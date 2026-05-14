@@ -3,6 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('mvm', {
   search: (query) => ipcRenderer.invoke('actions:search', query),
   execute: (action) => ipcRenderer.invoke('actions:execute', action),
+  setAlias: (action, alias) => ipcRenderer.invoke('actions:set-alias', action, alias),
+  setShortcut: (action, shortcut) => ipcRenderer.invoke('actions:set-shortcut', action, shortcut),
+  setOverride: (action, instruction) => ipcRenderer.invoke('actions:set-override', action, instruction),
+  clearOverride: (action) => ipcRenderer.invoke('actions:clear-override', action),
   getAppIcon: (appPath) => ipcRenderer.invoke('apps:icon', appPath),
   hide: () => ipcRenderer.invoke('palette:hide'),
   onShown: (callback) => {
