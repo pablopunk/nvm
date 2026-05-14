@@ -1,0 +1,25 @@
+appId: com.pablopunk.mvm
+productName: Nevermind
+artifactName: ${productName}-${version}-${arch}.${ext}
+directories:
+  output: release
+files:
+  - dist/**
+  - electron/**
+  - package.json
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: zip
+      arch:
+        - arm64
+        - x64
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb
+win:
+  target:
+    - nsis
+    - portable
