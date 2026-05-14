@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeTheme } = require('electron')
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme } = require('electron')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const os = require('node:os')
@@ -9,6 +9,7 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const HOTKEY = 'Alt+Space'
 const CLIPBOARD_LIMIT = 100
 const FILE_RESULT_LIMIT = 6
+const CLIPBOARD_POLL_INTERVAL_MS = 1000
 
 let win
 let appIndex = []
@@ -332,8 +333,29 @@ async function getAppIconDataUrl(appPath) {
   return result
 }
 
-function searchActions(query) {
+function clipboardActionFromItem(item) {
+  return {
+    id: `clipboard:${item.id}`,
+    kind: 'clipboard',
+    title: clipboardItemTitle(item),
+    subtitle: clipboardItemSubtitle(item),
+    clipboardType: item.type,
+    text: item.text,
+    imageDataUrl: item.imageDataUrl,
+    thumbnailUrl: item.thumbnailUrl,
+    icon: 'clipboard',
+    score: 3,
+    lastUsed: item.createdAt || 0,
+  }
+}
+
+function searchActions(query, options = {}) {
   const q = query.trim()
+
+  if (options.clipboardOnly) {
+    return clipboardHistory.map(clipboardActionFromItem).slice(0, CLIPBOARD_LIMIT)
+  }
+
   const results = []
   const url = getUrlFromQuery(q)
   const mathResult = q ? calculate(q) : null
@@ -366,6 +388,21 @@ function searchActions(query) {
   for (const item of BUILT_IN_ACTIONS) {
     const ranked = rankAction(withDefaultOverride(item), q)
     if (ranked) results.push(ranked)
+  }
+
+  const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
+  const clipboardHistoryAction = rankAction({
+    id: 'clipboard-history',
+    kind: 'clipboard-history',
+    title: 'Clipboard History',
+    subtitle: clipboardHistory.length ? `Show all ${clipboardHistory.length} copied items` : 'Show copied items',
+    icon: 'clipboard',
+    score: 14,
+    lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
+  }, q)
+  if (clipboardHistoryAction) {
+    clipboardHistoryAction.lastUsed = Math.max(clipboardHistoryAction.lastUsed || 0, latestClipboardTime ? latestClipboardTime - 1 : 0)
+    results.push(clipboardHistoryAction)
   }
 
   for (const item of appIndex) {
@@ -402,22 +439,16 @@ function searchActions(query) {
   }
 
   for (const item of clipboardHistory) {
-    const action = {
-      id: `clipboard:${item.id}`,
-      kind: 'clipboard',
-      title: item.text.length > 72 ? `${item.text.slice(0, 72)}…` : item.text,
-      subtitle: 'Copy from clipboard history',
-      text: item.text,
-      icon: 'clipboard',
-      score: 3,
+    const ranked = rankAction(clipboardActionFromItem(item), q)
+    if (ranked) {
+      ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.createdAt || 0)
+      results.push(ranked)
     }
-    const ranked = rankAction(action, q)
-    if (ranked) results.push(ranked)
   }
 
   if (q && !url && mathResult === null) {
     const hasLocalResults = results.some(
-      (r) => r.kind === 'builtin' || r.kind === 'app' || r.kind === 'clipboard',
+      (r) => r.kind === 'builtin' || r.kind === 'app' || r.kind === 'file' || r.kind === 'clipboard',
     )
     if (!hasLocalResults) {
       results.push({
@@ -467,7 +498,11 @@ async function executeAction(action, options = {}) {
       await launchApp(action.app)
       break
     case 'clipboard':
-      clipboard.writeText(action.text)
+      if (action.clipboardType === 'image' && action.imageDataUrl) {
+        clipboard.writeImage(nativeImage.createFromDataURL(action.imageDataUrl))
+      } else {
+        clipboard.writeText(action.text || '')
+      }
       break
     case 'file':
       await shell.openPath(action.filePath)
@@ -705,7 +740,85 @@ async function loadUserState() {
     // First run.
   }
 
-  clipboardHistory = userState.clipboardHistory
+  clipboardHistory = normalizeClipboardHistory(userState.clipboardHistory)
+}
+
+function normalizeClipboardHistory(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      if (item?.type === 'image' && item.imageDataUrl) {
+        return {
+          id: item.id || `image:${hashValue(item.imageDataUrl)}`,
+          type: 'image',
+          imageDataUrl: item.imageDataUrl,
+          thumbnailUrl: item.thumbnailUrl || item.imageDataUrl,
+          createdAt: item.createdAt || Date.now(),
+        }
+      }
+      if (item?.text) {
+        const text = String(item.text).trim()
+        if (!text) return null
+        return {
+          id: item.id?.startsWith('text:') ? item.id : `text:${hashValue(text)}`,
+          type: 'text',
+          text,
+          createdAt: item.createdAt || Date.now(),
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
+    .slice(0, CLIPBOARD_LIMIT)
+}
+
+function clipboardItemTitle(item) {
+  if (item.type === 'image') return 'Clipboard image'
+  return item.text.length > 72 ? `${item.text.slice(0, 72)}…` : item.text
+}
+
+function clipboardItemSubtitle(item) {
+  const when = new Date(item.createdAt || Date.now()).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  return item.type === 'image' ? `Image copied ${when}` : `Copied ${when}`
+}
+
+function readClipboardItem() {
+  const text = clipboard.readText().trim()
+  if (text) {
+    return {
+      id: `text:${hashValue(text)}`,
+      type: 'text',
+      text,
+      createdAt: Date.now(),
+    }
+  }
+
+  const image = clipboard.readImage()
+  if (image.isEmpty()) return null
+
+  const png = image.toPNG()
+  const thumbnail = image.resize({ width: 64, height: 64 })
+  return {
+    id: `image:${hashValue(png)}`,
+    type: 'image',
+    imageDataUrl: `data:image/png;base64,${png.toString('base64')}`,
+    thumbnailUrl: thumbnail.toDataURL(),
+    createdAt: Date.now(),
+  }
+}
+
+function rememberClipboardItem(item) {
+  if (!item) return
+  clipboardHistory = [
+    item,
+    ...clipboardHistory.filter((current) => current.id !== item.id),
+  ].slice(0, CLIPBOARD_LIMIT)
+  scheduleSaveState()
+  win?.webContents.send('clipboard:changed')
 }
 
 function scheduleSaveState() {
@@ -723,17 +836,13 @@ async function saveUserState() {
 }
 
 function startClipboardWatcher() {
-  let last = clipboard.readText().trim()
+  let lastId = readClipboardItem()?.id || ''
   setInterval(() => {
-    const text = clipboard.readText().trim()
-    if (!text || text === last) return
-    last = text
-    clipboardHistory = [
-      { id: hashValue(text), text, createdAt: Date.now() },
-      ...clipboardHistory.filter((item) => item.text !== text),
-    ].slice(0, CLIPBOARD_LIMIT)
-    scheduleSaveState()
-  }, 800).unref?.()
+    const item = readClipboardItem()
+    if (!item || item.id === lastId) return
+    lastId = item.id
+    rememberClipboardItem(item)
+  }, CLIPBOARD_POLL_INTERVAL_MS).unref?.()
 }
 
 function normalizeAccelerator(value) {
@@ -830,7 +939,7 @@ app.whenReady().then(async () => {
   setTimeout(indexApplications, 100)
   setTimeout(indexFiles, 200)
 
-  ipcMain.handle('actions:search', (_event, query) => searchActions(query))
+  ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeAction(action))
   ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
   ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))

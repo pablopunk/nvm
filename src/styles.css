@@ -194,6 +194,49 @@ kbd {
   object-fit: contain;
 }
 
+.thumbnailIcon img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.previewPane {
+  padding: 14px;
+}
+
+.previewImage {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.previewText {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: rgba(255, 255, 255, 0.88);
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.previewDetails {
+  display: grid;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.previewDetails strong {
+  font-size: 18px;
+}
+
+.previewDetails span {
+  color: rgba(255, 255, 255, 0.54);
+}
+
 .resultText {
   min-width: 0;
 }

@@ -23,6 +23,7 @@ type ActionKind =
   | 'web-search'
   | 'app'
   | 'clipboard'
+  | 'clipboard-history'
   | 'file'
   | 'ai-placeholder'
   | 'builtin'
@@ -59,6 +60,9 @@ type Action = {
   query?: string
   result?: string
   text?: string
+  clipboardType?: 'text' | 'image'
+  imageDataUrl?: string
+  thumbnailUrl?: string
   filePath?: string
   defaultActionId?: string
   isOverridden?: boolean
@@ -74,7 +78,7 @@ type SaveResult = {
 declare global {
   interface Window {
     mvm: {
-      search: (query: string) => Promise<Action[]>
+      search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<Action[]>
       execute: (action: Action) => Promise<void>
       setAlias: (action: Action, alias: string) => Promise<SaveResult>
       setShortcut: (action: Action, shortcut: string) => Promise<SaveResult>
@@ -85,6 +89,7 @@ declare global {
       onShown: (callback: () => void) => () => void
       onHidden: (callback: () => void) => () => void
       onAppsIndexed: (callback: (count: number) => void) => () => void
+      onClipboardChanged: (callback: () => void) => () => void
     }
   }
 }
@@ -119,7 +124,10 @@ export function App() {
   const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({})
   const [selectedValue, setSelectedValue] = useState('')
   const [optionsFor, setOptionsFor] = useState<Action | null>(null)
+  const [previewFor, setPreviewFor] = useState<Action | null>(null)
   const [placeholderIndex, setPlaceholderIndex] = useState(SEARCH_PLACEHOLDERS.length - 1)
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const [clipboardMode, setClipboardMode] = useState(false)
 
   useEffect(() => {
     const focusInput = () => {
@@ -129,6 +137,9 @@ export function App() {
 
     const stopShown = window.mvm.onShown(() => {
       setOptionsFor(null)
+      setPreviewFor(null)
+      setClipboardMode(false)
+      setRefreshNonce((nonce) => nonce + 1)
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length)
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
@@ -136,19 +147,23 @@ export function App() {
     const stopHidden = window.mvm.onHidden(() => {
       setQuery('')
       setOptionsFor(null)
+      setPreviewFor(null)
+      setClipboardMode(false)
     })
     const stopApps = window.mvm.onAppsIndexed(() => {})
+    const stopClipboard = window.mvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
     return () => {
       stopShown()
       stopHidden()
       stopApps()
+      stopClipboard()
     }
   }, [])
 
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(async () => {
-      const next = await window.mvm.search(query)
+      const next = await window.mvm.search(query, { clipboardOnly: clipboardMode })
       if (!cancelled) setActions(next)
     }, 20)
 
@@ -156,12 +171,13 @@ export function App() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [query])
+  }, [query, refreshNonce, clipboardMode])
 
   useEffect(() => {
     if (optionsFor) setSelectedValue('option:shortcut')
+    else if (previewFor) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, optionsFor])
+  }, [actions, optionsFor, previewFor])
 
   useEffect(() => {
     for (const action of actions) {
@@ -182,10 +198,18 @@ export function App() {
     () => actions.find((action) => action.kind === 'ai-placeholder'),
     [actions],
   )
-  const inputValue = optionsFor && !query ? optionsFor.title : query
+  const inputValue = previewFor ? previewFor.title : clipboardMode ? 'Clipboard History' : optionsFor && !query ? optionsFor.title : query
   const placeholder = SEARCH_PLACEHOLDERS[placeholderIndex]
 
   async function run(action: Action) {
+    if (action.kind === 'clipboard-history') {
+      setClipboardMode(true)
+      setOptionsFor(null)
+      setPreviewFor(null)
+      setQuery('')
+      setRefreshNonce((nonce) => nonce + 1)
+      return
+    }
     await window.mvm.execute(action)
   }
 
@@ -227,22 +251,44 @@ export function App() {
   }
 
   const canOverride = Boolean(optionsFor?.defaultActionId)
+  const activeAction = optionsFor || previewFor || selectedAction
+  const isChildOpen = Boolean(optionsFor || previewFor)
 
   function onCommandKeyDown(event: React.KeyboardEvent) {
     if (event.key === 'Escape') {
       event.preventDefault()
       if (optionsFor) setOptionsFor(null)
+      else if (previewFor) setPreviewFor(null)
+      else if (clipboardMode) setClipboardMode(false)
       else window.mvm.hide()
       return
     }
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault()
-      if (!optionsFor && selectedAction) setOptionsFor(selectedAction)
+      if (activeAction && !optionsFor && !clipboardMode) {
+        setPreviewFor(null)
+        setOptionsFor(activeAction)
+      }
       return
     }
 
-    if (!optionsFor && event.key === 'Tab' && createAction) {
+    if (event.key === 'ArrowLeft' && previewFor) {
+      event.preventDefault()
+      setPreviewFor(null)
+      return
+    }
+
+    if (event.key === 'ArrowRight' && !isChildOpen && selectedAction) {
+      const input = event.target instanceof HTMLInputElement ? event.target : null
+      if (input && input.selectionStart !== input.value.length) return
+      event.preventDefault()
+      setPreviewFor(selectedAction)
+      setOptionsFor(null)
+      return
+    }
+
+    if (!isChildOpen && event.key === 'Tab' && createAction) {
       event.preventDefault()
       run(createAction)
     }
@@ -251,7 +297,7 @@ export function App() {
   return (
     <main className="shell">
       <Command
-        className={`palette ${optionsFor ? 'isStacked' : ''}`}
+        className={`palette ${isChildOpen ? 'isStacked' : ''}`}
         label="Nevermind"
         loop
         shouldFilter={false}
@@ -259,29 +305,50 @@ export function App() {
         onValueChange={setSelectedValue}
         onKeyDown={onCommandKeyDown}
       >
-        <div className={`searchRow card searchCard ${optionsFor ? 'stackParentCard' : ''}`}>
+        <div className={`searchRow card searchCard ${isChildOpen ? 'stackParentCard' : ''}`}>
           <Zap className="brandIcon" size={22} />
           <Command.Input
             ref={inputRef}
             value={inputValue}
             onValueChange={(value) => {
-              if (!optionsFor) setQuery(value)
+              if (!isChildOpen && !clipboardMode) setQuery(value)
             }}
             placeholder={placeholder}
-            readOnly={Boolean(optionsFor)}
+            readOnly={isChildOpen || clipboardMode}
             spellCheck={false}
           />
-          {!optionsFor && createAction ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
+          {!isChildOpen && createAction ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
         </div>
 
-        <Command.List className={`results card ${optionsFor ? 'optionsCard' : 'resultsCard'}`}>
-          {optionsFor ? (
+        <Command.List className={`results card ${isChildOpen ? 'optionsCard' : 'resultsCard'}`}>
+          {previewFor ? (
+            <div className="previewPane">
+              {previewFor.imageDataUrl ? (
+                <img className="previewImage" src={previewFor.imageDataUrl} alt="Clipboard preview" />
+              ) : previewFor.text ? (
+                <pre className="previewText">{previewFor.text}</pre>
+              ) : (
+                <div className="previewDetails">
+                  <strong>{previewFor.title}</strong>
+                  <span>{previewFor.subtitle}</span>
+                </div>
+              )}
+            </div>
+          ) : optionsFor ? (
             <>
               <Command.Item value="option:shortcut" className="result" onSelect={setShortcut}>
                 <span className="resultIcon"><Keyboard size={18} /></span>
                 <span className="resultText">
                   <strong>Set keyboard shortcut</strong>
                   <small>Run this action globally without opening Nevermind</small>
+                </span>
+                <span className="enterHint">↵</span>
+              </Command.Item>
+              <Command.Item value="option:preview" className="result" onSelect={() => optionsFor && setPreviewFor(optionsFor)}>
+                <span className="resultIcon"><Search size={18} /></span>
+                <span className="resultText">
+                  <strong>Preview</strong>
+                  <small>Press → to preview an item</small>
                 </span>
                 <span className="enterHint">↵</span>
               </Command.Item>
@@ -317,7 +384,7 @@ export function App() {
           ) : (
             actions.map((action) => {
               const Icon = iconFor[action.icon]
-              const iconUrl = action.iconUrl ?? iconUrls[action.id]
+              const iconUrl = action.thumbnailUrl ?? action.iconUrl ?? iconUrls[action.id]
               return (
                 <Command.Item
                   key={action.id}
@@ -325,7 +392,7 @@ export function App() {
                   className="result"
                   onSelect={() => run(action)}
                 >
-                  <span className="resultIcon">
+                  <span className={`resultIcon ${action.thumbnailUrl ? 'thumbnailIcon' : ''}`}>
                     {iconUrl ? <img src={iconUrl} alt="" /> : <Icon size={18} />}
                   </span>
                   <span className="resultText">
@@ -338,7 +405,7 @@ export function App() {
             })
           )}
 
-          {!optionsFor && actions.length === 0 ? (
+          {!isChildOpen && actions.length === 0 ? (
             <Command.Empty className="empty">
               <Zap size={24} />
               <strong>Type anything.</strong>

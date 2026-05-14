@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('mvm', {
-  search: (query) => ipcRenderer.invoke('actions:search', query),
+  search: (query, options) => ipcRenderer.invoke('actions:search', query, options),
   execute: (action) => ipcRenderer.invoke('actions:execute', action),
   setAlias: (action, alias) => ipcRenderer.invoke('actions:set-alias', action, alias),
   setShortcut: (action, shortcut) => ipcRenderer.invoke('actions:set-shortcut', action, shortcut),
@@ -23,5 +23,10 @@ contextBridge.exposeInMainWorld('mvm', {
     const listener = (_event, count) => callback(count)
     ipcRenderer.on('apps:indexed', listener)
     return () => ipcRenderer.removeListener('apps:indexed', listener)
+  },
+  onClipboardChanged: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('clipboard:changed', listener)
+    return () => ipcRenderer.removeListener('clipboard:changed', listener)
   },
 })
