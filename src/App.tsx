@@ -1104,7 +1104,7 @@ export function App() {
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
-      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView && !clipboardMode) {
+      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
         setPreviewFor(null)
         setOptionsFor(activeAction)
       }
@@ -1220,7 +1220,7 @@ export function App() {
           ) : null}
         </Command.List>
 
-        {clipboardMode && isChildOpen ? (
+        {clipboardMode && isChildOpen && !previewFor && !optionsFor ? (
           <Command.List className="results card optionsCard clipboardSiblingCard">
             {actions.length > 0 ? renderActionResults() : renderChildEmpty('No clipboard items found')}
           </Command.List>
