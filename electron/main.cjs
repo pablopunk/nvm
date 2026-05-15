@@ -51,6 +51,7 @@ let userState = {
 const appIconCache = new Map()
 const extensionRegistry = new Map()
 const extensionActionHandlers = new Map()
+const registeredActionAccelerators = new Set()
 
 function addWindowBlurMargin(size) {
   return {
@@ -413,9 +414,13 @@ async function getAppIconDataUrl(appPath) {
   return result
 }
 
+function extensionCommandActionId(extension, command) {
+  return `extension:${extension.id}:${command.id}`
+}
+
 function extensionActionFromCommand(extension, command) {
-  return {
-    id: `extension:${extension.id}:${command.id}`,
+  const action = {
+    id: extensionCommandActionId(extension, command),
     kind: 'extension-command',
     extensionId: extension.id,
     commandId: command.id,
@@ -427,6 +432,8 @@ function extensionActionFromCommand(extension, command) {
     icon: command.icon || 'sparkles',
     score: command.score || 12,
   }
+  const shortcut = shortcutForAction(action) || command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
+  return shortcut ? { ...action, shortcut } : action
 }
 
 function hasReadyGeneratedExtension(item) {
@@ -520,6 +527,7 @@ function clipboardHistoryView() {
     type: 'list',
     id: 'clipboard-history',
     title: 'Clipboard History',
+    presentation: 'root',
     searchBarPlaceholder: 'Search Clipboard History',
     emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
     items: clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
@@ -1838,26 +1846,49 @@ async function executeShortcutAction(action) {
   }
 }
 
-function registerActionShortcut(actionId, accelerator, action) {
+function bindGlobalActionShortcut(actionId, accelerator, action) {
   globalShortcut.unregister(accelerator)
-  const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
+  registeredActionAccelerators.add(accelerator)
+  return globalShortcut.register(accelerator, () => executeShortcutAction(action))
+}
+
+function registerActionShortcut(actionId, accelerator, action) {
+  const ok = bindGlobalActionShortcut(actionId, accelerator, action)
   if (!ok) return false
   userState.shortcuts[actionId] = accelerator
   userState.shortcutActions[actionId] = action
   return true
 }
 
+function declaredGlobalShortcuts() {
+  return Array.from(extensionRegistry.values()).map(({ extension, command }) => {
+    const accelerator = command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
+    if (!accelerator) return null
+    const action = extensionActionFromCommand(extension, command)
+    return { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action }
+  }).filter(Boolean)
+}
+
 function unregisterActionShortcuts() {
-  for (const accelerator of Object.values(userState.shortcuts)) globalShortcut.unregister(accelerator)
+  for (const accelerator of registeredActionAccelerators) globalShortcut.unregister(accelerator)
+  registeredActionAccelerators.clear()
 }
 
 function registerActionShortcuts() {
   unregisterActionShortcuts()
+  const bound = new Set()
   for (const [actionId, accelerator] of Object.entries(userState.shortcuts)) {
     const action = currentActionForStoredShortcut(userState.shortcutActions[actionId])
     if (!action) continue
-    const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
-    if (!ok) console.warn(`Could not register action shortcut ${accelerator} for ${actionId}`)
+    const ok = bindGlobalActionShortcut(actionId, accelerator, action)
+    if (ok) bound.add(accelerator)
+    else console.warn(`Could not register action shortcut ${accelerator} for ${actionId}`)
+  }
+  for (const { actionId, accelerator, action } of declaredGlobalShortcuts()) {
+    if (userState.shortcuts[actionId] || bound.has(accelerator)) continue
+    const ok = bindGlobalActionShortcut(actionId, accelerator, action)
+    if (ok) bound.add(accelerator)
+    else console.warn(`Could not register declared action shortcut ${accelerator} for ${actionId}`)
   }
 }
 
@@ -1866,13 +1897,19 @@ function canCustomizeAction(action) {
 }
 
 function getShortcuts() {
-  return Object.entries(userState.shortcuts)
+  const configured = Object.entries(userState.shortcuts)
     .map(([actionId, accelerator]) => ({
       actionId,
       accelerator,
+      scope: 'global',
+      source: 'user',
       action: currentActionForStoredShortcut(userState.shortcutActions[actionId]),
     }))
     .filter((item) => item.action)
+  const declared = declaredGlobalShortcuts()
+    .filter((item) => !userState.shortcuts[item.actionId])
+    .map((item) => ({ ...item, scope: 'global', source: 'extension' }))
+  return [...configured, ...declared]
     .sort((a, b) => a.action.title.localeCompare(b.action.title))
 }
 
@@ -1941,6 +1978,7 @@ async function removeCreatedAction(action) {
         if (error?.code !== 'ENOENT') throw error
       })
       await loadExtensions()
+      registerActionShortcuts()
     }
     delete userState.aiChats[action.aiChatId]
     delete userState.recents[action.id]
@@ -1960,6 +1998,7 @@ async function removeCreatedAction(action) {
     delete userState.recents[action.id]
     scheduleSaveState()
     await loadExtensions()
+    registerActionShortcuts()
     return { ok: true, message: 'Generated action removed' }
   }
 

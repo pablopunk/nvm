@@ -46,11 +46,6 @@ contextBridge.exposeInMainWorld('nvm', {
     ipcRenderer.on('clipboard:changed', listener)
     return () => ipcRenderer.removeListener('clipboard:changed', listener)
   },
-  onOpenClipboardHistory: (callback) => {
-    const listener = (_event, payload) => callback(payload)
-    ipcRenderer.on('clipboard-history:open', listener)
-    return () => ipcRenderer.removeListener('clipboard-history:open', listener)
-  },
   onOpenActionView: (callback) => {
     const listener = (_event, payload) => callback(payload)
     ipcRenderer.on('action:view-open', listener)

@@ -25,6 +25,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { ActionPanelView, ChatView, CommandRow, CommandTile, DetailView, EmptyState, FormView, GridView, ListView, ProgressView, Toast, shortcutLabel } from './ui'
+import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView } from './model'
 
@@ -134,7 +135,6 @@ declare global {
       onHidden: (callback: () => void) => () => void
       onAppsIndexed: (callback: (count: number) => void) => () => void
       onClipboardChanged: (callback: () => void) => () => void
-      onOpenClipboardHistory: (callback: (payload?: { openedFromHidden?: boolean }) => void) => () => void
       onOpenActionView: (callback: (payload?: { view?: ExtensionView }) => void) => () => void
       onAiChatEvent: (callback: (event: { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }) => void) => () => void
     }
@@ -191,9 +191,6 @@ export function App() {
   const [toast, setToast] = useState<{ message: string; tone?: 'default' | 'error' } | null>(null)
   const [placeholderIndex, setPlaceholderIndex] = useState(SEARCH_PLACEHOLDERS.length - 1)
   const [refreshNonce, setRefreshNonce] = useState(0)
-  const [clipboardMode, setClipboardMode] = useState(false)
-  const [clipboardOpenedFromHidden, setClipboardOpenedFromHidden] = useState(false)
-  const [clipboardQuery, setClipboardQuery] = useState('')
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false)
   const [childQuery, setChildQuery] = useState('')
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null)
@@ -227,12 +224,9 @@ export function App() {
         setExtensionViewBackStack([])
         setAiMessages([])
       }
-      setClipboardMode(false)
-      setClipboardQuery('')
       setRefreshNonce((nonce) => nonce + 1)
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length)
       if (!aiChatOpenRef.current) setExtensionViewBackStack([])
-      setClipboardOpenedFromHidden(false)
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
     })
@@ -257,16 +251,9 @@ export function App() {
         setAiMessages([])
       }
       setExtensionViewBackStack([])
-      setClipboardMode(false)
-      setClipboardOpenedFromHidden(false)
-      setClipboardQuery('')
     })
     const stopApps = window.nvm.onAppsIndexed(() => {})
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
-    const stopOpenClipboardHistory = window.nvm.onOpenClipboardHistory((payload) => {
-      openClipboardHistory({ openedFromHidden: Boolean(payload?.openedFromHidden) })
-      markShortcutReady(Boolean(payload?.revealWhenReady))
-    })
     const stopOpenActionView = window.nvm.onOpenActionView(async (payload) => {
       if (!payload?.view) return
       setOptionsFor(null)
@@ -290,7 +277,6 @@ export function App() {
       stopHidden()
       stopApps()
       stopClipboard()
-      stopOpenClipboardHistory()
       stopOpenActionView()
       stopAi()
     }
@@ -299,7 +285,7 @@ export function App() {
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(async () => {
-      const next = await window.nvm.search(clipboardMode ? clipboardQuery : query, { clipboardOnly: clipboardMode })
+      const next = await window.nvm.search(query)
       if (!cancelled) setActions(next)
     }, 20)
 
@@ -307,13 +293,12 @@ export function App() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [query, clipboardQuery, refreshNonce, clipboardMode])
+  }, [query, refreshNonce])
 
   useEffect(() => {
     if (shortcutFor) setSelectedValue('shortcut:save')
     else if (shortcutOptionsFor) setSelectedValue(getShortcutOptionRows()[0]?.value ?? '')
     else if (shortcutManagerOpen) setSelectedValue(getShortcutRows()[0]?.value ?? '')
-    else if (clipboardMode) setSelectedValue(actions[0]?.id ?? '')
     else if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
     else if (actionSubmenuFor) setSelectedValue(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true).find((row) => !row.sectionHeader)?.value ?? '')
     else if (extensionItemOptionsFor) setSelectedValue(getExtensionItemActionRows()[0]?.value ?? '')
@@ -323,7 +308,7 @@ export function App() {
     else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, actionSubmenuFor, childQuery, clipboardMode, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
+  }, [actions, actionSubmenuFor, childQuery, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
     setChildQuery('')
@@ -335,7 +320,7 @@ export function App() {
   }, [extensionView])
 
   useEffect(() => {
-    if (!pendingShortcutReveal || (!extensionView && !clipboardMode)) return
+    if (!pendingShortcutReveal || !extensionView) return
     const frame = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         window.nvm.shortcutReady()
@@ -343,7 +328,7 @@ export function App() {
       })
     })
     return () => cancelAnimationFrame(frame)
-  }, [pendingShortcutReveal, extensionView, clipboardMode])
+  }, [pendingShortcutReveal, extensionView])
 
   useEffect(() => {
     const isAiChat = Boolean(extensionView?.aiChat)
@@ -395,8 +380,8 @@ export function App() {
   const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
   const isVisuallyStacked = isChildOpen && !isRootLikeExtensionView
   const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
-  const inputValue = shortcutFor ? recordedShortcut : clipboardMode ? clipboardQuery : isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : optionsFor && !query ? optionsFor.title : query
-  const placeholder = shortcutFor ? 'Press a keyboard shortcut' : clipboardMode ? 'Search Clipboard History' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
+  const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : optionsFor && !query ? optionsFor.title : query
+  const placeholder = shortcutFor ? 'Press a keyboard shortcut' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
 
   useEffect(() => {
     if (!isFilterableChildOpen && !shortcutFor) return
@@ -495,23 +480,6 @@ export function App() {
       await sendAiPrompt(view.initialPrompt, view.chatId)
     }
     focusAiChatInput()
-  }
-
-  function openClipboardHistory(options: { openedFromHidden?: boolean } = {}) {
-    setClipboardMode(true)
-    setClipboardOpenedFromHidden(Boolean(options.openedFromHidden))
-    setClipboardQuery('')
-    setRefreshNonce((nonce) => nonce + 1)
-    requestAnimationFrame(() => inputRef.current?.focus())
-  }
-
-  function closeClipboardHistory() {
-    const shouldHide = clipboardOpenedFromHidden
-    setClipboardMode(false)
-    setClipboardOpenedFromHidden(false)
-    setClipboardQuery('')
-    if (shouldHide) window.nvm.hide()
-    else requestAnimationFrame(() => inputRef.current?.focus())
   }
 
   async function run(action: Action) {
@@ -759,15 +727,40 @@ export function App() {
     return actionPanelRows()
   }
 
-  function getShortcutRows() {
+  function shortcutItems() {
     return shortcutRecords.map((record) => ({
-      value: `shortcut:${record.actionId}`,
-      icon: <Keyboard size={18} />,
+      id: `shortcut:${record.actionId}`,
       title: record.action.title,
       subtitle: record.accelerator,
-      onSelect: () => startShortcutRecorder(record.action),
+      icon: 'keyboard',
+      primaryAction: { type: 'nativeAction', title: 'Change shortcut', nativeAction: record.action },
+    })).filter((item) => childMatches(item.title, item.subtitle))
+  }
+
+  function getShortcutRows() {
+    return shortcutItems().map((item) => ({
+      value: item.id,
+      icon: <Keyboard size={18} />,
+      title: item.title,
+      subtitle: item.subtitle,
+      onSelect: () => {
+        const record = shortcutRecords.find((candidate) => `shortcut:${candidate.actionId}` === item.id)
+        if (record) startShortcutRecorder(record.action)
+      },
       className: 'result',
-    })).filter((row) => childMatches(row.title, row.subtitle))
+    }))
+  }
+
+  function renderShortcutManager() {
+    return <RootCommandList
+      items={shortcutItems()}
+      iconForItem={() => <Keyboard size={18} />}
+      onSelect={(item) => {
+        const record = shortcutRecords.find((candidate) => `shortcut:${candidate.actionId}` === item.id)
+        if (record) setShortcutOptionsFor(record)
+      }}
+      emptyTitle="No keyboard shortcuts found"
+    />
   }
 
   function getShortcutOptionRows() {
@@ -899,28 +892,34 @@ export function App() {
       id: action.id,
       title: action.title,
       subtitle: action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle,
+      icon: action.icon,
       image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id],
+      primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action },
       actionPanel: actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
     }
   }
 
-  function renderNativeCommandItem(item: CommandItem, action: Action) {
-    const Icon = iconFor[action.icon] ?? Sparkles
-    const primaryAction = actionsFromPanel(item.actionPanel)[0]
-    return <CommandRow
-      key={item.id}
-      value={item.id}
-      icon={<span className={action.thumbnailUrl ? 'thumbnailIcon' : ''}>{item.image ? <img src={item.image} alt="" /> : <Icon size={18} />}</span>}
-      title={item.title}
-      subtitle={item.subtitle}
-      shortcut={primaryAction?.shortcut}
-      extras={action.kind === 'extension-command' && action.aiChatId ? ['Tab tweak'] : []}
-      onSelect={() => run(action)}
-    />
+  function actionFromCommandItem(item: CommandItem) {
+    return (item.primaryAction?.nativeAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]?.nativeAction) as Action | undefined
+  }
+
+  function iconForCommandItem(item: CommandItem) {
+    const action = actionFromCommandItem(item)
+    const Icon = iconFor[(action?.icon || item.icon || 'sparkles') as ActionIcon] ?? Sparkles
+    return <span className={action?.thumbnailUrl || item.image ? 'thumbnailIcon' : ''}>{item.image ? <img src={item.image} alt="" /> : <Icon size={18} />}</span>
   }
 
   function renderActionResults() {
-    return actions.map((action) => renderNativeCommandItem(commandItemFromAction(action), action))
+    const items = actions.map(commandItemFromAction)
+    return <RootCommandList
+      items={items}
+      iconForItem={iconForCommandItem}
+      onSelect={(item) => {
+        const action = actionFromCommandItem(item)
+        if (action) run(action)
+      }}
+      extraForItem={(item) => actionFromCommandItem(item)?.kind === 'extension-command' && actionFromCommandItem(item)?.aiChatId ? ['Tab tweak'] : []}
+    />
   }
 
   function renderActionPanel(rows: ReturnType<typeof getOptionActionRows> | ReturnType<typeof getConfirmActionRows> | ReturnType<typeof getExtensionItemActionRows>, emptyMessage = 'No actions found') {
@@ -1023,6 +1022,7 @@ export function App() {
 
     if (view.type === 'list') {
       const items = filterExtensionItems(view.items || [])
+      if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={iconForCommandItem} onSelect={runDefaultViewAction} emptyTitle={view.emptyView?.title || 'No items found'} emptySubtitle={view.emptyView?.subtitle} />
       return <ListView
         items={items}
         sections={filterViewSections(view)}
@@ -1119,7 +1119,7 @@ export function App() {
   }
 
   function moveGridSelection(key: string) {
-    if (extensionView?.type !== 'grid' || clipboardMode || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
+    if (extensionView?.type !== 'grid' || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
     const items = filterExtensionItems(allViewItems(extensionView))
     if (items.length === 0) return false
     const currentIndex = Math.max(0, items.findIndex((item) => item.id === selectedValue))
@@ -1169,8 +1169,7 @@ export function App() {
 
     if (event.key === 'Escape') {
       event.preventDefault()
-      if (clipboardMode) closeClipboardHistory()
-      else if (shortcutOptionsFor) setShortcutOptionsFor(null)
+      if (shortcutOptionsFor) setShortcutOptionsFor(null)
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
       else if (confirmRemoveFor) setConfirmRemoveFor(null)
       else if (actionSubmenuFor) setActionSubmenuFor(null)
@@ -1257,12 +1256,11 @@ export function App() {
             value={inputValue}
             onValueChange={(value) => {
               if (shortcutFor) return
-              if (clipboardMode) setClipboardQuery(value)
-              else if (isFilterableChildOpen) setChildQuery(value)
+              if (isFilterableChildOpen) setChildQuery(value)
               else if (!isChildOpen) setQuery(value)
             }}
             placeholder={placeholder}
-            readOnly={!shortcutFor && !clipboardMode && !isFilterableChildOpen && isChildOpen}
+            readOnly={!shortcutFor && !isFilterableChildOpen && isChildOpen}
             spellCheck={false}
           />
           {renderSearchAccessory(extensionView)}
@@ -1280,7 +1278,7 @@ export function App() {
           ) : shortcutOptionsFor ? (
             renderActionPanel(getShortcutOptionRows())
           ) : shortcutManagerOpen ? (
-            renderActionPanel(getShortcutRows(), 'No keyboard shortcuts found')
+            renderShortcutManager()
           ) : confirmRemoveFor ? (
             renderActionPanel(getConfirmActionRows())
           ) : actionSubmenuFor ? (
@@ -1311,19 +1309,14 @@ export function App() {
           {!isChildOpen && actions.length === 0 ? (
             <Command.Empty asChild>
               <EmptyState
-                icon={clipboardMode ? <Clipboard size={24} /> : <Zap size={24} />}
-                title={clipboardMode ? 'No clipboard items found.' : 'Type anything.'}
-                subtitle={clipboardMode ? 'Try a different clipboard search.' : 'Nevermind starts with local actions; AI planning comes next.'}
+                icon={<Zap size={24} />}
+                title="Type anything."
+                subtitle="Nevermind starts with local actions; AI planning comes next."
               />
             </Command.Empty>
           ) : null}
         </Command.List>
 
-        {clipboardMode && isChildOpen && !previewFor && !optionsFor ? (
-          <Command.List className="results card optionsCard clipboardSiblingCard">
-            {actions.length > 0 ? renderActionResults() : renderChildEmpty('No clipboard items found')}
-          </Command.List>
-        ) : null}
       </Command>
     </main>
   )

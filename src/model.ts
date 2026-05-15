@@ -19,6 +19,7 @@ export type CommandAction = {
   view?: CommandView
   handlerId?: string
   shortcut?: string
+  shortcutScope?: 'local' | 'global'
   nativeAction?: unknown
   command?: string
   args?: string[]
@@ -86,6 +87,7 @@ export type CommandView = {
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
   searchBarPlaceholder?: string
+  presentation?: 'root' | 'stacked'
   selectedItemId?: string
   onSelectionChange?: CommandAction
   pagination?: { hasMore?: boolean; pageSize?: number; onLoadMore?: CommandAction }
