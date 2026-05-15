@@ -22,7 +22,7 @@ module.exports = {
             id: file.path,
             title: file.name,
             subtitle: file.displayPath,
-            image: file.url, // thumbnail-safe display URL; use file.fileUrl only when you need the original file URL
+            image: file.url, // thumbnail-safe display URL; Nevermind drags actions with a path as the original file
             primaryAction: ctx.actions.copyImage(file.path),
             actions: [
               ctx.actions.copyImage(file.path),

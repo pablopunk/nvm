@@ -880,6 +880,18 @@ async function findFiles(roots, options = {}) {
   return found
 }
 
+function dragIconForPath(filePath) {
+  const image = nativeImage.createFromPath(filePath)
+  if (!image.isEmpty()) return image.resize({ width: 64, height: 64, quality: 'good' })
+  return nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=')
+}
+
+function startFileDrag(event, filePath) {
+  const resolvedPath = expandUserPath(filePath)
+  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return
+  event.sender.startDrag({ file: resolvedPath, icon: dragIconForPath(resolvedPath) })
+}
+
 async function selectedInFinder() {
   if (process.platform !== 'darwin') return []
   const script = 'tell application "Finder" to get POSIX path of (selection as alias list)'
@@ -1472,6 +1484,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeAction(action))
   ipcMain.handle('view-action:execute', (_event, action) => executeViewAction(action))
+  ipcMain.on('drag:file', startFileDrag)
   ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
   ipcMain.handle('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
   ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))

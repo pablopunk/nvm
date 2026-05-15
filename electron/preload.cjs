@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('nvm', {
   search: (query, options) => ipcRenderer.invoke('actions:search', query, options),
   execute: (action) => ipcRenderer.invoke('actions:execute', action),
   runViewAction: (action) => ipcRenderer.invoke('view-action:execute', action),
+  startFileDrag: (filePath) => ipcRenderer.send('drag:file', filePath),
   sendAiMessage: (message, chatId) => ipcRenderer.invoke('ai:chat:send', message, chatId),
   abortAiChat: (chatId) => ipcRenderer.invoke('ai:chat:abort', chatId),
   resetAiChat: (chatId) => ipcRenderer.invoke('ai:chat:reset', chatId),

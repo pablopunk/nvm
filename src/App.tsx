@@ -99,6 +99,9 @@ type ExtensionViewItem = {
   subtitle?: string
   image?: string
   text?: string
+  path?: string
+  filePath?: string
+  fileUrl?: string
   primaryAction?: ExtensionViewAction
   actions?: ExtensionViewAction[]
 }
@@ -128,6 +131,7 @@ declare global {
       search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<Action[]>
       execute: (action: Action) => Promise<{ view?: ExtensionView } | void>
       runViewAction: (action: ExtensionViewAction) => Promise<{ view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void>
+      startFileDrag: (filePath: string) => void
       sendAiMessage: (message: string, chatId?: string) => Promise<void>
       abortAiChat: (chatId?: string) => Promise<void>
       resetAiChat: (chatId?: string) => Promise<void>
@@ -668,6 +672,24 @@ export function App() {
     return <span className="enterHint">⌘K</span>
   }
 
+  function renderTileActionHint(actions: ExtensionViewAction[] = []) {
+    if (actions.length === 0) return null
+    return <span className="tileActionHint">⌘K</span>
+  }
+
+  function dragPathForItem(item: ExtensionViewItem) {
+    if (item.path || item.filePath) return item.path || item.filePath
+    const actions = [item.primaryAction, ...(item.actions || [])].filter(Boolean) as ExtensionViewAction[]
+    return actions.find((action) => action.path)?.path || null
+  }
+
+  function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
+    const filePath = dragPathForItem(item)
+    if (!filePath) return
+    event.preventDefault()
+    window.nvm.startFileDrag(filePath)
+  }
+
   function renderExtensionView(view: ExtensionView) {
     if (view.type === 'grid') {
       const items = filterExtensionItems(view.items)
@@ -681,12 +703,17 @@ export function App() {
                   key={item.id}
                   value={item.id}
                   className="extensionTile"
+                  data-extension-item-id={item.id}
+                  draggable={Boolean(dragPathForItem(item))}
+                  onDragStart={(event) => startItemDrag(event, item)}
                   onSelect={() => runDefaultViewAction(item)}
                 >
-                  {item.image ? <img src={item.image} alt="" loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}
+                  <span className="tileMedia">
+                    {item.image ? <img src={item.image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}
+                    {renderTileActionHint(item.actions)}
+                  </span>
                   <strong>{item.title}</strong>
                   {item.subtitle ? <small>{item.subtitle}</small> : null}
-                  <div className="viewActions">{renderViewActions(item.actions)}</div>
                 </Command.Item>
               ))}
             </div>
@@ -792,7 +819,28 @@ export function App() {
     return <pre className="previewText">{view.content || view.subtitle || ''}</pre>
   }
 
+  function moveGridSelection(key: string) {
+    if (extensionView?.type !== 'grid' || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
+    const items = filterExtensionItems(extensionView.items)
+    if (items.length === 0) return false
+    const currentIndex = Math.max(0, items.findIndex((item) => item.id === selectedValue))
+    const grid = document.querySelector<HTMLElement>('.extensionGrid')
+    const columns = grid ? Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length) : 4
+    const delta = key === 'ArrowRight' ? 1 : key === 'ArrowLeft' ? -1 : key === 'ArrowDown' ? columns : -columns
+    const nextIndex = Math.max(0, Math.min(items.length - 1, currentIndex + delta))
+    const next = items[nextIndex]
+    if (!next) return false
+    setSelectedValue(next.id)
+    requestAnimationFrame(() => document.querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+    return true
+  }
+
   function onCommandKeyDown(event: React.KeyboardEvent) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && moveGridSelection(event.key)) {
+      event.preventDefault()
+      return
+    }
+
     if (event.key === 'Escape') {
       event.preventDefault()
       if (confirmRemoveFor) setConfirmRemoveFor(null)
