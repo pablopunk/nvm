@@ -143,6 +143,16 @@ kbd {
   font-weight: 700;
 }
 
+.searchAccessory {
+  max-width: 160px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 6px 8px;
+  outline: none;
+}
+
 .tabHint {
   display: flex;
   align-items: center;
@@ -403,12 +413,14 @@ kbd {
   position: absolute;
   right: 6px;
   top: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  padding: 2px 5px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
   color: rgba(255, 255, 255, 0.72);
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 0 rgba(0, 0, 0, 0.3);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -452,7 +464,11 @@ kbd {
 }
 
 .extensionListItem {
-  margin-bottom: 6px;
+  margin-bottom: 0;
+}
+
+.resultsCard > .extensionView {
+  padding: 0;
 }
 
 .chatView,
@@ -685,10 +701,24 @@ kbd {
   font-size: 12px;
 }
 
+.accessories,
 .keyHints {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.accessories {
+  margin-left: auto;
+}
+
+.accessory {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .shortcutHint,
@@ -720,6 +750,51 @@ kbd {
 .result[data-selected='true'] .selectedOnlyEnter,
 .extensionTile[data-selected='true'] .selectedOnlyEnter {
   opacity: 1;
+}
+
+.loadingBar {
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 216, 77, 0), rgba(255, 216, 77, 0.86), rgba(255, 216, 77, 0));
+  background-size: 200% 100%;
+  animation: loadingSweep 900ms linear infinite;
+}
+
+@keyframes loadingSweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.loadMoreButton {
+  margin: 8px auto 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+}
+
+.loadMoreButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.itemSection {
+  display: grid;
+  gap: 6px;
+}
+
+.itemSection + .itemSection {
+  margin-top: 10px;
+}
+
+.actionSectionHeader {
+  padding: 8px 12px 4px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .empty {

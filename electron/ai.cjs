@@ -70,7 +70,7 @@ function createNevermindAi(options) {
       thinkingLevelMap: model.thinkingLevelMap,
       compat: model.compat,
     }
-    console.info('[Nevermind AI] model', modelDebug)
+    // console.info('[Nevermind AI] model', modelDebug)
     onEvent?.({ type: 'debug', label: 'model', data: modelDebug })
 
     const settingsManager = pi.SettingsManager.inMemory({
@@ -96,7 +96,7 @@ function createNevermindAi(options) {
     })
 
     const toolNames = result.session.agent.state.tools.map((tool) => tool.name)
-    console.info('[Nevermind AI] tools', toolNames)
+    // console.info('[Nevermind AI] tools', toolNames)
     onEvent?.({ type: 'debug', label: 'tools', data: toolNames })
 
     const entry = sessions.get(chatId)
@@ -114,11 +114,11 @@ function createNevermindAi(options) {
         emit({ type: 'delta', text: delta })
       }
       if (event.type === 'tool_execution_start') {
-        console.info('[Nevermind AI] tool start', event.toolName)
+        // console.info('[Nevermind AI] tool start', event.toolName)
         emit({ type: 'tool_start', name: event.toolName })
       }
       if (event.type === 'tool_execution_end') {
-        console.info('[Nevermind AI] tool end', event.toolName, { isError: event.isError })
+        // console.info('[Nevermind AI] tool end', event.toolName, { isError: event.isError })
         emit({ type: 'tool_end', name: event.toolName, isError: event.isError })
       }
     })
@@ -260,10 +260,14 @@ function validateCommonJs(code) {
 function capabilities() {
   return {
     views: ['list', 'grid', 'detail', 'chat', 'form', 'progress', 'preview'],
+    viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination'],
+    itemOptions: ['accessories', 'keywords', 'actionPanel'],
+    actionPanel: ['sections', 'submenus'],
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
-    actions: ['openPath', 'revealPath', 'quickLook', 'openUrl', 'copyText', 'copyImage', 'push', 'replace', 'pop', 'run'],
+    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
     namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'cache', 'state', 'ai'],
-    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'open', 'readText', 'toFileUrl'],
+    shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
+    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'openWithApps', 'open', 'readText', 'toFileUrl'],
     findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
     fileKinds: ['image', 'video', 'media'],
     sortBy: ['recent', 'modified', 'added', 'created', 'name', 'size'],

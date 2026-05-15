@@ -44,12 +44,12 @@ module.exports = {
 
 ## Views
 
-Commands can return native views. Nevermind owns keyboard navigation, filtering, Enter/default actions, Cmd+K item action panels, Escape/back navigation, nested view stacks, loading/empty/error rendering, and toasts.
+Commands can return native views. Nevermind owns keyboard navigation, filtering, Enter/default actions, Cmd+K item action panels, Escape/back navigation, nested view stacks, loading/empty/error rendering, accessories, and toasts.
 
 Commands can return:
 
-- `ctx.ui.list({ title, items })`
-- `ctx.ui.grid({ title, items, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
+- `ctx.ui.list({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination })`; list items may include `accessories: [{ text }]` and `keywords`
+- `ctx.ui.grid({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
 - `ctx.ui.detail({ title, content, image, video })`
 - `ctx.ui.chat({ title, messages })`
 - `ctx.ui.form({ title, fields })`
@@ -61,17 +61,21 @@ Commands can return:
 Current `ctx` namespaces:
 
 - `ctx.clipboard.readText/writeText/readImage/writeImage`
-- `ctx.files.find/findImages/findVideos/findMedia/selectedInFinder/open/readText/toFileUrl`
-- `ctx.actions.openPath/revealPath/quickLook/openUrl/copyText/copyImage` (optional final `{ shortcut: 'Command+Y' }` for local shortcuts). `quickLook` opens native macOS Quick Look and reports an error on other platforms.
+- `ctx.files.find/findImages/findVideos/findMedia/selectedInFinder/openWithApps/open/readText/toFileUrl`
+- `ctx.actions.openPath/revealPath/quickLook/openWith/openUrl/copyText/pasteText/copyImage/trash` (optional final `{ shortcut: 'Command+Y' }` for local shortcuts). `quickLook` opens native macOS Quick Look and reports an error on other platforms. `trash` is destructive and requires confirmation by default.
 - `ctx.actions.push(title, view, { shortcut })`, `ctx.actions.replace(title, view, { shortcut })`, `ctx.actions.pop(title, { shortcut })` for nested native navigation
-- `ctx.actions.run(title, async (ctx) => { ... })` for script work from a view action; it may return another view
+- Actions can be grouped with `actionPanel: { sections: [{ title, actions }] }`; actions may include `submenu: { sections: [...] }` for nested action panels, `style: 'destructive'`, and `requiresConfirmation: true`.
+- `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return another view
+- `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native detail view. These require confirmation by default.
 - `ctx.apps.launch/frontmost`
-- `ctx.shell.openExternal`
+- `ctx.shell.openExternal`, `ctx.shell.exec(command, args, options)`, `ctx.shell.script(script, options)`, `ctx.shell.appleScript(script, options)`, and `ctx.shell.which(command)` for controlled system work. Shell helpers return `{ stdout, stderr, exitCode }` and default to a 30s timeout.
 - `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
 - `ctx.ui.item/actions/empty/loading/error` helpers
 - `ctx.cache`, `ctx.state`, `ctx.ai` placeholders
 
 `ctx.files.find(roots, options)` supports `{ limit, depth, extensions, kind, pattern, sortBy, order }`, where `kind` can be `image`, `video`, or `media`, and `sortBy` can be `recent`/`modified`, `added`/`created`, `name`, or `size`. Convenience helpers `findImages`, `findVideos`, and `findMedia` call the same implementation. Returned files include `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`. For grid videos, use `video: file.videoUrl` and `image: file.thumbnailUrl` to show a playable looping preview with a poster frame.
+
+Use `await ctx.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
 
 `ctx.storage` is scoped per extension, using the generated chat identity when available so tweaks keep the same storage. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires:
 

@@ -33,7 +33,9 @@ Rules:
 - Prefer declarative `ctx.actions.*` item actions over raw shell behavior.
 - Use `primaryAction` for what Enter should do; all `actions` automatically appear under Cmd+K for each item.
 - Use `ctx.actions.push/replace/pop` for nested views instead of inventing custom UI state; for media previews, use `ctx.actions.push('Preview', ctx.ui.preview(file), { shortcut: 'Command+Y' })` for in-app preview and `ctx.actions.quickLook(file.path)` for native macOS Quick Look when useful.
+- For Open With flows, never hardcode app names. Use `const apps = await ctx.files.openWithApps(file.path)` and create nested items whose primary action is `ctx.actions.openWith(file.path, app)`.
 - Use `ctx.storage.memo(key, ttlMs, loader)` for expensive repeated work like indexing screenshots/media; use `ctx.storage.get/set/delete/clear` for persistent per-extension JSON state.
+- Use `ctx.shell.exec(command, args, options)` or `ctx.shell.script(script, options)` for system automation when needed; keep commands focused, bounded, and show useful output/errors in native views.
 - For grid views, choose `layout: 'wide'` for screenshots/videos, `layout: 'square'` for images/icons, or override with `aspectRatio`/`columns` when requested.
 - Use `ctx.actions.run(title, async (ctx) => ...)` for script work triggered from UI; handlers may return another native view.
 - Keep generated code small and readable.

@@ -24,6 +24,9 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
+import { ActionPanelView, ChatView, CommandRow, CommandTile, DetailView, EmptyState, FormView, GridView, ListView, ProgressView, Toast, shortcutLabel } from './ui'
+import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
+import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView } from './model'
 
 type ActionKind =
   | 'open-url'
@@ -57,6 +60,7 @@ type ActionIcon =
   | 'keyboard'
 
 type AppInfo = {
+  name?: string
   path?: string
 }
 
@@ -87,53 +91,9 @@ type Action = {
   shortcut?: string
 }
 
-type ExtensionViewAction = {
-  type: 'openPath' | 'revealPath' | 'quickLook' | 'openUrl' | 'copyText' | 'copyImage' | 'pushView' | 'replaceView' | 'popView' | 'runExtensionAction'
-  title: string
-  path?: string
-  url?: string
-  text?: string
-  imageDataUrl?: string
-  view?: ExtensionView
-  handlerId?: string
-  shortcut?: string
-}
-
-type ExtensionViewItem = {
-  id: string
-  title: string
-  subtitle?: string
-  image?: string
-  video?: string
-  videoUrl?: string
-  text?: string
-  path?: string
-  filePath?: string
-  fileUrl?: string
-  primaryAction?: ExtensionViewAction
-  actions?: ExtensionViewAction[]
-}
-
-type ExtensionView = {
-  type: 'list' | 'grid' | 'detail' | 'chat' | 'form' | 'progress'
-  title: string
-  image?: string
-  video?: string
-  videoUrl?: string
-  aiChat?: boolean
-  chatId?: string
-  initialPrompt?: string
-  subtitle?: string
-  content?: string
-  items?: ExtensionViewItem[]
-  messages?: { role: 'user' | 'assistant' | 'system'; content: string }[]
-  fields?: { id: string; label: string; type?: string; value?: string }[]
-  steps?: { title: string; status?: string }[]
-  actions?: ExtensionViewAction[]
-  layout?: 'square' | 'wide' | 'compact'
-  aspectRatio?: string | number
-  columns?: number
-}
+type ExtensionViewAction = CommandAction
+type ExtensionViewItem = CommandItem
+type ExtensionView = CommandView
 
 type SaveResult = {
   ok: boolean
@@ -220,6 +180,7 @@ export function App() {
   const [selectedValue, setSelectedValue] = useState('')
   const [optionsFor, setOptionsFor] = useState<Action | null>(null)
   const [extensionItemOptionsFor, setExtensionItemOptionsFor] = useState<ExtensionViewItem | null>(null)
+  const [actionSubmenuFor, setActionSubmenuFor] = useState<{ title: string; panel: CommandActionPanel } | null>(null)
   const [confirmRemoveFor, setConfirmRemoveFor] = useState<Action | null>(null)
   const [previewFor, setPreviewFor] = useState<Action | null>(null)
   const [extensionView, setExtensionView] = useState<ExtensionView | null>(null)
@@ -240,6 +201,7 @@ export function App() {
   const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false)
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([])
   const [shortcutOptionsFor, setShortcutOptionsFor] = useState<ShortcutRecord | null>(null)
+  const [formValues, setFormValues] = useState<Record<string, string | boolean>>({})
 
   useEffect(() => {
     const focusInput = () => {
@@ -353,18 +315,24 @@ export function App() {
     else if (shortcutManagerOpen) setSelectedValue(getShortcutRows()[0]?.value ?? '')
     else if (clipboardMode) setSelectedValue(actions[0]?.id ?? '')
     else if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
+    else if (actionSubmenuFor) setSelectedValue(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true).find((row) => !row.sectionHeader)?.value ?? '')
     else if (extensionItemOptionsFor) setSelectedValue(getExtensionItemActionRows()[0]?.value ?? '')
     else if (optionsFor) setSelectedValue(getOptionActionRows()[0]?.value ?? '')
     else if (previewFor) setSelectedValue('preview')
-    else if (extensionView && isFilterableExtensionView) setSelectedValue(filterExtensionItems(extensionView.items)[0]?.id ?? '')
+    else if (extensionView && isFilterableExtensionView) setSelectedValue(extensionView.selectedItemId || filterExtensionItems(allViewItems(extensionView))[0]?.id || '')
     else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, childQuery, clipboardMode, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
+  }, [actions, actionSubmenuFor, childQuery, clipboardMode, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
     setChildQuery('')
-  }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
+  }, [actionSubmenuFor?.title, confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
+
+  useEffect(() => {
+    if (extensionView?.type !== 'form') return
+    setFormValues(Object.fromEntries((extensionView.fields || []).map((field) => [field.id, field.type === 'checkbox' ? Boolean(field.value) : field.value || ''])))
+  }, [extensionView])
 
   useEffect(() => {
     if (!pendingShortcutReveal || (!extensionView && !clipboardMode)) return
@@ -422,11 +390,13 @@ export function App() {
     [actions],
   )
   const isFilterableExtensionView = extensionView?.type === 'list' || extensionView?.type === 'grid'
-  const isFilterableChildOpen = Boolean(confirmRemoveFor || extensionItemOptionsFor || optionsFor || shortcutManagerOpen || isFilterableExtensionView)
-  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
-  const childPlaceholder = shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
+  const isRootLikeExtensionView = extensionView?.id === 'clipboard-history'
+  const isFilterableChildOpen = Boolean(actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || shortcutManagerOpen || isFilterableExtensionView)
+  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
+  const isVisuallyStacked = isChildOpen && !isRootLikeExtensionView
+  const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
   const inputValue = shortcutFor ? recordedShortcut : clipboardMode ? clipboardQuery : isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : optionsFor && !query ? optionsFor.title : query
-  const placeholder = shortcutFor ? 'Press a keyboard shortcut' : clipboardMode ? 'Search Clipboard History' : isFilterableChildOpen ? childPlaceholder : SEARCH_PLACEHOLDERS[placeholderIndex]
+  const placeholder = shortcutFor ? 'Press a keyboard shortcut' : clipboardMode ? 'Search Clipboard History' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
 
   useEffect(() => {
     if (!isFilterableChildOpen && !shortcutFor) return
@@ -496,6 +466,7 @@ export function App() {
   }
 
   async function runViewAction(action: ExtensionViewAction) {
+    if (action.requiresConfirmation && !window.confirm(`Run “${action.title}”?`)) return
     const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
     if (runningViewActionsRef.current.has(actionKey)) return
     runningViewActionsRef.current.add(actionKey)
@@ -544,10 +515,6 @@ export function App() {
   }
 
   async function run(action: Action) {
-    if (action.kind === 'clipboard-history') {
-      openClipboardHistory()
-      return
-    }
     if (action.kind === 'keyboard-shortcuts') {
       await openShortcutManager()
       return
@@ -561,38 +528,8 @@ export function App() {
     }
   }
 
-  function keyNameForShortcut(event: React.KeyboardEvent) {
-    const key = event.key
-    if (!key || ['Meta', 'Control', 'Alt', 'Shift'].includes(key)) return ''
-    if (key === ' ') return 'Space'
-    if (key === 'ArrowUp') return 'Up'
-    if (key === 'ArrowDown') return 'Down'
-    if (key === 'ArrowLeft') return 'Left'
-    if (key === 'ArrowRight') return 'Right'
-    if (/^Digit\d$/.test(event.code)) return event.code.slice('Digit'.length)
-    if (/^Key[A-Z]$/.test(event.code)) return event.code.slice('Key'.length)
-    if (key.length === 1) return key.toUpperCase()
-    return key[0].toUpperCase() + key.slice(1)
-  }
-
   function acceleratorFromEvent(event: React.KeyboardEvent) {
-    const key = keyNameForShortcut(event)
-    if (!key) return ''
-    const parts = []
-    if (event.metaKey) parts.push('Command')
-    if (event.ctrlKey) parts.push('Control')
-    if (event.altKey) parts.push('Alt')
-    if (event.shiftKey) parts.push('Shift')
-    parts.push(key)
-    if (parts.length < 2 && !key.startsWith('F')) return ''
-    return parts.join('+')
-  }
-
-  function shortcutLabel(shortcut?: string) {
-    return String(shortcut || '')
-      .split('+')
-      .map((part) => ({ Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Space: '␣', Escape: 'Esc' }[part] || part))
-      .join('')
+    return acceleratorFromKeyboardEvent(event.nativeEvent)
   }
 
   async function refreshShortcuts() {
@@ -714,14 +651,19 @@ export function App() {
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
   const canQuickLookAction = Boolean(optionsFor?.filePath)
   const selectedExtensionItem = useMemo(() => {
-    if (!extensionView?.items) return null
-    return extensionView.items.find((item) => item.id === selectedValue) || null
+    if (!extensionView) return null
+    return allViewItems(extensionView).find((item) => item.id === selectedValue) || null
   }, [extensionView, selectedValue])
   const selectedShortcutRecord = useMemo(
     () => shortcutRecords.find((record) => `shortcut:${record.actionId}` === selectedValue) || null,
     [selectedValue, shortcutRecords],
   )
   const activeAction = optionsFor || previewFor || selectedAction
+
+  useEffect(() => {
+    if (!extensionView?.onSelectionChange || !selectedValue || !allViewItems(extensionView).some((item) => item.id === selectedValue)) return
+    runViewAction({ ...extensionView.onSelectionChange, text: selectedValue })
+  }, [extensionView?.onSelectionChange, selectedValue])
 
   function childScore(value: string | undefined, filter: string) {
     const text = value?.toLowerCase() || ''
@@ -744,12 +686,21 @@ export function App() {
     return Math.max(...values.map((value) => childScore(value, filter))) > 0
   }
 
+  function allViewItems(view: ExtensionView) {
+    return view.sections?.flatMap((section) => section.items) || view.items || []
+  }
+
+  function filterViewSections(view: ExtensionView) {
+    if (view.sections?.length) return view.sections.map((section) => ({ ...section, items: filterExtensionItems(section.items) })).filter((section) => section.items.length > 0)
+    return undefined
+  }
+
   function filterExtensionItems(items: ExtensionViewItem[] = []) {
     return items.filter((item) => childMatches(
       item.title,
       item.subtitle,
       item.text,
-      ...(item.actions || []).map((action) => action.title),
+      ...actionsFromPanel(item.actionPanel, item.actions || []).map((action) => action.title),
     ))
   }
 
@@ -774,18 +725,38 @@ export function App() {
     ].filter((row) => childMatches(row.title, row.subtitle))
   }
 
+  function iconForViewAction(action: ExtensionViewAction) {
+    if (action.type === 'copyText' || action.type === 'copyImage' || action.type === 'pasteText') return <Clipboard size={18} />
+    if (action.type === 'trash') return <Trash2 size={18} />
+    if (action.type === 'revealPath' || action.type === 'openPath' || action.type === 'quickLook' || action.type === 'openWith') return <Folder size={18} />
+    return <Globe size={18} />
+  }
+
+  function actionPanelRows(panel = extensionItemOptionsFor?.actionPanel, fallbackActions = extensionItemOptionsFor?.actions || [], prefix = 'extension-item', closeAfterSelect = true) {
+    const sections = panel?.sections?.length ? panel.sections : [{ actions: fallbackActions }]
+    return sections.flatMap((section, sectionIndex) => [
+      ...(section.title ? [{ value: `${prefix}:section:${sectionIndex}`, title: section.title, subtitle: '', sectionHeader: true, onSelect: () => {}, className: 'actionSectionHeader' }] : []),
+      ...(section.actions || []).map((action, index) => ({
+        value: `${prefix}:${sectionIndex}:${index}:${action.type}:${action.title}`,
+        icon: iconForViewAction(action),
+        title: action.title,
+        subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
+        shortcut: action.shortcut,
+        onSelect: async () => {
+          if (action.submenu) {
+            setActionSubmenuFor({ title: action.title, panel: action.submenu })
+            return
+          }
+          await runViewAction(action)
+          if (closeAfterSelect) setExtensionItemOptionsFor(null)
+        },
+        className: action.style === 'destructive' ? 'result dangerResult' : 'result',
+      })),
+    ]).filter((row) => row.sectionHeader || childMatches(row.title, row.subtitle))
+  }
+
   function getExtensionItemActionRows() {
-    return (extensionItemOptionsFor?.actions || []).map((action, index) => ({
-      value: `extension-item:${index}:${action.type}:${action.title}`,
-      icon: action.type === 'copyText' || action.type === 'copyImage' ? <Clipboard size={18} /> : action.type === 'revealPath' || action.type === 'openPath' || action.type === 'quickLook' ? <Folder size={18} /> : <Globe size={18} />,
-      title: action.title,
-      subtitle: action.shortcut ? `${action.type} · ${action.shortcut}` : action.type,
-      onSelect: async () => {
-        await runViewAction(action)
-        setExtensionItemOptionsFor(null)
-      },
-      className: 'result',
-    })).filter((row) => childMatches(row.title, row.subtitle))
+    return actionPanelRows()
   }
 
   function getShortcutRows() {
@@ -915,58 +886,45 @@ export function App() {
     ].filter((row) => row.show && childMatches(row.title, row.subtitle))
   }
 
-  function renderChildEmpty(message = 'No actions found') {
-    return (
-      <div className="empty">
-        <Search size={24} />
-        <strong>{message}</strong>
-        <span>Try a different filter.</span>
-      </div>
-    )
+  function renderChildEmpty(message = 'No actions found', subtitle?: string) {
+    return <EmptyState icon={<Search size={24} />} title={message} subtitle={subtitle} />
+  }
+
+  function renderViewEmpty(view: ExtensionView, fallback = 'No items found') {
+    return renderChildEmpty(view.emptyView?.title || fallback, view.emptyView?.subtitle)
+  }
+
+  function commandItemFromAction(action: Action): CommandItem {
+    return {
+      id: action.id,
+      title: action.title,
+      subtitle: action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle,
+      image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id],
+      actionPanel: actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
+    }
+  }
+
+  function renderNativeCommandItem(item: CommandItem, action: Action) {
+    const Icon = iconFor[action.icon] ?? Sparkles
+    const primaryAction = actionsFromPanel(item.actionPanel)[0]
+    return <CommandRow
+      key={item.id}
+      value={item.id}
+      icon={<span className={action.thumbnailUrl ? 'thumbnailIcon' : ''}>{item.image ? <img src={item.image} alt="" /> : <Icon size={18} />}</span>}
+      title={item.title}
+      subtitle={item.subtitle}
+      shortcut={primaryAction?.shortcut}
+      extras={action.kind === 'extension-command' && action.aiChatId ? ['Tab tweak'] : []}
+      onSelect={() => run(action)}
+    />
   }
 
   function renderActionResults() {
-    return actions.map((action) => {
-      const Icon = iconFor[action.icon] ?? Sparkles
-      const iconUrl = action.thumbnailUrl ?? action.iconUrl ?? iconUrls[action.id]
-      return (
-        <Command.Item
-          key={action.id}
-          value={action.id}
-          className="result"
-          onSelect={() => run(action)}
-        >
-          <span className={`resultIcon ${action.thumbnailUrl ? 'thumbnailIcon' : ''}`}>
-            {iconUrl ? <img src={iconUrl} alt="" /> : <Icon size={18} />}
-          </span>
-          <span className="resultText">
-            <strong>{action.title}</strong>
-            <small>{action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle}</small>
-          </span>
-          <span className="keyHints">
-            {action.kind === 'extension-command' && action.aiChatId ? <span className="shortcutHint selectedOnlyEnter">Tab tweak</span> : null}
-            {action.shortcut ? <span className="shortcutHint">{shortcutLabel(action.shortcut)}</span> : null}
-            <span className="enterHint selectedOnlyEnter">↵</span>
-          </span>
-        </Command.Item>
-      )
-    })
+    return actions.map((action) => renderNativeCommandItem(commandItemFromAction(action), action))
   }
 
-  function renderActionRow(row: ReturnType<typeof getOptionActionRows>[number] | ReturnType<typeof getConfirmActionRows>[number] | ReturnType<typeof getExtensionItemActionRows>[number]) {
-    return (
-      <Command.Item key={row.value} value={row.value} className={row.className || 'result'} onSelect={row.onSelect}>
-        <span className="resultIcon">{row.icon}</span>
-        <span className="resultText">
-          <strong>{row.title}</strong>
-          <small>{row.subtitle}</small>
-        </span>
-        <span className="keyHints">
-          {'shortcut' in row && row.shortcut ? <span className="shortcutHint">{shortcutLabel(row.shortcut)}</span> : null}
-          <span className="enterHint selectedOnlyEnter">↵</span>
-        </span>
-      </Command.Item>
-    )
+  function renderActionPanel(rows: ReturnType<typeof getOptionActionRows> | ReturnType<typeof getConfirmActionRows> | ReturnType<typeof getExtensionItemActionRows>, emptyMessage = 'No actions found') {
+    return <ActionPanelView rows={rows} renderEmpty={() => renderChildEmpty(emptyMessage)} />
   }
 
   function renderMarkdown(content: string) {
@@ -985,14 +943,8 @@ export function App() {
   }
 
   function runDefaultViewAction(item: ExtensionViewItem) {
-    const action = item.primaryAction || item.actions?.[0]
+    const action = item.primaryAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]
     if (action) runViewAction(action)
-  }
-
-  function renderViewActions(actions: ExtensionViewAction[] = []) {
-    if (actions.length === 0) return null
-    const shortcut = actions.find((action) => action.shortcut)?.shortcut
-    return <span className="enterHint">{shortcut ? shortcutLabel(shortcut) : '⌘K'}</span>
   }
 
   function renderTileActionHint(actions: ExtensionViewAction[] = []) {
@@ -1003,7 +955,7 @@ export function App() {
 
   function dragPathForItem(item: ExtensionViewItem) {
     if (item.path || item.filePath) return item.path || item.filePath
-    const actions = [item.primaryAction, ...(item.actions || [])].filter(Boolean) as ExtensionViewAction[]
+    const actions = [item.primaryAction, ...actionsFromPanel(item.actionPanel, item.actions || [])].filter(Boolean) as ExtensionViewAction[]
     return actions.find((action) => action.path)?.path || null
   }
 
@@ -1012,6 +964,27 @@ export function App() {
     if (!filePath) return
     event.preventDefault()
     window.nvm.startFileDrag(filePath)
+  }
+
+  function renderSearchAccessory(view: ExtensionView | null) {
+    if (!view?.searchAccessory?.items?.length) return null
+    return <select
+      className="searchAccessory"
+      aria-label={view.searchAccessory.tooltip || 'View filter'}
+      value={view.searchAccessory.value || view.searchAccessory.items[0]?.value || ''}
+      onChange={(event) => {
+        const action = view.searchAccessory?.onChange
+        if (!action) return
+        runViewAction({ ...action, text: event.target.value })
+      }}
+    >
+      {view.searchAccessory.items.map((item) => <option key={item.value} value={item.value}>{item.title}</option>)}
+    </select>
+  }
+
+  function renderPagination(view: ExtensionView) {
+    if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
+    return <button className="loadMoreButton" type="button" onClick={() => runViewAction(view.pagination!.onLoadMore!)}>Load More</button>
   }
 
   function gridStyle(view: ExtensionView) {
@@ -1023,153 +996,107 @@ export function App() {
 
   function renderExtensionView(view: ExtensionView) {
     if (view.type === 'grid') {
-      const items = filterExtensionItems(view.items)
-      const layout = view.layout || 'square'
-      return (
-        <div className="extensionView">
-          {view.subtitle ? <div className="extensionSubtitle">{view.subtitle}</div> : null}
-          {items.length > 0 ? (
-            <div className={`extensionGrid extensionGrid-${layout}`} style={gridStyle(view)}>
-              {items.map((item) => (
-                <Command.Item
-                  key={item.id}
-                  value={item.id}
-                  className="extensionTile"
-                  data-extension-item-id={item.id}
-                  draggable={Boolean(dragPathForItem(item))}
-                  onDragStart={(event) => startItemDrag(event, item)}
-                  onSelect={() => runDefaultViewAction(item)}
-                >
-                  <span className="tileMedia">
-                    {item.video || item.videoUrl ? (
-                      <video src={item.video || item.videoUrl} poster={item.image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} />
-                    ) : item.image ? <img src={item.image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}
-                    {renderTileActionHint(item.actions)}
-                  </span>
-                  <strong>{item.title}</strong>
-                  {item.subtitle ? <small>{item.subtitle}</small> : null}
-                </Command.Item>
-              ))}
-            </div>
-          ) : renderChildEmpty('No items found')}
-        </div>
-      )
+      const items = filterExtensionItems(view.items || [])
+      return <GridView
+        items={items}
+        sections={filterViewSections(view)}
+        subtitle={view.subtitle}
+        layout={view.layout || 'square'}
+        style={gridStyle(view)}
+        empty={renderViewEmpty(view)}
+        isLoading={view.isLoading}
+        pagination={renderPagination(view)}
+        renderItem={(item) => <CommandTile
+          key={item.id}
+          value={item.id}
+          title={item.title}
+          subtitle={item.subtitle}
+          image={item.image}
+          video={item.video || item.videoUrl}
+          actionHint={renderTileActionHint(actionsFromPanel(item.actionPanel, item.actions || []))}
+          draggable={Boolean(dragPathForItem(item))}
+          onDragStart={(event) => startItemDrag(event, item)}
+          onSelect={() => runDefaultViewAction(item)}
+        />}
+      />
     }
 
     if (view.type === 'list') {
-      const items = filterExtensionItems(view.items)
-      return (
-        <div className="extensionView">
-          {items.length > 0 ? items.map((item) => (
-            <Command.Item key={item.id} value={item.id} className="result extensionListItem" onSelect={() => runDefaultViewAction(item)}>
-              <span className="resultIcon"><Sparkles size={18} /></span>
-              <span className="resultText">
-                <strong>{item.title}</strong>
-                <small>{item.subtitle || item.text}</small>
-              </span>
-              <span className="viewActions">{renderViewActions(item.actions)}</span>
-            </Command.Item>
-          )) : renderChildEmpty('No items found')}
-        </div>
-      )
+      const items = filterExtensionItems(view.items || [])
+      return <ListView
+        items={items}
+        sections={filterViewSections(view)}
+        empty={renderViewEmpty(view)}
+        isLoading={view.isLoading}
+        pagination={renderPagination(view)}
+        renderItem={(item) => <CommandRow
+          key={item.id}
+          value={item.id}
+          className="result extensionListItem"
+          icon={item.image ? <span className="thumbnailIcon"><img src={item.image} alt="" /></span> : (() => { const Icon = iconFor[item.icon || 'sparkles'] ?? Sparkles; return <Icon size={18} /> })()}
+          title={item.title}
+          subtitle={item.subtitle || item.text}
+          accessories={item.accessories}
+          shortcut={actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut}
+          selectedOnlyShortcut={view.id === 'clipboard-history'}
+          onSelect={() => runDefaultViewAction(item)}
+        />}
+      />
     }
 
     if (view.type === 'chat') {
-      const messages = view.aiChat ? aiMessages : view.messages || []
-      return (
-        <div className="extensionView chatView">
-          <div className="chatMessages" ref={view.aiChat ? chatMessagesRef : undefined}>
-            {messages.map((message, index) => (
-              <div key={index} className={`chatBubble ${message.role}`}>{renderMarkdown(message.content)}</div>
-            ))}
-            {aiBusy ? <div className="chatBubble system">Thinking…</div> : null}
-          </div>
-          {view.aiChat ? (
-            <form
-              className="chatInputRow"
-              onSubmit={(event) => {
+      const messages = (view.aiChat ? aiMessages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
+      const input = view.aiChat ? (
+        <form
+          className="chatInputRow"
+          onSubmit={(event) => {
+            event.preventDefault()
+            sendAiPrompt(aiInput)
+          }}
+        >
+          <textarea
+            ref={aiInputRef}
+            rows={1}
+            value={aiInput}
+            onChange={(event) => setAiInput(event.target.value)}
+            onInput={(event) => resizeAiInput(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.stopPropagation()
+              if (!event.shiftKey) {
                 event.preventDefault()
                 sendAiPrompt(aiInput)
-              }}
-            >
-              <textarea
-                ref={aiInputRef}
-                rows={1}
-                value={aiInput}
-                onChange={(event) => setAiInput(event.target.value)}
-                onInput={(event) => resizeAiInput(event.currentTarget)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter') return
-                  event.stopPropagation()
-                  if (!event.shiftKey) {
-                    event.preventDefault()
-                    sendAiPrompt(aiInput)
-                  }
-                }}
-                placeholder={aiBusy ? 'Thinking…' : 'Message AI'}
-              />
-              {aiBusy ? (
-                <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => window.nvm.abortAiChat(extensionView?.chatId)}>
-                  <Square size={14} fill="currentColor" />
-                </button>
-              ) : (
-                <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiInput.trim()}>
-                  <CornerDownLeft size={16} />
-                </button>
-              )}
-            </form>
-          ) : null}
-        </div>
-      )
+              }
+            }}
+            placeholder={aiBusy ? 'Thinking…' : 'Message AI'}
+          />
+          {aiBusy ? (
+            <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => window.nvm.abortAiChat(extensionView?.chatId)}>
+              <Square size={14} fill="currentColor" />
+            </button>
+          ) : (
+            <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiInput.trim()}>
+              <CornerDownLeft size={16} />
+            </button>
+          )}
+        </form>
+      ) : null
+      return <ChatView messages={messages} isBusy={aiBusy} input={input} messagesRef={view.aiChat ? chatMessagesRef : undefined} />
     }
 
-    if (view.type === 'form') {
-      return (
-        <div className="extensionView formView">
-          {(view.fields || []).map((field) => (
-            <label key={field.id}>
-              <span>{field.label}</span>
-              <input defaultValue={field.value || ''} type={field.type || 'text'} />
-            </label>
-          ))}
-        </div>
-      )
-    }
+    if (view.type === 'form') return <FormView
+      fields={view.fields || []}
+      values={formValues}
+      onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))}
+      onSubmit={view.submitAction ? () => runViewAction({ ...view.submitAction!, formValues }) : undefined}
+      submitTitle={view.submitAction?.title}
+    />
 
-    if (view.type === 'progress') {
-      return (
-        <div className="extensionView progressView">
-          {(view.steps || []).map((step, index) => (
-            <div key={index} className="progressStep">
-              <strong>{step.title}</strong>
-              <small>{step.status || 'Pending'}</small>
-            </div>
-          ))}
-        </div>
-      )
-    }
+    if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
 
-    return (
-      <div className="extensionView">
-        {view.video || view.videoUrl ? <video className="detailMedia" src={view.video || view.videoUrl} poster={view.image} controls autoPlay muted loop playsInline /> : null}
-        {!view.video && !view.videoUrl && view.image ? <img className="detailMedia" src={view.image} alt="" /> : null}
-        <pre className="previewText">{view.content || view.subtitle || ''}</pre>
-        {(view.actions || []).map((action, index) => (
-          <Command.Item key={`${action.type}:${action.title}`} value={`extension-view:${index}:${action.type}:${action.title}`} className="result" onSelect={() => runViewAction(action)}>
-            <span className="resultIcon"><Wand2 size={18} /></span>
-            <span className="resultText">
-              <strong>{action.title}</strong>
-              <small>{action.type}</small>
-            </span>
-            <span className="enterHint">↵</span>
-          </Command.Item>
-        ))}
-      </div>
-    )
-  }
+    const detailActions = renderActionPanel(actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
 
-  function normalizedShortcut(value?: string) {
-    return String(value || '').replace(/\s+/g, '').toLowerCase()
+    return <DetailView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={detailActions} />
   }
 
   function runLocalShortcut(accelerator: string) {
@@ -1181,7 +1108,9 @@ export function App() {
       return true
     }
     const selectedItem = selectedExtensionItem
-    const actions = selectedItem ? [selectedItem.primaryAction, ...(selectedItem.actions || [])].filter(Boolean) as ExtensionViewAction[] : (extensionView.actions || [])
+    const itemActions = selectedItem ? actionsFromPanel(selectedItem.actionPanel, selectedItem.actions || []) : []
+    const viewActions = actionsFromPanel(extensionView.actionPanel, extensionView.actions || [])
+    const actions = selectedItem ? [selectedItem.primaryAction, ...itemActions].filter(Boolean) as ExtensionViewAction[] : viewActions
     const action = actions.find((item) => normalizedShortcut(item.shortcut) === normalized)
     if (!action) return false
     lastLocalShortcutRef.current = accelerator
@@ -1191,7 +1120,7 @@ export function App() {
 
   function moveGridSelection(key: string) {
     if (extensionView?.type !== 'grid' || clipboardMode || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
-    const items = filterExtensionItems(extensionView.items)
+    const items = filterExtensionItems(allViewItems(extensionView))
     if (items.length === 0) return false
     const currentIndex = Math.max(0, items.findIndex((item) => item.id === selectedValue))
     const grid = document.querySelector<HTMLElement>('.extensionGrid')
@@ -1244,6 +1173,7 @@ export function App() {
       else if (shortcutOptionsFor) setShortcutOptionsFor(null)
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
       else if (confirmRemoveFor) setConfirmRemoveFor(null)
+      else if (actionSubmenuFor) setActionSubmenuFor(null)
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
       else if (optionsFor) setOptionsFor(null)
       else if (previewFor) setPreviewFor(null)
@@ -1310,9 +1240,9 @@ export function App() {
 
   return (
     <main className="shell">
-      {toast ? <div className={`toast ${toast.tone === 'error' ? 'toastError' : ''}`}>{toast.message}</div> : null}
+      {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
       <Command
-        className={`palette ${isChildOpen ? 'isStacked' : ''}`}
+        className={`palette ${isVisuallyStacked ? 'isStacked' : ''}`}
         label="Nevermind"
         loop
         shouldFilter={false}
@@ -1320,7 +1250,7 @@ export function App() {
         onValueChange={setSelectedValue}
         onKeyDown={onCommandKeyDown}
       >
-        <div className={`searchRow card searchCard ${isChildOpen ? 'stackParentCard' : ''}`}>
+        <div className={`searchRow card searchCard ${isVisuallyStacked ? 'stackParentCard' : ''}`}>
           <Zap className="brandIcon" size={22} />
           <Command.Input
             ref={inputRef}
@@ -1335,25 +1265,28 @@ export function App() {
             readOnly={!shortcutFor && !clipboardMode && !isFilterableChildOpen && isChildOpen}
             spellCheck={false}
           />
+          {renderSearchAccessory(extensionView)}
           {!isChildOpen && query ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
         </div>
 
-        <Command.List className={`results card ${isChildOpen ? 'optionsCard' : 'resultsCard'}`}>
+        <Command.List className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'}`}>
           {shortcutFor ? (
             <div className="shortcutRecorder">
               <div className="shortcutKeys">
                 {(recordedShortcut ? recordedShortcut.split('+') : ['Press keys']).map((part) => <kbd key={part}>{part}</kbd>)}
               </div>
-              {getShortcutRecorderRows().map(renderActionRow)}
+              {renderActionPanel(getShortcutRecorderRows())}
             </div>
           ) : shortcutOptionsFor ? (
-            getShortcutOptionRows().length > 0 ? getShortcutOptionRows().map(renderActionRow) : renderChildEmpty()
+            renderActionPanel(getShortcutOptionRows())
           ) : shortcutManagerOpen ? (
-            getShortcutRows().length > 0 ? getShortcutRows().map(renderActionRow) : renderChildEmpty('No keyboard shortcuts found')
+            renderActionPanel(getShortcutRows(), 'No keyboard shortcuts found')
           ) : confirmRemoveFor ? (
-            getConfirmActionRows().length > 0 ? getConfirmActionRows().map(renderActionRow) : renderChildEmpty()
+            renderActionPanel(getConfirmActionRows())
+          ) : actionSubmenuFor ? (
+            renderActionPanel(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true))
           ) : extensionItemOptionsFor ? (
-            getExtensionItemActionRows().length > 0 ? getExtensionItemActionRows().map(renderActionRow) : renderChildEmpty()
+            renderActionPanel(getExtensionItemActionRows())
           ) : extensionView ? (
             renderExtensionView(extensionView)
           ) : previewFor ? (
@@ -1370,16 +1303,18 @@ export function App() {
               )}
             </div>
           ) : optionsFor ? (
-            getOptionActionRows().length > 0 ? getOptionActionRows().map(renderActionRow) : renderChildEmpty()
+            renderActionPanel(getOptionActionRows())
           ) : (
             renderActionResults()
           )}
 
           {!isChildOpen && actions.length === 0 ? (
-            <Command.Empty className="empty">
-              {clipboardMode ? <Clipboard size={24} /> : <Zap size={24} />}
-              <strong>{clipboardMode ? 'No clipboard items found.' : 'Type anything.'}</strong>
-              <span>{clipboardMode ? 'Try a different clipboard search.' : 'Nevermind starts with local actions; AI planning comes next.'}</span>
+            <Command.Empty asChild>
+              <EmptyState
+                icon={clipboardMode ? <Clipboard size={24} /> : <Zap size={24} />}
+                title={clipboardMode ? 'No clipboard items found.' : 'Type anything.'}
+                subtitle={clipboardMode ? 'Try a different clipboard search.' : 'Nevermind starts with local actions; AI planning comes next.'}
+              />
             </Command.Empty>
           ) : null}
         </Command.List>

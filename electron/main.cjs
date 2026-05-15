@@ -515,6 +515,39 @@ function clipboardActionFromItem(item) {
   }
 }
 
+function clipboardHistoryView() {
+  return {
+    type: 'list',
+    id: 'clipboard-history',
+    title: 'Clipboard History',
+    searchBarPlaceholder: 'Search Clipboard History',
+    emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
+    items: clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
+      const isImage = item.type === 'image'
+      const copyAction = isImage
+        ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl }
+        : { type: 'copyText', title: 'Copy Text', text: item.text }
+      const pasteAction = isImage
+        ? copyAction
+        : { type: 'pasteText', title: 'Paste Text', text: item.text, shortcut: 'Command+Return' }
+      return {
+        id: `clipboard:${item.id}`,
+        title: clipboardItemTitle(item),
+        subtitle: clipboardItemSubtitle(item),
+        icon: 'clipboard',
+        image: item.thumbnailUrl,
+        keywords: [item.text || '', item.type || ''].filter(Boolean),
+        primaryAction: pasteAction,
+        actionPanel: {
+          sections: [
+            { actions: [pasteAction, copyAction] },
+          ],
+        },
+      }
+    }),
+  }
+}
+
 function searchActions(query, options = {}) {
   const q = query.trim()
 
@@ -687,18 +720,8 @@ async function executeAction(action, options = {}) {
         clipboard.writeText(action.text || '')
       }
       break
-    case 'clipboard-history': {
-      const wasVisible = Boolean(win?.isVisible())
-      if (wasVisible) {
-        centerWindow()
-        win.focus()
-        win.webContents.focus()
-      } else {
-        showPalette({ skipShownEvent: true, deferReveal: true })
-      }
-      win?.webContents.send('clipboard-history:open', { openedFromHidden: !wasVisible, revealWhenReady: !wasVisible })
-      return
-    }
+    case 'clipboard-history':
+      return { view: clipboardHistoryView() }
     case 'file':
       await shell.openPath(action.filePath)
       break
@@ -799,19 +822,45 @@ function normalizeExtensionView(result, entry) {
 }
 
 function normalizeView(view, entry) {
+  const actions = normalizeViewActions(view.actions, entry)
   return {
     ...view,
-    actions: normalizeViewActions(view.actions, entry),
-    items: Array.isArray(view.items) ? view.items.map((item) => ({
-      ...item,
-      actions: normalizeViewActions(item.actions, entry),
-      primaryAction: normalizeViewAction(item.primaryAction, entry),
-    })) : view.items,
+    actions,
+    actionPanel: normalizeActionPanel(view.actionPanel, actions, entry),
+    onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
+    submitAction: normalizeViewAction(view.submitAction, entry),
+    searchAccessory: view.searchAccessory ? { ...view.searchAccessory, onChange: normalizeViewAction(view.searchAccessory.onChange, entry) } : view.searchAccessory,
+    items: normalizeViewItems(view.items, entry),
+    sections: Array.isArray(view.sections) ? view.sections.map((section) => ({ ...section, items: normalizeViewItems(section.items, entry) })) : view.sections,
   }
 }
 
+function normalizeViewItems(items, entry) {
+  return Array.isArray(items) ? items.map((item) => {
+    const itemActions = normalizeViewActions(item.actions, entry)
+    return {
+      ...item,
+      actions: itemActions,
+      actionPanel: normalizeActionPanel(item.actionPanel, itemActions, entry),
+      primaryAction: normalizeViewAction(item.primaryAction, entry),
+    }
+  }) : items
+}
+
+function normalizeActionPanel(panel, fallbackActions, entry) {
+  if (panel?.sections) return {
+    ...panel,
+    sections: panel.sections.map((section) => ({
+      ...section,
+      actions: normalizeViewActions([...(section.actions || []), ...(section.lazyActions || [])], entry),
+    })),
+  }
+  if (Array.isArray(fallbackActions) && fallbackActions.length) return { sections: [{ actions: fallbackActions }] }
+  return panel
+}
+
 function normalizeViewActions(actions, entry) {
-  return Array.isArray(actions) ? actions.map((action) => normalizeViewAction(action, entry)).filter(Boolean) : actions
+  return Array.isArray(actions) ? actions.map((action) => normalizeViewAction(action, entry)).filter(Boolean) : []
 }
 
 function normalizeViewAction(action, entry) {
@@ -828,6 +877,35 @@ function normalizeViewAction(action, entry) {
   return action
 }
 
+function runShellCommand(command, args = [], options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(String(command), Array.isArray(args) ? args.map(String) : [], {
+      cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
+      env: { ...process.env, ...(options.env || {}) },
+      shell: Boolean(options.shell),
+      timeout: Number(options.timeout || 30_000),
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout?.on('data', (chunk) => { stdout = limitedOutput(stdout + chunk.toString(), options.outputLimit) })
+    child.stderr?.on('data', (chunk) => { stderr = limitedOutput(stderr + chunk.toString(), options.outputLimit) })
+    child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
+    child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
+  })
+}
+
+function runShellScript(script, options = {}) {
+  return runShellCommand(options.shell || '/bin/bash', ['-lc', String(script)], { ...options, shell: false })
+}
+
+function shellResultView(title, result) {
+  return {
+    type: 'detail',
+    title,
+    content: `Exit code: ${result.exitCode ?? 0}\n\nSTDOUT\n${result.stdout || '—'}\n\nSTDERR\n${result.stderr || '—'}`,
+  }
+}
+
 async function executeViewAction(action) {
   switch (action?.type) {
     case 'openPath':
@@ -838,27 +916,46 @@ async function executeViewAction(action) {
       break
     case 'quickLook':
       return quickLookPath(action.path)
+    case 'openWith':
+      return openPathWithApp(action.path, action.appPath || action.app?.path)
     case 'openUrl':
       await shell.openExternal(action.url)
       break
     case 'copyText':
       clipboard.writeText(action.text || '')
       break
+    case 'pasteText':
+      clipboard.writeText(action.text || '')
+      if (process.platform === 'darwin') execFile('osascript', ['-e', 'tell application "System Events" to keystroke "v" using command down'], () => {})
+      return { toast: { message: 'Pasted' } }
     case 'copyImage':
       if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
       else clipboard.writeImage(nativeImage.createFromDataURL(action.imageDataUrl))
       break
+    case 'trash':
+      for (const itemPath of action.paths || [action.path]) {
+        if (itemPath) await shell.trashItem(expandUserPath(itemPath))
+      }
+      return { toast: { message: 'Moved to Trash' } }
     case 'pushView':
       return { view: action.view, navigation: 'push' }
     case 'replaceView':
       return { view: action.view, navigation: 'replace' }
     case 'popView':
       return { navigation: 'pop' }
+    case 'shellExec': {
+      const result = await runShellCommand(action.command, action.args || [], action.options || {})
+      return { view: shellResultView(action.title || action.command || 'Command', result), navigation: 'push' }
+    }
+    case 'shellScript': {
+      const result = await runShellScript(action.script, action.options || {})
+      return { view: shellResultView(action.title || 'Script', result), navigation: 'push' }
+    }
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
       try {
-        const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command))
+        const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command), action)
         const view = normalizeExtensionView(result, record.entry)
         return view ? { view, navigation: result?.navigation || 'push' } : result
       } catch (error) {
@@ -1082,6 +1179,62 @@ function quickLookPath(filePath) {
   child.unref()
 }
 
+function execFileText(command, args) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, (error, stdout) => error ? reject(error) : resolve(stdout))
+  })
+}
+
+async function contentTypesForPath(filePath) {
+  if (process.platform !== 'darwin') return []
+  try {
+    const stdout = await execFileText('mdls', ['-raw', '-name', 'kMDItemContentTypeTree', filePath])
+    return stdout.match(/"([^"]+)"/g)?.map((item) => item.slice(1, -1)) || []
+  } catch {
+    return []
+  }
+}
+
+async function documentTypesForApp(appPath) {
+  try {
+    const stdout = await execFileText('/usr/bin/plutil', ['-convert', 'json', '-o', '-', path.join(appPath, 'Contents', 'Info.plist')])
+    return JSON.parse(stdout).CFBundleDocumentTypes || []
+  } catch {
+    return []
+  }
+}
+
+async function openWithApps(filePath) {
+  const resolvedPath = expandUserPath(filePath)
+  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return []
+  if (process.platform !== 'darwin') return appIndex
+  const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase()
+  const contentTypes = new Set(await contentTypesForPath(resolvedPath))
+  const scored = []
+  await Promise.all(appIndex.map(async (item) => {
+    if (!item.path?.endsWith('.app')) return
+    const documentTypes = await documentTypesForApp(item.path)
+    let score = 0
+    for (const type of documentTypes) {
+      const extensions = (type.CFBundleTypeExtensions || []).map((value) => String(value).toLowerCase())
+      const itemTypes = type.LSItemContentTypes || []
+      if (extension && extensions.includes(extension)) score = Math.max(score, 3)
+      if (itemTypes.some((itemType) => contentTypes.has(itemType))) score = Math.max(score, 2)
+      if (extensions.includes('*') || itemTypes.includes('public.data') || itemTypes.includes('public.item')) score = Math.max(score, 1)
+    }
+    if (score) scored.push({ ...item, score })
+  }))
+  return scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).map(({ score, ...item }) => item)
+}
+
+async function openPathWithApp(filePath, appPath) {
+  const resolvedPath = expandUserPath(filePath)
+  const resolvedAppPath = expandUserPath(appPath)
+  if (!resolvedPath || !resolvedAppPath || !path.isAbsolute(resolvedPath) || !path.isAbsolute(resolvedAppPath)) return { toast: { message: 'Cannot open this file with that app', tone: 'error' } }
+  if (process.platform === 'darwin') spawn('open', ['-a', resolvedAppPath, resolvedPath], { detached: true, stdio: 'ignore' }).unref()
+  else await shell.openPath(resolvedPath)
+}
+
 async function selectedInFinder() {
   if (process.platform !== 'darwin') return []
   const script = 'tell application "Finder" to get POSIX path of (selection as alias list)'
@@ -1110,6 +1263,11 @@ async function readExtensionStorage(extension) {
 async function writeExtensionStorage(extension, data) {
   await fs.mkdir(extensionStorageDir, { recursive: true })
   await fs.writeFile(extensionStoragePath(extension), JSON.stringify(data, null, 2))
+}
+
+function limitedOutput(value, limit = 200_000) {
+  const text = String(value || '')
+  return text.length > limit ? `${text.slice(0, limit)}\n… output truncated …` : text
 }
 
 function createExtensionStorage(extension) {
@@ -1174,13 +1332,18 @@ function createExtensionContext(extension, command) {
       openPath: (filePath, title = 'Open', options = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
       revealPath: (filePath, title = 'Reveal in Finder', options = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
       quickLook: (filePath, title = 'Quick Look', options = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
+      openWith: (filePath, app, title, options = {}) => ({ ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
       openUrl: (url, title = 'Open URL', options = {}) => ({ ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options = {}) => ({ ...options, type: 'copyText', title, text }),
+      pasteText: (text, title = 'Paste', options = {}) => ({ ...options, type: 'pasteText', title, text }),
       copyImage: (image, title = 'Copy image', options = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
+      trash: (paths, title = 'Move to Trash', options = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
       push: (title, view, options = {}) => ({ ...options, type: 'pushView', title, view }),
       replace: (title, view, options = {}) => ({ ...options, type: 'replaceView', title, view }),
       pop: (title = 'Back', options = {}) => ({ ...options, type: 'popView', title }),
       run: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
+      shellExec: (title, command, args = [], options = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+      shellScript: (title, script, options = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
     },
     clipboard: {
       readText: () => clipboard.readText(),
@@ -1194,6 +1357,7 @@ function createExtensionContext(extension, command) {
       findVideos: (roots, options) => findFiles(roots, { ...options, kind: 'video' }),
       findMedia: (roots, options) => findFiles(roots, { ...options, kind: 'media' }),
       selectedInFinder,
+      openWithApps,
       open: (filePath) => shell.openPath(expandUserPath(filePath)),
       readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
       toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
@@ -1204,6 +1368,40 @@ function createExtensionContext(extension, command) {
     },
     shell: {
       openExternal: (url) => shell.openExternal(url),
+      exec: (command, args = [], options = {}) => new Promise((resolve) => {
+        const child = spawn(String(command), Array.isArray(args) ? args.map(String) : [], {
+          cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
+          env: { ...process.env, ...(options.env || {}) },
+          shell: Boolean(options.shell),
+          timeout: Number(options.timeout || 30_000),
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout?.on('data', (chunk) => { stdout = limitedOutput(stdout + chunk.toString(), options.outputLimit) })
+        child.stderr?.on('data', (chunk) => { stderr = limitedOutput(stderr + chunk.toString(), options.outputLimit) })
+        child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
+        child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
+      }),
+      script: (script, options = {}) => new Promise((resolve) => {
+        const child = spawn(options.shell || '/bin/bash', ['-lc', String(script)], {
+          cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
+          env: { ...process.env, ...(options.env || {}) },
+          timeout: Number(options.timeout || 30_000),
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout?.on('data', (chunk) => { stdout = limitedOutput(stdout + chunk.toString(), options.outputLimit) })
+        child.stderr?.on('data', (chunk) => { stderr = limitedOutput(stderr + chunk.toString(), options.outputLimit) })
+        child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
+        child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
+      }),
+      appleScript: (script, options = {}) => new Promise((resolve) => {
+        if (process.platform !== 'darwin') return resolve({ stdout: '', stderr: 'AppleScript is only available on macOS', exitCode: 1 })
+        execFile('osascript', ['-e', String(script)], { timeout: Number(options.timeout || 30_000) }, (error, stdout, stderr) => resolve({ stdout: limitedOutput(stdout, options.outputLimit), stderr: limitedOutput(stderr || error?.message || '', options.outputLimit), exitCode: error ? 1 : 0 }))
+      }),
+      which: (command) => new Promise((resolve) => {
+        execFile('/usr/bin/which', [String(command)], (error, stdout, stderr) => resolve({ stdout: stdout.trim(), stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
+      }),
     },
     storage: createExtensionStorage(extension),
     cache: new Map(),
