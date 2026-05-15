@@ -1,4 +1,4 @@
-appId: com.pablopunk.mvm
+appId: com.pablopunk.nvm
 productName: Nevermind
 artifactName: ${productName}-${version}-${arch}.${ext}
 directories:
@@ -6,6 +6,8 @@ directories:
 files:
   - dist/**
   - electron/**
+  - docs/**
+  - resources/**
   - package.json
 mac:
   category: public.app-category.productivity

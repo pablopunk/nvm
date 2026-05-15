@@ -1,15 +1,28 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme } = require('electron')
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net } = require('electron')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const os = require('node:os')
 const crypto = require('node:crypto')
-const { spawn } = require('node:child_process')
+const { spawn, execFile } = require('node:child_process')
+const { pathToFileURL } = require('node:url')
+const { createNevermindAi } = require('./ai.cjs')
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const HOTKEY = 'Alt+Space'
 const CLIPBOARD_LIMIT = 100
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
+const DEFAULT_WINDOW_SIZE = { width: 760, height: 520 }
+const AI_CHAT_WINDOW_SIZE = { width: 900, height: 720 }
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.heic'])
+const LOCAL_FILE_PROTOCOL = 'nvm-file'
+const LOCAL_THUMB_PROTOCOL = 'nvm-thumb'
+const THUMBNAIL_SIZE = 512
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
+  { scheme: LOCAL_THUMB_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
+])
 
 let win
 let appIndex = []
@@ -17,7 +30,10 @@ let fileIndex = []
 let clipboardHistory = []
 let statePath
 let iconCacheDir
+let extensionsDir
 let saveTimer
+let nevermindAi
+let activeAiChatId
 let userState = {
   recents: {},
   aliases: {},
@@ -25,8 +41,13 @@ let userState = {
   shortcutActions: {},
   overrides: {},
   clipboardHistory: [],
+  aiChats: {},
 }
 const appIconCache = new Map()
+const extensionRegistry = new Map()
+const extensionActionHandlers = new Map()
+
+const INTERNAL_EXTENSIONS = []
 
 const BUILT_IN_ACTIONS = [
   {
@@ -108,8 +129,8 @@ const BUILT_IN_ACTIONS = [
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 760,
-    height: 520,
+    width: DEFAULT_WINDOW_SIZE.width,
+    height: DEFAULT_WINDOW_SIZE.height,
     show: false,
     frame: false,
     transparent: true,
@@ -145,6 +166,12 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
+}
+
+function setPaletteSizeForMode(mode = 'default') {
+  if (!win) return
+  const size = mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
+  win.setSize(size.width, size.height, false)
 }
 
 function centerWindow() {
@@ -185,6 +212,12 @@ function registerHotkey() {
   const ok = globalShortcut.register(HOTKEY, togglePalette)
   if (ok) console.log(`Registered global shortcut: ${HOTKEY}`)
   else console.warn(`Could not register global shortcut: ${HOTKEY}`)
+
+  globalShortcut.register('CommandOrControl+Alt+I', () => {
+    if (!win) return
+    if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools()
+    else win.webContents.openDevTools({ mode: 'detach' })
+  })
 }
 
 function normalize(value) {
@@ -222,6 +255,7 @@ function actionSearchScore(action, query) {
   return Math.max(
     score(action.title, query),
     score(action.subtitle, query),
+    ...(action.aliases || []).map((alias) => score(alias, query)),
     ...actionAliases(action.id).map((alias) => score(alias, query)),
   )
 }
@@ -259,7 +293,7 @@ function rankAction(action, query) {
   if (query.trim() && base <= 0) return null
   return {
     ...action,
-    aliases: actionAliases(action.id),
+    aliases: [...(action.aliases || []), ...actionAliases(action.id)],
     score: base + recentBoost(action.id),
     lastUsed: userState.recents[action.id]?.lastUsed || 0,
   }
@@ -333,6 +367,92 @@ async function getAppIconDataUrl(appPath) {
   return result
 }
 
+function extensionActionFromCommand(extension, command) {
+  return {
+    id: `extension:${extension.id}:${command.id}`,
+    kind: 'extension-command',
+    extensionId: extension.id,
+    commandId: command.id,
+    aiChatId: extension.__chatId,
+    removable: Boolean(extension.__generated),
+    title: command.title,
+    subtitle: command.subtitle || extension.title || 'Extension command',
+    aliases: command.aliases || [],
+    icon: command.icon || 'sparkles',
+    score: command.score || 12,
+  }
+}
+
+function hasReadyGeneratedExtension(item) {
+  return item.status === 'ready' && item.generatedExtensionFile
+}
+
+function aiChatActionFromItem(item) {
+  return {
+    id: `ai-chat:${item.id}`,
+    kind: 'ai-chat',
+    title: item.title || item.query,
+    subtitle: item.status === 'ready' ? 'Tweak AI-created action' : 'Continue AI automation chat',
+    query: item.query,
+    aiChatId: item.id,
+    aliases: [item.query],
+    icon: 'sparkles',
+    score: 13,
+    lastUsed: item.updatedAt || item.createdAt || 0,
+  }
+}
+
+function getOrCreateAiChat(query, options = {}) {
+  const id = hashValue(query.trim())
+  const current = userState.aiChats[id]
+  if (current && !options.fresh) return current
+  const item = {
+    id,
+    query: query.trim(),
+    title: query.trim(),
+    status: 'running',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [
+      { role: 'assistant', content: `What should “${query.trim()}” do? Tell me the exact behavior, inputs, and what UI you want, then I’ll build it.` },
+    ],
+  }
+  userState.aiChats[id] = item
+  scheduleSaveState()
+  return item
+}
+
+function appendAiChatMessage(chatId, role, content) {
+  const chat = userState.aiChats[chatId]
+  if (!chat || !content) return
+  chat.messages = [...(chat.messages || []), { role, content }].slice(-100)
+  chat.updatedAt = Date.now()
+  scheduleSaveState()
+}
+
+function appendAiChatDelta(chatId, text) {
+  const chat = userState.aiChats[chatId]
+  if (!chat || !text) return
+  const messages = chat.messages || []
+  const last = messages[messages.length - 1]
+  if (last?.role === 'assistant') last.content = `${last.content}${text}`
+  else messages.push({ role: 'assistant', content: text })
+  chat.messages = messages.slice(-100)
+  chat.updatedAt = Date.now()
+  scheduleSaveState()
+}
+
+function aiChatView(item, options = {}) {
+  return {
+    type: 'chat',
+    title: `Automate “${item.query}”`,
+    aiChat: true,
+    chatId: item.id,
+    initialPrompt: undefined,
+    messages: item.messages || [],
+  }
+}
+
 function clipboardActionFromItem(item) {
   return {
     id: `clipboard:${item.id}`,
@@ -388,6 +508,20 @@ function searchActions(query, options = {}) {
   for (const item of BUILT_IN_ACTIONS) {
     const ranked = rankAction(withDefaultOverride(item), q)
     if (ranked) results.push(ranked)
+  }
+
+  for (const command of extensionRegistry.values()) {
+    const ranked = rankAction(extensionActionFromCommand(command.extension, command.command), q)
+    if (ranked) results.push(ranked)
+  }
+
+  for (const item of Object.values(userState.aiChats || {})) {
+    if (hasReadyGeneratedExtension(item)) continue
+    const ranked = rankAction(aiChatActionFromItem(item), q)
+    if (ranked) {
+      ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.updatedAt || item.createdAt || 0)
+      results.push(ranked)
+    }
   }
 
   const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
@@ -447,20 +581,15 @@ function searchActions(query, options = {}) {
   }
 
   if (q && !url && mathResult === null) {
-    const hasLocalResults = results.some(
-      (r) => r.kind === 'builtin' || r.kind === 'app' || r.kind === 'file' || r.kind === 'clipboard',
-    )
-    if (!hasLocalResults) {
-      results.push({
-        id: `ai:${q}`,
-        kind: 'ai-placeholder',
-        title: `Press Tab to automate "${q}"`,
-        subtitle: 'Automate with AI',
-        query: q,
-        icon: 'bolt',
-        score: 90,
-      })
-    }
+    results.push({
+      id: `ai:${q}`,
+      kind: 'ai-placeholder',
+      title: `Press Tab to automate "${q}"`,
+      subtitle: 'Automate with AI',
+      query: q,
+      icon: 'bolt',
+      score: 90,
+    })
   }
 
   if (q) {
@@ -513,12 +642,101 @@ async function executeAction(action, options = {}) {
     case 'builtin':
       await executeBuiltin(action)
       break
-    case 'ai-placeholder':
-      // TODO: open the AI script creation flow.
+    case 'extension-command': {
+      const view = await executeExtensionCommand(action)
+      if (view) return { view }
       break
+    }
+    case 'ai-chat': {
+      const item = userState.aiChats[action.aiChatId]
+      if (item) return { view: aiChatView(item) }
+      break
+    }
+    case 'ai-placeholder': {
+      const item = getOrCreateAiChat(action.query, { fresh: true })
+      return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
+    }
   }
 
   if (!options.keepPaletteOpen) hidePalette()
+}
+
+async function executeExtensionCommand(action) {
+  const entry = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
+  if (!entry) return null
+  const ctx = createExtensionContext(entry.extension, entry.command)
+  const result = await entry.command.run(ctx)
+  return normalizeExtensionView(result, entry)
+}
+
+function normalizeExtensionView(result, entry) {
+  if (!result) return null
+  const view = result.type ? result : result.view?.type ? result.view : null
+  return view ? normalizeView(view, entry) : null
+}
+
+function normalizeView(view, entry) {
+  return {
+    ...view,
+    actions: normalizeViewActions(view.actions, entry),
+    items: Array.isArray(view.items) ? view.items.map((item) => ({
+      ...item,
+      actions: normalizeViewActions(item.actions, entry),
+      primaryAction: normalizeViewAction(item.primaryAction, entry),
+    })) : view.items,
+  }
+}
+
+function normalizeViewActions(actions, entry) {
+  return Array.isArray(actions) ? actions.map((action) => normalizeViewAction(action, entry)).filter(Boolean) : actions
+}
+
+function normalizeViewAction(action, entry) {
+  if (!action) return null
+  if (action.__handler && typeof action.__handler === 'function') {
+    const handlerId = crypto.randomUUID()
+    extensionActionHandlers.set(handlerId, { entry, handler: action.__handler })
+    const { __handler, ...rest } = action
+    return { ...rest, type: 'runExtensionAction', handlerId }
+  }
+  if ((action.type === 'pushView' || action.type === 'replaceView') && action.view) {
+    return { ...action, view: normalizeView(action.view, entry) }
+  }
+  return action
+}
+
+async function executeViewAction(action) {
+  switch (action?.type) {
+    case 'openPath':
+      await shell.openPath(action.path)
+      break
+    case 'revealPath':
+      shell.showItemInFolder(action.path)
+      break
+    case 'openUrl':
+      await shell.openExternal(action.url)
+      break
+    case 'copyText':
+      clipboard.writeText(action.text || '')
+      break
+    case 'copyImage':
+      if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
+      else clipboard.writeImage(nativeImage.createFromDataURL(action.imageDataUrl))
+      break
+    case 'pushView':
+      return { view: action.view, navigation: 'push' }
+    case 'replaceView':
+      return { view: action.view, navigation: 'replace' }
+    case 'popView':
+      return { navigation: 'pop' }
+    case 'runExtensionAction': {
+      const record = extensionActionHandlers.get(action.handlerId)
+      if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
+      const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command))
+      const view = normalizeExtensionView(result, record.entry)
+      return view ? { view, navigation: result?.navigation || 'push' } : result
+    }
+  }
 }
 
 async function executeBuiltin(action) {
@@ -553,6 +771,280 @@ async function executeBuiltin(action) {
       app.isQuiting = true
       app.quit()
       break
+  }
+}
+
+function expandUserPath(value) {
+  if (!value) return value
+  if (value === '~') return os.homedir()
+  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2))
+  return value
+}
+
+function fileUrlForPath(filePath) {
+  return `${LOCAL_FILE_PROTOCOL}:${pathToFileURL(filePath).href.slice('file:'.length)}`
+}
+
+function thumbnailUrlForPath(filePath) {
+  return `${LOCAL_THUMB_PROTOCOL}://thumb?path=${encodeURIComponent(filePath)}`
+}
+
+function isImagePath(filePath) {
+  return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+}
+
+async function thumbnailResponseForPath(filePath) {
+  const stat = await fs.stat(filePath)
+  const key = crypto.createHash('sha1').update(`${filePath}:${stat.mtimeMs}:${stat.size}:${THUMBNAIL_SIZE}`).digest('hex')
+  const cachedPath = path.join(iconCacheDir, 'thumbs', `${key}.png`)
+
+  try {
+    const cached = await fs.readFile(cachedPath)
+    return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+  } catch {}
+
+  let image = null
+  if (typeof nativeImage.createThumbnailFromPath === 'function') {
+    image = await nativeImage.createThumbnailFromPath(filePath, { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE })
+  }
+  if (!image || image.isEmpty()) image = nativeImage.createFromPath(filePath).resize({ width: THUMBNAIL_SIZE, quality: 'good' })
+  if (!image || image.isEmpty()) return net.fetch(pathToFileURL(filePath).href)
+
+  const png = image.toPNG()
+  await fs.mkdir(path.dirname(cachedPath), { recursive: true })
+  await fs.writeFile(cachedPath, png).catch(() => {})
+  return new Response(png, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+}
+
+function registerLocalFileProtocol() {
+  protocol.handle(LOCAL_FILE_PROTOCOL, (request) => {
+    const url = new URL(request.url)
+    const encodedPath = url.host ? `/${url.host}${url.pathname}` : url.pathname
+    const requestPath = decodeURIComponent(encodedPath)
+    if (!path.isAbsolute(requestPath)) return new Response('Invalid file path', { status: 400 })
+    return net.fetch(pathToFileURL(requestPath).href)
+  })
+
+  protocol.handle(LOCAL_THUMB_PROTOCOL, async (request) => {
+    const requestPath = decodeURIComponent(new URL(request.url).searchParams.get('path') || '')
+    if (!path.isAbsolute(requestPath)) return new Response('Invalid file path', { status: 400 })
+    try {
+      return await thumbnailResponseForPath(requestPath)
+    } catch (error) {
+      console.error('Failed to create thumbnail', requestPath, error)
+      return new Response('Thumbnail not found', { status: 404 })
+    }
+  })
+}
+
+function fileToExtensionFile(filePath) {
+  return {
+    path: filePath,
+    name: path.basename(filePath),
+    displayPath: displayUserPath(filePath),
+    url: isImagePath(filePath) ? thumbnailUrlForPath(filePath) : fileUrlForPath(filePath),
+    fileUrl: fileUrlForPath(filePath),
+    thumbnailUrl: isImagePath(filePath) ? thumbnailUrlForPath(filePath) : null,
+  }
+}
+
+async function findFiles(roots, options = {}) {
+  const limit = options.limit || 100
+  const maxDepth = options.depth ?? 2
+  const extensions = options.extensions ? new Set(options.extensions.map((ext) => ext.toLowerCase())) : null
+  const found = []
+
+  async function walk(dir, depth) {
+    if (found.length >= limit) return
+    let entries = []
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      if (found.length >= limit || entry.name.startsWith('.')) continue
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isFile()) {
+        if (!extensions || extensions.has(path.extname(entry.name).toLowerCase())) {
+          found.push(fileToExtensionFile(fullPath))
+        }
+        continue
+      }
+      if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
+    }
+  }
+
+  await Promise.all(roots.map((root) => walk(expandUserPath(root), maxDepth)))
+  return found
+}
+
+async function selectedInFinder() {
+  if (process.platform !== 'darwin') return []
+  const script = 'tell application "Finder" to get POSIX path of (selection as alias list)'
+  return new Promise((resolve) => {
+    execFile('osascript', ['-e', script], (error, stdout) => {
+      if (error) return resolve([])
+      resolve(stdout.split(', ').map((item) => item.trim()).filter(Boolean).map(fileToExtensionFile))
+    })
+  })
+}
+
+function createExtensionContext(extension, command) {
+  return {
+    extension,
+    command,
+    ui: {
+      list: (view) => ({ ...view, type: 'list' }),
+      grid: (view) => ({ ...view, type: 'grid' }),
+      detail: (view) => ({ ...view, type: 'detail' }),
+      chat: (view) => ({ ...view, type: 'chat' }),
+      form: (view) => ({ ...view, type: 'form' }),
+      progress: (view) => ({ ...view, type: 'progress' }),
+      item: (item) => item,
+      actions: (actions) => actions,
+      empty: (title = 'Nothing here', subtitle = '') => ({ type: 'detail', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
+      loading: (title = 'Loading…') => ({ type: 'progress', title, steps: [{ title, status: 'active' }] }),
+      error: (title = 'Something went wrong', message = '') => ({ type: 'detail', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
+    },
+    actions: {
+      openPath: (filePath, title = 'Open') => ({ type: 'openPath', title, path: filePath }),
+      revealPath: (filePath, title = 'Reveal in Finder') => ({ type: 'revealPath', title, path: filePath }),
+      openUrl: (url, title = 'Open URL') => ({ type: 'openUrl', title, url }),
+      copyText: (text, title = 'Copy') => ({ type: 'copyText', title, text }),
+      copyImage: (image, title = 'Copy image') => String(image || '').startsWith('data:') ? ({ type: 'copyImage', title, imageDataUrl: image }) : ({ type: 'copyImage', title, path: image }),
+      push: (title, view) => ({ type: 'pushView', title, view }),
+      replace: (title, view) => ({ type: 'replaceView', title, view }),
+      pop: (title = 'Back') => ({ type: 'popView', title }),
+      run: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
+    },
+    clipboard: {
+      readText: () => clipboard.readText(),
+      writeText: (text) => clipboard.writeText(String(text || '')),
+      readImage: () => clipboard.readImage().toDataURL(),
+      writeImage: (imageDataUrl) => clipboard.writeImage(nativeImage.createFromDataURL(imageDataUrl)),
+    },
+    files: {
+      find: findFiles,
+      findImages: (roots, options) => findFiles(roots, { ...options, extensions: Array.from(IMAGE_EXTENSIONS) }),
+      selectedInFinder,
+      open: (filePath) => shell.openPath(expandUserPath(filePath)),
+      readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
+      toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
+    },
+    apps: {
+      launch: (appPath) => shell.openPath(expandUserPath(appPath)),
+      frontmost: () => null,
+    },
+    shell: {
+      openExternal: (url) => shell.openExternal(url),
+    },
+    cache: new Map(),
+    state: {},
+    ai: {},
+  }
+}
+
+function initNevermindAi() {
+  nevermindAi = createNevermindAi({
+    agentDir: path.join(app.getPath('userData'), 'pi-agent'),
+    workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
+    extensionsDir,
+    extensionApiPath: path.join(__dirname, '..', 'docs', 'extension-api.md'),
+    skillPath: path.join(__dirname, '..', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
+    reloadExtensions: loadExtensions,
+    getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] : null,
+    markGeneratedExtension: (filePath) => markGeneratedExtensionForActiveChat(filePath),
+    onEvent: (event) => {
+      const chatId = event.chatId || activeAiChatId
+      if (chatId && event.type === 'delta' && event.text) appendAiChatDelta(chatId, event.text)
+      if (chatId && event.type === 'tool_start' && event.name) appendAiChatMessage(chatId, 'system', `Using ${event.name}…`)
+      if (chatId && event.type === 'error' && event.message) appendAiChatMessage(chatId, 'system', event.message)
+      if (chatId && event.type === 'done' && userState.aiChats[chatId]) {
+        if (userState.aiChats[chatId].status !== 'ready') userState.aiChats[chatId].status = 'done'
+        userState.aiChats[chatId].updatedAt = Date.now()
+        scheduleSaveState()
+      }
+      win?.webContents.send('ai:chat:event', { ...event, chatId })
+    },
+  })
+}
+
+function aiChatPromptWithContext(message, chatId) {
+  const chat = userState.aiChats[chatId]
+  const messages = (chat?.messages || [])
+    .filter((item) => item.role === 'user' || item.role === 'assistant')
+    .slice(-12)
+
+  if (!messages.length) return message
+
+  const transcript = messages
+    .map((item) => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`)
+    .join('\n\n')
+
+  return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.\n\n${transcript}\n\nNew user message:\n${message}`
+}
+
+function markGeneratedExtensionForActiveChat(filePath) {
+  const chat = activeAiChatId ? userState.aiChats[activeAiChatId] : null
+  if (!chat) return
+  chat.generatedExtensionFile = path.basename(filePath)
+  chat.status = 'ready'
+  chat.updatedAt = Date.now()
+  scheduleSaveState()
+}
+
+async function sendAiChatMessage(message, chatId) {
+  if (!nevermindAi) initNevermindAi()
+  activeAiChatId = chatId || activeAiChatId
+  const prompt = activeAiChatId ? aiChatPromptWithContext(message, activeAiChatId) : message
+  if (activeAiChatId) appendAiChatMessage(activeAiChatId, 'user', message)
+  return nevermindAi.send(prompt, activeAiChatId)
+}
+
+async function abortAiChat(chatId) {
+  return nevermindAi?.abort(chatId || activeAiChatId)
+}
+
+async function resetAiChat(chatId) {
+  activeAiChatId = chatId || activeAiChatId
+  return nevermindAi?.reset(activeAiChatId)
+}
+
+async function loadExtensions() {
+  extensionRegistry.clear()
+  for (const extension of INTERNAL_EXTENSIONS) registerExtension(extension)
+
+  await fs.mkdir(extensionsDir, { recursive: true })
+  const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.cjs')) continue
+    const fullPath = path.join(extensionsDir, entry.name)
+    try {
+      delete require.cache[require.resolve(fullPath)]
+      const extension = require(fullPath)
+      extension.__filePath = fullPath
+      extension.__generated = true
+      const chat = Object.values(userState.aiChats || {}).find((item) => item.generatedExtensionFile === entry.name)
+      if (chat) extension.__chatId = chat.id
+      registerExtension(extension)
+    } catch (error) {
+      console.error(`Failed to load extension ${fullPath}`, error)
+    }
+  }
+}
+
+function registerExtension(extension) {
+  if (!extension?.id || !Array.isArray(extension.commands)) return
+  if (extension.__generated && extension.__chatId) {
+    for (const key of Array.from(extensionRegistry.keys())) {
+      if (extensionRegistry.get(key)?.extension?.__chatId === extension.__chatId) extensionRegistry.delete(key)
+    }
+  }
+  for (const command of extension.commands) {
+    if (!command?.id || !command.title || typeof command.run !== 'function') continue
+    extensionRegistry.set(`${extension.id}:${command.id}`, { extension, command })
   }
 }
 
@@ -725,6 +1217,7 @@ async function indexFiles() {
 async function loadUserState() {
   statePath = path.join(app.getPath('userData'), 'state.json')
   iconCacheDir = path.join(app.getPath('userData'), 'icon-cache')
+  extensionsDir = path.join(app.getPath('userData'), 'extensions')
 
   try {
     const loaded = JSON.parse(await fs.readFile(statePath, 'utf8'))
@@ -735,6 +1228,7 @@ async function loadUserState() {
       shortcutActions: loaded.shortcutActions || {},
       overrides: loaded.overrides || {},
       clipboardHistory: loaded.clipboardHistory || [],
+      aiChats: loaded.aiChats || {},
     }
   } catch {
     // First run.
@@ -927,11 +1421,47 @@ async function clearOverride(action) {
   return { ok: true, message: 'Original restored' }
 }
 
+async function removeCreatedAction(action) {
+  if (action?.kind === 'ai-chat' && action.aiChatId) {
+    const chat = userState.aiChats[action.aiChatId]
+    if (chat?.generatedExtensionFile) {
+      await fs.unlink(path.join(extensionsDir, chat.generatedExtensionFile)).catch((error) => {
+        if (error?.code !== 'ENOENT') throw error
+      })
+      await loadExtensions()
+    }
+    delete userState.aiChats[action.aiChatId]
+    delete userState.recents[action.id]
+    scheduleSaveState()
+    return { ok: true, message: 'AI action removed' }
+  }
+
+  if (action?.kind === 'extension-command' && action.removable) {
+    const entry = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
+    const filePath = entry?.extension?.__filePath
+    if (!filePath) return { ok: false, message: 'This action cannot be removed' }
+    const chatId = entry?.extension?.__chatId || action.aiChatId
+    await fs.unlink(filePath).catch((error) => {
+      if (error?.code !== 'ENOENT') throw error
+    })
+    if (chatId) delete userState.aiChats[chatId]
+    delete userState.recents[action.id]
+    scheduleSaveState()
+    await loadExtensions()
+    return { ok: true, message: 'Generated action removed' }
+  }
+
+  return { ok: false, message: 'This action cannot be removed' }
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   if (process.platform === 'darwin') app.dock.hide()
+  registerLocalFileProtocol()
 
   await loadUserState()
+  await loadExtensions()
+  initNevermindAi()
   createWindow()
   registerHotkey()
   registerActionShortcuts()
@@ -941,11 +1471,20 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeAction(action))
+  ipcMain.handle('view-action:execute', (_event, action) => executeViewAction(action))
+  ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
+  ipcMain.handle('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
+  ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
   ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
   ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
   ipcMain.handle('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
   ipcMain.handle('actions:clear-override', (_event, action) => clearOverride(action))
+  ipcMain.handle('actions:remove-created', (_event, action) => removeCreatedAction(action))
   ipcMain.handle('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
+  ipcMain.handle('palette:set-mode', (_event, mode) => {
+    setPaletteSizeForMode(mode)
+    centerWindow()
+  })
   ipcMain.handle('palette:hide', () => hidePalette())
 })
 

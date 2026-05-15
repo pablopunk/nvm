@@ -1,5 +1,5 @@
 {
-  "name": "mvm",
+  "name": "nvm",
   "version": "0.0.1",
   "description": "Nevermind: an AI-native command palette for your desktop",
   "author": "Pablo Varela",
@@ -20,12 +20,16 @@
     "dist:win:x64": "pnpm build && electron-builder --config electron-builder.yml --win nsis portable --x64 --publish never"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@earendil-works/pi-coding-agent": "^0.74.0",
     "@vitejs/plugin-react": "latest",
     "cmdk": "^1.1.1",
     "file-icon": "^6.0.0",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "latest",
     "vite": "latest"
   },
