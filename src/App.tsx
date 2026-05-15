@@ -1,32 +1,29 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Command } from 'cmdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
-  AppWindow,
-  Calculator,
   Clipboard,
-  CornerDownLeft,
-  Folder,
-  Globe,
-  Grid2X2,
   Keyboard,
-  Lock,
-  Moon,
-  Power,
   RotateCcw,
   Search,
-  Settings,
   Sparkles,
-  Square,
   Tag,
   Trash2,
   Wand2,
   Zap,
 } from 'lucide-react'
-import { ActionPanelView, ChatView, CommandRow, CommandTile, DetailView, EmptyState, FormView, GridView, ListView, ProgressView, Toast, shortcutLabel } from './ui'
+import { EmptyState, SearchAccessory, Toast, type ActionPanelRow } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
+import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
+import { iconFor, iconForAction, iconForItem, type CommandIconName } from './command-icons'
+import { useExtensionNavigation } from './use-extension-navigation'
+import { useAiChat } from './use-ai-chat'
+import { useSearchResults } from './use-search-results'
+import { ActionPanel } from './action-panel'
+import { ExtensionViewRenderer } from './extension-view'
+import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
 import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView } from './model'
 
 type ActionKind =
@@ -135,7 +132,7 @@ declare global {
       onHidden: (callback: () => void) => () => void
       onAppsIndexed: (callback: (count: number) => void) => () => void
       onClipboardChanged: (callback: () => void) => () => void
-      onOpenActionView: (callback: (payload?: { view?: ExtensionView }) => void) => () => void
+      onOpenActionView: (callback: (payload?: { view?: ExtensionView; revealWhenReady?: boolean }) => void) => () => void
       onAiChatEvent: (callback: (event: { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }) => void) => () => void
     }
   }
@@ -147,35 +144,17 @@ const SEARCH_PLACEHOLDERS = [
   'Make it happen',
 ]
 
-const iconFor = {
-  globe: Globe,
-  search: Search,
-  app: AppWindow,
-  clipboard: Clipboard,
-  sparkles: Sparkles,
-  lock: Lock,
-  moon: Moon,
-  restart: RotateCcw,
-  settings: Settings,
-  folder: Folder,
-  power: Power,
-  calculator: Calculator,
-  bolt: Zap,
-  grid: Grid2X2,
-  keyboard: Keyboard,
-}
-
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
-  const chatMessagesRef = useRef<HTMLDivElement>(null)
-  const aiInputRef = useRef<HTMLTextAreaElement>(null)
+  const resultsListRef = useRef<HTMLDivElement>(null)
   const requestedIcons = useRef(new Set<string>())
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
   const runningViewActionsRef = useRef(new Set<string>())
   const lastLocalShortcutRef = useRef<string | null>(null)
   const [query, setQuery] = useState('')
-  const [actions, setActions] = useState<Action[]>([])
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
   const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({})
   const [selectedValue, setSelectedValue] = useState('')
   const [optionsFor, setOptionsFor] = useState<Action | null>(null)
@@ -183,14 +162,12 @@ export function App() {
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{ title: string; panel: CommandActionPanel } | null>(null)
   const [confirmRemoveFor, setConfirmRemoveFor] = useState<Action | null>(null)
   const [previewFor, setPreviewFor] = useState<Action | null>(null)
-  const [extensionView, setExtensionView] = useState<ExtensionView | null>(null)
-  const [extensionViewBackStack, setExtensionViewBackStack] = useState<ExtensionView[]>([])
-  const [aiMessages, setAiMessages] = useState<NonNullable<ExtensionView['messages']>>([])
-  const [aiInput, setAiInput] = useState('')
-  const [aiBusy, setAiBusy] = useState(false)
+  const extensionNavigation = useExtensionNavigation()
+  const extensionView = extensionNavigation.view
+  const extensionViewBackStack = extensionNavigation.backStack
+  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
   const [toast, setToast] = useState<{ message: string; tone?: 'default' | 'error' } | null>(null)
   const [placeholderIndex, setPlaceholderIndex] = useState(SEARCH_PLACEHOLDERS.length - 1)
-  const [refreshNonce, setRefreshNonce] = useState(0)
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false)
   const [childQuery, setChildQuery] = useState('')
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null)
@@ -220,13 +197,12 @@ export function App() {
       setShortcutManagerOpen(false)
       setShortcutOptionsFor(null)
       if (!aiChatOpenRef.current) {
-        setExtensionView(null)
-        setExtensionViewBackStack([])
-        setAiMessages([])
+        extensionNavigation.clearView()
+        aiChat.setMessages([])
       }
       setRefreshNonce((nonce) => nonce + 1)
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length)
-      if (!aiChatOpenRef.current) setExtensionViewBackStack([])
+      if (!aiChatOpenRef.current) extensionNavigation.setBackStack([])
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
     })
@@ -246,11 +222,10 @@ export function App() {
       setShortcutManagerOpen(false)
       setShortcutOptionsFor(null)
       if (!aiChatOpenRef.current) {
-        setExtensionView(null)
-        setExtensionViewBackStack([])
-        setAiMessages([])
+        extensionNavigation.clearView()
+        aiChat.setMessages([])
       }
-      setExtensionViewBackStack([])
+      extensionNavigation.setBackStack([])
     })
     const stopApps = window.nvm.onAppsIndexed(() => {})
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
@@ -265,11 +240,11 @@ export function App() {
     const stopAi = window.nvm.onAiChatEvent((event) => {
       if (event.type === 'debug') console.debug('[Nevermind AI]', event.label, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
-      if (event.type === 'start') setAiBusy(true)
-      if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') setAiBusy(false)
-      if (event.type === 'delta' && event.text) appendAiDelta(event.text)
-      if (event.type === 'tool_start' && event.name) appendAiMessage('system', `Using ${event.name}…`)
-      if (event.type === 'error' && event.message) appendAiMessage('system', event.message)
+      if (event.type === 'start') aiChat.setBusy(true)
+      if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') aiChat.setBusy(false)
+      if (event.type === 'delta' && event.text) aiChat.appendDelta(event.text)
+      if (event.type === 'tool_start' && event.name) aiChat.appendMessage('system', `Using ${event.name}…`)
+      if (event.type === 'error' && event.message) aiChat.appendMessage('system', event.message)
     })
     return () => {
       stopShown()
@@ -281,19 +256,6 @@ export function App() {
       stopAi()
     }
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    const timer = window.setTimeout(async () => {
-      const next = await window.nvm.search(query)
-      if (!cancelled) setActions(next)
-    }, 20)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [query, refreshNonce])
 
   useEffect(() => {
     if (shortcutFor) setSelectedValue('shortcut:save')
@@ -339,13 +301,9 @@ export function App() {
 
   useEffect(() => {
     if (extensionView?.aiChat) {
-      chatMessagesRef.current?.scrollTo({ top: chatMessagesRef.current.scrollHeight })
+      aiChat.messagesRef.current?.scrollTo({ top: aiChat.messagesRef.current.scrollHeight })
     }
-  }, [aiMessages, aiBusy, extensionView])
-
-  useLayoutEffect(() => {
-    resizeAiInput()
-  }, [aiInput, extensionView?.aiChat])
+  }, [aiChat.messages, aiChat.busy, extensionView])
 
   useEffect(() => {
     if (!shortcutFor) return
@@ -388,6 +346,11 @@ export function App() {
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
 
+  useEffect(() => {
+    if (isChildOpen) return
+    requestAnimationFrame(() => resultsListRef.current?.scrollTo({ top: 0 }))
+  }, [query, actions, isChildOpen])
+
   function markShortcutReady(shouldReveal: boolean) {
     if (shouldReveal) setPendingShortcutReveal(true)
   }
@@ -397,49 +360,18 @@ export function App() {
     window.setTimeout(() => setToast((current) => current?.message === message ? null : current), 2200)
   }
 
-  function appendAiMessage(role: 'user' | 'assistant' | 'system', content: string) {
-    setAiMessages((messages) => [...messages, { role, content }])
-  }
-
-  function appendAiDelta(text: string) {
-    setAiMessages((messages) => {
-      const last = messages[messages.length - 1]
-      if (last?.role === 'assistant') {
-        return [...messages.slice(0, -1), { ...last, content: `${last.content}${text}` }]
-      }
-      return [...messages, { role: 'assistant', content: text }]
-    })
-  }
-
-  function resizeAiInput(textarea = aiInputRef.current) {
-    if (!textarea) return
-    textarea.style.height = 'auto'
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
-    textarea.style.overflowY = textarea.scrollHeight > 120 ? 'auto' : 'hidden'
-  }
-
   async function sendAiPrompt(message: string, chatId = extensionView?.chatId) {
-    const trimmed = message.trim()
-    if (!trimmed || aiBusy) return
-    appendAiMessage('user', trimmed)
-    setAiInput('')
-    await window.nvm.sendAiMessage(trimmed, chatId)
+    await aiChat.sendPrompt(message, chatId)
   }
 
   function showExtensionView(view: ExtensionView, navigation: 'root' | 'push' | 'replace' = 'replace') {
-    if (navigation === 'root') setExtensionViewBackStack([])
-    if (navigation === 'push' && extensionView) setExtensionViewBackStack((stack) => [...stack, extensionView])
-    setExtensionView(view)
+    extensionNavigation.showView(view, navigation)
   }
 
   function popExtensionView() {
     setExtensionItemOptionsFor(null)
-    setExtensionViewBackStack((stack) => {
-      const previous = stack[stack.length - 1]
-      if (previous) setExtensionView(previous)
-      else setExtensionView(null)
-      return stack.slice(0, -1)
-    })
+    lastLocalShortcutRef.current = null
+    extensionNavigation.popView()
   }
 
   async function handleViewActionResult(result?: { view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
@@ -463,23 +395,9 @@ export function App() {
     }
   }
 
-  function focusAiChatInput() {
-    requestAnimationFrame(() => {
-      chatMessagesRef.current?.scrollTo({ top: chatMessagesRef.current.scrollHeight })
-      aiInputRef.current?.focus()
-    })
-  }
-
   async function openAiChat(view: ExtensionView) {
     showExtensionView(view, 'root')
-    setAiMessages(view.messages || [])
-    setAiInput('')
-    focusAiChatInput()
-    if (view.initialPrompt) {
-      await window.nvm.resetAiChat(view.chatId)
-      await sendAiPrompt(view.initialPrompt, view.chatId)
-    }
-    focusAiChatInput()
+    await aiChat.openChat(view)
   }
 
   async function run(action: Action) {
@@ -633,43 +551,16 @@ export function App() {
     runViewAction({ ...extensionView.onSelectionChange, text: selectedValue })
   }, [extensionView?.onSelectionChange, selectedValue])
 
-  function childScore(value: string | undefined, filter: string) {
-    const text = value?.toLowerCase() || ''
-    if (!filter) return 1
-    if (text === filter) return 100
-    if (text.startsWith(filter)) return 80
-    if (text.includes(filter)) return 50
-    let position = 0
-    for (const character of filter) {
-      position = text.indexOf(character, position)
-      if (position === -1) return 0
-      position += 1
-    }
-    return 20
-  }
-
   function childMatches(...values: Array<string | undefined>) {
-    const filter = childQuery.trim().toLowerCase()
-    if (!filter) return true
-    return Math.max(...values.map((value) => childScore(value, filter))) > 0
-  }
-
-  function allViewItems(view: ExtensionView) {
-    return view.sections?.flatMap((section) => section.items) || view.items || []
+    return valuesMatch(childQuery, ...values)
   }
 
   function filterViewSections(view: ExtensionView) {
-    if (view.sections?.length) return view.sections.map((section) => ({ ...section, items: filterExtensionItems(section.items) })).filter((section) => section.items.length > 0)
-    return undefined
+    return filterCommandSections(view, childQuery)
   }
 
   function filterExtensionItems(items: ExtensionViewItem[] = []) {
-    return items.filter((item) => childMatches(
-      item.title,
-      item.subtitle,
-      item.text,
-      ...actionsFromPanel(item.actionPanel, item.actions || []).map((action) => action.title),
-    ))
+    return filterCommandItems(items, childQuery)
   }
 
   function getConfirmActionRows() {
@@ -693,20 +584,13 @@ export function App() {
     ].filter((row) => childMatches(row.title, row.subtitle))
   }
 
-  function iconForViewAction(action: ExtensionViewAction) {
-    if (action.type === 'copyText' || action.type === 'copyImage' || action.type === 'pasteText') return <Clipboard size={18} />
-    if (action.type === 'trash') return <Trash2 size={18} />
-    if (action.type === 'revealPath' || action.type === 'openPath' || action.type === 'quickLook' || action.type === 'openWith') return <Folder size={18} />
-    return <Globe size={18} />
-  }
-
-  function actionPanelRows(panel = extensionItemOptionsFor?.actionPanel, fallbackActions = extensionItemOptionsFor?.actions || [], prefix = 'extension-item', closeAfterSelect = true) {
+  function actionPanelRows(panel = extensionItemOptionsFor?.actionPanel, fallbackActions = extensionItemOptionsFor?.actions || [], prefix = 'extension-item', closeAfterSelect = true): ActionPanelRow[] {
     const sections = panel?.sections?.length ? panel.sections : [{ actions: fallbackActions }]
     return sections.flatMap((section, sectionIndex) => [
       ...(section.title ? [{ value: `${prefix}:section:${sectionIndex}`, title: section.title, subtitle: '', sectionHeader: true, onSelect: () => {}, className: 'actionSectionHeader' }] : []),
       ...(section.actions || []).map((action, index) => ({
         value: `${prefix}:${sectionIndex}:${index}:${action.type}:${action.title}`,
-        icon: iconForViewAction(action),
+        icon: iconForAction(action),
         title: action.title,
         subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
         shortcut: action.shortcut,
@@ -720,25 +604,15 @@ export function App() {
         },
         className: action.style === 'destructive' ? 'result dangerResult' : 'result',
       })),
-    ]).filter((row) => row.sectionHeader || childMatches(row.title, row.subtitle))
+    ]).filter((row) => 'sectionHeader' in row || childMatches(row.title, row.subtitle))
   }
 
   function getExtensionItemActionRows() {
     return actionPanelRows()
   }
 
-  function shortcutItems() {
-    return shortcutRecords.map((record) => ({
-      id: `shortcut:${record.actionId}`,
-      title: record.action.title,
-      subtitle: record.accelerator,
-      icon: 'keyboard',
-      primaryAction: { type: 'nativeAction', title: 'Change shortcut', nativeAction: record.action },
-    })).filter((item) => childMatches(item.title, item.subtitle))
-  }
-
   function getShortcutRows() {
-    return shortcutItems().map((item) => ({
+    return shortcutItems(shortcutRecords, childMatches).map((item) => ({
       value: item.id,
       icon: <Keyboard size={18} />,
       title: item.title,
@@ -752,61 +626,20 @@ export function App() {
   }
 
   function renderShortcutManager() {
-    return <RootCommandList
-      items={shortcutItems()}
-      iconForItem={() => <Keyboard size={18} />}
-      onSelect={(item) => {
-        const record = shortcutRecords.find((candidate) => `shortcut:${candidate.actionId}` === item.id)
-        if (record) setShortcutOptionsFor(record)
-      }}
-      emptyTitle="No keyboard shortcuts found"
-    />
+    return <ShortcutManagerView records={shortcutRecords} matches={childMatches} onSelect={(record) => setShortcutOptionsFor(record as ShortcutRecord)} />
   }
 
   function getShortcutOptionRows() {
-    if (!shortcutOptionsFor) return []
-    return [
-      {
-        value: 'shortcut-option:change',
-        icon: <Keyboard size={18} />,
-        title: 'Change shortcut',
-        subtitle: shortcutOptionsFor.accelerator,
-        onSelect: () => {
-          startShortcutRecorder(shortcutOptionsFor.action)
-          setShortcutOptionsFor(null)
-        },
-        className: 'result',
-      },
-      {
-        value: 'shortcut-option:remove',
-        icon: <Trash2 size={18} />,
-        title: 'Remove shortcut',
-        subtitle: shortcutOptionsFor.action.title,
-        onSelect: () => removeShortcut(shortcutOptionsFor),
-        className: 'result dangerResult',
-      },
-    ].filter((row) => childMatches(row.title, row.subtitle))
+    return shortcutOptionRows(
+      shortcutOptionsFor as ShortcutRecordLike | null,
+      (action) => { startShortcutRecorder(action as Action); setShortcutOptionsFor(null) },
+      (record) => removeShortcut(record as ShortcutRecord),
+      childMatches,
+    )
   }
 
   function getShortcutRecorderRows() {
-    return [
-      {
-        value: 'shortcut:save',
-        icon: <Keyboard size={18} />,
-        title: recordedShortcut || 'Press a shortcut',
-        subtitle: recordedShortcut ? `Save shortcut for “${shortcutFor?.title}”` : 'Use at least one modifier, then press Enter',
-        onSelect: saveRecordedShortcut,
-        className: 'result',
-      },
-      {
-        value: 'shortcut:cancel',
-        icon: <RotateCcw size={18} />,
-        title: 'Cancel',
-        subtitle: 'Keep the current shortcut settings',
-        onSelect: () => setShortcutFor(null),
-        className: 'result',
-      },
-    ]
+    return shortcutRecorderRows(recordedShortcut, shortcutFor, saveRecordedShortcut, () => setShortcutFor(null))
   }
 
   function getOptionActionRows() {
@@ -893,20 +726,33 @@ export function App() {
       title: action.title,
       subtitle: action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle,
       icon: action.icon,
-      image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id],
+      image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id] || undefined,
       primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action },
       actionPanel: actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
     }
   }
 
+  function primaryCommandAction(item: CommandItem) {
+    return item.primaryAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]
+  }
+
   function actionFromCommandItem(item: CommandItem) {
-    return (item.primaryAction?.nativeAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]?.nativeAction) as Action | undefined
+    return primaryCommandAction(item)?.nativeAction as Action | undefined
+  }
+
+  async function runCommandItem(item: CommandItem) {
+    const action = primaryCommandAction(item)
+    if (!action) return
+    if (action.type === 'nativeAction' && actionFromCommandItem(item)?.kind === 'keyboard-shortcuts') {
+      await openShortcutManager()
+      return
+    }
+    await runViewAction(action)
   }
 
   function iconForCommandItem(item: CommandItem) {
     const action = actionFromCommandItem(item)
-    const Icon = iconFor[(action?.icon || item.icon || 'sparkles') as ActionIcon] ?? Sparkles
-    return <span className={action?.thumbnailUrl || item.image ? 'thumbnailIcon' : ''}>{item.image ? <img src={item.image} alt="" /> : <Icon size={18} />}</span>
+    return iconForItem({ ...item, icon: (action?.icon || item.icon) as CommandIconName, image: item.image })
   }
 
   function renderActionResults() {
@@ -914,16 +760,13 @@ export function App() {
     return <RootCommandList
       items={items}
       iconForItem={iconForCommandItem}
-      onSelect={(item) => {
-        const action = actionFromCommandItem(item)
-        if (action) run(action)
-      }}
+      onSelect={runCommandItem}
       extraForItem={(item) => actionFromCommandItem(item)?.kind === 'extension-command' && actionFromCommandItem(item)?.aiChatId ? ['Tab tweak'] : []}
     />
   }
 
-  function renderActionPanel(rows: ReturnType<typeof getOptionActionRows> | ReturnType<typeof getConfirmActionRows> | ReturnType<typeof getExtensionItemActionRows>, emptyMessage = 'No actions found') {
-    return <ActionPanelView rows={rows} renderEmpty={() => renderChildEmpty(emptyMessage)} />
+  function renderActionPanel(rows: ActionPanelRow[] | unknown[], emptyMessage = 'No actions found') {
+    return <ActionPanel rows={rows as ActionPanelRow[]} emptyMessage={emptyMessage} />
   }
 
   function renderMarkdown(content: string) {
@@ -946,12 +789,6 @@ export function App() {
     if (action) runViewAction(action)
   }
 
-  function renderTileActionHint(actions: ExtensionViewAction[] = []) {
-    if (actions.length === 0) return null
-    const shortcut = actions.find((action) => action.shortcut)?.shortcut
-    return <span className="tileActionHint">{shortcut ? shortcutLabel(shortcut) : '⌘K'}</span>
-  }
-
   function dragPathForItem(item: ExtensionViewItem) {
     if (item.path || item.filePath) return item.path || item.filePath
     const actions = [item.primaryAction, ...actionsFromPanel(item.actionPanel, item.actions || [])].filter(Boolean) as ExtensionViewAction[]
@@ -967,136 +804,37 @@ export function App() {
 
   function renderSearchAccessory(view: ExtensionView | null) {
     if (!view?.searchAccessory?.items?.length) return null
-    return <select
-      className="searchAccessory"
-      aria-label={view.searchAccessory.tooltip || 'View filter'}
-      value={view.searchAccessory.value || view.searchAccessory.items[0]?.value || ''}
-      onChange={(event) => {
+    return <SearchAccessory
+      tooltip={view.searchAccessory.tooltip}
+      value={view.searchAccessory.value}
+      items={view.searchAccessory.items}
+      onChange={(value) => {
         const action = view.searchAccessory?.onChange
-        if (!action) return
-        runViewAction({ ...action, text: event.target.value })
+        if (action) runViewAction({ ...action, text: value })
       }}
-    >
-      {view.searchAccessory.items.map((item) => <option key={item.value} value={item.value}>{item.title}</option>)}
-    </select>
-  }
-
-  function renderPagination(view: ExtensionView) {
-    if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
-    return <button className="loadMoreButton" type="button" onClick={() => runViewAction(view.pagination!.onLoadMore!)}>Load More</button>
-  }
-
-  function gridStyle(view: ExtensionView) {
-    return {
-      ...(view.columns ? { '--grid-columns': String(view.columns) } : {}),
-      ...(view.aspectRatio ? { '--tile-aspect-ratio': String(view.aspectRatio) } : {}),
-    } as React.CSSProperties
+    />
   }
 
   function renderExtensionView(view: ExtensionView) {
-    if (view.type === 'grid') {
-      const items = filterExtensionItems(view.items || [])
-      return <GridView
-        items={items}
-        sections={filterViewSections(view)}
-        subtitle={view.subtitle}
-        layout={view.layout || 'square'}
-        style={gridStyle(view)}
-        empty={renderViewEmpty(view)}
-        isLoading={view.isLoading}
-        pagination={renderPagination(view)}
-        renderItem={(item) => <CommandTile
-          key={item.id}
-          value={item.id}
-          title={item.title}
-          subtitle={item.subtitle}
-          image={item.image}
-          video={item.video || item.videoUrl}
-          actionHint={renderTileActionHint(actionsFromPanel(item.actionPanel, item.actions || []))}
-          draggable={Boolean(dragPathForItem(item))}
-          onDragStart={(event) => startItemDrag(event, item)}
-          onSelect={() => runDefaultViewAction(item)}
-        />}
-      />
-    }
-
-    if (view.type === 'list') {
-      const items = filterExtensionItems(view.items || [])
-      if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={iconForCommandItem} onSelect={runDefaultViewAction} emptyTitle={view.emptyView?.title || 'No items found'} emptySubtitle={view.emptyView?.subtitle} />
-      return <ListView
-        items={items}
-        sections={filterViewSections(view)}
-        empty={renderViewEmpty(view)}
-        isLoading={view.isLoading}
-        pagination={renderPagination(view)}
-        renderItem={(item) => <CommandRow
-          key={item.id}
-          value={item.id}
-          className="result extensionListItem"
-          icon={item.image ? <span className="thumbnailIcon"><img src={item.image} alt="" /></span> : (() => { const Icon = iconFor[item.icon || 'sparkles'] ?? Sparkles; return <Icon size={18} /> })()}
-          title={item.title}
-          subtitle={item.subtitle || item.text}
-          accessories={item.accessories}
-          shortcut={actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut}
-          selectedOnlyShortcut={view.id === 'clipboard-history'}
-          onSelect={() => runDefaultViewAction(item)}
-        />}
-      />
-    }
-
-    if (view.type === 'chat') {
-      const messages = (view.aiChat ? aiMessages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
-      const input = view.aiChat ? (
-        <form
-          className="chatInputRow"
-          onSubmit={(event) => {
-            event.preventDefault()
-            sendAiPrompt(aiInput)
-          }}
-        >
-          <textarea
-            ref={aiInputRef}
-            rows={1}
-            value={aiInput}
-            onChange={(event) => setAiInput(event.target.value)}
-            onInput={(event) => resizeAiInput(event.currentTarget)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter') return
-              event.stopPropagation()
-              if (!event.shiftKey) {
-                event.preventDefault()
-                sendAiPrompt(aiInput)
-              }
-            }}
-            placeholder={aiBusy ? 'Thinking…' : 'Message AI'}
-          />
-          {aiBusy ? (
-            <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => window.nvm.abortAiChat(extensionView?.chatId)}>
-              <Square size={14} fill="currentColor" />
-            </button>
-          ) : (
-            <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiInput.trim()}>
-              <CornerDownLeft size={16} />
-            </button>
-          )}
-        </form>
-      ) : null
-      return <ChatView messages={messages} isBusy={aiBusy} input={input} messagesRef={view.aiChat ? chatMessagesRef : undefined} />
-    }
-
-    if (view.type === 'form') return <FormView
-      fields={view.fields || []}
-      values={formValues}
-      onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))}
-      onSubmit={view.submitAction ? () => runViewAction({ ...view.submitAction!, formValues }) : undefined}
-      submitTitle={view.submitAction?.title}
+    return <ExtensionViewRenderer
+      view={view}
+      aiChat={aiChat}
+      formValues={formValues}
+      setFormValues={setFormValues}
+      filterItems={filterExtensionItems}
+      filterSections={filterViewSections}
+      renderMarkdown={renderMarkdown}
+      renderActionPanel={renderActionPanel}
+      actionPanelRows={actionPanelRows}
+      renderRootIcon={iconForCommandItem}
+      renderEmpty={renderViewEmpty}
+      runDefaultAction={runDefaultViewAction}
+      runAction={runViewAction}
+      sendAiPrompt={sendAiPrompt}
+      abortAiChat={window.nvm.abortAiChat}
+      dragPathForItem={dragPathForItem}
+      startItemDrag={startItemDrag}
     />
-
-    if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
-
-    const detailActions = renderActionPanel(actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
-
-    return <DetailView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={detailActions} />
   }
 
   function runLocalShortcut(accelerator: string) {
@@ -1257,7 +995,10 @@ export function App() {
             onValueChange={(value) => {
               if (shortcutFor) return
               if (isFilterableChildOpen) setChildQuery(value)
-              else if (!isChildOpen) setQuery(value)
+              else if (!isChildOpen) {
+                resultsListRef.current?.scrollTo({ top: 0 })
+                setQuery(value)
+              }
             }}
             placeholder={placeholder}
             readOnly={!shortcutFor && !isFilterableChildOpen && isChildOpen}
@@ -1267,7 +1008,7 @@ export function App() {
           {!isChildOpen && query ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
         </div>
 
-        <Command.List className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'}`}>
+        <Command.List ref={resultsListRef} className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'}`}>
           {shortcutFor ? (
             <div className="shortcutRecorder">
               <div className="shortcutKeys">

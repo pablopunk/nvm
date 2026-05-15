@@ -10,10 +10,16 @@ function assertIncludes(path, text) {
 }
 
 assertIncludes('src/command-list.tsx', 'RootCommandList')
-assertIncludes('src/App.tsx', 'presentation === \'root\'')
+assertIncludes('src/extension-view.tsx', 'presentation === \'root\'')
 assertIncludes('electron/main.cjs', "presentation: 'root'")
 assertIncludes('electron/main.cjs', 'function clipboardHistoryView()')
-assertIncludes('src/App.tsx', 'function renderShortcutManager()')
+assertIncludes('src/shortcut-manager.tsx', 'ShortcutManagerView')
+assertIncludes('src/use-ai-chat.ts', 'useAiChat')
+assertIncludes('src/use-extension-navigation.ts', 'useExtensionNavigation')
+assertIncludes('src/filtering.ts', 'filterCommandItems')
+assertIncludes('src/command-icons.tsx', 'iconForAction')
 assertIncludes('src/ui.tsx', 'selectedOnlyShortcut')
+assertIncludes('electron/main.cjs', 'case \'nativeAction\'')
+assertIncludes('electron/main.cjs', 'declaredGlobalShortcuts')
 
 console.log('design-system checks passed')

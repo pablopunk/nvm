@@ -36,6 +36,11 @@ input,
   height: 100%;
   padding: var(--window-blur-margin);
   background: transparent;
+  -webkit-app-region: drag;
+}
+
+.shell .palette {
+  -webkit-app-region: no-drag;
 }
 
 .toast {
@@ -101,6 +106,20 @@ input,
     0 20px 50px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px) saturate(1.12);
+  -webkit-app-region: drag;
+}
+
+.card .results,
+.card input,
+.card .searchAccessory,
+.card .tabHint,
+.card [cmdk-item],
+.card button,
+.card textarea,
+.card select,
+.card .extensionTile,
+.card .chatInputRow {
+  -webkit-app-region: no-drag;
 }
 
 .stackParentCard {
@@ -115,11 +134,24 @@ input,
   flex: 0 0 58px;
   height: 58px;
   padding: 0 18px;
+  -webkit-app-region: drag;
+}
+
+.searchRow input,
+.searchRow .searchAccessory,
+.searchRow .tabHint {
+  -webkit-app-region: no-drag;
 }
 
 .brandIcon {
   color: #ffd84d;
   filter: drop-shadow(0 0 18px rgba(255, 203, 71, 0.62));
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.brandIcon:active {
+  cursor: grabbing;
 }
 
 input {
@@ -141,6 +173,11 @@ kbd {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   font-weight: 700;
+}
+
+.tabHint kbd {
+  position: relative;
+  top: 1px;
 }
 
 .searchAccessory {

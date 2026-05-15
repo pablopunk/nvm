@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net } = require('electron')
 const fs = require('node:fs/promises')
 const path = require('node:path')
@@ -29,6 +30,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let win
+let ignorePaletteBlurUntil = 0
 let appIndex = []
 let fileIndex = []
 let clipboardHistory = []
@@ -171,7 +173,10 @@ function createWindow() {
     },
   })
 
-  win.on('blur', () => hidePalette())
+  win.on('blur', () => {
+    if (Date.now() < ignorePaletteBlurUntil) return
+    hidePalette()
+  })
   win.on('close', (event) => {
     if (!app.isQuiting) {
       event.preventDefault()
@@ -179,7 +184,17 @@ function createWindow() {
     }
   })
 
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    debugLog('renderer.didFailLoad', { errorCode, errorDescription, validatedURL })
+  })
+  win.webContents.on('render-process-gone', (_event, details) => {
+    debugLog('renderer.gone', details)
+  })
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    debugLog('renderer.console', { level, message, line, sourceId })
+  })
   win.webContents.once('did-finish-load', () => {
+    debugLog('renderer.didFinishLoad', { url: win.webContents.getURL() })
     if (isDev) showPalette()
   })
 
@@ -188,6 +203,13 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
+}
+
+function debugLog(message, data) {
+  try {
+    const line = `${new Date().toISOString()} ${message}${data ? ` ${JSON.stringify(data)}` : ''}\n`
+    fs.appendFile(path.join(app.getPath('userData'), 'debug.log'), line).catch(() => {})
+  } catch {}
 }
 
 function setPaletteSizeForMode(mode = 'default') {
@@ -212,6 +234,8 @@ function centerWindow() {
 
 function showPalette(options = {}) {
   if (!win) return
+  ignorePaletteBlurUntil = Date.now() + 500
+  debugLog('showPalette', { options, visible: win.isVisible(), bounds: win.getBounds() })
   centerWindow()
   if (options.deferReveal) {
     win.setOpacity(0)
@@ -222,8 +246,11 @@ function showPalette(options = {}) {
   if (options.skipShownEvent) win.webContents.send('palette:shortcut-show')
   else win.webContents.send('palette:shown')
   win.show()
+  win.moveTop()
   win.focus()
   win.webContents.focus()
+  debugLog('showPalette.after', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
+  setTimeout(() => debugLog('showPalette.later', { visible: win?.isVisible(), focused: win?.isFocused(), bounds: win?.getBounds(), opacity: win?.getOpacity() }), 300)
 }
 
 function revealPalette() {
@@ -232,6 +259,7 @@ function revealPalette() {
 
 function hidePalette() {
   if (!win) return
+  debugLog('hidePalette', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
   win.webContents.send('palette:hidden')
   win.hide()
 }
@@ -243,6 +271,7 @@ function togglePalette() {
 
 function registerHotkey() {
   const ok = globalShortcut.register(HOTKEY, togglePalette)
+  debugLog('registerHotkey', { accelerator: HOTKEY, ok, isRegistered: globalShortcut.isRegistered(HOTKEY) })
   if (ok) console.log(`Registered global shortcut: ${HOTKEY}`)
   else console.warn(`Could not register global shortcut: ${HOTKEY}`)
 
@@ -537,7 +566,7 @@ function clipboardHistoryView() {
         : { type: 'copyText', title: 'Copy Text', text: item.text }
       const pasteAction = isImage
         ? copyAction
-        : { type: 'pasteText', title: 'Paste Text', text: item.text, shortcut: 'Command+Return' }
+        : { type: 'pasteText', title: 'Paste Text', text: item.text }
       return {
         id: `clipboard:${item.id}`,
         title: clipboardItemTitle(item),
@@ -916,6 +945,8 @@ function shellResultView(title, result) {
 
 async function executeViewAction(action) {
   switch (action?.type) {
+    case 'nativeAction':
+      return executeAction(action.nativeAction, { keepPaletteOpen: true })
     case 'openPath':
       await shell.openPath(action.path)
       break
@@ -1847,9 +1878,12 @@ async function executeShortcutAction(action) {
 }
 
 function bindGlobalActionShortcut(actionId, accelerator, action) {
+  if (accelerator === HOTKEY) return false
   globalShortcut.unregister(accelerator)
   registeredActionAccelerators.add(accelerator)
-  return globalShortcut.register(accelerator, () => executeShortcutAction(action))
+  const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
+  debugLog('registerActionShortcut', { actionId, accelerator, title: action?.title, ok, isRegistered: globalShortcut.isRegistered(accelerator) })
+  return ok
 }
 
 function registerActionShortcut(actionId, accelerator, action) {
@@ -1936,6 +1970,7 @@ async function setShortcut(action, shortcut) {
   if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent commands' }
   if (!action?.id || !shortcut.trim()) return { ok: false, message: 'Missing shortcut' }
   const accelerator = normalizeAccelerator(shortcut)
+  if (accelerator === HOTKEY) return { ok: false, message: `${accelerator} is reserved for opening Nevermind` }
   const conflictingActionId = Object.entries(userState.shortcuts)
     .find(([actionId, current]) => actionId !== action.id && current === accelerator)?.[0]
   if (conflictingActionId) {

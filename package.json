@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
-    "test": "node scripts/check-design-system.cjs",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "test": "node scripts/check-design-system.cjs && pnpm typecheck",
     "electron": "electron .",
     "electron:dev": "node ./scripts/prepare-dev.cjs && concurrently -k \"pnpm dev\" \"wait-on tcp:127.0.0.1:5173 && ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "dist": "pnpm run dist:mac:arm64",

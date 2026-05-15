@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Search, Sparkles } from 'lucide-react'
 import { CommandRow, EmptyState } from './ui'
-import { actionsFromPanel, type CommandItem } from './model'
+import { actionsFromPanel, type CommandAction, type CommandItem } from './model'
 
 export type RootCommandListProps = {
   items: CommandItem[]
@@ -10,6 +10,10 @@ export type RootCommandListProps = {
   emptyTitle?: string
   emptySubtitle?: string
   extraForItem?: (item: CommandItem) => string[]
+}
+
+function isGlobalShortcut(action?: CommandAction) {
+  return action?.shortcutScope === 'global' || action?.type === 'nativeAction'
 }
 
 export function RootCommandList({ items, iconForItem, onSelect, emptyTitle = 'Type anything.', emptySubtitle = 'Nevermind starts with local actions; AI planning comes next.', extraForItem }: RootCommandListProps) {
@@ -25,6 +29,7 @@ export function RootCommandList({ items, iconForItem, onSelect, emptyTitle = 'Ty
       accessories={item.accessories}
       shortcut={primaryAction?.shortcut}
       extras={extraForItem?.(item)}
+      selectedOnlyShortcut={Boolean(primaryAction?.shortcut && !isGlobalShortcut(primaryAction))}
       onSelect={() => onSelect(item)}
     />
   })}</>

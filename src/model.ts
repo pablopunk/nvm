@@ -72,6 +72,7 @@ export type CommandItemSection = {
 }
 
 export type CommandView = {
+  id?: string
   type: 'list' | 'grid' | 'detail' | 'chat' | 'form' | 'progress'
   title: string
   image?: string
@@ -136,6 +137,6 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'pushView' || action.type === 'replaceView') return 'Open nested view'
   if (action.type === 'popView') return 'Go back'
   if (action.type === 'shellExec' || action.type === 'shellScript') return 'Run system command'
-  if (action.type === 'nativeAction') return 'Run Nevermind action'
+  if (action.type === 'nativeAction') return 'Run command'
   return 'Run action'
 }
