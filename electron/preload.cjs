@@ -20,10 +20,16 @@ contextBridge.exposeInMainWorld('nvm', {
   getAppIcon: (appPath) => ipcRenderer.invoke('apps:icon', appPath),
   setPaletteMode: (mode) => ipcRenderer.invoke('palette:set-mode', mode),
   hide: () => ipcRenderer.invoke('palette:hide'),
+  shortcutReady: () => ipcRenderer.invoke('palette:shortcut-ready'),
   onShown: (callback) => {
     const listener = () => callback()
     ipcRenderer.on('palette:shown', listener)
     return () => ipcRenderer.removeListener('palette:shown', listener)
+  },
+  onShortcutShown: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('palette:shortcut-show', listener)
+    return () => ipcRenderer.removeListener('palette:shortcut-show', listener)
   },
   onHidden: (callback) => {
     const listener = () => callback()
@@ -44,6 +50,11 @@ contextBridge.exposeInMainWorld('nvm', {
     const listener = (_event, payload) => callback(payload)
     ipcRenderer.on('clipboard-history:open', listener)
     return () => ipcRenderer.removeListener('clipboard-history:open', listener)
+  },
+  onOpenActionView: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('action:view-open', listener)
+    return () => ipcRenderer.removeListener('action:view-open', listener)
   },
   onAiChatEvent: (callback) => {
     const listener = (_event, payload) => callback(payload)

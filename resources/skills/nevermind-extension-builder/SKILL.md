@@ -20,6 +20,7 @@ Workflow:
 Rules:
 
 - Extensions export `module.exports = { id, title, commands }`.
+- When tweaking an existing extension, keep the extension `id` and command `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Commands should return `ctx.ui.*` views when they need UI.
 - Prefer `ctx.ui.grid` for image/file galleries.
 - Image thumbnails must use `file.url` from `ctx.files.findImages()` or `ctx.files.toFileUrl(path)`, never raw filesystem paths.

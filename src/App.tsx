@@ -157,11 +157,14 @@ declare global {
       getAppIcon: (appPath: string) => Promise<string | null>
       setPaletteMode: (mode: 'default' | 'ai-chat') => Promise<void>
       hide: () => Promise<void>
+      shortcutReady: () => Promise<void>
       onShown: (callback: () => void) => () => void
+      onShortcutShown: (callback: () => void) => () => void
       onHidden: (callback: () => void) => () => void
       onAppsIndexed: (callback: (count: number) => void) => () => void
       onClipboardChanged: (callback: () => void) => () => void
       onOpenClipboardHistory: (callback: (payload?: { openedFromHidden?: boolean }) => void) => () => void
+      onOpenActionView: (callback: (payload?: { view?: ExtensionView }) => void) => () => void
       onAiChatEvent: (callback: (event: { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }) => void) => () => void
     }
   }
@@ -217,6 +220,7 @@ export function App() {
   const [clipboardMode, setClipboardMode] = useState(false)
   const [clipboardOpenedFromHidden, setClipboardOpenedFromHidden] = useState(false)
   const [clipboardQuery, setClipboardQuery] = useState('')
+  const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false)
   const [childQuery, setChildQuery] = useState('')
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null)
   const [recordedShortcut, setRecordedShortcut] = useState('')
@@ -257,6 +261,10 @@ export function App() {
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
     })
+    const stopShortcutShown = window.nvm.onShortcutShown(() => {
+      requestAnimationFrame(focusInput)
+      window.setTimeout(focusInput, 50)
+    })
     const stopHidden = window.nvm.onHidden(() => {
       setQuery('')
       setOptionsFor(null)
@@ -280,7 +288,18 @@ export function App() {
     })
     const stopApps = window.nvm.onAppsIndexed(() => {})
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
-    const stopOpenClipboardHistory = window.nvm.onOpenClipboardHistory((payload) => openClipboardHistory({ openedFromHidden: Boolean(payload?.openedFromHidden) }))
+    const stopOpenClipboardHistory = window.nvm.onOpenClipboardHistory((payload) => {
+      openClipboardHistory({ openedFromHidden: Boolean(payload?.openedFromHidden) })
+      markShortcutReady(Boolean(payload?.revealWhenReady))
+    })
+    const stopOpenActionView = window.nvm.onOpenActionView(async (payload) => {
+      if (!payload?.view) return
+      setOptionsFor(null)
+      setPreviewFor(null)
+      if (payload.view.aiChat) await openAiChat(payload.view)
+      else showExtensionView(payload.view, 'root')
+      markShortcutReady(Boolean(payload?.revealWhenReady))
+    })
     const stopAi = window.nvm.onAiChatEvent((event) => {
       if (event.type === 'debug') console.debug('[Nevermind AI]', event.label, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
@@ -292,10 +311,12 @@ export function App() {
     })
     return () => {
       stopShown()
+      stopShortcutShown()
       stopHidden()
       stopApps()
       stopClipboard()
       stopOpenClipboardHistory()
+      stopOpenActionView()
       stopAi()
     }
   }, [])
@@ -330,6 +351,17 @@ export function App() {
   useEffect(() => {
     setChildQuery('')
   }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
+
+  useEffect(() => {
+    if (!pendingShortcutReveal || (!extensionView && !clipboardMode)) return
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.nvm.shortcutReady()
+        setPendingShortcutReveal(false)
+      })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [pendingShortcutReveal, extensionView, clipboardMode])
 
   useEffect(() => {
     const isAiChat = Boolean(extensionView?.aiChat)
@@ -386,6 +418,10 @@ export function App() {
     if (!isFilterableChildOpen && !shortcutFor) return
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
+
+  function markShortcutReady(shouldReveal: boolean) {
+    if (shouldReveal) setPendingShortcutReveal(true)
+  }
 
   function showToast(message: string, tone: 'default' | 'error' = 'default') {
     setToast({ message, tone })
@@ -501,6 +537,8 @@ export function App() {
     if (key === 'ArrowDown') return 'Down'
     if (key === 'ArrowLeft') return 'Left'
     if (key === 'ArrowRight') return 'Right'
+    if (/^Digit\d$/.test(event.code)) return event.code.slice('Digit'.length)
+    if (/^Key[A-Z]$/.test(event.code)) return event.code.slice('Key'.length)
     if (key.length === 1) return key.toUpperCase()
     return key[0].toUpperCase() + key.slice(1)
   }

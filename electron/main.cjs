@@ -196,13 +196,24 @@ function centerWindow() {
   })
 }
 
-function showPalette() {
+function showPalette(options = {}) {
   if (!win) return
   centerWindow()
+  if (options.deferReveal) {
+    win.setOpacity(0)
+    setTimeout(() => win?.setOpacity(1), 250)
+  } else {
+    win.setOpacity(1)
+  }
+  if (options.skipShownEvent) win.webContents.send('palette:shortcut-show')
+  else win.webContents.send('palette:shown')
   win.show()
   win.focus()
   win.webContents.focus()
-  win.webContents.send('palette:shown')
+}
+
+function revealPalette() {
+  win?.setOpacity(1)
 }
 
 function hidePalette() {
@@ -656,9 +667,9 @@ async function executeAction(action, options = {}) {
         win.focus()
         win.webContents.focus()
       } else {
-        showPalette()
+        showPalette({ skipShownEvent: true, deferReveal: true })
       }
-      win?.webContents.send('clipboard-history:open', { openedFromHidden: !wasVisible })
+      win?.webContents.send('clipboard-history:open', { openedFromHidden: !wasVisible, revealWhenReady: !wasVisible })
       return
     }
     case 'file':
@@ -689,9 +700,19 @@ async function executeAction(action, options = {}) {
   if (!options.keepPaletteOpen) hidePalette()
 }
 
+function extensionEntryForAction(action) {
+  const direct = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
+  if (direct) return direct
+  const matches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.id === action.extensionId)
+  return matches.length === 1 ? matches[0] : null
+}
+
 async function executeExtensionCommand(action) {
-  const entry = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
-  if (!entry) return null
+  const entry = extensionEntryForAction(action)
+  if (!entry) {
+    console.warn(`Extension command not found: ${action.extensionId}:${action.commandId}`)
+    return null
+  }
   const ctx = createExtensionContext(entry.extension, entry.command)
   const result = await entry.command.run(ctx)
   return normalizeExtensionView(result, entry)
@@ -1403,9 +1424,18 @@ function unregisterShortcutForAction(actionId) {
   if (current) globalShortcut.unregister(current)
 }
 
+async function executeShortcutAction(action) {
+  const wasVisible = Boolean(win?.isVisible())
+  const result = await executeAction(action, { keepPaletteOpen: true })
+  if (result?.view) {
+    showPalette({ skipShownEvent: true, deferReveal: !wasVisible })
+    win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible })
+  }
+}
+
 function registerActionShortcut(actionId, accelerator, action) {
   globalShortcut.unregister(accelerator)
-  const ok = globalShortcut.register(accelerator, () => executeAction(action, { keepPaletteOpen: true }))
+  const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
   if (!ok) return false
   userState.shortcuts[actionId] = accelerator
   userState.shortcutActions[actionId] = action
@@ -1417,10 +1447,11 @@ function unregisterActionShortcuts() {
 }
 
 function registerActionShortcuts() {
+  unregisterActionShortcuts()
   for (const [actionId, accelerator] of Object.entries(userState.shortcuts)) {
     const action = userState.shortcutActions[actionId]
     if (!action) continue
-    const ok = globalShortcut.register(accelerator, () => executeAction(action, { keepPaletteOpen: true }))
+    const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
     if (!ok) console.warn(`Could not register action shortcut ${accelerator} for ${actionId}`)
   }
 }
@@ -1567,6 +1598,7 @@ app.whenReady().then(async () => {
     centerWindow()
   })
   ipcMain.handle('palette:hide', () => hidePalette())
+  ipcMain.handle('palette:shortcut-ready', () => revealPalette())
 })
 
 app.on('activate', () => showPalette())
