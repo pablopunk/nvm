@@ -12,8 +12,11 @@ const HOTKEY = 'Alt+Space'
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
-const DEFAULT_WINDOW_SIZE = { width: 760, height: 520 }
-const AI_CHAT_WINDOW_SIZE = { width: 900, height: 720 }
+const WINDOW_BLUR_MARGIN = 96
+const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
+const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
+const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
+const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.heic'])
 const LOCAL_FILE_PROTOCOL = 'nvm-file'
 const LOCAL_THUMB_PROTOCOL = 'nvm-thumb'
@@ -46,6 +49,13 @@ let userState = {
 const appIconCache = new Map()
 const extensionRegistry = new Map()
 const extensionActionHandlers = new Map()
+
+function addWindowBlurMargin(size) {
+  return {
+    width: size.width + WINDOW_BLUR_MARGIN * 2,
+    height: size.height + WINDOW_BLUR_MARGIN * 2,
+  }
+}
 
 const INTERNAL_EXTENSIONS = []
 
