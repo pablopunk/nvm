@@ -84,10 +84,11 @@ type Action = {
   commandId?: string
   aiChatId?: string
   removable?: boolean
+  shortcut?: string
 }
 
 type ExtensionViewAction = {
-  type: 'openPath' | 'revealPath' | 'openUrl' | 'copyText' | 'copyImage' | 'pushView' | 'replaceView' | 'popView' | 'runExtensionAction'
+  type: 'openPath' | 'revealPath' | 'quickLook' | 'openUrl' | 'copyText' | 'copyImage' | 'pushView' | 'replaceView' | 'popView' | 'runExtensionAction'
   title: string
   path?: string
   url?: string
@@ -95,6 +96,7 @@ type ExtensionViewAction = {
   imageDataUrl?: string
   view?: ExtensionView
   handlerId?: string
+  shortcut?: string
 }
 
 type ExtensionViewItem = {
@@ -102,6 +104,8 @@ type ExtensionViewItem = {
   title: string
   subtitle?: string
   image?: string
+  video?: string
+  videoUrl?: string
   text?: string
   path?: string
   filePath?: string
@@ -113,6 +117,9 @@ type ExtensionViewItem = {
 type ExtensionView = {
   type: 'list' | 'grid' | 'detail' | 'chat' | 'form' | 'progress'
   title: string
+  image?: string
+  video?: string
+  videoUrl?: string
   aiChat?: boolean
   chatId?: string
   initialPrompt?: string
@@ -122,6 +129,10 @@ type ExtensionView = {
   messages?: { role: 'user' | 'assistant' | 'system'; content: string }[]
   fields?: { id: string; label: string; type?: string; value?: string }[]
   steps?: { title: string; status?: string }[]
+  actions?: ExtensionViewAction[]
+  layout?: 'square' | 'wide' | 'compact'
+  aspectRatio?: string | number
+  columns?: number
 }
 
 type SaveResult = {
@@ -201,6 +212,8 @@ export function App() {
   const requestedIcons = useRef(new Set<string>())
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
+  const runningViewActionsRef = useRef(new Set<string>())
+  const lastLocalShortcutRef = useRef<string | null>(null)
   const [query, setQuery] = useState('')
   const [actions, setActions] = useState<Action[]>([])
   const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({})
@@ -344,6 +357,7 @@ export function App() {
     else if (optionsFor) setSelectedValue(getOptionActionRows()[0]?.value ?? '')
     else if (previewFor) setSelectedValue('preview')
     else if (extensionView && isFilterableExtensionView) setSelectedValue(filterExtensionItems(extensionView.items)[0]?.id ?? '')
+    else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
   }, [actions, childQuery, clipboardMode, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
@@ -473,25 +487,43 @@ export function App() {
     })
   }
 
-  function handleViewActionResult(result?: { view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
+  async function handleViewActionResult(result?: { view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
     if (!result) return
     if (result.toast) showToast(result.toast.message, result.toast.tone || 'default')
     if (result.navigation === 'pop') popExtensionView()
+    else if (result.view?.aiChat) await openAiChat(result.view)
     else if (result.view) showExtensionView(result.view, result.navigation || 'push')
   }
 
   async function runViewAction(action: ExtensionViewAction) {
-    const result = await window.nvm.runViewAction(action)
-    handleViewActionResult(result)
+    const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
+    if (runningViewActionsRef.current.has(actionKey)) return
+    runningViewActionsRef.current.add(actionKey)
+    try {
+      const result = await window.nvm.runViewAction(action)
+      await handleViewActionResult(result)
+    } finally {
+      runningViewActionsRef.current.delete(actionKey)
+    }
+  }
+
+  function focusAiChatInput() {
+    requestAnimationFrame(() => {
+      chatMessagesRef.current?.scrollTo({ top: chatMessagesRef.current.scrollHeight })
+      aiInputRef.current?.focus()
+    })
   }
 
   async function openAiChat(view: ExtensionView) {
     showExtensionView(view, 'root')
     setAiMessages(view.messages || [])
+    setAiInput('')
+    focusAiChatInput()
     if (view.initialPrompt) {
       await window.nvm.resetAiChat(view.chatId)
       await sendAiPrompt(view.initialPrompt, view.chatId)
     }
+    focusAiChatInput()
   }
 
   function openClipboardHistory(options: { openedFromHidden?: boolean } = {}) {
@@ -556,6 +588,13 @@ export function App() {
     return parts.join('+')
   }
 
+  function shortcutLabel(shortcut?: string) {
+    return String(shortcut || '')
+      .split('+')
+      .map((part) => ({ Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Space: '␣', Escape: 'Esc' }[part] || part))
+      .join('')
+  }
+
   async function refreshShortcuts() {
     setShortcutRecords(await window.nvm.getShortcuts())
   }
@@ -608,6 +647,11 @@ export function App() {
     startShortcutRecorder(optionsFor)
   }
 
+  async function quickLookOptionsAction() {
+    if (!optionsFor?.filePath) return
+    await window.nvm.runViewAction({ type: 'quickLook', title: 'Quick Look', path: optionsFor.filePath })
+  }
+
   async function setOverride() {
     if (!optionsFor) return
     const instruction = window.prompt(
@@ -620,21 +664,25 @@ export function App() {
     if (result.ok) setOptionsFor(null)
   }
 
-  async function tweakWithAi() {
-    if (!optionsFor?.aiChatId) return
+  async function tweakActionWithAi(action: Action | null | undefined) {
+    if (!action?.aiChatId) return
     const result = await window.nvm.execute({
-      id: `ai-chat:${optionsFor.aiChatId}`,
+      id: `ai-chat:${action.aiChatId}`,
       kind: 'ai-chat',
-      title: optionsFor.title,
+      title: action.title,
       subtitle: 'Tweak AI-created action',
       icon: 'sparkles',
       score: 0,
-      aiChatId: optionsFor.aiChatId,
+      aiChatId: action.aiChatId,
     })
     if (result?.view) {
       setOptionsFor(null)
       await openAiChat(result.view)
     }
+  }
+
+  async function tweakWithAi() {
+    await tweakActionWithAi(optionsFor)
   }
 
   async function restoreOriginal() {
@@ -664,6 +712,7 @@ export function App() {
   const canTweakWithAi = Boolean(optionsFor?.aiChatId && optionsFor.kind === 'extension-command')
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
+  const canQuickLookAction = Boolean(optionsFor?.filePath)
   const selectedExtensionItem = useMemo(() => {
     if (!extensionView?.items) return null
     return extensionView.items.find((item) => item.id === selectedValue) || null
@@ -728,9 +777,9 @@ export function App() {
   function getExtensionItemActionRows() {
     return (extensionItemOptionsFor?.actions || []).map((action, index) => ({
       value: `extension-item:${index}:${action.type}:${action.title}`,
-      icon: action.type === 'copyText' || action.type === 'copyImage' ? <Clipboard size={18} /> : action.type === 'revealPath' || action.type === 'openPath' ? <Folder size={18} /> : <Globe size={18} />,
+      icon: action.type === 'copyText' || action.type === 'copyImage' ? <Clipboard size={18} /> : action.type === 'revealPath' || action.type === 'openPath' || action.type === 'quickLook' ? <Folder size={18} /> : <Globe size={18} />,
       title: action.title,
-      subtitle: action.type,
+      subtitle: action.shortcut ? `${action.type} · ${action.shortcut}` : action.type,
       onSelect: async () => {
         await runViewAction(action)
         setExtensionItemOptionsFor(null)
@@ -815,6 +864,14 @@ export function App() {
         show: true,
       },
       {
+        value: 'option:quick-look',
+        icon: <Search size={18} />,
+        title: 'Quick Look',
+        subtitle: 'Open native macOS Quick Look for this file',
+        onSelect: quickLookOptionsAction,
+        show: canQuickLookAction,
+      },
+      {
         value: 'option:alias',
         icon: <Tag size={18} />,
         title: 'Set alias',
@@ -827,6 +884,7 @@ export function App() {
         icon: <Wand2 size={18} />,
         title: 'Tweak with AI',
         subtitle: 'Open the original creation chat for this action',
+        shortcut: 'Tab',
         onSelect: tweakWithAi,
         show: canTweakWithAi,
       },
@@ -885,7 +943,11 @@ export function App() {
             <strong>{action.title}</strong>
             <small>{action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle}</small>
           </span>
-          <span className="enterHint">↵</span>
+          <span className="keyHints">
+            {action.kind === 'extension-command' && action.aiChatId ? <span className="shortcutHint selectedOnlyEnter">Tab tweak</span> : null}
+            {action.shortcut ? <span className="shortcutHint">{shortcutLabel(action.shortcut)}</span> : null}
+            <span className="enterHint selectedOnlyEnter">↵</span>
+          </span>
         </Command.Item>
       )
     })
@@ -899,7 +961,10 @@ export function App() {
           <strong>{row.title}</strong>
           <small>{row.subtitle}</small>
         </span>
-        <span className="enterHint">↵</span>
+        <span className="keyHints">
+          {'shortcut' in row && row.shortcut ? <span className="shortcutHint">{shortcutLabel(row.shortcut)}</span> : null}
+          <span className="enterHint selectedOnlyEnter">↵</span>
+        </span>
       </Command.Item>
     )
   }
@@ -926,12 +991,14 @@ export function App() {
 
   function renderViewActions(actions: ExtensionViewAction[] = []) {
     if (actions.length === 0) return null
-    return <span className="enterHint">⌘K</span>
+    const shortcut = actions.find((action) => action.shortcut)?.shortcut
+    return <span className="enterHint">{shortcut ? shortcutLabel(shortcut) : '⌘K'}</span>
   }
 
   function renderTileActionHint(actions: ExtensionViewAction[] = []) {
     if (actions.length === 0) return null
-    return <span className="tileActionHint">⌘K</span>
+    const shortcut = actions.find((action) => action.shortcut)?.shortcut
+    return <span className="tileActionHint">{shortcut ? shortcutLabel(shortcut) : '⌘K'}</span>
   }
 
   function dragPathForItem(item: ExtensionViewItem) {
@@ -947,14 +1014,22 @@ export function App() {
     window.nvm.startFileDrag(filePath)
   }
 
+  function gridStyle(view: ExtensionView) {
+    return {
+      ...(view.columns ? { '--grid-columns': String(view.columns) } : {}),
+      ...(view.aspectRatio ? { '--tile-aspect-ratio': String(view.aspectRatio) } : {}),
+    } as React.CSSProperties
+  }
+
   function renderExtensionView(view: ExtensionView) {
     if (view.type === 'grid') {
       const items = filterExtensionItems(view.items)
+      const layout = view.layout || 'square'
       return (
         <div className="extensionView">
           {view.subtitle ? <div className="extensionSubtitle">{view.subtitle}</div> : null}
           {items.length > 0 ? (
-            <div className="extensionGrid">
+            <div className={`extensionGrid extensionGrid-${layout}`} style={gridStyle(view)}>
               {items.map((item) => (
                 <Command.Item
                   key={item.id}
@@ -966,7 +1041,9 @@ export function App() {
                   onSelect={() => runDefaultViewAction(item)}
                 >
                   <span className="tileMedia">
-                    {item.image ? <img src={item.image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}
+                    {item.video || item.videoUrl ? (
+                      <video src={item.video || item.videoUrl} poster={item.image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} />
+                    ) : item.image ? <img src={item.image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}
                     {renderTileActionHint(item.actions)}
                   </span>
                   <strong>{item.title}</strong>
@@ -1072,7 +1149,44 @@ export function App() {
       )
     }
 
-    return <pre className="previewText">{view.content || view.subtitle || ''}</pre>
+    return (
+      <div className="extensionView">
+        {view.video || view.videoUrl ? <video className="detailMedia" src={view.video || view.videoUrl} poster={view.image} controls autoPlay muted loop playsInline /> : null}
+        {!view.video && !view.videoUrl && view.image ? <img className="detailMedia" src={view.image} alt="" /> : null}
+        <pre className="previewText">{view.content || view.subtitle || ''}</pre>
+        {(view.actions || []).map((action, index) => (
+          <Command.Item key={`${action.type}:${action.title}`} value={`extension-view:${index}:${action.type}:${action.title}`} className="result" onSelect={() => runViewAction(action)}>
+            <span className="resultIcon"><Wand2 size={18} /></span>
+            <span className="resultText">
+              <strong>{action.title}</strong>
+              <small>{action.type}</small>
+            </span>
+            <span className="enterHint">↵</span>
+          </Command.Item>
+        ))}
+      </div>
+    )
+  }
+
+  function normalizedShortcut(value?: string) {
+    return String(value || '').replace(/\s+/g, '').toLowerCase()
+  }
+
+  function runLocalShortcut(accelerator: string) {
+    if (!extensionView || extensionItemOptionsFor || optionsFor || previewFor || confirmRemoveFor || shortcutManagerOpen || shortcutFor) return false
+    const normalized = normalizedShortcut(accelerator)
+    if (extensionViewBackStack.length > 0 && normalizedShortcut(lastLocalShortcutRef.current || '') === normalized) {
+      popExtensionView()
+      lastLocalShortcutRef.current = null
+      return true
+    }
+    const selectedItem = selectedExtensionItem
+    const actions = selectedItem ? [selectedItem.primaryAction, ...(selectedItem.actions || [])].filter(Boolean) as ExtensionViewAction[] : (extensionView.actions || [])
+    const action = actions.find((item) => normalizedShortcut(item.shortcut) === normalized)
+    if (!action) return false
+    lastLocalShortcutRef.current = accelerator
+    runViewAction(action)
+    return true
   }
 
   function moveGridSelection(key: string) {
@@ -1110,6 +1224,12 @@ export function App() {
       }
       const accelerator = acceleratorFromEvent(event)
       if (accelerator) setRecordedShortcut(accelerator)
+      return
+    }
+
+    const localAccelerator = acceleratorFromEvent(event)
+    if (localAccelerator && runLocalShortcut(localAccelerator)) {
+      event.preventDefault()
       return
     }
 
@@ -1161,6 +1281,12 @@ export function App() {
       event.preventDefault()
       setPreviewFor(selectedAction)
       setOptionsFor(null)
+      return
+    }
+
+    if (!isChildOpen && event.key === 'Tab' && selectedAction?.kind === 'extension-command' && selectedAction.aiChatId) {
+      event.preventDefault()
+      tweakActionWithAi(selectedAction)
       return
     }
 

@@ -17,7 +17,8 @@ const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
 const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
 const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
 const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.heic'])
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic'])
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'flv', 'm4v'])
 const LOCAL_FILE_PROTOCOL = 'nvm-file'
 const LOCAL_THUMB_PROTOCOL = 'nvm-thumb'
 const THUMBNAIL_SIZE = 512
@@ -34,6 +35,7 @@ let clipboardHistory = []
 let statePath
 let iconCacheDir
 let extensionsDir
+let extensionStorageDir
 let saveTimer
 let nevermindAi
 let activeAiChatId
@@ -154,6 +156,7 @@ function createWindow() {
     transparent: true,
     resizable: false,
     movable: true,
+    type: process.platform === 'darwin' ? 'panel' : undefined,
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: false,
@@ -242,8 +245,8 @@ function registerHotkey() {
   if (ok) console.log(`Registered global shortcut: ${HOTKEY}`)
   else console.warn(`Could not register global shortcut: ${HOTKEY}`)
 
-  globalShortcut.register('CommandOrControl+Alt+I', () => {
-    if (!win) return
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (!(input.meta || input.control) || !input.alt || input.key.toLowerCase() !== 'i') return
     if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools()
     else win.webContents.openDevTools({ mode: 'detach' })
   })
@@ -305,15 +308,29 @@ function defaultActionIdFor(action) {
   return null
 }
 
+function shortcutForAction(action) {
+  if (userState.shortcuts[action.id]) return userState.shortcuts[action.id]
+  if (!action.aiChatId) return null
+  const matchingActionId = Object.entries(userState.shortcutActions)
+    .find(([, storedAction]) => storedAction?.aiChatId === action.aiChatId)?.[0]
+  return matchingActionId ? userState.shortcuts[matchingActionId] : null
+}
+
+function withShortcutHint(action) {
+  const shortcut = shortcutForAction(action)
+  return shortcut ? { ...action, shortcut } : action
+}
+
 function withDefaultOverride(action) {
   const defaultActionId = defaultActionIdFor(action)
-  if (!defaultActionId) return action
+  if (!defaultActionId) return withShortcutHint(action)
   const override = userState.overrides[defaultActionId]
   return {
     ...action,
     defaultActionId,
     isOverridden: Boolean(override),
     overrideSummary: override?.instruction,
+    shortcut: shortcutForAction(action),
   }
 }
 
@@ -548,7 +565,7 @@ function searchActions(query, options = {}) {
   }
 
   for (const command of extensionRegistry.values()) {
-    const ranked = rankAction(extensionActionFromCommand(command.extension, command.command), q)
+    const ranked = rankAction(withShortcutHint(extensionActionFromCommand(command.extension, command.command)), q)
     if (ranked) results.push(ranked)
   }
 
@@ -562,7 +579,7 @@ function searchActions(query, options = {}) {
   }
 
   const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
-  const clipboardHistoryAction = rankAction({
+  const clipboardHistoryAction = rankAction(withShortcutHint({
     id: 'clipboard-history',
     kind: 'clipboard-history',
     title: 'Clipboard History',
@@ -570,7 +587,7 @@ function searchActions(query, options = {}) {
     icon: 'clipboard',
     score: 14,
     lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
-  }, q)
+  }), q)
   if (clipboardHistoryAction) {
     clipboardHistoryAction.lastUsed = Math.max(clipboardHistoryAction.lastUsed || 0, latestClipboardTime ? latestClipboardTime - 1 : 0)
     results.push(clipboardHistoryAction)
@@ -586,7 +603,7 @@ function searchActions(query, options = {}) {
       icon: 'app',
       score: 5,
     }
-    const ranked = rankAction(action, q)
+    const ranked = rankAction(withShortcutHint(action), q)
     if (ranked) results.push(ranked)
   }
 
@@ -713,8 +730,20 @@ async function executeAction(action, options = {}) {
 function extensionEntryForAction(action) {
   const direct = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
   if (direct) return direct
+
+  if (action.aiChatId) {
+    const chatMatches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.__chatId === action.aiChatId)
+    if (chatMatches.length === 1) return chatMatches[0]
+  }
+
   const matches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.id === action.extensionId)
   return matches.length === 1 ? matches[0] : null
+}
+
+function currentActionForStoredShortcut(action) {
+  if (action?.kind !== 'extension-command') return action
+  const entry = extensionEntryForAction(action)
+  return entry ? extensionActionFromCommand(entry.extension, entry.command) : action
 }
 
 async function executeExtensionCommand(action) {
@@ -723,9 +752,44 @@ async function executeExtensionCommand(action) {
     console.warn(`Extension command not found: ${action.extensionId}:${action.commandId}`)
     return null
   }
-  const ctx = createExtensionContext(entry.extension, entry.command)
-  const result = await entry.command.run(ctx)
-  return normalizeExtensionView(result, entry)
+  try {
+    const ctx = createExtensionContext(entry.extension, entry.command)
+    const result = await entry.command.run(ctx)
+    return normalizeExtensionView(result, entry)
+  } catch (error) {
+    console.error(`Extension command failed: ${entry.extension.id}:${entry.command.id}`, error)
+    return extensionErrorView(entry, error)
+  }
+}
+
+function extensionErrorMessage(error) {
+  if (!error) return 'Unknown error'
+  if (error.stack) return error.stack
+  if (error.message) return error.message
+  return String(error)
+}
+
+function extensionErrorView(entry, error) {
+  const message = extensionErrorMessage(error)
+  return normalizeView({
+    type: 'detail',
+    title: `${entry.command.title || entry.extension.title || 'Extension'} failed`,
+    content: `# Something went wrong\n\n\`\`\`\n${message}\n\`\`\``,
+    actions: [extensionErrorAiAction(entry, message)].filter(Boolean),
+  }, entry)
+}
+
+function extensionErrorAiAction(entry, message) {
+  const chatId = entry.extension.__chatId
+  if (!chatId) return null
+  return {
+    type: 'runExtensionAction',
+    title: 'Fix with AI',
+    __handler: async () => {
+      await sendAiChatMessage(`This generated action failed. Please fix the extension.\n\nAction: ${entry.command.title || entry.command.id}\nExtension: ${entry.extension.title || entry.extension.id}\n\nError:\n\`\`\`\n${message}\n\`\`\``, chatId)
+      return aiChatView(userState.aiChats[chatId])
+    },
+  }
 }
 
 function normalizeExtensionView(result, entry) {
@@ -772,6 +836,8 @@ async function executeViewAction(action) {
     case 'revealPath':
       shell.showItemInFolder(action.path)
       break
+    case 'quickLook':
+      return quickLookPath(action.path)
     case 'openUrl':
       await shell.openExternal(action.url)
       break
@@ -791,9 +857,14 @@ async function executeViewAction(action) {
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
-      const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command))
-      const view = normalizeExtensionView(result, record.entry)
-      return view ? { view, navigation: result?.navigation || 'push' } : result
+      try {
+        const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command))
+        const view = normalizeExtensionView(result, record.entry)
+        return view ? { view, navigation: result?.navigation || 'push' } : result
+      } catch (error) {
+        console.error(`Extension action failed: ${record.entry.extension.id}:${record.entry.command.id}`, error)
+        return { view: extensionErrorView(record.entry, error), navigation: 'push' }
+      }
     }
   }
 }
@@ -848,8 +919,16 @@ function thumbnailUrlForPath(filePath) {
   return `${LOCAL_THUMB_PROTOCOL}://thumb?path=${encodeURIComponent(filePath)}`
 }
 
+function extensionForPath(filePath) {
+  return path.extname(filePath).toLowerCase().replace(/^\./, '')
+}
+
 function isImagePath(filePath) {
-  return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+  return IMAGE_EXTENSIONS.has(extensionForPath(filePath))
+}
+
+function isVideoPath(filePath) {
+  return VIDEO_EXTENSIONS.has(extensionForPath(filePath))
 }
 
 async function thumbnailResponseForPath(filePath) {
@@ -896,25 +975,70 @@ function registerLocalFileProtocol() {
   })
 }
 
-function fileToExtensionFile(filePath) {
+async function fileToExtensionFile(filePath) {
+  const stat = await fs.stat(filePath).catch(() => null)
   return {
     path: filePath,
     name: path.basename(filePath),
     displayPath: displayUserPath(filePath),
-    url: isImagePath(filePath) ? thumbnailUrlForPath(filePath) : fileUrlForPath(filePath),
+    url: isImagePath(filePath) || isVideoPath(filePath) ? thumbnailUrlForPath(filePath) : fileUrlForPath(filePath),
     fileUrl: fileUrlForPath(filePath),
-    thumbnailUrl: isImagePath(filePath) ? thumbnailUrlForPath(filePath) : null,
+    videoUrl: isVideoPath(filePath) ? fileUrlForPath(filePath) : null,
+    thumbnailUrl: isImagePath(filePath) || isVideoPath(filePath) ? thumbnailUrlForPath(filePath) : null,
+    kind: isImagePath(filePath) ? 'image' : isVideoPath(filePath) ? 'video' : 'file',
+    extension: extensionForPath(filePath),
+    mtime: stat ? new Date(stat.mtimeMs).toISOString() : null,
+    mtimeMs: stat?.mtimeMs || 0,
+    birthtime: stat ? new Date(stat.birthtimeMs).toISOString() : null,
+    birthtimeMs: stat?.birthtimeMs || 0,
+    size: stat?.size || 0,
   }
+}
+
+function normalizeFindRoots(roots) {
+  if (Array.isArray(roots)) return roots
+  if (typeof roots === 'string') return [roots]
+  return []
+}
+
+function extensionsForFindOptions(options = {}) {
+  const kinds = Array.isArray(options.kind) ? options.kind : options.kind ? [options.kind] : []
+  const kindExtensions = kinds.flatMap((kind) => {
+    if (kind === 'image') return Array.from(IMAGE_EXTENSIONS)
+    if (kind === 'video') return Array.from(VIDEO_EXTENSIONS)
+    if (kind === 'media') return [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS]
+    return []
+  })
+  const patterns = Array.isArray(options.patterns) ? options.patterns : options.pattern ? [options.pattern] : []
+  const patternExtensions = patterns.map((pattern) => String(pattern).match(/\.([a-z0-9]+)$/i)?.[1]).filter(Boolean)
+  const requestedExtensions = [...(options.extensions || []), ...kindExtensions, ...patternExtensions]
+  return requestedExtensions.length ? new Set(requestedExtensions.map((ext) => String(ext).toLowerCase().replace(/^\./, ''))) : null
+}
+
+function sortFoundFiles(files, options = {}) {
+  const sortBy = options.sortBy || options.sort || null
+  if (!sortBy) return files
+  const direction = options.order === 'asc' ? 1 : -1
+  const field = sortBy === 'recent' || sortBy === 'modified' ? 'mtimeMs'
+    : sortBy === 'added' || sortBy === 'created' ? 'birthtimeMs'
+      : sortBy === 'name' ? 'name'
+        : sortBy === 'size' ? 'size'
+          : sortBy
+  return [...files].sort((a, b) => {
+    const av = a[field] || 0
+    const bv = b[field] || 0
+    if (typeof av === 'string' || typeof bv === 'string') return direction * String(av).localeCompare(String(bv))
+    return direction * (av - bv)
+  })
 }
 
 async function findFiles(roots, options = {}) {
   const limit = options.limit || 100
   const maxDepth = options.depth ?? 2
-  const extensions = options.extensions ? new Set(options.extensions.map((ext) => ext.toLowerCase())) : null
+  const extensions = extensionsForFindOptions(options)
   const found = []
 
   async function walk(dir, depth) {
-    if (found.length >= limit) return
     let entries = []
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -923,20 +1047,19 @@ async function findFiles(roots, options = {}) {
     }
 
     for (const entry of entries) {
-      if (found.length >= limit || entry.name.startsWith('.')) continue
+      if (entry.name.startsWith('.')) continue
       const fullPath = path.join(dir, entry.name)
       if (entry.isFile()) {
-        if (!extensions || extensions.has(path.extname(entry.name).toLowerCase())) {
-          found.push(fileToExtensionFile(fullPath))
-        }
+        const ext = extensionForPath(entry.name)
+        if (!extensions || extensions.has(ext)) found.push(await fileToExtensionFile(fullPath))
         continue
       }
       if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
     }
   }
 
-  await Promise.all(roots.map((root) => walk(expandUserPath(root), maxDepth)))
-  return found
+  await Promise.all(normalizeFindRoots(roots).map((root) => walk(expandUserPath(root), maxDepth)))
+  return sortFoundFiles(found, options).slice(0, limit)
 }
 
 function dragIconForPath(filePath) {
@@ -951,15 +1074,74 @@ function startFileDrag(event, filePath) {
   event.sender.startDrag({ file: resolvedPath, icon: dragIconForPath(resolvedPath) })
 }
 
+function quickLookPath(filePath) {
+  if (process.platform !== 'darwin') return { toast: { message: 'Quick Look is only available on macOS', tone: 'error' } }
+  const resolvedPath = expandUserPath(filePath)
+  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return { toast: { message: 'Cannot Quick Look this item', tone: 'error' } }
+  const child = spawn('qlmanage', ['-p', resolvedPath], { detached: true, stdio: 'ignore' })
+  child.unref()
+}
+
 async function selectedInFinder() {
   if (process.platform !== 'darwin') return []
   const script = 'tell application "Finder" to get POSIX path of (selection as alias list)'
   return new Promise((resolve) => {
     execFile('osascript', ['-e', script], (error, stdout) => {
       if (error) return resolve([])
-      resolve(stdout.split(', ').map((item) => item.trim()).filter(Boolean).map(fileToExtensionFile))
+      Promise.all(stdout.split(', ').map((item) => item.trim()).filter(Boolean).map(fileToExtensionFile)).then(resolve)
     })
   })
+}
+
+function extensionStoragePath(extension) {
+  const key = extension.__chatId || extension.id || 'extension'
+  const safeKey = String(key).replace(/[^a-zA-Z0-9._-]/g, '-')
+  return path.join(extensionStorageDir, `${safeKey}.json`)
+}
+
+async function readExtensionStorage(extension) {
+  try {
+    return JSON.parse(await fs.readFile(extensionStoragePath(extension), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+async function writeExtensionStorage(extension, data) {
+  await fs.mkdir(extensionStorageDir, { recursive: true })
+  await fs.writeFile(extensionStoragePath(extension), JSON.stringify(data, null, 2))
+}
+
+function createExtensionStorage(extension) {
+  return {
+    async get(key, fallback = null) {
+      const data = await readExtensionStorage(extension)
+      return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : fallback
+    },
+    async set(key, value) {
+      const data = await readExtensionStorage(extension)
+      data[key] = value
+      await writeExtensionStorage(extension, data)
+      return value
+    },
+    async delete(key) {
+      const data = await readExtensionStorage(extension)
+      delete data[key]
+      await writeExtensionStorage(extension, data)
+    },
+    async clear() {
+      await writeExtensionStorage(extension, {})
+    },
+    async memo(key, ttlMs, loader) {
+      const data = await readExtensionStorage(extension)
+      const cached = data[key]
+      if (cached && typeof cached === 'object' && Date.now() - Number(cached.updatedAt || 0) < Number(ttlMs || 0)) return cached.value
+      const value = await loader()
+      data[key] = { value, updatedAt: Date.now() }
+      await writeExtensionStorage(extension, data)
+      return value
+    },
+  }
 }
 
 function createExtensionContext(extension, command) {
@@ -970,6 +1152,15 @@ function createExtensionContext(extension, command) {
       list: (view) => ({ ...view, type: 'list' }),
       grid: (view) => ({ ...view, type: 'grid' }),
       detail: (view) => ({ ...view, type: 'detail' }),
+      preview: (file, view = {}) => ({
+        ...view,
+        type: 'detail',
+        title: view.title || file.name || 'Preview',
+        subtitle: view.subtitle || file.displayPath,
+        content: view.content || file.displayPath || '',
+        image: file.thumbnailUrl || file.url,
+        video: file.videoUrl || undefined,
+      }),
       chat: (view) => ({ ...view, type: 'chat' }),
       form: (view) => ({ ...view, type: 'form' }),
       progress: (view) => ({ ...view, type: 'progress' }),
@@ -980,14 +1171,15 @@ function createExtensionContext(extension, command) {
       error: (title = 'Something went wrong', message = '') => ({ type: 'detail', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
     },
     actions: {
-      openPath: (filePath, title = 'Open') => ({ type: 'openPath', title, path: filePath }),
-      revealPath: (filePath, title = 'Reveal in Finder') => ({ type: 'revealPath', title, path: filePath }),
-      openUrl: (url, title = 'Open URL') => ({ type: 'openUrl', title, url }),
-      copyText: (text, title = 'Copy') => ({ type: 'copyText', title, text }),
-      copyImage: (image, title = 'Copy image') => String(image || '').startsWith('data:') ? ({ type: 'copyImage', title, imageDataUrl: image }) : ({ type: 'copyImage', title, path: image }),
-      push: (title, view) => ({ type: 'pushView', title, view }),
-      replace: (title, view) => ({ type: 'replaceView', title, view }),
-      pop: (title = 'Back') => ({ type: 'popView', title }),
+      openPath: (filePath, title = 'Open', options = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
+      revealPath: (filePath, title = 'Reveal in Finder', options = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
+      quickLook: (filePath, title = 'Quick Look', options = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
+      openUrl: (url, title = 'Open URL', options = {}) => ({ ...options, type: 'openUrl', title, url }),
+      copyText: (text, title = 'Copy', options = {}) => ({ ...options, type: 'copyText', title, text }),
+      copyImage: (image, title = 'Copy image', options = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
+      push: (title, view, options = {}) => ({ ...options, type: 'pushView', title, view }),
+      replace: (title, view, options = {}) => ({ ...options, type: 'replaceView', title, view }),
+      pop: (title = 'Back', options = {}) => ({ ...options, type: 'popView', title }),
       run: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
     },
     clipboard: {
@@ -998,7 +1190,9 @@ function createExtensionContext(extension, command) {
     },
     files: {
       find: findFiles,
-      findImages: (roots, options) => findFiles(roots, { ...options, extensions: Array.from(IMAGE_EXTENSIONS) }),
+      findImages: (roots, options) => findFiles(roots, { ...options, kind: 'image' }),
+      findVideos: (roots, options) => findFiles(roots, { ...options, kind: 'video' }),
+      findMedia: (roots, options) => findFiles(roots, { ...options, kind: 'media' }),
       selectedInFinder,
       open: (filePath) => shell.openPath(expandUserPath(filePath)),
       readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
@@ -1011,6 +1205,7 @@ function createExtensionContext(extension, command) {
     shell: {
       openExternal: (url) => shell.openExternal(url),
     },
+    storage: createExtensionStorage(extension),
     cache: new Map(),
     state: {},
     ai: {},
@@ -1289,6 +1484,7 @@ async function loadUserState() {
   statePath = path.join(app.getPath('userData'), 'state.json')
   iconCacheDir = path.join(app.getPath('userData'), 'icon-cache')
   extensionsDir = path.join(app.getPath('userData'), 'extensions')
+  extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage')
 
   try {
     const loaded = JSON.parse(await fs.readFile(statePath, 'utf8'))
@@ -1435,8 +1631,9 @@ function unregisterShortcutForAction(actionId) {
 }
 
 async function executeShortcutAction(action) {
+  const currentAction = currentActionForStoredShortcut(action)
   const wasVisible = Boolean(win?.isVisible())
-  const result = await executeAction(action, { keepPaletteOpen: true })
+  const result = await executeAction(currentAction, { keepPaletteOpen: true })
   if (result?.view) {
     showPalette({ skipShownEvent: true, deferReveal: !wasVisible })
     win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible })
@@ -1459,7 +1656,7 @@ function unregisterActionShortcuts() {
 function registerActionShortcuts() {
   unregisterActionShortcuts()
   for (const [actionId, accelerator] of Object.entries(userState.shortcuts)) {
-    const action = userState.shortcutActions[actionId]
+    const action = currentActionForStoredShortcut(userState.shortcutActions[actionId])
     if (!action) continue
     const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
     if (!ok) console.warn(`Could not register action shortcut ${accelerator} for ${actionId}`)
@@ -1475,7 +1672,7 @@ function getShortcuts() {
     .map(([actionId, accelerator]) => ({
       actionId,
       accelerator,
-      action: userState.shortcutActions[actionId],
+      action: currentActionForStoredShortcut(userState.shortcutActions[actionId]),
     }))
     .filter((item) => item.action)
     .sort((a, b) => a.action.title.localeCompare(b.action.title))
@@ -1573,7 +1770,10 @@ async function removeCreatedAction(action) {
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
-  if (process.platform === 'darwin') app.dock.hide()
+  if (process.platform === 'darwin') {
+    app.setActivationPolicy('accessory')
+    app.dock.hide()
+  }
   registerLocalFileProtocol()
 
   await loadUserState()

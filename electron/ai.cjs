@@ -176,6 +176,19 @@ function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensio
       }),
     }),
     pi.defineTool({
+      name: 'read_current_extension',
+      label: 'Read Current Extension',
+      description: 'Read the active generated extension source for this chat/action before tweaking it.',
+      parameters: Type.Object({}),
+      execute: async () => {
+        const chat = getActiveChat?.()
+        if (!chat?.generatedExtensionFile) return { content: [{ type: 'text', text: 'No current generated extension for this chat.' }], details: {} }
+        const filePath = safeExtensionPath(extensionsDir, chat.generatedExtensionFile)
+        const code = await fs.readFile(filePath, 'utf8')
+        return { content: [{ type: 'text', text: code }], details: { filePath } }
+      },
+    }),
+    pi.defineTool({
       name: 'write_extension',
       label: 'Write Extension',
       description: 'Write a generated Nevermind extension CommonJS module into the generated extensions directory.',
@@ -246,10 +259,16 @@ function validateCommonJs(code) {
 
 function capabilities() {
   return {
-    views: ['list', 'grid', 'detail', 'chat', 'form', 'progress'],
-    actions: ['openPath', 'revealPath', 'openUrl', 'copyText', 'copyImage', 'push', 'replace', 'pop', 'run'],
-    namespaces: ['clipboard', 'files', 'apps', 'shell', 'cache', 'state', 'ai'],
-    fileHelpers: ['find', 'findImages', 'selectedInFinder', 'open', 'readText', 'toFileUrl'],
+    views: ['list', 'grid', 'detail', 'chat', 'form', 'progress', 'preview'],
+    gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
+    actions: ['openPath', 'revealPath', 'quickLook', 'openUrl', 'copyText', 'copyImage', 'push', 'replace', 'pop', 'run'],
+    namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'cache', 'state', 'ai'],
+    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'open', 'readText', 'toFileUrl'],
+    findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
+    fileKinds: ['image', 'video', 'media'],
+    sortBy: ['recent', 'modified', 'added', 'created', 'name', 'size'],
+    fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'size'],
+    storage: ['get', 'set', 'delete', 'clear', 'memo'],
   }
 }
 
@@ -259,10 +278,11 @@ Build local Nevermind extensions, not shell scripts.
 When the first user message is vague, ask clarifying questions before using tools.
 Do not call read_extension_api, list_capabilities, write_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
 Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The only available tool names are: read_extension_api, list_capabilities, write_extension, validate_extension, install_extension. Never invent tool names like read_file, write_file, list_directory, or bash.
+The only available tool names are: read_extension_api, list_capabilities, read_current_extension, write_extension, validate_extension, install_extension. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 Use read_extension_api before writing an extension.
+When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it.
 Use list_capabilities when unsure which UI or OS capabilities exist.
 Only write .cjs extension files with write_extension.
 write_extension is idempotent: it replaces and activates the current action's generated extension.
