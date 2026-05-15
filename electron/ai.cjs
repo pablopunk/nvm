@@ -153,7 +153,7 @@ function createResourceLoader(pi, { extensionApiPath, skillPath }) {
   }
 }
 
-function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension }) {
+function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat }) {
   return [
     pi.defineTool({
       name: 'read_extension_api',
@@ -202,6 +202,8 @@ function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensio
         await fs.writeFile(filePath, params.code)
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
+        const chat = getActiveChat?.()
+        if (chat?.id) addAliasForChat?.(chat.id)
         return { content: [{ type: 'text', text: `Installed ${path.basename(filePath)}` }], details: { filePath } }
       },
     }),

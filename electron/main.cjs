@@ -1459,6 +1459,7 @@ function initNevermindAi() {
     reloadExtensions: loadExtensions,
     getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] : null,
     markGeneratedExtension: (filePath) => markGeneratedExtensionForActiveChat(filePath),
+    addAliasForChat: (chatId) => addAliasForGeneratedAction(chatId),
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId
       if (chatId && event.type === 'delta' && event.text) appendAiChatDelta(chatId, event.text)
@@ -1495,6 +1496,19 @@ function markGeneratedExtensionForActiveChat(filePath) {
   chat.generatedExtensionFile = path.basename(filePath)
   chat.status = 'ready'
   chat.updatedAt = Date.now()
+  scheduleSaveState()
+}
+
+function addAliasForGeneratedAction(chatId) {
+  const chat = userState.aiChats[chatId]
+  if (!chat?.query) return
+  const entry = Array.from(extensionRegistry.values()).find((e) => e.extension?.__chatId === chatId)
+  if (!entry) return
+  const action = extensionActionFromCommand(entry.extension, entry.command)
+  if (!action?.id) return
+  const aliases = new Set(actionAliases(action.id))
+  aliases.add(chat.query.trim())
+  userState.aliases[action.id] = Array.from(aliases)
   scheduleSaveState()
 }
 
