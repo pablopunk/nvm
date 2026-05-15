@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('nvm', {
   resetAiChat: (chatId) => ipcRenderer.invoke('ai:chat:reset', chatId),
   setAlias: (action, alias) => ipcRenderer.invoke('actions:set-alias', action, alias),
   setShortcut: (action, shortcut) => ipcRenderer.invoke('actions:set-shortcut', action, shortcut),
+  getShortcuts: () => ipcRenderer.invoke('actions:get-shortcuts'),
+  removeShortcut: (actionId) => ipcRenderer.invoke('actions:remove-shortcut', actionId),
+  suspendShortcuts: () => ipcRenderer.invoke('actions:suspend-shortcuts'),
+  resumeShortcuts: () => ipcRenderer.invoke('actions:resume-shortcuts'),
   setOverride: (action, instruction) => ipcRenderer.invoke('actions:set-override', action, instruction),
   clearOverride: (action) => ipcRenderer.invoke('actions:clear-override', action),
   removeCreatedAction: (action) => ipcRenderer.invoke('actions:remove-created', action),
@@ -35,6 +39,11 @@ contextBridge.exposeInMainWorld('nvm', {
     const listener = () => callback()
     ipcRenderer.on('clipboard:changed', listener)
     return () => ipcRenderer.removeListener('clipboard:changed', listener)
+  },
+  onOpenClipboardHistory: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('clipboard-history:open', listener)
+    return () => ipcRenderer.removeListener('clipboard-history:open', listener)
   },
   onAiChatEvent: (callback) => {
     const listener = (_event, payload) => callback(payload)

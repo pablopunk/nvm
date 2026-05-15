@@ -9,7 +9,7 @@ const { createNevermindAi } = require('./ai.cjs')
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const HOTKEY = 'Alt+Space'
-const CLIPBOARD_LIMIT = 100
+const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
 const DEFAULT_WINDOW_SIZE = { width: 760, height: 520 }
@@ -114,6 +114,14 @@ const BUILT_IN_ACTIONS = [
     title: 'Open Desktop',
     subtitle: '~/Desktop',
     icon: 'folder',
+    score: 16,
+  },
+  {
+    id: 'keyboard-shortcuts',
+    kind: 'keyboard-shortcuts',
+    title: 'Keyboard Shortcuts',
+    subtitle: 'View, change, or remove global shortcuts',
+    icon: 'keyboard',
     score: 16,
   },
   {
@@ -473,7 +481,15 @@ function searchActions(query, options = {}) {
   const q = query.trim()
 
   if (options.clipboardOnly) {
-    return clipboardHistory.map(clipboardActionFromItem).slice(0, CLIPBOARD_LIMIT)
+    const results = []
+    for (const item of clipboardHistory) {
+      const action = clipboardActionFromItem(item)
+      const ranked = q ? rankAction(action, q) : action
+      if (ranked) results.push(ranked)
+    }
+    return results
+      .sort((a, b) => q ? b.score - a.score || b.lastUsed - a.lastUsed : b.lastUsed - a.lastUsed)
+      .slice(0, CLIPBOARD_LIMIT)
   }
 
   const results = []
@@ -633,6 +649,18 @@ async function executeAction(action, options = {}) {
         clipboard.writeText(action.text || '')
       }
       break
+    case 'clipboard-history': {
+      const wasVisible = Boolean(win?.isVisible())
+      if (wasVisible) {
+        centerWindow()
+        win.focus()
+        win.webContents.focus()
+      } else {
+        showPalette()
+      }
+      win?.webContents.send('clipboard-history:open', { openedFromHidden: !wasVisible })
+      return
+    }
     case 'file':
       await shell.openPath(action.filePath)
       break
@@ -1384,6 +1412,10 @@ function registerActionShortcut(actionId, accelerator, action) {
   return true
 }
 
+function unregisterActionShortcuts() {
+  for (const accelerator of Object.values(userState.shortcuts)) globalShortcut.unregister(accelerator)
+}
+
 function registerActionShortcuts() {
   for (const [actionId, accelerator] of Object.entries(userState.shortcuts)) {
     const action = userState.shortcutActions[actionId]
@@ -1393,7 +1425,32 @@ function registerActionShortcuts() {
   }
 }
 
+function canCustomizeAction(action) {
+  return ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(action?.kind)
+}
+
+function getShortcuts() {
+  return Object.entries(userState.shortcuts)
+    .map(([actionId, accelerator]) => ({
+      actionId,
+      accelerator,
+      action: userState.shortcutActions[actionId],
+    }))
+    .filter((item) => item.action)
+    .sort((a, b) => a.action.title.localeCompare(b.action.title))
+}
+
+async function removeShortcut(actionId) {
+  if (!actionId || !userState.shortcuts[actionId]) return { ok: false, message: 'Shortcut not found' }
+  globalShortcut.unregister(userState.shortcuts[actionId])
+  delete userState.shortcuts[actionId]
+  delete userState.shortcutActions[actionId]
+  scheduleSaveState()
+  return { ok: true, message: 'Shortcut removed' }
+}
+
 async function setAlias(action, alias) {
+  if (!canCustomizeAction(action)) return { ok: false, message: 'Aliases are only available for persistent commands' }
   if (!action?.id || !alias.trim()) return { ok: false, message: 'Missing alias' }
   const aliases = new Set(actionAliases(action.id))
   aliases.add(alias.trim())
@@ -1403,8 +1460,15 @@ async function setAlias(action, alias) {
 }
 
 async function setShortcut(action, shortcut) {
+  if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent commands' }
   if (!action?.id || !shortcut.trim()) return { ok: false, message: 'Missing shortcut' }
   const accelerator = normalizeAccelerator(shortcut)
+  const conflictingActionId = Object.entries(userState.shortcuts)
+    .find(([actionId, current]) => actionId !== action.id && current === accelerator)?.[0]
+  if (conflictingActionId) {
+    const title = userState.shortcutActions[conflictingActionId]?.title || 'another action'
+    return { ok: false, message: `${accelerator} is already used by ${title}` }
+  }
   unregisterShortcutForAction(action.id)
   const ok = registerActionShortcut(action.id, accelerator, action)
   if (!ok) return { ok: false, message: `Could not register ${accelerator}` }
@@ -1490,6 +1554,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
   ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
   ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
+  ipcMain.handle('actions:get-shortcuts', () => getShortcuts())
+  ipcMain.handle('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))
+  ipcMain.handle('actions:suspend-shortcuts', () => unregisterActionShortcuts())
+  ipcMain.handle('actions:resume-shortcuts', () => registerActionShortcuts())
   ipcMain.handle('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
   ipcMain.handle('actions:clear-override', (_event, action) => clearOverride(action))
   ipcMain.handle('actions:remove-created', (_event, action) => removeCreatedAction(action))

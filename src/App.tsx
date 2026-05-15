@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Command } from 'cmdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -6,6 +6,7 @@ import {
   AppWindow,
   Calculator,
   Clipboard,
+  CornerDownLeft,
   Folder,
   Globe,
   Grid2X2,
@@ -17,9 +18,10 @@ import {
   Search,
   Settings,
   Sparkles,
+  Square,
   Tag,
-  Wand2,
   Trash2,
+  Wand2,
   Zap,
 } from 'lucide-react'
 
@@ -29,6 +31,7 @@ type ActionKind =
   | 'app'
   | 'clipboard'
   | 'clipboard-history'
+  | 'keyboard-shortcuts'
   | 'file'
   | 'ai-placeholder'
   | 'ai-chat'
@@ -51,6 +54,7 @@ type ActionIcon =
   | 'calculator'
   | 'bolt'
   | 'grid'
+  | 'keyboard'
 
 type AppInfo = {
   path?: string
@@ -125,6 +129,12 @@ type SaveResult = {
   message: string
 }
 
+type ShortcutRecord = {
+  actionId: string
+  accelerator: string
+  action: Action
+}
+
 declare global {
   interface Window {
     nvm: {
@@ -137,6 +147,10 @@ declare global {
       resetAiChat: (chatId?: string) => Promise<void>
       setAlias: (action: Action, alias: string) => Promise<SaveResult>
       setShortcut: (action: Action, shortcut: string) => Promise<SaveResult>
+      getShortcuts: () => Promise<ShortcutRecord[]>
+      removeShortcut: (actionId: string) => Promise<SaveResult>
+      suspendShortcuts: () => Promise<void>
+      resumeShortcuts: () => Promise<void>
       setOverride: (action: Action, instruction: string) => Promise<SaveResult>
       clearOverride: (action: Action) => Promise<SaveResult>
       removeCreatedAction: (action: Action) => Promise<SaveResult>
@@ -147,6 +161,7 @@ declare global {
       onHidden: (callback: () => void) => () => void
       onAppsIndexed: (callback: (count: number) => void) => () => void
       onClipboardChanged: (callback: () => void) => () => void
+      onOpenClipboardHistory: (callback: (payload?: { openedFromHidden?: boolean }) => void) => () => void
       onAiChatEvent: (callback: (event: { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }) => void) => () => void
     }
   }
@@ -173,11 +188,13 @@ const iconFor = {
   calculator: Calculator,
   bolt: Zap,
   grid: Grid2X2,
+  keyboard: Keyboard,
 }
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   const chatMessagesRef = useRef<HTMLDivElement>(null)
+  const aiInputRef = useRef<HTMLTextAreaElement>(null)
   const requestedIcons = useRef(new Set<string>())
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
@@ -198,7 +215,14 @@ export function App() {
   const [placeholderIndex, setPlaceholderIndex] = useState(SEARCH_PLACEHOLDERS.length - 1)
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [clipboardMode, setClipboardMode] = useState(false)
+  const [clipboardOpenedFromHidden, setClipboardOpenedFromHidden] = useState(false)
+  const [clipboardQuery, setClipboardQuery] = useState('')
   const [childQuery, setChildQuery] = useState('')
+  const [shortcutFor, setShortcutFor] = useState<Action | null>(null)
+  const [recordedShortcut, setRecordedShortcut] = useState('')
+  const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false)
+  const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([])
+  const [shortcutOptionsFor, setShortcutOptionsFor] = useState<ShortcutRecord | null>(null)
 
   useEffect(() => {
     const focusInput = () => {
@@ -215,15 +239,21 @@ export function App() {
       setConfirmRemoveFor(null)
       setPreviewFor(null)
       setChildQuery('')
+      setShortcutFor(null)
+      setRecordedShortcut('')
+      setShortcutManagerOpen(false)
+      setShortcutOptionsFor(null)
       if (!aiChatOpenRef.current) {
         setExtensionView(null)
         setExtensionViewBackStack([])
         setAiMessages([])
       }
       setClipboardMode(false)
+      setClipboardQuery('')
       setRefreshNonce((nonce) => nonce + 1)
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length)
       if (!aiChatOpenRef.current) setExtensionViewBackStack([])
+      setClipboardOpenedFromHidden(false)
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
     })
@@ -234,6 +264,10 @@ export function App() {
       setConfirmRemoveFor(null)
       setPreviewFor(null)
       setChildQuery('')
+      setShortcutFor(null)
+      setRecordedShortcut('')
+      setShortcutManagerOpen(false)
+      setShortcutOptionsFor(null)
       if (!aiChatOpenRef.current) {
         setExtensionView(null)
         setExtensionViewBackStack([])
@@ -241,9 +275,12 @@ export function App() {
       }
       setExtensionViewBackStack([])
       setClipboardMode(false)
+      setClipboardOpenedFromHidden(false)
+      setClipboardQuery('')
     })
     const stopApps = window.nvm.onAppsIndexed(() => {})
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
+    const stopOpenClipboardHistory = window.nvm.onOpenClipboardHistory((payload) => openClipboardHistory({ openedFromHidden: Boolean(payload?.openedFromHidden) }))
     const stopAi = window.nvm.onAiChatEvent((event) => {
       if (event.type === 'debug') console.debug('[Nevermind AI]', event.label, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
@@ -258,6 +295,7 @@ export function App() {
       stopHidden()
       stopApps()
       stopClipboard()
+      stopOpenClipboardHistory()
       stopAi()
     }
   }, [])
@@ -265,7 +303,7 @@ export function App() {
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(async () => {
-      const next = await window.nvm.search(query, { clipboardOnly: clipboardMode })
+      const next = await window.nvm.search(clipboardMode ? clipboardQuery : query, { clipboardOnly: clipboardMode })
       if (!cancelled) setActions(next)
     }, 20)
 
@@ -273,17 +311,21 @@ export function App() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [query, refreshNonce, clipboardMode])
+  }, [query, clipboardQuery, refreshNonce, clipboardMode])
 
   useEffect(() => {
-    if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
+    if (shortcutFor) setSelectedValue('shortcut:save')
+    else if (shortcutOptionsFor) setSelectedValue(getShortcutOptionRows()[0]?.value ?? '')
+    else if (shortcutManagerOpen) setSelectedValue(getShortcutRows()[0]?.value ?? '')
+    else if (clipboardMode) setSelectedValue(actions[0]?.id ?? '')
+    else if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
     else if (extensionItemOptionsFor) setSelectedValue(getExtensionItemActionRows()[0]?.value ?? '')
     else if (optionsFor) setSelectedValue(getOptionActionRows()[0]?.value ?? '')
     else if (previewFor) setSelectedValue('preview')
     else if (extensionView && isFilterableExtensionView) setSelectedValue(filterExtensionItems(extensionView.items)[0]?.id ?? '')
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, childQuery, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView])
+  }, [actions, childQuery, clipboardMode, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
     setChildQuery('')
@@ -301,6 +343,18 @@ export function App() {
       chatMessagesRef.current?.scrollTo({ top: chatMessagesRef.current.scrollHeight })
     }
   }, [aiMessages, aiBusy, extensionView])
+
+  useLayoutEffect(() => {
+    resizeAiInput()
+  }, [aiInput, extensionView?.aiChat])
+
+  useEffect(() => {
+    if (!shortcutFor) return
+    window.nvm.suspendShortcuts()
+    return () => {
+      window.nvm.resumeShortcuts()
+    }
+  }, [shortcutFor?.id])
 
   useEffect(() => {
     for (const action of actions) {
@@ -322,16 +376,16 @@ export function App() {
     [actions],
   )
   const isFilterableExtensionView = extensionView?.type === 'list' || extensionView?.type === 'grid'
-  const isFilterableChildOpen = Boolean(confirmRemoveFor || extensionItemOptionsFor || optionsFor || isFilterableExtensionView)
-  const isChildOpen = Boolean(confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
-  const childPlaceholder = confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
-  const inputValue = isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : clipboardMode ? 'Clipboard History' : optionsFor && !query ? optionsFor.title : query
-  const placeholder = isFilterableChildOpen ? childPlaceholder : SEARCH_PLACEHOLDERS[placeholderIndex]
+  const isFilterableChildOpen = Boolean(confirmRemoveFor || extensionItemOptionsFor || optionsFor || shortcutManagerOpen || isFilterableExtensionView)
+  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
+  const childPlaceholder = shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
+  const inputValue = shortcutFor ? recordedShortcut : clipboardMode ? clipboardQuery : isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : optionsFor && !query ? optionsFor.title : query
+  const placeholder = shortcutFor ? 'Press a keyboard shortcut' : clipboardMode ? 'Search Clipboard History' : isFilterableChildOpen ? childPlaceholder : SEARCH_PLACEHOLDERS[placeholderIndex]
 
   useEffect(() => {
-    if (!isFilterableChildOpen) return
+    if (!isFilterableChildOpen && !shortcutFor) return
     requestAnimationFrame(() => inputRef.current?.focus())
-  }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id])
+  }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
 
   function showToast(message: string, tone: 'default' | 'error' = 'default') {
     setToast({ message, tone })
@@ -350,6 +404,13 @@ export function App() {
       }
       return [...messages, { role: 'assistant', content: text }]
     })
+  }
+
+  function resizeAiInput(textarea = aiInputRef.current) {
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
+    textarea.style.overflowY = textarea.scrollHeight > 120 ? 'auto' : 'hidden'
   }
 
   async function sendAiPrompt(message: string, chatId = extensionView?.chatId) {
@@ -397,16 +458,30 @@ export function App() {
     }
   }
 
+  function openClipboardHistory(options: { openedFromHidden?: boolean } = {}) {
+    setClipboardMode(true)
+    setClipboardOpenedFromHidden(Boolean(options.openedFromHidden))
+    setClipboardQuery('')
+    setRefreshNonce((nonce) => nonce + 1)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function closeClipboardHistory() {
+    const shouldHide = clipboardOpenedFromHidden
+    setClipboardMode(false)
+    setClipboardOpenedFromHidden(false)
+    setClipboardQuery('')
+    if (shouldHide) window.nvm.hide()
+    else requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
   async function run(action: Action) {
     if (action.kind === 'clipboard-history') {
-      setClipboardMode(true)
-      setOptionsFor(null)
-      setPreviewFor(null)
-      setExtensionView(null)
-      setExtensionViewBackStack([])
-      setAiMessages([])
-      setQuery('')
-      setRefreshNonce((nonce) => nonce + 1)
+      openClipboardHistory()
+      return
+    }
+    if (action.kind === 'keyboard-shortcuts') {
+      await openShortcutManager()
       return
     }
     const result = await window.nvm.execute(action)
@@ -415,6 +490,68 @@ export function App() {
       setPreviewFor(null)
       if (result.view.aiChat) await openAiChat(result.view)
       else showExtensionView(result.view, 'root')
+    }
+  }
+
+  function keyNameForShortcut(event: React.KeyboardEvent) {
+    const key = event.key
+    if (!key || ['Meta', 'Control', 'Alt', 'Shift'].includes(key)) return ''
+    if (key === ' ') return 'Space'
+    if (key === 'ArrowUp') return 'Up'
+    if (key === 'ArrowDown') return 'Down'
+    if (key === 'ArrowLeft') return 'Left'
+    if (key === 'ArrowRight') return 'Right'
+    if (key.length === 1) return key.toUpperCase()
+    return key[0].toUpperCase() + key.slice(1)
+  }
+
+  function acceleratorFromEvent(event: React.KeyboardEvent) {
+    const key = keyNameForShortcut(event)
+    if (!key) return ''
+    const parts = []
+    if (event.metaKey) parts.push('Command')
+    if (event.ctrlKey) parts.push('Control')
+    if (event.altKey) parts.push('Alt')
+    if (event.shiftKey) parts.push('Shift')
+    parts.push(key)
+    if (parts.length < 2 && !key.startsWith('F')) return ''
+    return parts.join('+')
+  }
+
+  async function refreshShortcuts() {
+    setShortcutRecords(await window.nvm.getShortcuts())
+  }
+
+  async function openShortcutManager() {
+    await refreshShortcuts()
+    setShortcutManagerOpen(true)
+    setShortcutFor(null)
+    setOptionsFor(null)
+    setPreviewFor(null)
+  }
+
+  function startShortcutRecorder(action: Action) {
+    setShortcutFor(action)
+    setRecordedShortcut('')
+  }
+
+  async function saveRecordedShortcut() {
+    if (!shortcutFor || !recordedShortcut) return
+    const result = await window.nvm.setShortcut(shortcutFor, recordedShortcut)
+    showToast(result.message, result.ok ? 'default' : 'error')
+    if (!result.ok) return
+    setShortcutFor(null)
+    setOptionsFor(null)
+    setRefreshNonce((nonce) => nonce + 1)
+    if (shortcutManagerOpen) await refreshShortcuts()
+  }
+
+  async function removeShortcut(record: ShortcutRecord) {
+    const result = await window.nvm.removeShortcut(record.actionId)
+    showToast(result.message, result.ok ? 'default' : 'error')
+    if (result.ok) {
+      setShortcutOptionsFor(null)
+      await refreshShortcuts()
     }
   }
 
@@ -430,11 +567,7 @@ export function App() {
 
   async function setShortcut() {
     if (!optionsFor) return
-    const shortcut = window.prompt(`Keyboard shortcut for “${optionsFor.title}”`, 'Command+Shift+')
-    if (!shortcut?.trim()) return
-    const result = await window.nvm.setShortcut(optionsFor, shortcut)
-    showToast(result.message, result.ok ? 'default' : 'error')
-    if (result.ok) setOptionsFor(null)
+    startShortcutRecorder(optionsFor)
   }
 
   async function setOverride() {
@@ -492,10 +625,15 @@ export function App() {
   const canOverride = Boolean(optionsFor?.defaultActionId)
   const canTweakWithAi = Boolean(optionsFor?.aiChatId && optionsFor.kind === 'extension-command')
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
+  const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
   const selectedExtensionItem = useMemo(() => {
     if (!extensionView?.items) return null
     return extensionView.items.find((item) => item.id === selectedValue) || null
   }, [extensionView, selectedValue])
+  const selectedShortcutRecord = useMemo(
+    () => shortcutRecords.find((record) => `shortcut:${record.actionId}` === selectedValue) || null,
+    [selectedValue, shortcutRecords],
+  )
   const activeAction = optionsFor || previewFor || selectedAction
 
   function childScore(value: string | undefined, filter: string) {
@@ -563,6 +701,63 @@ export function App() {
     })).filter((row) => childMatches(row.title, row.subtitle))
   }
 
+  function getShortcutRows() {
+    return shortcutRecords.map((record) => ({
+      value: `shortcut:${record.actionId}`,
+      icon: <Keyboard size={18} />,
+      title: record.action.title,
+      subtitle: record.accelerator,
+      onSelect: () => startShortcutRecorder(record.action),
+      className: 'result',
+    })).filter((row) => childMatches(row.title, row.subtitle))
+  }
+
+  function getShortcutOptionRows() {
+    if (!shortcutOptionsFor) return []
+    return [
+      {
+        value: 'shortcut-option:change',
+        icon: <Keyboard size={18} />,
+        title: 'Change shortcut',
+        subtitle: shortcutOptionsFor.accelerator,
+        onSelect: () => {
+          startShortcutRecorder(shortcutOptionsFor.action)
+          setShortcutOptionsFor(null)
+        },
+        className: 'result',
+      },
+      {
+        value: 'shortcut-option:remove',
+        icon: <Trash2 size={18} />,
+        title: 'Remove shortcut',
+        subtitle: shortcutOptionsFor.action.title,
+        onSelect: () => removeShortcut(shortcutOptionsFor),
+        className: 'result dangerResult',
+      },
+    ].filter((row) => childMatches(row.title, row.subtitle))
+  }
+
+  function getShortcutRecorderRows() {
+    return [
+      {
+        value: 'shortcut:save',
+        icon: <Keyboard size={18} />,
+        title: recordedShortcut || 'Press a shortcut',
+        subtitle: recordedShortcut ? `Save shortcut for “${shortcutFor?.title}”` : 'Use at least one modifier, then press Enter',
+        onSelect: saveRecordedShortcut,
+        className: 'result',
+      },
+      {
+        value: 'shortcut:cancel',
+        icon: <RotateCcw size={18} />,
+        title: 'Cancel',
+        subtitle: 'Keep the current shortcut settings',
+        onSelect: () => setShortcutFor(null),
+        className: 'result',
+      },
+    ]
+  }
+
   function getOptionActionRows() {
     return [
       {
@@ -571,7 +766,7 @@ export function App() {
         title: 'Set keyboard shortcut',
         subtitle: 'Run this action globally without opening Nevermind',
         onSelect: setShortcut,
-        show: true,
+        show: canCustomizeAction,
       },
       {
         value: 'option:preview',
@@ -587,7 +782,7 @@ export function App() {
         title: 'Set alias',
         subtitle: 'Make this action appear for another phrase',
         onSelect: setAlias,
-        show: true,
+        show: canCustomizeAction,
       },
       {
         value: 'option:tweak',
@@ -632,6 +827,30 @@ export function App() {
         <span>Try a different filter.</span>
       </div>
     )
+  }
+
+  function renderActionResults() {
+    return actions.map((action) => {
+      const Icon = iconFor[action.icon] ?? Sparkles
+      const iconUrl = action.thumbnailUrl ?? action.iconUrl ?? iconUrls[action.id]
+      return (
+        <Command.Item
+          key={action.id}
+          value={action.id}
+          className="result"
+          onSelect={() => run(action)}
+        >
+          <span className={`resultIcon ${action.thumbnailUrl ? 'thumbnailIcon' : ''}`}>
+            {iconUrl ? <img src={iconUrl} alt="" /> : <Icon size={18} />}
+          </span>
+          <span className="resultText">
+            <strong>{action.title}</strong>
+            <small>{action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle}</small>
+          </span>
+          <span className="enterHint">↵</span>
+        </Command.Item>
+      )
+    })
   }
 
   function renderActionRow(row: ReturnType<typeof getOptionActionRows>[number] | ReturnType<typeof getConfirmActionRows>[number] | ReturnType<typeof getExtensionItemActionRows>[number]) {
@@ -759,14 +978,11 @@ export function App() {
               }}
             >
               <textarea
+                ref={aiInputRef}
                 rows={1}
                 value={aiInput}
                 onChange={(event) => setAiInput(event.target.value)}
-                onInput={(event) => {
-                  const textarea = event.currentTarget
-                  textarea.style.height = 'auto'
-                  textarea.style.height = `${textarea.scrollHeight}px`
-                }}
+                onInput={(event) => resizeAiInput(event.currentTarget)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter') return
                   event.stopPropagation()
@@ -778,11 +994,13 @@ export function App() {
                 placeholder={aiBusy ? 'Thinking…' : 'Message AI'}
               />
               {aiBusy ? (
-                <button className="chatStopButton" type="button" onClick={() => window.nvm.abortAiChat(extensionView?.chatId)}>
-                  Stop
+                <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => window.nvm.abortAiChat(extensionView?.chatId)}>
+                  <Square size={14} fill="currentColor" />
                 </button>
               ) : (
-                <span className="chatEnterHint">↵</span>
+                <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiInput.trim()}>
+                  <CornerDownLeft size={16} />
+                </button>
               )}
             </form>
           ) : null}
@@ -820,7 +1038,7 @@ export function App() {
   }
 
   function moveGridSelection(key: string) {
-    if (extensionView?.type !== 'grid' || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
+    if (extensionView?.type !== 'grid' || clipboardMode || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
     const items = filterExtensionItems(extensionView.items)
     if (items.length === 0) return false
     const currentIndex = Math.max(0, items.findIndex((item) => item.id === selectedValue))
@@ -836,6 +1054,27 @@ export function App() {
   }
 
   function onCommandKeyDown(event: React.KeyboardEvent) {
+    if (shortcutFor) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        setShortcutFor(null)
+        setRecordedShortcut('')
+        return
+      }
+      if (event.key === 'Enter') {
+        saveRecordedShortcut()
+        return
+      }
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        setRecordedShortcut('')
+        return
+      }
+      const accelerator = acceleratorFromEvent(event)
+      if (accelerator) setRecordedShortcut(accelerator)
+      return
+    }
+
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && moveGridSelection(event.key)) {
       event.preventDefault()
       return
@@ -843,23 +1082,29 @@ export function App() {
 
     if (event.key === 'Escape') {
       event.preventDefault()
-      if (confirmRemoveFor) setConfirmRemoveFor(null)
+      if (clipboardMode) closeClipboardHistory()
+      else if (shortcutOptionsFor) setShortcutOptionsFor(null)
+      else if (shortcutManagerOpen) setShortcutManagerOpen(false)
+      else if (confirmRemoveFor) setConfirmRemoveFor(null)
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
       else if (optionsFor) setOptionsFor(null)
       else if (previewFor) setPreviewFor(null)
       else if (extensionView) popExtensionView()
-      else if (clipboardMode) setClipboardMode(false)
       else window.nvm.hide()
       return
     }
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault()
+      if (selectedShortcutRecord && shortcutManagerOpen && !shortcutOptionsFor) {
+        setShortcutOptionsFor(selectedShortcutRecord)
+        return
+      }
       if (selectedExtensionItem && extensionView && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
-      if (activeAction && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView && !clipboardMode) {
+      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView && !clipboardMode) {
         setPreviewFor(null)
         setOptionsFor(activeAction)
       }
@@ -917,18 +1162,31 @@ export function App() {
             ref={inputRef}
             value={inputValue}
             onValueChange={(value) => {
-              if (isFilterableChildOpen) setChildQuery(value)
-              else if (!isChildOpen && !clipboardMode) setQuery(value)
+              if (shortcutFor) return
+              if (clipboardMode) setClipboardQuery(value)
+              else if (isFilterableChildOpen) setChildQuery(value)
+              else if (!isChildOpen) setQuery(value)
             }}
             placeholder={placeholder}
-            readOnly={(!isFilterableChildOpen && isChildOpen) || clipboardMode}
+            readOnly={!shortcutFor && !clipboardMode && !isFilterableChildOpen && isChildOpen}
             spellCheck={false}
           />
           {!isChildOpen && query ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
         </div>
 
         <Command.List className={`results card ${isChildOpen ? 'optionsCard' : 'resultsCard'}`}>
-          {confirmRemoveFor ? (
+          {shortcutFor ? (
+            <div className="shortcutRecorder">
+              <div className="shortcutKeys">
+                {(recordedShortcut ? recordedShortcut.split('+') : ['Press keys']).map((part) => <kbd key={part}>{part}</kbd>)}
+              </div>
+              {getShortcutRecorderRows().map(renderActionRow)}
+            </div>
+          ) : shortcutOptionsFor ? (
+            getShortcutOptionRows().length > 0 ? getShortcutOptionRows().map(renderActionRow) : renderChildEmpty()
+          ) : shortcutManagerOpen ? (
+            getShortcutRows().length > 0 ? getShortcutRows().map(renderActionRow) : renderChildEmpty('No keyboard shortcuts found')
+          ) : confirmRemoveFor ? (
             getConfirmActionRows().length > 0 ? getConfirmActionRows().map(renderActionRow) : renderChildEmpty()
           ) : extensionItemOptionsFor ? (
             getExtensionItemActionRows().length > 0 ? getExtensionItemActionRows().map(renderActionRow) : renderChildEmpty()
@@ -950,37 +1208,23 @@ export function App() {
           ) : optionsFor ? (
             getOptionActionRows().length > 0 ? getOptionActionRows().map(renderActionRow) : renderChildEmpty()
           ) : (
-            actions.map((action) => {
-              const Icon = iconFor[action.icon] ?? Sparkles
-              const iconUrl = action.thumbnailUrl ?? action.iconUrl ?? iconUrls[action.id]
-              return (
-                <Command.Item
-                  key={action.id}
-                  value={action.id}
-                  className="result"
-                  onSelect={() => run(action)}
-                >
-                  <span className={`resultIcon ${action.thumbnailUrl ? 'thumbnailIcon' : ''}`}>
-                    {iconUrl ? <img src={iconUrl} alt="" /> : <Icon size={18} />}
-                  </span>
-                  <span className="resultText">
-                    <strong>{action.title}</strong>
-                    <small>{action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle}</small>
-                  </span>
-                  <span className="enterHint">↵</span>
-                </Command.Item>
-              )
-            })
+            renderActionResults()
           )}
 
           {!isChildOpen && actions.length === 0 ? (
             <Command.Empty className="empty">
-              <Zap size={24} />
-              <strong>Type anything.</strong>
-              <span>Nevermind starts with local actions; AI planning comes next.</span>
+              {clipboardMode ? <Clipboard size={24} /> : <Zap size={24} />}
+              <strong>{clipboardMode ? 'No clipboard items found.' : 'Type anything.'}</strong>
+              <span>{clipboardMode ? 'Try a different clipboard search.' : 'Nevermind starts with local actions; AI planning comes next.'}</span>
             </Command.Empty>
           ) : null}
         </Command.List>
+
+        {clipboardMode && isChildOpen ? (
+          <Command.List className="results card optionsCard clipboardSiblingCard">
+            {actions.length > 0 ? renderActionResults() : renderChildEmpty('No clipboard items found')}
+          </Command.List>
+        ) : null}
       </Command>
     </main>
   )
