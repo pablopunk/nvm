@@ -382,13 +382,20 @@ function actionSearchScore(action, query) {
   )
 }
 
+function usageBoost(actionId) {
+  const count = userState.recents[actionId]?.count || 0
+  return Math.min(90, count * 6)
+}
+
 function recentBoost(actionId) {
   const recent = userState.recents[actionId]
   if (!recent) return 0
   const ageHours = Math.max(0, (Date.now() - recent.lastUsed) / 36e5)
-  const recency = Math.max(0, 120 - ageHours * 3)
-  const frequency = Math.min(30, (recent.count || 1) * 3)
-  return recency + frequency
+  return Math.max(0, 20 - ageHours)
+}
+
+function priorityBoost(action) {
+  return action.kind === 'app' ? 25 : 0
 }
 
 function defaultActionIdFor(action) {
@@ -430,7 +437,7 @@ function rankAction(action, query) {
   return {
     ...action,
     aliases: [...(action.aliases || []), ...actionAliases(action.id)],
-    score: base + recentBoost(action.id),
+    score: base + priorityBoost(action) + usageBoost(action.id) + recentBoost(action.id),
     lastUsed: userState.recents[action.id]?.lastUsed || 0,
   }
 }
@@ -761,7 +768,7 @@ function searchActions(query, options = {}) {
       subtitle: 'Launch application',
       app: item,
       icon: 'app',
-      score: 5,
+      score: 30,
     }
     const ranked = rankAction(withShortcutHint(action), q)
     if (ranked) results.push(ranked)
@@ -816,13 +823,12 @@ function searchActions(query, options = {}) {
       subtitle: 'Search instead',
       query: q,
       icon: 'search',
-      score: 10 + recentBoost(`web-search:${q}`),
+      score: 10 + usageBoost(`web-search:${q}`) + recentBoost(`web-search:${q}`),
     })
   }
 
   return results
     .sort((a, b) => {
-      if (!q && a.lastUsed !== b.lastUsed) return b.lastUsed - a.lastUsed
       return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
     })
     .slice(0, 10)
