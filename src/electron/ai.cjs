@@ -293,7 +293,7 @@ function capabilities() {
     shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
-    namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'cache', 'state', 'ai'],
+    namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'extension', 'cache', 'state', 'ai'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
     fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'openWithApps', 'open', 'readText', 'toFileUrl'],

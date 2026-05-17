@@ -70,6 +70,7 @@ Current `ctx` namespaces:
 - `ctx.apps.launch/frontmost`
 - `ctx.shell.openExternal`, `ctx.shell.exec(command, args, options)`, `ctx.shell.script(script, options)`, `ctx.shell.appleScript(script, options)`, and `ctx.shell.which(command)` for controlled system work. Shell helpers return `{ stdout, stderr, exitCode }` and default to a 30s timeout.
 - `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
+- `ctx.extension.rename(title)` or `ctx.extension.rename({ title, subtitle, commandTitle, commandSubtitle })` to persistently rename the extension metadata shown in search results
 - `ctx.ui.item/actions/empty/loading/error` helpers
 - `ctx.cache`, `ctx.state`, `ctx.ai` placeholders
 

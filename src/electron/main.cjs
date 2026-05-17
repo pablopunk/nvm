@@ -1448,7 +1448,7 @@ function createExtensionStorage(extension) {
 
 function createExtensionContext(extension, command) {
   return {
-    extension,
+    extension: createExtensionRuntimeMetadata(extension, command),
     command,
     ui: {
       list: (view) => ({ ...view, type: 'list' }),
@@ -1655,11 +1655,60 @@ async function loadExtensions() {
       extension.__generated = true
       const chat = Object.values(userState.aiChats || {}).find((item) => item.generatedExtensionFile === entry.name)
       if (chat) extension.__chatId = chat.id
+      await applyExtensionMetadataOverrides(extension)
       registerExtension(extension)
     } catch (error) {
       console.error(`Failed to load extension ${fullPath}`, error)
     }
   }
+}
+
+function createExtensionRuntimeMetadata(extension, command) {
+  return {
+    ...extension,
+    rename: (metadata) => renameExtension(extension, command, metadata),
+  }
+}
+
+function normalizedExtensionMetadata(metadata) {
+  const value = typeof metadata === 'string' ? { title: metadata, commandTitle: metadata } : metadata || {}
+  return {
+    title: value.title == null ? undefined : String(value.title).trim(),
+    subtitle: value.subtitle == null ? undefined : String(value.subtitle).trim(),
+    commandTitle: value.commandTitle == null ? undefined : String(value.commandTitle).trim(),
+    commandSubtitle: value.commandSubtitle == null ? undefined : String(value.commandSubtitle).trim(),
+  }
+}
+
+async function applyExtensionMetadataOverrides(extension) {
+  const metadata = (await readExtensionStorage(extension)).__metadata
+  if (!metadata || typeof metadata !== 'object') return
+  applyExtensionMetadata(extension, metadata)
+}
+
+function applyExtensionMetadata(extension, metadata) {
+  const normalized = normalizedExtensionMetadata(metadata)
+  if (normalized.title) extension.title = normalized.title
+  if (normalized.subtitle) extension.subtitle = normalized.subtitle
+  if (!Array.isArray(extension.commands)) return
+  for (const command of extension.commands) {
+    if (normalized.commandTitle) command.title = normalized.commandTitle
+    if (normalized.commandSubtitle) command.subtitle = normalized.commandSubtitle
+  }
+}
+
+async function renameExtension(extension, command, metadata) {
+  const normalized = normalizedExtensionMetadata(metadata)
+  if (!normalized.title && !normalized.subtitle && !normalized.commandTitle && !normalized.commandSubtitle) throw new Error('rename requires a title, subtitle, commandTitle, or commandSubtitle')
+  const data = await readExtensionStorage(extension)
+  data.__metadata = { ...(data.__metadata || {}), ...normalized }
+  await writeExtensionStorage(extension, data)
+  applyExtensionMetadata(extension, normalized)
+  if (command && normalized.commandTitle) command.title = normalized.commandTitle
+  if (command && normalized.commandSubtitle) command.subtitle = normalized.commandSubtitle
+  await loadExtensions()
+  registerActionShortcuts()
+  return { ok: true, title: extension.title, commandTitle: command?.title }
 }
 
 function registerExtension(extension) {
