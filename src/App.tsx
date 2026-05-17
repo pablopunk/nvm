@@ -14,7 +14,7 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
-import { EmptyState, SearchAccessory, Toast, shortcutLabel, type ActionPanelRow } from './ui'
+import { EmptyState, SearchAccessory, Toast, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
@@ -167,7 +167,7 @@ function spotlightConflictView(accelerator: string): ExtensionView {
 }
 
 const SETTINGS_ROOT_ACTION: Action = { id: 'app-settings', kind: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 0 }
-const PALETTE_HOTKEY_PSEUDO_ACTION: Action = { id: PALETTE_HOTKEY_ACTION_ID, kind: 'builtin', title: 'Open Nevermind Shortcut', subtitle: 'Global shortcut that toggles the palette', icon: 'keyboard', score: 0 }
+const PALETTE_HOTKEY_PSEUDO_ACTION: Action = { id: PALETTE_HOTKEY_ACTION_ID, kind: 'builtin', title: 'Set Nevermind shortcut', subtitle: 'Global shortcut that toggles the palette', icon: 'keyboard', score: 0 }
 
 const SEARCH_PLACEHOLDERS = [
   'Watcha gonna do?',
@@ -444,7 +444,8 @@ export function App() {
 
   function showToast(message: string, tone: 'default' | 'error' = 'default') {
     setToast({ message, tone })
-    window.setTimeout(() => setToast((current) => current?.message === message ? null : current), 2200)
+    const duration = tone === 'error' ? 4000 : 2200
+    window.setTimeout(() => setToast((current) => current?.message === message ? null : current), duration)
   }
 
   async function sendAiPrompt(message: string, chatId = extensionView?.chatId) {
@@ -911,11 +912,11 @@ export function App() {
     ].filter((row) => row.show && childMatches(row.title, row.subtitle))
   }
 
-  function renderChildEmpty(message = 'No actions found', subtitle?: string) {
+  function renderChildEmpty(message = EMPTY_ACTIONS_TITLE, subtitle?: string) {
     return <EmptyState icon={<Search size={24} />} title={message} subtitle={subtitle} />
   }
 
-  function renderViewEmpty(view: ExtensionView, fallback = 'No items found') {
+  function renderViewEmpty(view: ExtensionView, fallback = EMPTY_ITEMS_TITLE) {
     return renderChildEmpty(view.emptyView?.title || fallback, view.emptyView?.subtitle)
   }
 
@@ -964,7 +965,7 @@ export function App() {
     />
   }
 
-  function renderActionPanel(rows: ActionPanelRow[] | unknown[], emptyMessage = 'No actions found') {
+  function renderActionPanel(rows: ActionPanelRow[] | unknown[], emptyMessage = EMPTY_ACTIONS_TITLE) {
     return <ActionPanel rows={rows as ActionPanelRow[]} emptyMessage={emptyMessage} />
   }
 
@@ -1193,7 +1194,7 @@ export function App() {
           id: `ai:${query}`,
           kind: 'ai-placeholder',
           title: `Automate "${query}"`,
-          subtitle: 'Automate with AI',
+          subtitle: 'Build an action for this with AI',
           query,
           icon: 'bolt',
           score: 90,
@@ -1290,8 +1291,8 @@ export function App() {
             <Command.Empty asChild>
               <EmptyState
                 icon={<Zap size={24} />}
-                title="Type anything."
-                subtitle="Nevermind starts with local actions; AI planning comes next."
+                title={EMPTY_ROOT_TITLE}
+                subtitle={EMPTY_ROOT_SUBTITLE}
               />
             </Command.Empty>
           ) : null}

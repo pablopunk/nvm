@@ -2,6 +2,13 @@ import { type ReactNode } from 'react'
 import { Command } from 'cmdk'
 import { Folder } from 'lucide-react'
 
+export const EMPTY_ROOT_TITLE = 'Type anything'
+export const EMPTY_ROOT_SUBTITLE = 'Nevermind starts with local actions; AI planning comes next.'
+export const EMPTY_RESULTS_TITLE = 'No results'
+export const EMPTY_ITEMS_TITLE = 'No items'
+export const EMPTY_ACTIONS_TITLE = 'No actions'
+export const EMPTY_SHORTCUTS_TITLE = 'No keyboard shortcuts'
+
 export type KeyHintsProps = { shortcut?: string; extras?: string[]; showEnter?: boolean }
 export type CommandRowProps = { value: string; icon: ReactNode; title: string; subtitle?: string; accessories?: { text?: string; icon?: ReactNode }[]; shortcut?: string; extras?: string[]; className?: string; selectedOnlyShortcut?: boolean; onSelect: () => void }
 export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: string; video?: string; actionHint?: ReactNode; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
@@ -38,8 +45,8 @@ export function CommandTile({ value, title, subtitle, image, video, actionHint, 
   return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia">{video ? <video src={video} poster={image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : image ? <img src={image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
 }
 
-export function EmptyState({ icon, title, subtitle = 'Try a different filter.' }: EmptyStateProps) {
-  return <div className="empty">{icon}<strong>{title}</strong><span>{subtitle}</span></div>
+export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
+  return <div className="empty">{icon}<strong>{title}</strong>{subtitle ? <span>{subtitle}</span> : null}</div>
 }
 
 export function Toast({ message, tone }: ToastProps) {

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { CornerDownLeft, Search, Sparkles, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
-import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel } from './ui'
+import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
 import { RootCommandList } from './command-list'
 import { iconFor, type CommandIconName } from './command-icons'
 
@@ -48,7 +48,7 @@ function gridStyle(view: CommandView) {
   } as CSSProperties
 }
 
-function fallbackEmpty(view: CommandView, fallback = 'No items found') {
+function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   return <EmptyState icon={<Search size={24} />} title={view.emptyView?.title || fallback} subtitle={view.emptyView?.subtitle} />
 }
 
@@ -74,7 +74,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
 
   if (view.type === 'list') {
     const items = filterItems(view.items)
-    if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={renderRootIcon} onSelect={runDefaultAction} emptyTitle={view.emptyView?.title || 'No items found'} emptySubtitle={view.emptyView?.subtitle} />
+    if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={renderRootIcon} onSelect={runDefaultAction} emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE} emptySubtitle={view.emptyView?.subtitle} />
     return <ListView
       items={items}
       sections={filterSections(view)}

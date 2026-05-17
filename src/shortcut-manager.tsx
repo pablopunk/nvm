@@ -2,6 +2,7 @@ import { Keyboard, RotateCcw, Trash2 } from 'lucide-react'
 import { RootCommandList } from './command-list'
 import type { CommandItem } from './model'
 import type { ActionPanelRow } from './ui'
+import { EMPTY_SHORTCUTS_TITLE } from './ui'
 
 type ShortcutAction = { id: string; title: string; subtitle?: string }
 export type ShortcutRecordLike = { actionId: string; accelerator: string; action: ShortcutAction }
@@ -25,7 +26,7 @@ export function ShortcutManagerView({ records, matches, onSelect }: { records: S
       const record = records.find((candidate) => `shortcut:${candidate.actionId}` === item.id)
       if (record) onSelect(record)
     }}
-    emptyTitle="No keyboard shortcuts found"
+    emptyTitle={EMPTY_SHORTCUTS_TITLE}
   />
 }
 
@@ -56,7 +57,7 @@ export function shortcutRecorderRows(recordedShortcut: string, action: ShortcutA
     {
       value: 'shortcut:save',
       icon: <Keyboard size={18} />,
-      title: recordedShortcut || 'Press a shortcut',
+      title: recordedShortcut || 'Press a keyboard shortcut',
       subtitle: recordedShortcut ? `Save shortcut for “${action?.title}”` : 'Use at least one modifier, then press Enter',
       onSelect: saveShortcut,
       className: 'result',
