@@ -1037,6 +1037,7 @@ export function App() {
         return
       }
       if (selectedExtensionItem && extensionView && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+        setChildQuery('')
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
@@ -1073,6 +1074,7 @@ export function App() {
       }
       if (selectedExtensionItem && extensionView && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         event.preventDefault()
+        setChildQuery('')
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }

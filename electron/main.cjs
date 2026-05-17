@@ -627,9 +627,7 @@ function clipboardHistoryView() {
       const copyAction = isImage
         ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, dismissAfterRun: 'auto' }
         : { type: 'copyText', title: isVideo ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
-      const previewAction = isImage || isVideo
-        ? { type: 'nativeAction', title: 'Preview', nativeAction: clipboardActionFromItem(item) }
-        : null
+      const previewAction = { type: 'nativeAction', title: 'Preview', nativeAction: clipboardActionFromItem(item) }
       const pasteAction = isImage || isVideo
         ? null
         : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }

@@ -98,6 +98,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
 
   if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
 
-  const previewActions = renderActionPanel(actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
+  const previewActionRows = actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false)
+  const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
   return <div className={view.presentation === 'preview' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
 }

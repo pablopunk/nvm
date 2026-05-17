@@ -359,9 +359,17 @@ kbd {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.previewMode .extensionView {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 0;
+  height: 100%;
+}
+
 .previewMode .previewMedia {
   height: 100%;
-  max-height: calc(100vh - var(--window-blur-margin) * 2 - 106px);
+  min-height: 0;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 134px);
 }
 
 .previewText {
