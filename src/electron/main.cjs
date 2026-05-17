@@ -658,16 +658,16 @@ function settingsView() {
     searchBarPlaceholder: 'Search Settings',
     items: SETTING_DEFINITIONS.map((definition) => {
       const value = getSetting(definition.id)
-      const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? formatShortcut(value) : String(value)
+      const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
       const primaryAction = definition.type === 'shortcut'
-        ? { type: 'nativeAction', title: 'Change Shortcut', nativeAction: { kind: 'record-palette-hotkey' } }
+        ? { type: 'nativeAction', title: 'Change Shortcut', shortcut: value, nativeAction: { kind: 'record-palette-hotkey' } }
         : { type: 'nativeAction', title: value ? 'Turn Off' : 'Turn On', nativeAction: { kind: 'toggle-setting', settingId: definition.id } }
       return {
         id: `setting:${definition.id}`,
         title: definition.title,
         subtitle: definition.description,
         icon: 'settings',
-        accessories: [{ text: accessoryText }],
+        accessories: accessoryText ? [{ text: accessoryText }] : [],
         primaryAction,
         actionPanel: { sections: [{ actions: [primaryAction] }] },
       }
