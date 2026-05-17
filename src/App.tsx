@@ -127,7 +127,7 @@ declare global {
       clearOverride: (action: Action) => Promise<SaveResult>
       removeCreatedAction: (action: Action) => Promise<SaveResult>
       getAppIcon: (appPath: string) => Promise<string | null>
-      setPaletteMode: (mode: 'default' | 'ai-chat' | 'stacked') => Promise<void>
+      setPaletteMode: (mode: 'default' | 'ai-chat' | 'stacked' | 'preview') => Promise<void>
       hide: () => Promise<void>
       shortcutReady: () => Promise<void>
       onShown: (callback: () => void) => () => void
@@ -362,9 +362,9 @@ export function App() {
     const isAiChat = Boolean(extensionView?.aiChat)
     aiChatOpenRef.current = isAiChat
     aiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
-    const mode = siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
+    const mode = previewFor ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
     window.nvm.setPaletteMode(mode)
-  }, [extensionView, siblingViews.length])
+  }, [extensionView, previewFor, siblingViews.length])
 
   useEffect(() => {
     if (extensionView?.aiChat) {
@@ -405,7 +405,7 @@ export function App() {
   const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
   const isVisuallyStacked = (isChildOpen && !isRootLikeExtensionView) || siblingViews.length > 0
   const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
-  const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : optionsFor && !query ? optionsFor.title : query
+  const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : previewFor ? previewFor.title : extensionView ? extensionView.title : optionsFor && !query ? optionsFor.title : query
   const placeholder = shortcutFor ? 'Press a keyboard shortcut' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
 
   useEffect(() => {
@@ -467,8 +467,14 @@ export function App() {
 
   async function runViewAction(action: ExtensionViewAction) {
     if (action.requiresConfirmation && !window.confirm(`Run “${action.title}”?`)) return
-    if (action.type === 'nativeAction' && (action.nativeAction as { kind?: string } | undefined)?.kind === 'record-palette-hotkey') {
+    const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string } | undefined : undefined
+    if (nativeAction?.kind === 'record-palette-hotkey') {
       startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
+      return
+    }
+    if (nativeAction?.kind === 'clipboard' && ('imageDataUrl' in nativeAction || 'text' in nativeAction)) {
+      setPreviewFor(nativeAction as Action)
+      setExtensionItemOptionsFor(null)
       return
     }
     const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
@@ -1137,8 +1143,6 @@ export function App() {
             renderActionPanel(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true))
           ) : extensionItemOptionsFor ? (
             renderActionPanel(getExtensionItemActionRows())
-          ) : extensionView ? (
-            renderExtensionView(extensionView)
           ) : previewFor ? (
             <div className="previewPane">
               {previewFor.imageDataUrl ? (
@@ -1152,6 +1156,8 @@ export function App() {
                 </div>
               )}
             </div>
+          ) : extensionView ? (
+            renderExtensionView(extensionView)
           ) : optionsFor ? (
             renderActionPanel(getOptionActionRows())
           ) : (

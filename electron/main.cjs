@@ -17,9 +17,11 @@ const WINDOW_BLUR_MARGIN = 96
 const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
 const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
 const STACKED_PALETTE_SIZE = { width: 760, height: 720 }
+const PREVIEW_PALETTE_SIZE = { width: 1080, height: 760 }
 const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
 const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
 const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE)
+const PREVIEW_WINDOW_SIZE = addWindowBlurMargin(PREVIEW_PALETTE_SIZE)
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic'])
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'flv', 'm4v'])
 const LOCAL_FILE_PROTOCOL = 'nvm-file'
@@ -270,8 +272,9 @@ function debugLog(message, data) {
 
 function setPaletteSizeForMode(mode = 'default') {
   if (!win) return
-  const size = mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
+  const size = mode === 'preview' ? PREVIEW_WINDOW_SIZE : mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
   win.setSize(size.width, size.height, false)
+  if (win.isVisible()) centerWindow()
 }
 
 function centerWindow() {
@@ -621,8 +624,11 @@ function clipboardHistoryView() {
       const copyAction = isImage
         ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, dismissAfterRun: 'auto' }
         : { type: 'copyText', title: 'Copy Text', text: item.text, dismissAfterRun: 'auto' }
+      const previewAction = isImage
+        ? { type: 'nativeAction', title: 'Preview', nativeAction: clipboardActionFromItem(item) }
+        : null
       const pasteAction = isImage
-        ? copyAction
+        ? null
         : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
       return {
         id: `clipboard:${item.id}`,
@@ -634,7 +640,7 @@ function clipboardHistoryView() {
         primaryAction: copyAction,
         actionPanel: {
           sections: [
-            { actions: [copyAction, pasteAction] },
+            { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
           ],
         },
       }

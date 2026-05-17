@@ -335,13 +335,17 @@ kbd {
 }
 
 .previewPane {
+  display: grid;
+  min-height: 0;
+  height: 100%;
   padding: 14px;
 }
 
 .previewImage {
   display: block;
   width: 100%;
-  max-height: 320px;
+  height: 100%;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 106px);
   border-radius: 14px;
   object-fit: contain;
   background: rgba(255, 255, 255, 0.05);
