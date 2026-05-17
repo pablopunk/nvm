@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   Clipboard,
+  Copy,
   Keyboard,
   RotateCcw,
   Search,
@@ -126,6 +127,7 @@ declare global {
       resumeShortcuts: () => Promise<void>
       setOverride: (action: Action, instruction: string) => Promise<SaveResult>
       clearOverride: (action: Action) => Promise<SaveResult>
+      duplicateCreatedAction: (action: Action) => Promise<SaveResult & { action?: Action }>
       removeCreatedAction: (action: Action) => Promise<SaveResult>
       getAppIcon: (appPath: string) => Promise<string | null>
       setPaletteMode: (mode: 'default' | 'ai-chat' | 'stacked' | 'preview') => Promise<void>
@@ -625,6 +627,16 @@ export function App() {
     if (result.ok) setOptionsFor(null)
   }
 
+  async function duplicateCreatedAction() {
+    if (!optionsFor) return
+    const result = await window.nvm.duplicateCreatedAction(optionsFor)
+    showToast(result.message, result.ok ? 'default' : 'error')
+    if (!result.ok) return
+    setOptionsFor(null)
+    setRefreshNonce((nonce) => nonce + 1)
+    await tweakActionWithAi(result.action)
+  }
+
   function askRemoveCreatedAction() {
     if (!optionsFor) return
     setConfirmRemoveFor(optionsFor)
@@ -644,6 +656,7 @@ export function App() {
   const canOverride = Boolean(optionsFor?.defaultActionId)
   const canTweakWithAi = Boolean(optionsFor?.aiChatId && optionsFor.kind === 'extension-command')
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
+  const canDuplicateCreatedAction = Boolean(optionsFor?.kind === 'extension-command' && optionsFor.removable)
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
@@ -786,6 +799,14 @@ export function App() {
         subtitle: 'Make this action appear for another phrase',
         onSelect: setAlias,
         show: canCustomizeAction,
+      },
+      {
+        value: 'option:duplicate',
+        icon: <Copy size={18} />,
+        title: 'Duplicate',
+        subtitle: 'Create a separate copy to tweak while keeping this action',
+        onSelect: duplicateCreatedAction,
+        show: canDuplicateCreatedAction,
       },
       {
         value: 'option:tweak',

@@ -48,10 +48,7 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
     setMessages(view.messages || [])
     setInput('')
     focusInput()
-    if (view.initialPrompt) {
-      await resetChat(view.chatId)
-      await sendPrompt(view.initialPrompt, view.chatId)
-    }
+    if (view.initialPrompt) await sendPrompt(view.initialPrompt, view.chatId)
     focusInput()
   }
 

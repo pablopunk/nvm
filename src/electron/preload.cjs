@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('nvm', {
   resumeShortcuts: () => ipcRenderer.invoke('actions:resume-shortcuts'),
   setOverride: (action, instruction) => ipcRenderer.invoke('actions:set-override', action, instruction),
   clearOverride: (action) => ipcRenderer.invoke('actions:clear-override', action),
+  duplicateCreatedAction: (action) => ipcRenderer.invoke('actions:duplicate-created', action),
   removeCreatedAction: (action) => ipcRenderer.invoke('actions:remove-created', action),
   getAppIcon: (appPath) => ipcRenderer.invoke('apps:icon', appPath),
   setPaletteMode: (mode) => ipcRenderer.invoke('palette:set-mode', mode),

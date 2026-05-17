@@ -2,7 +2,7 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 const vm = require('node:vm')
 
-const DEFAULT_MODEL = 'deepseek-v4-flash'
+const DEFAULT_MODEL = 'gemini-3-flash'
 
 function createNevermindAi(options) {
   const sessions = new Map()
@@ -57,11 +57,11 @@ function createNevermindAi(options) {
 
     const apiKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
-    if (apiKey) authStorage.setRuntimeApiKey('opencode-go', apiKey)
+    if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
 
     const modelRegistry = pi.ModelRegistry.inMemory(authStorage)
-    const model = ai.getModel('opencode-go', process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
-    if (!model) throw new Error(`Missing opencode-go model: ${process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL}`)
+    const model = ai.getModel('opencode', process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
+    if (!model) throw new Error(`Missing opencode model: ${process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL}`)
     const modelDebug = {
       provider: model.provider,
       id: model.id,

@@ -597,7 +597,7 @@ function aiChatView(item, options = {}) {
     title: `Automate “${item.query}”`,
     aiChat: true,
     chatId: item.id,
-    initialPrompt: undefined,
+    initialPrompt: options.initialPrompt,
     messages: item.messages || [],
   }
 }
@@ -953,13 +953,11 @@ function extensionErrorView(entry, error) {
 function extensionErrorAiAction(entry, message) {
   const chatId = entry.extension.__chatId
   if (!chatId) return null
+  const prompt = `This generated action failed. Please fix the extension.\n\nAction: ${entry.command.title || entry.command.id}\nExtension: ${entry.extension.title || entry.extension.id}\n\nError:\n\`\`\`\n${message}\n\`\`\``
   return {
     type: 'runExtensionAction',
     title: 'Fix with AI',
-    __handler: async () => {
-      await sendAiChatMessage(`This generated action failed. Please fix the extension.\n\nAction: ${entry.command.title || entry.command.id}\nExtension: ${entry.extension.title || entry.extension.id}\n\nError:\n\`\`\`\n${message}\n\`\`\``, chatId)
-      return aiChatView(userState.aiChats[chatId])
-    },
+    __handler: async () => aiChatView(userState.aiChats[chatId], { initialPrompt: prompt }),
   }
 }
 
@@ -1579,7 +1577,7 @@ function initNevermindAi() {
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId
       if (chatId && event.type === 'delta' && event.text) appendAiChatDelta(chatId, event.text)
-      if (chatId && event.type === 'tool_start' && event.name) appendAiChatMessage(chatId, 'system', `Using ${event.name}…`)
+      if (chatId && event.type === 'tool_start' && event.name) appendAiChatMessage(chatId, 'system', event.name)
       if (chatId && event.type === 'error' && event.message) appendAiChatMessage(chatId, 'system', event.message)
       if (chatId && event.type === 'done' && userState.aiChats[chatId]) {
         if (userState.aiChats[chatId].status !== 'ready') userState.aiChats[chatId].status = 'done'
@@ -2258,6 +2256,42 @@ async function clearOverride(action) {
   return { ok: true, message: 'Original restored' }
 }
 
+async function duplicateCreatedAction(action) {
+  if (action?.kind !== 'extension-command' || !action.removable) return { ok: false, message: 'Only generated extension actions can be duplicated' }
+  const entry = extensionEntryForAction(action)
+  const filePath = entry?.extension?.__filePath
+  const chatId = entry?.extension?.__chatId || action.aiChatId
+  const chat = chatId ? userState.aiChats[chatId] : null
+  if (!filePath || !chat) return { ok: false, message: 'Generated action not found' }
+
+  const duplicateId = hashValue(`${chat.id}:${Date.now()}`)
+  const duplicateTitle = `Copy of ${chat.title || chat.query || action.title}`
+  const duplicateQuery = duplicateTitle
+  const duplicateFile = `${path.basename(filePath, '.cjs')}-copy-${duplicateId.slice(0, 8)}.cjs`
+  const sourceFile = path.basename(filePath)
+  const sourceCode = `const source = require('./${sourceFile.replace(/'/g, "\\'")}')\n\nmodule.exports = {\n  ...source,\n  id: ${JSON.stringify(`${entry.extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n}\n`
+
+  await fs.writeFile(path.join(extensionsDir, duplicateFile), sourceCode)
+  userState.aiChats[duplicateId] = {
+    id: duplicateId,
+    query: duplicateQuery,
+    title: duplicateTitle,
+    status: 'ready',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    generatedExtensionFile: duplicateFile,
+    messages: [
+      ...(chat.messages || []),
+      { role: 'system', content: `Duplicated from “${chat.title || chat.query || action.title}”. Tweak this copy without changing the original.` },
+    ].slice(-100),
+  }
+  scheduleSaveState()
+  await loadExtensions()
+  registerActionShortcuts()
+  const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => candidate.extension?.__chatId === duplicateId)
+  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromCommand(duplicateEntry.extension, duplicateEntry.command) : { kind: 'ai-chat', aiChatId: duplicateId, title: duplicateTitle } }
+}
+
 async function removeCreatedAction(action) {
   if (action?.kind === 'ai-chat' && action.aiChatId) {
     const chat = userState.aiChats[action.aiChatId]
@@ -2328,6 +2362,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:resume-shortcuts', () => registerActionShortcuts())
   ipcMain.handle('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
   ipcMain.handle('actions:clear-override', (_event, action) => clearOverride(action))
+  ipcMain.handle('actions:duplicate-created', (_event, action) => duplicateCreatedAction(action))
   ipcMain.handle('actions:remove-created', (_event, action) => removeCreatedAction(action))
   ipcMain.handle('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
   ipcMain.handle('palette:set-mode', (_event, mode) => {
