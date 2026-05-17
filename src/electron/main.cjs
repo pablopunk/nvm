@@ -664,7 +664,8 @@ async function getAppIconDataUrl(appPath) {
 
   appIconCache.set(appPath, promise)
   const result = await promise
-  appIconCache.set(appPath, result)
+  if (result) appIconCache.set(appPath, result)
+  else appIconCache.delete(appPath)
   return result
 }
 
