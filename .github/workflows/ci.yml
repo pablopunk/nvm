@@ -89,8 +89,8 @@ jobs:
           mkdir -p mac-artifacts
           shopt -s nullglob
           files=(
-            release/Nevermind-*-${{ matrix.arch }}.zip
-            release/Nevermind-*-${{ matrix.arch }}.zip.blockmap
+            release/Nevermind-*-mac-${{ matrix.arch }}.zip
+            release/Nevermind-*-mac-${{ matrix.arch }}.zip.blockmap
           )
           if (( ${#files[@]} == 0 )); then
             find release -maxdepth 1 -type f -print
@@ -163,9 +163,9 @@ jobs:
           mkdir -p linux-artifacts
           shopt -s nullglob
           files=(
-            release/Nevermind-*-${{ matrix.appimage-arch }}.AppImage
-            release/Nevermind-*-${{ matrix.deb-arch }}.deb
-            release/Nevermind-*-${{ matrix.appimage-arch }}.AppImage.blockmap
+            release/Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage
+            release/Nevermind-*-linux-${{ matrix.deb-arch }}.deb
+            release/Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage.blockmap
           )
           if (( ${#files[@]} == 0 )); then
             find release -maxdepth 1 -type f -print

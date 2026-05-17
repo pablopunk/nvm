@@ -28,7 +28,7 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
-  artifactName: '${productName}-${version}-${arch}.${ext}'
+  artifactName: '${productName}-${version}-mac-${arch}.${ext}'
 linux:
   icon: build/Icon.icon/Assets/icon.png
   category: Utility
@@ -42,10 +42,10 @@ linux:
       arch:
         - x64
         - arm64
-  artifactName: '${productName}-${version}-${arch}.${ext}'
+  artifactName: '${productName}-${version}-linux-${arch}.${ext}'
 win:
   target:
     - nsis
     - portable
-  artifactName: '${productName}-${version}-${arch}.${ext}'
+  artifactName: '${productName}-${version}-win-${arch}.${ext}'
 electronUpdaterCompatibility: '>=2.16'
