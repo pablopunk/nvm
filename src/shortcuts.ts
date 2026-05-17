@@ -21,10 +21,14 @@ export function acceleratorFromKeyboardEvent(event: Pick<KeyboardEvent, 'key' | 
   if (event.altKey) parts.push('Alt')
   if (event.shiftKey) parts.push('Shift')
   parts.push(key)
-  if (parts.length < 2 && !key.startsWith('F')) return ''
+  const isArrow = key === 'Left' || key === 'Right' || key === 'Up' || key === 'Down'
+  if (parts.length < 2 && !key.startsWith('F') && !isArrow) return ''
   return parts.join('+')
 }
 
 export function normalizedShortcut(value?: string) {
-  return String(value || '').replace(/\s+/g, '').toLowerCase()
+  return String(value || '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/(^|\+)arrow(left|right|up|down)(?=\+|$)/g, '$1$2')
 }
