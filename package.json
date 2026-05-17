@@ -1,6 +1,6 @@
 {
   "name": "nvm",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Nevermind: an AI-native command palette for your desktop",
   "author": "Pablo Varela",
   "private": true,
