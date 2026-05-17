@@ -20,7 +20,7 @@ export type ActionPanelViewProps = { rows: ActionPanelRow[]; renderEmpty: () => 
 export type SearchAccessoryProps = { tooltip?: string; value?: string; items: { title: string; value: string }[]; onChange?: (value: string) => void }
 
 export function shortcutLabel(shortcut?: string) {
-  return String(shortcut || '').split('+').map((part) => ({ Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Space: '␣', Escape: 'Esc', Tab: 'Tab' }[part] || part)).join('')
+  return String(shortcut || '').split('+').map((part) => ({ Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Escape: 'Esc', Tab: 'Tab' }[part] || part)).join('')
 }
 
 export function KeyHints({ shortcut, extras = [], showEnter = true }: KeyHintsProps) {

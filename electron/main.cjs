@@ -75,6 +75,12 @@ function getPaletteHotkey() {
   return getSetting('paletteHotkey') || DEFAULT_PALETTE_HOTKEY
 }
 
+const SHORTCUT_SYMBOLS = { Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Escape: 'Esc', Tab: 'Tab' }
+
+function formatShortcut(accelerator) {
+  return String(accelerator || '').split('+').map((part) => SHORTCUT_SYMBOLS[part] || part).join('')
+}
+
 function isSpotlightAccelerator(accelerator) {
   if (process.platform !== 'darwin') return false
   return normalizeAccelerator(accelerator) === 'Command+Space'
@@ -645,7 +651,7 @@ function settingsView() {
     searchBarPlaceholder: 'Search Settings',
     items: SETTING_DEFINITIONS.map((definition) => {
       const value = getSetting(definition.id)
-      const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : String(value)
+      const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? formatShortcut(value) : String(value)
       const primaryAction = definition.type === 'shortcut'
         ? { type: 'nativeAction', title: 'Change Shortcut', nativeAction: { kind: 'record-palette-hotkey' } }
         : { type: 'nativeAction', title: value ? 'Turn Off' : 'Turn On', nativeAction: { kind: 'toggle-setting', settingId: definition.id } }
@@ -840,6 +846,9 @@ async function executeAction(action, options = {}) {
       return { view: clipboardHistoryView() }
     case 'app-settings':
       return { view: settingsView() }
+    case 'open-keyboard-settings':
+      await openSystemKeyboardSettings()
+      return
     case 'toggle-setting': {
       const definition = SETTING_DEFINITIONS.find((entry) => entry.id === action.settingId)
       if (!definition) return

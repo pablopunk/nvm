@@ -13,7 +13,7 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
-import { EmptyState, SearchAccessory, Toast, type ActionPanelRow } from './ui'
+import { EmptyState, SearchAccessory, Toast, shortcutLabel, type ActionPanelRow } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
@@ -142,6 +142,25 @@ declare global {
 }
 
 const PALETTE_HOTKEY_ACTION_ID = '__palette-hotkey__'
+
+function spotlightConflictView(accelerator: string): ExtensionView {
+  const label = shortcutLabel(accelerator)
+  const openSettings: CommandAction = {
+    type: 'nativeAction',
+    title: 'Open Keyboard Shortcuts',
+    subtitle: 'macOS System Settings → Keyboard → Keyboard Shortcuts',
+    nativeAction: { kind: 'open-keyboard-settings' },
+  }
+  const dismiss: CommandAction = { type: 'popView', title: 'Dismiss' }
+  return {
+    type: 'detail',
+    title: `${label} conflicts with Spotlight`,
+    content: `# ${label} is used by Spotlight\n\nmacOS has \`${label}\` bound to Spotlight, so Nevermind cannot toggle with it until you disable that binding.\n\nOpen **System Settings → Keyboard → Keyboard Shortcuts → Spotlight** and uncheck *Show Spotlight search*.`,
+    actions: [openSettings, dismiss],
+    actionPanel: { sections: [{ actions: [openSettings, dismiss] }] },
+  }
+}
+
 const SETTINGS_ROOT_ACTION: Action = { id: 'app-settings', kind: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 0 }
 const PALETTE_HOTKEY_PSEUDO_ACTION: Action = { id: PALETTE_HOTKEY_ACTION_ID, kind: 'builtin', title: 'Open Nevermind Shortcut', subtitle: 'Global shortcut that toggles the palette', icon: 'keyboard', score: 0 }
 
@@ -186,6 +205,7 @@ export function App() {
   const [formValues, setFormValues] = useState<Record<string, string | boolean>>({})
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([])
   const extensionViewRef = useRef<ExtensionView | null>(null)
+  const wasChildOpenRef = useRef(false)
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
 
   useLayoutEffect(() => {
@@ -394,6 +414,16 @@ export function App() {
   }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
 
   useEffect(() => {
+    if (isChildOpen) {
+      wasChildOpenRef.current = true
+      return
+    }
+    if (!wasChildOpenRef.current) return
+    wasChildOpenRef.current = false
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [isChildOpen])
+
+  useEffect(() => {
     if (isChildOpen) return
     requestAnimationFrame(() => resultsListRef.current?.scrollTo({ top: 0 }))
   }, [query, actions, isChildOpen])
@@ -501,14 +531,12 @@ export function App() {
     if (shortcutFor.id === PALETTE_HOTKEY_ACTION_ID) {
       const result = await window.nvm.setPaletteHotkey(recordedShortcut)
       showToast(result.message, result.ok ? 'default' : 'error')
-      if (result.spotlightConflict && window.confirm(`${recordedShortcut} is used by macOS Spotlight. Open System Settings to disable the Spotlight shortcut?`)) {
-        await window.nvm.openSystemKeyboardSettings()
-      }
-      if (!result.ok) return
+      if (!result.ok && !result.spotlightConflict) return
       setShortcutFor(null)
       setOptionsFor(null)
       const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION)
       if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
+      if (result.spotlightConflict) showExtensionView(spotlightConflictView(recordedShortcut), 'push')
       return
     }
     const result = await window.nvm.setShortcut(shortcutFor, recordedShortcut)
