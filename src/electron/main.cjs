@@ -387,7 +387,7 @@ function createWindow() {
   if (isDev) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
-    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    win.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'))
   }
 }
 
