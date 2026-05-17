@@ -1,5 +1,6 @@
 // @ts-nocheck
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session } = require('electron')
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session, dialog } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const os = require('node:os')
@@ -7,6 +8,116 @@ const crypto = require('node:crypto')
 const { spawn, execFile } = require('node:child_process')
 const { pathToFileURL } = require('node:url')
 const { createNevermindAi } = require('./ai.cjs')
+
+let updateCheckInFlight = false
+let updateDownloadInFlight = false
+let updateStartupTimer = null
+let updatePollTimer = null
+const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000
+const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000
+
+function canUseAutoUpdates() {
+  if (!app.isPackaged) return false
+  if (process.platform === 'darwin') return true
+  if (process.platform === 'linux') return Boolean(process.env.APPIMAGE)
+  return false
+}
+
+async function checkForUpdates(trigger = 'manual') {
+  if (!canUseAutoUpdates() || updateCheckInFlight || updateDownloadInFlight) return
+  updateCheckInFlight = true
+  try {
+    console.info(`[nvm-updater] checking for updates (${trigger})`)
+    await autoUpdater.checkForUpdates()
+  } catch (error) {
+    console.error('[nvm-updater] update check failed', error)
+  } finally {
+    updateCheckInFlight = false
+  }
+}
+
+function clearUpdateTimers() {
+  if (updateStartupTimer) {
+    clearTimeout(updateStartupTimer)
+    updateStartupTimer = null
+  }
+  if (updatePollTimer) {
+    clearInterval(updatePollTimer)
+    updatePollTimer = null
+  }
+}
+
+function configureAutoUpdater() {
+  if (!canUseAutoUpdates()) {
+    console.info('[nvm-updater] disabled (development build or unsupported platform)')
+    return
+  }
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+
+  autoUpdater.on('checking-for-update', () => {
+    console.info('[nvm-updater] checking for update')
+  })
+
+  autoUpdater.on('update-available', async (info) => {
+    if (updateDownloadInFlight) return
+    const { response } = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Update available',
+      message: `Nevermind ${info.version} is available.`,
+      detail: 'Do you want to download it now?',
+      buttons: ['Download', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (response !== 0) return
+    updateDownloadInFlight = true
+    try {
+      await autoUpdater.downloadUpdate()
+    } catch (error) {
+      console.error('[nvm-updater] update download failed', error)
+    } finally {
+      updateDownloadInFlight = false
+    }
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    console.info('[nvm-updater] no updates available')
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.info(`[nvm-updater] download progress ${Math.floor(progress.percent)}%`)
+  })
+
+  autoUpdater.on('update-downloaded', async (info) => {
+    const { response } = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Update ready',
+      message: `Nevermind ${info.version} has been downloaded.`,
+      detail: 'Restart Nevermind now to install the update?',
+      buttons: ['Restart and Install', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (response === 0) autoUpdater.quitAndInstall()
+  })
+
+  autoUpdater.on('error', (error) => {
+    console.error('[nvm-updater] updater error', error)
+  })
+
+  updateStartupTimer = setTimeout(() => {
+    updateStartupTimer = null
+    void checkForUpdates('startup')
+  }, AUTO_UPDATE_STARTUP_DELAY_MS)
+  updateStartupTimer.unref?.()
+
+  updatePollTimer = setInterval(() => {
+    void checkForUpdates('poll')
+  }, AUTO_UPDATE_POLL_INTERVAL_MS)
+  updatePollTimer.unref?.()
+}
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const DEFAULT_PALETTE_HOTKEY = 'Alt+Space'
@@ -2462,6 +2573,7 @@ app.whenReady().then(async () => {
   }
   registerLocalFileProtocol()
   installPermissionHandlers()
+  configureAutoUpdater()
 
   await loadUserState()
   await loadExtensions()
@@ -2506,6 +2618,7 @@ app.on('activate', () => showPalette())
 app.on('will-quit', () => {
   app.isQuiting = true
   globalShortcut.unregisterAll()
+  clearUpdateTimers()
 })
 
 const gotLock = app.requestSingleInstanceLock()

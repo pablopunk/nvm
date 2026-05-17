@@ -25,6 +25,7 @@
     "@earendil-works/pi-ai": "^0.74.0",
     "@earendil-works/pi-coding-agent": "^0.74.0",
     "@vitejs/plugin-react": "latest",
+    "electron-updater": "^6.3.9",
     "cmdk": "^1.1.1",
     "file-icon": "^6.0.0",
     "lucide-react": "latest",

@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build app
+        run: mise exec -- pnpm run build
+
+  release-linux:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            appimage-arch: x86_64
+            deb-arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            appimage-arch: arm64
+            deb-arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build Linux release
+        run: mise exec -- pnpm run dist:linux:${{ matrix.arch }}
+
+      - name: Collect Linux artifacts
+        run: |
+          mkdir -p linux-artifacts
+          shopt -s nullglob
+          files=(
+            release/Nevermind-*-${{ matrix.appimage-arch }}.AppImage
+            release/Nevermind-*-${{ matrix.deb-arch }}.deb
+            release/Nevermind-*-${{ matrix.appimage-arch }}.AppImage.blockmap
+          )
+          if (( ${#files[@]} == 0 )); then
+            find release -maxdepth 1 -type f -print
+            exit 1
+          fi
+          cp "${files[@]}" linux-artifacts/
+
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            cp release/latest-linux.yml linux-artifacts/
+          elif [[ -f release/latest-linux-arm64.yml ]]; then
+            cp release/latest-linux-arm64.yml linux-artifacts/
+          else
+            cp release/latest-linux.yml linux-artifacts/latest-linux-arm64.yml
+          fi
+
+      - name: Upload Linux dry-run artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nevermind-linux-${{ matrix.arch }}-${{ github.sha }}
+          path: linux-artifacts/*
+          if-no-files-found: error
+
+      - name: Upload Linux release artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --generate-notes || gh release view "$tag" >/dev/null
+          fi
+          gh release upload "$tag" linux-artifacts/* --clobber

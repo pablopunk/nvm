@@ -1,27 +1,51 @@
 appId: com.pablopunk.nvm
 productName: Nevermind
-artifactName: ${productName}-${version}-${arch}.${ext}
 directories:
   output: release
+  buildResources: build
 files:
   - dist/**
   - src/electron/**
   - src/docs/**
   - src/resources/**
   - package.json
+  - '!**/*.map'
+  - '!node_modules/**/{test,tests,__tests__,docs,example,examples}/**'
+asar: true
+publish:
+  - provider: github
+    owner: pablopunk
+    repo: nvm
 mac:
+  icon: build/Icon.icon
   category: public.app-category.productivity
   target:
     - target: zip
       arch:
         - arm64
         - x64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  artifactName: '${productName}-${version}-${arch}.${ext}'
 linux:
+  icon: build/Icon.icon/Assets/icon.png
   category: Utility
+  maintainer: Pablo Varela <pablo@pablopunk.com>
   target:
-    - AppImage
-    - deb
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+  artifactName: '${productName}-${version}-${arch}.${ext}'
 win:
   target:
     - nsis
     - portable
+  artifactName: '${productName}-${version}-${arch}.${ext}'
+electronUpdaterCompatibility: '>=2.16'
