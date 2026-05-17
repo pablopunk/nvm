@@ -33,6 +33,7 @@ type ActionKind =
   | 'clipboard'
   | 'clipboard-history'
   | 'keyboard-shortcuts'
+  | 'app-settings'
   | 'file'
   | 'ai-placeholder'
   | 'ai-chat'

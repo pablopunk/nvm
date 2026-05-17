@@ -761,6 +761,17 @@ kbd {
   margin-left: auto;
 }
 
+.resultTrailing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.resultTrailing .accessories {
+  margin-left: 0;
+}
+
 .accessory {
   display: inline-flex;
   align-items: center;

@@ -51,6 +51,30 @@ let userState = {
   overrides: {},
   clipboardHistory: [],
   aiChats: {},
+  settings: {},
+}
+
+const SETTING_DEFINITIONS = [
+  {
+    id: 'showClipboardInRoot',
+    title: 'Show Clipboard Items in Main List',
+    description: 'Show copied items inline in the root list',
+    type: 'boolean',
+    default: true,
+  },
+]
+
+function getSetting(id) {
+  const definition = SETTING_DEFINITIONS.find((entry) => entry.id === id)
+  if (!definition) return undefined
+  const stored = userState.settings?.[id]
+  return stored === undefined ? definition.default : stored
+}
+
+function setSetting(id, value) {
+  if (!userState.settings) userState.settings = {}
+  userState.settings[id] = value
+  scheduleSaveState()
 }
 const appIconCache = new Map()
 const extensionRegistry = new Map()
@@ -139,6 +163,14 @@ const BUILT_IN_ACTIONS = [
     title: 'Keyboard Shortcuts',
     subtitle: 'View, change, or remove global shortcuts',
     icon: 'keyboard',
+    score: 16,
+  },
+  {
+    id: 'app-settings',
+    kind: 'app-settings',
+    title: 'Settings',
+    subtitle: 'Configure Nevermind',
+    icon: 'settings',
     score: 16,
   },
   {
@@ -587,6 +619,34 @@ function clipboardHistoryView() {
   }
 }
 
+function settingsView() {
+  return {
+    type: 'list',
+    id: 'app-settings',
+    title: 'Settings',
+    presentation: 'root',
+    searchBarPlaceholder: 'Search Settings',
+    items: SETTING_DEFINITIONS.map((definition) => {
+      const value = getSetting(definition.id)
+      const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : String(value)
+      const toggleAction = {
+        type: 'nativeAction',
+        title: definition.type === 'boolean' ? (value ? 'Turn Off' : 'Turn On') : 'Toggle',
+        nativeAction: { kind: 'toggle-setting', settingId: definition.id },
+      }
+      return {
+        id: `setting:${definition.id}`,
+        title: definition.title,
+        subtitle: definition.description,
+        icon: 'settings',
+        accessories: [{ text: accessoryText }],
+        primaryAction: toggleAction,
+        actionPanel: { sections: [{ actions: [toggleAction] }] },
+      }
+    }),
+  }
+}
+
 function searchActions(query, options = {}) {
   const q = query.trim()
 
@@ -698,11 +758,13 @@ function searchActions(query, options = {}) {
     }
   }
 
-  for (const item of clipboardHistory) {
-    const ranked = rankAction(clipboardActionFromItem(item), q)
-    if (ranked) {
-      ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.createdAt || 0)
-      results.push(ranked)
+  if (getSetting('showClipboardInRoot')) {
+    for (const item of clipboardHistory) {
+      const ranked = rankAction(clipboardActionFromItem(item), q)
+      if (ranked) {
+        ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.createdAt || 0)
+        results.push(ranked)
+      }
     }
   }
 
@@ -761,6 +823,16 @@ async function executeAction(action, options = {}) {
       break
     case 'clipboard-history':
       return { view: clipboardHistoryView() }
+    case 'app-settings':
+      return { view: settingsView() }
+    case 'toggle-setting': {
+      const definition = SETTING_DEFINITIONS.find((entry) => entry.id === action.settingId)
+      if (!definition) return
+      const current = getSetting(definition.id)
+      const next = definition.type === 'boolean' ? !current : current
+      setSetting(definition.id, next)
+      return { view: settingsView(), navigation: 'replace' }
+    }
     case 'file':
       await shell.openPath(action.filePath)
       break
@@ -1749,6 +1821,7 @@ async function loadUserState() {
       overrides: loaded.overrides || {},
       clipboardHistory: loaded.clipboardHistory || [],
       aiChats: loaded.aiChats || {},
+      settings: loaded.settings || {},
     }
   } catch {
     // First run.
