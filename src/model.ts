@@ -74,7 +74,7 @@ export type CommandItemSection = {
 
 export type CommandView = {
   id?: string
-  type: 'list' | 'grid' | 'detail' | 'chat' | 'form' | 'progress'
+  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress'
   title: string
   image?: string
   video?: string
@@ -89,7 +89,7 @@ export type CommandView = {
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
   searchBarPlaceholder?: string
-  presentation?: 'root' | 'stacked'
+  presentation?: 'root' | 'stacked' | 'preview'
   selectedItemId?: string
   onSelectionChange?: CommandAction
   pagination?: { hasMore?: boolean; pageSize?: number; onLoadMore?: CommandAction }

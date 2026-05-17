@@ -261,7 +261,7 @@ function validateCommonJs(code) {
 
 function capabilities() {
   return {
-    views: ['list', 'grid', 'detail', 'chat', 'form', 'progress', 'preview'],
+    views: ['list', 'grid', 'preview', 'chat', 'form', 'progress'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination'],
     itemOptions: ['accessories', 'keywords', 'actionPanel'],
     actionPanel: ['sections', 'submenus'],

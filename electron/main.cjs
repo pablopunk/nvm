@@ -604,6 +604,8 @@ function clipboardActionFromItem(item) {
     clipboardType: item.type,
     text: item.text,
     imageDataUrl: item.imageDataUrl,
+    videoUrl: item.videoUrl,
+    filePath: item.filePath,
     thumbnailUrl: item.thumbnailUrl,
     icon: 'clipboard',
     score: 3,
@@ -621,13 +623,14 @@ function clipboardHistoryView() {
     emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
     items: clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
       const isImage = item.type === 'image'
+      const isVideo = item.type === 'video'
       const copyAction = isImage
         ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, dismissAfterRun: 'auto' }
-        : { type: 'copyText', title: 'Copy Text', text: item.text, dismissAfterRun: 'auto' }
-      const previewAction = isImage
+        : { type: 'copyText', title: isVideo ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
+      const previewAction = isImage || isVideo
         ? { type: 'nativeAction', title: 'Preview', nativeAction: clipboardActionFromItem(item) }
         : null
-      const pasteAction = isImage
+      const pasteAction = isImage || isVideo
         ? null
         : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
       return {
@@ -636,7 +639,7 @@ function clipboardHistoryView() {
         subtitle: clipboardItemSubtitle(item),
         icon: 'clipboard',
         image: item.thumbnailUrl,
-        keywords: [item.text || '', item.type || ''].filter(Boolean),
+        keywords: [item.text || '', item.type || '', `clipboard ${item.type || ''}`, isImage ? 'image photo picture screenshot' : '', isVideo ? 'video movie recording' : ''].filter(Boolean),
         primaryAction: copyAction,
         actionPanel: {
           sections: [
@@ -936,7 +939,7 @@ function extensionErrorMessage(error) {
 function extensionErrorView(entry, error) {
   const message = extensionErrorMessage(error)
   return normalizeView({
-    type: 'detail',
+    type: 'preview',
     title: `${entry.command.title || entry.extension.title || 'Extension'} failed`,
     content: `# Something went wrong\n\n\`\`\`\n${message}\n\`\`\``,
     actions: [extensionErrorAiAction(entry, message)].filter(Boolean),
@@ -1041,7 +1044,7 @@ function runShellScript(script, options = {}) {
 
 function shellResultView(title, result) {
   return {
-    type: 'detail',
+    type: 'preview',
     title,
     content: `Exit code: ${result.exitCode ?? 0}\n\nSTDOUT\n${result.stdout || '—'}\n\nSTDERR\n${result.stderr || '—'}`,
   }
@@ -1452,24 +1455,29 @@ function createExtensionContext(extension, command) {
     ui: {
       list: (view) => ({ ...view, type: 'list' }),
       grid: (view) => ({ ...view, type: 'grid' }),
-      detail: (view) => ({ ...view, type: 'detail' }),
-      preview: (file, view = {}) => ({
-        ...view,
-        type: 'detail',
-        title: view.title || file.name || 'Preview',
-        subtitle: view.subtitle || file.displayPath,
-        content: view.content || file.displayPath || '',
-        image: file.thumbnailUrl || file.url,
-        video: file.videoUrl || undefined,
-      }),
+      preview: (fileOrView, view = {}) => {
+        const isFile = fileOrView?.path || fileOrView?.fileUrl || fileOrView?.videoUrl || fileOrView?.thumbnailUrl
+        if (!isFile) return { ...fileOrView, type: 'preview' }
+        const file = fileOrView
+        return {
+          ...view,
+          type: 'preview',
+          presentation: view.presentation || 'preview',
+          title: view.title || file.name || 'Preview',
+          subtitle: view.subtitle || file.displayPath,
+          content: view.content || file.displayPath || '',
+          image: file.thumbnailUrl || file.url,
+          video: file.videoUrl || undefined,
+        }
+      },
       chat: (view) => ({ ...view, type: 'chat' }),
       form: (view) => ({ ...view, type: 'form' }),
       progress: (view) => ({ ...view, type: 'progress' }),
       item: (item) => item,
       actions: (actions) => actions,
-      empty: (title = 'Nothing here', subtitle = '') => ({ type: 'detail', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
+      empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
       loading: (title = 'Loading…') => ({ type: 'progress', title, steps: [{ title, status: 'active' }] }),
-      error: (title = 'Something went wrong', message = '') => ({ type: 'detail', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
+      error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
     },
     actions: {
       openPath: (filePath, title = 'Open', options = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
@@ -1872,6 +1880,18 @@ function normalizeClipboardHistory(items) {
           createdAt: item.createdAt || Date.now(),
         }
       }
+      if (item?.type === 'video' && item.filePath) {
+        const filePath = expandUserPath(item.filePath)
+        if (!isVideoPath(filePath)) return null
+        return {
+          id: item.id || `video:${hashValue(filePath)}`,
+          type: 'video',
+          filePath,
+          videoUrl: item.videoUrl || fileUrlForPath(filePath),
+          thumbnailUrl: item.thumbnailUrl || thumbnailUrlForPath(filePath),
+          createdAt: item.createdAt || Date.now(),
+        }
+      }
       if (item?.text) {
         const text = String(item.text).trim()
         if (!text) return null
@@ -1890,6 +1910,7 @@ function normalizeClipboardHistory(items) {
 
 function clipboardItemTitle(item) {
   if (item.type === 'image') return 'Clipboard image'
+  if (item.type === 'video') return path.basename(item.filePath || 'Clipboard video')
   return item.text.length > 72 ? `${item.text.slice(0, 72)}…` : item.text
 }
 
@@ -1900,10 +1921,35 @@ function clipboardItemSubtitle(item) {
     hour: 'numeric',
     minute: '2-digit',
   })
-  return item.type === 'image' ? `Image copied ${when}` : `Copied ${when}`
+  if (item.type === 'image') return `Image copied ${when}`
+  if (item.type === 'video') return `Video copied ${when}`
+  return `Copied ${when}`
+}
+
+function clipboardFilePath() {
+  const candidates = [clipboard.readBuffer('public.file-url').toString('utf8'), clipboard.readText()]
+  for (const candidate of candidates) {
+    const value = String(candidate || '').replace(/\0/g, '').trim().split(/\r?\n/)[0]
+    if (!value) continue
+    if (value.startsWith('file://')) return decodeURIComponent(new URL(value).pathname)
+    if (path.isAbsolute(value)) return value
+  }
+  return null
 }
 
 function readClipboardItem() {
+  const filePath = clipboardFilePath()
+  if (filePath && isVideoPath(filePath)) {
+    return {
+      id: `video:${hashValue(filePath)}`,
+      type: 'video',
+      filePath,
+      videoUrl: fileUrlForPath(filePath),
+      thumbnailUrl: thumbnailUrlForPath(filePath),
+      createdAt: Date.now(),
+    }
+  }
+
   const text = clipboard.readText().trim()
   if (text) {
     return {

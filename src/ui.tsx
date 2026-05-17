@@ -7,7 +7,7 @@ export type CommandRowProps = { value: string; icon: ReactNode; title: string; s
 export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: string; video?: string; actionHint?: ReactNode; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
 export type EmptyStateProps = { icon: ReactNode; title: string; subtitle?: string }
 export type ToastProps = { message: string; tone?: 'default' | 'error' }
-export type DetailViewProps = { content?: ReactNode; image?: string; video?: string; poster?: string; actions?: ReactNode }
+export type PreviewViewProps = { content?: ReactNode; image?: string; video?: string; poster?: string; actions?: ReactNode }
 export type ProgressViewProps = { steps: { title: string; status?: string }[] }
 export type FormField = { id: string; label: string; type?: string; value?: string; placeholder?: string; required?: boolean }
 export type FormViewProps = { fields: FormField[]; values?: Record<string, string | boolean>; onChange?: (id: string, value: string | boolean) => void; onSubmit?: () => void; submitTitle?: string }
@@ -50,8 +50,8 @@ export function SearchAccessory({ tooltip, value, items, onChange }: SearchAcces
   return <select className="searchAccessory" aria-label={tooltip || 'View filter'} value={value || items[0]?.value || ''} onChange={(event) => onChange?.(event.target.value)}>{items.map((item) => <option key={item.value} value={item.value}>{item.title}</option>)}</select>
 }
 
-export function DetailView({ content, image, video, poster, actions }: DetailViewProps) {
-  return <div className="extensionView">{video ? <video className="detailMedia" src={video} poster={poster || image} controls autoPlay muted loop playsInline /> : null}{!video && image ? <img className="detailMedia" src={image} alt="" /> : null}<pre className="previewText">{content}</pre>{actions}</div>
+export function PreviewView({ content, image, video, poster, actions }: PreviewViewProps) {
+  return <div className="extensionView">{video ? <video className="previewMedia" src={video} poster={poster || image} controls autoPlay muted loop playsInline /> : null}{!video && image ? <img className="previewMedia" src={image} alt="" /> : null}<pre className="previewText">{content}</pre>{actions}</div>
 }
 
 export function ProgressView({ steps }: ProgressViewProps) {

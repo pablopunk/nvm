@@ -75,8 +75,9 @@ type Action = {
   query?: string
   result?: string
   text?: string
-  clipboardType?: 'text' | 'image'
+  clipboardType?: 'text' | 'image' | 'video'
   imageDataUrl?: string
+  videoUrl?: string
   thumbnailUrl?: string
   filePath?: string
   defaultActionId?: string
@@ -153,7 +154,7 @@ function spotlightConflictView(accelerator: string): ExtensionView {
   }
   const dismiss: CommandAction = { type: 'popView', title: 'Dismiss' }
   return {
-    type: 'detail',
+    type: 'preview',
     title: `${label} conflicts with Spotlight`,
     content: `# ${label} is used by Spotlight\n\nmacOS has \`${label}\` bound to Spotlight, so Nevermind cannot toggle with it until you disable that binding.\n\nOpen **System Settings → Keyboard → Keyboard Shortcuts → Spotlight** and uncheck *Show Spotlight search*.`,
     actions: [openSettings, dismiss],
@@ -360,9 +361,10 @@ export function App() {
 
   useEffect(() => {
     const isAiChat = Boolean(extensionView?.aiChat)
+    const isPreview = extensionView?.presentation === 'preview'
     aiChatOpenRef.current = isAiChat
     aiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
-    const mode = previewFor ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
+    const mode = previewFor || isPreview ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
     window.nvm.setPaletteMode(mode)
   }, [extensionView, previewFor, siblingViews.length])
 
@@ -472,7 +474,7 @@ export function App() {
       startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
       return
     }
-    if (nativeAction?.kind === 'clipboard' && ('imageDataUrl' in nativeAction || 'text' in nativeAction)) {
+    if (nativeAction?.kind === 'clipboard' && ('imageDataUrl' in nativeAction || 'videoUrl' in nativeAction || 'text' in nativeAction)) {
       setPreviewFor(nativeAction as Action)
       setExtensionItemOptionsFor(null)
       return
@@ -643,7 +645,7 @@ export function App() {
   const canTweakWithAi = Boolean(optionsFor?.aiChatId && optionsFor.kind === 'extension-command')
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
-  const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.text)
+  const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
   const selectedExtensionItem = useMemo(() => {
     if (!extensionView) return null
@@ -1045,19 +1047,41 @@ export function App() {
       return
     }
 
-    if (event.key === 'ArrowLeft' && previewFor) {
+    if (event.key === 'ArrowLeft' && isChildOpen) {
+      const input = event.target instanceof HTMLInputElement ? event.target : null
+      if (input && input.selectionStart !== 0) return
       event.preventDefault()
-      setPreviewFor(null)
+      if (shortcutOptionsFor) setShortcutOptionsFor(null)
+      else if (shortcutManagerOpen) setShortcutManagerOpen(false)
+      else if (confirmRemoveFor) setConfirmRemoveFor(null)
+      else if (actionSubmenuFor) setActionSubmenuFor(null)
+      else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
+      else if (optionsFor) setOptionsFor(null)
+      else if (previewFor) setPreviewFor(null)
+      else if (extensionView) popExtensionView()
       return
     }
 
-    if (event.key === 'ArrowRight' && !isChildOpen && selectedAction && (selectedAction.imageDataUrl || selectedAction.text)) {
+    if (event.key === 'ArrowRight') {
       const input = event.target instanceof HTMLInputElement ? event.target : null
       if (input && input.selectionStart !== input.value.length) return
-      event.preventDefault()
-      setPreviewFor(selectedAction)
-      setOptionsFor(null)
-      return
+      if (!isChildOpen && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.text)) {
+        event.preventDefault()
+        setPreviewFor(selectedAction)
+        setOptionsFor(null)
+        return
+      }
+      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+        event.preventDefault()
+        setExtensionItemOptionsFor(selectedExtensionItem)
+        return
+      }
+      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
+        event.preventDefault()
+        setPreviewFor(null)
+        setOptionsFor(activeAction)
+        return
+      }
     }
 
     if (!isChildOpen && event.key === 'Tab' && selectedAction?.kind === 'extension-command' && selectedAction.aiChatId) {
@@ -1145,7 +1169,9 @@ export function App() {
             renderActionPanel(getExtensionItemActionRows())
           ) : previewFor ? (
             <div className="previewPane">
-              {previewFor.imageDataUrl ? (
+              {previewFor.videoUrl ? (
+                <video className="previewImage" src={previewFor.videoUrl} controls autoPlay muted loop playsInline />
+              ) : previewFor.imageDataUrl ? (
                 <img className="previewImage" src={previewFor.imageDataUrl} alt="Clipboard preview" />
               ) : previewFor.text ? (
                 <pre className="previewText">{previewFor.text}</pre>

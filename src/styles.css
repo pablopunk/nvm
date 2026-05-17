@@ -351,12 +351,17 @@ kbd {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.detailMedia {
+.previewMedia {
   width: 100%;
-  max-height: 360px;
+  max-height: min(360px, calc(100vh - var(--window-blur-margin) * 2 - 106px));
   object-fit: contain;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.06);
+}
+
+.previewMode .previewMedia {
+  height: 100%;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 106px);
 }
 
 .previewText {
@@ -398,8 +403,6 @@ kbd {
   display: grid;
   grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
   gap: 12px;
-  max-height: 330px;
-  overflow: auto;
   padding: 4px;
   scroll-padding: 4px;
 }

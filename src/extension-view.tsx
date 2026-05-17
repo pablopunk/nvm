@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { CornerDownLeft, Search, Sparkles, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
-import { ChatView, CommandRow, CommandTile, DetailView, EmptyState, FormView, GridView, ListView, ProgressView, shortcutLabel } from './ui'
+import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel } from './ui'
 import { RootCommandList } from './command-list'
 import { iconFor, type CommandIconName } from './command-icons'
 
@@ -98,6 +98,6 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
 
   if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
 
-  const detailActions = renderActionPanel(actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
-  return <DetailView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={detailActions} />
+  const previewActions = renderActionPanel(actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
+  return <div className={view.presentation === 'preview' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
 }

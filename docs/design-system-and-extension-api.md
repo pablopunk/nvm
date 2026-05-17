@@ -33,7 +33,7 @@ Dogfooding only counts when first-party extension-style features use the same vi
 
 The API should expose product concepts:
 
-- views such as list, grid, detail, chat, form, and progress
+- views such as list, grid, preview, chat, form, and progress
 - items with titles, subtitles, media, accessories, keywords, and actions
 - action panels with sections and nested choices
 - built-in actions for common platform behavior

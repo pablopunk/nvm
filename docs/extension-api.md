@@ -29,7 +29,7 @@ module.exports = {
               ctx.actions.copyText(file.path, 'Copy path'),
               ctx.actions.revealPath(file.path),
               ctx.actions.quickLook(file.path),
-              ctx.actions.push('Show Details', ctx.ui.detail({
+              ctx.actions.push('Preview', ctx.ui.preview({
                 title: file.name,
                 content: `# ${file.name}\n\n${file.displayPath}`,
               })),
@@ -50,11 +50,10 @@ Commands can return:
 
 - `ctx.ui.list({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination })`; list items may include `accessories: [{ text }]` and `keywords`
 - `ctx.ui.grid({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
-- `ctx.ui.detail({ title, content, image, video })`
+- `ctx.ui.preview({ title, content, image, video })` for text, image, and video previews; `ctx.ui.preview(file, { title, content })` builds a large media preview from an extension file object
 - `ctx.ui.chat({ title, messages })`
 - `ctx.ui.form({ title, fields })`
 - `ctx.ui.progress({ title, steps })`
-- `ctx.ui.preview(file, { title, content })` for a built-in image/video preview detail view
 
 ## Context capabilities
 
@@ -67,7 +66,7 @@ Current `ctx` namespaces:
 - `ctx.actions.push(title, view, { shortcut })`, `ctx.actions.replace(title, view, { shortcut })`, `ctx.actions.pop(title, { shortcut })` for nested native navigation
 - Actions can be grouped with `actionPanel: { sections: [{ title, actions }] }`; actions may include `submenu: { sections: [...] }` for nested action panels, `style: 'destructive'`, and `requiresConfirmation: true`.
 - `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return another view
-- `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native detail view. These require confirmation by default.
+- `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
 - `ctx.apps.launch/frontmost`
 - `ctx.shell.openExternal`, `ctx.shell.exec(command, args, options)`, `ctx.shell.script(script, options)`, `ctx.shell.appleScript(script, options)`, and `ctx.shell.which(command)` for controlled system work. Shell helpers return `{ stdout, stderr, exitCode }` and default to a 30s timeout.
 - `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
