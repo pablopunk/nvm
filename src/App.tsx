@@ -117,6 +117,8 @@ declare global {
       resetAiChat: (chatId?: string) => Promise<void>
       setAlias: (action: Action, alias: string) => Promise<SaveResult>
       setShortcut: (action: Action, shortcut: string) => Promise<SaveResult>
+      setPaletteHotkey: (accelerator: string) => Promise<SaveResult & { spotlightConflict?: boolean }>
+      openSystemKeyboardSettings: () => Promise<{ ok: boolean }>
       getShortcuts: () => Promise<ShortcutRecord[]>
       removeShortcut: (actionId: string) => Promise<SaveResult>
       suspendShortcuts: () => Promise<void>
@@ -138,6 +140,10 @@ declare global {
     }
   }
 }
+
+const PALETTE_HOTKEY_ACTION_ID = '__palette-hotkey__'
+const SETTINGS_ROOT_ACTION: Action = { id: 'app-settings', kind: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 0 }
+const PALETTE_HOTKEY_PSEUDO_ACTION: Action = { id: PALETTE_HOTKEY_ACTION_ID, kind: 'builtin', title: 'Open Nevermind Shortcut', subtitle: 'Global shortcut that toggles the palette', icon: 'keyboard', score: 0 }
 
 const SEARCH_PLACEHOLDERS = [
   'Watcha gonna do?',
@@ -431,6 +437,10 @@ export function App() {
 
   async function runViewAction(action: ExtensionViewAction) {
     if (action.requiresConfirmation && !window.confirm(`Run “${action.title}”?`)) return
+    if (action.type === 'nativeAction' && (action.nativeAction as { kind?: string } | undefined)?.kind === 'record-palette-hotkey') {
+      startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
+      return
+    }
     const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
     if (runningViewActionsRef.current.has(actionKey)) return
     runningViewActionsRef.current.add(actionKey)
@@ -488,6 +498,19 @@ export function App() {
 
   async function saveRecordedShortcut() {
     if (!shortcutFor || !recordedShortcut) return
+    if (shortcutFor.id === PALETTE_HOTKEY_ACTION_ID) {
+      const result = await window.nvm.setPaletteHotkey(recordedShortcut)
+      showToast(result.message, result.ok ? 'default' : 'error')
+      if (result.spotlightConflict && window.confirm(`${recordedShortcut} is used by macOS Spotlight. Open System Settings to disable the Spotlight shortcut?`)) {
+        await window.nvm.openSystemKeyboardSettings()
+      }
+      if (!result.ok) return
+      setShortcutFor(null)
+      setOptionsFor(null)
+      const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION)
+      if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
+      return
+    }
     const result = await window.nvm.setShortcut(shortcutFor, recordedShortcut)
     showToast(result.message, result.ok ? 'default' : 'error')
     if (!result.ok) return

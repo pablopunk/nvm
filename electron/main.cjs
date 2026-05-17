@@ -9,7 +9,7 @@ const { pathToFileURL } = require('node:url')
 const { createNevermindAi } = require('./ai.cjs')
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
-const HOTKEY = 'Alt+Space'
+const DEFAULT_PALETTE_HOTKEY = 'Alt+Space'
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
@@ -56,6 +56,13 @@ let userState = {
 
 const SETTING_DEFINITIONS = [
   {
+    id: 'paletteHotkey',
+    title: 'Open Nevermind Shortcut',
+    description: 'Global keyboard shortcut that toggles the palette',
+    type: 'shortcut',
+    default: DEFAULT_PALETTE_HOTKEY,
+  },
+  {
     id: 'showClipboardInRoot',
     title: 'Show Clipboard Items in Main List',
     description: 'Show copied items inline in the root list',
@@ -63,6 +70,15 @@ const SETTING_DEFINITIONS = [
     default: true,
   },
 ]
+
+function getPaletteHotkey() {
+  return getSetting('paletteHotkey') || DEFAULT_PALETTE_HOTKEY
+}
+
+function isSpotlightAccelerator(accelerator) {
+  if (process.platform !== 'darwin') return false
+  return normalizeAccelerator(accelerator) === 'Command+Space'
+}
 
 function getSetting(id) {
   const definition = SETTING_DEFINITIONS.find((entry) => entry.id === id)
@@ -304,10 +320,11 @@ function togglePalette() {
 }
 
 function registerHotkey() {
-  const ok = globalShortcut.register(HOTKEY, togglePalette)
-  debugLog('registerHotkey', { accelerator: HOTKEY, ok, isRegistered: globalShortcut.isRegistered(HOTKEY) })
-  if (ok) console.log(`Registered global shortcut: ${HOTKEY}`)
-  else console.warn(`Could not register global shortcut: ${HOTKEY}`)
+  const hotkey = getPaletteHotkey()
+  const ok = globalShortcut.register(hotkey, togglePalette)
+  debugLog('registerHotkey', { accelerator: hotkey, ok, isRegistered: globalShortcut.isRegistered(hotkey) })
+  if (ok) console.log(`Registered global shortcut: ${hotkey}`)
+  else console.warn(`Could not register global shortcut: ${hotkey}`)
 
   win.webContents.on('before-input-event', (_event, input) => {
     if (!(input.meta || input.control) || !input.alt || input.key.toLowerCase() !== 'i') return
@@ -629,19 +646,17 @@ function settingsView() {
     items: SETTING_DEFINITIONS.map((definition) => {
       const value = getSetting(definition.id)
       const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : String(value)
-      const toggleAction = {
-        type: 'nativeAction',
-        title: definition.type === 'boolean' ? (value ? 'Turn Off' : 'Turn On') : 'Toggle',
-        nativeAction: { kind: 'toggle-setting', settingId: definition.id },
-      }
+      const primaryAction = definition.type === 'shortcut'
+        ? { type: 'nativeAction', title: 'Change Shortcut', nativeAction: { kind: 'record-palette-hotkey' } }
+        : { type: 'nativeAction', title: value ? 'Turn Off' : 'Turn On', nativeAction: { kind: 'toggle-setting', settingId: definition.id } }
       return {
         id: `setting:${definition.id}`,
         title: definition.title,
         subtitle: definition.description,
         icon: 'settings',
         accessories: [{ text: accessoryText }],
-        primaryAction: toggleAction,
-        actionPanel: { sections: [{ actions: [toggleAction] }] },
+        primaryAction,
+        actionPanel: { sections: [{ actions: [primaryAction] }] },
       }
     }),
   }
@@ -1967,7 +1982,7 @@ async function executeShortcutAction(action) {
 }
 
 function bindGlobalActionShortcut(actionId, accelerator, action) {
-  if (accelerator === HOTKEY) return false
+  if (accelerator === getPaletteHotkey()) return false
   globalShortcut.unregister(accelerator)
   registeredActionAccelerators.add(accelerator)
   const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
@@ -2059,7 +2074,7 @@ async function setShortcut(action, shortcut) {
   if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent commands' }
   if (!action?.id || !shortcut.trim()) return { ok: false, message: 'Missing shortcut' }
   const accelerator = normalizeAccelerator(shortcut)
-  if (accelerator === HOTKEY) return { ok: false, message: `${accelerator} is reserved for opening Nevermind` }
+  if (accelerator === getPaletteHotkey()) return { ok: false, message: `${accelerator} is reserved for opening Nevermind` }
   const conflictingActionId = Object.entries(userState.shortcuts)
     .find(([actionId, current]) => actionId !== action.id && current === accelerator)?.[0]
   if (conflictingActionId) {
@@ -2071,6 +2086,41 @@ async function setShortcut(action, shortcut) {
   if (!ok) return { ok: false, message: `Could not register ${accelerator}` }
   scheduleSaveState()
   return { ok: true, message: `Shortcut set: ${accelerator}` }
+}
+
+async function setPaletteHotkey(accelerator) {
+  if (!accelerator?.trim()) return { ok: false, message: 'Missing shortcut' }
+  const normalized = normalizeAccelerator(accelerator)
+  const current = getPaletteHotkey()
+  if (normalized === current) return { ok: true, message: `Shortcut unchanged: ${normalized}`, spotlightConflict: isSpotlightAccelerator(normalized) }
+  const conflictingActionId = Object.entries(userState.shortcuts).find(([, value]) => value === normalized)?.[0]
+  if (conflictingActionId) {
+    const title = userState.shortcutActions[conflictingActionId]?.title || 'another action'
+    return { ok: false, message: `${normalized} is already used by ${title}` }
+  }
+  globalShortcut.unregister(current)
+  const ok = globalShortcut.register(normalized, togglePalette)
+  if (!ok) {
+    globalShortcut.register(current, togglePalette)
+    const spotlightConflict = isSpotlightAccelerator(normalized)
+    return { ok: false, message: spotlightConflict ? `${normalized} is used by Spotlight` : `Could not register ${normalized}`, spotlightConflict }
+  }
+  setSetting('paletteHotkey', normalized)
+  return { ok: true, message: `Shortcut set: ${normalized}`, spotlightConflict: isSpotlightAccelerator(normalized) }
+}
+
+async function openSystemKeyboardSettings() {
+  if (process.platform === 'darwin') {
+    const urls = [
+      'x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts',
+      'x-apple.systempreferences:com.apple.Keyboard-Settings.extension',
+      'x-apple.systempreferences:com.apple.preference.keyboard?Shortcuts',
+    ]
+    for (const url of urls) {
+      try { await shell.openExternal(url); return { ok: true } } catch {}
+    }
+  }
+  return { ok: false }
 }
 
 async function setOverride(action, instruction) {
@@ -2156,6 +2206,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
   ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
   ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
+  ipcMain.handle('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
+  ipcMain.handle('system:open-keyboard-settings', () => openSystemKeyboardSettings())
   ipcMain.handle('actions:get-shortcuts', () => getShortcuts())
   ipcMain.handle('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))
   ipcMain.handle('actions:suspend-shortcuts', () => unregisterActionShortcuts())
