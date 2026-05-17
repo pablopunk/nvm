@@ -378,7 +378,10 @@ function createWindow() {
   })
   win.webContents.once('did-finish-load', () => {
     debugLog('renderer.didFinishLoad', { url: win.webContents.getURL() })
-    if (isDev) showPalette()
+    if (isDev || pendingShowOnReady) {
+      pendingShowOnReady = false
+      showPalette()
+    }
   })
 
   if (isDev) {
@@ -448,6 +451,17 @@ function hidePalette() {
   win.hide()
 }
 
+let pendingShowOnReady = false
+
+function showPaletteWhenReady() {
+  if (!win) {
+    pendingShowOnReady = true
+    return
+  }
+  if (win.webContents.isLoading()) pendingShowOnReady = true
+  else showPalette()
+}
+
 function togglePalette() {
   if (win?.isVisible()) hidePalette()
   else showPalette()
@@ -458,7 +472,10 @@ function registerHotkey() {
   const ok = globalShortcut.register(hotkey, togglePalette)
   debugLog('registerHotkey', { accelerator: hotkey, ok, isRegistered: globalShortcut.isRegistered(hotkey) })
   if (ok) console.log(`Registered global shortcut: ${hotkey}`)
-  else console.warn(`Could not register global shortcut: ${hotkey}`)
+  else {
+    console.warn(`Could not register global shortcut: ${hotkey}`)
+    showPaletteWhenReady()
+  }
 
   win.webContents.on('before-input-event', (_event, input) => {
     if (!(input.meta || input.control) || !input.alt || input.key.toLowerCase() !== 'i') return
