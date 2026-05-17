@@ -17,7 +17,7 @@ publish:
     owner: pablopunk
     repo: nvm
 mac:
-  icon: build/Icon.icon
+  icon: build/Icon.icns
   category: public.app-category.productivity
   target:
     - target: zip
