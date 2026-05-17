@@ -15,6 +15,7 @@
 * Comments are a smell. 3 long named functions is better than 1 function with a comment.
 * If you spend a lot of iterations with the user to finally find a solution for something, document your learnings in src/docs/. But you shouldn't touch it if all goes smooth.
 * Documentation needs to hold intention, never implementation (except general quirks on the point above). Implementation details are already on files, you're not adding value to it. Document intention and guidelines.
+* Style with the design tokens defined in `:root` of `src/styles.css` (`--radius-*`, `--surface-*`, `--border-*`, `--text-*`, `--accent-*`, `--danger-*`). Do not reintroduce ad-hoc `rgba(255,255,255,…)` surfaces/borders/text or pixel border-radii — extend the token set if you need a new step.
 
 ## Product conventions
 
