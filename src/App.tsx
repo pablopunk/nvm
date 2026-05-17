@@ -1072,6 +1072,7 @@ export function App() {
     if (event.key === 'ArrowLeft' && isChildOpen) {
       const input = event.target instanceof HTMLInputElement ? event.target : null
       if (input && input.selectionStart !== 0) return
+      if (event.target instanceof HTMLTextAreaElement) return
       event.preventDefault()
       if (shortcutOptionsFor) setShortcutOptionsFor(null)
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
@@ -1087,6 +1088,7 @@ export function App() {
     if (event.key === 'ArrowRight') {
       const input = event.target instanceof HTMLInputElement ? event.target : null
       if (input && input.selectionStart !== input.value.length) return
+      if (event.target instanceof HTMLTextAreaElement) return
       if (!isChildOpen && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.text)) {
         event.preventDefault()
         setPreviewFor(selectedAction)
