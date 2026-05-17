@@ -51,6 +51,7 @@ Commands can return:
 - `ctx.ui.list({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination })`; list items may include `accessories: [{ text }]` and `keywords`
 - `ctx.ui.grid({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
 - `ctx.ui.preview({ title, content, image, video })` for text, image, and video previews; `ctx.ui.preview(file, { title, content })` builds a large media preview from an extension file object
+- `ctx.ui.webview({ title, html, actions, size })` for live/interactive browser UI. Webviews run sandboxed HTML/JS without Node access and may use browser APIs like `navigator.mediaDevices` when the extension declares matching permissions such as `camera`. Use `size: 'large'` when the webview needs a larger palette.
 - `ctx.ui.chat({ title, messages })`
 - `ctx.ui.form({ title, fields })`
 - `ctx.ui.progress({ title, steps })`
@@ -65,7 +66,8 @@ Current `ctx` namespaces:
 - Shortcuts have two scopes: action shortcuts inside views are local by default; command-level shortcuts are global when declared as `globalShortcut` or `{ shortcut, shortcutScope: 'global' }`. User-assigned global shortcuts always win over extension defaults.
 - `ctx.actions.push(title, view, { shortcut })`, `ctx.actions.replace(title, view, { shortcut })`, `ctx.actions.pop(title, { shortcut })` for nested native navigation
 - Actions can be grouped with `actionPanel: { sections: [{ title, actions }] }`; actions may include `submenu: { sections: [...] }` for nested action panels, `style: 'destructive'`, and `requiresConfirmation: true`.
-- `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return another view
+- `ctx.navigation.push(view)`, `ctx.navigation.replace(view)`, `ctx.navigation.pop()`, and `ctx.navigation.run(action)` are the preferred explicit return helpers from action handlers.
+- `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return a `ctx.navigation.*` result, another view, another action to execute, `{ view }`, `{ action }`, or `{ toast }`.
 - `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
 - `ctx.apps.launch/frontmost`
 - `ctx.shell.openExternal`, `ctx.shell.exec(command, args, options)`, `ctx.shell.script(script, options)`, `ctx.shell.appleScript(script, options)`, and `ctx.shell.which(command)` for controlled system work. Shell helpers return `{ stdout, stderr, exitCode }` and default to a 30s timeout.
@@ -85,5 +87,9 @@ const files = await ctx.storage.memo('recent-media', 60_000, () =>
   ctx.files.findMedia(['~/Documents/CleanShot X'], { sortBy: 'recent', limit: 200 })
 )
 ```
+
+## Error handling
+
+Extension command and action handlers may throw errors. Nevermind catches thrown errors and renders a native extension error view with the stack/message, so extensions should prefer throwing meaningful `Error` objects over swallowing failures or returning silent no-op states. Only catch errors when the extension can recover or add user-facing context before rethrowing.
 
 Permissions are declared today and will become enforceable guardrails later.

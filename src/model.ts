@@ -74,8 +74,9 @@ export type CommandItemSection = {
 
 export type CommandView = {
   id?: string
-  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress'
+  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview'
   title: string
+  size?: 'default' | 'large'
   image?: string
   video?: string
   videoUrl?: string
@@ -84,6 +85,7 @@ export type CommandView = {
   initialPrompt?: string
   subtitle?: string
   content?: string
+  html?: string
   items?: CommandItem[]
   sections?: CommandItemSection[]
   isLoading?: boolean

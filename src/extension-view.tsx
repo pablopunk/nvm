@@ -98,6 +98,12 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
 
   if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
 
+  if (view.type === 'webview') {
+    const webviewActionRows = actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false)
+    const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
+    return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox="allow-scripts allow-forms allow-same-origin" allow="camera; microphone; display-capture; autoplay; clipboard-read; clipboard-write" />{webviewActions}</div>
+  }
+
   const previewActionRows = actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false)
   const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
   return <div className={view.presentation === 'preview' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>

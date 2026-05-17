@@ -286,14 +286,14 @@ function validateCommonJs(code) {
 
 function capabilities() {
   return {
-    views: ['list', 'grid', 'preview', 'chat', 'form', 'progress'],
+    views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination'],
     itemOptions: ['accessories', 'keywords', 'actionPanel'],
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
-    namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'extension', 'cache', 'state', 'ai'],
+    namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
     fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'openWithApps', 'open', 'readText', 'toFileUrl'],
@@ -323,9 +323,10 @@ write_extension is idempotent: it replaces and activates the current action's ge
 validate_extension can be used to syntax-check the active generated extension after writing.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
+Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
 For image grids, use file.url from ctx.files.findImages() or ctx.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
-Use ctx.actions.push/replace/pop for nested native views. Use ctx.actions.run for script work triggered from UI; handlers may return a native view.
+Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.ui.webview for custom live/interactive browser UI; set size: 'large' when it needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }
 

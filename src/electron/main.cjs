@@ -1,5 +1,5 @@
 // @ts-nocheck
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net } = require('electron')
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session } = require('electron')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const os = require('node:os')
@@ -208,6 +208,15 @@ const BUILT_IN_ACTIONS = [
     score: 15,
   },
 ]
+
+function installPermissionHandlers() {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const url = webContents.getURL()
+    const isAppPage = url.startsWith('file:') || (isDev && url.startsWith(process.env.ELECTRON_RENDERER_URL || ''))
+    if (isAppPage && ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)) return callback(true)
+    callback(false)
+  })
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -971,6 +980,20 @@ async function executeExtensionCommand(action) {
   }
 }
 
+async function executeActionForIpc(action) {
+  try {
+    const result = await executeAction(action)
+    structuredClone(result)
+    return result
+  } catch (error) {
+    if (action?.kind === 'extension-command') {
+      const entry = extensionEntryForAction(action)
+      if (entry) return { view: extensionErrorView(entry, error) }
+    }
+    return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` } }
+  }
+}
+
 function extensionErrorMessage(error) {
   if (!error) return 'Unknown error'
   if (error.stack) return error.stack
@@ -1039,7 +1062,7 @@ function normalizeActionPanel(panel, fallbackActions, entry) {
       actions: normalizeViewActions([...(section.actions || []), ...(section.lazyActions || [])], entry),
     })),
   }
-  if (Array.isArray(fallbackActions) && fallbackActions.length) return { sections: [{ actions: fallbackActions }] }
+  if (Array.isArray(fallbackActions) && fallbackActions.length) return { sections: [{ actions: normalizeViewActions(fallbackActions, entry) }] }
   return panel
 }
 
@@ -1049,16 +1072,18 @@ function normalizeViewActions(actions, entry) {
 
 function normalizeViewAction(action, entry) {
   if (!action) return null
-  if (action.__handler && typeof action.__handler === 'function') {
+  const handler = typeof action.__handler === 'function' ? action.__handler : typeof action.run === 'function' ? action.run : null
+  if (handler) {
     const handlerId = crypto.randomUUID()
-    extensionActionHandlers.set(handlerId, { entry, handler: action.__handler })
-    const { __handler, ...rest } = action
-    return { ...rest, type: 'runExtensionAction', handlerId }
+    extensionActionHandlers.set(handlerId, { entry, handler })
+    const { __handler, run, ...rest } = action
+    return normalizeViewAction({ ...rest, type: 'runExtensionAction', handlerId }, entry)
   }
-  if ((action.type === 'pushView' || action.type === 'replaceView') && action.view) {
-    return { ...action, view: normalizeView(action.view, entry) }
+  const normalized = action.submenu ? { ...action, submenu: normalizeActionPanel(action.submenu, [], entry) } : action
+  if ((normalized.type === 'pushView' || normalized.type === 'replaceView') && normalized.view) {
+    return { ...normalized, view: normalizeView(normalized.view, entry) }
   }
-  return action
+  return normalized
 }
 
 function runShellCommand(command, args = [], options = {}) {
@@ -1080,6 +1105,30 @@ function runShellCommand(command, args = [], options = {}) {
 
 function runShellScript(script, options = {}) {
   return runShellCommand(options.shell || '/bin/bash', ['-lc', String(script)], { ...options, shell: false })
+}
+
+function isViewAction(value) {
+  return Boolean(value?.type && ['nativeAction', 'openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'pushView', 'replaceView', 'popView', 'runExtensionAction', 'shellExec', 'shellScript'].includes(value.type))
+}
+
+async function executeViewActionResult(result, entry) {
+  if (!result) return result
+  if (isViewAction(result)) return executeViewAction(normalizeViewAction(result, entry))
+  if (isViewAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry))
+  const view = normalizeExtensionView(result, entry)
+  return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast } : result
+}
+
+async function executeViewActionForIpc(action) {
+  try {
+    const result = await executeViewAction(action)
+    structuredClone(result)
+    return result
+  } catch (error) {
+    const record = action?.type === 'runExtensionAction' ? extensionActionHandlers.get(action.handlerId) : null
+    if (record) return { view: extensionErrorView(record.entry, error), navigation: 'push' }
+    return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` }, navigation: 'push' }
+  }
 }
 
 function shellResultView(title, result) {
@@ -1143,8 +1192,7 @@ async function executeViewAction(action) {
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
       try {
         const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command), action)
-        const view = normalizeExtensionView(result, record.entry)
-        return view ? { view, navigation: result?.navigation || 'push' } : result
+        return executeViewActionResult(result, record.entry)
       } catch (error) {
         console.error(`Extension action failed: ${record.entry.extension.id}:${record.entry.command.id}`, error)
         return { view: extensionErrorView(record.entry, error), navigation: 'push' }
@@ -1514,6 +1562,7 @@ function createExtensionContext(extension, command) {
       chat: (view) => ({ ...view, type: 'chat' }),
       form: (view) => ({ ...view, type: 'form' }),
       progress: (view) => ({ ...view, type: 'progress' }),
+      webview: (view) => ({ ...view, type: 'webview' }),
       item: (item) => item,
       actions: (actions) => actions,
       empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
@@ -1536,6 +1585,12 @@ function createExtensionContext(extension, command) {
       run: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
       shellExec: (title, command, args = [], options = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+    },
+    navigation: {
+      push: (view) => ({ view, navigation: 'push' }),
+      replace: (view) => ({ view, navigation: 'replace' }),
+      pop: () => ({ navigation: 'pop' }),
+      run: (action) => ({ action }),
     },
     clipboard: {
       readText: () => clipboard.readText(),
@@ -2406,6 +2461,7 @@ app.whenReady().then(async () => {
     app.dock.hide()
   }
   registerLocalFileProtocol()
+  installPermissionHandlers()
 
   await loadUserState()
   await loadExtensions()
@@ -2418,8 +2474,8 @@ app.whenReady().then(async () => {
   setTimeout(indexFiles, 200)
 
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
-  ipcMain.handle('actions:execute', (_event, action) => executeAction(action))
-  ipcMain.handle('view-action:execute', (_event, action) => executeViewAction(action))
+  ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))
+  ipcMain.handle('view-action:execute', (_event, action) => executeViewActionForIpc(action))
   ipcMain.on('drag:file', startFileDrag)
   ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
   ipcMain.handle('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))

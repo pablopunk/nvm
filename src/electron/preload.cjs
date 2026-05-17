@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('nvm', {
   abortAiChat: (chatId) => ipcRenderer.invoke('ai:chat:abort', chatId),
   resetAiChat: (chatId) => ipcRenderer.invoke('ai:chat:reset', chatId),
   setAlias: (action, alias) => ipcRenderer.invoke('actions:set-alias', action, alias),
+  removeAlias: (action, alias) => ipcRenderer.invoke('actions:remove-alias', action, alias),
   setShortcut: (action, shortcut) => ipcRenderer.invoke('actions:set-shortcut', action, shortcut),
   setPaletteHotkey: (accelerator) => ipcRenderer.invoke('palette:set-hotkey', accelerator),
   openSystemKeyboardSettings: () => ipcRenderer.invoke('system:open-keyboard-settings'),

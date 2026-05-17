@@ -90,6 +90,7 @@ type Action = {
   aiChatId?: string
   removable?: boolean
   shortcut?: string
+  userAliases?: string[]
 }
 
 type ExtensionViewAction = CommandAction
@@ -118,6 +119,7 @@ declare global {
       abortAiChat: (chatId?: string) => Promise<void>
       resetAiChat: (chatId?: string) => Promise<void>
       setAlias: (action: Action, alias: string) => Promise<SaveResult>
+      removeAlias: (action: Action, alias: string) => Promise<SaveResult>
       setShortcut: (action: Action, shortcut: string) => Promise<SaveResult>
       setPaletteHotkey: (accelerator: string) => Promise<SaveResult & { spotlightConflict?: boolean }>
       openSystemKeyboardSettings: () => Promise<{ ok: boolean }>
@@ -191,6 +193,7 @@ export function App() {
   const [extensionItemOptionsFor, setExtensionItemOptionsFor] = useState<ExtensionViewItem | null>(null)
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{ title: string; panel: CommandActionPanel } | null>(null)
   const [confirmRemoveFor, setConfirmRemoveFor] = useState<Action | null>(null)
+  const [aliasFor, setAliasFor] = useState<Action | null>(null)
   const [previewFor, setPreviewFor] = useState<Action | null>(null)
   const extensionNavigation = useExtensionNavigation()
   const extensionView = extensionNavigation.view
@@ -312,7 +315,7 @@ export function App() {
       if (event.type === 'start') aiChat.setBusy(true)
       if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') aiChat.setBusy(false)
       if (event.type === 'delta' && event.text) aiChat.appendDelta(event.text)
-      if (event.type === 'tool_start' && event.name) aiChat.appendMessage('system', `Using ${event.name}…`)
+      if (event.type === 'tool_start' && event.name) aiChat.appendMessage('system', event.name)
       if (event.type === 'error' && event.message) aiChat.appendMessage('system', event.message)
     })
     return () => {
@@ -330,6 +333,7 @@ export function App() {
     if (shortcutFor) setSelectedValue('shortcut:save')
     else if (shortcutOptionsFor) setSelectedValue(getShortcutOptionRows()[0]?.value ?? '')
     else if (shortcutManagerOpen) setSelectedValue(getShortcutRows()[0]?.value ?? '')
+    else if (aliasFor) setSelectedValue(getAliasActionRows()[0]?.value ?? '')
     else if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
     else if (actionSubmenuFor) setSelectedValue(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true).find((row) => !row.sectionHeader)?.value ?? '')
     else if (extensionItemOptionsFor) setSelectedValue(getExtensionItemActionRows()[0]?.value ?? '')
@@ -339,7 +343,7 @@ export function App() {
     else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, actionSubmenuFor, childQuery, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
+  }, [actions, actionSubmenuFor, aliasFor, childQuery, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
     setChildQuery('')
@@ -363,12 +367,13 @@ export function App() {
 
   useEffect(() => {
     const isAiChat = Boolean(extensionView?.aiChat)
-    const isPreview = extensionView?.presentation === 'preview'
+    const isLarge = extensionView?.size === 'large' || extensionView?.presentation === 'preview'
+    const isActionPanelOpen = Boolean(actionSubmenuFor || extensionItemOptionsFor)
     aiChatOpenRef.current = isAiChat
     aiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
-    const mode = previewFor || isPreview ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
+    const mode = previewFor || (isLarge && !isActionPanelOpen) ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
     window.nvm.setPaletteMode(mode)
-  }, [extensionView, previewFor, siblingViews.length])
+  }, [actionSubmenuFor, extensionItemOptionsFor, extensionView, previewFor, siblingViews.length])
 
   useEffect(() => {
     if (extensionView?.aiChat) {
@@ -405,10 +410,11 @@ export function App() {
   )
   const isFilterableExtensionView = extensionView?.type === 'list' || extensionView?.type === 'grid'
   const isRootLikeExtensionView = extensionView?.id === 'clipboard-history'
-  const isFilterableChildOpen = Boolean(actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || shortcutManagerOpen || isFilterableExtensionView)
-  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
+  const isFilterableChildOpen = Boolean(actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || aliasFor || shortcutManagerOpen || isFilterableExtensionView)
+  const isLargeExtensionView = Boolean(extensionView?.size === 'large' && !actionSubmenuFor && !extensionItemOptionsFor)
+  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || aliasFor || previewFor || extensionView)
   const isVisuallyStacked = (isChildOpen && !isRootLikeExtensionView) || siblingViews.length > 0
-  const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
+  const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : aliasFor ? `Alias for “${aliasFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
   const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : previewFor ? previewFor.title : extensionView ? extensionView.title : optionsFor && !query ? optionsFor.title : query
   const placeholder = shortcutFor ? 'Press a keyboard shortcut' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
 
@@ -569,12 +575,37 @@ export function App() {
 
   async function setAlias() {
     if (!optionsFor) return
-    const alias = window.prompt(`Alias for “${optionsFor.title}”`)
-    if (!alias?.trim()) return
-    const result = await window.nvm.setAlias(optionsFor, alias)
-    if (!result.ok) showToast(result.message, 'error')
-    else showToast(result.message)
+    setAliasFor(optionsFor)
+    setChildQuery('')
     setOptionsFor(null)
+  }
+
+  async function submitAlias() {
+    if (!aliasFor) return
+    const alias = childQuery.trim()
+    if (!alias) return
+    const result = await window.nvm.setAlias(aliasFor, alias)
+    if (!result.ok) {
+      showToast(result.message, 'error')
+      return
+    }
+    showToast(result.message)
+    const current = aliasFor.userAliases || []
+    const userAliases = current.includes(alias) ? current : [...current, alias]
+    setAliasFor({ ...aliasFor, userAliases })
+    setChildQuery('')
+  }
+
+  async function removeAliasEntry(alias: string) {
+    if (!aliasFor) return
+    const result = await window.nvm.removeAlias(aliasFor, alias)
+    if (!result.ok) {
+      showToast(result.message, 'error')
+      return
+    }
+    showToast(result.message)
+    const userAliases = (aliasFor.userAliases || []).filter((value) => value !== alias)
+    setAliasFor({ ...aliasFor, userAliases })
   }
 
   async function setShortcut() {
@@ -687,6 +718,38 @@ export function App() {
     return filterCommandItems(items, childQuery)
   }
 
+  function getAliasActionRows() {
+    const draft = childQuery.trim()
+    const existing = aliasFor?.userAliases || []
+    const rows: ActionPanelRow[] = []
+    if (draft && !existing.includes(draft)) {
+      rows.push({
+        value: 'alias:save',
+        icon: <Tag size={18} />,
+        title: `Save alias “${draft}”`,
+        subtitle: aliasFor ? `Make “${aliasFor.title}” appear for this phrase` : '',
+        onSelect: submitAlias,
+      })
+    }
+    for (const alias of existing) {
+      rows.push({
+        value: `alias:remove:${alias}`,
+        icon: <Trash2 size={18} />,
+        title: alias,
+        subtitle: 'Remove this alias',
+        onSelect: () => removeAliasEntry(alias),
+      })
+    }
+    rows.push({
+      value: 'alias:done',
+      icon: <RotateCcw size={18} />,
+      title: 'Done',
+      subtitle: existing.length ? `${existing.length} alias${existing.length === 1 ? '' : 'es'} saved` : 'Close without changes',
+      onSelect: () => { setAliasFor(null); setChildQuery('') },
+    })
+    return rows
+  }
+
   function getConfirmActionRows() {
     return [
       {
@@ -724,7 +787,11 @@ export function App() {
             return
           }
           await runViewAction(action)
-          if (closeAfterSelect) setExtensionItemOptionsFor(null)
+          if (closeAfterSelect) {
+            setActionSubmenuFor(null)
+            setExtensionItemOptionsFor(null)
+            setChildQuery('')
+          }
         },
         className: action.style === 'destructive' ? 'result dangerResult' : 'result',
       })),
@@ -1041,6 +1108,7 @@ export function App() {
       event.preventDefault()
       if (shortcutOptionsFor) setShortcutOptionsFor(null)
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
+      else if (aliasFor) { setAliasFor(null); setChildQuery('') }
       else if (confirmRemoveFor) setConfirmRemoveFor(null)
       else if (actionSubmenuFor) setActionSubmenuFor(null)
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
@@ -1076,6 +1144,7 @@ export function App() {
       event.preventDefault()
       if (shortcutOptionsFor) setShortcutOptionsFor(null)
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
+      else if (aliasFor) { setAliasFor(null); setChildQuery('') }
       else if (confirmRemoveFor) setConfirmRemoveFor(null)
       else if (actionSubmenuFor) setActionSubmenuFor(null)
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
@@ -1174,7 +1243,7 @@ export function App() {
           </div>
         ))}
 
-        <Command.List ref={resultsListRef} className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'}`}>
+        <Command.List ref={resultsListRef} className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''}`}>
           {shortcutFor ? (
             <div className="shortcutRecorder">
               <div className="shortcutKeys">
@@ -1186,6 +1255,8 @@ export function App() {
             renderActionPanel(getShortcutOptionRows())
           ) : shortcutManagerOpen ? (
             renderShortcutManager()
+          ) : aliasFor ? (
+            renderActionPanel(getAliasActionRows())
           ) : confirmRemoveFor ? (
             renderActionPanel(getConfirmActionRows())
           ) : actionSubmenuFor ? (

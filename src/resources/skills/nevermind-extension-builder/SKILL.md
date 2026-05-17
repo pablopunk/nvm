@@ -30,16 +30,18 @@ Rules:
 - Image thumbnails must use `file.url` from `ctx.files.findImages()` or `ctx.files.toFileUrl(path)`, never raw filesystem paths.
 - Prefer `ctx.ui.form` for user input flows.
 - Prefer `ctx.ui.chat` for conversational workflows.
+- Prefer `ctx.ui.webview` for custom live/interactive browser UI; it runs sandboxed HTML/JS without Node access. Set `size: 'large'` when it needs a larger palette.
 - Prefer declarative `ctx.actions.*` item actions over raw shell behavior.
 - Use `primaryAction` for what Enter should do; all `actions` automatically appear under Cmd+K for each item.
-- Use `ctx.actions.push/replace/pop` for nested views instead of inventing custom UI state; for media previews, use `ctx.actions.push('Preview', ctx.ui.preview(file), { shortcut: 'Command+Y' })` for in-app preview and `ctx.actions.quickLook(file.path)` for native macOS Quick Look when useful.
+- Use `ctx.navigation.push/replace/pop/run` as explicit return helpers from action handlers. Use `ctx.actions.push/replace/pop` for declarative view actions instead of inventing custom UI state; for media previews, use `ctx.actions.push('Preview', ctx.ui.preview(file), { shortcut: 'Command+Y' })` for in-app preview and `ctx.actions.quickLook(file.path)` for native macOS Quick Look when useful.
 - Treat action shortcuts as local to the current view. Use command-level `globalShortcut` only for top-level commands that should run from anywhere; user-assigned global shortcuts take precedence.
 - For Open With flows, never hardcode app names. Use `const apps = await ctx.files.openWithApps(file.path)` and create nested items whose primary action is `ctx.actions.openWith(file.path, app)`.
 - Use `ctx.storage.memo(key, ttlMs, loader)` for expensive repeated work like indexing screenshots/media; use `ctx.storage.get/set/delete/clear` for persistent per-extension JSON state.
 - Use `ctx.shell.exec(command, args, options)` or `ctx.shell.script(script, options)` for system automation when needed; keep commands focused, bounded, and show useful output/errors in native views.
 - For grid views, choose `layout: 'wide'` for screenshots/videos, `layout: 'square'` for images/icons, or override with `aspectRatio`/`columns` when requested.
-- Use `ctx.actions.run(title, async (ctx) => ...)` for script work triggered from UI; handlers may return another native view.
+- Use `ctx.actions.run(title, async (ctx) => ...)` for script work triggered from UI; handlers may return another native view or another action to execute.
 - Keep generated code small and readable.
+- Nevermind catches thrown extension errors and renders an error view, so prefer throwing meaningful `Error` objects over swallowing failures unless the extension can recover or add context and rethrow.
 - Do not use external dependencies.
 - Do not write outside the generated extensions directory.
 - Do not ask the user to edit files manually.
