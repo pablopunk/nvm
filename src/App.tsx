@@ -637,6 +637,7 @@ export function App() {
   const canTweakWithAi = Boolean(optionsFor?.aiChatId && optionsFor.kind === 'extension-command')
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
+  const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.text)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
   const selectedExtensionItem = useMemo(() => {
     if (!extensionView) return null
@@ -760,7 +761,7 @@ export function App() {
         title: 'Preview',
         subtitle: 'Press → to preview an item',
         onSelect: () => optionsFor && setPreviewFor(optionsFor),
-        show: true,
+        show: canPreviewAction,
       },
       {
         value: 'option:quick-look',
@@ -1044,7 +1045,7 @@ export function App() {
       return
     }
 
-    if (event.key === 'ArrowRight' && !isChildOpen && selectedAction) {
+    if (event.key === 'ArrowRight' && !isChildOpen && selectedAction && (selectedAction.imageDataUrl || selectedAction.text)) {
       const input = event.target instanceof HTMLInputElement ? event.target : null
       if (input && input.selectionStart !== input.value.length) return
       event.preventDefault()
