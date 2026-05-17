@@ -5,9 +5,9 @@ directories:
   output: release
 files:
   - dist/**
-  - electron/**
-  - docs/**
-  - resources/**
+  - src/electron/**
+  - src/docs/**
+  - src/resources/**
   - package.json
 mac:
   category: public.app-category.productivity

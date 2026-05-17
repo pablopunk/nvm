@@ -63,7 +63,7 @@ Risky capabilities should move toward explicit permission declarations, timeouts
 
 ## Documentation boundaries
 
-- `docs/extension-api.md` describes the current public API surface for extension authors and AI builders.
+- `src/docs/extension-api.md` describes the current public API surface for extension authors and AI builders.
 - This document describes the product and architecture direction.
 - Implementation details belong in source code, not here.
 - If the implementation changes but the product intent remains the same, this document should not need to change.

@@ -5,7 +5,7 @@
   "author": "Pablo Varela",
   "private": true,
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "src/electron/main.cjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
