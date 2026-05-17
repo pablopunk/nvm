@@ -78,7 +78,7 @@ function createNevermindAi(options) {
       retry: { enabled: true, maxRetries: 2 },
     })
 
-    const resourceLoader = createResourceLoader(pi, { extensionApiPath, skillPath })
+    const resourceLoader = await createResourceLoader(pi, { agentDir, workspaceDir, extensionApiPath, skillPath })
     const customTools = createTools(pi, ai.Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension })
 
     const result = await pi.createAgentSession({
@@ -130,7 +130,13 @@ function createNevermindAi(options) {
   return { send, abort, reset }
 }
 
-function createResourceLoader(pi, { extensionApiPath, skillPath }) {
+async function createResourceLoader(pi, { agentDir, workspaceDir, extensionApiPath, skillPath }) {
+  const webAccessPath = await findPiWebAccessPath()
+  const webAccessLoader = webAccessPath && pi.DefaultResourceLoader
+    ? new pi.DefaultResourceLoader({ agentDir, cwd: workspaceDir, additionalExtensionPaths: [webAccessPath] })
+    : null
+  if (webAccessLoader) await webAccessLoader.reload()
+
   const extensionBuilderSkill = {
     name: 'nevermind-extension-builder',
     description: 'Builds local Nevermind extensions that return declarative UI views. Use whenever the user asks to automate or create a command/action in Nevermind.',
@@ -141,16 +147,35 @@ function createResourceLoader(pi, { extensionApiPath, skillPath }) {
   }
 
   return {
-    getExtensions: () => ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
-    getSkills: () => ({ skills: [extensionBuilderSkill], diagnostics: [] }),
+    getExtensions: () => webAccessLoader?.getExtensions() || ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
+    getSkills: () => {
+      const webSkills = (webAccessLoader?.getSkills().skills || []).filter((skill) => skill.filePath?.includes('pi-web-access'))
+      return { skills: [extensionBuilderSkill, ...webSkills], diagnostics: [] }
+    },
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     getAgentsFiles: () => ({ agentsFiles: [{ path: 'NEVERMIND.md', content: systemContext(extensionApiPath) }] }),
     getSystemPrompt: () => systemPrompt(),
     getAppendSystemPrompt: () => [],
     extendResources: () => {},
-    reload: async () => {},
+    reload: async () => { await webAccessLoader?.reload() },
   }
+}
+
+async function findPiWebAccessPath() {
+  const candidates = [
+    process.env.NEVERMIND_PI_WEB_ACCESS_PATH,
+    '/opt/homebrew/lib/node_modules/pi-web-access',
+    '/usr/local/lib/node_modules/pi-web-access',
+    path.join(process.env.HOME || '', '.pi', 'agent', 'node_modules', 'pi-web-access'),
+  ].filter(Boolean)
+  for (const candidate of candidates) {
+    try {
+      await fs.access(path.join(candidate, 'package.json'))
+      return candidate
+    } catch {}
+  }
+  return null
 }
 
 function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat }) {
@@ -269,6 +294,7 @@ function capabilities() {
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
     namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'cache', 'state', 'ai'],
+    webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
     fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'openWithApps', 'open', 'readText', 'toFileUrl'],
     findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
@@ -285,10 +311,11 @@ Build local Nevermind extensions, not shell scripts.
 When the first user message is vague, ask clarifying questions before using tools.
 Do not call read_extension_api, list_capabilities, write_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
 Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The only available tool names are: read_extension_api, list_capabilities, read_current_extension, write_extension, validate_extension, install_extension. Never invent tool names like read_file, write_file, list_directory, or bash.
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 Use read_extension_api before writing an extension.
+Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
 When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it.
 Use list_capabilities when unsure which UI or OS capabilities exist.
 Only write .cjs extension files with write_extension.
