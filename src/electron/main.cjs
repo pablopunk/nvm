@@ -2653,7 +2653,7 @@ app.whenReady().then(async () => {
 app.on('activate', () => showPalette())
 app.on('will-quit', () => {
   app.isQuiting = true
-  globalShortcut.unregisterAll()
+  if (app.isReady()) globalShortcut.unregisterAll()
   clearUpdateTimers()
   for (const watcher of appWatchers) watcher.close()
 })
