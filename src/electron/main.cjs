@@ -40,6 +40,7 @@ let fileIndex = []
 let clipboardHistory = []
 let statePath
 let iconCacheDir
+let clipboardImagesDir
 let extensionsDir
 let extensionStorageDir
 let saveTimer
@@ -350,10 +351,9 @@ function hashValue(value) {
   return crypto.createHash('sha1').update(String(value)).digest('hex')
 }
 
-function score(value, query) {
-  const v = normalize(value)
-  const q = normalize(query)
+function scoreNormalized(value, q) {
   if (!q) return 0
+  const v = normalize(value)
   if (v === q) return 100
   if (v.startsWith(q)) return 80
   if (v.includes(q)) return 50
@@ -366,6 +366,10 @@ function score(value, query) {
   return 20
 }
 
+function score(value, query) {
+  return scoreNormalized(value, normalize(query))
+}
+
 function actionAliases(actionId) {
   const value = userState.aliases[actionId]
   if (!value) return []
@@ -373,13 +377,27 @@ function actionAliases(actionId) {
 }
 
 function actionSearchScore(action, query) {
-  if (!query.trim()) return action.score || 0
-  return Math.max(
-    score(action.title, query),
-    score(action.subtitle, query),
-    ...(action.aliases || []).map((alias) => score(alias, query)),
-    ...actionAliases(action.id).map((alias) => score(alias, query)),
-  )
+  const q = normalize(query)
+  if (!q) return action.score || 0
+  let best = scoreNormalized(action.title, q)
+  if (best === 100) return best
+  const subtitleScore = scoreNormalized(action.subtitle, q)
+  if (subtitleScore > best) best = subtitleScore
+  if (best === 100) return best
+  const aliases = action.aliases
+  if (aliases) {
+    for (const alias of aliases) {
+      const s = scoreNormalized(alias, q)
+      if (s > best) best = s
+      if (best === 100) return best
+    }
+  }
+  for (const alias of actionAliases(action.id)) {
+    const s = scoreNormalized(alias, q)
+    if (s > best) best = s
+    if (best === 100) return best
+  }
+  return best
 }
 
 function usageBoost(actionId) {
@@ -405,12 +423,27 @@ function defaultActionIdFor(action) {
   return null
 }
 
+let shortcutByAiChatIdCache = null
+function shortcutByAiChatIdMap() {
+  if (shortcutByAiChatIdCache) return shortcutByAiChatIdCache
+  const map = new Map()
+  for (const [actionId, storedAction] of Object.entries(userState.shortcutActions)) {
+    if (storedAction?.aiChatId && userState.shortcuts[actionId]) {
+      map.set(storedAction.aiChatId, userState.shortcuts[actionId])
+    }
+  }
+  shortcutByAiChatIdCache = map
+  return map
+}
+
+function invalidateShortcutCaches() {
+  shortcutByAiChatIdCache = null
+}
+
 function shortcutForAction(action) {
   if (userState.shortcuts[action.id]) return userState.shortcuts[action.id]
   if (!action.aiChatId) return null
-  const matchingActionId = Object.entries(userState.shortcutActions)
-    .find(([, storedAction]) => storedAction?.aiChatId === action.aiChatId)?.[0]
-  return matchingActionId ? userState.shortcuts[matchingActionId] : null
+  return shortcutByAiChatIdMap().get(action.aiChatId) || null
 }
 
 function withShortcutHint(action) {
@@ -437,6 +470,7 @@ function rankAction(action, query) {
   return {
     ...action,
     aliases: [...(action.aliases || []), ...actionAliases(action.id)],
+    userAliases: actionAliases(action.id),
     score: base + priorityBoost(action) + usageBoost(action.id) + recentBoost(action.id),
     lastUsed: userState.recents[action.id]?.lastUsed || 0,
   }
@@ -611,6 +645,7 @@ function clipboardActionFromItem(item) {
     clipboardType: item.type,
     text: item.text,
     imageDataUrl: item.imageDataUrl,
+    imagePath: item.imagePath,
     videoUrl: item.videoUrl,
     filePath: item.filePath,
     thumbnailUrl: item.thumbnailUrl,
@@ -632,7 +667,7 @@ function clipboardHistoryView() {
       const isImage = item.type === 'image'
       const isVideo = item.type === 'video'
       const copyAction = isImage
-        ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, dismissAfterRun: 'auto' }
+        ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, imagePath: item.imagePath, dismissAfterRun: 'auto' }
         : { type: 'copyText', title: isVideo ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
       const previewAction = { type: 'nativeAction', title: 'Preview', nativeAction: clipboardActionFromItem(item) }
       const pasteAction = isImage || isVideo
@@ -849,8 +884,11 @@ async function executeAction(action, options = {}) {
       await launchApp(action.app)
       break
     case 'clipboard':
-      if (action.clipboardType === 'image' && action.imageDataUrl) {
-        clipboard.writeImage(nativeImage.createFromDataURL(action.imageDataUrl))
+      if (action.clipboardType === 'image' && (action.imagePath || action.imageDataUrl)) {
+        const image = action.imagePath
+          ? nativeImage.createFromPath(action.imagePath)
+          : nativeImage.createFromDataURL(action.imageDataUrl)
+        clipboard.writeImage(image)
       } else {
         clipboard.writeText(action.text || '')
       }
@@ -1078,6 +1116,7 @@ async function executeViewAction(action) {
       return { toast: { message: 'Pasted' } }
     case 'copyImage':
       if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
+      else if (action.imagePath) clipboard.writeImage(nativeImage.createFromPath(action.imagePath))
       else clipboard.writeImage(nativeImage.createFromDataURL(action.imageDataUrl))
       break
     case 'trash':
@@ -1897,6 +1936,7 @@ async function indexFiles() {
 async function loadUserState() {
   statePath = path.join(app.getPath('userData'), 'state.json')
   iconCacheDir = path.join(app.getPath('userData'), 'icon-cache')
+  clipboardImagesDir = path.join(app.getPath('userData'), 'clipboard-images')
   extensionsDir = path.join(app.getPath('userData'), 'extensions')
   extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage')
 
@@ -1922,12 +1962,22 @@ async function loadUserState() {
 function normalizeClipboardHistory(items) {
   return (Array.isArray(items) ? items : [])
     .map((item) => {
-      if (item?.type === 'image' && item.imageDataUrl) {
+      if (item?.type === 'image' && (item.imagePath || item.imageDataUrl)) {
+        let imagePath = item.imagePath
+        if (!imagePath && typeof item.imageDataUrl === 'string' && item.imageDataUrl.startsWith('data:')) {
+          const base64 = item.imageDataUrl.split(',', 2)[1] || ''
+          try {
+            const png = Buffer.from(base64, 'base64')
+            imagePath = persistClipboardImage(png, hashValue(png))
+          } catch {}
+        }
+        const id = item.id || (imagePath ? `image:${path.basename(imagePath, '.png')}` : `image:${hashValue(item.imageDataUrl)}`)
         return {
-          id: item.id || `image:${hashValue(item.imageDataUrl)}`,
+          id,
           type: 'image',
-          imageDataUrl: item.imageDataUrl,
-          thumbnailUrl: item.thumbnailUrl || item.imageDataUrl,
+          imagePath,
+          imageDataUrl: imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl,
+          thumbnailUrl: item.thumbnailUrl || (imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl),
           createdAt: item.createdAt || Date.now(),
         }
       }
@@ -1988,6 +2038,14 @@ function clipboardFilePath() {
   return null
 }
 
+function persistClipboardImage(png, hash) {
+  const imagePath = path.join(clipboardImagesDir, `${hash}.png`)
+  fs.mkdir(clipboardImagesDir, { recursive: true })
+    .then(() => fs.writeFile(imagePath, png))
+    .catch((error) => console.warn('Failed to persist clipboard image', error))
+  return imagePath
+}
+
 function readClipboardItem() {
   const filePath = clipboardFilePath()
   if (filePath && isVideoPath(filePath)) {
@@ -2015,11 +2073,14 @@ function readClipboardItem() {
   if (image.isEmpty()) return null
 
   const png = image.toPNG()
+  const hash = hashValue(png)
+  const imagePath = persistClipboardImage(png, hash)
   const thumbnail = image.resize({ width: 64, height: 64 })
   return {
-    id: `image:${hashValue(png)}`,
+    id: `image:${hash}`,
     type: 'image',
-    imageDataUrl: `data:image/png;base64,${png.toString('base64')}`,
+    imagePath,
+    imageDataUrl: fileUrlForPath(imagePath),
     thumbnailUrl: thumbnail.toDataURL(),
     createdAt: Date.now(),
   }
@@ -2107,6 +2168,7 @@ function registerActionShortcut(actionId, accelerator, action) {
   if (!ok) return false
   userState.shortcuts[actionId] = accelerator
   userState.shortcutActions[actionId] = action
+  invalidateShortcutCaches()
   return true
 }
 
@@ -2168,6 +2230,7 @@ async function removeShortcut(actionId) {
   globalShortcut.unregister(userState.shortcuts[actionId])
   delete userState.shortcuts[actionId]
   delete userState.shortcutActions[actionId]
+  invalidateShortcutCaches()
   scheduleSaveState()
   return { ok: true, message: 'Shortcut removed' }
 }
@@ -2180,6 +2243,15 @@ async function setAlias(action, alias) {
   userState.aliases[action.id] = Array.from(aliases)
   scheduleSaveState()
   return { ok: true, message: `Alias set: ${alias.trim()}` }
+}
+
+async function removeAlias(action, alias) {
+  if (!action?.id || !alias) return { ok: false, message: 'Missing alias' }
+  const current = actionAliases(action.id).filter((value) => value !== alias)
+  if (current.length) userState.aliases[action.id] = current
+  else delete userState.aliases[action.id]
+  scheduleSaveState()
+  return { ok: true, message: `Alias removed: ${alias}` }
 }
 
 async function setShortcut(action, shortcut) {
@@ -2353,6 +2425,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
   ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
   ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
+  ipcMain.handle('actions:remove-alias', (_event, action, alias) => removeAlias(action, alias))
   ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
   ipcMain.handle('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
   ipcMain.handle('system:open-keyboard-settings', () => openSystemKeyboardSettings())
