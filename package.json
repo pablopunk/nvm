@@ -16,6 +16,7 @@
     "dist": "pnpm run dist:mac:arm64",
     "dist:mac": "pnpm run dist:mac:arm64",
     "dist:mac:arm64": "pnpm build && electron-builder --config electron-builder.yml --mac zip --arm64 --publish never",
+    "dist:mac:x64": "pnpm build && electron-builder --config electron-builder.yml --mac zip --x64 --publish never",
     "dist:linux": "pnpm run dist:linux:x64",
     "dist:linux:x64": "pnpm build && electron-builder --config electron-builder.yml --linux AppImage deb --x64 --publish never",
     "dist:linux:arm64": "pnpm build && electron-builder --config electron-builder.yml --linux AppImage deb --arm64 --publish never",

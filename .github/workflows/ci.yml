@@ -29,6 +29,100 @@ jobs:
       - name: Build app
         run: mise exec -- pnpm run build
 
+  release-mac:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Import Apple signing certificate
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -P "$MACOS_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+
+      - name: Build signed/notarized macOS release
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
+        run: mise exec -- pnpm run dist:mac:${{ matrix.arch }}
+
+      - name: Collect macOS artifacts
+        run: |
+          mkdir -p mac-artifacts
+          shopt -s nullglob
+          files=(
+            release/Nevermind-*-${{ matrix.arch }}.zip
+            release/Nevermind-*-${{ matrix.arch }}.zip.blockmap
+          )
+          if (( ${#files[@]} == 0 )); then
+            find release -maxdepth 1 -type f -print
+            exit 1
+          fi
+          cp "${files[@]}" mac-artifacts/
+
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            cp release/latest-mac.yml mac-artifacts/
+          elif [[ -f release/latest-mac-x64.yml ]]; then
+            cp release/latest-mac-x64.yml mac-artifacts/
+          fi
+
+      - name: Upload macOS dry-run artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nevermind-mac-${{ matrix.arch }}-${{ github.sha }}
+          path: mac-artifacts/*
+          if-no-files-found: error
+
+      - name: Upload macOS release artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --generate-notes || gh release view "$tag" >/dev/null
+          fi
+          gh release upload "$tag" mac-artifacts/* --clobber
+
   release-linux:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.runner }}
