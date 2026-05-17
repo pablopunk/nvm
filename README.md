@@ -2,7 +2,7 @@
 
 
 <p align="center">
-  <img src="https://github.com/pablopunk/nvm/blob/main/build/screenshot.png?raw=true"  />
+  <img src="https://github.com/pablopunk/nvm/blob/main/build/screenshot.jpg?raw=true"  />
   <br /><br />
   <i>An AI-native desktop command palette that extends itself.</i>
   <br /><br />
