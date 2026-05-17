@@ -16,8 +16,10 @@ const CLIPBOARD_POLL_INTERVAL_MS = 1000
 const WINDOW_BLUR_MARGIN = 96
 const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
 const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
+const STACKED_PALETTE_SIZE = { width: 760, height: 720 }
 const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
 const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
+const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE)
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic'])
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'flv', 'm4v'])
 const LOCAL_FILE_PROTOCOL = 'nvm-file'
@@ -214,7 +216,7 @@ function debugLog(message, data) {
 
 function setPaletteSizeForMode(mode = 'default') {
   if (!win) return
-  const size = mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
+  const size = mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
   win.setSize(size.width, size.height, false)
 }
 
@@ -562,11 +564,11 @@ function clipboardHistoryView() {
     items: clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
       const isImage = item.type === 'image'
       const copyAction = isImage
-        ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl }
-        : { type: 'copyText', title: 'Copy Text', text: item.text }
+        ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, dismissAfterRun: 'auto' }
+        : { type: 'copyText', title: 'Copy Text', text: item.text, dismissAfterRun: 'auto' }
       const pasteAction = isImage
         ? copyAction
-        : { type: 'pasteText', title: 'Paste Text', text: item.text }
+        : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
       return {
         id: `clipboard:${item.id}`,
         title: clipboardItemTitle(item),
@@ -574,10 +576,10 @@ function clipboardHistoryView() {
         icon: 'clipboard',
         image: item.thumbnailUrl,
         keywords: [item.text || '', item.type || ''].filter(Boolean),
-        primaryAction: pasteAction,
+        primaryAction: copyAction,
         actionPanel: {
           sections: [
-            { actions: [pasteAction, copyAction] },
+            { actions: [copyAction, pasteAction] },
           ],
         },
       }
@@ -1887,7 +1889,7 @@ async function executeShortcutAction(action) {
   const result = await executeAction(currentAction, { keepPaletteOpen: true })
   if (result?.view) {
     showPalette({ skipShownEvent: true, deferReveal: !wasVisible })
-    win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible })
+    win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible, asSibling: wasVisible })
   }
 }
 

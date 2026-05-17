@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Command } from 'cmdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -124,7 +124,7 @@ declare global {
       clearOverride: (action: Action) => Promise<SaveResult>
       removeCreatedAction: (action: Action) => Promise<SaveResult>
       getAppIcon: (appPath: string) => Promise<string | null>
-      setPaletteMode: (mode: 'default' | 'ai-chat') => Promise<void>
+      setPaletteMode: (mode: 'default' | 'ai-chat' | 'stacked') => Promise<void>
       hide: () => Promise<void>
       shortcutReady: () => Promise<void>
       onShown: (callback: () => void) => () => void
@@ -132,7 +132,7 @@ declare global {
       onHidden: (callback: () => void) => () => void
       onAppsIndexed: (callback: (count: number) => void) => () => void
       onClipboardChanged: (callback: () => void) => () => void
-      onOpenActionView: (callback: (payload?: { view?: ExtensionView; revealWhenReady?: boolean }) => void) => () => void
+      onOpenActionView: (callback: (payload?: { view?: ExtensionView; revealWhenReady?: boolean; asSibling?: boolean }) => void) => () => void
       onAiChatEvent: (callback: (event: { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }) => void) => () => void
     }
   }
@@ -147,6 +147,7 @@ const SEARCH_PLACEHOLDERS = [
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsListRef = useRef<HTMLDivElement>(null)
+  const paletteRef = useRef<HTMLDivElement>(null)
   const requestedIcons = useRef(new Set<string>())
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
@@ -176,6 +177,34 @@ export function App() {
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([])
   const [shortcutOptionsFor, setShortcutOptionsFor] = useState<ShortcutRecord | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string | boolean>>({})
+  const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([])
+  const extensionViewRef = useRef<ExtensionView | null>(null)
+  useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
+
+  useLayoutEffect(() => {
+    const palette = paletteRef.current
+    if (!palette) return
+    if (siblingViews.length === 0) {
+      palette.style.removeProperty('--spine-top')
+      palette.style.removeProperty('--spine-height')
+      return
+    }
+    const updateSpine = () => {
+      const searchRow = palette.querySelector('.searchRow') as HTMLElement | null
+      const activePane = palette.querySelector('.results') as HTMLElement | null
+      if (!searchRow || !activePane) return
+      const paletteRect = palette.getBoundingClientRect()
+      const top = searchRow.getBoundingClientRect().bottom - paletteRect.top
+      const bottom = activePane.getBoundingClientRect().top - paletteRect.top - 11
+      palette.style.setProperty('--spine-top', `${top}px`)
+      palette.style.setProperty('--spine-height', `${Math.max(0, bottom - top)}px`)
+    }
+    updateSpine()
+    const observer = new ResizeObserver(updateSpine)
+    observer.observe(palette)
+    palette.querySelectorAll('.siblingPane').forEach((node) => observer.observe(node))
+    return () => observer.disconnect()
+  }, [siblingViews, extensionView])
 
   useEffect(() => {
     const focusInput = () => {
@@ -202,7 +231,10 @@ export function App() {
       }
       setRefreshNonce((nonce) => nonce + 1)
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length)
-      if (!aiChatOpenRef.current) extensionNavigation.setBackStack([])
+      if (!aiChatOpenRef.current) {
+        extensionNavigation.setBackStack([])
+        setSiblingViews([])
+      }
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
     })
@@ -226,6 +258,7 @@ export function App() {
         aiChat.setMessages([])
       }
       extensionNavigation.setBackStack([])
+      setSiblingViews([])
     })
     const stopApps = window.nvm.onAppsIndexed(() => {})
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
@@ -233,6 +266,12 @@ export function App() {
       if (!payload?.view) return
       setOptionsFor(null)
       setPreviewFor(null)
+      const current = extensionViewRef.current
+      if (payload.asSibling && current && current.id !== payload.view.id) {
+        setSiblingViews((siblings) => [...siblings, current])
+      } else if (!payload.asSibling) {
+        setSiblingViews([])
+      }
       if (payload.view.aiChat) await openAiChat(payload.view)
       else showExtensionView(payload.view, 'root')
       markShortcutReady(Boolean(payload?.revealWhenReady))
@@ -296,8 +335,9 @@ export function App() {
     const isAiChat = Boolean(extensionView?.aiChat)
     aiChatOpenRef.current = isAiChat
     aiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
-    window.nvm.setPaletteMode(isAiChat ? 'ai-chat' : 'default')
-  }, [extensionView])
+    const mode = siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
+    window.nvm.setPaletteMode(mode)
+  }, [extensionView, siblingViews.length])
 
   useEffect(() => {
     if (extensionView?.aiChat) {
@@ -336,7 +376,7 @@ export function App() {
   const isRootLikeExtensionView = extensionView?.id === 'clipboard-history'
   const isFilterableChildOpen = Boolean(actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || shortcutManagerOpen || isFilterableExtensionView)
   const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor || extensionView)
-  const isVisuallyStacked = isChildOpen && !isRootLikeExtensionView
+  const isVisuallyStacked = (isChildOpen && !isRootLikeExtensionView) || siblingViews.length > 0
   const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
   const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : extensionView ? extensionView.title : previewFor ? previewFor.title : optionsFor && !query ? optionsFor.title : query
   const placeholder = shortcutFor ? 'Press a keyboard shortcut' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
@@ -371,6 +411,12 @@ export function App() {
   function popExtensionView() {
     setExtensionItemOptionsFor(null)
     lastLocalShortcutRef.current = null
+    if (extensionViewBackStack.length === 0 && siblingViews.length > 0) {
+      const next = siblingViews[siblingViews.length - 1]
+      setSiblingViews((siblings) => siblings.slice(0, -1))
+      extensionNavigation.showView(next, 'root')
+      return
+    }
     extensionNavigation.popView()
   }
 
@@ -390,6 +436,10 @@ export function App() {
     try {
       const result = await window.nvm.runViewAction(action)
       await handleViewActionResult(result)
+      if (action.dismissAfterRun === 'auto' && !result?.view && result?.navigation !== 'pop') {
+        if (extensionNavigation.backStack.length > 0) popExtensionView()
+        else window.nvm.hide()
+      }
     } finally {
       runningViewActionsRef.current.delete(actionKey)
     }
@@ -979,6 +1029,7 @@ export function App() {
     <main className="shell">
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
       <Command
+        ref={paletteRef}
         className={`palette ${isVisuallyStacked ? 'isStacked' : ''}`}
         label="Nevermind"
         loop
@@ -1007,6 +1058,13 @@ export function App() {
           {renderSearchAccessory(extensionView)}
           {!isChildOpen && query ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
         </div>
+
+        {siblingViews.map((sib, index) => (
+          <div key={`sibling-${index}-${sib.id || sib.title}`} className="siblingPane card inertSibling" aria-hidden="true">
+            <div className="siblingHeader">{sib.title}</div>
+            <div className="siblingBody">{renderExtensionView(sib)}</div>
+          </div>
+        ))}
 
         <Command.List ref={resultsListRef} className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'}`}>
           {shortcutFor ? (

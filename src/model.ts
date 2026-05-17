@@ -30,6 +30,7 @@ export type CommandAction = {
   lazySubmenu?: boolean
   style?: 'regular' | 'destructive'
   requiresConfirmation?: boolean
+  dismissAfterRun?: 'auto'
 }
 
 export type CommandActionSection = {
