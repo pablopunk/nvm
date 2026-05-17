@@ -2,6 +2,7 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session, dialog } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
+const fsSync = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const crypto = require('node:crypto')
@@ -124,6 +125,7 @@ const DEFAULT_PALETTE_HOTKEY = 'Alt+Space'
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
+const APP_REINDEX_DEBOUNCE_MS = 1000
 const WINDOW_BLUR_MARGIN = 96
 const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
 const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
@@ -155,6 +157,8 @@ let clipboardImagesDir
 let extensionsDir
 let extensionStorageDir
 let saveTimer
+let appIndexTimer
+let appWatchers = []
 let nevermindAi
 let activeAiChatId
 let userState = {
@@ -1950,8 +1954,19 @@ async function launchApp(item) {
   await shell.openPath(item.path)
 }
 
+function appScanRoots() {
+  if (process.platform === 'darwin') return ['/Applications', '/System/Applications', path.join(os.homedir(), 'Applications')]
+  if (process.platform === 'win32') {
+    return [
+      process.env.ProgramData && path.join(process.env.ProgramData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+      process.env.APPDATA && path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    ].filter(Boolean)
+  }
+  return ['/usr/share/applications', '/usr/local/share/applications', path.join(os.homedir(), '.local/share/applications')]
+}
+
 async function scanMacApps() {
-  const roots = ['/Applications', '/System/Applications', path.join(os.homedir(), 'Applications')]
+  const roots = appScanRoots()
   const found = []
 
   async function walk(dir, depth) {
@@ -2020,10 +2035,7 @@ async function scanFiles() {
 }
 
 async function scanWindowsApps() {
-  const roots = [
-    process.env.ProgramData && path.join(process.env.ProgramData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-    process.env.APPDATA && path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-  ].filter(Boolean)
+  const roots = appScanRoots()
   const found = []
 
   async function walk(dir) {
@@ -2047,7 +2059,7 @@ async function scanWindowsApps() {
 }
 
 async function scanLinuxApps() {
-  const roots = ['/usr/share/applications', '/usr/local/share/applications', path.join(os.homedir(), '.local/share/applications')]
+  const roots = appScanRoots()
   const found = []
 
   await Promise.all(roots.map(async (root) => {
@@ -2072,6 +2084,28 @@ async function scanLinuxApps() {
   }))
 
   return found
+}
+
+function scheduleIndexApplications() {
+  if (appIndexTimer) clearTimeout(appIndexTimer)
+  appIndexTimer = setTimeout(() => {
+    appIndexTimer = null
+    void indexApplications()
+  }, APP_REINDEX_DEBOUNCE_MS)
+  appIndexTimer.unref?.()
+}
+
+async function startAppWatcher() {
+  for (const watcher of appWatchers) watcher.close()
+  appWatchers = []
+  for (const root of appScanRoots()) {
+    if (!fsSync.existsSync(root)) continue
+    try {
+      const watcher = fsSync.watch(root, { recursive: process.platform === 'darwin' || process.platform === 'win32' }, scheduleIndexApplications)
+      watcher.on('error', () => {})
+      appWatchers.push(watcher)
+    } catch {}
+  }
 }
 
 async function indexApplications() {
@@ -2584,6 +2618,7 @@ app.whenReady().then(async () => {
   startClipboardWatcher()
   setTimeout(indexApplications, 100)
   setTimeout(indexFiles, 200)
+  await startAppWatcher()
 
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))
@@ -2619,6 +2654,7 @@ app.on('will-quit', () => {
   app.isQuiting = true
   globalShortcut.unregisterAll()
   clearUpdateTimers()
+  for (const watcher of appWatchers) watcher.close()
 })
 
 const gotLock = app.requestSingleInstanceLock()

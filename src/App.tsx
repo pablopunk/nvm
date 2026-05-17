@@ -293,7 +293,7 @@ export function App() {
       extensionNavigation.setBackStack([])
       setSiblingViews([])
     })
-    const stopApps = window.nvm.onAppsIndexed(() => {})
+    const stopApps = window.nvm.onAppsIndexed(() => setRefreshNonce((nonce) => nonce + 1))
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
     const stopOpenActionView = window.nvm.onOpenActionView(async (payload) => {
       if (!payload?.view) return
