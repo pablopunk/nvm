@@ -8,9 +8,11 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
+import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -33,10 +35,6 @@ const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
 const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
 const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE)
 const PREVIEW_WINDOW_SIZE = addWindowBlurMargin(PREVIEW_PALETTE_SIZE)
-const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic'])
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'flv', 'm4v'])
-const LOCAL_FILE_PROTOCOL = 'nvm-file'
-const LOCAL_THUMB_PROTOCOL = 'nvm-thumb'
 const THUMBNAIL_SIZE = 512
 
 protocol.registerSchemesAsPrivileged([
@@ -373,33 +371,6 @@ function registerHotkey() {
   })
 }
 
-function normalize(value) {
-  return String(value || '').toLowerCase().trim()
-}
-
-function hashValue(value) {
-  return crypto.createHash('sha1').update(String(value)).digest('hex')
-}
-
-function scoreNormalized(value, q) {
-  if (!q) return 0
-  const v = normalize(value)
-  if (v === q) return 100
-  if (v.startsWith(q)) return 80
-  if (v.includes(q)) return 50
-  let pos = 0
-  for (const ch of q) {
-    pos = v.indexOf(ch, pos)
-    if (pos === -1) return 0
-    pos += 1
-  }
-  return 20
-}
-
-function score(value, query) {
-  return scoreNormalized(value, normalize(query))
-}
-
 function actionAliases(actionId) {
   const value = userState.aliases[actionId]
   if (!value) return []
@@ -516,35 +487,6 @@ function recordRecent(action) {
     kind: action.kind,
   }
   scheduleSaveState()
-}
-
-function isLikelyUrl(input) {
-  const value = input.trim()
-  if (!value || value.includes(' ')) return false
-  if (/^https?:\/\//i.test(value)) return true
-  return /^[\w-]+(\.[\w-]+)+([/:?#].*)?$/i.test(value)
-}
-
-function getUrlFromQuery(query) {
-  const trimmed = query.trim()
-  const opened = trimmed.match(/^open\s+(.+)$/i)?.[1]?.trim() || trimmed
-  if (!isLikelyUrl(opened)) return null
-  return /^https?:\/\//i.test(opened) ? opened : `https://${opened}`
-}
-
-function calculate(query) {
-  const expression = query.trim().replace(/^=?\s*/, '').replace(/^calc(?:ulate)?\s+/i, '')
-  if (!expression || !/[+\-*/%^()]/.test(expression)) return null
-  if (!/^[\d\s.+\-*/%^(),]+$/.test(expression)) return null
-
-  try {
-    const jsExpression = expression.replace(/%/g, '/100')
-    const result = Function(`"use strict"; return (${jsExpression})`)()
-    if (typeof result !== 'number' || !Number.isFinite(result)) return null
-    return Number.isInteger(result) ? String(result) : String(Number(result.toPrecision(12)))
-  } catch {
-    return null
-  }
 }
 
 async function getAppIconDataUrl(appPath) {
@@ -1366,33 +1308,6 @@ async function executeBuiltin(action) {
       app.quit()
       break
   }
-}
-
-function expandUserPath(value) {
-  if (!value) return value
-  if (value === '~') return os.homedir()
-  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2))
-  return value
-}
-
-function fileUrlForPath(filePath) {
-  return `${LOCAL_FILE_PROTOCOL}:${pathToFileURL(filePath).href.slice('file:'.length)}`
-}
-
-function thumbnailUrlForPath(filePath) {
-  return `${LOCAL_THUMB_PROTOCOL}://thumb?path=${encodeURIComponent(filePath)}`
-}
-
-function extensionForPath(filePath) {
-  return path.extname(filePath).toLowerCase().replace(/^\./, '')
-}
-
-function isImagePath(filePath) {
-  return IMAGE_EXTENSIONS.has(extensionForPath(filePath))
-}
-
-function isVideoPath(filePath) {
-  return VIDEO_EXTENSIONS.has(extensionForPath(filePath))
 }
 
 async function thumbnailResponseForPath(filePath) {
