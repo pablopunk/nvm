@@ -1,5 +1,5 @@
 // @ts-nocheck
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session, dialog } = require('electron')
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
 const fsSync = require('node:fs')
@@ -14,6 +14,10 @@ let updateCheckInFlight = false
 let updateDownloadInFlight = false
 let updateStartupTimer = null
 let updatePollTimer = null
+let updateStatus = 'idle'
+let updateAvailableInfo = null
+let updateDownloadedInfo = null
+let updateErrorMessage = ''
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000
 
@@ -24,16 +28,47 @@ function canUseAutoUpdates() {
   return false
 }
 
-async function checkForUpdates(trigger = 'manual') {
-  if (!canUseAutoUpdates() || updateCheckInFlight || updateDownloadInFlight) return
+async function checkForUpdates(trigger = 'manual', options = {}) {
+  if (!canUseAutoUpdates()) {
+    updateStatus = 'unsupported'
+    return null
+  }
+  if (updateDownloadedInfo) return updateDownloadedInfo
+  if (updateCheckInFlight || updateDownloadInFlight) return updateAvailableInfo || updateDownloadedInfo
   updateCheckInFlight = true
+  updateStatus = 'checking'
+  updateErrorMessage = ''
   try {
     console.info(`[nvm-updater] checking for updates (${trigger})`)
-    await autoUpdater.checkForUpdates()
+    const result = await autoUpdater.checkForUpdates()
+    if (options.download && result?.updateInfo && !updateDownloadedInfo) await downloadAvailableUpdate(result.updateInfo)
+    return result?.updateInfo || null
   } catch (error) {
+    updateStatus = 'error'
+    updateErrorMessage = error?.message || String(error)
     console.error('[nvm-updater] update check failed', error)
+    return null
   } finally {
     updateCheckInFlight = false
+    if (updateStatus === 'checking') updateStatus = updateAvailableInfo ? 'available' : 'idle'
+  }
+}
+
+async function downloadAvailableUpdate(info = updateAvailableInfo) {
+  if (!canUseAutoUpdates() || updateDownloadInFlight || updateDownloadedInfo) return
+  updateAvailableInfo = info || updateAvailableInfo
+  updateDownloadInFlight = true
+  updateStatus = 'downloading'
+  updateErrorMessage = ''
+  try {
+    await autoUpdater.downloadUpdate()
+  } catch (error) {
+    updateStatus = 'error'
+    updateErrorMessage = error?.message || String(error)
+    console.error('[nvm-updater] update download failed', error)
+  } finally {
+    updateDownloadInFlight = false
+    if (updateStatus === 'downloading') updateStatus = updateDownloadedInfo ? 'downloaded' : updateAvailableInfo ? 'available' : 'idle'
   }
 }
 
@@ -58,32 +93,20 @@ function configureAutoUpdater() {
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('checking-for-update', () => {
+    updateStatus = 'checking'
     console.info('[nvm-updater] checking for update')
   })
 
-  autoUpdater.on('update-available', async (info) => {
-    if (updateDownloadInFlight) return
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      title: 'Update available',
-      message: `Nevermind ${info.version} is available.`,
-      detail: 'Do you want to download it now?',
-      buttons: ['Download', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-    })
-    if (response !== 0) return
-    updateDownloadInFlight = true
-    try {
-      await autoUpdater.downloadUpdate()
-    } catch (error) {
-      console.error('[nvm-updater] update download failed', error)
-    } finally {
-      updateDownloadInFlight = false
-    }
+  autoUpdater.on('update-available', (info) => {
+    updateAvailableInfo = info
+    updateStatus = 'available'
+    console.info(`[nvm-updater] update available ${info.version}`)
   })
 
   autoUpdater.on('update-not-available', () => {
+    updateAvailableInfo = null
+    updateDownloadedInfo = null
+    updateStatus = 'idle'
     console.info('[nvm-updater] no updates available')
   })
 
@@ -91,20 +114,16 @@ function configureAutoUpdater() {
     console.info(`[nvm-updater] download progress ${Math.floor(progress.percent)}%`)
   })
 
-  autoUpdater.on('update-downloaded', async (info) => {
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      title: 'Update ready',
-      message: `Nevermind ${info.version} has been downloaded.`,
-      detail: 'Restart Nevermind now to install the update?',
-      buttons: ['Restart and Install', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-    })
-    if (response === 0) autoUpdater.quitAndInstall()
+  autoUpdater.on('update-downloaded', (info) => {
+    updateDownloadedInfo = info
+    updateAvailableInfo = info
+    updateStatus = 'downloaded'
+    console.info(`[nvm-updater] update downloaded ${info.version}`)
   })
 
   autoUpdater.on('error', (error) => {
+    updateStatus = 'error'
+    updateErrorMessage = error?.message || String(error)
     console.error('[nvm-updater] updater error', error)
   })
 
@@ -231,6 +250,14 @@ function addWindowBlurMargin(size) {
 const INTERNAL_EXTENSIONS = []
 
 const BUILT_IN_ACTIONS = [
+  {
+    id: 'builtin:check-for-updates',
+    kind: 'check-for-updates',
+    title: 'Check for Updates',
+    subtitle: 'Install the latest Nevermind release',
+    icon: 'restart',
+    score: 23,
+  },
   {
     id: 'builtin:lock-screen',
     kind: 'builtin',
@@ -847,6 +874,66 @@ function clipboardHistoryView() {
   }
 }
 
+function updateStatusView() {
+  const version = updateDownloadedInfo?.version || updateAvailableInfo?.version
+  const unsupported = updateStatus === 'unsupported' || !canUseAutoUpdates()
+  const primaryAction = updateDownloadedInfo
+    ? { type: 'nativeAction', title: 'Install and Restart', nativeAction: { kind: 'install-update' } }
+    : updateAvailableInfo
+      ? { type: 'nativeAction', title: updateDownloadInFlight ? 'Downloading…' : 'Download Update', nativeAction: { kind: 'download-update' } }
+      : { type: 'nativeAction', title: updateCheckInFlight ? 'Checking…' : 'Check Again', nativeAction: { kind: 'check-for-updates' } }
+  const title = unsupported
+    ? 'Updates unavailable'
+    : updateDownloadedInfo
+      ? `Nevermind ${version} is ready`
+      : updateAvailableInfo
+        ? `Nevermind ${version} is available`
+        : updateStatus === 'error'
+          ? 'Update check failed'
+          : 'Nevermind is up to date'
+  const subtitle = unsupported
+    ? 'Automatic updates only run from packaged macOS builds or Linux AppImages'
+    : updateDownloadedInfo
+      ? 'Install the downloaded update and restart Nevermind'
+      : updateAvailableInfo
+        ? 'Download the update before installing it'
+        : updateStatus === 'error'
+          ? updateErrorMessage
+          : `Current version: ${app.getVersion()}`
+  return {
+    type: 'list',
+    id: 'app-updates',
+    title: 'Updates',
+    presentation: 'root',
+    searchBarPlaceholder: 'Search Updates',
+    items: [{
+      id: 'update-status',
+      title,
+      subtitle,
+      icon: 'restart',
+      accessories: version ? [{ text: version }] : [],
+      primaryAction: unsupported ? undefined : primaryAction,
+      actionPanel: unsupported ? undefined : { sections: [{ actions: [primaryAction] }] },
+    }],
+  }
+}
+
+async function checkForUpdatesView() {
+  await checkForUpdates('manual', { download: true })
+  return { view: updateStatusView(), navigation: 'replace' }
+}
+
+async function downloadUpdateView() {
+  await downloadAvailableUpdate()
+  return { view: updateStatusView(), navigation: 'replace' }
+}
+
+function installDownloadedUpdate() {
+  if (!updateDownloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
+  app.isQuiting = true
+  autoUpdater.quitAndInstall()
+}
+
 function settingsView() {
   return {
     type: 'list',
@@ -1053,6 +1140,12 @@ async function executeAction(action, options = {}) {
       return { view: clipboardHistoryView() }
     case 'app-settings':
       return { view: settingsView() }
+    case 'check-for-updates':
+      return checkForUpdatesView()
+    case 'download-update':
+      return downloadUpdateView()
+    case 'install-update':
+      return installDownloadedUpdate()
     case 'open-keyboard-settings':
       await openSystemKeyboardSettings()
       return
