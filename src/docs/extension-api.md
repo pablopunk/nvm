@@ -100,6 +100,8 @@ Current `ctx` namespaces:
 - `ctx.actions.background(title, async (ctx) => { ... })` for fire-and-forget custom work that should dismiss the palette immediately and does not need follow-up UI. Command entries can set `background: true` or `dismissAfterRun: 'auto'` for the same command-level behavior.
 - `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
 - `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
+- `ctx.settings.definitions/get/set/toggle` for host-owned app settings exposed to first-party extension workflows
+- `ctx.actions.toggleSetting(settingId, title)` and `ctx.actions.setPaletteShortcut(title)` for declarative settings actions
 - `ctx.ai.ask(prompt, options)` for a one-shot AI call that returns text. Options may include `{ system }`.
 - `ctx.ai.session(id, options)` for a per-extension conversational AI session. The returned session supports `ask(prompt)` and `reset()`. Session ids are scoped to the extension, and options may include `{ system }`.
 - `ctx.extension.rename(title)` or `ctx.extension.rename({ title, subtitle, commandTitle, commandSubtitle })` to persistently rename the extension metadata shown in search results

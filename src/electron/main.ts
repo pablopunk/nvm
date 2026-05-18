@@ -98,7 +98,7 @@ const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension(), createSettingsExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -1603,6 +1603,28 @@ function createKeyboardShortcutsExtension() {
   }
 }
 
+function createSettingsExtension() {
+  return {
+    id: 'nevermind.settings',
+    title: 'Settings',
+    commands: [{ id: 'app-settings', actionId: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 16, run: (ctx) => ctx.ui.list({
+      type: 'list',
+      id: 'app-settings',
+      title: 'Settings',
+      presentation: 'root',
+      searchBarPlaceholder: 'Search Settings',
+      items: SETTING_DEFINITIONS.map((definition) => {
+        const value = getSetting(definition.id)
+        const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
+        const primaryAction = definition.type === 'shortcut'
+          ? ctx.actions.setPaletteShortcut('Change Shortcut', { shortcut: String(value || '') })
+          : ctx.actions.toggleSetting(definition.id, value ? 'Turn Off' : 'Turn On')
+        return { id: `setting:${definition.id}`, title: definition.title, subtitle: definition.description, icon: 'settings', accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
+      }),
+    }) }],
+  }
+}
+
 function createExtensionContext(extension, command) {
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
@@ -1652,6 +1674,8 @@ function createExtensionContext(extension, command) {
       background: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
       shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+      toggleSetting: (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'toggle-setting', settingId } }),
+      setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'record-palette-hotkey' } }),
       native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
     },
     navigation: {
@@ -1705,6 +1729,18 @@ function createExtensionContext(extension, command) {
       },
     },
     storage: createExtensionStorage(extension),
+    settings: {
+      definitions: () => SETTING_DEFINITIONS.map((definition) => ({ ...definition, value: getSetting(definition.id) })),
+      get: (id) => getSetting(id),
+      set: (id, value) => setSetting(id, value),
+      toggle: (id) => {
+        const definition = settingDefinition(id)
+        if (!definition) throw new Error(`Unknown setting: ${id}`)
+        const next = toggledSettingValue(definition, getSetting(id))
+        setSetting(id, next)
+        return next
+      },
+    },
     cache: new Map(),
     state: {},
     ai: createExtensionAi(extension),
