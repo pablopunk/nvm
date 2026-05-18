@@ -345,6 +345,8 @@ function createWindow() {
     type: process.platform === 'darwin' ? 'panel' : undefined,
     alwaysOnTop: true,
     skipTaskbar: true,
+    focusable: true,
+    fullscreenable: false,
     hasShadow: false,
     title: 'Nevermind',
     backgroundColor: '#00000000',
@@ -355,6 +357,8 @@ function createWindow() {
       sandbox: false,
     },
   })
+
+  applyPaletteWindowPolicy()
 
   win.on('blur', () => {
     if (Date.now() < ignorePaletteBlurUntil) return
@@ -419,9 +423,18 @@ function centerWindow() {
   })
 }
 
+function applyPaletteWindowPolicy() {
+  if (!win || process.platform !== 'darwin') return
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  win.setFullScreenable(false)
+  win.setSkipTaskbar(true)
+}
+
 function showPalette(options = {}) {
   if (!win) return
   ignorePaletteBlurUntil = Date.now() + 500
+  applyPaletteWindowPolicy()
   debugLog('showPalette', { options, visible: win.isVisible(), bounds: win.getBounds() })
   centerWindow()
   if (options.deferReveal) {
