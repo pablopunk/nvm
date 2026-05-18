@@ -76,13 +76,20 @@ export function clipboardItemSubtitle(item: ClipboardHistoryItem) {
   return `Copied ${when}`
 }
 
-export function clipboardFilePath(clipboard: Clipboard) {
+export function clipboardFilePaths(clipboard: Clipboard) {
   const candidates = [clipboard.readBuffer('public.file-url').toString('utf8'), clipboard.readText()]
+  const paths: string[] = []
   for (const candidate of candidates) {
-    const value = String(candidate || '').replace(/\0/g, '').trim().split(/\r?\n/)[0]
-    if (!value) continue
-    if (value.startsWith('file://')) return decodeURIComponent(new URL(value).pathname)
-    if (path.isAbsolute(value)) return value
+    for (const raw of String(candidate || '').replace(/\0/g, '').trim().split(/\r?\n/)) {
+      const value = raw.trim()
+      if (!value) continue
+      if (value.startsWith('file://')) paths.push(decodeURIComponent(new URL(value).pathname))
+      else if (path.isAbsolute(value)) paths.push(value)
+    }
   }
-  return null
+  return Array.from(new Set(paths))
+}
+
+export function clipboardFilePath(clipboard: Clipboard) {
+  return clipboardFilePaths(clipboard)[0] || null
 }

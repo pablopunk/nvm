@@ -21,7 +21,7 @@ export function osLabel() {
   return osDependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux')
 }
 
-const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'applescript', 'app-icons', 'open-with', 'frontmost-paste', 'keyboard-settings', 'window-panel-policy'])
+const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'selected-text', 'frontmost-app', 'applescript', 'app-icons', 'open-with', 'frontmost-paste', 'keyboard-settings', 'window-panel-policy'])
 
 export function hasCapability(capability: string) {
   if (macOnlyCapabilities.has(capability)) return osDependent({ darwin: true }, false)
@@ -188,8 +188,49 @@ export function watchApps(onChange: () => void) {
   return watchers
 }
 
+function runAppleScript(script: string, timeout = 30_000) {
+  return new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
+    if (!hasCapability('applescript')) return resolve({ stdout: '', stderr: 'AppleScript is not available on this OS', exitCode: 1 })
+    execFile('osascript', ['-e', script], { timeout }, (error, stdout, stderr) => resolve({ stdout, stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
+  })
+}
+
 export function pasteIntoFrontmostApp() {
   return osFunction({ darwin: () => execFile('osascript', ['-e', 'tell application "System Events" to keystroke "v" using command down'], () => {}) })()
+}
+
+export async function selectedFilePaths() {
+  return osFunction({
+    darwin: async () => {
+      const script = 'set AppleScript\'s text item delimiters to linefeed\ntell application "Finder" to get POSIX path of (selection as alias list) as text'
+      const result = await runAppleScript(script)
+      if (result.exitCode !== 0) return []
+      return result.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
+    },
+  }, async () => [])()
+}
+
+export async function selectedText() {
+  return osFunction({
+    darwin: async () => {
+      const script = 'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\ntry\nset selectedText to value of attribute "AXSelectedText" of focused UI element of frontProcess\nif selectedText is missing value then return ""\nreturn selectedText as text\non error\nreturn ""\nend try\nend tell'
+      const result = await runAppleScript(script, 5_000)
+      const text = result.stdout.trim()
+      return text || null
+    },
+  }, async () => null)()
+}
+
+export async function frontmostApp() {
+  return osFunction({
+    darwin: async () => {
+      const script = 'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\nset appName to name of frontProcess\nset appBundle to bundle identifier of frontProcess\ntry\nset appPath to POSIX path of (file of frontProcess as alias)\non error\nset appPath to ""\nend try\nreturn appName & linefeed & appBundle & linefeed & appPath\nend tell'
+      const result = await runAppleScript(script, 5_000)
+      if (result.exitCode !== 0) return null
+      const [name, bundleId, appPath] = result.stdout.split(/\r?\n/)
+      return name ? { name, bundleId: bundleId || null, path: appPath || null } : null
+    },
+  }, async () => null)()
 }
 
 function detached(command: string, args: string[] = []) {

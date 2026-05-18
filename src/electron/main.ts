@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { builtInActions } from './builtin-actions'
-import { clipboardFilePath as readClipboardFilePath, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
+import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
@@ -15,7 +15,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, executeSystemBuiltin, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 
@@ -1421,15 +1421,41 @@ async function openPathWithApp(filePath, appPath) {
   else await shell.openPath(resolvedPath)
 }
 
-async function selectedInFinder() {
-  if (!hasCapability('selected-files')) return []
-  const script = 'tell application "Finder" to get POSIX path of (selection as alias list)'
-  return new Promise((resolve) => {
-    execFile('osascript', ['-e', script], (error, stdout) => {
-      if (error) return resolve([])
-      Promise.all(stdout.split(', ').map((item) => item.trim()).filter(Boolean).map(fileToExtensionFile)).then(resolve)
-    })
-  })
+async function selectedFiles() {
+  const paths = await selectedFilePaths()
+  return Promise.all(paths.map(fileToExtensionFile))
+}
+
+async function clipboardFiles() {
+  return Promise.all(clipboardFilePaths(clipboard).map(fileToExtensionFile))
+}
+
+function clipboardImageDataUrl() {
+  const image = clipboard.readImage()
+  return image.isEmpty() ? null : image.toDataURL()
+}
+
+async function readDesktopClipboard() {
+  const files = await clipboardFiles()
+  if (files.length) return { type: 'files', files }
+  const image = clipboardImageDataUrl()
+  if (image) return { type: 'image', image }
+  const text = clipboard.readText()
+  return text ? { type: 'text', text } : { type: 'empty' }
+}
+
+function writeDesktopClipboard(item) {
+  if (typeof item === 'string') return clipboard.writeText(item)
+  if (item?.type === 'text' || item?.text != null) return clipboard.writeText(String(item.text || ''))
+  const image = item?.image || item?.imageDataUrl || item?.path
+  if (item?.type === 'image' || image) {
+    return String(image || '').startsWith('data:') ? clipboard.writeImage(nativeImage.createFromDataURL(image)) : clipboard.writeImage(nativeImage.createFromPath(expandUserPath(image)))
+  }
+}
+
+async function readDesktopSelection() {
+  const [text, files, app] = await Promise.all([selectedText(), selectedFiles(), frontmostApp()])
+  return { text, files, sourceApp: app }
 }
 
 function extensionStoragePath(extension) {
@@ -1544,63 +1570,49 @@ function createExtensionContext(extension, command) {
       pop: () => ({ navigation: 'pop' }),
       run: (action) => ({ action }),
     },
-    clipboard: {
-      readText: () => clipboard.readText(),
-      writeText: (text) => clipboard.writeText(String(text || '')),
-      readImage: () => clipboard.readImage().toDataURL(),
-      writeImage: (imageDataUrl) => clipboard.writeImage(nativeImage.createFromDataURL(imageDataUrl)),
-    },
-    files: {
-      find: findFiles,
-      findImages: (roots, options) => findFiles(roots, { ...options, kind: 'image' }),
-      findVideos: (roots, options) => findFiles(roots, { ...options, kind: 'video' }),
-      findMedia: (roots, options) => findFiles(roots, { ...options, kind: 'media' }),
-      selectedInFinder,
-      openWithApps,
-      open: (filePath) => shell.openPath(expandUserPath(filePath)),
-      readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
-      toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
-    },
-    apps: {
-      launch: (appPath) => shell.openPath(expandUserPath(appPath)),
-      frontmost: () => null,
-    },
-    shell: {
-      openExternal: (url) => shell.openExternal(url),
-      exec: (command, args = [], options: any = {}) => new Promise((resolve) => {
-        const child = spawn(String(command), Array.isArray(args) ? args.map(String) : [], {
-          cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
-          env: { ...process.env, ...(options.env || {}) },
-          shell: Boolean(options.shell),
-          timeout: Number(options.timeout || 30_000),
-        })
-        let stdout = ''
-        let stderr = ''
-        child.stdout?.on('data', (chunk) => { stdout = limitedOutput(stdout + chunk.toString(), options.outputLimit) })
-        child.stderr?.on('data', (chunk) => { stderr = limitedOutput(stderr + chunk.toString(), options.outputLimit) })
-        child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
-        child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
-      }),
-      script: (script, options: any = {}) => new Promise((resolve) => {
-        const child = spawn(options.shell || '/bin/bash', ['-lc', String(script)], {
-          cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
-          env: { ...process.env, ...(options.env || {}) },
-          timeout: Number(options.timeout || 30_000),
-        })
-        let stdout = ''
-        let stderr = ''
-        child.stdout?.on('data', (chunk) => { stdout = limitedOutput(stdout + chunk.toString(), options.outputLimit) })
-        child.stderr?.on('data', (chunk) => { stderr = limitedOutput(stderr + chunk.toString(), options.outputLimit) })
-        child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
-        child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
-      }),
-      appleScript: (script, options: any = {}) => new Promise((resolve) => {
-        if (!hasCapability('applescript')) return resolve({ stdout: '', stderr: 'AppleScript is not available on this OS', exitCode: 1 })
-        execFile('osascript', ['-e', String(script)], { timeout: Number(options.timeout || 30_000) }, (error, stdout, stderr) => resolve({ stdout: limitedOutput(stdout, options.outputLimit), stderr: limitedOutput(stderr || error?.message || '', options.outputLimit), exitCode: error ? 1 : 0 }))
-      }),
-      which: (command) => new Promise((resolve) => {
-        execFile('/usr/bin/which', [String(command)], (error, stdout, stderr) => resolve({ stdout: stdout.trim(), stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
-      }),
+    desktop: {
+      clipboard: {
+        readText: () => clipboard.readText(),
+        writeText: (text) => clipboard.writeText(String(text || '')),
+        readImage: clipboardImageDataUrl,
+        writeImage: (image) => writeDesktopClipboard({ type: 'image', image }),
+        readFiles: clipboardFiles,
+        read: readDesktopClipboard,
+        write: writeDesktopClipboard,
+      },
+      selection: {
+        text: selectedText,
+        files: selectedFiles,
+        read: readDesktopSelection,
+      },
+      apps: {
+        frontmost: frontmostApp,
+        launch: (appPath) => shell.openPath(expandUserPath(appPath)),
+      },
+      files: {
+        find: findFiles,
+        findImages: (roots, options) => findFiles(roots, { ...options, kind: 'image' }),
+        findVideos: (roots, options) => findFiles(roots, { ...options, kind: 'video' }),
+        findMedia: (roots, options) => findFiles(roots, { ...options, kind: 'media' }),
+        openWithApps,
+        open: (filePath) => shell.openPath(expandUserPath(filePath)),
+        reveal: (filePath) => shell.showItemInFolder(expandUserPath(filePath)),
+        preview: quickLookPath,
+        readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
+        toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
+      },
+      shell: {
+        openExternal: (url) => shell.openExternal(url),
+        exec: runShellCommand,
+        script: runShellScript,
+        appleScript: (script, options: any = {}) => new Promise((resolve) => {
+          if (!hasCapability('applescript')) return resolve({ stdout: '', stderr: 'AppleScript is not available on this OS', exitCode: 1 })
+          execFile('osascript', ['-e', String(script)], { timeout: Number(options.timeout || 30_000) }, (error, stdout, stderr) => resolve({ stdout: limitedOutput(stdout, options.outputLimit), stderr: limitedOutput(stderr || error?.message || '', options.outputLimit), exitCode: error ? 1 : 0 }))
+        }),
+        which: (command) => new Promise((resolve) => {
+          execFile('/usr/bin/which', [String(command)], (error, stdout, stderr) => resolve({ stdout: stdout.trim(), stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
+        }),
+      },
     },
     storage: createExtensionStorage(extension),
     cache: new Map(),

@@ -408,10 +408,16 @@ function capabilities() {
     shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
-    namespaces: ['clipboard', 'files', 'apps', 'shell', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
+    namespaces: ['desktop', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
-    shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
-    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'selectedInFinder', 'openWithApps', 'open', 'readText', 'toFileUrl'],
+    desktop: {
+      clipboard: ['readText', 'writeText', 'readImage', 'writeImage', 'readFiles', 'read', 'write'],
+      selection: ['text', 'files', 'read'],
+      apps: ['frontmost', 'launch'],
+      files: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl'],
+      shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
+    },
+    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl'],
     findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
     fileKinds: ['image', 'video', 'media'],
     sortBy: ['recent', 'modified', 'added', 'created', 'name', 'size'],
@@ -440,7 +446,7 @@ validate_extension can be used to syntax-check changed extension files after wri
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
-For image grids, use file.url from ctx.files.findImages() or ctx.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
+For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
 Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.ui.webview for custom live/interactive browser UI; set size: 'large' when it needs a larger palette. Use ctx.actions.run for script work triggered from UI.

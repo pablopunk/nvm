@@ -15,7 +15,7 @@ module.exports = {
       icon: 'grid',
       permissions: ['files:read', 'ui:grid'],
       async run(ctx) {
-        const images = await ctx.files.findImages(['~/Downloads', '~/Desktop'], { limit: 48 })
+        const images = await ctx.desktop.files.findImages(['~/Downloads', '~/Desktop'], { limit: 48 })
         return ctx.ui.grid({
           title: 'Images',
           items: images.map((file) => ({
@@ -86,8 +86,11 @@ Commands can return:
 
 Current `ctx` namespaces:
 
-- `ctx.clipboard.readText/writeText/readImage/writeImage`
-- `ctx.files.find/findImages/findVideos/findMedia/selectedInFinder/openWithApps/open/readText/toFileUrl`
+- `ctx.desktop.clipboard.readText/writeText/readImage/writeImage/readFiles/read/write`
+- `ctx.desktop.selection.text/files/read` for current desktop selection such as selected text or selected files
+- `ctx.desktop.apps.frontmost/launch`
+- `ctx.desktop.files.find/findImages/findVideos/findMedia/openWithApps/open/reveal/preview/readText/toFileUrl`
+- `ctx.desktop.shell.openExternal`, `ctx.desktop.shell.exec(command, args, options)`, `ctx.desktop.shell.script(script, options)`, `ctx.desktop.shell.appleScript(script, options)`, and `ctx.desktop.shell.which(command)` for controlled system work. Shell helpers return `{ stdout, stderr, exitCode }` and default to a 30s timeout.
 - `ctx.actions.openPath/revealPath/quickLook/openWith/openUrl/copyText/pasteText/copyImage/trash` (optional final `{ shortcut: 'Command+Y' }` for local shortcuts). `quickLook` opens native macOS Quick Look and reports an error on other platforms. `trash` is destructive and requires confirmation by default.
 - Shortcuts have two scopes: action shortcuts inside views are local by default; command-level shortcuts are global when declared as `globalShortcut` or `{ shortcut, shortcutScope: 'global' }`. User-assigned global shortcuts always win over extension defaults.
 - `ctx.actions.push(title, view, { shortcut })`, `ctx.actions.replace(title, view, { shortcut })`, `ctx.actions.pop(title, { shortcut })` for nested native navigation
@@ -96,22 +99,20 @@ Current `ctx` namespaces:
 - `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return a `ctx.navigation.*` result, another view, another action to execute, `{ view }`, `{ action }`, or `{ toast }`.
 - `ctx.actions.background(title, async (ctx) => { ... })` for fire-and-forget custom work that should dismiss the palette immediately and does not need follow-up UI. Command entries can set `background: true` or `dismissAfterRun: 'auto'` for the same command-level behavior.
 - `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
-- `ctx.apps.launch/frontmost`
-- `ctx.shell.openExternal`, `ctx.shell.exec(command, args, options)`, `ctx.shell.script(script, options)`, `ctx.shell.appleScript(script, options)`, and `ctx.shell.which(command)` for controlled system work. Shell helpers return `{ stdout, stderr, exitCode }` and default to a 30s timeout.
 - `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
 - `ctx.extension.rename(title)` or `ctx.extension.rename({ title, subtitle, commandTitle, commandSubtitle })` to persistently rename the extension metadata shown in search results
 - `ctx.ui.item/actions/empty/loading/error` helpers
 - `ctx.cache`, `ctx.state`, `ctx.ai` placeholders
 
-`ctx.files.find(roots, options)` supports `{ limit, depth, extensions, kind, pattern, sortBy, order }`, where `kind` can be `image`, `video`, or `media`, and `sortBy` can be `recent`/`modified`, `added`/`created`, `name`, or `size`. Convenience helpers `findImages`, `findVideos`, and `findMedia` call the same implementation. Returned files include `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`. For grid videos, use `video: file.videoUrl` and `image: file.thumbnailUrl` to show a playable looping preview with a poster frame.
+`ctx.desktop.files.find(roots, options)` supports `{ limit, depth, extensions, kind, pattern, sortBy, order }`, where `kind` can be `image`, `video`, or `media`, and `sortBy` can be `recent`/`modified`, `added`/`created`, `name`, or `size`. Convenience helpers `findImages`, `findVideos`, and `findMedia` call the same implementation. Returned files include `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`. For grid videos, use `video: file.videoUrl` and `image: file.thumbnailUrl` to show a playable looping preview with a poster frame.
 
-Use `await ctx.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
+Use `await ctx.desktop.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
 
 `ctx.storage` is scoped per extension file/identity, not per AI chat. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires:
 
 ```js
 const files = await ctx.storage.memo('recent-media', 60_000, () =>
-  ctx.files.findMedia(['~/Documents/CleanShot X'], { sortBy: 'recent', limit: 200 })
+  ctx.desktop.files.findMedia(['~/Documents/CleanShot X'], { sortBy: 'recent', limit: 200 })
 )
 ```
 
