@@ -98,7 +98,7 @@ const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -631,35 +631,8 @@ async function searchActions(query, options: any = {}) {
   }
 
   const results = []
-  const url = getUrlFromQuery(q)
-  const mathResult = q ? calculate(q) : null
   const updateAction = q ? null : updatePromptAction()
   if (updateAction) results.push(updateAction)
-
-  if (url) {
-    results.push({
-      id: `open-url:${url}`,
-      kind: 'open-url',
-      title: `Open ${url.replace(/^https?:\/\//, '')}`,
-      subtitle: 'Open website',
-      url,
-      icon: 'globe',
-      score: 100,
-    })
-  }
-
-  if (mathResult !== null) {
-    results.push({
-      id: `calculate:${q}`,
-      kind: 'calculate',
-      title: `${q} = ${mathResult}`,
-      subtitle: 'Copy result to clipboard',
-      query: q,
-      result: mathResult,
-      icon: 'calculator',
-      score: 105,
-    })
-  }
 
   const aiChatsAction = rankAction(withShortcutHint({
     id: 'ai-chats',
@@ -748,7 +721,8 @@ async function searchActions(query, options: any = {}) {
     }
   }
 
-  if (q && !url && mathResult === null) {
+  const hasDirectAnswer = results.some((item) => item.kind === 'open-url' || item.kind === 'calculate')
+  if (q && !hasDirectAnswer) {
     results.push({
       id: `ai:${q}`,
       kind: 'ai-placeholder',
@@ -757,18 +731,6 @@ async function searchActions(query, options: any = {}) {
       query: q,
       icon: 'bolt',
       score: 40,
-    })
-  }
-
-  if (q) {
-    results.push({
-      id: `web-search:${q}`,
-      kind: 'web-search',
-      title: `Search the web for "${q}"`,
-      subtitle: 'Search instead',
-      query: q,
-      icon: 'search',
-      score: 10 + usageBoost(`web-search:${q}`) + recentBoost(`web-search:${q}`),
     })
   }
 
@@ -1557,6 +1519,39 @@ function createCoreExtension() {
       score: action.score,
       run: (ctx) => ctx.navigation.run(ctx.actions.native(action.title, action)),
     })),
+  }
+}
+
+function createCalculatorExtension() {
+  return {
+    id: 'nevermind.calculator',
+    title: 'Calculator',
+    commands: [],
+    searchItems(_ctx, query) {
+      const result = query ? calculate(query) : null
+      if (result === null) return []
+      const action = { id: `calculate:${query}`, kind: 'calculate', title: `${query} = ${result}`, subtitle: 'Copy result to clipboard', query, result, icon: 'calculator', score: 105 }
+      return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+    },
+  }
+}
+
+function createWebSearchExtension() {
+  return {
+    id: 'nevermind.web',
+    title: 'Web',
+    commands: [],
+    searchItems(_ctx, query) {
+      const q = String(query || '').trim()
+      if (!q) return []
+      const url = getUrlFromQuery(q)
+      if (url) {
+        const action = { id: `open-url:${url}`, kind: 'open-url', title: `Open ${url.replace(/^https?:\/\//, '')}`, subtitle: 'Open website', url, icon: 'globe', score: 100 }
+        return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+      }
+      const action = { id: `web-search:${q}`, kind: 'web-search', title: `Search the web for "${q}"`, subtitle: 'Search instead', query: q, icon: 'search', score: 10 + usageBoost(`web-search:${q}`) + recentBoost(`web-search:${q}`) }
+      return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+    },
   }
 }
 
