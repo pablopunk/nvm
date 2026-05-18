@@ -10,138 +10,11 @@ import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
+import { createUpdateManager } from './update-manager'
 
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
-
-let updateCheckInFlight = false
-let updateDownloadInFlight = false
-let updateStartupTimer = null
-let updatePollTimer = null
-let updateStatus = 'idle'
-let updateAvailableInfo = null
-let updateDownloadedInfo = null
-let updateErrorMessage = ''
-const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000
-const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000
-
-function canUseAutoUpdates() {
-  if (!app.isPackaged) return false
-  if (process.platform === 'darwin') return true
-  if (process.platform === 'linux') return Boolean(process.env.APPIMAGE)
-  return false
-}
-
-async function checkForUpdates(trigger = 'manual', options = {}) {
-  if (!canUseAutoUpdates()) {
-    updateStatus = 'unsupported'
-    return null
-  }
-  if (updateDownloadedInfo) return updateDownloadedInfo
-  if (updateCheckInFlight || updateDownloadInFlight) return updateAvailableInfo || updateDownloadedInfo
-  updateCheckInFlight = true
-  updateStatus = 'checking'
-  updateErrorMessage = ''
-  try {
-    console.info(`[nvm-updater] checking for updates (${trigger})`)
-    const result = await autoUpdater.checkForUpdates()
-    if (options.download && result?.updateInfo && !updateDownloadedInfo) await downloadAvailableUpdate(result.updateInfo)
-    return result?.updateInfo || null
-  } catch (error) {
-    updateStatus = 'error'
-    updateErrorMessage = error?.message || String(error)
-    console.error('[nvm-updater] update check failed', error)
-    return null
-  } finally {
-    updateCheckInFlight = false
-    if (updateStatus === 'checking') updateStatus = updateAvailableInfo ? 'available' : 'idle'
-  }
-}
-
-async function downloadAvailableUpdate(info = updateAvailableInfo) {
-  if (!canUseAutoUpdates() || updateDownloadInFlight || updateDownloadedInfo) return
-  updateAvailableInfo = info || updateAvailableInfo
-  updateDownloadInFlight = true
-  updateStatus = 'downloading'
-  updateErrorMessage = ''
-  try {
-    await autoUpdater.downloadUpdate()
-  } catch (error) {
-    updateStatus = 'error'
-    updateErrorMessage = error?.message || String(error)
-    console.error('[nvm-updater] update download failed', error)
-  } finally {
-    updateDownloadInFlight = false
-    if (updateStatus === 'downloading') updateStatus = updateDownloadedInfo ? 'downloaded' : updateAvailableInfo ? 'available' : 'idle'
-  }
-}
-
-function clearUpdateTimers() {
-  if (updateStartupTimer) {
-    clearTimeout(updateStartupTimer)
-    updateStartupTimer = null
-  }
-  if (updatePollTimer) {
-    clearInterval(updatePollTimer)
-    updatePollTimer = null
-  }
-}
-
-function configureAutoUpdater() {
-  if (!canUseAutoUpdates()) {
-    console.info('[nvm-updater] disabled (development build or unsupported platform)')
-    return
-  }
-
-  autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = false
-
-  autoUpdater.on('checking-for-update', () => {
-    updateStatus = 'checking'
-    console.info('[nvm-updater] checking for update')
-  })
-
-  autoUpdater.on('update-available', (info) => {
-    updateAvailableInfo = info
-    updateStatus = 'available'
-    console.info(`[nvm-updater] update available ${info.version}`)
-  })
-
-  autoUpdater.on('update-not-available', () => {
-    updateAvailableInfo = null
-    updateDownloadedInfo = null
-    updateStatus = 'idle'
-    console.info('[nvm-updater] no updates available')
-  })
-
-  autoUpdater.on('download-progress', (progress) => {
-    console.info(`[nvm-updater] download progress ${Math.floor(progress.percent)}%`)
-  })
-
-  autoUpdater.on('update-downloaded', (info) => {
-    updateDownloadedInfo = info
-    updateAvailableInfo = info
-    updateStatus = 'downloaded'
-    console.info(`[nvm-updater] update downloaded ${info.version}`)
-  })
-
-  autoUpdater.on('error', (error) => {
-    updateStatus = 'error'
-    updateErrorMessage = error?.message || String(error)
-    console.error('[nvm-updater] updater error', error)
-  })
-
-  updateStartupTimer = setTimeout(() => {
-    updateStartupTimer = null
-    void checkForUpdates('startup')
-  }, AUTO_UPDATE_STARTUP_DELAY_MS)
-  updateStartupTimer.unref?.()
-
-  updatePollTimer = setInterval(() => {
-    void checkForUpdates('poll')
-  }, AUTO_UPDATE_POLL_INTERVAL_MS)
-  updatePollTimer.unref?.()
-}
+const updateManager = createUpdateManager(autoUpdater)
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const DEFAULT_PALETTE_HOTKEY = 'Alt+Space'
@@ -898,22 +771,22 @@ function isNewerVersion(version, current = app.getVersion()) {
 }
 
 function updateStatusView() {
-  const downloadedInfo = isNewerVersion(updateDownloadedInfo?.version) ? updateDownloadedInfo : null
-  const availableInfo = isNewerVersion(updateAvailableInfo?.version) ? updateAvailableInfo : null
+  const downloadedInfo = isNewerVersion(updateManager.state.downloadedInfo?.version) ? updateManager.state.downloadedInfo : null
+  const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   const version = downloadedInfo?.version || availableInfo?.version
-  const unsupported = updateStatus === 'unsupported' || !canUseAutoUpdates()
+  const unsupported = updateManager.state.status === 'unsupported' || !updateManager.canUseAutoUpdates()
   const primaryAction = downloadedInfo
     ? { type: 'nativeAction', title: 'Install and Restart', nativeAction: { kind: 'install-update' } }
     : availableInfo
-      ? { type: 'nativeAction', title: updateDownloadInFlight ? 'Downloading…' : 'Download Update', nativeAction: { kind: 'download-update' } }
-      : { type: 'nativeAction', title: updateCheckInFlight ? 'Checking…' : 'Check Again', nativeAction: { kind: 'check-for-updates' } }
+      ? { type: 'nativeAction', title: updateManager.state.downloadInFlight ? 'Downloading…' : 'Download Update', nativeAction: { kind: 'download-update' } }
+      : { type: 'nativeAction', title: updateManager.state.checkInFlight ? 'Checking…' : 'Check Again', nativeAction: { kind: 'check-for-updates' } }
   const title = unsupported
     ? 'Updates unavailable'
     : downloadedInfo
       ? `Nevermind ${version} is ready`
       : availableInfo
         ? `Nevermind ${version} is available`
-        : updateStatus === 'error'
+        : updateManager.state.status === 'error'
           ? 'Update check failed'
           : 'No versions available'
   const subtitle = unsupported
@@ -922,8 +795,8 @@ function updateStatusView() {
       ? 'Install the downloaded update and restart Nevermind'
       : availableInfo
         ? 'Download the update before installing it'
-        : updateStatus === 'error'
-          ? updateErrorMessage
+        : updateManager.state.status === 'error'
+          ? updateManager.state.errorMessage
           : `Current version: ${app.getVersion()}`
   return {
     type: 'list',
@@ -944,19 +817,19 @@ function updateStatusView() {
 }
 
 async function checkForUpdatesView() {
-  await checkForUpdates('manual', { download: true })
+  await updateManager.checkForUpdates('manual', { download: true })
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
 async function downloadUpdateView() {
-  await downloadAvailableUpdate()
+  await updateManager.downloadAvailableUpdate()
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
 function installDownloadedUpdate() {
-  if (!updateDownloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
+  if (!updateManager.state.downloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
   app.isQuiting = true
-  autoUpdater.quitAndInstall()
+  updateManager.quitAndInstall()
 }
 
 function settingsView() {
@@ -986,8 +859,8 @@ function settingsView() {
 }
 
 function updatePromptAction() {
-  const downloadedInfo = isNewerVersion(updateDownloadedInfo?.version) ? updateDownloadedInfo : null
-  const availableInfo = isNewerVersion(updateAvailableInfo?.version) ? updateAvailableInfo : null
+  const downloadedInfo = isNewerVersion(updateManager.state.downloadedInfo?.version) ? updateManager.state.downloadedInfo : null
+  const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   const version = downloadedInfo?.version || availableInfo?.version
   if (downloadedInfo) {
     return {
@@ -1004,7 +877,7 @@ function updatePromptAction() {
       id: 'builtin:download-update',
       kind: 'download-update',
       title: `Download Nevermind ${version}`,
-      subtitle: updateDownloadInFlight ? 'Downloading update…' : 'Update available',
+      subtitle: updateManager.state.downloadInFlight ? 'Downloading update…' : 'Update available',
       icon: 'restart',
       score: 1_000,
     }
@@ -2801,7 +2674,7 @@ app.whenReady().then(async () => {
   }
   registerLocalFileProtocol()
   installPermissionHandlers()
-  configureAutoUpdater()
+  updateManager.configure()
 
   await loadUserState()
   await loadExtensions()
@@ -2850,7 +2723,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   app.isQuiting = true
   if (app.isReady()) globalShortcut.unregisterAll()
-  clearUpdateTimers()
+  updateManager.clearTimers()
   for (const watcher of appWatchers) watcher.close()
 })
 
