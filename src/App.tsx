@@ -461,6 +461,23 @@ export function App() {
     extensionNavigation.showView(view, navigation)
   }
 
+  function showUpdateLoadingView() {
+    showExtensionView({
+      type: 'list',
+      id: 'app-updates',
+      title: 'Updates',
+      presentation: 'root',
+      searchBarPlaceholder: 'Search Updates',
+      isLoading: true,
+      items: [{
+        id: 'update-status-loading',
+        title: 'Checking for updates…',
+        subtitle: 'Looking for a newer Nevermind version',
+        icon: 'restart',
+      }],
+    }, 'root')
+  }
+
   function popExtensionView() {
     setExtensionItemOptionsFor(null)
     lastLocalShortcutRef.current = null
@@ -528,6 +545,7 @@ export function App() {
       await openShortcutManager()
       return
     }
+    if (action.kind === 'check-for-updates') showUpdateLoadingView()
     if (rootActionCanDismissImmediately(action)) window.nvm.hide()
     const result = await window.nvm.execute(action)
     if (result?.view) {

@@ -258,7 +258,7 @@ const BUILT_IN_ACTIONS = [
     id: 'builtin:check-for-updates',
     kind: 'check-for-updates',
     title: 'Check for Updates',
-    subtitle: 'Install the latest Nevermind release',
+    subtitle: `Current version: ${app.getVersion()}`,
     icon: 'restart',
     score: 23,
   },
@@ -880,28 +880,47 @@ function clipboardHistoryView() {
   }
 }
 
+function versionParts(version) {
+  return String(version || '').split(/[.-]/).map((part) => Number.parseInt(part, 10)).map((part) => Number.isFinite(part) ? part : 0)
+}
+
+function isNewerVersion(version, current = app.getVersion()) {
+  const nextParts = versionParts(version)
+  const currentParts = versionParts(current)
+  const length = Math.max(nextParts.length, currentParts.length)
+  for (let index = 0; index < length; index += 1) {
+    const next = nextParts[index] || 0
+    const existing = currentParts[index] || 0
+    if (next > existing) return true
+    if (next < existing) return false
+  }
+  return false
+}
+
 function updateStatusView() {
-  const version = updateDownloadedInfo?.version || updateAvailableInfo?.version
+  const downloadedInfo = isNewerVersion(updateDownloadedInfo?.version) ? updateDownloadedInfo : null
+  const availableInfo = isNewerVersion(updateAvailableInfo?.version) ? updateAvailableInfo : null
+  const version = downloadedInfo?.version || availableInfo?.version
   const unsupported = updateStatus === 'unsupported' || !canUseAutoUpdates()
-  const primaryAction = updateDownloadedInfo
+  const primaryAction = downloadedInfo
     ? { type: 'nativeAction', title: 'Install and Restart', nativeAction: { kind: 'install-update' } }
-    : updateAvailableInfo
+    : availableInfo
       ? { type: 'nativeAction', title: updateDownloadInFlight ? 'Downloading…' : 'Download Update', nativeAction: { kind: 'download-update' } }
       : { type: 'nativeAction', title: updateCheckInFlight ? 'Checking…' : 'Check Again', nativeAction: { kind: 'check-for-updates' } }
   const title = unsupported
     ? 'Updates unavailable'
-    : updateDownloadedInfo
+    : downloadedInfo
       ? `Nevermind ${version} is ready`
-      : updateAvailableInfo
+      : availableInfo
         ? `Nevermind ${version} is available`
         : updateStatus === 'error'
           ? 'Update check failed'
-          : 'Nevermind is up to date'
+          : 'No versions available'
   const subtitle = unsupported
     ? 'Automatic updates only run from packaged macOS builds or Linux AppImages'
-    : updateDownloadedInfo
+    : downloadedInfo
       ? 'Install the downloaded update and restart Nevermind'
-      : updateAvailableInfo
+      : availableInfo
         ? 'Download the update before installing it'
         : updateStatus === 'error'
           ? updateErrorMessage
@@ -967,8 +986,10 @@ function settingsView() {
 }
 
 function updatePromptAction() {
-  const version = updateDownloadedInfo?.version || updateAvailableInfo?.version
-  if (updateDownloadedInfo) {
+  const downloadedInfo = isNewerVersion(updateDownloadedInfo?.version) ? updateDownloadedInfo : null
+  const availableInfo = isNewerVersion(updateAvailableInfo?.version) ? updateAvailableInfo : null
+  const version = downloadedInfo?.version || availableInfo?.version
+  if (downloadedInfo) {
     return {
       id: 'builtin:install-update',
       kind: 'install-update',
@@ -978,7 +999,7 @@ function updatePromptAction() {
       score: 1_000,
     }
   }
-  if (updateAvailableInfo) {
+  if (availableInfo) {
     return {
       id: 'builtin:download-update',
       kind: 'download-update',
