@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
 
-const require = createRequire(import.meta.url)
+const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
 
 let updateCheckInFlight = false
@@ -2049,8 +2049,8 @@ async function loadExtensions() {
     if (!entry.isFile() || !entry.name.endsWith('.cjs')) continue
     const fullPath = path.join(extensionsDir, entry.name)
     try {
-      delete require.cache[require.resolve(fullPath)]
-      const extension = require(fullPath)
+      delete extensionRequire.cache[extensionRequire.resolve(fullPath)]
+      const extension = extensionRequire(fullPath)
       extension.__filePath = fullPath
       extension.__generated = true
       const chat = Object.values(userState.aiChats || {}).find((item) => item.generatedExtensionFile === entry.name)
