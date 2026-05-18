@@ -10,3 +10,7 @@
 </p>
 
 _*In the screenshot above, Screenshots and Open Camera were extensions done by our AI. Not builtin. That's all you need to know._
+
+## License
+
+Nevermind is licensed under the [GNU General Public License v3.0](LICENSE).

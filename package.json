@@ -3,6 +3,7 @@
   "version": "0.1.10",
   "description": "Nevermind: an AI-native command palette for your desktop",
   "author": "Pablo Varela",
+  "license": "GPL-3.0-only",
   "private": true,
   "type": "module",
   "main": "dist/main/main.js",

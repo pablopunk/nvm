@@ -7,6 +7,7 @@ files:
   - dist/**
   - src/docs/**
   - src/resources/**
+  - LICENSE
   - package.json
   - '!**/*.map'
   - '!node_modules/**/{test,tests,__tests__,docs,example,examples}/**'
