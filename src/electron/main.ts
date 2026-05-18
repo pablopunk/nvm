@@ -13,6 +13,7 @@ import { createNevermindAi } from './ai'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { createUpdateManager } from './update-manager'
+import { isNewerVersion as isVersionNewerThan } from './version-utils'
 
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
@@ -723,21 +724,8 @@ function clipboardHistoryView() {
   }
 }
 
-function versionParts(version) {
-  return String(version || '').split(/[.-]/).map((part) => Number.parseInt(part, 10)).map((part) => Number.isFinite(part) ? part : 0)
-}
-
-function isNewerVersion(version, current = app.getVersion()) {
-  const nextParts = versionParts(version)
-  const currentParts = versionParts(current)
-  const length = Math.max(nextParts.length, currentParts.length)
-  for (let index = 0; index < length; index += 1) {
-    const next = nextParts[index] || 0
-    const existing = currentParts[index] || 0
-    if (next > existing) return true
-    if (next < existing) return false
-  }
-  return false
+function isNewerVersion(version) {
+  return isVersionNewerThan(version, app.getVersion())
 }
 
 function updateStatusView() {
