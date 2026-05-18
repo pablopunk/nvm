@@ -1,0 +1,88 @@
+import path from 'node:path'
+import type { Clipboard } from 'electron'
+import { expandUserPath, fileUrlForPath, isVideoPath, thumbnailUrlForPath } from './file-utils'
+import { hashValue } from './search-utils'
+
+export type ClipboardHistoryItem =
+  | { id: string; type: 'text'; text: string; createdAt: number }
+  | { id: string; type: 'image'; imagePath?: string; imageDataUrl?: string; thumbnailUrl?: string; createdAt: number }
+  | { id: string; type: 'video'; filePath: string; videoUrl: string; thumbnailUrl: string; createdAt: number }
+
+export function normalizeClipboardHistory(items: unknown, limit: number, persistImage: (png: Buffer, hash: string) => string) {
+  return (Array.isArray(items) ? items : [])
+    .map((item: any): ClipboardHistoryItem | null => {
+      if (item?.type === 'image' && (item.imagePath || item.imageDataUrl)) {
+        let imagePath = item.imagePath
+        if (!imagePath && typeof item.imageDataUrl === 'string' && item.imageDataUrl.startsWith('data:')) {
+          const base64 = item.imageDataUrl.split(',', 2)[1] || ''
+          try {
+            const png = Buffer.from(base64, 'base64')
+            imagePath = persistImage(png, hashValue(png))
+          } catch {}
+        }
+        const id = item.id || (imagePath ? `image:${path.basename(imagePath, '.png')}` : `image:${hashValue(item.imageDataUrl)}`)
+        return {
+          id,
+          type: 'image',
+          imagePath,
+          imageDataUrl: imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl,
+          thumbnailUrl: item.thumbnailUrl || (imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl),
+          createdAt: item.createdAt || Date.now(),
+        }
+      }
+      if (item?.type === 'video' && item.filePath) {
+        const filePath = expandUserPath(item.filePath)
+        if (!isVideoPath(filePath)) return null
+        return {
+          id: item.id || `video:${hashValue(filePath)}`,
+          type: 'video',
+          filePath,
+          videoUrl: item.videoUrl || fileUrlForPath(filePath),
+          thumbnailUrl: item.thumbnailUrl || thumbnailUrlForPath(filePath),
+          createdAt: item.createdAt || Date.now(),
+        }
+      }
+      if (item?.text) {
+        const text = String(item.text).trim()
+        if (!text) return null
+        return {
+          id: item.id?.startsWith('text:') ? item.id : `text:${hashValue(text)}`,
+          type: 'text',
+          text,
+          createdAt: item.createdAt || Date.now(),
+        }
+      }
+      return null
+    })
+    .filter((item): item is ClipboardHistoryItem => Boolean(item))
+    .slice(0, limit)
+}
+
+export function clipboardItemTitle(item: ClipboardHistoryItem) {
+  if (item.type === 'image') return 'Clipboard image'
+  if (item.type === 'video') return path.basename(item.filePath || 'Clipboard video')
+  return item.text.length > 72 ? `${item.text.slice(0, 72)}…` : item.text
+}
+
+export function clipboardItemSubtitle(item: ClipboardHistoryItem) {
+  const when = new Date(item.createdAt || Date.now()).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  if (item.type === 'image') return `Image copied ${when}`
+  if (item.type === 'video') return `Video copied ${when}`
+  return `Copied ${when}`
+}
+
+export function clipboardFilePath(clipboard: Clipboard) {
+  const candidates = [clipboard.readBuffer('public.file-url').toString('utf8'), clipboard.readText()]
+  for (const candidate of candidates) {
+    const value = String(candidate || '').replace(/\0/g, '').trim().split(/\r?\n/)[0]
+    if (!value) continue
+    if (value.startsWith('file://')) return decodeURIComponent(new URL(value).pathname)
+    if (path.isAbsolute(value)) return value
+  }
+  return null
+}

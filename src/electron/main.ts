@@ -8,6 +8,8 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { builtInActions } from './builtin-actions'
+import { clipboardFilePath as readClipboardFilePath, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
@@ -94,108 +96,7 @@ function addWindowBlurMargin(size) {
 }
 
 const INTERNAL_EXTENSIONS = []
-
-const BUILT_IN_ACTIONS = [
-  {
-    id: 'builtin:check-for-updates',
-    kind: 'check-for-updates',
-    title: 'Check for Updates',
-    subtitle: `Current version: ${app.getVersion()}`,
-    icon: 'restart',
-    score: 23,
-  },
-  {
-    id: 'builtin:lock-screen',
-    kind: 'builtin',
-    builtin: 'lock-screen',
-    title: 'Lock Screen',
-    subtitle: 'Secure this computer',
-    icon: 'lock',
-    score: 22,
-  },
-  {
-    id: 'builtin:sleep',
-    kind: 'builtin',
-    builtin: 'sleep',
-    title: 'Sleep',
-    subtitle: 'Put this computer to sleep',
-    icon: 'moon',
-    score: 21,
-  },
-  {
-    id: 'builtin:restart',
-    kind: 'builtin',
-    builtin: 'restart',
-    title: 'Restart Computer',
-    subtitle: 'Restart this computer',
-    icon: 'restart',
-    score: 20,
-  },
-  {
-    id: 'builtin:settings',
-    kind: 'builtin',
-    builtin: 'settings',
-    title: process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings',
-    subtitle: 'Open system preferences',
-    icon: 'settings',
-    score: 19,
-  },
-  {
-    id: 'builtin:downloads',
-    kind: 'builtin',
-    builtin: 'open-path',
-    targetPath: path.join(os.homedir(), 'Downloads'),
-    title: 'Open Downloads',
-    subtitle: '~/Downloads',
-    icon: 'folder',
-    score: 18,
-  },
-  {
-    id: 'builtin:documents',
-    kind: 'builtin',
-    builtin: 'open-path',
-    targetPath: path.join(os.homedir(), 'Documents'),
-    title: 'Open Documents',
-    subtitle: '~/Documents',
-    icon: 'folder',
-    score: 17,
-  },
-  {
-    id: 'builtin:desktop',
-    kind: 'builtin',
-    builtin: 'open-path',
-    targetPath: path.join(os.homedir(), 'Desktop'),
-    title: 'Open Desktop',
-    subtitle: '~/Desktop',
-    icon: 'folder',
-    score: 16,
-  },
-  {
-    id: 'keyboard-shortcuts',
-    kind: 'keyboard-shortcuts',
-    title: 'Keyboard Shortcuts',
-    subtitle: 'View, change, or remove global shortcuts',
-    icon: 'keyboard',
-    score: 16,
-  },
-  {
-    id: 'app-settings',
-    kind: 'app-settings',
-    title: 'Settings',
-    subtitle: 'Configure Nevermind',
-    icon: 'settings',
-    score: 16,
-  },
-  {
-    id: 'builtin:quit',
-    kind: 'builtin',
-    builtin: 'quit',
-    title: 'Quit Nevermind',
-    subtitle: 'Close the app',
-    icon: 'power',
-    score: 15,
-  },
-]
+const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
 
 function installPermissionHandlers() {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -2096,86 +1997,7 @@ async function loadUserState() {
     // First run.
   }
 
-  clipboardHistory = normalizeClipboardHistory(userState.clipboardHistory)
-}
-
-function normalizeClipboardHistory(items) {
-  return (Array.isArray(items) ? items : [])
-    .map((item) => {
-      if (item?.type === 'image' && (item.imagePath || item.imageDataUrl)) {
-        let imagePath = item.imagePath
-        if (!imagePath && typeof item.imageDataUrl === 'string' && item.imageDataUrl.startsWith('data:')) {
-          const base64 = item.imageDataUrl.split(',', 2)[1] || ''
-          try {
-            const png = Buffer.from(base64, 'base64')
-            imagePath = persistClipboardImage(png, hashValue(png))
-          } catch {}
-        }
-        const id = item.id || (imagePath ? `image:${path.basename(imagePath, '.png')}` : `image:${hashValue(item.imageDataUrl)}`)
-        return {
-          id,
-          type: 'image',
-          imagePath,
-          imageDataUrl: imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl,
-          thumbnailUrl: item.thumbnailUrl || (imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl),
-          createdAt: item.createdAt || Date.now(),
-        }
-      }
-      if (item?.type === 'video' && item.filePath) {
-        const filePath = expandUserPath(item.filePath)
-        if (!isVideoPath(filePath)) return null
-        return {
-          id: item.id || `video:${hashValue(filePath)}`,
-          type: 'video',
-          filePath,
-          videoUrl: item.videoUrl || fileUrlForPath(filePath),
-          thumbnailUrl: item.thumbnailUrl || thumbnailUrlForPath(filePath),
-          createdAt: item.createdAt || Date.now(),
-        }
-      }
-      if (item?.text) {
-        const text = String(item.text).trim()
-        if (!text) return null
-        return {
-          id: item.id?.startsWith('text:') ? item.id : `text:${hashValue(text)}`,
-          type: 'text',
-          text,
-          createdAt: item.createdAt || Date.now(),
-        }
-      }
-      return null
-    })
-    .filter(Boolean)
-    .slice(0, CLIPBOARD_LIMIT)
-}
-
-function clipboardItemTitle(item) {
-  if (item.type === 'image') return 'Clipboard image'
-  if (item.type === 'video') return path.basename(item.filePath || 'Clipboard video')
-  return item.text.length > 72 ? `${item.text.slice(0, 72)}…` : item.text
-}
-
-function clipboardItemSubtitle(item) {
-  const when = new Date(item.createdAt || Date.now()).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-  if (item.type === 'image') return `Image copied ${when}`
-  if (item.type === 'video') return `Video copied ${when}`
-  return `Copied ${when}`
-}
-
-function clipboardFilePath() {
-  const candidates = [clipboard.readBuffer('public.file-url').toString('utf8'), clipboard.readText()]
-  for (const candidate of candidates) {
-    const value = String(candidate || '').replace(/\0/g, '').trim().split(/\r?\n/)[0]
-    if (!value) continue
-    if (value.startsWith('file://')) return decodeURIComponent(new URL(value).pathname)
-    if (path.isAbsolute(value)) return value
-  }
-  return null
+  clipboardHistory = normalizeClipboardHistory(userState.clipboardHistory, CLIPBOARD_LIMIT, persistClipboardImage)
 }
 
 function persistClipboardImage(png, hash) {
@@ -2187,7 +2009,7 @@ function persistClipboardImage(png, hash) {
 }
 
 function readClipboardItem() {
-  const filePath = clipboardFilePath()
+  const filePath = readClipboardFilePath(clipboard)
   if (filePath && isVideoPath(filePath)) {
     return {
       id: `video:${hashValue(filePath)}`,
