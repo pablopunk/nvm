@@ -744,6 +744,8 @@ function extensionActionFromCommand(extension, command) {
     aliases: command.aliases || [],
     icon: command.icon || 'sparkles',
     score: command.score || 12,
+    dismissAfterRun: command.dismissAfterRun,
+    background: command.background,
   }
   const shortcut = shortcutForAction(action) || command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
   return shortcut ? { ...action, shortcut } : action
@@ -1139,19 +1141,23 @@ function searchActions(query, options = {}) {
     .slice(0, 10)
 }
 
+function runInBackground(task) {
+  Promise.resolve().then(task).catch((error) => console.error('Background action failed', error))
+}
+
 async function executeAction(action, options = {}) {
   if (!action) return
   recordRecent(action)
 
   switch (action.kind) {
     case 'open-url':
-      await shell.openExternal(action.url)
+      runInBackground(() => shell.openExternal(action.url))
       break
     case 'web-search':
-      await shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(action.query)}`)
+      runInBackground(() => shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(action.query)}`))
       break
     case 'app':
-      await launchApp(action.app)
+      runInBackground(() => launchApp(action.app))
       break
     case 'clipboard':
       if (action.clipboardType === 'image' && (action.imagePath || action.imageDataUrl)) {
@@ -1174,8 +1180,8 @@ async function executeAction(action, options = {}) {
     case 'install-update':
       return installDownloadedUpdate()
     case 'open-keyboard-settings':
-      await openSystemKeyboardSettings()
-      return
+      runInBackground(openSystemKeyboardSettings)
+      break
     case 'toggle-setting': {
       const definition = SETTING_DEFINITIONS.find((entry) => entry.id === action.settingId)
       if (!definition) return
@@ -1185,15 +1191,17 @@ async function executeAction(action, options = {}) {
       return { view: settingsView(), navigation: 'replace' }
     }
     case 'file':
-      await shell.openPath(action.filePath)
+      runInBackground(() => shell.openPath(action.filePath))
       break
     case 'calculate':
       clipboard.writeText(action.result)
       break
     case 'builtin':
-      await executeBuiltin(action)
+      runInBackground(() => executeBuiltin(action))
       break
     case 'extension-command': {
+      const dismissImmediately = action.background || action.dismissAfterRun === 'auto'
+      if (dismissImmediately && !options.keepPaletteOpen) hidePalette()
       const view = await executeExtensionCommand(action)
       if (view) return { view }
       break
@@ -1411,7 +1419,7 @@ async function executeViewAction(action) {
     case 'nativeAction':
       return executeAction(action.nativeAction, { keepPaletteOpen: true })
     case 'openPath':
-      await shell.openPath(action.path)
+      runInBackground(() => shell.openPath(action.path))
       break
     case 'revealPath':
       shell.showItemInFolder(action.path)
@@ -1419,9 +1427,10 @@ async function executeViewAction(action) {
     case 'quickLook':
       return quickLookPath(action.path)
     case 'openWith':
-      return openPathWithApp(action.path, action.appPath || action.app?.path)
+      runInBackground(() => openPathWithApp(action.path, action.appPath || action.app?.path))
+      break
     case 'openUrl':
-      await shell.openExternal(action.url)
+      runInBackground(() => shell.openExternal(action.url))
       break
     case 'copyText':
       clipboard.writeText(action.text || '')
@@ -1850,6 +1859,7 @@ function createExtensionContext(extension, command) {
       replace: (title, view, options = {}) => ({ ...options, type: 'replaceView', title, view }),
       pop: (title = 'Back', options = {}) => ({ ...options, type: 'popView', title }),
       run: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
+      background: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
       shellExec: (title, command, args = [], options = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
     },

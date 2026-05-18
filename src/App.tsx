@@ -92,6 +92,8 @@ type Action = {
   commandId?: string
   aiChatId?: string
   removable?: boolean
+  background?: boolean
+  dismissAfterRun?: 'auto'
   shortcut?: string
   userAliases?: string[]
 }
@@ -479,6 +481,14 @@ export function App() {
     else if (result.view) showExtensionView(result.view, result.navigation || 'push')
   }
 
+  function actionCanDismissImmediately(action: ExtensionViewAction) {
+    return action.dismissAfterRun === 'auto' && ['nativeAction', 'openPath', 'revealPath', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'runExtensionAction'].includes(action.type)
+  }
+
+  function rootActionCanDismissImmediately(action: Action) {
+    return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(action.kind) || (action.kind === 'extension-command' && (action.background || action.dismissAfterRun === 'auto'))
+  }
+
   async function runViewAction(action: ExtensionViewAction) {
     if (action.requiresConfirmation && !window.confirm(`Run “${action.title}”?`)) return
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string } | undefined : undefined
@@ -494,10 +504,12 @@ export function App() {
     const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
     if (runningViewActionsRef.current.has(actionKey)) return
     runningViewActionsRef.current.add(actionKey)
+    const dismissedImmediately = actionCanDismissImmediately(action)
+    if (dismissedImmediately) window.nvm.hide()
     try {
       const result = await window.nvm.runViewAction(action)
       await handleViewActionResult(result)
-      if (action.dismissAfterRun === 'auto' && !result?.view && result?.navigation !== 'pop') {
+      if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
         else window.nvm.hide()
       }
@@ -516,6 +528,7 @@ export function App() {
       await openShortcutManager()
       return
     }
+    if (rootActionCanDismissImmediately(action)) window.nvm.hide()
     const result = await window.nvm.execute(action)
     if (result?.view) {
       setOptionsFor(null)
