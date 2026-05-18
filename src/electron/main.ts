@@ -776,7 +776,7 @@ async function executeExtensionCommand(action) {
   try {
     const ctx = createExtensionContext(entry.extension, entry.command)
     const result = await entry.command.run(ctx)
-    return normalizeExtensionView(result, entry)
+    return executeViewActionResult(result, entry)
   } catch (error) {
     console.error(`Extension command failed: ${entry.extension.id}:${entry.command.id}`, error)
     return extensionErrorView(entry, error)
