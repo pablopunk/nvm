@@ -98,7 +98,7 @@ const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -660,39 +660,6 @@ async function searchActions(query, options: any = {}) {
     if (ranked) {
       ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.updatedAt || item.createdAt || 0)
       results.push(ranked)
-    }
-  }
-
-  for (const item of appIndex) {
-    const action = {
-      id: `app:${item.id}`,
-      kind: 'app',
-      title: item.name,
-      subtitle: 'Launch application',
-      app: item,
-      icon: 'app',
-      score: 30,
-    }
-    const ranked = rankAction(withShortcutHint(action), q)
-    if (ranked) results.push(ranked)
-  }
-
-  let fileMatches = 0
-  for (const item of fileIndex) {
-    if (fileMatches >= FILE_RESULT_LIMIT) break
-    const action = {
-      id: `file:${item.path}`,
-      kind: 'file',
-      title: item.name,
-      subtitle: item.displayPath,
-      filePath: item.path,
-      icon: 'folder',
-      score: 4,
-    }
-    const ranked = rankAction(action, q)
-    if (ranked) {
-      results.push(ranked)
-      fileMatches += 1
     }
   }
 
@@ -1530,6 +1497,10 @@ function createWebSearchExtension() {
   }
 }
 
+function rootItemFromNativeAction(action) {
+  return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, image: action.thumbnailUrl || action.iconUrl || undefined, score: action.score, lastUsed: action.lastUsed, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }
+}
+
 function createClipboardExtension() {
   function historyAction() {
     const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
@@ -1542,10 +1513,6 @@ function createClipboardExtension() {
       score: 14,
       lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
     }
-  }
-
-  function itemFromAction(action) {
-    return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, lastUsed: action.lastUsed, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }
   }
 
   return {
@@ -1561,12 +1528,40 @@ function createClipboardExtension() {
       run: () => clipboardHistoryView(),
     }],
     rootItems() {
-      if (!getSetting('showClipboardInRoot')) return [itemFromAction(historyAction())]
-      return [itemFromAction(historyAction()), ...clipboardHistory.slice(0, 5).map((item) => itemFromAction(clipboardActionFromItem(item)))]
+      if (!getSetting('showClipboardInRoot')) return [rootItemFromNativeAction(historyAction())]
+      return [rootItemFromNativeAction(historyAction()), ...clipboardHistory.slice(0, 5).map((item) => rootItemFromNativeAction(clipboardActionFromItem(item)))]
     },
     searchItems(_ctx, query) {
       const results = [historyAction(), ...clipboardHistory.map(clipboardActionFromItem)]
-      return results.map(itemFromAction).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+      return results.map(rootItemFromNativeAction).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+    },
+  }
+}
+
+function createAppsExtension() {
+  return {
+    id: 'nevermind.apps',
+    title: 'Applications',
+    commands: [],
+    rootItems() {
+      return appIndex.slice(0, 5).map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 }))
+    },
+    searchItems(_ctx, query) {
+      return appIndex.map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+    },
+  }
+}
+
+function createFilesExtension() {
+  return {
+    id: 'nevermind.files',
+    title: 'Files',
+    commands: [],
+    rootItems() {
+      return fileIndex.slice(0, FILE_RESULT_LIMIT).map((item) => rootItemFromNativeAction({ id: `file:${item.path}`, kind: 'file', title: item.name, subtitle: item.displayPath, filePath: item.path, icon: 'folder', score: 4 }))
+    },
+    searchItems(_ctx, query) {
+      return fileIndex.map((item) => rootItemFromNativeAction({ id: `file:${item.path}`, kind: 'file', title: item.name, subtitle: item.displayPath, filePath: item.path, icon: 'folder', score: 4 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, FILE_RESULT_LIMIT)
     },
   }
 }
