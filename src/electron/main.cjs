@@ -1973,7 +1973,14 @@ async function launchApp(item) {
 }
 
 function appScanRoots() {
-  if (process.platform === 'darwin') return ['/Applications', '/System/Applications', path.join(os.homedir(), 'Applications')]
+  if (process.platform === 'darwin') {
+    return [
+      '/Applications',
+      '/System/Applications',
+      '/System/Library/CoreServices/Applications',
+      path.join(os.homedir(), 'Applications'),
+    ]
+  }
   if (process.platform === 'win32') {
     return [
       process.env.ProgramData && path.join(process.env.ProgramData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
