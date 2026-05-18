@@ -1,3 +1,5 @@
+import { isReservedPaletteAccelerator } from './os'
+
 const SHORTCUT_SYMBOLS: Record<string, string> = {
   Command: '⌘',
   Cmd: '⌘',
@@ -36,6 +38,5 @@ export function normalizeAccelerator(value: unknown) {
 }
 
 export function isSpotlightAccelerator(accelerator: unknown) {
-  if (process.platform !== 'darwin') return false
-  return normalizeAccelerator(accelerator) === 'Command+Space'
+  return isReservedPaletteAccelerator(normalizeAccelerator(accelerator))
 }

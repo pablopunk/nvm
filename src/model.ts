@@ -129,10 +129,10 @@ export function actionsFromPanel(panel?: CommandActionPanel, fallbackActions: Co
 
 export function actionDescription(action: CommandAction) {
   if (action.subtitle || action.description) return action.subtitle || action.description
-  if (action.type === 'quickLook') return 'Open native macOS Quick Look'
+  if (action.type === 'quickLook') return action.title || 'Preview this file'
   if (action.type === 'openWith') return action.app?.name ? `Open with ${action.app.name}` : 'Open with another app'
   if (action.type === 'openPath') return 'Open with the default app'
-  if (action.type === 'revealPath') return 'Show in Finder'
+  if (action.type === 'revealPath') return action.title || 'Reveal in file manager'
   if (action.type === 'copyText') return 'Copy text to the clipboard'
   if (action.type === 'copyImage') return 'Copy image to the clipboard'
   if (action.type === 'pasteText') return 'Paste into the frontmost app'

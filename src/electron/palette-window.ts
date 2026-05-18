@@ -1,6 +1,7 @@
 import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, paletteBrowserWindowOptions } from './os'
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
 
@@ -60,7 +61,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       transparent: true,
       resizable: false,
       movable: true,
-      type: process.platform === 'darwin' ? 'panel' : undefined,
+      ...paletteBrowserWindowOptions(),
       alwaysOnTop: true,
       skipTaskbar: true,
       focusable: true,
@@ -135,11 +136,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   function applyPaletteWindowPolicy() {
-    if (!win || process.platform !== 'darwin') return
-    win.setAlwaysOnTop(true, 'screen-saver')
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    win.setFullScreenable(false)
-    win.setSkipTaskbar(true)
+    applyOsPaletteWindowPolicy(win)
   }
 
   function showPalette(showOptions: { deferReveal?: boolean; skipShownEvent?: boolean } = {}) {

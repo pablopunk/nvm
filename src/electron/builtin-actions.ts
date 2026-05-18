@@ -1,7 +1,8 @@
 import os from 'node:os'
 import path from 'node:path'
+import { settingsTitle } from './os'
 
-export function builtInActions({ version, platform = process.platform }: { version: string; platform?: NodeJS.Platform }) {
+export function builtInActions({ version }: { version: string; platform?: NodeJS.Platform }) {
   return [
     {
       id: 'builtin:check-for-updates',
@@ -14,7 +15,7 @@ export function builtInActions({ version, platform = process.platform }: { versi
     { id: 'builtin:lock-screen', kind: 'builtin', builtin: 'lock-screen', title: 'Lock Screen', subtitle: 'Secure this computer', icon: 'lock', score: 22 },
     { id: 'builtin:sleep', kind: 'builtin', builtin: 'sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21 },
     { id: 'builtin:restart', kind: 'builtin', builtin: 'restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20 },
-    { id: 'builtin:settings', kind: 'builtin', builtin: 'settings', title: platform === 'darwin' ? 'Open System Settings' : 'Open Settings', subtitle: 'Open system preferences', icon: 'settings', score: 19 },
+    { id: 'builtin:settings', kind: 'builtin', builtin: 'settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19 },
     { id: 'builtin:downloads', kind: 'builtin', builtin: 'open-path', targetPath: path.join(os.homedir(), 'Downloads'), title: 'Open Downloads', subtitle: '~/Downloads', icon: 'folder', score: 18 },
     { id: 'builtin:documents', kind: 'builtin', builtin: 'open-path', targetPath: path.join(os.homedir(), 'Documents'), title: 'Open Documents', subtitle: '~/Documents', icon: 'folder', score: 17 },
     { id: 'builtin:desktop', kind: 'builtin', builtin: 'open-path', targetPath: path.join(os.homedir(), 'Desktop'), title: 'Open Desktop', subtitle: '~/Desktop', icon: 'folder', score: 16 },

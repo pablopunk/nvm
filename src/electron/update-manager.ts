@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { supportsAutoUpdates } from './os'
 
 type UpdateInfo = { version?: string }
 type AutoUpdaterLike = {
@@ -37,10 +38,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   }
 
   function canUseAutoUpdates() {
-    if (!app.isPackaged) return false
-    if (process.platform === 'darwin') return true
-    if (process.platform === 'linux') return Boolean(process.env.APPIMAGE)
-    return false
+    return app.isPackaged && supportsAutoUpdates()
   }
 
   async function checkForUpdates(trigger = 'manual', options: { download?: boolean } = {}) {

@@ -1,7 +1,6 @@
 import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net } from 'electron'
 import electronUpdater from 'electron-updater'
 import fs from 'node:fs/promises'
-import fsSync from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
@@ -16,6 +15,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
+import { autoUpdatesUnavailableMessage, executeSystemBuiltin, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 
@@ -219,7 +219,7 @@ function recordRecent(action: any) {
 }
 
 async function getAppIconDataUrl(appPath) {
-  if (process.platform !== 'darwin' || !appPath || !appPath.endsWith('.app')) return null
+  if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
   if (appIconCache.has(appPath)) return appIconCache.get(appPath)
 
   const promise = (async () => {
@@ -509,7 +509,7 @@ function updateStatusView() {
           ? 'Update check failed'
           : 'No versions available'
   const subtitle = unsupported
-    ? 'Automatic updates only run from packaged macOS builds or Linux AppImages'
+    ? autoUpdatesUnavailableMessage()
     : downloadedInfo
       ? 'Install the downloaded update and restart Nevermind'
       : availableInfo
@@ -791,7 +791,7 @@ async function executeAction(action, options: any = {}) {
       runInBackground(() => shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(action.query)}`))
       break
     case 'app':
-      runInBackground(() => launchApp(action.app))
+      runInBackground(() => launchOsApp(action.app))
       break
     case 'clipboard':
       if (action.clipboardType === 'image' && (action.imagePath || action.imageDataUrl)) {
@@ -1167,7 +1167,7 @@ async function executeViewAction(action) {
       break
     case 'pasteText':
       clipboard.writeText(action.text || '')
-      if (process.platform === 'darwin') execFile('osascript', ['-e', 'tell application "System Events" to keystroke "v" using command down'], () => {})
+      pasteIntoFrontmostApp()
       return { toast: { message: 'Pasted' } }
     case 'copyImage':
       if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
@@ -1208,38 +1208,10 @@ async function executeViewAction(action) {
 }
 
 async function executeBuiltin(action) {
-  switch (action.builtin) {
-    case 'lock-screen':
-      if (process.platform === 'darwin') {
-        spawn('/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession', ['-suspend'], { detached: true, stdio: 'ignore' }).unref()
-      } else if (process.platform === 'win32') {
-        spawn('rundll32.exe', ['user32.dll,LockWorkStation'], { detached: true, stdio: 'ignore' }).unref()
-      } else {
-        spawn('sh', ['-lc', 'loginctl lock-session || xdg-screensaver lock || gnome-screensaver-command -l'], { detached: true, stdio: 'ignore' }).unref()
-      }
-      break
-    case 'sleep':
-      if (process.platform === 'darwin') spawn('pmset', ['sleepnow'], { detached: true, stdio: 'ignore' }).unref()
-      else if (process.platform === 'win32') spawn('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0'], { detached: true, stdio: 'ignore' }).unref()
-      else spawn('systemctl', ['suspend'], { detached: true, stdio: 'ignore' }).unref()
-      break
-    case 'restart':
-      if (process.platform === 'darwin') spawn('osascript', ['-e', 'tell application "System Events" to restart'], { detached: true, stdio: 'ignore' }).unref()
-      else spawn('shutdown', [process.platform === 'win32' ? '/r' : '-r', process.platform === 'win32' ? '/t' : 'now', process.platform === 'win32' ? '0' : ''], { detached: true, stdio: 'ignore' }).unref()
-      break
-    case 'settings':
-      if (process.platform === 'darwin') await shell.openExternal('x-apple.systempreferences:')
-      else if (process.platform === 'win32') await shell.openExternal('ms-settings:')
-      else spawn('sh', ['-lc', 'gnome-control-center || systemsettings || xfce4-settings-manager'], { detached: true, stdio: 'ignore' }).unref()
-      break
-    case 'open-path':
-      await shell.openPath(action.targetPath)
-      break
-    case 'quit':
-      nevermindApp.isQuiting = true
-      app.quit()
-      break
-  }
+  return executeSystemBuiltin(action, () => {
+    nevermindApp.isQuiting = true
+    app.quit()
+  })
 }
 
 async function thumbnailResponseForPath(filePath) {
@@ -1386,9 +1358,9 @@ function startFileDrag(event, filePath) {
 }
 
 function quickLookPath(filePath) {
-  if (process.platform !== 'darwin') return { toast: { message: 'Quick Look is only available on macOS', tone: 'error' } }
+  if (!hasCapability('quick-look')) return { toast: { message: `${quickLookTitle()} is not available on this OS`, tone: 'error' } }
   const resolvedPath = expandUserPath(filePath)
-  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return { toast: { message: 'Cannot Quick Look this item', tone: 'error' } }
+  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return { toast: { message: `Cannot ${quickLookTitle()} this item`, tone: 'error' } }
   const child = spawn('qlmanage', ['-p', resolvedPath], { detached: true, stdio: 'ignore' })
   child.unref()
 }
@@ -1400,7 +1372,7 @@ function execFileText(command, args) {
 }
 
 async function contentTypesForPath(filePath) {
-  if (process.platform !== 'darwin') return []
+  if (!hasCapability('quick-look')) return []
   try {
     const stdout = await execFileText('mdls', ['-raw', '-name', 'kMDItemContentTypeTree', filePath]) as string
     return stdout.match(/"([^"]+)"/g)?.map((item) => item.slice(1, -1)) || []
@@ -1421,7 +1393,7 @@ async function documentTypesForApp(appPath) {
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath)
   if (!resolvedPath || !path.isAbsolute(resolvedPath)) return []
-  if (process.platform !== 'darwin') return appIndex
+  if (!hasCapability('open-with')) return appIndex
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase()
   const contentTypes = new Set(await contentTypesForPath(resolvedPath))
   const scored = []
@@ -1445,12 +1417,12 @@ async function openPathWithApp(filePath, appPath) {
   const resolvedPath = expandUserPath(filePath)
   const resolvedAppPath = expandUserPath(appPath)
   if (!resolvedPath || !resolvedAppPath || !path.isAbsolute(resolvedPath) || !path.isAbsolute(resolvedAppPath)) return { toast: { message: 'Cannot open this file with that app', tone: 'error' } }
-  if (process.platform === 'darwin') spawn('open', ['-a', resolvedAppPath, resolvedPath], { detached: true, stdio: 'ignore' }).unref()
+  if (hasCapability('open-with')) spawn('open', ['-a', resolvedAppPath, resolvedPath], { detached: true, stdio: 'ignore' }).unref()
   else await shell.openPath(resolvedPath)
 }
 
 async function selectedInFinder() {
-  if (process.platform !== 'darwin') return []
+  if (!hasCapability('selected-files')) return []
   const script = 'tell application "Finder" to get POSIX path of (selection as alias list)'
   return new Promise((resolve) => {
     execFile('osascript', ['-e', script], (error, stdout) => {
@@ -1550,8 +1522,8 @@ function createExtensionContext(extension, command) {
     },
     actions: {
       openPath: (filePath, title = 'Open', options: any = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
-      revealPath: (filePath, title = 'Reveal in Finder', options: any = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
-      quickLook: (filePath, title = 'Quick Look', options: any = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
+      revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
+      quickLook: (filePath, title = quickLookTitle(), options: any = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
       openWith: (filePath, app, title, options: any = {}) => ({ ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
@@ -1623,7 +1595,7 @@ function createExtensionContext(extension, command) {
         child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
       }),
       appleScript: (script, options: any = {}) => new Promise((resolve) => {
-        if (process.platform !== 'darwin') return resolve({ stdout: '', stderr: 'AppleScript is only available on macOS', exitCode: 1 })
+        if (!hasCapability('applescript')) return resolve({ stdout: '', stderr: 'AppleScript is not available on this OS', exitCode: 1 })
         execFile('osascript', ['-e', String(script)], { timeout: Number(options.timeout || 30_000) }, (error, stdout, stderr) => resolve({ stdout: limitedOutput(stdout, options.outputLimit), stderr: limitedOutput(stderr || error?.message || '', options.outputLimit), exitCode: error ? 1 : 0 }))
       }),
       which: (command) => new Promise((resolve) => {
@@ -1802,72 +1774,6 @@ function registerExtension(extension) {
   }
 }
 
-async function launchApp(item) {
-  if (!item) return
-  if (process.platform === 'darwin') {
-    spawn('open', [item.path], { detached: true, stdio: 'ignore' }).unref()
-    return
-  }
-  if (process.platform === 'win32') {
-    await shell.openPath(item.path)
-    return
-  }
-  if (item.command) {
-    spawn(item.command, { shell: true, detached: true, stdio: 'ignore' }).unref()
-    return
-  }
-  await shell.openPath(item.path)
-}
-
-function appScanRoots() {
-  if (process.platform === 'darwin') {
-    return [
-      '/Applications',
-      '/System/Applications',
-      '/System/Library/CoreServices/Applications',
-      path.join(os.homedir(), 'Applications'),
-    ]
-  }
-  if (process.platform === 'win32') {
-    return [
-      process.env.ProgramData && path.join(process.env.ProgramData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-      process.env.APPDATA && path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-    ].filter(Boolean)
-  }
-  return ['/usr/share/applications', '/usr/local/share/applications', path.join(os.homedir(), '.local/share/applications')]
-}
-
-async function scanMacApps() {
-  const roots = appScanRoots()
-  const found = []
-
-  async function walk(dir, depth) {
-    let entries = []
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-
-    await Promise.all(entries.map(async (entry) => {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) return
-      const fullPath = path.join(dir, entry.name)
-      if (entry.name.endsWith('.app')) {
-        found.push({
-          id: fullPath,
-          name: entry.name.replace(/\.app$/i, ''),
-          path: fullPath,
-        })
-        return
-      }
-      if (depth > 0) await walk(fullPath, depth - 1)
-    }))
-  }
-
-  await Promise.all(roots.map((root) => walk(root, 2)))
-  return found
-}
-
 function displayUserPath(filePath) {
   const home = os.homedir()
   return filePath.startsWith(home) ? `~${filePath.slice(home.length)}` : filePath
@@ -1906,58 +1812,6 @@ async function scanFiles() {
   return found.slice(0, 5000)
 }
 
-async function scanWindowsApps() {
-  const roots = appScanRoots()
-  const found = []
-
-  async function walk(dir) {
-    let entries = []
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    await Promise.all(entries.map(async (entry) => {
-      const fullPath = path.join(dir, entry.name)
-      if (entry.isDirectory()) return walk(fullPath)
-      if (entry.name.endsWith('.lnk')) {
-        found.push({ id: fullPath, name: entry.name.replace(/\.lnk$/i, ''), path: fullPath })
-      }
-    }))
-  }
-
-  await Promise.all(roots.map(walk))
-  return found
-}
-
-async function scanLinuxApps() {
-  const roots = appScanRoots()
-  const found = []
-
-  await Promise.all(roots.map(async (root) => {
-    let entries = []
-    try {
-      entries = await fs.readdir(root, { withFileTypes: true })
-    } catch {
-      return
-    }
-
-    await Promise.all(entries.map(async (entry) => {
-      if (!entry.isFile() || !entry.name.endsWith('.desktop')) return
-      const fullPath = path.join(root, entry.name)
-      const body = await fs.readFile(fullPath, 'utf8').catch(() => '')
-      if (/^(NoDisplay|Hidden)=true$/im.test(body)) return
-      const name = body.match(/^Name=(.+)$/m)?.[1]
-      const exec = body.match(/^Exec=(.+)$/m)?.[1]
-      if (!name || !exec) return
-      const command = exec.replace(/\s*%[fFuUdDnNickvm]/g, '').trim()
-      found.push({ id: fullPath, name, path: fullPath, command })
-    }))
-  }))
-
-  return found
-}
-
 function scheduleIndexApplications() {
   if (appIndexTimer) clearTimeout(appIndexTimer)
   appIndexTimer = setTimeout(() => {
@@ -1969,25 +1823,12 @@ function scheduleIndexApplications() {
 
 async function startAppWatcher() {
   for (const watcher of appWatchers) watcher.close()
-  appWatchers = []
-  for (const root of appScanRoots()) {
-    if (!fsSync.existsSync(root)) continue
-    try {
-      const watcher = fsSync.watch(root, { recursive: process.platform === 'darwin' || process.platform === 'win32' }, scheduleIndexApplications)
-      watcher.on('error', () => {})
-      appWatchers.push(watcher)
-    } catch {}
-  }
+  appWatchers = watchApps(scheduleIndexApplications)
 }
 
 async function indexApplications() {
   try {
-    const apps = process.platform === 'darwin'
-      ? await scanMacApps()
-      : process.platform === 'win32'
-        ? await scanWindowsApps()
-        : await scanLinuxApps()
-
+    const apps = await scanApps()
     const deduped = new Map()
     for (const item of apps) deduped.set(normalize(item.name), item)
     appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
@@ -2269,24 +2110,15 @@ async function setPaletteHotkey(accelerator) {
   if (!ok) {
     globalShortcut.register(current, paletteWindow.togglePalette)
     const spotlightConflict = isSpotlightAccelerator(normalized)
-    return { ok: false, message: spotlightConflict ? `${normalized} is used by Spotlight` : `Could not register ${normalized}`, spotlightConflict }
+    return { ok: false, message: spotlightConflict ? `${normalized} is used by ${reservedPaletteShortcutName()}` : `Could not register ${normalized}`, spotlightConflict }
   }
   setSetting('paletteHotkey', normalized)
   return { ok: true, message: `Shortcut set: ${normalized}`, spotlightConflict: isSpotlightAccelerator(normalized) }
 }
 
 async function openSystemKeyboardSettings() {
-  if (process.platform === 'darwin') {
-    const urls = [
-      'x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts',
-      'x-apple.systempreferences:com.apple.Keyboard-Settings.extension',
-      'x-apple.systempreferences:com.apple.preference.keyboard?Shortcuts',
-    ]
-    for (const url of urls) {
-      try { await shell.openExternal(url); return { ok: true } } catch {}
-    }
-  }
-  return { ok: false }
+  await executeSystemBuiltin({ builtin: 'open-keyboard-settings' }, () => {})
+  return { ok: true }
 }
 
 async function setOverride(action, instruction) {
@@ -2381,10 +2213,7 @@ async function removeCreatedAction(action) {
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
-  if (process.platform === 'darwin') {
-    app.setActivationPolicy('accessory')
-    app.dock?.hide()
-  }
+  prepareAppWindowPolicy()
   registerLocalFileProtocol()
   installPermissionHandlers(isDev)
   updateManager.configure()

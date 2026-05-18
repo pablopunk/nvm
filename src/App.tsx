@@ -122,14 +122,14 @@ function spotlightConflictView(accelerator: string): ExtensionView {
   const openSettings: CommandAction = {
     type: 'nativeAction',
     title: 'Open Keyboard Shortcuts',
-    subtitle: 'macOS System Settings → Keyboard → Keyboard Shortcuts',
+    subtitle: 'Open system keyboard shortcut settings',
     nativeAction: { kind: 'open-keyboard-settings' },
   }
   const dismiss: CommandAction = { type: 'popView', title: 'Dismiss' }
   return {
     type: 'preview',
-    title: `${label} conflicts with Spotlight`,
-    content: `# ${label} is used by Spotlight\n\nmacOS has \`${label}\` bound to Spotlight, so Nevermind cannot toggle with it until you disable that binding.\n\nOpen **System Settings → Keyboard → Keyboard Shortcuts → Spotlight** and uncheck *Show Spotlight search*.`,
+    title: `${label} conflicts with a system shortcut`,
+    content: `# ${label} is used by the system\n\nNevermind cannot use \`${label}\` until the current system shortcut binding is disabled or changed.`,
     actions: [openSettings, dismiss],
     actionPanel: { sections: [{ actions: [openSettings, dismiss] }] },
   }
@@ -629,7 +629,7 @@ export function App() {
 
   async function quickLookOptionsAction() {
     if (!optionsFor?.filePath) return
-    await window.nvm.runViewAction({ type: 'quickLook', title: 'Quick Look', path: optionsFor.filePath })
+    await window.nvm.runViewAction({ type: 'quickLook', title: 'Preview File', path: optionsFor.filePath })
   }
 
   async function setOverride() {
@@ -894,8 +894,8 @@ export function App() {
       {
         value: 'option:quick-look',
         icon: <Search size={18} />,
-        title: 'Quick Look',
-        subtitle: 'Open native macOS Quick Look for this file',
+        title: 'Preview File',
+        subtitle: 'Preview this file',
         onSelect: quickLookOptionsAction,
         show: canQuickLookAction,
       },
@@ -1127,7 +1127,7 @@ export function App() {
   }
 
   async function revealSelectedDiskItem(path: string) {
-    await runViewAction({ type: 'revealPath', title: 'Show in Finder', path })
+    await runViewAction({ type: 'revealPath', title: 'Reveal in File Manager', path })
   }
 
   function onCommandKeyDown(event: React.KeyboardEvent) {
