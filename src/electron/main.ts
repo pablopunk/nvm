@@ -10,6 +10,7 @@ import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
+import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { createUpdateManager } from './update-manager'
 
 const extensionRequire = createRequire(import.meta.url)
@@ -17,7 +18,6 @@ const { autoUpdater } = electronUpdater
 const updateManager = createUpdateManager(autoUpdater)
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
-const DEFAULT_PALETTE_HOTKEY = 'Alt+Space'
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
@@ -68,25 +68,8 @@ let userState = {
   settings: {},
 }
 
-const SETTING_DEFINITIONS = [
-  {
-    id: 'paletteHotkey',
-    title: 'Open Nevermind Shortcut',
-    description: 'Global keyboard shortcut that toggles the palette',
-    type: 'shortcut',
-    default: DEFAULT_PALETTE_HOTKEY,
-  },
-  {
-    id: 'showClipboardInRoot',
-    title: 'Show Clipboard Items in Main List',
-    description: 'Show copied items inline in the root list',
-    type: 'boolean',
-    default: true,
-  },
-]
-
 function getPaletteHotkey() {
-  return getSetting('paletteHotkey') || DEFAULT_PALETTE_HOTKEY
+  return getSetting('paletteHotkey') || 'Alt+Space'
 }
 
 const SHORTCUT_SYMBOLS = { Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Escape: 'Esc', Tab: 'Tab' }
@@ -101,10 +84,7 @@ function isSpotlightAccelerator(accelerator) {
 }
 
 function getSetting(id) {
-  const definition = SETTING_DEFINITIONS.find((entry) => entry.id === id)
-  if (!definition) return undefined
-  const stored = userState.settings?.[id]
-  return stored === undefined ? definition.default : stored
+  return settingValue(userState.settings, id)
 }
 
 function setSetting(id, value) {
@@ -1081,10 +1061,10 @@ async function executeAction(action, options = {}) {
       runInBackground(openSystemKeyboardSettings)
       break
     case 'toggle-setting': {
-      const definition = SETTING_DEFINITIONS.find((entry) => entry.id === action.settingId)
+      const definition = settingDefinition(action.settingId)
       if (!definition) return
       const current = getSetting(definition.id)
-      const next = definition.type === 'boolean' ? !current : current
+      const next = toggledSettingValue(definition, current)
       setSetting(definition.id, next)
       return { view: settingsView(), navigation: 'replace' }
     }
