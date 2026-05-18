@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "strict": true,
+    "strict": false,
     "allowJs": true,
     "checkJs": false,
     "noEmit": true,

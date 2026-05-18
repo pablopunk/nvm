@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net } from 'electron'
 import electronUpdater from 'electron-updater'
 import fs from 'node:fs/promises'
@@ -22,14 +21,14 @@ import { isNewerVersion as isVersionNewerThan } from './version-utils'
 
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
-const updateManager = createUpdateManager(autoUpdater)
+const updateManager = createUpdateManager(autoUpdater as any)
 const paletteWindow = createPaletteWindowController({
   isDev: Boolean(process.env.ELECTRON_RENDERER_URL),
   preloadPath: path.join(__dirname, '..', 'preload', 'preload.cjs'),
   rendererUrl: process.env.ELECTRON_RENDERER_URL,
   rendererIndexPath: path.join(__dirname, '..', 'renderer', 'index.html'),
   userDataPath: app.getPath('userData'),
-  getPaletteHotkey,
+  getPaletteHotkey: () => String(getPaletteHotkey()),
 })
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
@@ -44,20 +43,26 @@ protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_THUMB_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
 ])
 
-let appIndex = []
-let fileIndex = []
-let clipboardHistory = []
-let statePath
-let iconCacheDir
-let clipboardImagesDir
-let extensionsDir
-let extensionStorageDir
-let saveTimer
-let appIndexTimer
-let appWatchers = []
-let nevermindAi
-let activeAiChatId
-let userState = {
+type AnyRecord = Record<string, any>
+
+type NevermindApp = typeof app & { isQuiting?: boolean }
+
+const nevermindApp = app as NevermindApp
+
+let appIndex: any[] = []
+let fileIndex: any[] = []
+let clipboardHistory: any[] = []
+let statePath = ''
+let iconCacheDir = ''
+let clipboardImagesDir = ''
+let extensionsDir = ''
+let extensionStorageDir = ''
+let saveTimer: NodeJS.Timeout | undefined
+let appIndexTimer: NodeJS.Timeout | undefined
+let appWatchers: Array<{ close: () => unknown }> = []
+let nevermindAi: any
+let activeAiChatId: string | undefined
+let userState: AnyRecord = {
   recents: {},
   aliases: {},
   shortcuts: {},
@@ -72,30 +77,30 @@ function getPaletteHotkey() {
   return getSetting('paletteHotkey') || 'Alt+Space'
 }
 
-function getSetting(id) {
+function getSetting(id: any) {
   return settingValue(userState.settings, id)
 }
 
-function setSetting(id, value) {
+function setSetting(id: any, value: any) {
   if (!userState.settings) userState.settings = {}
   userState.settings[id] = value
   scheduleSaveState()
 }
-const appIconCache = new Map()
-const extensionRegistry = new Map()
-const extensionActionHandlers = new Map()
-const registeredActionAccelerators = new Set()
+const appIconCache = new Map<string, string | null>()
+const extensionRegistry = new Map<string, any>()
+const extensionActionHandlers = new Map<string, any>()
+const registeredActionAccelerators = new Set<string>()
 
-const INTERNAL_EXTENSIONS = []
+const INTERNAL_EXTENSIONS: any[] = []
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
 
-function actionAliases(actionId) {
+function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
   if (!value) return []
   return Array.isArray(value) ? value : [value]
 }
 
-function actionSearchScore(action, query) {
+function actionSearchScore(action: any, query: any) {
   const q = normalize(query)
   if (!q) return action.score || 0
   let best = scoreNormalized(action.title, q)
@@ -119,34 +124,34 @@ function actionSearchScore(action, query) {
   return best
 }
 
-function usageBoost(actionId) {
+function usageBoost(actionId: any) {
   const count = userState.recents[actionId]?.count || 0
   return Math.min(90, count * 6)
 }
 
-function recentBoost(actionId) {
+function recentBoost(actionId: any) {
   const recent = userState.recents[actionId]
   if (!recent) return 0
   const ageHours = Math.max(0, (Date.now() - recent.lastUsed) / 36e5)
   return Math.max(0, 20 - ageHours)
 }
 
-function priorityBoost(action) {
+function priorityBoost(action: any) {
   return action.kind === 'app' ? 25 : 0
 }
 
-function defaultActionIdFor(action) {
+function defaultActionIdFor(action: any) {
   if (action.defaultActionId) return action.defaultActionId
   if (action.kind === 'builtin') return action.id
   if (action.kind === 'calculate') return 'default:calculator'
   return null
 }
 
-let shortcutByAiChatIdCache = null
+let shortcutByAiChatIdCache: Map<string, string> | null = null
 function shortcutByAiChatIdMap() {
   if (shortcutByAiChatIdCache) return shortcutByAiChatIdCache
-  const map = new Map()
-  for (const [actionId, storedAction] of Object.entries(userState.shortcutActions)) {
+  const map = new Map<string, string>()
+  for (const [actionId, storedAction] of Object.entries(userState.shortcutActions) as Array<[string, any]>) {
     if (storedAction?.aiChatId && userState.shortcuts[actionId]) {
       map.set(storedAction.aiChatId, userState.shortcuts[actionId])
     }
@@ -159,18 +164,18 @@ function invalidateShortcutCaches() {
   shortcutByAiChatIdCache = null
 }
 
-function shortcutForAction(action) {
+function shortcutForAction(action: any) {
   if (userState.shortcuts[action.id]) return userState.shortcuts[action.id]
   if (!action.aiChatId) return null
   return shortcutByAiChatIdMap().get(action.aiChatId) || null
 }
 
-function withShortcutHint(action) {
+function withShortcutHint(action: any) {
   const shortcut = shortcutForAction(action)
   return shortcut ? { ...action, shortcut } : action
 }
 
-function withDefaultOverride(action) {
+function withDefaultOverride(action: any) {
   const defaultActionId = defaultActionIdFor(action)
   if (!defaultActionId) return withShortcutHint(action)
   const override = userState.overrides[defaultActionId]
@@ -183,7 +188,7 @@ function withDefaultOverride(action) {
   }
 }
 
-function rankAction(action, query) {
+function rankAction(action: any, query: any) {
   const base = actionSearchScore(action, query)
   if (query.trim() && base <= 0) return null
   return {
@@ -195,7 +200,7 @@ function rankAction(action, query) {
   }
 }
 
-function recordRecent(action) {
+function recordRecent(action: any) {
   if (!action?.id) return
   const current = userState.recents[action.id] || { count: 0, lastUsed: 0, title: action.title }
   userState.recents[action.id] = {
@@ -228,7 +233,6 @@ async function getAppIconDataUrl(appPath) {
     }
   })()
 
-  appIconCache.set(appPath, promise)
   const result = await promise
   if (result) appIconCache.set(appPath, result)
   else appIconCache.delete(appPath)
@@ -278,7 +282,7 @@ function aiChatActionFromItem(item) {
   }
 }
 
-function getOrCreateAiChat(query, options = {}) {
+function getOrCreateAiChat(query, options: any = {}) {
   const id = hashValue(query.trim())
   const current = userState.aiChats[id]
   if (current && !options.fresh) return current
@@ -318,7 +322,7 @@ function appendAiChatDelta(chatId, text) {
   scheduleSaveState()
 }
 
-function aiChatView(item, options = {}) {
+function aiChatView(item, options: any = {}) {
   return {
     type: 'chat',
     title: `Automate “${item.query}”`,
@@ -446,7 +450,7 @@ async function downloadUpdateView() {
 
 function installDownloadedUpdate() {
   if (!updateManager.state.downloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
-  app.isQuiting = true
+  nevermindApp.isQuiting = true
   updateManager.quitAndInstall()
 }
 
@@ -503,7 +507,7 @@ function updatePromptAction() {
   return null
 }
 
-function searchActions(query, options = {}) {
+function searchActions(query, options: any = {}) {
   const q = query.trim()
 
   if (options.clipboardOnly) {
@@ -559,7 +563,7 @@ function searchActions(query, options = {}) {
     if (ranked) results.push(ranked)
   }
 
-  for (const item of Object.values(userState.aiChats || {})) {
+  for (const item of Object.values(userState.aiChats || {}) as any[]) {
     if (hasReadyGeneratedExtension(item)) continue
     const ranked = rankAction(aiChatActionFromItem(item), q)
     if (ranked) {
@@ -661,7 +665,7 @@ function runInBackground(task) {
   Promise.resolve().then(task).catch((error) => console.error('Background action failed', error))
 }
 
-async function executeAction(action, options = {}) {
+async function executeAction(action, options: any = {}) {
   if (!action) return
   recordRecent(action)
 
@@ -877,7 +881,7 @@ function normalizeViewAction(action, entry) {
   return normalized
 }
 
-function runShellCommand(command, args = [], options = {}) {
+function runShellCommand(command, args = [], options: any = {}) {
   return new Promise((resolve) => {
     const child = spawn(String(command), Array.isArray(args) ? args.map(String) : [], {
       cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
@@ -894,7 +898,7 @@ function runShellCommand(command, args = [], options = {}) {
   })
 }
 
-function runShellScript(script, options = {}) {
+function runShellScript(script, options: any = {}) {
   return runShellCommand(options.shell || '/bin/bash', ['-lc', String(script)], { ...options, shell: false })
 }
 
@@ -1022,7 +1026,7 @@ async function executeBuiltin(action) {
       await shell.openPath(action.targetPath)
       break
     case 'quit':
-      app.isQuiting = true
+      nevermindApp.isQuiting = true
       app.quit()
       break
   }
@@ -1098,7 +1102,7 @@ function normalizeFindRoots(roots) {
   return []
 }
 
-function extensionsForFindOptions(options = {}) {
+function extensionsForFindOptions(options: any = {}) {
   const kinds = Array.isArray(options.kind) ? options.kind : options.kind ? [options.kind] : []
   const kindExtensions = kinds.flatMap((kind) => {
     if (kind === 'image') return Array.from(IMAGE_EXTENSIONS)
@@ -1112,7 +1116,7 @@ function extensionsForFindOptions(options = {}) {
   return requestedExtensions.length ? new Set(requestedExtensions.map((ext) => String(ext).toLowerCase().replace(/^\./, ''))) : null
 }
 
-function sortFoundFiles(files, options = {}) {
+function sortFoundFiles(files, options: any = {}) {
   const sortBy = options.sortBy || options.sort || null
   if (!sortBy) return files
   const direction = options.order === 'asc' ? 1 : -1
@@ -1129,7 +1133,7 @@ function sortFoundFiles(files, options = {}) {
   })
 }
 
-async function findFiles(roots, options = {}) {
+async function findFiles(roots, options: any = {}) {
   const limit = options.limit || 100
   const maxDepth = options.depth ?? 2
   const extensions = extensionsForFindOptions(options)
@@ -1188,7 +1192,7 @@ function execFileText(command, args) {
 async function contentTypesForPath(filePath) {
   if (process.platform !== 'darwin') return []
   try {
-    const stdout = await execFileText('mdls', ['-raw', '-name', 'kMDItemContentTypeTree', filePath])
+    const stdout = await execFileText('mdls', ['-raw', '-name', 'kMDItemContentTypeTree', filePath]) as string
     return stdout.match(/"([^"]+)"/g)?.map((item) => item.slice(1, -1)) || []
   } catch {
     return []
@@ -1197,7 +1201,7 @@ async function contentTypesForPath(filePath) {
 
 async function documentTypesForApp(appPath) {
   try {
-    const stdout = await execFileText('/usr/bin/plutil', ['-convert', 'json', '-o', '-', path.join(appPath, 'Contents', 'Info.plist')])
+    const stdout = await execFileText('/usr/bin/plutil', ['-convert', 'json', '-o', '-', path.join(appPath, 'Contents', 'Info.plist')]) as string
     return JSON.parse(stdout).CFBundleDocumentTypes || []
   } catch {
     return []
@@ -1309,7 +1313,7 @@ function createExtensionContext(extension, command) {
     ui: {
       list: (view) => ({ ...view, type: 'list' }),
       grid: (view) => ({ ...view, type: 'grid' }),
-      preview: (fileOrView, view = {}) => {
+      preview: (fileOrView, view: any = {}) => {
         const isFile = fileOrView?.path || fileOrView?.fileUrl || fileOrView?.videoUrl || fileOrView?.thumbnailUrl
         if (!isFile) return { ...fileOrView, type: 'preview' }
         const file = fileOrView
@@ -1335,22 +1339,22 @@ function createExtensionContext(extension, command) {
       error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
     },
     actions: {
-      openPath: (filePath, title = 'Open', options = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
-      revealPath: (filePath, title = 'Reveal in Finder', options = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
-      quickLook: (filePath, title = 'Quick Look', options = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
-      openWith: (filePath, app, title, options = {}) => ({ ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
-      openUrl: (url, title = 'Open URL', options = {}) => ({ ...options, type: 'openUrl', title, url }),
-      copyText: (text, title = 'Copy', options = {}) => ({ ...options, type: 'copyText', title, text }),
-      pasteText: (text, title = 'Paste', options = {}) => ({ ...options, type: 'pasteText', title, text }),
-      copyImage: (image, title = 'Copy image', options = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
-      trash: (paths, title = 'Move to Trash', options = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
-      push: (title, view, options = {}) => ({ ...options, type: 'pushView', title, view }),
-      replace: (title, view, options = {}) => ({ ...options, type: 'replaceView', title, view }),
-      pop: (title = 'Back', options = {}) => ({ ...options, type: 'popView', title }),
-      run: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
-      background: (title, handler, options = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
-      shellExec: (title, command, args = [], options = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
-      shellScript: (title, script, options = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+      openPath: (filePath, title = 'Open', options: any = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
+      revealPath: (filePath, title = 'Reveal in Finder', options: any = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
+      quickLook: (filePath, title = 'Quick Look', options: any = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
+      openWith: (filePath, app, title, options: any = {}) => ({ ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
+      openUrl: (url, title = 'Open URL', options: any = {}) => ({ ...options, type: 'openUrl', title, url }),
+      copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
+      pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
+      copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
+      trash: (paths, title = 'Move to Trash', options: any = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
+      push: (title, view, options: any = {}) => ({ ...options, type: 'pushView', title, view }),
+      replace: (title, view, options: any = {}) => ({ ...options, type: 'replaceView', title, view }),
+      pop: (title = 'Back', options: any = {}) => ({ ...options, type: 'popView', title }),
+      run: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
+      background: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
+      shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+      shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
     },
     navigation: {
       push: (view) => ({ view, navigation: 'push' }),
@@ -1381,7 +1385,7 @@ function createExtensionContext(extension, command) {
     },
     shell: {
       openExternal: (url) => shell.openExternal(url),
-      exec: (command, args = [], options = {}) => new Promise((resolve) => {
+      exec: (command, args = [], options: any = {}) => new Promise((resolve) => {
         const child = spawn(String(command), Array.isArray(args) ? args.map(String) : [], {
           cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
           env: { ...process.env, ...(options.env || {}) },
@@ -1395,7 +1399,7 @@ function createExtensionContext(extension, command) {
         child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
         child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
       }),
-      script: (script, options = {}) => new Promise((resolve) => {
+      script: (script, options: any = {}) => new Promise((resolve) => {
         const child = spawn(options.shell || '/bin/bash', ['-lc', String(script)], {
           cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
           env: { ...process.env, ...(options.env || {}) },
@@ -1408,7 +1412,7 @@ function createExtensionContext(extension, command) {
         child.on('error', (error) => resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }))
         child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
       }),
-      appleScript: (script, options = {}) => new Promise((resolve) => {
+      appleScript: (script, options: any = {}) => new Promise((resolve) => {
         if (process.platform !== 'darwin') return resolve({ stdout: '', stderr: 'AppleScript is only available on macOS', exitCode: 1 })
         execFile('osascript', ['-e', String(script)], { timeout: Number(options.timeout || 30_000) }, (error, stdout, stderr) => resolve({ stdout: limitedOutput(stdout, options.outputLimit), stderr: limitedOutput(stderr || error?.message || '', options.outputLimit), exitCode: error ? 1 : 0 }))
       }),
@@ -1517,7 +1521,7 @@ async function loadExtensions() {
       const extension = extensionRequire(fullPath)
       extension.__filePath = fullPath
       extension.__generated = true
-      const chat = Object.values(userState.aiChats || {}).find((item) => item.generatedExtensionFile === entry.name)
+      const chat = (Object.values(userState.aiChats || {}) as any[]).find((item) => item.generatedExtensionFile === entry.name)
       if (chat) extension.__chatId = chat.id
       await applyExtensionMetadataOverrides(extension)
       registerExtension(extension)
@@ -2035,7 +2039,7 @@ async function setShortcut(action, shortcut) {
 async function setPaletteHotkey(accelerator) {
   if (!accelerator?.trim()) return { ok: false, message: 'Missing shortcut' }
   const normalized = normalizeAccelerator(accelerator)
-  const current = getPaletteHotkey()
+  const current = String(getPaletteHotkey())
   if (normalized === current) return { ok: true, message: `Shortcut unchanged: ${normalized}`, spotlightConflict: isSpotlightAccelerator(normalized) }
   const conflictingActionId = Object.entries(userState.shortcuts).find(([, value]) => value === normalized)?.[0]
   if (conflictingActionId) {
@@ -2043,9 +2047,9 @@ async function setPaletteHotkey(accelerator) {
     return { ok: false, message: `${normalized} is already used by ${title}` }
   }
   globalShortcut.unregister(current)
-  const ok = globalShortcut.register(normalized, togglePalette)
+  const ok = globalShortcut.register(normalized, paletteWindow.togglePalette)
   if (!ok) {
-    globalShortcut.register(current, togglePalette)
+    globalShortcut.register(current, paletteWindow.togglePalette)
     const spotlightConflict = isSpotlightAccelerator(normalized)
     return { ok: false, message: spotlightConflict ? `${normalized} is used by Spotlight` : `Could not register ${normalized}`, spotlightConflict }
   }
@@ -2163,10 +2167,10 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   if (process.platform === 'darwin') {
     app.setActivationPolicy('accessory')
-    app.dock.hide()
+    app.dock?.hide()
   }
   registerLocalFileProtocol()
-  installPermissionHandlers()
+  installPermissionHandlers(isDev)
   updateManager.configure()
 
   await loadUserState()
@@ -2211,10 +2215,10 @@ app.whenReady().then(async () => {
 
 app.on('activate', () => paletteWindow.showPalette())
 app.on('before-quit', () => {
-  app.isQuiting = true
+  nevermindApp.isQuiting = true
 })
 app.on('will-quit', () => {
-  app.isQuiting = true
+  nevermindApp.isQuiting = true
   if (app.isReady()) globalShortcut.unregisterAll()
   updateManager.clearTimers()
   for (const watcher of appWatchers) watcher.close()

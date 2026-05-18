@@ -99,8 +99,8 @@ export type AiChatEvent = {
 
 export type NevermindApi = {
   search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<RootAction[]>
-  execute: (action: RootAction) => Promise<{ view?: CommandView } | void>
-  runViewAction: (action: CommandAction) => Promise<ViewActionResult | void>
+  execute: (action: RootAction) => Promise<{ view?: CommandView }>
+  runViewAction: (action: CommandAction) => Promise<ViewActionResult>
   startFileDrag: (filePath: string) => void
   sendAiMessage: (message: string, chatId?: string) => Promise<void>
   abortAiChat: (chatId?: string) => Promise<void>
