@@ -98,7 +98,7 @@ const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -631,19 +631,6 @@ async function searchActions(query, options: any = {}) {
   }
 
   const results = []
-  const updateAction = q ? null : updatePromptAction()
-  if (updateAction) results.push(updateAction)
-
-  const aiChatsAction = rankAction(withShortcutHint({
-    id: 'ai-chats',
-    kind: 'ai-chats',
-    title: 'AI Chats',
-    subtitle: `${Object.keys(userState.aiChats || {}).length} builder chats`,
-    icon: 'sparkles',
-    score: 16,
-  }), q)
-  if (aiChatsAction) results.push(aiChatsAction)
-
   const contributedItems = q ? await extensionSearchActions(q) : await extensionRootActions()
   for (const item of contributedItems) {
     const ranked = rankAction(withShortcutHint(item), q)
@@ -653,27 +640,6 @@ async function searchActions(query, options: any = {}) {
   for (const command of extensionRegistry.values()) {
     const ranked = rankAction(withShortcutHint(extensionActionFromCommand(command.extension, command.command)), q)
     if (ranked) results.push(ranked)
-  }
-
-  for (const item of Object.values(userState.aiChats || {}) as any[]) {
-    const ranked = rankAction(aiChatActionFromItem(item), q)
-    if (ranked) {
-      ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.updatedAt || item.createdAt || 0)
-      results.push(ranked)
-    }
-  }
-
-  const hasDirectAnswer = results.some((item) => item.kind === 'open-url' || item.kind === 'calculate')
-  if (q && !hasDirectAnswer) {
-    results.push({
-      id: `ai:${q}`,
-      kind: 'ai-placeholder',
-      title: `Press Tab to automate "${q}"`,
-      subtitle: 'Automate with AI',
-      query: q,
-      icon: 'bolt',
-      score: 40,
-    })
   }
 
   return results
@@ -1562,6 +1528,45 @@ function createFilesExtension() {
     },
     searchItems(_ctx, query) {
       return fileIndex.map((item) => rootItemFromNativeAction({ id: `file:${item.path}`, kind: 'file', title: item.name, subtitle: item.displayPath, filePath: item.path, icon: 'folder', score: 4 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, FILE_RESULT_LIMIT)
+    },
+  }
+}
+
+function createAiBuilderExtension() {
+  function chatsAction() {
+    return { id: 'ai-chats', kind: 'ai-chats', title: 'AI Chats', subtitle: `${Object.keys(userState.aiChats || {}).length} builder chats`, icon: 'sparkles', score: 16 }
+  }
+  function chatItems(query = '') {
+    return Object.values(userState.aiChats || {}).map((item: any) => {
+      const action = aiChatActionFromItem(item)
+      action.lastUsed = Math.max(action.lastUsed || 0, item.updatedAt || item.createdAt || 0)
+      return rootItemFromNativeAction(action)
+    }).filter((item) => !query || rankAction(item.primaryAction.nativeAction, query))
+  }
+  return {
+    id: 'nevermind.ai-builder',
+    title: 'AI Builder',
+    commands: [{ id: 'ai-chats', actionId: 'ai-chats', title: 'AI Chats', subtitle: 'Builder chats', icon: 'sparkles', score: 16, run: () => aiChatsView() }],
+    rootItems() {
+      return [rootItemFromNativeAction(chatsAction()), ...chatItems().slice(0, 4)]
+    },
+    searchItems(_ctx, query) {
+      const q = String(query || '').trim()
+      const items = [rootItemFromNativeAction(chatsAction()), ...chatItems(q)]
+      if (q && !getUrlFromQuery(q) && calculate(q) === null) items.push(rootItemFromNativeAction({ id: `ai:${q}`, kind: 'ai-placeholder', title: `Press Tab to automate "${q}"`, subtitle: 'Automate with AI', query: q, icon: 'bolt', score: 40 }))
+      return items.filter((item) => rankAction(item.primaryAction.nativeAction, q)).slice(0, 5)
+    },
+  }
+}
+
+function createUpdatesExtension() {
+  return {
+    id: 'nevermind.updates',
+    title: 'Updates',
+    commands: [],
+    rootItems() {
+      const action = updatePromptAction()
+      return action ? [rootItemFromNativeAction(action)] : []
     },
   }
 }
