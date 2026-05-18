@@ -38,7 +38,7 @@ const CLIPBOARD_POLL_INTERVAL_MS = 1000
 const APP_REINDEX_DEBOUNCE_MS = 1000
 const THUMBNAIL_SIZE = 512
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000
-const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 500
+const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -64,6 +64,7 @@ let appIndexTimer: NodeJS.Timeout | undefined
 let appWatchers: Array<{ close: () => unknown }> = []
 let nevermindAi: any
 let activeAiChatId: string | undefined
+const draftAiChats = new Map<string, AnyRecord>()
 let userState: AnyRecord = {
   recents: {},
   aliases: {},
@@ -92,6 +93,7 @@ const appIconCache = new Map<string, string | null>()
 const extensionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
 const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
+const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
@@ -283,23 +285,49 @@ function aiChatActionFromItem(item) {
 }
 
 function getOrCreateAiChat(query, options: any = {}) {
-  const id = hashValue(query.trim())
-  const current = userState.aiChats[id]
+  const trimmed = query.trim()
+  const baseId = hashValue(trimmed)
+  const current = userState.aiChats[baseId]
   if (current && !options.fresh) return current
-  const item = {
+  const id = current && options.fresh ? hashValue(`${trimmed}:${Date.now()}:${crypto.randomUUID()}`) : baseId
+  const item = aiChatItem(id, trimmed)
+  userState.aiChats[id] = item
+  scheduleSaveState()
+  return item
+}
+
+function aiChatItem(id, query) {
+  return {
     id,
-    query: query.trim(),
-    title: query.trim(),
+    query,
+    title: query,
     status: 'running',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     messages: [
-      { role: 'assistant', content: `What should “${query.trim()}” do? Tell me the exact behavior, inputs, and what UI you want, then I’ll build it.` },
+      { role: 'assistant', content: `What should “${query}” do? Tell me the exact behavior, inputs, and what UI you want, then I’ll build it.` },
     ],
   }
-  userState.aiChats[id] = item
-  scheduleSaveState()
+}
+
+function createDraftAiChat(query) {
+  const trimmed = query.trim()
+  const id = `draft:${hashValue(`${trimmed}:${Date.now()}:${crypto.randomUUID()}`)}`
+  const item = aiChatItem(id, trimmed)
+  draftAiChats.set(id, item)
   return item
+}
+
+function promoteDraftAiChat(chatId) {
+  if (userState.aiChats[chatId]) return userState.aiChats[chatId]
+  const draft = draftAiChats.get(chatId)
+  if (!draft) return null
+  draftAiChats.delete(chatId)
+  draft.createdAt = Date.now()
+  draft.updatedAt = Date.now()
+  userState.aiChats[chatId] = draft
+  scheduleSaveState()
+  return draft
 }
 
 function appendAiChatMessage(chatId, role, content) {
@@ -348,6 +376,13 @@ function aiChatsView() {
         subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
         icon: 'sparkles',
         primaryAction: { type: 'nativeAction', title: 'Open Chat', nativeAction: aiChatActionFromItem(chat) },
+        actions: [{
+          type: 'nativeAction',
+          title: 'Remove Chat',
+          style: 'destructive',
+          requiresConfirmation: true,
+          nativeAction: { id: `remove-ai-chat:${chat.id}`, kind: 'remove-ai-chat', aiChatId: chat.id, title: 'Remove Chat', subtitle: chat.title || chat.query || 'AI chat', icon: 'sparkles', score: 0 },
+        }],
       })),
   }
 }
@@ -812,6 +847,8 @@ async function executeAction(action, options: any = {}) {
     }
     case 'ai-chats':
       return { view: aiChatsView() }
+    case 'remove-ai-chat':
+      return removeAiChat(action.aiChatId)
     case 'ai-chat': {
       const item = userState.aiChats[action.aiChatId]
       if (item) return { view: aiChatView(item) }
@@ -822,7 +859,7 @@ async function executeAction(action, options: any = {}) {
       return { view: aiChatView(item) }
     }
     case 'ai-placeholder': {
-      const item = getOrCreateAiChat(action.query, { fresh: true })
+      const item = createDraftAiChat(action.query)
       return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
     }
   }
@@ -896,17 +933,28 @@ async function extensionRootActionsForExtension(extension) {
   const cacheKey = extension.__filePath || extension.id
   const cached = extensionRootItemsCache.get(cacheKey)
   if (cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS) return cached.items
-  const entry = { extension, command: { id: 'root', title: extension.title || extension.id } }
-  try {
+  refreshExtensionRootActions(extension, cacheKey)
+  return cached?.items || []
+}
+
+function refreshExtensionRootActions(extension, cacheKey) {
+  const current = extensionRootItemsRefreshes.get(cacheKey)
+  if (current) return current
+  const promise = (async () => {
+    const entry = { extension, command: { id: 'root', title: extension.title || extension.id } }
     const items = await withTimeout(extension.rootItems(createExtensionContext(extension, null)), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
     const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
     const actions = list.slice(0, 5).map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean)
     extensionRootItemsCache.set(cacheKey, { updatedAt: Date.now(), items: actions })
     return actions
-  } catch (error) {
-    console.error(`Extension root items failed: ${extension.id}`, error)
-    return cached?.items || []
-  }
+  })().catch((error) => {
+    if (!String(error?.message || error).includes('Timed out')) console.error(`Extension root items failed: ${extension.id}`, error)
+    return extensionRootItemsCache.get(cacheKey)?.items || []
+  }).finally(() => {
+    extensionRootItemsRefreshes.delete(cacheKey)
+  })
+  extensionRootItemsRefreshes.set(cacheKey, promise)
+  return promise
 }
 
 function withTimeout(promise, timeoutMs) {
@@ -1597,8 +1645,9 @@ function initNevermindAi() {
     extensionApiPath: path.join(app.getAppPath(), 'src', 'docs', 'extension-api.md'),
     skillPath: path.join(app.getAppPath(), 'src', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
     reloadExtensions: loadExtensions,
-    getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] : null,
-    markGeneratedExtension: (filePath) => markGeneratedExtensionForActiveChat(filePath),
+    getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId) || null : null,
+    getChat: (chatId) => userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
+    markGeneratedExtension: (filePath, chatId) => markGeneratedExtensionForActiveChat(filePath, chatId),
     addAliasForChat: (chatId) => addAliasForGeneratedAction(chatId),
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId
@@ -1632,8 +1681,8 @@ function aiChatPromptWithContext(message, chatId) {
   return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}\n\n${transcript}\n\nNew user message:\n${message}`
 }
 
-function markGeneratedExtensionForActiveChat(filePath) {
-  const chat = activeAiChatId ? userState.aiChats[activeAiChatId] : null
+function markGeneratedExtensionForActiveChat(filePath, chatId = activeAiChatId) {
+  const chat = chatId ? userState.aiChats[chatId] : null
   if (!chat) return
   touchExtensionFileForChat(chat, path.basename(filePath))
   scheduleSaveState()
@@ -1656,6 +1705,7 @@ function addAliasForGeneratedAction(chatId) {
 async function sendAiChatMessage(message, chatId) {
   if (!nevermindAi) initNevermindAi()
   activeAiChatId = chatId || activeAiChatId
+  if (activeAiChatId?.startsWith('draft:')) promoteDraftAiChat(activeAiChatId)
   const prompt = activeAiChatId ? aiChatPromptWithContext(message, activeAiChatId) : message
   if (activeAiChatId) appendAiChatMessage(activeAiChatId, 'user', message)
   return nevermindAi.send(prompt, activeAiChatId)
@@ -1674,6 +1724,7 @@ async function loadExtensions() {
   extensionRegistry.clear()
   extensionModules.clear()
   extensionRootItemsCache.clear()
+  extensionRootItemsRefreshes.clear()
   for (const extension of INTERNAL_EXTENSIONS) registerExtension(extension)
 
   await fs.mkdir(extensionsDir, { recursive: true })
@@ -2289,15 +2340,25 @@ async function duplicateCreatedAction(action) {
   await loadExtensions()
   registerActionShortcuts()
   const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
-  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromCommand(duplicateEntry.extension, duplicateEntry.command) : { kind: 'ai-chat', aiChatId: duplicateId, title: duplicateTitle } }
+  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromCommand(duplicateEntry.extension, duplicateEntry.command) : { id: `ai-tweak-extension:${duplicateFile}`, kind: 'ai-tweak-extension', extensionFile: duplicateFile, title: duplicateTitle, subtitle: 'Tweak extension with AI', icon: 'sparkles', score: 0 } }
+}
+
+async function removeAiChat(chatId) {
+  if (!chatId || !userState.aiChats[chatId]) return { toast: { message: 'AI chat not found', tone: 'error' } }
+  await nevermindAi?.reset?.(chatId)
+  const chat = userState.aiChats[chatId]
+  delete userState.aiChats[chatId]
+  for (const actionId of Object.keys(userState.recents || {})) {
+    if (actionId === `ai-chat:${chatId}`) delete userState.recents[actionId]
+  }
+  scheduleSaveState()
+  return { view: aiChatsView(), navigation: 'replace', toast: { message: `Removed ${chat.title || chat.query || 'AI chat'}` } }
 }
 
 async function removeCreatedAction(action) {
   if (action?.kind === 'ai-chat' && action.aiChatId) {
-    await nevermindAi?.reset?.(action.aiChatId)
-    delete userState.aiChats[action.aiChatId]
+    await removeAiChat(action.aiChatId)
     delete userState.recents[action.id]
-    scheduleSaveState()
     return { ok: true, message: 'AI chat removed' }
   }
 

@@ -18,6 +18,7 @@ export type RootAction = {
     | 'ai-chat'
     | 'ai-chats'
     | 'ai-tweak-extension'
+    | 'remove-ai-chat'
     | 'builtin'
     | 'calculate'
     | 'extension-command'

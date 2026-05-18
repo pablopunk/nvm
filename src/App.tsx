@@ -44,6 +44,7 @@ type ActionKind =
   | 'ai-chat'
   | 'ai-chats'
   | 'ai-tweak-extension'
+  | 'remove-ai-chat'
   | 'builtin'
   | 'calculate'
   | 'extension-command'
@@ -161,6 +162,7 @@ export function App() {
   const [extensionItemOptionsFor, setExtensionItemOptionsFor] = useState<ExtensionViewItem | null>(null)
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{ title: string; panel: CommandActionPanel } | null>(null)
   const [confirmRemoveFor, setConfirmRemoveFor] = useState<Action | null>(null)
+  const [confirmViewActionFor, setConfirmViewActionFor] = useState<ExtensionViewAction | null>(null)
   const [aliasFor, setAliasFor] = useState<Action | null>(null)
   const [previewFor, setPreviewFor] = useState<Action | null>(null)
   const extensionNavigation = useExtensionNavigation()
@@ -303,6 +305,7 @@ export function App() {
     else if (shortcutManagerOpen) setSelectedValue(getShortcutRows()[0]?.value ?? '')
     else if (aliasFor) setSelectedValue(getAliasActionRows()[0]?.value ?? '')
     else if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
+    else if (confirmViewActionFor) setSelectedValue(getConfirmViewActionRows()[0]?.value ?? '')
     else if (actionSubmenuFor) setSelectedValue(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true).find((row) => !row.sectionHeader)?.value ?? '')
     else if (extensionItemOptionsFor) setSelectedValue(getExtensionItemActionRows()[0]?.value ?? '')
     else if (optionsFor) setSelectedValue(getOptionActionRows()[0]?.value ?? '')
@@ -311,11 +314,11 @@ export function App() {
     else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, actionSubmenuFor, aliasFor, childQuery, confirmRemoveFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
+  }, [actions, actionSubmenuFor, aliasFor, childQuery, confirmRemoveFor, confirmViewActionFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
     setChildQuery('')
-  }, [actionSubmenuFor?.title, confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
+  }, [actionSubmenuFor?.title, confirmRemoveFor?.id, confirmViewActionFor?.title, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
 
   useEffect(() => {
     if (extensionView?.type !== 'form') return
@@ -378,18 +381,18 @@ export function App() {
   )
   const isFilterableExtensionView = extensionView?.type === 'list' || extensionView?.type === 'grid'
   const isRootLikeExtensionView = extensionView?.id === 'clipboard-history'
-  const isFilterableChildOpen = Boolean(actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || aliasFor || shortcutManagerOpen || isFilterableExtensionView)
+  const isFilterableChildOpen = Boolean(actionSubmenuFor || confirmRemoveFor || confirmViewActionFor || extensionItemOptionsFor || optionsFor || aliasFor || shortcutManagerOpen || isFilterableExtensionView)
   const isLargeExtensionView = Boolean(extensionView?.size === 'large' && !actionSubmenuFor && !extensionItemOptionsFor)
-  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || extensionItemOptionsFor || optionsFor || aliasFor || previewFor || extensionView)
+  const isChildOpen = Boolean(shortcutFor || shortcutOptionsFor || shortcutManagerOpen || actionSubmenuFor || confirmRemoveFor || confirmViewActionFor || extensionItemOptionsFor || optionsFor || aliasFor || previewFor || extensionView)
   const isVisuallyStacked = (isChildOpen && !isRootLikeExtensionView) || siblingViews.length > 0
-  const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : aliasFor ? `Alias for “${aliasFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
+  const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor || confirmViewActionFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : aliasFor ? `Alias for “${aliasFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
   const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : previewFor ? previewFor.title : extensionView ? extensionView.title : optionsFor && !query ? optionsFor.title : query
   const placeholder = shortcutFor ? 'Press a keyboard shortcut' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
 
   useEffect(() => {
     if (!isFilterableChildOpen && !shortcutFor) return
     requestAnimationFrame(() => inputRef.current?.focus())
-  }, [confirmRemoveFor?.id, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
+  }, [confirmRemoveFor?.id, confirmViewActionFor?.title, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
 
   useEffect(() => {
     if (isChildOpen) {
@@ -424,21 +427,21 @@ export function App() {
     extensionNavigation.showView(view, navigation)
   }
 
-  function showUpdateLoadingView() {
+  function showActionLoadingView(title = 'Running…', subtitle = 'Waiting for the action to finish', navigation: 'root' | 'push' | 'replace' = 'root') {
     showExtensionView({
       type: 'list',
-      id: 'app-updates',
-      title: 'Updates',
-      presentation: 'root',
-      searchBarPlaceholder: 'Search Updates',
+      id: `action-loading:${title}`,
+      title,
+      presentation: navigation === 'root' ? 'root' : undefined,
+      searchBarPlaceholder: title,
       isLoading: true,
       items: [{
-        id: 'update-status-loading',
-        title: 'Checking for updates…',
-        subtitle: 'Looking for a newer Nevermind version',
-        icon: 'restart',
+        id: 'action-loading',
+        title,
+        subtitle,
+        icon: 'sparkles',
       }],
-    }, 'root')
+    }, navigation)
   }
 
   function popExtensionView() {
@@ -453,24 +456,28 @@ export function App() {
     extensionNavigation.popView()
   }
 
-  async function handleViewActionResult(result?: { view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
+  async function handleViewActionResult(result?: { view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
     if (!result) return
     if (result.toast) showToast(result.toast.message, result.toast.tone || 'default')
     if (result.navigation === 'pop') popExtensionView()
     else if (result.view?.aiChat) await openAiChat(result.view)
-    else if (result.view) showExtensionView(result.view, result.navigation || 'push')
+    else if (result.view) showExtensionView(result.view, result.navigation || fallbackNavigation)
   }
 
   function actionCanDismissImmediately(action: ExtensionViewAction) {
     return action.dismissAfterRun === 'auto' && ['nativeAction', 'openPath', 'revealPath', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'runExtensionAction'].includes(action.type)
   }
 
-  function rootActionCanDismissImmediately(action: Action) {
-    return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(action.kind) || (action.kind === 'extension-command' && (action.background || action.dismissAfterRun === 'auto'))
+  function rootActionCanDismissImmediately(action: Action | { kind?: string }) {
+    return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(String(action.kind)) || (action.kind === 'extension-command' && ('background' in action && action.background || 'dismissAfterRun' in action && action.dismissAfterRun === 'auto'))
   }
 
-  async function runViewAction(action: ExtensionViewAction) {
-    if (action.requiresConfirmation && !window.confirm(`Run “${action.title}”?`)) return
+  async function runViewAction(action: ExtensionViewAction, confirmed = false) {
+    if (action.requiresConfirmation && !confirmed) {
+      setConfirmViewActionFor(action)
+      setChildQuery('')
+      return
+    }
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string } | undefined : undefined
     if (nativeAction?.kind === 'record-palette-hotkey') {
       startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
@@ -484,13 +491,19 @@ export function App() {
     const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
     if (runningViewActionsRef.current.has(actionKey)) return
     runningViewActionsRef.current.add(actionKey)
-    const dismissedImmediately = actionCanDismissImmediately(action)
+    const dismissedImmediately = actionCanDismissImmediately(action) || Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction))
+    const loadingNavigation = nativeAction ? 'root' : 'push'
+    const showsLoading = !dismissedImmediately
     if (dismissedImmediately) window.nvm.hide()
+    else showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {
       const result = await window.nvm.runViewAction(action)
-      await handleViewActionResult(result)
+      await handleViewActionResult(result, showsLoading ? 'replace' : 'push')
       if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
+        else window.nvm.hide()
+      } else if (showsLoading && !result?.view && !result?.navigation) {
+        if (loadingNavigation === 'push') popExtensionView()
         else window.nvm.hide()
       }
     } finally {
@@ -508,14 +521,17 @@ export function App() {
       await openShortcutManager()
       return
     }
-    if (action.kind === 'check-for-updates') showUpdateLoadingView()
-    if (rootActionCanDismissImmediately(action)) window.nvm.hide()
+    const dismissedImmediately = rootActionCanDismissImmediately(action)
+    if (dismissedImmediately) window.nvm.hide()
+    else showActionLoadingView(action.title || 'Running…', action.subtitle || 'Waiting for the action to finish', 'root')
     const result = await window.nvm.execute(action)
     if (result?.view) {
       setOptionsFor(null)
       setPreviewFor(null)
       if (result.view.aiChat) await openAiChat(result.view)
       else showExtensionView(result.view, 'root')
+    } else if (!dismissedImmediately) {
+      window.nvm.hide()
     }
   }
 
@@ -764,6 +780,32 @@ export function App() {
         title: 'Cancel',
         subtitle: 'Keep this action',
         onSelect: () => setConfirmRemoveFor(null),
+        className: 'result',
+      },
+    ].filter((row) => childMatches(row.title, row.subtitle))
+  }
+
+  function getConfirmViewActionRows() {
+    const action = confirmViewActionFor
+    return [
+      {
+        value: 'confirm:view-action',
+        icon: action?.style === 'destructive' ? <Trash2 size={18} /> : <Zap size={18} />,
+        title: action?.title || 'Run action',
+        subtitle: 'Confirm this action',
+        onSelect: async () => {
+          if (!action) return
+          setConfirmViewActionFor(null)
+          await runViewAction({ ...action, requiresConfirmation: false }, true)
+        },
+        className: action?.style === 'destructive' ? 'result dangerResult' : 'result',
+      },
+      {
+        value: 'confirm:view-cancel',
+        icon: <RotateCcw size={18} />,
+        title: 'Cancel',
+        subtitle: 'Do nothing',
+        onSelect: () => setConfirmViewActionFor(null),
         className: 'result',
       },
     ].filter((row) => childMatches(row.title, row.subtitle))
@@ -1135,6 +1177,7 @@ export function App() {
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
       else if (aliasFor) { setAliasFor(null); setChildQuery('') }
       else if (confirmRemoveFor) setConfirmRemoveFor(null)
+      else if (confirmViewActionFor) setConfirmViewActionFor(null)
       else if (actionSubmenuFor) setActionSubmenuFor(null)
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
       else if (optionsFor) setOptionsFor(null)
@@ -1150,12 +1193,12 @@ export function App() {
         setShortcutOptionsFor(selectedShortcutRecord)
         return
       }
-      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         setChildQuery('')
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
-      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
+      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
         setPreviewFor(null)
         setOptionsFor(activeAction)
       }
@@ -1171,6 +1214,7 @@ export function App() {
       else if (shortcutManagerOpen) setShortcutManagerOpen(false)
       else if (aliasFor) { setAliasFor(null); setChildQuery('') }
       else if (confirmRemoveFor) setConfirmRemoveFor(null)
+      else if (confirmViewActionFor) setConfirmViewActionFor(null)
       else if (actionSubmenuFor) setActionSubmenuFor(null)
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null)
       else if (optionsFor) setOptionsFor(null)
@@ -1189,13 +1233,13 @@ export function App() {
         setOptionsFor(null)
         return
       }
-      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         event.preventDefault()
         setChildQuery('')
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
-      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
+      if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
         event.preventDefault()
         setPreviewFor(null)
         setOptionsFor(activeAction)
@@ -1284,6 +1328,8 @@ export function App() {
             renderActionPanel(getAliasActionRows())
           ) : confirmRemoveFor ? (
             renderActionPanel(getConfirmActionRows())
+          ) : confirmViewActionFor ? (
+            renderActionPanel(getConfirmViewActionRows())
           ) : actionSubmenuFor ? (
             renderActionPanel(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true))
           ) : extensionItemOptionsFor ? (

@@ -30,7 +30,8 @@ type NevermindAiOptions = {
   skillPath: string
   reloadExtensions: () => Promise<unknown> | unknown
   getActiveChat?: () => ActiveChat | null
-  markGeneratedExtension?: (filePath: string) => void
+  getChat?: (chatId: string) => ActiveChat | null
+  markGeneratedExtension?: (filePath: string, chatId?: string) => void
   addAliasForChat?: (chatId: string) => void
   onEvent?: (event: AiEvent) => void
 }
@@ -127,7 +128,7 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   return { send, abort, reset }
 
-  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
+  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
     await fs.mkdir(workspaceDir, { recursive: true })
     await fs.mkdir(extensionsDir, { recursive: true })
@@ -160,7 +161,14 @@ function createNevermindAi(options: NevermindAiOptions) {
     })
 
     const resourceLoader = await createResourceLoader(pi, { agentDir, workspaceDir, extensionApiPath, skillPath })
-    const customTools = createTools(pi, ai.Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat })
+    const customTools = createTools(pi, ai.Type, {
+      extensionsDir,
+      extensionApiPath,
+      reloadExtensions,
+      getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
+      markGeneratedExtension: (filePath) => markGeneratedExtension?.(filePath, chatId),
+      addAliasForChat,
+    })
 
     const result = await pi.createAgentSession({
       cwd: workspaceDir,

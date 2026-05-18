@@ -20,8 +20,10 @@
 
 ## Product conventions
 
-* This app is command-k first. Decisions, confirmations, warnings, and configuration live inside the palette — usually a `preview`/`list` view with an actionPanel, or an item in an existing view. Never use `window.confirm`, `window.prompt`, or `window.alert`, and never introduce a separate preferences window.
+* This app is command-k first. Decisions, confirmations, warnings, and configuration live inside the palette — usually a `preview`/`list` view with an actionPanel, or an item in an existing view. Never use `window.confirm`, `window.prompt`, or `window.alert`, and never introduce a separate preferences window. Extension `requiresConfirmation` and destructive flows must render as in-palette confirmation/action-panel states.
 * Extension APIs should be declarative contribution points, not backdoors into app internals. Prefer host-controlled surfaces such as root items, views, actions, background refresh, permissions, quotas, TTLs, and bounded ranking over exposing mutable global state.
+* Passive extension contribution surfaces should be snapshot-stable while visible. Slow or async contribution work should use stale-while-revalidate: return cached snapshots immediately, refresh in the background, and never insert/reorder items into an already-rendered list.
+* AI builder chats are history/context, not owners of extensions. Extension files are standalone durable artifacts, and deleting chat history must not delete extension code.
 * Reset scoped filters/search state when navigating into a different context unless inheritance is explicitly desired. Keep extension view presentation state scoped: action panels/submenus should own palette sizing and selection state while open.
 * Do not show empty-state UI in passive content surfaces; reserve empty states for places where the user expects result/action lists.
 * New user-configurable options go through the existing settings pipeline: add an entry to `SETTING_DEFINITIONS` in `src/electron/main.ts`, persist it under `userState.settings`, and surface it as an item in the Settings view. Booleans toggle via `toggle-setting`; richer types get their own `nativeAction` kind plus renderer handling.

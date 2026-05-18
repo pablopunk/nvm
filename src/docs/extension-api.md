@@ -66,7 +66,7 @@ module.exports = {
 }
 ```
 
-Nevermind owns root ranking, rendering, limits, and failure isolation. Root contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. The host limits each extension to a few root items, caps total root contributions, times out slow `rootItems` calls, and reuses recently cached successful items when available. Use `ctx.storage.memo` to cache expensive refreshes.
+Nevermind owns root ranking, rendering, limits, and failure isolation. Root contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. Root items use stale-while-revalidate semantics: the host returns the current cached snapshot for a palette render, refreshes stale/missing items in the background, and only shows refreshed items on a later search/open so the visible list does not shift under the user. Use `ctx.storage.memo` to cache expensive refreshes.
 
 ## Views
 
