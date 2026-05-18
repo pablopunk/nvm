@@ -715,8 +715,9 @@ async function executeAction(action, options: any = {}) {
     case 'extension-command': {
       const dismissImmediately = action.background || action.dismissAfterRun === 'auto'
       if (dismissImmediately && !options.keepPaletteOpen) paletteWindow.hidePalette()
-      const view = await executeExtensionCommand(action)
-      if (view) return { view }
+      const result = await executeExtensionCommand(action)
+      if (result?.type) return { view: result }
+      if (result) return result
       break
     }
     case 'ai-chats':
