@@ -26,6 +26,7 @@ import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
 import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView } from './model'
+import type { NevermindApi, ShortcutRecord } from './preload-api'
 
 type ActionKind =
   | 'open-url'
@@ -102,52 +103,9 @@ type ExtensionViewAction = CommandAction
 type ExtensionViewItem = CommandItem
 type ExtensionView = CommandView
 
-type SaveResult = {
-  ok: boolean
-  message: string
-}
-
-type ShortcutRecord = {
-  actionId: string
-  accelerator: string
-  action: Action
-}
-
 declare global {
   interface Window {
-    nvm: {
-      search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<Action[]>
-      execute: (action: Action) => Promise<{ view?: ExtensionView } | void>
-      runViewAction: (action: ExtensionViewAction) => Promise<{ view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void>
-      startFileDrag: (filePath: string) => void
-      sendAiMessage: (message: string, chatId?: string) => Promise<void>
-      abortAiChat: (chatId?: string) => Promise<void>
-      resetAiChat: (chatId?: string) => Promise<void>
-      setAlias: (action: Action, alias: string) => Promise<SaveResult>
-      removeAlias: (action: Action, alias: string) => Promise<SaveResult>
-      setShortcut: (action: Action, shortcut: string) => Promise<SaveResult>
-      setPaletteHotkey: (accelerator: string) => Promise<SaveResult & { spotlightConflict?: boolean }>
-      openSystemKeyboardSettings: () => Promise<{ ok: boolean }>
-      getShortcuts: () => Promise<ShortcutRecord[]>
-      removeShortcut: (actionId: string) => Promise<SaveResult>
-      suspendShortcuts: () => Promise<void>
-      resumeShortcuts: () => Promise<void>
-      setOverride: (action: Action, instruction: string) => Promise<SaveResult>
-      clearOverride: (action: Action) => Promise<SaveResult>
-      duplicateCreatedAction: (action: Action) => Promise<SaveResult & { action?: Action }>
-      removeCreatedAction: (action: Action) => Promise<SaveResult>
-      getAppIcon: (appPath: string) => Promise<string | null>
-      setPaletteMode: (mode: 'default' | 'ai-chat' | 'stacked' | 'preview') => Promise<void>
-      hide: () => Promise<void>
-      shortcutReady: () => Promise<void>
-      onShown: (callback: () => void) => () => void
-      onShortcutShown: (callback: () => void) => () => void
-      onHidden: (callback: () => void) => () => void
-      onAppsIndexed: (callback: (count: number) => void) => () => void
-      onClipboardChanged: (callback: () => void) => () => void
-      onOpenActionView: (callback: (payload?: { view?: ExtensionView; revealWhenReady?: boolean; asSibling?: boolean }) => void) => () => void
-      onAiChatEvent: (callback: (event: { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }) => void) => () => void
-    }
+    nvm: NevermindApi
   }
 }
 

@@ -1,7 +1,7 @@
-// @ts-nocheck
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { NevermindApi } from '../preload-api'
 
-contextBridge.exposeInMainWorld('nvm', {
+const api: NevermindApi = {
   search: (query, options) => ipcRenderer.invoke('actions:search', query, options),
   execute: (action) => ipcRenderer.invoke('actions:execute', action),
   runViewAction: (action) => ipcRenderer.invoke('view-action:execute', action),
@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('nvm', {
     return () => ipcRenderer.removeListener('palette:hidden', listener)
   },
   onAppsIndexed: (callback) => {
-    const listener = (_event, count) => callback(count)
+    const listener = (_event: IpcRendererEvent, count: number) => callback(count)
     ipcRenderer.on('apps:indexed', listener)
     return () => ipcRenderer.removeListener('apps:indexed', listener)
   },
@@ -52,13 +52,15 @@ contextBridge.exposeInMainWorld('nvm', {
     return () => ipcRenderer.removeListener('clipboard:changed', listener)
   },
   onOpenActionView: (callback) => {
-    const listener = (_event, payload) => callback(payload)
+    const listener = (_event: IpcRendererEvent, payload?: Parameters<NevermindApi['onOpenActionView']>[0] extends (payload?: infer Payload) => void ? Payload : never) => callback(payload)
     ipcRenderer.on('action:view-open', listener)
     return () => ipcRenderer.removeListener('action:view-open', listener)
   },
   onAiChatEvent: (callback) => {
-    const listener = (_event, payload) => callback(payload)
+    const listener = (_event: IpcRendererEvent, payload: Parameters<NevermindApi['onAiChatEvent']>[0] extends (event: infer Event) => void ? Event : never) => callback(payload)
     ipcRenderer.on('ai:chat:event', listener)
     return () => ipcRenderer.removeListener('ai:chat:event', listener)
   },
-})
+}
+
+contextBridge.exposeInMainWorld('nvm', api)
