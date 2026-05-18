@@ -960,6 +960,31 @@ function settingsView() {
   }
 }
 
+function updatePromptAction() {
+  const version = updateDownloadedInfo?.version || updateAvailableInfo?.version
+  if (updateDownloadedInfo) {
+    return {
+      id: 'builtin:install-update',
+      kind: 'install-update',
+      title: `Install Nevermind ${version}`,
+      subtitle: 'Restart Nevermind to finish updating',
+      icon: 'restart',
+      score: 1_000,
+    }
+  }
+  if (updateAvailableInfo) {
+    return {
+      id: 'builtin:download-update',
+      kind: 'download-update',
+      title: `Download Nevermind ${version}`,
+      subtitle: updateDownloadInFlight ? 'Downloading update…' : 'Update available',
+      icon: 'restart',
+      score: 1_000,
+    }
+  }
+  return null
+}
+
 function searchActions(query, options = {}) {
   const q = query.trim()
 
@@ -978,6 +1003,8 @@ function searchActions(query, options = {}) {
   const results = []
   const url = getUrlFromQuery(q)
   const mathResult = q ? calculate(q) : null
+  const updateAction = q ? null : updatePromptAction()
+  if (updateAction) results.push(updateAction)
 
   if (url) {
     results.push({
