@@ -1419,7 +1419,7 @@ function createCoreExtension() {
   return {
     id: 'nevermind.core',
     title: 'Nevermind Core',
-    commands: BUILT_IN_ACTIONS.map((action) => ({
+    commands: BUILT_IN_ACTIONS.filter((action) => action.kind !== 'keyboard-shortcuts').map((action) => ({
       id: action.id,
       actionId: action.id,
       title: action.title,
