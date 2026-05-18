@@ -1001,7 +1001,7 @@ function searchActions(query, options = {}) {
       subtitle: 'Automate with AI',
       query: q,
       icon: 'bolt',
-      score: 90,
+      score: 40,
     })
   }
 
