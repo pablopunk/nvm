@@ -1,18 +1,95 @@
-// @ts-nocheck
-const fs = require('node:fs/promises')
-const path = require('node:path')
-const vm = require('node:vm')
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import vm from 'node:vm'
+
+type AiEvent = {
+  type: string
+  chatId?: string
+  text?: string
+  message?: string
+  name?: string
+  label?: string
+  data?: unknown
+  isError?: boolean
+}
+
+type ActiveChat = {
+  id?: string
+  title?: string
+  query?: string
+  generatedExtensionFile?: string
+}
+
+type NevermindAiOptions = {
+  agentDir: string
+  workspaceDir: string
+  extensionsDir: string
+  extensionApiPath: string
+  skillPath: string
+  reloadExtensions: () => Promise<unknown> | unknown
+  getActiveChat?: () => ActiveChat | null
+  markGeneratedExtension?: (filePath: string) => void
+  addAliasForChat?: (chatId: string) => void
+  onEvent?: (event: AiEvent) => void
+}
+
+type AgentSession = {
+  prompt: (message: string) => Promise<unknown>
+  abort?: () => Promise<unknown>
+  dispose?: () => void
+  subscribe: (callback: (event: AgentSessionEvent) => void) => () => void
+  agent: { state: { tools: Array<{ name: string }> } }
+}
+
+type AgentSessionEvent = { type: string; [key: string]: unknown }
+
+type MessageUpdateEvent = AgentSessionEvent & {
+  type: 'message_update'
+  assistantMessageEvent: { type: 'text_delta'; delta: string }
+}
+
+type ToolExecutionStartEvent = AgentSessionEvent & {
+  type: 'tool_execution_start'
+  toolName: string
+}
+
+type ToolExecutionEndEvent = AgentSessionEvent & {
+  type: 'tool_execution_end'
+  toolName: string
+  isError: boolean
+}
+
+type SessionEntry = {
+  unsubscribe: (() => void) | null
+  promise: Promise<AgentSession>
+}
+
+type PiApi = any
+type TypeApi = any
 
 const DEFAULT_MODEL = 'gemini-3-flash'
 
-function createNevermindAi(options) {
-  const sessions = new Map()
+function isMessageUpdateEvent(event: AgentSessionEvent): event is MessageUpdateEvent {
+  const assistantMessageEvent = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined
+  return event.type === 'message_update' && assistantMessageEvent?.type === 'text_delta' && typeof assistantMessageEvent.delta === 'string'
+}
+
+function isToolExecutionStartEvent(event: AgentSessionEvent): event is ToolExecutionStartEvent {
+  return event.type === 'tool_execution_start' && typeof event.toolName === 'string'
+}
+
+function isToolExecutionEndEvent(event: AgentSessionEvent): event is ToolExecutionEndEvent {
+  return event.type === 'tool_execution_end' && typeof event.toolName === 'string' && typeof event.isError === 'boolean'
+}
+
+function createNevermindAi(options: NevermindAiOptions) {
+  const sessions = new Map<string, SessionEntry>()
 
   async function getSession(chatId = 'default') {
     const current = sessions.get(chatId)
     if (current) return current.promise
 
-    const entry = {
+    const entry: SessionEntry = {
       unsubscribe: null,
       promise: createSession({ ...options, chatId }, (event) => options.onEvent?.({ ...event, chatId })),
     }
@@ -20,7 +97,7 @@ function createNevermindAi(options) {
     return entry.promise
   }
 
-  async function send(message, chatId = 'default') {
+  async function send(message: string, chatId = 'default') {
     const session = await getSession(chatId)
     options.onEvent?.({ type: 'start', chatId })
     try {
@@ -46,14 +123,16 @@ function createNevermindAi(options) {
     sessions.delete(chatId)
   }
 
-  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, markGeneratedExtension, onEvent }, emit) {
+  return { send, abort, reset }
+
+  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
     await fs.mkdir(workspaceDir, { recursive: true })
     await fs.mkdir(extensionsDir, { recursive: true })
 
     const [pi, ai] = await Promise.all([
-      import('@earendil-works/pi-coding-agent'),
-      import('@earendil-works/pi-ai'),
+      import('@earendil-works/pi-coding-agent') as Promise<PiApi>,
+      import('@earendil-works/pi-ai') as Promise<any>,
     ])
 
     const apiKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
@@ -71,7 +150,6 @@ function createNevermindAi(options) {
       thinkingLevelMap: model.thinkingLevelMap,
       compat: model.compat,
     }
-    // console.info('[Nevermind AI] model', modelDebug)
     onEvent?.({ type: 'debug', label: 'model', data: modelDebug })
 
     const settingsManager = pi.SettingsManager.inMemory({
@@ -80,7 +158,7 @@ function createNevermindAi(options) {
     })
 
     const resourceLoader = await createResourceLoader(pi, { agentDir, workspaceDir, extensionApiPath, skillPath })
-    const customTools = createTools(pi, ai.Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension })
+    const customTools = createTools(pi, ai.Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat })
 
     const result = await pi.createAgentSession({
       cwd: workspaceDir,
@@ -94,15 +172,14 @@ function createNevermindAi(options) {
       customTools,
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
-    })
+    }) as { session: AgentSession }
 
     const toolNames = result.session.agent.state.tools.map((tool) => tool.name)
-    // console.info('[Nevermind AI] tools', toolNames)
     onEvent?.({ type: 'debug', label: 'tools', data: toolNames })
 
     const entry = sessions.get(chatId)
     if (entry) entry.unsubscribe = result.session.subscribe((event) => {
-      if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+      if (isMessageUpdateEvent(event)) {
         const delta = event.assistantMessageEvent.delta
         if (delta.includes('<tool_calls>') || delta.includes('<tool name=')) {
           console.warn('[Nevermind AI] model emitted raw tool-call text instead of structured tool calls', {
@@ -114,24 +191,16 @@ function createNevermindAi(options) {
         }
         emit({ type: 'delta', text: delta })
       }
-      if (event.type === 'tool_execution_start') {
-        // console.info('[Nevermind AI] tool start', event.toolName)
-        emit({ type: 'tool_start', name: event.toolName })
-      }
-      if (event.type === 'tool_execution_end') {
-        // console.info('[Nevermind AI] tool end', event.toolName, { isError: event.isError })
-        emit({ type: 'tool_end', name: event.toolName, isError: event.isError })
-      }
+      if (isToolExecutionStartEvent(event)) emit({ type: 'tool_start', name: event.toolName })
+      if (isToolExecutionEndEvent(event)) emit({ type: 'tool_end', name: event.toolName, isError: event.isError })
     })
 
     onEvent?.({ type: 'ready' })
     return result.session
   }
-
-  return { send, abort, reset }
 }
 
-async function createResourceLoader(pi, { agentDir, workspaceDir, extensionApiPath, skillPath }) {
+async function createResourceLoader(pi: PiApi, { agentDir, workspaceDir, extensionApiPath, skillPath }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'>) {
   const webAccessPath = await findPiWebAccessPath()
   const webAccessLoader = webAccessPath && pi.DefaultResourceLoader
     ? new pi.DefaultResourceLoader({ agentDir, cwd: workspaceDir, additionalExtensionPaths: [webAccessPath] })
@@ -150,7 +219,7 @@ async function createResourceLoader(pi, { agentDir, workspaceDir, extensionApiPa
   return {
     getExtensions: () => webAccessLoader?.getExtensions() || ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
     getSkills: () => {
-      const webSkills = (webAccessLoader?.getSkills().skills || []).filter((skill) => skill.filePath?.includes('pi-web-access'))
+      const webSkills = (webAccessLoader?.getSkills().skills || []).filter((skill: { filePath?: string }) => skill.filePath?.includes('pi-web-access'))
       return { skills: [extensionBuilderSkill, ...webSkills], diagnostics: [] }
     },
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
@@ -169,7 +238,7 @@ async function findPiWebAccessPath() {
     '/opt/homebrew/lib/node_modules/pi-web-access',
     '/usr/local/lib/node_modules/pi-web-access',
     path.join(process.env.HOME || '', '.pi', 'agent', 'node_modules', 'pi-web-access'),
-  ].filter(Boolean)
+  ].filter((candidate): candidate is string => Boolean(candidate))
   for (const candidate of candidates) {
     try {
       await fs.access(path.join(candidate, 'package.json'))
@@ -179,7 +248,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat }) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'addAliasForChat'>) {
   return [
     pi.defineTool({
       name: 'read_extension_api',
@@ -222,7 +291,7 @@ function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensio
         filename: Type.String({ description: 'Safe filename ending in .cjs, for example image-grid.cjs' }),
         code: Type.String({ description: 'Complete CommonJS extension source code using module.exports = { ... }' }),
       }),
-      execute: async (_toolCallId, params) => {
+      execute: async (_toolCallId: string, params: { filename: string; code: string }) => {
         const filePath = extensionPathForActiveChat(extensionsDir, params.filename, getActiveChat)
         validateCommonJs(params.code)
         await fs.writeFile(filePath, params.code)
@@ -238,7 +307,7 @@ function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensio
       label: 'Validate Extension',
       description: 'Validate that the active generated extension file is syntactically valid CommonJS.',
       parameters: Type.Object({ filename: Type.String() }),
-      execute: async (_toolCallId, params) => {
+      execute: async (_toolCallId: string, params: { filename: string }) => {
         const filePath = extensionPathForActiveChat(extensionsDir, params.filename, getActiveChat)
         validateCommonJs(await fs.readFile(filePath, 'utf8'))
         return { content: [{ type: 'text', text: `Validated ${path.basename(filePath)}` }], details: { filePath } }
@@ -249,7 +318,7 @@ function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensio
       label: 'Install Extension',
       description: 'No-op compatibility tool. write_extension already installs/replaces the active generated extension idempotently.',
       parameters: Type.Object({ filename: Type.String() }),
-      execute: async (_toolCallId, params) => {
+      execute: async (_toolCallId: string, params: { filename: string }) => {
         const filePath = extensionPathForActiveChat(extensionsDir, params.filename, getActiveChat)
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
@@ -259,13 +328,13 @@ function createTools(pi, Type, { extensionsDir, extensionApiPath, reloadExtensio
   ]
 }
 
-function extensionPathForActiveChat(root, filename, getActiveChat) {
+function extensionPathForActiveChat(root: string, filename: string, getActiveChat?: () => ActiveChat | null) {
   const chat = getActiveChat?.()
   if (!chat?.id) return safeExtensionPath(root, filename)
   return safeExtensionPath(root, `${slugValue(chat.query || chat.title || 'action')}-${chat.id.slice(0, 8)}.cjs`)
 }
 
-function slugValue(value) {
+function slugValue(value: unknown) {
   return String(value || 'action')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -273,7 +342,7 @@ function slugValue(value) {
     .slice(0, 48) || 'action'
 }
 
-function safeExtensionPath(root, filename) {
+function safeExtensionPath(root: string, filename: string) {
   const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '-')
   if (!safeName.endsWith('.cjs')) throw new Error('Extension filename must end in .cjs')
   const fullPath = path.resolve(root, safeName)
@@ -281,7 +350,7 @@ function safeExtensionPath(root, filename) {
   return fullPath
 }
 
-function validateCommonJs(code) {
+function validateCommonJs(code: string) {
   new vm.Script(`(function (module, exports, require) {\n${code}\n})`)
 }
 
@@ -331,7 +400,7 @@ Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers
 When done, tell the user what command was installed and how to find it.`
 }
 
-function systemContext(extensionApiPath) {
+function systemContext(extensionApiPath: string) {
   return `Nevermind is an Electron command palette. Your job is to create first-class local extensions using the documented API.
 Extension API docs path: ${extensionApiPath}
 Generated extensions are loaded by Nevermind after install_extension.`
