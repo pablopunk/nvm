@@ -505,24 +505,29 @@ function updateStatusView() {
       ? `Nevermind ${version} is ready`
       : availableInfo
         ? `Nevermind ${version} is available`
-        : updateManager.state.status === 'error'
-          ? 'Update check failed'
-          : 'No versions available'
+        : updateManager.state.checkInFlight
+          ? 'Checking for updates…'
+          : updateManager.state.status === 'error'
+            ? 'Update check failed'
+            : 'No versions available'
   const subtitle = unsupported
     ? autoUpdatesUnavailableMessage()
     : downloadedInfo
       ? 'Install the downloaded update and restart Nevermind'
       : availableInfo
         ? 'Download the update before installing it'
-        : updateManager.state.status === 'error'
-          ? updateManager.state.errorMessage
-          : `Current version: ${app.getVersion()}`
+        : updateManager.state.checkInFlight
+          ? `Current version: ${app.getVersion()}`
+          : updateManager.state.status === 'error'
+            ? updateManager.state.errorMessage
+            : `Current version: ${app.getVersion()}`
   return {
     type: 'list',
     id: 'app-updates',
     title: 'Updates',
     presentation: 'root',
     searchBarPlaceholder: 'Search Updates',
+    isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
     items: [{
       id: 'update-status',
       title,
@@ -535,13 +540,19 @@ function updateStatusView() {
   }
 }
 
-async function checkForUpdatesView() {
-  await updateManager.checkForUpdates('manual', { download: true })
+function refreshUpdateStatusViewWhenSettled(task: Promise<unknown>) {
+  task.finally(() => {
+    paletteWindow.win?.webContents.send('action:view-open', { view: updateStatusView() })
+  }).catch(() => {})
+}
+
+function checkForUpdatesView() {
+  refreshUpdateStatusViewWhenSettled(updateManager.checkForUpdates('manual', { download: true }))
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
-async function downloadUpdateView() {
-  await updateManager.downloadAvailableUpdate()
+function downloadUpdateView() {
+  refreshUpdateStatusViewWhenSettled(updateManager.downloadAvailableUpdate())
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
