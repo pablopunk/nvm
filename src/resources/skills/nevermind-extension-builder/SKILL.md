@@ -40,6 +40,7 @@ Rules:
 - Treat action shortcuts as local to the current view. Use command-level `globalShortcut` only for top-level commands that should run from anywhere; user-assigned global shortcuts take precedence.
 - For Open With flows, never hardcode app names. Use `const apps = await ctx.desktop.files.openWithApps(file.path)` and create nested items whose primary action is `ctx.actions.openWith(file.path, app)`.
 - Use `ctx.storage.memo(key, ttlMs, loader)` for expensive repeated work like indexing screenshots/media; use `ctx.storage.get/set/delete/clear` for persistent per-extension JSON state.
+- Use `ctx.ai.ask(prompt, options)` for one-shot AI calls and `ctx.ai.session(id, options).ask(prompt)` for per-extension conversational AI state; both return assistant text.
 - Use `ctx.desktop.shell.exec(command, args, options)` or `ctx.desktop.shell.script(script, options)` for system automation when needed; keep commands focused, bounded, and show useful output/errors in native views.
 - For grid views, choose `layout: 'wide'` for screenshots/videos, `layout: 'square'` for images/icons, or override with `aspectRatio`/`columns` when requested.
 - Use `ctx.actions.run(title, async (ctx) => ...)` for script work triggered from UI; handlers may return another native view or another action to execute.

@@ -100,9 +100,11 @@ Current `ctx` namespaces:
 - `ctx.actions.background(title, async (ctx) => { ... })` for fire-and-forget custom work that should dismiss the palette immediately and does not need follow-up UI. Command entries can set `background: true` or `dismissAfterRun: 'auto'` for the same command-level behavior.
 - `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
 - `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
+- `ctx.ai.ask(prompt, options)` for a one-shot AI call that returns text. Options may include `{ system }`.
+- `ctx.ai.session(id, options)` for a per-extension conversational AI session. The returned session supports `ask(prompt)` and `reset()`. Session ids are scoped to the extension, and options may include `{ system }`.
 - `ctx.extension.rename(title)` or `ctx.extension.rename({ title, subtitle, commandTitle, commandSubtitle })` to persistently rename the extension metadata shown in search results
 - `ctx.ui.item/actions/empty/loading/error` helpers
-- `ctx.cache`, `ctx.state`, `ctx.ai` placeholders
+- `ctx.cache` and `ctx.state` placeholders
 
 `ctx.desktop.files.find(roots, options)` supports `{ limit, depth, extensions, kind, pattern, sortBy, order }`, where `kind` can be `image`, `video`, or `media`, and `sortBy` can be `recent`/`modified`, `added`/`created`, `name`, or `size`. Convenience helpers `findImages`, `findVideos`, and `findMedia` call the same implementation. Returned files include `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`. For grid videos, use `video: file.videoUrl` and `image: file.thumbnailUrl` to show a playable looping preview with a poster frame.
 

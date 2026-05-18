@@ -87,6 +87,7 @@ function isToolExecutionEndEvent(event: AgentSessionEvent): event is ToolExecuti
 
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>()
+  const generalSessions = new Map<string, Promise<AgentSession>>()
 
   async function getSession(chatId = 'default') {
     const current = sessions.get(chatId)
@@ -126,7 +127,44 @@ function createNevermindAi(options: NevermindAiOptions) {
     sessions.delete(chatId)
   }
 
-  return { send, abort, reset }
+  async function ask(message: string, askOptions: { sessionId?: string; system?: string } = {}) {
+    const text: string[] = []
+    const session = await generalSession(askOptions)
+    const unsubscribe = session.subscribe((event) => {
+      if (isMessageUpdateEvent(event)) text.push(event.assistantMessageEvent.delta)
+    })
+    try {
+      await session.prompt(message)
+      return text.join('')
+    } finally {
+      unsubscribe()
+      if (!askOptions.sessionId) session.dispose?.()
+    }
+  }
+
+  async function generalSession(sessionOptions: { sessionId?: string; system?: string }) {
+    if (!sessionOptions.sessionId) return createGeneralSession(options, sessionOptions)
+    const key = sessionOptions.sessionId
+    let promise = generalSessions.get(key)
+    if (!promise) {
+      promise = createGeneralSession(options, sessionOptions)
+      generalSessions.set(key, promise)
+    }
+    return promise
+  }
+
+  function session(sessionId: string, sessionOptions: { system?: string } = {}) {
+    return {
+      ask: (message: string) => ask(message, { ...sessionOptions, sessionId }),
+      reset: async () => {
+        const current = await generalSessions.get(sessionId)?.catch(() => null)
+        current?.dispose?.()
+        generalSessions.delete(sessionId)
+      },
+    }
+  }
+
+  return { send, abort, reset, ask, session }
 
   async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
@@ -208,6 +246,45 @@ function createNevermindAi(options: NevermindAiOptions) {
     onEvent?.({ type: 'ready' })
     return result.session
   }
+}
+
+async function createGeneralSession(options: NevermindAiOptions, sessionOptions: { sessionId?: string; system?: string }) {
+  const { agentDir, workspaceDir } = options
+  await fs.mkdir(agentDir, { recursive: true })
+  await fs.mkdir(workspaceDir, { recursive: true })
+  const [pi, ai] = await Promise.all([
+    import('@earendil-works/pi-coding-agent') as Promise<PiApi>,
+    import('@earendil-works/pi-ai') as Promise<any>,
+  ])
+  const apiKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
+  const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
+  if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
+  const model = ai.getModel('opencode', process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
+  if (!model) throw new Error(`Missing opencode model: ${process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL}`)
+  const resourceLoader = {
+    getExtensions: () => ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
+    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getPrompts: () => ({ prompts: [], diagnostics: [] }),
+    getThemes: () => ({ themes: [], diagnostics: [] }),
+    getAgentsFiles: () => ({ agentsFiles: [] }),
+    getSystemPrompt: () => sessionOptions.system || 'You are a helpful AI assistant inside a Nevermind extension. Answer directly and concisely.',
+    getAppendSystemPrompt: () => [],
+    extendResources: () => {},
+    reload: async () => {},
+  }
+  const result = await pi.createAgentSession({
+    cwd: workspaceDir,
+    agentDir,
+    model,
+    thinkingLevel: 'low',
+    authStorage,
+    modelRegistry: pi.ModelRegistry.inMemory(authStorage),
+    resourceLoader,
+    noTools: 'builtin',
+    sessionManager: pi.SessionManager.inMemory(path.join(workspaceDir, 'extension-ai', sessionOptions.sessionId || `${Date.now()}-${Math.random()}`)),
+    settingsManager: pi.SettingsManager.inMemory({ compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 } }),
+  }) as { session: AgentSession }
+  return result.session
 }
 
 async function createResourceLoader(pi: PiApi, { agentDir, workspaceDir, extensionApiPath, skillPath }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'>) {
@@ -409,6 +486,7 @@ function capabilities() {
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
     namespaces: ['desktop', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
+    ai: ['ask(prompt, options)', 'session(id, options).ask(prompt)', 'session(id).reset()'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     desktop: {
       clipboard: ['readText', 'writeText', 'readImage', 'writeImage', 'readFiles', 'read', 'write'],

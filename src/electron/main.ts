@@ -1525,6 +1525,14 @@ function createExtensionStorage(extension) {
   }
 }
 
+function createExtensionAi(extension) {
+  const extensionKey = path.basename(extension.__filePath || extension.id || 'extension').replace(/[^a-zA-Z0-9._-]/g, '-')
+  return {
+    ask: (prompt, options: any = {}) => nevermindAi.ask(String(prompt || ''), { system: options.system }),
+    session: (id = 'default', options: any = {}) => nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: options.system }),
+  }
+}
+
 function createExtensionContext(extension, command) {
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
@@ -1628,7 +1636,7 @@ function createExtensionContext(extension, command) {
     storage: createExtensionStorage(extension),
     cache: new Map(),
     state: {},
-    ai: {},
+    ai: createExtensionAi(extension),
   }
 }
 
