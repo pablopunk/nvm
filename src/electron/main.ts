@@ -562,12 +562,13 @@ function installDownloadedUpdate() {
   updateManager.quitAndInstall()
 }
 
-function settingsView() {
+function settingsView(selectedItemId = '') {
   return {
     type: 'list',
     id: 'app-settings',
     title: 'Settings',
     presentation: 'root',
+    selectedItemId,
     searchBarPlaceholder: 'Search Settings',
     items: SETTING_DEFINITIONS.map((definition) => {
       const value = getSetting(definition.id)
@@ -696,7 +697,7 @@ async function executeAction(action, options: any = {}) {
       const current = getSetting(definition.id)
       const next = toggledSettingValue(definition, current)
       setSetting(definition.id, next)
-      return { view: settingsView(), navigation: 'replace' }
+      return { view: settingsView(`setting:${definition.id}`), navigation: 'replace' }
     }
     case 'file':
       runInBackground(() => shell.openPath(action.filePath))
@@ -1612,6 +1613,7 @@ function createSettingsExtension() {
       id: 'app-settings',
       title: 'Settings',
       presentation: 'root',
+      selectedItemId: ctx.state.selectedItemId,
       searchBarPlaceholder: 'Search Settings',
       items: SETTING_DEFINITIONS.map((definition) => {
         const value = getSetting(definition.id)
