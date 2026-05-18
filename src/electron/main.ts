@@ -631,6 +631,10 @@ async function searchActions(query, options: any = {}) {
   }
 
   const results = []
+  const keyboardShortcutsAction = BUILT_IN_ACTIONS.find((action) => action.kind === 'keyboard-shortcuts')
+  const rankedKeyboardShortcuts = keyboardShortcutsAction ? rankAction(withShortcutHint(keyboardShortcutsAction), q) : null
+  if (rankedKeyboardShortcuts) results.push(rankedKeyboardShortcuts)
+
   const contributedItems = q ? await extensionSearchActions(q) : await extensionRootActions()
   for (const item of contributedItems) {
     const ranked = rankAction(withShortcutHint(item), q)
@@ -1419,7 +1423,7 @@ function createCoreExtension() {
   return {
     id: 'nevermind.core',
     title: 'Nevermind Core',
-    commands: BUILT_IN_ACTIONS.map((action) => ({
+    commands: BUILT_IN_ACTIONS.filter((action) => action.kind !== 'keyboard-shortcuts').map((action) => ({
       id: action.id,
       actionId: action.id,
       title: action.title,
