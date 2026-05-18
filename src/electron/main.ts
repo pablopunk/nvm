@@ -98,7 +98,7 @@ const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -663,21 +663,6 @@ async function searchActions(query, options: any = {}) {
     }
   }
 
-  const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
-  const clipboardHistoryAction = rankAction(withShortcutHint({
-    id: 'clipboard-history',
-    kind: 'clipboard-history',
-    title: 'Clipboard History',
-    subtitle: clipboardHistory.length ? `Show all ${clipboardHistory.length} copied items` : 'Show copied items',
-    icon: 'clipboard',
-    score: 14,
-    lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
-  }), q)
-  if (clipboardHistoryAction) {
-    clipboardHistoryAction.lastUsed = Math.max(clipboardHistoryAction.lastUsed || 0, latestClipboardTime ? latestClipboardTime - 1 : 0)
-    results.push(clipboardHistoryAction)
-  }
-
   for (const item of appIndex) {
     const action = {
       id: `app:${item.id}`,
@@ -708,16 +693,6 @@ async function searchActions(query, options: any = {}) {
     if (ranked) {
       results.push(ranked)
       fileMatches += 1
-    }
-  }
-
-  if (getSetting('showClipboardInRoot')) {
-    for (const item of clipboardHistory) {
-      const ranked = rankAction(clipboardActionFromItem(item), q)
-      if (ranked) {
-        ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.createdAt || 0)
-        results.push(ranked)
-      }
     }
   }
 
@@ -1551,6 +1526,47 @@ function createWebSearchExtension() {
       }
       const action = { id: `web-search:${q}`, kind: 'web-search', title: `Search the web for "${q}"`, subtitle: 'Search instead', query: q, icon: 'search', score: 10 + usageBoost(`web-search:${q}`) + recentBoost(`web-search:${q}`) }
       return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+    },
+  }
+}
+
+function createClipboardExtension() {
+  function historyAction() {
+    const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
+    return {
+      id: 'clipboard-history',
+      kind: 'clipboard-history',
+      title: 'Clipboard History',
+      subtitle: clipboardHistory.length ? `Show all ${clipboardHistory.length} copied items` : 'Show copied items',
+      icon: 'clipboard',
+      score: 14,
+      lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
+    }
+  }
+
+  function itemFromAction(action) {
+    return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, lastUsed: action.lastUsed, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }
+  }
+
+  return {
+    id: 'nevermind.clipboard',
+    title: 'Clipboard',
+    commands: [{
+      id: 'clipboard-history',
+      actionId: 'clipboard-history',
+      title: 'Clipboard History',
+      subtitle: 'Show copied items',
+      icon: 'clipboard',
+      score: 14,
+      run: () => clipboardHistoryView(),
+    }],
+    rootItems() {
+      if (!getSetting('showClipboardInRoot')) return [itemFromAction(historyAction())]
+      return [itemFromAction(historyAction()), ...clipboardHistory.slice(0, 5).map((item) => itemFromAction(clipboardActionFromItem(item)))]
+    },
+    searchItems(_ctx, query) {
+      const results = [historyAction(), ...clipboardHistory.map(clipboardActionFromItem)]
+      return results.map(itemFromAction).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
     },
   }
 }
