@@ -19,7 +19,6 @@ export function builtInActions({ version }: { version: string; platform?: NodeJS
     { id: 'builtin:downloads', kind: 'builtin', builtin: 'open-path', targetPath: path.join(os.homedir(), 'Downloads'), title: 'Open Downloads', subtitle: '~/Downloads', icon: 'folder', score: 18 },
     { id: 'builtin:documents', kind: 'builtin', builtin: 'open-path', targetPath: path.join(os.homedir(), 'Documents'), title: 'Open Documents', subtitle: '~/Documents', icon: 'folder', score: 17 },
     { id: 'builtin:desktop', kind: 'builtin', builtin: 'open-path', targetPath: path.join(os.homedir(), 'Desktop'), title: 'Open Desktop', subtitle: '~/Desktop', icon: 'folder', score: 16 },
-    { id: 'keyboard-shortcuts', kind: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16 },
     { id: 'app-settings', kind: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 16 },
     { id: 'builtin:quit', kind: 'builtin', builtin: 'quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15 },
   ]
