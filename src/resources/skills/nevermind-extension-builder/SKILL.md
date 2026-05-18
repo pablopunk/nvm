@@ -25,7 +25,7 @@ Rules:
 - AI chats are builder/history sessions, not extension owners. Extensions are standalone files; a chat may create or touch multiple extension files.
 - When tweaking an existing extension, keep the extension `id` and command `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Commands should return `ctx.ui.*` views when they need UI.
-- Use `rootItems(ctx)` for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
+- Use `rootItems(ctx)` for high-signal empty-query root palette contributions and `searchItems(ctx, query)` for bounded query-aware root results; keep contributed items few, stable, cached when possible, and bounded because Nevermind owns ranking and limits.
 - Prefer `ctx.ui.grid` for image/file galleries.
 - Use `ctx.desktop.files.findImages`, `ctx.desktop.files.findVideos`, or `ctx.desktop.files.findMedia` for common galleries; use `ctx.desktop.files.find(roots, { extensions, kind, pattern, sortBy, order })` for custom filters.
 - File helpers return objects with `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`; use `{ sortBy: 'recent' }` for recently modified and `{ sortBy: 'added' }` for recently added/created.

@@ -44,7 +44,7 @@ module.exports = {
 
 ## Root contributions
 
-Extensions can export `rootItems(ctx)` to contribute passive items to the root palette when there is no query. This is for ambient, high-signal information such as an upcoming calendar event, a currently running timer, or a recent status that deserves quick access.
+Extensions can export `rootItems(ctx)` to contribute passive items to the root palette when there is no query, and `searchItems(ctx, query)` to contribute bounded query-aware root results. Root items are for ambient, high-signal information such as an upcoming calendar event, a currently running timer, or a recent status that deserves quick access.
 
 ```js
 module.exports = {
@@ -66,7 +66,7 @@ module.exports = {
 }
 ```
 
-Nevermind owns root ranking, rendering, limits, and failure isolation. Root contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. Root items use stale-while-revalidate semantics: the host returns the current cached snapshot for a palette render, refreshes stale/missing items in the background, and only shows refreshed items on a later search/open so the visible list does not shift under the user. Use `ctx.storage.memo` to cache expensive refreshes.
+Nevermind owns root ranking, rendering, limits, and failure isolation. Root/search contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. Root items use stale-while-revalidate semantics: the host returns the current cached snapshot for a palette render, refreshes stale/missing items in the background, and only shows refreshed items on a later search/open so the visible list does not shift under the user. Query-aware `searchItems(ctx, query)` contributions run under the same timeout and per-extension caps. Use `ctx.storage.memo` to cache expensive refreshes.
 
 ## Views
 

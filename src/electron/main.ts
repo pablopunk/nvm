@@ -97,8 +97,8 @@ const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
-const INTERNAL_EXTENSIONS: any[] = []
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -251,7 +251,7 @@ function extensionCommandActionId(extension, command) {
 
 function extensionActionFromCommand(extension, command) {
   const action = {
-    id: extensionCommandActionId(extension, command),
+    id: command.actionId || extensionCommandActionId(extension, command),
     kind: 'extension-command',
     extensionId: extension.id,
     commandId: command.id,
@@ -661,11 +661,6 @@ async function searchActions(query, options: any = {}) {
     })
   }
 
-  for (const item of BUILT_IN_ACTIONS) {
-    const ranked = rankAction(withDefaultOverride(item), q)
-    if (ranked) results.push(ranked)
-  }
-
   const aiChatsAction = rankAction(withShortcutHint({
     id: 'ai-chats',
     kind: 'ai-chats',
@@ -676,12 +671,10 @@ async function searchActions(query, options: any = {}) {
   }), q)
   if (aiChatsAction) results.push(aiChatsAction)
 
-  if (!q) {
-    const rootItems = await extensionRootActions()
-    for (const item of rootItems) {
-      const ranked = rankAction(withShortcutHint(item), q)
-      if (ranked) results.push(ranked)
-    }
+  const contributedItems = q ? await extensionSearchActions(q) : await extensionRootActions()
+  for (const item of contributedItems) {
+    const ranked = rankAction(withShortcutHint(item), q)
+    if (ranked) results.push(ranked)
   }
 
   for (const command of extensionRegistry.values()) {
@@ -937,6 +930,24 @@ async function executeExtensionRootItem(action) {
 async function extensionRootActions() {
   const actionGroups = await Promise.all(Array.from(extensionModules.values()).map(extensionRootActionsForExtension))
   return actionGroups.flat().slice(0, 20)
+}
+
+async function extensionSearchActions(query) {
+  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionSearchActionsForExtension(extension, query)))
+  return actionGroups.flat().slice(0, 20)
+}
+
+async function extensionSearchActionsForExtension(extension, query) {
+  if (typeof extension.searchItems !== 'function') return []
+  try {
+    const entry = { extension, command: { id: 'search', title: extension.title || extension.id } }
+    const items = await withTimeout(extension.searchItems(createExtensionContext(extension, null), query), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
+    const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
+    return list.slice(0, 5).map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean)
+  } catch (error) {
+    if (!String(error?.message || error).includes('Timed out')) console.error(`Extension search items failed: ${extension.id}`, error)
+    return []
+  }
 }
 
 async function extensionRootActionsForExtension(extension) {
@@ -1533,6 +1544,22 @@ function createExtensionAi(extension) {
   }
 }
 
+function createCoreExtension() {
+  return {
+    id: 'nevermind.core',
+    title: 'Nevermind Core',
+    commands: BUILT_IN_ACTIONS.map((action) => ({
+      id: action.id,
+      actionId: action.id,
+      title: action.title,
+      subtitle: action.subtitle,
+      icon: action.icon,
+      score: action.score,
+      run: (ctx) => ctx.navigation.run(ctx.actions.native(action.title, action)),
+    })),
+  }
+}
+
 function createExtensionContext(extension, command) {
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
@@ -1582,6 +1609,7 @@ function createExtensionContext(extension, command) {
       background: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
       shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+      native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
     },
     navigation: {
       push: (view) => ({ view, navigation: 'push' }),
