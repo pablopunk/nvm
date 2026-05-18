@@ -1,4 +1,4 @@
-import type { CommandAction, CommandView } from './model'
+import type { CommandAction, CommandView, CommandViewPatch } from './model'
 
 export type RootAction = {
   id: string
@@ -83,6 +83,7 @@ export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
 
 export type ViewActionResult = {
   view?: CommandView
+  patch?: CommandViewPatch
   navigation?: 'push' | 'replace' | 'pop'
   toast?: { message: string; tone?: 'default' | 'error' }
 }

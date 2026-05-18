@@ -25,7 +25,7 @@ import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
-import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView } from './model'
+import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView, type CommandViewPatch } from './model'
 import type { NevermindApi, ShortcutRecord } from './preload-api'
 
 type ActionKind =
@@ -456,9 +456,25 @@ export function App() {
     extensionNavigation.popView()
   }
 
-  async function handleViewActionResult(result?: { view?: ExtensionView; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
+  function patchItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']>) {
+    if (!Array.isArray(items)) return items
+    const byId = new Map(patches.map((patch) => [patch.id, patch]))
+    return items.map((item) => byId.has(item.id) ? { ...item, ...byId.get(item.id) } : item)
+  }
+
+  function applyViewPatch(patch?: CommandViewPatch) {
+    if (!patch) return
+    extensionNavigation.setView((current) => current ? {
+      ...current,
+      items: patchItems(current.items, patch.items || []),
+      sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || []) || [] })),
+    } : current)
+  }
+
+  async function handleViewActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
     if (!result) return
     if (result.toast) showToast(result.toast.message, result.toast.tone || 'default')
+    if (result.patch) applyViewPatch(result.patch)
     if (result.navigation === 'pop') popExtensionView()
     else if (result.view?.aiChat) await openAiChat(result.view)
     else if (result.view) showExtensionView(result.view, result.navigation || fallbackNavigation)

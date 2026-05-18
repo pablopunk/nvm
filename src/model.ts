@@ -47,6 +47,8 @@ export type CommandActionPanel = {
 
 export type CommandItemAccessory = { text?: string; icon?: string }
 
+export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & { id: string }
+
 export type CommandItem = {
   id: string
   title: string
@@ -70,6 +72,10 @@ export type CommandItemSection = {
   title?: string
   subtitle?: string
   items: CommandItem[]
+}
+
+export type CommandViewPatch = {
+  items?: CommandItemPatch[]
 }
 
 export type CommandView = {

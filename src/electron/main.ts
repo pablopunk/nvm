@@ -562,6 +562,15 @@ function installDownloadedUpdate() {
   updateManager.quitAndInstall()
 }
 
+function settingItemPatch(definition) {
+  const value = getSetting(definition.id)
+  const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
+  const primaryAction = definition.type === 'shortcut'
+    ? { type: 'nativeAction', title: 'Change Shortcut', shortcut: String(value || ''), nativeAction: { kind: 'record-palette-hotkey' } }
+    : { type: 'nativeAction', title: value ? 'Turn Off' : 'Turn On', nativeAction: { kind: 'toggle-setting', settingId: definition.id } }
+  return { id: `setting:${definition.id}`, accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
+}
+
 function settingsView(selectedItemId = '') {
   return {
     type: 'list',
@@ -570,22 +579,13 @@ function settingsView(selectedItemId = '') {
     presentation: 'root',
     selectedItemId,
     searchBarPlaceholder: 'Search Settings',
-    items: SETTING_DEFINITIONS.map((definition) => {
-      const value = getSetting(definition.id)
-      const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
-      const primaryAction = definition.type === 'shortcut'
-        ? { type: 'nativeAction', title: 'Change Shortcut', shortcut: value, nativeAction: { kind: 'record-palette-hotkey' } }
-        : { type: 'nativeAction', title: value ? 'Turn Off' : 'Turn On', nativeAction: { kind: 'toggle-setting', settingId: definition.id } }
-      return {
-        id: `setting:${definition.id}`,
-        title: definition.title,
-        subtitle: definition.description,
-        icon: 'settings',
-        accessories: accessoryText ? [{ text: accessoryText }] : [],
-        primaryAction,
-        actionPanel: { sections: [{ actions: [primaryAction] }] },
-      }
-    }),
+    items: SETTING_DEFINITIONS.map((definition) => ({
+      id: `setting:${definition.id}`,
+      title: definition.title,
+      subtitle: definition.description,
+      icon: 'settings',
+      ...settingItemPatch(definition),
+    })),
   }
 }
 
@@ -697,7 +697,7 @@ async function executeAction(action, options: any = {}) {
       const current = getSetting(definition.id)
       const next = toggledSettingValue(definition, current)
       setSetting(definition.id, next)
-      return { view: settingsView(`setting:${definition.id}`), navigation: 'replace' }
+      return { patch: { items: [settingItemPatch(definition)] } }
     }
     case 'file':
       runInBackground(() => shell.openPath(action.filePath))
@@ -1015,7 +1015,7 @@ async function executeViewActionResult(result, entry) {
   if (isViewAction(result)) return executeViewAction(normalizeViewAction(result, entry))
   if (isViewAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry))
   const view = normalizeExtensionView(result, entry)
-  return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast } : result
+  return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast, patch: result?.patch } : result
 }
 
 async function executeViewActionForIpc(action) {
@@ -1616,12 +1616,8 @@ function createSettingsExtension() {
       selectedItemId: ctx.state.selectedItemId,
       searchBarPlaceholder: 'Search Settings',
       items: SETTING_DEFINITIONS.map((definition) => {
-        const value = getSetting(definition.id)
-        const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
-        const primaryAction = definition.type === 'shortcut'
-          ? ctx.actions.setPaletteShortcut('Change Shortcut', { shortcut: String(value || '') })
-          : ctx.actions.toggleSetting(definition.id, value ? 'Turn Off' : 'Turn On')
-        return { id: `setting:${definition.id}`, title: definition.title, subtitle: definition.description, icon: 'settings', accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
+        const patch = settingItemPatch(definition)
+        return { id: `setting:${definition.id}`, title: definition.title, subtitle: definition.description, icon: 'settings', ...patch }
       }),
     }) }],
   }
