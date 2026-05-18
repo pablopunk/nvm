@@ -377,8 +377,9 @@ function createWindow() {
   win.webContents.on('render-process-gone', (_event, details) => {
     debugLog('renderer.gone', details)
   })
-  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    debugLog('renderer.console', { level, message, line, sourceId })
+  win.webContents.on('console-message', (event) => {
+    const { level, message, lineNumber, sourceId } = event
+    debugLog('renderer.console', { level, message, line: lineNumber, sourceId })
   })
   win.webContents.once('did-finish-load', () => {
     debugLog('renderer.didFinishLoad', { url: win.webContents.getURL() })
