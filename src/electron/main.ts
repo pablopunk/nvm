@@ -2823,6 +2823,9 @@ app.whenReady().then(async () => {
 })
 
 app.on('activate', () => showPalette())
+app.on('before-quit', () => {
+  app.isQuiting = true
+})
 app.on('will-quit', () => {
   app.isQuiting = true
   if (app.isReady()) globalShortcut.unregisterAll()
@@ -2830,6 +2833,8 @@ app.on('will-quit', () => {
   for (const watcher of appWatchers) watcher.close()
 })
 
-const gotLock = app.requestSingleInstanceLock()
-if (!gotLock) app.quit()
-else app.on('second-instance', () => showPalette())
+if (!isDev) {
+  const gotLock = app.requestSingleInstanceLock()
+  if (!gotLock) app.quit()
+  else app.on('second-instance', () => showPalette())
+}
