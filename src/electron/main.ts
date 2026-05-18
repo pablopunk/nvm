@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
+import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { createUpdateManager } from './update-manager'
 
 const extensionRequire = createRequire(import.meta.url)
@@ -70,17 +71,6 @@ let userState = {
 
 function getPaletteHotkey() {
   return getSetting('paletteHotkey') || 'Alt+Space'
-}
-
-const SHORTCUT_SYMBOLS = { Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Escape: 'Esc', Tab: 'Tab' }
-
-function formatShortcut(accelerator) {
-  return String(accelerator || '').split('+').map((part) => SHORTCUT_SYMBOLS[part] || part).join('')
-}
-
-function isSpotlightAccelerator(accelerator) {
-  if (process.platform !== 'darwin') return false
-  return normalizeAccelerator(accelerator) === 'Command+Space'
 }
 
 function getSetting(id) {
@@ -2365,25 +2355,6 @@ function startClipboardWatcher() {
     lastId = item.id
     rememberClipboardItem(item)
   }, CLIPBOARD_POLL_INTERVAL_MS).unref?.()
-}
-
-function normalizeAccelerator(value) {
-  return String(value || '')
-    .split('+')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const normalized = part.toLowerCase()
-      if (['cmd', 'command', '⌘'].includes(normalized)) return 'Command'
-      if (['ctrl', 'control', '^'].includes(normalized)) return 'Control'
-      if (['option', 'opt', 'alt', '⌥'].includes(normalized)) return 'Alt'
-      if (['shift', '⇧'].includes(normalized)) return 'Shift'
-      if (['enter', 'return', '↵'].includes(normalized)) return 'Enter'
-      if (['esc', 'escape'].includes(normalized)) return 'Escape'
-      if (normalized === 'space') return 'Space'
-      return part.length === 1 ? part.toUpperCase() : part
-    })
-    .join('+')
 }
 
 function unregisterShortcutForAction(actionId) {
