@@ -13,16 +13,19 @@ Workflow:
 2. Wait for the user to confirm what the command should do.
 3. Call `read_extension_api`.
 4. If tweaking an existing generated action, call `read_current_extension` and preserve existing behavior unless the user explicitly asks to remove it.
-5. Call `list_capabilities` if the requested UI or OS operation is unclear.
-6. Write a single `.cjs` extension with `write_extension` (this also replaces/activates the current generated action).
-6. Validate it with `validate_extension`.
+5. Use `list_extensions` and `read_extension` when the request needs awareness of other installed extensions.
+6. Call `list_capabilities` if the requested UI or OS operation is unclear.
+7. Write one or more `.cjs` extension files with `write_extension`.
+8. Validate changed files with `validate_extension`.
 7. Tell the user the command title and aliases to search for.
 
 Rules:
 
 - Extensions export `module.exports = { id, title, commands }`.
+- AI chats are builder/history sessions, not extension owners. Extensions are standalone files; a chat may create or touch multiple extension files.
 - When tweaking an existing extension, keep the extension `id` and command `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Commands should return `ctx.ui.*` views when they need UI.
+- Use `rootItems(ctx)` for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
 - Prefer `ctx.ui.grid` for image/file galleries.
 - Use `ctx.files.findImages`, `ctx.files.findVideos`, or `ctx.files.findMedia` for common galleries; use `ctx.files.find(roots, { extensions, kind, pattern, sortBy, order })` for custom filters.
 - File helpers return objects with `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`; use `{ sortBy: 'recent' }` for recently modified and `{ sortBy: 'added' }` for recently added/created.

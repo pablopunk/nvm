@@ -1,6 +1,6 @@
 # Nevermind Extension API
 
-Extensions are local `.cjs` modules loaded from Nevermind's user-data `extensions` directory. They expose commands that appear in the main search results. A command can execute work, return a declarative native view, or do both through item/action handlers. AI-generated extensions are idempotent per chat/action: writing again replaces the same generated extension instead of creating a duplicate.
+Extensions are local `.cjs` modules loaded from Nevermind's user-data `extensions` directory. They are standalone app contributions, independent from the AI chats that created or edited them. They expose commands that appear in the main search results and can also contribute bounded items to the empty-query root palette. A command can execute work, return a declarative native view, or do both through item/action handlers.
 
 ```js
 module.exports = {
@@ -42,6 +42,32 @@ module.exports = {
 }
 ```
 
+## Root contributions
+
+Extensions can export `rootItems(ctx)` to contribute passive items to the root palette when there is no query. This is for ambient, high-signal information such as an upcoming calendar event, a currently running timer, or a recent status that deserves quick access.
+
+```js
+module.exports = {
+  id: 'my.calendar',
+  title: 'Calendar',
+  async rootItems(ctx) {
+    const event = await ctx.storage.memo('next-event', 60_000, async () => null)
+    if (!event) return []
+    return [{
+      id: `next-event-${event.id}`,
+      title: event.title,
+      subtitle: `Starts ${event.startsIn}`,
+      icon: 'calendar',
+      score: 80,
+      primaryAction: ctx.actions.openUrl(event.url, 'Open event'),
+    }]
+  },
+  commands: [],
+}
+```
+
+Nevermind owns root ranking, rendering, limits, and failure isolation. Root contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. The host limits each extension to a few root items, caps total root contributions, times out slow `rootItems` calls, and reuses recently cached successful items when available. Use `ctx.storage.memo` to cache expensive refreshes.
+
 ## Views
 
 Commands can return native views. Nevermind owns keyboard navigation, filtering, Enter/default actions, Cmd+K item action panels, Escape/back navigation, nested view stacks, loading/empty/error rendering, accessories, and toasts.
@@ -81,7 +107,7 @@ Current `ctx` namespaces:
 
 Use `await ctx.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
 
-`ctx.storage` is scoped per extension, using the generated chat identity when available so tweaks keep the same storage. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires:
+`ctx.storage` is scoped per extension file/identity, not per AI chat. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires:
 
 ```js
 const files = await ctx.storage.memo('recent-media', 60_000, () =>

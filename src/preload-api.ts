@@ -16,9 +16,12 @@ export type RootAction = {
     | 'file'
     | 'ai-placeholder'
     | 'ai-chat'
+    | 'ai-chats'
+    | 'ai-tweak-extension'
     | 'builtin'
     | 'calculate'
     | 'extension-command'
+    | 'extension-root-item'
   title: string
   subtitle: string
   icon:
@@ -55,9 +58,11 @@ export type RootAction = {
   extensionId?: string
   commandId?: string
   aiChatId?: string
+  extensionFile?: string
   removable?: boolean
   background?: boolean
   dismissAfterRun?: 'auto'
+  actionPanel?: CommandView['actionPanel']
   shortcut?: string
   userAliases?: string[]
 }

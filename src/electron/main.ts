@@ -37,6 +37,8 @@ const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
 const APP_REINDEX_DEBOUNCE_MS = 1000
 const THUMBNAIL_SIZE = 512
+const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000
+const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 500
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -88,6 +90,8 @@ function setSetting(id: any, value: any) {
 }
 const appIconCache = new Map<string, string | null>()
 const extensionRegistry = new Map<string, any>()
+const extensionModules = new Map<string, any>()
+const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
 const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
@@ -249,7 +253,7 @@ function extensionActionFromCommand(extension, command) {
     kind: 'extension-command',
     extensionId: extension.id,
     commandId: command.id,
-    aiChatId: extension.__chatId,
+    extensionFile: extension.__filePath ? path.basename(extension.__filePath) : undefined,
     removable: Boolean(extension.__generated),
     title: command.title,
     subtitle: command.subtitle || extension.title || 'Extension command',
@@ -263,16 +267,12 @@ function extensionActionFromCommand(extension, command) {
   return shortcut ? { ...action, shortcut } : action
 }
 
-function hasReadyGeneratedExtension(item) {
-  return item.status === 'ready' && item.generatedExtensionFile
-}
-
 function aiChatActionFromItem(item) {
   return {
     id: `ai-chat:${item.id}`,
     kind: 'ai-chat',
     title: item.title || item.query,
-    subtitle: item.status === 'ready' ? 'Tweak AI-created action' : 'Continue AI automation chat',
+    subtitle: item.status === 'ready' ? 'AI builder chat' : 'Continue AI builder chat',
     query: item.query,
     aiChatId: item.id,
     aliases: [item.query],
@@ -331,6 +331,68 @@ function aiChatView(item, options: any = {}) {
     initialPrompt: options.initialPrompt,
     messages: item.messages || [],
   }
+}
+
+function aiChatsView() {
+  const chats = Object.values(userState.aiChats || {}) as any[]
+  return {
+    type: 'list',
+    id: 'ai-chats',
+    title: 'AI Chats',
+    searchBarPlaceholder: 'Search AI Chats',
+    items: chats
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+      .map((chat) => ({
+        id: `ai-chat:${chat.id}`,
+        title: chat.title || chat.query || 'AI Chat',
+        subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
+        icon: 'sparkles',
+        primaryAction: { type: 'nativeAction', title: 'Open Chat', nativeAction: aiChatActionFromItem(chat) },
+      })),
+  }
+}
+
+function chatTouchedExtensionFiles(chat) {
+  return Array.from(new Set([...(chat?.touchedExtensionFiles || []), chat?.generatedExtensionFile].filter(Boolean).map((item) => path.basename(item))))
+}
+
+function touchExtensionFileForChat(chat, filename) {
+  if (!chat || !filename) return
+  chat.touchedExtensionFiles = Array.from(new Set([...chatTouchedExtensionFiles(chat), path.basename(filename)]))
+  if (!chat.contextExtensionFile) chat.contextExtensionFile = path.basename(filename)
+  if (!chat.generatedExtensionFile) chat.generatedExtensionFile = path.basename(filename)
+  chat.status = 'ready'
+  chat.updatedAt = Date.now()
+}
+
+function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
+  const filename = path.basename(extensionFile || '')
+  const existing = (Object.values(userState.aiChats || {}) as any[])
+    .filter((chat) => chat.contextExtensionFile === filename || chatTouchedExtensionFiles(chat).includes(filename))
+    .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))[0]
+  if (existing) {
+    existing.contextExtensionFile = filename
+    existing.updatedAt = Date.now()
+    scheduleSaveState()
+    return existing
+  }
+  const id = hashValue(`extension-chat:${filename}:${Date.now()}`)
+  const item = {
+    id,
+    query: `Tweak ${title || filename}`,
+    title: `Tweak ${title || filename}`,
+    status: 'ready',
+    contextExtensionFile: filename,
+    touchedExtensionFiles: [filename],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [
+      { role: 'assistant', content: `I can tweak “${title || filename}”. I can read this extension as context and inspect any other extension if needed.` },
+    ],
+  }
+  userState.aiChats[id] = item
+  scheduleSaveState()
+  return item
 }
 
 function clipboardActionFromItem(item) {
@@ -507,7 +569,7 @@ function updatePromptAction() {
   return null
 }
 
-function searchActions(query, options: any = {}) {
+async function searchActions(query, options: any = {}) {
   const q = query.trim()
 
   if (options.clipboardOnly) {
@@ -558,13 +620,30 @@ function searchActions(query, options: any = {}) {
     if (ranked) results.push(ranked)
   }
 
+  const aiChatsAction = rankAction(withShortcutHint({
+    id: 'ai-chats',
+    kind: 'ai-chats',
+    title: 'AI Chats',
+    subtitle: `${Object.keys(userState.aiChats || {}).length} builder chats`,
+    icon: 'sparkles',
+    score: 16,
+  }), q)
+  if (aiChatsAction) results.push(aiChatsAction)
+
+  if (!q) {
+    const rootItems = await extensionRootActions()
+    for (const item of rootItems) {
+      const ranked = rankAction(withShortcutHint(item), q)
+      if (ranked) results.push(ranked)
+    }
+  }
+
   for (const command of extensionRegistry.values()) {
     const ranked = rankAction(withShortcutHint(extensionActionFromCommand(command.extension, command.command)), q)
     if (ranked) results.push(ranked)
   }
 
   for (const item of Object.values(userState.aiChats || {}) as any[]) {
-    if (hasReadyGeneratedExtension(item)) continue
     const ranked = rankAction(aiChatActionFromItem(item), q)
     if (ranked) {
       ranked.lastUsed = Math.max(ranked.lastUsed || 0, item.updatedAt || item.createdAt || 0)
@@ -719,6 +798,11 @@ async function executeAction(action, options: any = {}) {
     case 'builtin':
       runInBackground(() => executeBuiltin(action))
       break
+    case 'extension-root-item': {
+      const result = await executeExtensionRootItem(action)
+      if (result) return result
+      break
+    }
     case 'extension-command': {
       const dismissImmediately = action.background || action.dismissAfterRun === 'auto'
       if (dismissImmediately && !options.keepPaletteOpen) paletteWindow.hidePalette()
@@ -726,10 +810,16 @@ async function executeAction(action, options: any = {}) {
       if (view) return { view }
       break
     }
+    case 'ai-chats':
+      return { view: aiChatsView() }
     case 'ai-chat': {
       const item = userState.aiChats[action.aiChatId]
       if (item) return { view: aiChatView(item) }
       break
+    }
+    case 'ai-tweak-extension': {
+      const item = getOrCreateExtensionChat(action.extensionFile, action.title || action.extensionFile)
+      return { view: aiChatView(item) }
     }
     case 'ai-placeholder': {
       const item = getOrCreateAiChat(action.query, { fresh: true })
@@ -744,13 +834,20 @@ function extensionEntryForAction(action) {
   const direct = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
   if (direct) return direct
 
-  if (action.aiChatId) {
-    const chatMatches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.__chatId === action.aiChatId)
-    if (chatMatches.length === 1) return chatMatches[0]
+  if (action.extensionFile) {
+    const fileMatches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
+    if (fileMatches.length === 1) return fileMatches[0]
   }
 
   const matches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.id === action.extensionId)
   return matches.length === 1 ? matches[0] : null
+}
+
+function extensionModuleForAction(action) {
+  const entry = extensionEntryForAction(action)
+  if (entry?.extension) return entry.extension
+  if (!action?.extensionFile) return null
+  return Array.from(extensionModules.values()).find((extension) => path.basename(extension.__filePath || '') === action.extensionFile) || null
 }
 
 function currentActionForStoredShortcut(action) {
@@ -772,6 +869,71 @@ async function executeExtensionCommand(action) {
   } catch (error) {
     console.error(`Extension command failed: ${entry.extension.id}:${entry.command.id}`, error)
     return extensionErrorView(entry, error)
+  }
+}
+
+async function executeExtensionRootItem(action) {
+  if (!action.rootAction) return { view: { type: 'preview', title: action.title || 'Extension item', content: action.subtitle || '' } }
+  if (action.rootAction.type !== 'runExtensionAction') return executeViewAction(action.rootAction)
+  const record = extensionActionHandlers.get(action.rootAction.handlerId)
+  if (!record) return { view: { type: 'preview', title: 'Action unavailable', content: 'This extension item is no longer available.' } }
+  try {
+    const result = await record.handler(createExtensionContext(record.entry.extension, null), action)
+    return executeViewActionResult(result, record.entry)
+  } catch (error) {
+    console.error(`Extension root item failed: ${record.entry.extension.id}`, error)
+    return { view: extensionErrorView(record.entry, error) }
+  }
+}
+
+async function extensionRootActions() {
+  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map(extensionRootActionsForExtension))
+  return actionGroups.flat().slice(0, 20)
+}
+
+async function extensionRootActionsForExtension(extension) {
+  if (typeof extension.rootItems !== 'function') return []
+  const cacheKey = extension.__filePath || extension.id
+  const cached = extensionRootItemsCache.get(cacheKey)
+  if (cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS) return cached.items
+  const entry = { extension, command: { id: 'root', title: extension.title || extension.id } }
+  try {
+    const items = await withTimeout(extension.rootItems(createExtensionContext(extension, null)), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
+    const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
+    const actions = list.slice(0, 5).map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean)
+    extensionRootItemsCache.set(cacheKey, { updatedAt: Date.now(), items: actions })
+    return actions
+  } catch (error) {
+    console.error(`Extension root items failed: ${extension.id}`, error)
+    return cached?.items || []
+  }
+}
+
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs)),
+  ])
+}
+
+function extensionRootActionFromItem(entry, item) {
+  if (!item?.id || !item.title) return null
+  const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
+  const actionPanel = normalizeActionPanel(item.actionPanel, item.actions || [], entry)
+  return {
+    id: `extension-root:${entry.extension.id}:${item.id}`,
+    kind: 'extension-root-item',
+    extensionId: entry.extension.id,
+    extensionFile: entry.extension.__filePath ? path.basename(entry.extension.__filePath) : undefined,
+    rootAction: primaryAction,
+    removable: Boolean(entry.extension.__generated),
+    title: item.title,
+    subtitle: item.subtitle || entry.extension.title || 'Extension item',
+    aliases: item.aliases || item.keywords || [],
+    icon: item.icon || 'sparkles',
+    score: Math.min(Number(item.score || 35), 90),
+    lastUsed: Number(item.lastUsed || 0),
+    actionPanel,
   }
 }
 
@@ -807,13 +969,13 @@ function extensionErrorView(entry, error) {
 }
 
 function extensionErrorAiAction(entry, message) {
-  const chatId = entry.extension.__chatId
-  if (!chatId) return null
-  const prompt = `This generated action failed. Please fix the extension.\n\nAction: ${entry.command.title || entry.command.id}\nExtension: ${entry.extension.title || entry.extension.id}\n\nError:\n\`\`\`\n${message}\n\`\`\``
+  const extensionFile = entry.extension.__filePath ? path.basename(entry.extension.__filePath) : null
+  if (!extensionFile) return null
+  const prompt = `This generated action failed. Please fix the extension.\n\nAction: ${entry.command.title || entry.command.id}\nExtension: ${entry.extension.title || entry.extension.id}\nFile: ${extensionFile}\n\nError:\n\`\`\`\n${message}\n\`\`\``
   return {
     type: 'runExtensionAction',
     title: 'Fix with AI',
-    __handler: async () => aiChatView(userState.aiChats[chatId], { initialPrompt: prompt }),
+    __handler: async () => aiChatView(getOrCreateExtensionChat(extensionFile, entry.extension.title || entry.command.title), { initialPrompt: prompt }),
   }
 }
 
@@ -1251,7 +1413,7 @@ async function selectedInFinder() {
 }
 
 function extensionStoragePath(extension) {
-  const key = extension.__chatId || extension.id || 'extension'
+  const key = extension.__filePath ? path.basename(extension.__filePath, '.cjs') : extension.id || 'extension'
   const safeKey = String(key).replace(/[^a-zA-Z0-9._-]/g, '-')
   return path.join(extensionStorageDir, `${safeKey}.json`)
 }
@@ -1465,22 +1627,23 @@ function aiChatPromptWithContext(message, chatId) {
     .map((item) => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`)
     .join('\n\n')
 
-  return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.\n\n${transcript}\n\nNew user message:\n${message}`
+  const focused = chat?.contextExtensionFile ? `\n\nFocused extension file: ${chat.contextExtensionFile}. Use read_current_extension before editing it. You may list/read other extensions if needed.` : ''
+
+  return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}\n\n${transcript}\n\nNew user message:\n${message}`
 }
 
 function markGeneratedExtensionForActiveChat(filePath) {
   const chat = activeAiChatId ? userState.aiChats[activeAiChatId] : null
   if (!chat) return
-  chat.generatedExtensionFile = path.basename(filePath)
-  chat.status = 'ready'
-  chat.updatedAt = Date.now()
+  touchExtensionFileForChat(chat, path.basename(filePath))
   scheduleSaveState()
 }
 
 function addAliasForGeneratedAction(chatId) {
   const chat = userState.aiChats[chatId]
   if (!chat?.query) return
-  const entry = Array.from(extensionRegistry.values()).find((e) => e.extension?.__chatId === chatId)
+  const files = chatTouchedExtensionFiles(chat)
+  const entry = Array.from(extensionRegistry.values()).find((e) => files.includes(path.basename(e.extension?.__filePath || '')))
   if (!entry) return
   const action = extensionActionFromCommand(entry.extension, entry.command)
   if (!action?.id) return
@@ -1509,6 +1672,8 @@ async function resetAiChat(chatId) {
 
 async function loadExtensions() {
   extensionRegistry.clear()
+  extensionModules.clear()
+  extensionRootItemsCache.clear()
   for (const extension of INTERNAL_EXTENSIONS) registerExtension(extension)
 
   await fs.mkdir(extensionsDir, { recursive: true })
@@ -1521,8 +1686,6 @@ async function loadExtensions() {
       const extension = extensionRequire(fullPath)
       extension.__filePath = fullPath
       extension.__generated = true
-      const chat = (Object.values(userState.aiChats || {}) as any[]).find((item) => item.generatedExtensionFile === entry.name)
-      if (chat) extension.__chatId = chat.id
       await applyExtensionMetadataOverrides(extension)
       registerExtension(extension)
     } catch (error) {
@@ -1580,13 +1743,9 @@ async function renameExtension(extension, command, metadata) {
 }
 
 function registerExtension(extension) {
-  if (!extension?.id || !Array.isArray(extension.commands)) return
-  if (extension.__generated && extension.__chatId) {
-    for (const key of Array.from(extensionRegistry.keys())) {
-      if (extensionRegistry.get(key)?.extension?.__chatId === extension.__chatId) extensionRegistry.delete(key)
-    }
-  }
-  for (const command of extension.commands) {
+  if (!extension?.id) return
+  extensionModules.set(extension.id, extension)
+  for (const command of extension.commands || []) {
     if (!command?.id || !command.title || typeof command.run !== 'function') continue
     extensionRegistry.set(`${extension.id}:${command.id}`, { extension, command })
   }
@@ -1818,7 +1977,15 @@ async function loadUserState() {
     // First run.
   }
 
+  migrateAiChats()
   clipboardHistory = normalizeClipboardHistory(userState.clipboardHistory, CLIPBOARD_LIMIT, persistClipboardImage)
+}
+
+function migrateAiChats() {
+  for (const chat of Object.values(userState.aiChats || {}) as any[]) {
+    if (chat.generatedExtensionFile && !chat.touchedExtensionFiles) chat.touchedExtensionFiles = [chat.generatedExtensionFile]
+    if (chat.generatedExtensionFile && !chat.contextExtensionFile) chat.contextExtensionFile = chat.generatedExtensionFile
+  }
 }
 
 function persistClipboardImage(png, hash) {
@@ -2093,71 +2260,59 @@ async function clearOverride(action) {
 }
 
 async function duplicateCreatedAction(action) {
-  if (action?.kind !== 'extension-command' || !action.removable) return { ok: false, message: 'Only generated extension actions can be duplicated' }
-  const entry = extensionEntryForAction(action)
-  const filePath = entry?.extension?.__filePath
-  const chatId = entry?.extension?.__chatId || action.aiChatId
-  const chat = chatId ? userState.aiChats[chatId] : null
-  if (!filePath || !chat) return { ok: false, message: 'Generated action not found' }
+  if (!['extension-command', 'extension-root-item'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
+  const extension = extensionModuleForAction(action)
+  const filePath = extension?.__filePath
+  if (!filePath) return { ok: false, message: 'Generated extension not found' }
 
-  const duplicateId = hashValue(`${chat.id}:${Date.now()}`)
-  const duplicateTitle = `Copy of ${chat.title || chat.query || action.title}`
-  const duplicateQuery = duplicateTitle
+  const duplicateId = hashValue(`${filePath}:${Date.now()}`)
+  const duplicateTitle = `Copy of ${extension.title || action.title}`
   const duplicateFile = `${path.basename(filePath, '.cjs')}-copy-${duplicateId.slice(0, 8)}.cjs`
   const sourceFile = path.basename(filePath)
-  const sourceCode = `const source = require('./${sourceFile.replace(/'/g, "\\'")}')\n\nmodule.exports = {\n  ...source,\n  id: ${JSON.stringify(`${entry.extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n}\n`
+  const sourceCode = `const source = require('./${sourceFile.replace(/'/g, "\\'")}')\n\nmodule.exports = {\n  ...source,\n  id: ${JSON.stringify(`${extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n}\n`
 
   await fs.writeFile(path.join(extensionsDir, duplicateFile), sourceCode)
   userState.aiChats[duplicateId] = {
     id: duplicateId,
-    query: duplicateQuery,
-    title: duplicateTitle,
+    query: `Tweak ${duplicateTitle}`,
+    title: `Tweak ${duplicateTitle}`,
     status: 'ready',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    generatedExtensionFile: duplicateFile,
+    contextExtensionFile: duplicateFile,
+    touchedExtensionFiles: [duplicateFile],
     messages: [
-      ...(chat.messages || []),
-      { role: 'system', content: `Duplicated from “${chat.title || chat.query || action.title}”. Tweak this copy without changing the original.` },
-    ].slice(-100),
+      { role: 'system', content: `Duplicated from “${extension.title || action.title}”. Tweak this copy without changing the original.` },
+    ],
   }
   scheduleSaveState()
   await loadExtensions()
   registerActionShortcuts()
-  const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => candidate.extension?.__chatId === duplicateId)
+  const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
   return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromCommand(duplicateEntry.extension, duplicateEntry.command) : { kind: 'ai-chat', aiChatId: duplicateId, title: duplicateTitle } }
 }
 
 async function removeCreatedAction(action) {
   if (action?.kind === 'ai-chat' && action.aiChatId) {
-    const chat = userState.aiChats[action.aiChatId]
-    if (chat?.generatedExtensionFile) {
-      await fs.unlink(path.join(extensionsDir, chat.generatedExtensionFile)).catch((error) => {
-        if (error?.code !== 'ENOENT') throw error
-      })
-      await loadExtensions()
-      registerActionShortcuts()
-    }
+    await nevermindAi?.reset?.(action.aiChatId)
     delete userState.aiChats[action.aiChatId]
     delete userState.recents[action.id]
     scheduleSaveState()
-    return { ok: true, message: 'AI action removed' }
+    return { ok: true, message: 'AI chat removed' }
   }
 
-  if (action?.kind === 'extension-command' && action.removable) {
-    const entry = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
-    const filePath = entry?.extension?.__filePath
-    if (!filePath) return { ok: false, message: 'This action cannot be removed' }
-    const chatId = entry?.extension?.__chatId || action.aiChatId
+  if (['extension-command', 'extension-root-item'].includes(action?.kind) && action.removable) {
+    const extension = extensionModuleForAction(action)
+    const filePath = extension?.__filePath
+    if (!filePath) return { ok: false, message: 'This extension cannot be removed' }
     await fs.unlink(filePath).catch((error) => {
       if (error?.code !== 'ENOENT') throw error
     })
-    if (chatId) delete userState.aiChats[chatId]
     delete userState.recents[action.id]
     scheduleSaveState()
     await loadExtensions()
     registerActionShortcuts()
-    return { ok: true, message: 'Generated action removed' }
+    return { ok: true, message: 'Generated extension removed' }
   }
 
   return { ok: false, message: 'This action cannot be removed' }

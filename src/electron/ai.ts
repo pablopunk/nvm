@@ -17,6 +17,8 @@ type ActiveChat = {
   id?: string
   title?: string
   query?: string
+  contextExtensionFile?: string
+  touchedExtensionFiles?: string[]
   generatedExtensionFile?: string
 }
 
@@ -249,6 +251,16 @@ async function findPiWebAccessPath() {
 }
 
 function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'addAliasForChat'>) {
+  const readFiles = new Set<string>()
+
+  function markRead(filename: string) {
+    readFiles.add(path.basename(filename))
+  }
+
+  function currentExtensionFile(chat?: ActiveChat | null) {
+    return chat?.contextExtensionFile || chat?.generatedExtensionFile || chat?.touchedExtensionFiles?.[0]
+  }
+
   return [
     pi.defineTool({
       name: 'read_extension_api',
@@ -271,15 +283,39 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       }),
     }),
     pi.defineTool({
+      name: 'list_extensions',
+      label: 'List Extensions',
+      description: 'List generated Nevermind extension files available to inspect or reference.',
+      parameters: Type.Object({}),
+      execute: async () => {
+        const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
+        const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.cjs')).map((entry) => entry.name).sort()
+        return { content: [{ type: 'text', text: files.length ? files.join('\n') : 'No generated extensions installed.' }], details: { files } }
+      },
+    }),
+    pi.defineTool({
+      name: 'read_extension',
+      label: 'Read Extension',
+      description: 'Read any generated Nevermind extension source by filename.',
+      parameters: Type.Object({ filename: Type.String({ description: 'Safe generated extension filename ending in .cjs' }) }),
+      execute: async (_toolCallId: string, params: { filename: string }) => {
+        const filePath = safeExtensionPath(extensionsDir, params.filename)
+        const code = await fs.readFile(filePath, 'utf8')
+        markRead(filePath)
+        return { content: [{ type: 'text', text: code }], details: { filePath } }
+      },
+    }),
+    pi.defineTool({
       name: 'read_current_extension',
       label: 'Read Current Extension',
       description: 'Read the active generated extension source for this chat/action before tweaking it.',
       parameters: Type.Object({}),
       execute: async () => {
-        const chat = getActiveChat?.()
-        if (!chat?.generatedExtensionFile) return { content: [{ type: 'text', text: 'No current generated extension for this chat.' }], details: {} }
-        const filePath = safeExtensionPath(extensionsDir, chat.generatedExtensionFile)
+        const filename = currentExtensionFile(getActiveChat?.())
+        if (!filename) return { content: [{ type: 'text', text: 'No focused generated extension for this chat.' }], details: {} }
+        const filePath = safeExtensionPath(extensionsDir, filename)
         const code = await fs.readFile(filePath, 'utf8')
+        markRead(filePath)
         return { content: [{ type: 'text', text: code }], details: { filePath } }
       },
     }),
@@ -292,14 +328,18 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         code: Type.String({ description: 'Complete CommonJS extension source code using module.exports = { ... }' }),
       }),
       execute: async (_toolCallId: string, params: { filename: string; code: string }) => {
-        const filePath = extensionPathForActiveChat(extensionsDir, params.filename, getActiveChat)
+        const filePath = safeExtensionPath(extensionsDir, params.filename)
+        const filename = path.basename(filePath)
+        const chat = getActiveChat?.()
+        const exists = await fileExists(filePath)
+        const focused = currentExtensionFile(chat) === filename
+        if (exists && !focused && !readFiles.has(filename)) throw new Error(`Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`)
         validateCommonJs(params.code)
         await fs.writeFile(filePath, params.code)
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
-        const chat = getActiveChat?.()
         if (chat?.id) addAliasForChat?.(chat.id)
-        return { content: [{ type: 'text', text: `Installed ${path.basename(filePath)}` }], details: { filePath } }
+        return { content: [{ type: 'text', text: `Installed ${filename}` }], details: { filePath } }
       },
     }),
     pi.defineTool({
@@ -308,7 +348,7 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       description: 'Validate that the active generated extension file is syntactically valid CommonJS.',
       parameters: Type.Object({ filename: Type.String() }),
       execute: async (_toolCallId: string, params: { filename: string }) => {
-        const filePath = extensionPathForActiveChat(extensionsDir, params.filename, getActiveChat)
+        const filePath = safeExtensionPath(extensionsDir, params.filename)
         validateCommonJs(await fs.readFile(filePath, 'utf8'))
         return { content: [{ type: 'text', text: `Validated ${path.basename(filePath)}` }], details: { filePath } }
       },
@@ -319,7 +359,7 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       description: 'No-op compatibility tool. write_extension already installs/replaces the active generated extension idempotently.',
       parameters: Type.Object({ filename: Type.String() }),
       execute: async (_toolCallId: string, params: { filename: string }) => {
-        const filePath = extensionPathForActiveChat(extensionsDir, params.filename, getActiveChat)
+        const filePath = safeExtensionPath(extensionsDir, params.filename)
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
         return { content: [{ type: 'text', text: `${path.basename(filePath)} is already active.` }], details: { filePath } }
@@ -328,18 +368,13 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
   ]
 }
 
-function extensionPathForActiveChat(root: string, filename: string, getActiveChat?: () => ActiveChat | null) {
-  const chat = getActiveChat?.()
-  if (!chat?.id) return safeExtensionPath(root, filename)
-  return safeExtensionPath(root, `${slugValue(chat.query || chat.title || 'action')}-${chat.id.slice(0, 8)}.cjs`)
-}
-
-function slugValue(value: unknown) {
-  return String(value || 'action')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'action'
+async function fileExists(filePath: string) {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function safeExtensionPath(root: string, filename: string) {
@@ -356,6 +391,8 @@ function validateCommonJs(code: string) {
 
 function capabilities() {
   return {
+    extensionExports: ['commands', 'rootItems'],
+    rootContributions: ['rootItems(ctx) returns high-signal empty-query root palette items with stable ids, titles, optional subtitles/icons/scores, primaryAction, actions, and actionPanel'],
     views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination'],
     itemOptions: ['accessories', 'keywords', 'actionPanel'],
@@ -381,21 +418,23 @@ Build local Nevermind extensions, not shell scripts.
 When the first user message is vague, ask clarifying questions before using tools.
 Do not call read_extension_api, list_capabilities, write_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
 Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 Use read_extension_api before writing an extension.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
 When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it.
 Use list_capabilities when unsure which UI or OS capabilities exist.
+Use list_extensions and read_extension when you need awareness of other installed extensions.
 Only write .cjs extension files with write_extension.
-write_extension is idempotent: it replaces and activates the current action's generated extension.
-validate_extension can be used to syntax-check the active generated extension after writing.
+write_extension creates standalone extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
+validate_extension can be used to syntax-check changed extension files after writing.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
 For image grids, use file.url from ctx.files.findImages() or ctx.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
+Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
 Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.ui.webview for custom live/interactive browser UI; set size: 'large' when it needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }
@@ -403,7 +442,7 @@ When done, tell the user what command was installed and how to find it.`
 function systemContext(extensionApiPath: string) {
   return `Nevermind is an Electron command palette. Your job is to create first-class local extensions using the documented API.
 Extension API docs path: ${extensionApiPath}
-Generated extensions are loaded by Nevermind after install_extension.`
+Generated extensions are standalone app contributions. AI chats are builder/history sessions and can inspect or edit multiple extensions.`
 }
 
 export { createNevermindAi }

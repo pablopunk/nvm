@@ -42,9 +42,12 @@ type ActionKind =
   | 'file'
   | 'ai-placeholder'
   | 'ai-chat'
+  | 'ai-chats'
+  | 'ai-tweak-extension'
   | 'builtin'
   | 'calculate'
   | 'extension-command'
+  | 'extension-root-item'
 
 type ActionIcon =
   | 'globe'
@@ -92,9 +95,11 @@ type Action = {
   extensionId?: string
   commandId?: string
   aiChatId?: string
+  extensionFile?: string
   removable?: boolean
   background?: boolean
   dismissAfterRun?: 'auto'
+  actionPanel?: CommandActionPanel
   shortcut?: string
   userAliases?: string[]
 }
@@ -624,15 +629,15 @@ export function App() {
   }
 
   async function tweakActionWithAi(action: Action | null | undefined) {
-    if (!action?.aiChatId) return
+    if (!action?.extensionFile) return
     const result = await window.nvm.execute({
-      id: `ai-chat:${action.aiChatId}`,
-      kind: 'ai-chat',
+      id: `ai-tweak-extension:${action.extensionFile}`,
+      kind: 'ai-tweak-extension',
       title: action.title,
-      subtitle: 'Tweak AI-created action',
+      subtitle: 'Tweak extension with AI',
       icon: 'sparkles',
       score: 0,
-      aiChatId: action.aiChatId,
+      extensionFile: action.extensionFile,
     })
     if (result?.view) {
       setOptionsFor(null)
@@ -678,9 +683,9 @@ export function App() {
   }
 
   const canOverride = Boolean(optionsFor?.defaultActionId)
-  const canTweakWithAi = Boolean(optionsFor?.aiChatId && optionsFor.kind === 'extension-command')
+  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-command', 'extension-root-item'].includes(optionsFor.kind))
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
-  const canDuplicateCreatedAction = Boolean(optionsFor?.kind === 'extension-command' && optionsFor.removable)
+  const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item'].includes(optionsFor?.kind || '') && optionsFor?.removable)
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
@@ -920,7 +925,7 @@ export function App() {
       icon: action.icon,
       image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id] || undefined,
       primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action },
-      actionPanel: actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
+      actionPanel: action.actionPanel || actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
     }
   }
 
@@ -953,7 +958,7 @@ export function App() {
       items={items}
       iconForItem={iconForCommandItem}
       onSelect={runCommandItem}
-      extraForItem={(item) => actionFromCommandItem(item)?.kind === 'extension-command' && actionFromCommandItem(item)?.aiChatId ? ['Tab tweak'] : []}
+      extraForItem={(item) => ['extension-command', 'extension-root-item'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
     />
   }
 
@@ -1198,7 +1203,7 @@ export function App() {
       }
     }
 
-    if (!isChildOpen && event.key === 'Tab' && selectedAction?.kind === 'extension-command' && selectedAction.aiChatId) {
+    if (!isChildOpen && event.key === 'Tab' && ['extension-command', 'extension-root-item'].includes(selectedAction?.kind || '') && selectedAction?.extensionFile) {
       event.preventDefault()
       tweakActionWithAi(selectedAction)
       return

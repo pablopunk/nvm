@@ -11,6 +11,7 @@
 
 * Try to keep files small and focused.
 * New primitives, especially extension API additions, must be generic first-party building blocks rather than helpers tailored to one generated extension or user prompt.
+* Treat extensions as first-class app contributors: users should be able to build workflows with extension APIs that feel as capable as native Nevermind features, while the host keeps ownership of safety, rendering, ranking, and core state.
 * Performance is a top priority. If you change/add code make sure it's performant. If you see existing slow/bab patterns change them for performance improvments.
 * Comments are a smell. 3 long named functions is better than 1 function with a comment.
 * If you spend a lot of iterations with the user to finally find a solution for something, document your learnings in src/docs/. But you shouldn't touch it if all goes smooth.
@@ -20,7 +21,8 @@
 ## Product conventions
 
 * This app is command-k first. Decisions, confirmations, warnings, and configuration live inside the palette — usually a `preview`/`list` view with an actionPanel, or an item in an existing view. Never use `window.confirm`, `window.prompt`, or `window.alert`, and never introduce a separate preferences window.
+* Extension APIs should be declarative contribution points, not backdoors into app internals. Prefer host-controlled surfaces such as root items, views, actions, background refresh, permissions, quotas, TTLs, and bounded ranking over exposing mutable global state.
 * Reset scoped filters/search state when navigating into a different context unless inheritance is explicitly desired. Keep extension view presentation state scoped: action panels/submenus should own palette sizing and selection state while open.
 * Do not show empty-state UI in passive content surfaces; reserve empty states for places where the user expects result/action lists.
-* New user-configurable options go through the existing settings pipeline: add an entry to `SETTING_DEFINITIONS` in `src/electron/main.cjs`, persist it under `userState.settings`, and surface it as an item in the Settings view. Booleans toggle via `toggle-setting`; richer types get their own `nativeAction` kind plus renderer handling.
-* Keyboard accelerators have two forms: the canonical `Command+Alt+K` for storage/registration, and the symbol form `⌘⌥K` for display. Anything user-visible must pass through `shortcutLabel` (renderer, `src/ui.tsx`) or `formatShortcut` (main, `src/electron/main.cjs`). `Space` intentionally stays as the literal word.
+* New user-configurable options go through the existing settings pipeline: add an entry to `SETTING_DEFINITIONS` in `src/electron/main.ts`, persist it under `userState.settings`, and surface it as an item in the Settings view. Booleans toggle via `toggle-setting`; richer types get their own `nativeAction` kind plus renderer handling.
+* Keyboard accelerators have two forms: the canonical `Command+Alt+K` for storage/registration, and the symbol form `⌘⌥K` for display. Anything user-visible must pass through `shortcutLabel` (renderer, `src/ui.tsx`) or `formatShortcut` (main, `src/electron/main.ts`). `Space` intentionally stays as the literal word.
