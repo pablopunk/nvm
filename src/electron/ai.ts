@@ -1,3 +1,4 @@
+// @ts-nocheck
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const vm = require('node:vm')
@@ -336,4 +337,4 @@ Extension API docs path: ${extensionApiPath}
 Generated extensions are loaded by Nevermind after install_extension.`
 }
 
-module.exports = { createNevermindAi }
+export { createNevermindAi }

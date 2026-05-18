@@ -1,14 +1,18 @@
 // @ts-nocheck
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session } = require('electron')
-const { autoUpdater } = require('electron-updater')
-const fs = require('node:fs/promises')
-const fsSync = require('node:fs')
-const path = require('node:path')
-const os = require('node:os')
-const crypto = require('node:crypto')
-const { spawn, execFile } = require('node:child_process')
-const { pathToFileURL } = require('node:url')
-const { createNevermindAi } = require('./ai.cjs')
+import { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session } from 'electron'
+import electronUpdater from 'electron-updater'
+import fs from 'node:fs/promises'
+import fsSync from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+import crypto from 'node:crypto'
+import { spawn, execFile } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
+import { createNevermindAi } from './ai'
+
+const require = createRequire(import.meta.url)
+const { autoUpdater } = electronUpdater
 
 let updateCheckInFlight = false
 let updateDownloadInFlight = false
@@ -378,7 +382,7 @@ function createWindow() {
     title: 'Nevermind',
     backgroundColor: '#00000000',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, '..', 'preload', 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -419,7 +423,7 @@ function createWindow() {
   if (isDev) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
-    win.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'))
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
   }
 }
 
@@ -1939,8 +1943,8 @@ function initNevermindAi() {
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
-    extensionApiPath: path.join(__dirname, '..', 'docs', 'extension-api.md'),
-    skillPath: path.join(__dirname, '..', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
+    extensionApiPath: path.join(app.getAppPath(), 'src', 'docs', 'extension-api.md'),
+    skillPath: path.join(app.getAppPath(), 'src', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
     reloadExtensions: loadExtensions,
     getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] : null,
     markGeneratedExtension: (filePath) => markGeneratedExtensionForActiveChat(filePath),
