@@ -118,8 +118,14 @@ export async function launchApp(item: any) {
   })(item)
 }
 
+const macSystemApps = ['/System/Library/CoreServices/Finder.app']
+
 async function scanMacApps() {
   const found: any[] = []
+  for (const appPath of macSystemApps) {
+    if (fsSync.existsSync(appPath)) found.push({ id: appPath, name: path.basename(appPath).replace(/\.app$/i, ''), path: appPath })
+  }
+
   async function walk(dir: string, depth: number) {
     const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
     await Promise.all(entries.map(async (entry) => {
