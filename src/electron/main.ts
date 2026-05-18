@@ -98,7 +98,7 @@ const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -631,10 +631,6 @@ async function searchActions(query, options: any = {}) {
   }
 
   const results = []
-  const keyboardShortcutsAction = BUILT_IN_ACTIONS.find((action) => action.kind === 'keyboard-shortcuts')
-  const rankedKeyboardShortcuts = keyboardShortcutsAction ? rankAction(withShortcutHint(keyboardShortcutsAction), q) : null
-  if (rankedKeyboardShortcuts) results.push(rankedKeyboardShortcuts)
-
   const contributedItems = q ? await extensionSearchActions(q) : await extensionRootActions()
   for (const item of contributedItems) {
     const ranked = rankAction(withShortcutHint(item), q)
@@ -1423,7 +1419,7 @@ function createCoreExtension() {
   return {
     id: 'nevermind.core',
     title: 'Nevermind Core',
-    commands: BUILT_IN_ACTIONS.filter((action) => action.kind !== 'keyboard-shortcuts').map((action) => ({
+    commands: BUILT_IN_ACTIONS.map((action) => ({
       id: action.id,
       actionId: action.id,
       title: action.title,
@@ -1573,6 +1569,37 @@ function createUpdatesExtension() {
       const action = updatePromptAction()
       return action ? [rootItemFromNativeAction(action)] : []
     },
+  }
+}
+
+function keyboardShortcutsView() {
+  return {
+    type: 'list',
+    id: 'keyboard-shortcuts',
+    title: 'Keyboard Shortcuts',
+    presentation: 'root',
+    searchBarPlaceholder: 'Search Keyboard Shortcuts',
+    emptyView: { title: 'No shortcuts found.' },
+    items: getShortcuts().map((record) => {
+      const changeAction = { type: 'nativeAction', title: 'Change shortcut', nativeAction: { kind: 'record-shortcut', action: record.action } }
+      const removeAction = record.source === 'user' ? { type: 'nativeAction', title: 'Remove shortcut', style: 'destructive', nativeAction: { kind: 'remove-shortcut', actionId: record.actionId } } : null
+      return {
+        id: `shortcut:${record.actionId}`,
+        title: record.action.title,
+        subtitle: record.accelerator,
+        icon: 'keyboard',
+        primaryAction: changeAction,
+        actionPanel: { sections: [{ actions: [changeAction, removeAction].filter(Boolean) }] },
+      }
+    }),
+  }
+}
+
+function createKeyboardShortcutsExtension() {
+  return {
+    id: 'nevermind.shortcuts',
+    title: 'Keyboard Shortcuts',
+    commands: [{ id: 'keyboard-shortcuts', actionId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16, run: () => keyboardShortcutsView() }],
   }
 }
 

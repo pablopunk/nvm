@@ -478,9 +478,22 @@ export function App() {
       setChildQuery('')
       return
     }
-    const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string } | undefined : undefined
+    const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string; action?: Action; actionId?: string } | undefined : undefined
     if (nativeAction?.kind === 'record-palette-hotkey') {
       startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
+      return
+    }
+    if (nativeAction?.kind === 'record-shortcut' && nativeAction.action) {
+      startShortcutRecorder(nativeAction.action as Action)
+      return
+    }
+    if (nativeAction?.kind === 'remove-shortcut' && nativeAction.actionId) {
+      const result = await window.nvm.removeShortcut(String(nativeAction.actionId))
+      showToast(result.message, result.ok ? 'default' : 'error')
+      if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
+        const refreshed = await window.nvm.execute({ id: 'keyboard-shortcuts', kind: 'extension-command', extensionId: 'nevermind.shortcuts', commandId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16 } as Action)
+        if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
+      }
       return
     }
     if (nativeAction?.kind === 'clipboard' && ('imageDataUrl' in nativeAction || 'videoUrl' in nativeAction || 'text' in nativeAction)) {
@@ -517,10 +530,6 @@ export function App() {
   }
 
   async function run(action: Action) {
-    if (action.kind === 'keyboard-shortcuts') {
-      await openShortcutManager()
-      return
-    }
     const dismissedImmediately = rootActionCanDismissImmediately(action)
     if (dismissedImmediately) window.nvm.hide()
     else showActionLoadingView(action.title || 'Running…', action.subtitle || 'Waiting for the action to finish', 'root')
@@ -982,10 +991,6 @@ export function App() {
   async function runCommandItem(item: CommandItem) {
     const action = primaryCommandAction(item)
     if (!action) return
-    if (action.type === 'nativeAction' && actionFromCommandItem(item)?.kind === 'keyboard-shortcuts') {
-      await openShortcutManager()
-      return
-    }
     await runViewAction(action)
   }
 
