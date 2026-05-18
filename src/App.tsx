@@ -989,10 +989,19 @@ export function App() {
     if (action) runViewAction(action)
   }
 
-  function dragPathForItem(item: ExtensionViewItem) {
+  function diskPathForAction(action: Action | null | undefined) {
+    return action?.filePath || action?.app?.path || null
+  }
+
+  function diskPathForItem(item: ExtensionViewItem | null | undefined) {
+    if (!item) return null
     if (item.path || item.filePath) return item.path || item.filePath
     const actions = [item.primaryAction, ...actionsFromPanel(item.actionPanel, item.actions || [])].filter(Boolean) as ExtensionViewAction[]
     return actions.find((action) => action.path)?.path || null
+  }
+
+  function dragPathForItem(item: ExtensionViewItem) {
+    return diskPathForItem(item)
   }
 
   function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
@@ -1072,6 +1081,16 @@ export function App() {
     return true
   }
 
+  function selectedDiskPath() {
+    if (!isChildOpen) return diskPathForAction(selectedAction)
+    if (selectedExtensionItem && !confirmRemoveFor && !extensionItemOptionsFor && !optionsFor && !previewFor) return diskPathForItem(selectedExtensionItem)
+    return null
+  }
+
+  async function revealSelectedDiskItem(path: string) {
+    await runViewAction({ type: 'revealPath', title: 'Show in Finder', path })
+  }
+
   function onCommandKeyDown(event: React.KeyboardEvent) {
     if (shortcutFor) {
       event.preventDefault()
@@ -1095,6 +1114,14 @@ export function App() {
     }
 
     const localAccelerator = acceleratorFromEvent(event)
+    if (normalizedShortcut(localAccelerator) === 'command+enter') {
+      const path = selectedDiskPath()
+      if (path) {
+        event.preventDefault()
+        revealSelectedDiskItem(path)
+        return
+      }
+    }
     if (localAccelerator && runLocalShortcut(localAccelerator)) {
       event.preventDefault()
       return
