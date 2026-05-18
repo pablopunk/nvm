@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, nativeImage, nativeTheme, protocol, net, session } from 'electron'
+import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net } from 'electron'
 import electronUpdater from 'electron-updater'
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
@@ -13,6 +13,7 @@ import { clipboardFilePath as readClipboardFilePath, clipboardItemSubtitle, clip
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
+import { createPaletteWindowController, installPermissionHandlers } from './palette-window'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
@@ -22,21 +23,20 @@ import { isNewerVersion as isVersionNewerThan } from './version-utils'
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
 const updateManager = createUpdateManager(autoUpdater)
+const paletteWindow = createPaletteWindowController({
+  isDev: Boolean(process.env.ELECTRON_RENDERER_URL),
+  preloadPath: path.join(__dirname, '..', 'preload', 'preload.cjs'),
+  rendererUrl: process.env.ELECTRON_RENDERER_URL,
+  rendererIndexPath: path.join(__dirname, '..', 'renderer', 'index.html'),
+  userDataPath: app.getPath('userData'),
+  getPaletteHotkey,
+})
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
 const APP_REINDEX_DEBOUNCE_MS = 1000
-const WINDOW_BLUR_MARGIN = 96
-const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
-const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
-const STACKED_PALETTE_SIZE = { width: 760, height: 720 }
-const PREVIEW_PALETTE_SIZE = { width: 1080, height: 760 }
-const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
-const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
-const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE)
-const PREVIEW_WINDOW_SIZE = addWindowBlurMargin(PREVIEW_PALETTE_SIZE)
 const THUMBNAIL_SIZE = 512
 
 protocol.registerSchemesAsPrivileged([
@@ -44,8 +44,6 @@ protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_THUMB_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
 ])
 
-let win
-let ignorePaletteBlurUntil = 0
 let appIndex = []
 let fileIndex = []
 let clipboardHistory = []
@@ -88,189 +86,8 @@ const extensionRegistry = new Map()
 const extensionActionHandlers = new Map()
 const registeredActionAccelerators = new Set()
 
-function addWindowBlurMargin(size) {
-  return {
-    width: size.width + WINDOW_BLUR_MARGIN * 2,
-    height: size.height + WINDOW_BLUR_MARGIN * 2,
-  }
-}
-
 const INTERNAL_EXTENSIONS = []
 const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-
-function installPermissionHandlers() {
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const url = webContents.getURL()
-    const isAppPage = url.startsWith('file:') || (isDev && url.startsWith(process.env.ELECTRON_RENDERER_URL || ''))
-    if (isAppPage && ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)) return callback(true)
-    callback(false)
-  })
-}
-
-function createWindow() {
-  win = new BrowserWindow({
-    width: DEFAULT_WINDOW_SIZE.width,
-    height: DEFAULT_WINDOW_SIZE.height,
-    show: false,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    movable: true,
-    type: process.platform === 'darwin' ? 'panel' : undefined,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    focusable: true,
-    fullscreenable: false,
-    hasShadow: false,
-    title: 'Nevermind',
-    backgroundColor: '#00000000',
-    webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  })
-
-  applyPaletteWindowPolicy()
-
-  win.on('blur', () => {
-    if (Date.now() < ignorePaletteBlurUntil) return
-    hidePalette()
-  })
-  win.on('close', (event) => {
-    if (!app.isQuiting) {
-      event.preventDefault()
-      hidePalette()
-    }
-  })
-
-  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-    debugLog('renderer.didFailLoad', { errorCode, errorDescription, validatedURL })
-  })
-  win.webContents.on('render-process-gone', (_event, details) => {
-    debugLog('renderer.gone', details)
-  })
-  win.webContents.on('console-message', (event) => {
-    const { level, message, lineNumber, sourceId } = event
-    debugLog('renderer.console', { level, message, line: lineNumber, sourceId })
-  })
-  win.webContents.once('did-finish-load', () => {
-    debugLog('renderer.didFinishLoad', { url: win.webContents.getURL() })
-    if (isDev || pendingShowOnReady) {
-      pendingShowOnReady = false
-      showPalette()
-    }
-  })
-
-  if (isDev) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
-  }
-}
-
-function debugLog(message, data) {
-  try {
-    const line = `${new Date().toISOString()} ${message}${data ? ` ${JSON.stringify(data)}` : ''}\n`
-    fs.appendFile(path.join(app.getPath('userData'), 'debug.log'), line).catch(() => {})
-  } catch {}
-}
-
-function setPaletteSizeForMode(mode = 'default') {
-  if (!win) return
-  const size = mode === 'preview' ? PREVIEW_WINDOW_SIZE : mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
-  win.setSize(size.width, size.height, false)
-  if (win.isVisible()) centerWindow()
-}
-
-function centerWindow() {
-  if (!win) return
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
-  const { width, height } = win.getBounds()
-  const { x, y, width: sw, height: sh } = display.workArea
-  win.setBounds({
-    x: Math.round(x + (sw - width) / 2),
-    y: Math.round(y + Math.min(sh * 0.18, 180)),
-    width,
-    height,
-  })
-}
-
-function applyPaletteWindowPolicy() {
-  if (!win || process.platform !== 'darwin') return
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  win.setFullScreenable(false)
-  win.setSkipTaskbar(true)
-}
-
-function showPalette(options = {}) {
-  if (!win) return
-  ignorePaletteBlurUntil = Date.now() + 500
-  applyPaletteWindowPolicy()
-  debugLog('showPalette', { options, visible: win.isVisible(), bounds: win.getBounds() })
-  centerWindow()
-  if (options.deferReveal) {
-    win.setOpacity(0)
-    setTimeout(() => win?.setOpacity(1), 250)
-  } else {
-    win.setOpacity(1)
-  }
-  if (options.skipShownEvent) win.webContents.send('palette:shortcut-show')
-  else win.webContents.send('palette:shown')
-  win.show()
-  win.moveTop()
-  win.focus()
-  win.webContents.focus()
-  debugLog('showPalette.after', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
-  setTimeout(() => debugLog('showPalette.later', { visible: win?.isVisible(), focused: win?.isFocused(), bounds: win?.getBounds(), opacity: win?.getOpacity() }), 300)
-}
-
-function revealPalette() {
-  win?.setOpacity(1)
-}
-
-function hidePalette() {
-  if (!win) return
-  debugLog('hidePalette', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
-  win.webContents.send('palette:hidden')
-  win.hide()
-}
-
-let pendingShowOnReady = false
-
-function showPaletteWhenReady() {
-  if (!win) {
-    pendingShowOnReady = true
-    return
-  }
-  if (win.webContents.isLoading()) pendingShowOnReady = true
-  else showPalette()
-}
-
-function togglePalette() {
-  if (win?.isVisible()) hidePalette()
-  else showPalette()
-}
-
-function registerHotkey() {
-  const hotkey = getPaletteHotkey()
-  const ok = globalShortcut.register(hotkey, togglePalette)
-  debugLog('registerHotkey', { accelerator: hotkey, ok, isRegistered: globalShortcut.isRegistered(hotkey) })
-  if (ok) console.log(`Registered global shortcut: ${hotkey}`)
-  else {
-    console.warn(`Could not register global shortcut: ${hotkey}`)
-    showPaletteWhenReady()
-  }
-
-  win.webContents.on('before-input-event', (_event, input) => {
-    if (!(input.meta || input.control) || !input.alt || input.key.toLowerCase() !== 'i') return
-    if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools()
-    else win.webContents.openDevTools({ mode: 'detach' })
-  })
-}
 
 function actionAliases(actionId) {
   const value = userState.aliases[actionId]
@@ -900,7 +717,7 @@ async function executeAction(action, options = {}) {
       break
     case 'extension-command': {
       const dismissImmediately = action.background || action.dismissAfterRun === 'auto'
-      if (dismissImmediately && !options.keepPaletteOpen) hidePalette()
+      if (dismissImmediately && !options.keepPaletteOpen) paletteWindow.hidePalette()
       const view = await executeExtensionCommand(action)
       if (view) return { view }
       break
@@ -916,7 +733,7 @@ async function executeAction(action, options = {}) {
     }
   }
 
-  if (!options.keepPaletteOpen) hidePalette()
+  if (!options.keepPaletteOpen) paletteWindow.hidePalette()
 }
 
 function extensionEntryForAction(action) {
@@ -1627,7 +1444,7 @@ function initNevermindAi() {
         userState.aiChats[chatId].updatedAt = Date.now()
         scheduleSaveState()
       }
-      win?.webContents.send('ai:chat:event', { ...event, chatId })
+      paletteWindow.win?.webContents.send('ai:chat:event', { ...event, chatId })
     },
   })
 }
@@ -1960,7 +1777,7 @@ async function indexApplications() {
     const deduped = new Map()
     for (const item of apps) deduped.set(normalize(item.name), item)
     appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
-    win?.webContents.send('apps:indexed', appIndex.length)
+    paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
   } catch (error) {
     console.error('Failed to index applications', error)
   }
@@ -2055,7 +1872,7 @@ function rememberClipboardItem(item) {
     ...clipboardHistory.filter((current) => current.id !== item.id),
   ].slice(0, CLIPBOARD_LIMIT)
   scheduleSaveState()
-  win?.webContents.send('clipboard:changed')
+  paletteWindow.win?.webContents.send('clipboard:changed')
 }
 
 function scheduleSaveState() {
@@ -2089,11 +1906,11 @@ function unregisterShortcutForAction(actionId) {
 
 async function executeShortcutAction(action) {
   const currentAction = currentActionForStoredShortcut(action)
-  const wasVisible = Boolean(win?.isVisible())
+  const wasVisible = Boolean(paletteWindow.win?.isVisible())
   const result = await executeAction(currentAction, { keepPaletteOpen: true })
   if (result?.view) {
-    showPalette({ skipShownEvent: true, deferReveal: !wasVisible })
-    win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible, asSibling: wasVisible })
+    paletteWindow.showPalette({ skipShownEvent: true, deferReveal: !wasVisible })
+    paletteWindow.win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible, asSibling: wasVisible })
   }
 }
 
@@ -2102,7 +1919,7 @@ function bindGlobalActionShortcut(actionId, accelerator, action) {
   globalShortcut.unregister(accelerator)
   registeredActionAccelerators.add(accelerator)
   const ok = globalShortcut.register(accelerator, () => executeShortcutAction(action))
-  debugLog('registerActionShortcut', { actionId, accelerator, title: action?.title, ok, isRegistered: globalShortcut.isRegistered(accelerator) })
+  paletteWindow.debugLog('registerActionShortcut', { actionId, accelerator, title: action?.title, ok, isRegistered: globalShortcut.isRegistered(accelerator) })
   return ok
 }
 
@@ -2355,8 +2172,8 @@ app.whenReady().then(async () => {
   await loadUserState()
   await loadExtensions()
   initNevermindAi()
-  createWindow()
-  registerHotkey()
+  paletteWindow.createWindow()
+  paletteWindow.registerHotkey()
   registerActionShortcuts()
   startClipboardWatcher()
   setTimeout(indexApplications, 100)
@@ -2385,14 +2202,14 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:remove-created', (_event, action) => removeCreatedAction(action))
   ipcMain.handle('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
   ipcMain.handle('palette:set-mode', (_event, mode) => {
-    setPaletteSizeForMode(mode)
-    centerWindow()
+    paletteWindow.setPaletteSizeForMode(mode)
+    paletteWindow.centerWindow()
   })
-  ipcMain.handle('palette:hide', () => hidePalette())
-  ipcMain.handle('palette:shortcut-ready', () => revealPalette())
+  ipcMain.handle('palette:hide', () => paletteWindow.hidePalette())
+  ipcMain.handle('palette:shortcut-ready', () => paletteWindow.revealPalette())
 })
 
-app.on('activate', () => showPalette())
+app.on('activate', () => paletteWindow.showPalette())
 app.on('before-quit', () => {
   app.isQuiting = true
 })
@@ -2406,5 +2223,5 @@ app.on('will-quit', () => {
 if (!isDev) {
   const gotLock = app.requestSingleInstanceLock()
   if (!gotLock) app.quit()
-  else app.on('second-instance', () => showPalette())
+  else app.on('second-instance', () => paletteWindow.showPalette())
 }

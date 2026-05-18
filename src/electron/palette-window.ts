@@ -1,0 +1,223 @@
+import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+
+export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
+
+type PaletteWindowOptions = {
+  isDev: boolean
+  preloadPath: string
+  rendererUrl?: string
+  rendererIndexPath: string
+  userDataPath: string
+  getPaletteHotkey: () => string
+}
+
+const WINDOW_BLUR_MARGIN = 96
+const DEFAULT_PALETTE_SIZE = { width: 600, height: 400 }
+const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 }
+const STACKED_PALETTE_SIZE = { width: 760, height: 720 }
+const PREVIEW_PALETTE_SIZE = { width: 1080, height: 760 }
+const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE)
+const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE)
+const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE)
+const PREVIEW_WINDOW_SIZE = addWindowBlurMargin(PREVIEW_PALETTE_SIZE)
+
+function addWindowBlurMargin(size: { width: number; height: number }) {
+  return {
+    width: size.width + WINDOW_BLUR_MARGIN * 2,
+    height: size.height + WINDOW_BLUR_MARGIN * 2,
+  }
+}
+
+export function installPermissionHandlers(isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const url = webContents.getURL()
+    const isAppPage = url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
+    if (isAppPage && ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)) return callback(true)
+    callback(false)
+  })
+}
+
+export function createPaletteWindowController(options: PaletteWindowOptions) {
+  let win: BrowserWindow | null = null
+  let ignorePaletteBlurUntil = 0
+  let pendingShowOnReady = false
+
+  function debugLog(message: string, data?: unknown) {
+    try {
+      const line = `${new Date().toISOString()} ${message}${data ? ` ${JSON.stringify(data)}` : ''}\n`
+      fs.appendFile(path.join(options.userDataPath, 'debug.log'), line).catch(() => {})
+    } catch {}
+  }
+
+  function createWindow() {
+    win = new BrowserWindow({
+      width: DEFAULT_WINDOW_SIZE.width,
+      height: DEFAULT_WINDOW_SIZE.height,
+      show: false,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: true,
+      type: process.platform === 'darwin' ? 'panel' : undefined,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      focusable: true,
+      fullscreenable: false,
+      hasShadow: false,
+      title: 'Nevermind',
+      backgroundColor: '#00000000',
+      webPreferences: {
+        preload: options.preloadPath,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    } satisfies BrowserWindowConstructorOptions)
+
+    applyPaletteWindowPolicy()
+
+    win.on('blur', () => {
+      if (Date.now() < ignorePaletteBlurUntil) return
+      hidePalette()
+    })
+    win.on('close', (event) => {
+      if (!(app as typeof app & { isQuiting?: boolean }).isQuiting) {
+        event.preventDefault()
+        hidePalette()
+      }
+    })
+
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+      debugLog('renderer.didFailLoad', { errorCode, errorDescription, validatedURL })
+    })
+    win.webContents.on('render-process-gone', (_event, details) => {
+      debugLog('renderer.gone', details)
+    })
+    win.webContents.on('console-message', (event) => {
+      const { level, message, lineNumber, sourceId } = event
+      debugLog('renderer.console', { level, message, line: lineNumber, sourceId })
+    })
+    win.webContents.once('did-finish-load', () => {
+      debugLog('renderer.didFinishLoad', { url: win?.webContents.getURL() })
+      if (options.isDev || pendingShowOnReady) {
+        pendingShowOnReady = false
+        showPalette()
+      }
+    })
+
+    if (options.isDev && options.rendererUrl) win.loadURL(options.rendererUrl)
+    else win.loadFile(options.rendererIndexPath)
+
+    return win
+  }
+
+  function setPaletteSizeForMode(mode: PaletteMode = 'default') {
+    if (!win) return
+    const size = mode === 'preview' ? PREVIEW_WINDOW_SIZE : mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
+    win.setSize(size.width, size.height, false)
+    if (win.isVisible()) centerWindow()
+  }
+
+  function centerWindow() {
+    if (!win) return
+    const cursor = screen.getCursorScreenPoint()
+    const display = screen.getDisplayNearestPoint(cursor)
+    const { width, height } = win.getBounds()
+    const { x, y, width: sw, height: sh } = display.workArea
+    win.setBounds({
+      x: Math.round(x + (sw - width) / 2),
+      y: Math.round(y + Math.min(sh * 0.18, 180)),
+      width,
+      height,
+    })
+  }
+
+  function applyPaletteWindowPolicy() {
+    if (!win || process.platform !== 'darwin') return
+    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    win.setFullScreenable(false)
+    win.setSkipTaskbar(true)
+  }
+
+  function showPalette(showOptions: { deferReveal?: boolean; skipShownEvent?: boolean } = {}) {
+    if (!win) return
+    ignorePaletteBlurUntil = Date.now() + 500
+    applyPaletteWindowPolicy()
+    debugLog('showPalette', { options: showOptions, visible: win.isVisible(), bounds: win.getBounds() })
+    centerWindow()
+    if (showOptions.deferReveal) {
+      win.setOpacity(0)
+      setTimeout(() => win?.setOpacity(1), 250)
+    } else {
+      win.setOpacity(1)
+    }
+    if (showOptions.skipShownEvent) win.webContents.send('palette:shortcut-show')
+    else win.webContents.send('palette:shown')
+    win.show()
+    win.moveTop()
+    win.focus()
+    win.webContents.focus()
+    debugLog('showPalette.after', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
+    setTimeout(() => debugLog('showPalette.later', { visible: win?.isVisible(), focused: win?.isFocused(), bounds: win?.getBounds(), opacity: win?.getOpacity() }), 300)
+  }
+
+  function revealPalette() {
+    win?.setOpacity(1)
+  }
+
+  function hidePalette() {
+    if (!win) return
+    debugLog('hidePalette', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
+    win.webContents.send('palette:hidden')
+    win.hide()
+  }
+
+  function showPaletteWhenReady() {
+    if (!win) {
+      pendingShowOnReady = true
+      return
+    }
+    if (win.webContents.isLoading()) pendingShowOnReady = true
+    else showPalette()
+  }
+
+  function togglePalette() {
+    if (win?.isVisible()) hidePalette()
+    else showPalette()
+  }
+
+  function registerHotkey() {
+    const hotkey = options.getPaletteHotkey()
+    const ok = globalShortcut.register(hotkey, togglePalette)
+    debugLog('registerHotkey', { accelerator: hotkey, ok, isRegistered: globalShortcut.isRegistered(hotkey) })
+    if (ok) console.log(`Registered global shortcut: ${hotkey}`)
+    else {
+      console.warn(`Could not register global shortcut: ${hotkey}`)
+      showPaletteWhenReady()
+    }
+
+    win?.webContents.on('before-input-event', (_event, input) => {
+      if (!(input.meta || input.control) || !input.alt || input.key.toLowerCase() !== 'i') return
+      if (win?.webContents.isDevToolsOpened()) win.webContents.closeDevTools()
+      else win?.webContents.openDevTools({ mode: 'detach' })
+    })
+  }
+
+  return {
+    get win() { return win },
+    createWindow,
+    debugLog,
+    setPaletteSizeForMode,
+    centerWindow,
+    applyPaletteWindowPolicy,
+    showPalette,
+    revealPalette,
+    hidePalette,
+    showPaletteWhenReady,
+    togglePalette,
+    registerHotkey,
+  }
+}
