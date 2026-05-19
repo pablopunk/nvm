@@ -152,7 +152,6 @@ export function App() {
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
   const runningViewActionsRef = useRef(new Set<string>())
-  const lastLocalShortcutRef = useRef<string | null>(null)
   const [query, setQuery] = useState('')
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
@@ -457,7 +456,6 @@ export function App() {
 
   function popExtensionView() {
     setExtensionItemOptionsFor(null)
-    lastLocalShortcutRef.current = null
     if (extensionViewBackStack.length === 0 && siblingViews.length > 0) {
       const next = siblingViews[siblingViews.length - 1]
       setSiblingViews((siblings) => siblings.slice(0, -1))
@@ -566,6 +564,9 @@ export function App() {
     else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {
       const result = await window.nvm.runViewAction(action)
+      if (showsLoading && loadingNavigation === 'push' && (result?.navigation === 'replace' || result?.navigation === 'pop')) {
+        extensionNavigation.setBackStack((stack) => stack.slice(0, -1))
+      }
       await handleViewActionResult(result, showsLoading ? 'replace' : 'push')
       if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
@@ -1152,18 +1153,12 @@ export function App() {
   function runLocalShortcut(accelerator: string) {
     if (!extensionView || extensionItemOptionsFor || optionsFor || previewFor || confirmRemoveFor || shortcutManagerOpen || shortcutFor) return false
     const normalized = normalizedShortcut(accelerator)
-    if (extensionViewBackStack.length > 0 && normalizedShortcut(lastLocalShortcutRef.current || '') === normalized) {
-      popExtensionView()
-      lastLocalShortcutRef.current = null
-      return true
-    }
     const selectedItem = selectedExtensionItem
     const itemActions = selectedItem ? actionsFromPanel(selectedItem.actionPanel, selectedItem.actions || []) : []
     const viewActions = actionsFromPanel(extensionView.actionPanel, extensionView.actions || [])
     const actions = selectedItem ? [selectedItem.primaryAction, ...itemActions].filter(Boolean) as ExtensionViewAction[] : viewActions
     const action = actions.find((item) => normalizedShortcut(item.shortcut) === normalized)
     if (!action) return false
-    lastLocalShortcutRef.current = accelerator
     runViewAction(action)
     return true
   }
