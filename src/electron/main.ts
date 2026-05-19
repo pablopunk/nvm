@@ -108,6 +108,49 @@ const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionStorageRefreshes = new Map<string, Promise<any>>()
 const extensionActionHandlers = new Map<string, any>()
+const extensionCaches = new Map<string, Map<string, { value: any; expiresAt: number }>>()
+
+function extensionCacheFor(extensionId) {
+  let store = extensionCaches.get(extensionId)
+  if (!store) {
+    store = new Map()
+    extensionCaches.set(extensionId, store)
+  }
+  return store
+}
+
+function createExtensionCache(extension) {
+  const store = extensionCacheFor(extension.id)
+  return {
+    get(key) {
+      const entry = store.get(key)
+      if (!entry) return undefined
+      if (entry.expiresAt && Date.now() > entry.expiresAt) return undefined
+      return entry.value
+    },
+    getStale(key) {
+      return store.get(key)?.value
+    },
+    has(key) {
+      const entry = store.get(key)
+      if (!entry) return false
+      return !entry.expiresAt || Date.now() <= entry.expiresAt
+    },
+    set(key, value, options: any = {}) {
+      const ttlMs = Number(options.ttlMs || 0)
+      store.set(key, { value, expiresAt: ttlMs > 0 ? Date.now() + ttlMs : 0 })
+      return value
+    },
+    invalidate(key) {
+      if (key === undefined) store.clear()
+      else store.delete(key)
+      invalidateExtensionRootItemsForExtension(extension)
+    },
+    keys() {
+      return Array.from(store.keys())
+    },
+  }
+}
 const registeredActionAccelerators = new Set<string>()
 
 const INTERNAL_EXTENSIONS: any[] = [createSystemExtension(), createPlacesExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension(), createSettingsExtension()]
@@ -394,7 +437,7 @@ function aiChatsView() {
     id: 'ai-chats',
     title: 'AI Chats',
     searchBarPlaceholder: 'Search AI Chats',
-    refresh: { intervalMs: 3000, action: refreshNativeViewAction('ai-chats'), mode: 'replace' },
+    refresh: { intervalMs: 3000, action: viewRefreshAction(aiChatListItems), mode: 'replace' },
     items: aiChatListItems(),
   }
 }
@@ -510,8 +553,12 @@ function clipboardHistoryItems() {
   })
 }
 
-function refreshNativeViewAction(viewId) {
-  return { type: 'refreshNativeView', title: 'Refresh', viewId }
+function viewRefreshAction(itemsBuilder) {
+  return {
+    type: 'runExtensionAction',
+    title: 'Refresh',
+    __handler: () => ({ patch: { mode: 'replace', items: itemsBuilder() } }),
+  }
 }
 
 function clipboardHistoryView() {
@@ -522,7 +569,7 @@ function clipboardHistoryView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Clipboard History',
     emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
-    refresh: { intervalMs: 1000, action: refreshNativeViewAction('clipboard-history'), mode: 'replace' },
+    refresh: { intervalMs: 1000, action: viewRefreshAction(clipboardHistoryItems), mode: 'replace' },
     items: clipboardHistoryItems(),
   }
 }
@@ -575,7 +622,7 @@ function updateStatusView(options: any = {}) {
     presentation: 'root',
     searchBarPlaceholder: 'Search Updates',
     isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
-    ...(options.includeRefresh === false ? {} : { refresh: { intervalMs: 2000, action: refreshNativeViewAction('app-updates'), mode: 'replace' } }),
+    ...(options.includeRefresh === false ? {} : { refresh: { intervalMs: 2000, action: viewRefreshAction(updateStatusItems), mode: 'replace' } }),
     items: [{
       id: 'update-status',
       title,
@@ -602,23 +649,6 @@ function installDownloadedUpdate() {
   if (!updateManager.state.downloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
   nevermindApp.isQuiting = true
   updateManager.quitAndInstall()
-}
-
-function refreshNativeViewPatch(viewId) {
-  switch (viewId) {
-    case 'clipboard-history':
-      return { patch: { mode: 'replace', items: clipboardHistoryItems() } }
-    case 'app-updates':
-      return { patch: { mode: 'replace', items: updateStatusItems() } }
-    case 'app-settings':
-      return { patch: { mode: 'replace', items: settingsItems() } }
-    case 'keyboard-shortcuts':
-      return { patch: { mode: 'replace', items: keyboardShortcutItems() } }
-    case 'ai-chats':
-      return { patch: { mode: 'replace', items: aiChatListItems() } }
-    default:
-      return { toast: { message: 'View cannot refresh', tone: 'error' } }
-  }
 }
 
 function settingItemPatch(definition) {
@@ -648,7 +678,7 @@ function settingsView(selectedItemId = '') {
     presentation: 'root',
     selectedItemId,
     searchBarPlaceholder: 'Search Settings',
-    refresh: { intervalMs: 2000, action: refreshNativeViewAction('app-settings'), mode: 'replace' },
+    refresh: { intervalMs: 2000, action: viewRefreshAction(settingsItems), mode: 'replace' },
     items: settingsItems(),
   }
 }
@@ -712,6 +742,12 @@ async function searchActions(query, options: any = {}) {
 
 function invalidateExtensionRootItems() {
   extensionRootItemsCache.clear()
+  paletteWindow.win?.webContents.send('root-items:changed')
+}
+
+function invalidateExtensionRootItemsForExtension(extension) {
+  const cacheKey = extension.__filePath || extension.id
+  extensionRootItemsCache.delete(cacheKey)
   paletteWindow.win?.webContents.send('root-items:changed')
 }
 
@@ -1176,8 +1212,6 @@ async function executeViewAction(action) {
       const result = await clearOverride(action.targetAction || action.action)
       return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
     }
-    case 'refreshNativeView':
-      return refreshNativeViewPatch(action.viewId)
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
     case 'openAiChats':
@@ -1806,7 +1840,7 @@ function keyboardShortcutsView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Keyboard Shortcuts',
     emptyView: { title: 'No shortcuts found.' },
-    refresh: { intervalMs: 2000, action: refreshNativeViewAction('keyboard-shortcuts'), mode: 'replace' },
+    refresh: { intervalMs: 2000, action: viewRefreshAction(keyboardShortcutItems), mode: 'replace' },
     items: keyboardShortcutItems(),
   }
 }
@@ -1830,7 +1864,7 @@ function createSettingsExtension() {
       presentation: 'root',
       selectedItemId: ctx.state.selectedItemId,
       searchBarPlaceholder: 'Search Settings',
-      refresh: { intervalMs: 2000, action: refreshNativeViewAction('app-settings'), mode: 'replace' },
+      refresh: { intervalMs: 2000, action: viewRefreshAction(settingsItems), mode: 'replace' },
       items: settingsItems(),
     }) }],
   }
@@ -1916,6 +1950,13 @@ function createExtensionContext(extension, command) {
       removeShortcut: (input: any = {}, options: any = {}) => buildRemoveShortcutAction(input, options),
       setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => buildRecordShortcutAction({ scope: 'palette', title }, options),
       native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
+      camera: {
+        switchDevice: (title = 'Switch Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.switchDevice' } }),
+        nextDevice: (title = 'Next Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.nextDevice' } }),
+        previousDevice: (title = 'Previous Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.previousDevice' } }),
+        toggleMuted: (title = 'Toggle Camera Audio', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.toggleMuted' } }),
+        toggleControls: (title = 'Toggle Camera Controls', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.toggleControls' } }),
+      },
     },
     navigation: {
       push: (view) => ({ view, navigation: 'push' }),
@@ -1981,9 +2022,32 @@ function createExtensionContext(extension, command) {
       },
     },
     logs: extensionLogger(extension.id, command?.id),
-    cache: new Map(),
+    cache: createExtensionCache(extension),
+    views: createExtensionViewsApi(extension, command),
     state: {},
     ai: createExtensionAi(extension),
+  }
+}
+
+function createExtensionViewsApi(extension, command) {
+  return {
+    refresh: () => ({
+      type: 'runExtensionAction',
+      title: 'Refresh',
+      __handler: async (innerCtx) => {
+        if (!command || typeof command.run !== 'function') return { toast: { message: 'View cannot refresh', tone: 'error' } }
+        invalidateExtensionRootItemsForExtension(extension)
+        const result = await command.run(innerCtx)
+        const view = result?.type ? result : result?.view?.type ? result.view : null
+        if (view?.items) return { patch: { mode: 'replace', items: view.items } }
+        if (view) return { view, navigation: 'replace' }
+        return result
+      },
+    }),
+    invalidate: () => {
+      invalidateExtensionRootItemsForExtension(extension)
+      extensionCacheFor(extension.id).clear()
+    },
   }
 }
 
