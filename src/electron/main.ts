@@ -6,7 +6,6 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { builtInActions } from './builtin-actions'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createRequire } from 'node:module'
@@ -15,7 +14,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, executeSystemBuiltin, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 
@@ -97,8 +96,7 @@ const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
-const BUILT_IN_ACTIONS = builtInActions({ version: app.getVersion() })
-const INTERNAL_EXTENSIONS: any[] = [createCoreExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension(), createSettingsExtension()]
+const INTERNAL_EXTENSIONS: any[] = [createSystemExtension(), createPlacesExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension(), createSettingsExtension()]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -1421,19 +1419,43 @@ function createExtensionAi(extension) {
   }
 }
 
-function createCoreExtension() {
+function systemActions() {
+  return [
+    { id: 'builtin:lock-screen', kind: 'builtin', builtin: 'lock-screen', title: 'Lock Screen', subtitle: 'Secure this computer', icon: 'lock', score: 22 },
+    { id: 'builtin:sleep', kind: 'builtin', builtin: 'sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21 },
+    { id: 'builtin:restart', kind: 'builtin', builtin: 'restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20 },
+    { id: 'builtin:settings', kind: 'builtin', builtin: 'settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19 },
+    { id: 'builtin:quit', kind: 'builtin', builtin: 'quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15 },
+  ]
+}
+
+function placesActions() {
+  return [
+    { id: 'places:downloads', kind: 'file', title: 'Open Downloads', subtitle: '~/Downloads', filePath: path.join(os.homedir(), 'Downloads'), icon: 'folder', score: 18 },
+    { id: 'places:documents', kind: 'file', title: 'Open Documents', subtitle: '~/Documents', filePath: path.join(os.homedir(), 'Documents'), icon: 'folder', score: 17 },
+    { id: 'places:desktop', kind: 'file', title: 'Open Desktop', subtitle: '~/Desktop', filePath: path.join(os.homedir(), 'Desktop'), icon: 'folder', score: 16 },
+  ]
+}
+
+function commandFromNativeAction(action) {
+  return { id: action.id, actionId: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, run: (ctx) => ctx.navigation.run(ctx.actions.native(action.title, action)) }
+}
+
+function createSystemExtension() {
   return {
-    id: 'nevermind.core',
-    title: 'Nevermind Core',
-    commands: BUILT_IN_ACTIONS.map((action) => ({
-      id: action.id,
-      actionId: action.id,
-      title: action.title,
-      subtitle: action.subtitle,
-      icon: action.icon,
-      score: action.score,
-      run: (ctx) => ctx.navigation.run(ctx.actions.native(action.title, action)),
-    })),
+    id: 'nevermind.system',
+    title: 'System',
+    commands: systemActions().map(commandFromNativeAction),
+    rootItems: () => systemActions().map(rootItemFromNativeAction),
+  }
+}
+
+function createPlacesExtension() {
+  return {
+    id: 'nevermind.places',
+    title: 'Places',
+    commands: placesActions().map(commandFromNativeAction),
+    rootItems: () => placesActions().map(rootItemFromNativeAction),
   }
 }
 
@@ -1574,13 +1596,14 @@ function createAiBuilderExtension() {
 }
 
 function createUpdatesExtension() {
+  const checkAction = () => ({ id: 'updates:check', kind: 'check-for-updates', title: 'Check for Updates', subtitle: `Current version: ${app.getVersion()}`, icon: 'restart', score: 23 })
   return {
     id: 'nevermind.updates',
     title: 'Updates',
-    commands: [],
+    commands: [commandFromNativeAction(checkAction())],
     rootItems() {
-      const action = updatePromptAction()
-      return action ? [rootItemFromNativeAction(action)] : []
+      const action = updatePromptAction() || checkAction()
+      return [rootItemFromNativeAction(action)]
     },
   }
 }
