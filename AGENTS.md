@@ -6,6 +6,7 @@
 * When changing/adding code, always explore the repo to understand conventions and similar use cases before assuming the intended architecture. Reuse existing helpers, overlays, and primitives before adding new ones — formatters, confirm-style flows, shortcut recorder plumbing, OS capabilities, etc. already exist. OS-specific desktop behavior must go through `src/electron/os.ts` as an intent-named capability and follow `src/docs/os-architecture.md`; never proxy one OS mechanism through an unrelated capability guard.
 * If you suddenly see changes you have not done, it might be the user in the background, do not mess it up.
 * When debugging generated/plugin behavior, inspect both the framework API and the installed/generated artifacts that consume it (for Nevermind extensions, check `~/Library/Application Support/nvm/extensions` as well as repo code). Extension command/action boundaries must catch, normalize, and clone-check results so extension failures surface as Nevermind error views, not raw Electron IPC/log errors.
+* When iterating, git is your friend. Commit early and often, and use the git log to understand recent changes.
 
 ## Code and docs
 
