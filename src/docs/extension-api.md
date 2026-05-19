@@ -86,7 +86,15 @@ Commands can return:
 - `ctx.ui.webview({ title, html, actions, size, actionPanelVisibility })` for advanced custom live/interactive browser UI when no host-owned primitive fits. Webviews run sandboxed HTML/JS without Node access. Use `size: 'large'` when the webview needs a larger palette.
 - `ctx.ui.chat({ title, messages })`
 - `ctx.ui.form({ title, fields })`
-- `ctx.ui.progress({ title, steps })`
+- `ctx.ui.progress({ title, label, steps, id, value, total })` returns a host-rendered progress view. Pass `label` for a single active step, or `steps: [{ title, status }]` for a multi-step indicator. Optional `id`, `value`, and `total` are forwarded for downstream progress tracking.
+
+## Declarative UI lifecycle primitives
+
+The renderer owns confirmation, preview, and progress surfaces; extensions request them declaratively through `ctx.ui.*` so they never need renderer-only state branches:
+
+- `ctx.ui.confirm({ title?, message?, confirmLabel?, cancelLabel?, destructive?, onConfirm })` wraps an inner action so the host renders a confirmation step before executing it. `onConfirm` may be any declarative action (e.g. `ctx.actions.run(...)`, a native action, or another `ctx.ui.*` result). Pass `destructive: true` to render the destructive style; `message`, `confirmLabel`, and `cancelLabel` customize the confirmation panel copy.
+- `ctx.ui.preview({ kind, title?, text?, imageDataUrl?, imagePath?, videoUrl?, filePath?, thumbnailUrl?, clipboardType? })` opens the host-owned inline preview pane. `kind` is one of `'clipboard' | 'image' | 'video' | 'file' | 'text'`. For a full preview as a stacked view (with markdown, image, or video content), keep using the existing `ctx.ui.preview({ title, content, image, video })` view form or `ctx.ui.preview(file, { title, content })`.
+- `ctx.ui.toast({ message, tone? })` returns an action-result toast (`{ toast: { message, tone } }`). Equivalent to returning `{ toast: { ... } }` directly; use it when composing results from `ctx.actions.run`.
 
 ## Context capabilities
 
@@ -133,6 +141,19 @@ const files = await ctx.storage.memoStale('recent-media', 60_000, 24 * 60 * 60_0
   ctx.desktop.files.findMedia(['~/Downloads', '~/Desktop'], { sortBy: 'added', limit: 200 })
 )
 ```
+
+## AI Builder (host-only)
+
+The built-in `nevermind.ai-builder` extension is the only caller granted `ctx.aiBuilder.*`. The host gates this surface by extension id; public extensions get `undefined` for `ctx.aiBuilder` and a read-only `ctx.extensions.ownership` view. The AI Builder extension uses the same declarative primitives as every other extension — it is a reference implementation, not a privileged path through `executeAction`.
+
+- `ctx.aiBuilder.startChat({ prompt, title? })` returns a declarative action that opens a fresh builder draft chat.
+- `ctx.aiBuilder.openChat(chatId, { title? })` returns a declarative action that opens an existing chat.
+- `ctx.aiBuilder.removeChat(chatId, { title? })` returns a destructive declarative action that removes only the chat history and AI session state. Generated extension files are durable and are never unlinked by chat removal; wrap with `ctx.ui.confirm(...)` to confirm before invoking.
+- `ctx.aiBuilder.tweakExtension({ extensionFile, title?, prompt? })` returns a declarative action that opens (or creates) the tweak chat for a generated extension.
+- `ctx.aiBuilder.openChatsList({ title? })` returns a declarative action that opens the chats list view.
+- `ctx.aiBuilder.listChats()` and `ctx.aiBuilder.getChat(id)` are synchronous read helpers.
+
+`ctx.extensions.ownership` exposes durable generated-extension ownership. Read methods (`ownerOf(extensionFile)`, `filesForChat(chatId)`, `canWrite(extensionFile, chatId)`) are available to every extension. Mutating methods (`claim(extensionFile, chatId)`, `reload()`) are exposed only to the AI Builder extension.
 
 ## AI builder write scope
 
