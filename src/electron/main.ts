@@ -299,6 +299,7 @@ function getOrCreateAiChat(query, options: any = {}) {
   const item = aiChatItem(id, trimmed)
   userState.aiChats[id] = item
   scheduleSaveState()
+  invalidateExtensionRootItems()
   return item
 }
 
@@ -333,6 +334,7 @@ function promoteDraftAiChat(chatId) {
   draft.updatedAt = Date.now()
   userState.aiChats[chatId] = draft
   scheduleSaveState()
+  invalidateExtensionRootItems()
   return draft
 }
 
@@ -440,6 +442,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   }
   userState.aiChats[id] = item
   scheduleSaveState()
+  invalidateExtensionRootItems()
   return item
 }
 
@@ -1725,8 +1728,12 @@ function createFilesExtension() {
 }
 
 function createAiBuilderExtension() {
+  function chatsSubtitle() {
+    const count = Object.keys(userState.aiChats || {}).length
+    return `${count} builder ${count === 1 ? 'chat' : 'chats'}`
+  }
   function chatsItem() {
-    return { id: 'ai-chats', title: 'AI Chats', subtitle: `${Object.keys(userState.aiChats || {}).length} builder chats`, icon: 'sparkles', score: 16, primaryAction: { type: 'openAiChats', title: 'AI Chats' } }
+    return { id: 'ai-chats', title: 'AI Chats', subtitle: chatsSubtitle(), icon: 'sparkles', score: 16, primaryAction: { type: 'openAiChats', title: 'AI Chats' } }
   }
   function chatItems(query = '') {
     return Object.values(userState.aiChats || {}).map((item: any) => ({
@@ -1743,7 +1750,7 @@ function createAiBuilderExtension() {
   return {
     id: 'nevermind.ai-builder',
     title: 'AI Builder',
-    commands: [{ ...chatsItem(), actionId: 'ai-chats', run: () => aiChatsView() }],
+    commands: [{ id: 'ai-chats', actionId: 'ai-chats', title: 'AI Chats', get subtitle() { return chatsSubtitle() }, icon: 'sparkles', score: 16, run: () => aiChatsView() }],
     rootItems() {
       return [chatsItem(), ...chatItems().slice(0, 4)]
     },
@@ -2516,6 +2523,7 @@ async function duplicateCreatedAction(action) {
     ],
   }
   scheduleSaveState()
+  invalidateExtensionRootItems()
   await loadExtensions()
   registerActionShortcuts()
   const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
@@ -2531,6 +2539,7 @@ async function removeAiChat(chatId) {
     if (actionId === `ai-chat:${chatId}`) delete userState.recents[actionId]
   }
   scheduleSaveState()
+  invalidateExtensionRootItems()
   return { view: aiChatsView(), navigation: 'replace', toast: { message: `Removed ${chat.title || chat.query || 'AI chat'}` } }
 }
 
