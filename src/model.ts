@@ -97,12 +97,16 @@ export type CommandViewPatch = {
 
 export type CommandView = {
   id?: string
-  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview'
+  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview' | 'camera'
   title: string
   size?: 'default' | 'large'
   image?: string
   video?: string
   videoUrl?: string
+  deviceId?: string
+  facingMode?: 'user' | 'environment' | 'left' | 'right'
+  muted?: boolean
+  controls?: boolean
   aiChat?: boolean
   chatId?: string
   initialPrompt?: string

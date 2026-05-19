@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { CornerDownLeft, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
@@ -58,6 +58,47 @@ function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   return <EmptyState icon={<Search size={24} />} title={view.emptyView?.title || fallback} subtitle={view.emptyView?.subtitle} />
 }
 
+function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [status, setStatus] = useState('Initializing…')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let stream: MediaStream | null = null
+    let cancelled = false
+
+    async function start() {
+      setStatus('Requesting camera…')
+      setError('')
+      try {
+        const video: boolean | MediaTrackConstraints = view.deviceId
+          ? { deviceId: { exact: view.deviceId } }
+          : view.facingMode
+            ? { facingMode: view.facingMode }
+            : true
+        stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+        if (cancelled) return
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+        setStatus('Live')
+      } catch (err) {
+        setStatus('Camera unavailable')
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    start()
+    return () => {
+      cancelled = true
+      stream?.getTracks().forEach((track) => track.stop())
+    }
+  }, [view.deviceId, view.facingMode])
+
+  return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={view.muted !== false} controls={Boolean(view.controls)} />{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
+}
+
 export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {
   function pagination() {
     if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
@@ -105,6 +146,12 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
     const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
     const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
     return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox="allow-scripts allow-forms allow-same-origin" allow="camera; microphone; display-capture; autoplay; clipboard-read; clipboard-write" />{webviewActions}</div>
+  }
+
+  if (view.type === 'camera') {
+    const cameraActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-camera', false))
+    const cameraActions = cameraActionRows.length ? renderActionPanel(cameraActionRows) : null
+    return <CameraView view={view} actions={cameraActions} />
   }
 
   const previewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))

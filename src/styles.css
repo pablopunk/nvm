@@ -964,7 +964,8 @@ kbd {
   overflow: hidden;
 }
 
-.webviewSurface {
+.webviewSurface,
+.cameraSurface {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
@@ -982,16 +983,57 @@ kbd {
 }
 
 .resultsCard > .webviewSurface.webviewLarge,
-.largeResultsCard .webviewSurface.webviewLarge {
+.largeResultsCard .webviewSurface.webviewLarge,
+.resultsCard > .cameraSurface.cameraLarge,
+.largeResultsCard .cameraSurface.cameraLarge {
   height: 100%;
   min-height: 0;
 }
 
-.extensionWebview {
+.extensionWebview,
+.cameraFrame {
   width: 100%;
   height: 100%;
   min-height: 0;
   border: 0;
   border-radius: var(--radius-lg);
   background: #000;
+}
+
+.cameraFrame {
+  position: relative;
+  overflow: hidden;
+}
+
+.cameraVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cameraStatus {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-1);
+  font-size: 11px;
+}
+
+.cameraError {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-1);
+}
+
+.cameraError strong {
+  color: var(--danger-text);
 }
