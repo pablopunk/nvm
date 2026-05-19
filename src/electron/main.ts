@@ -443,7 +443,7 @@ function clipboardActionFromItem(item) {
     filePath: item.filePath,
     thumbnailUrl: item.thumbnailUrl,
     icon: 'clipboard',
-    score: 13,
+    score: 60,
     lastUsed: item.createdAt || 0,
   }
 }
