@@ -172,18 +172,26 @@ export function App() {
 
   useEffect(() => {
     if (!extensionView?.refresh?.action || !extensionView.refresh.intervalMs) return
+    const viewId = extensionView.id
+    const action = extensionView.refresh.action
     let cancelled = false
+    let running = false
     const refresh = async () => {
-      if (cancelled || !extensionView.refresh?.action) return
-      const result = await window.nvm.runViewAction(extensionView.refresh.action)
-      if (!cancelled) await handleViewActionResult(result, 'replace')
+      if (cancelled || running || extensionViewRef.current?.id !== viewId) return
+      running = true
+      try {
+        const result = await window.nvm.runViewAction(action)
+        if (!cancelled && extensionViewRef.current?.id === viewId) await handleViewActionResult(result, 'replace')
+      } finally {
+        running = false
+      }
     }
     const timer = window.setInterval(refresh, Math.max(1000, extensionView.refresh.intervalMs))
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [extensionView?.id, extensionView?.refresh])
+  }, [extensionView?.id, extensionView?.refresh?.intervalMs])
 
   useLayoutEffect(() => {
     const palette = paletteRef.current

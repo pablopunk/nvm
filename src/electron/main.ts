@@ -369,29 +369,34 @@ function aiChatView(item, options: any = {}) {
   }
 }
 
-function aiChatsView() {
+function aiChatListItems() {
   const chats = Object.values(userState.aiChats || {}) as any[]
+  return chats
+    .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+    .map((chat) => ({
+      id: `ai-chat:${chat.id}`,
+      title: chat.title || chat.query || 'AI Chat',
+      subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
+      icon: 'sparkles',
+      primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: chat.id },
+      actions: [{
+        type: 'removeAiChat',
+        title: 'Remove Chat',
+        style: 'destructive',
+        requiresConfirmation: true,
+        aiChatId: chat.id,
+      }],
+    }))
+}
+
+function aiChatsView() {
   return {
     type: 'list',
     id: 'ai-chats',
     title: 'AI Chats',
     searchBarPlaceholder: 'Search AI Chats',
-    items: chats
-      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
-      .map((chat) => ({
-        id: `ai-chat:${chat.id}`,
-        title: chat.title || chat.query || 'AI Chat',
-        subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
-        icon: 'sparkles',
-        primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: chat.id },
-        actions: [{
-          type: 'removeAiChat',
-          title: 'Remove Chat',
-          style: 'destructive',
-          requiresConfirmation: true,
-          aiChatId: chat.id,
-        }],
-      })),
+    refresh: { intervalMs: 3000, action: refreshNativeViewAction('ai-chats'), mode: 'replace' },
+    items: aiChatListItems(),
   }
 }
 
@@ -499,6 +504,36 @@ function clipboardRootItem(item) {
   }
 }
 
+function clipboardHistoryItems() {
+  return clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
+    const isImage = item.type === 'image'
+    const isVideo = item.type === 'video'
+    const copyAction = clipboardCopyAction(item)
+    const previewAction = clipboardPreviewAction(item)
+    const pasteAction = isImage || isVideo
+      ? null
+      : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
+    return {
+      id: `clipboard:${item.id}`,
+      title: clipboardItemTitle(item),
+      subtitle: clipboardItemSubtitle(item),
+      icon: 'clipboard',
+      image: item.thumbnailUrl,
+      keywords: [item.text || '', item.type || '', `clipboard ${item.type || ''}`, isImage ? 'image photo picture screenshot' : '', isVideo ? 'video movie recording' : ''].filter(Boolean),
+      primaryAction: copyAction,
+      actionPanel: {
+        sections: [
+          { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
+        ],
+      },
+    }
+  })
+}
+
+function refreshNativeViewAction(viewId) {
+  return { type: 'refreshNativeView', title: 'Refresh', viewId }
+}
+
 function clipboardHistoryView() {
   return {
     type: 'list',
@@ -507,29 +542,8 @@ function clipboardHistoryView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Clipboard History',
     emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
-    items: clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
-      const isImage = item.type === 'image'
-      const isVideo = item.type === 'video'
-      const copyAction = clipboardCopyAction(item)
-      const previewAction = clipboardPreviewAction(item)
-      const pasteAction = isImage || isVideo
-        ? null
-        : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
-      return {
-        id: `clipboard:${item.id}`,
-        title: clipboardItemTitle(item),
-        subtitle: clipboardItemSubtitle(item),
-        icon: 'clipboard',
-        image: item.thumbnailUrl,
-        keywords: [item.text || '', item.type || '', `clipboard ${item.type || ''}`, isImage ? 'image photo picture screenshot' : '', isVideo ? 'video movie recording' : ''].filter(Boolean),
-        primaryAction: copyAction,
-        actionPanel: {
-          sections: [
-            { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
-          ],
-        },
-      }
-    }),
+    refresh: { intervalMs: 1000, action: refreshNativeViewAction('clipboard-history'), mode: 'replace' },
+    items: clipboardHistoryItems(),
   }
 }
 
@@ -537,7 +551,12 @@ function isNewerVersion(version) {
   return isVersionNewerThan(version, app.getVersion())
 }
 
-function updateStatusView() {
+function updateStatusItems() {
+  const view = updateStatusView({ includeRefresh: false })
+  return view.items
+}
+
+function updateStatusView(options: any = {}) {
   const downloadedInfo = isNewerVersion(updateManager.state.downloadedInfo?.version) ? updateManager.state.downloadedInfo : null
   const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   const version = downloadedInfo?.version || availableInfo?.version
@@ -576,6 +595,7 @@ function updateStatusView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Updates',
     isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
+    ...(options.includeRefresh === false ? {} : { refresh: { intervalMs: 2000, action: refreshNativeViewAction('app-updates'), mode: 'replace' } }),
     items: [{
       id: 'update-status',
       title,
@@ -588,19 +608,13 @@ function updateStatusView() {
   }
 }
 
-function refreshUpdateStatusViewWhenSettled(task: Promise<unknown>) {
-  task.finally(() => {
-    paletteWindow.win?.webContents.send('action:view-open', { view: updateStatusView() })
-  }).catch(() => {})
-}
-
 function checkForUpdatesView() {
-  refreshUpdateStatusViewWhenSettled(updateManager.checkForUpdates('manual', { download: true }))
+  updateManager.checkForUpdates('manual', { download: true }).catch(() => {})
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
 function downloadUpdateView() {
-  refreshUpdateStatusViewWhenSettled(updateManager.downloadAvailableUpdate())
+  updateManager.downloadAvailableUpdate().catch(() => {})
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
@@ -608,6 +622,23 @@ function installDownloadedUpdate() {
   if (!updateManager.state.downloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
   nevermindApp.isQuiting = true
   updateManager.quitAndInstall()
+}
+
+function refreshNativeViewPatch(viewId) {
+  switch (viewId) {
+    case 'clipboard-history':
+      return { patch: { mode: 'replace', items: clipboardHistoryItems() } }
+    case 'app-updates':
+      return { patch: { mode: 'replace', items: updateStatusItems() } }
+    case 'app-settings':
+      return { patch: { mode: 'replace', items: settingsItems() } }
+    case 'keyboard-shortcuts':
+      return { patch: { mode: 'replace', items: keyboardShortcutItems() } }
+    case 'ai-chats':
+      return { patch: { mode: 'replace', items: aiChatListItems() } }
+    default:
+      return { toast: { message: 'View cannot refresh', tone: 'error' } }
+  }
 }
 
 function settingItemPatch(definition) {
@@ -619,6 +650,16 @@ function settingItemPatch(definition) {
   return { id: `setting:${definition.id}`, accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
 }
 
+function settingsItems() {
+  return SETTING_DEFINITIONS.map((definition) => ({
+    id: `setting:${definition.id}`,
+    title: definition.title,
+    subtitle: definition.description,
+    icon: 'settings',
+    ...settingItemPatch(definition),
+  }))
+}
+
 function settingsView(selectedItemId = '') {
   return {
     type: 'list',
@@ -627,13 +668,8 @@ function settingsView(selectedItemId = '') {
     presentation: 'root',
     selectedItemId,
     searchBarPlaceholder: 'Search Settings',
-    items: SETTING_DEFINITIONS.map((definition) => ({
-      id: `setting:${definition.id}`,
-      title: definition.title,
-      subtitle: definition.description,
-      icon: 'settings',
-      ...settingItemPatch(definition),
-    })),
+    refresh: { intervalMs: 2000, action: refreshNativeViewAction('app-settings'), mode: 'replace' },
+    items: settingsItems(),
   }
 }
 
@@ -1197,6 +1233,8 @@ async function executeViewAction(action) {
       if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
       return { view: keyboardShortcutsView(), navigation: 'replace', toast: { message: result.message } }
     }
+    case 'refreshNativeView':
+      return refreshNativeViewPatch(action.viewId)
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
     case 'openAiChats':
@@ -1784,6 +1822,21 @@ function createUpdatesExtension() {
   }
 }
 
+function keyboardShortcutItems() {
+  return getShortcuts().map((record) => {
+    const changeAction = { type: 'recordShortcut', title: 'Change shortcut', action: record.action }
+    const removeAction = record.source === 'user' ? { type: 'removeShortcut', title: 'Remove shortcut', style: 'destructive', actionId: record.actionId } : null
+    return {
+      id: `shortcut:${record.actionId}`,
+      title: record.action.title,
+      subtitle: record.accelerator,
+      icon: 'keyboard',
+      primaryAction: changeAction,
+      actionPanel: { sections: [{ actions: [changeAction, removeAction].filter(Boolean) }] },
+    }
+  })
+}
+
 function keyboardShortcutsView() {
   return {
     type: 'list',
@@ -1792,18 +1845,8 @@ function keyboardShortcutsView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Keyboard Shortcuts',
     emptyView: { title: 'No shortcuts found.' },
-    items: getShortcuts().map((record) => {
-      const changeAction = { type: 'recordShortcut', title: 'Change shortcut', action: record.action }
-      const removeAction = record.source === 'user' ? { type: 'removeShortcut', title: 'Remove shortcut', style: 'destructive', actionId: record.actionId } : null
-      return {
-        id: `shortcut:${record.actionId}`,
-        title: record.action.title,
-        subtitle: record.accelerator,
-        icon: 'keyboard',
-        primaryAction: changeAction,
-        actionPanel: { sections: [{ actions: [changeAction, removeAction].filter(Boolean) }] },
-      }
-    }),
+    refresh: { intervalMs: 2000, action: refreshNativeViewAction('keyboard-shortcuts'), mode: 'replace' },
+    items: keyboardShortcutItems(),
   }
 }
 
@@ -1826,10 +1869,8 @@ function createSettingsExtension() {
       presentation: 'root',
       selectedItemId: ctx.state.selectedItemId,
       searchBarPlaceholder: 'Search Settings',
-      items: SETTING_DEFINITIONS.map((definition) => {
-        const patch = settingItemPatch(definition)
-        return { id: `setting:${definition.id}`, title: definition.title, subtitle: definition.description, icon: 'settings', ...patch }
-      }),
+      refresh: { intervalMs: 2000, action: refreshNativeViewAction('app-settings'), mode: 'replace' },
+      items: settingsItems(),
     }) }],
   }
 }

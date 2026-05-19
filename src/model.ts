@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'refreshNativeView' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -32,6 +32,7 @@ export type CommandAction = {
   aiChatId?: string
   query?: string
   extensionFile?: string
+  viewId?: string
   command?: string
   args?: string[]
   script?: string
