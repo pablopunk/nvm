@@ -389,7 +389,7 @@ export function App() {
     [actions, selectedValue],
   )
   const createAction = useMemo(
-    () => actions.find((action) => action.kind === 'ai-placeholder' || (action.kind === 'extension-root-item' && action.rootAction?.type === 'startAiBuilderChat')),
+    () => actions.find((action) => action.kind === 'extension-root-item' && action.extensionId === 'nevermind.ai-builder' && action.id.startsWith('extension-root:nevermind.ai-builder:ai:')),
     [actions],
   )
   const isFilterableExtensionView = extensionView?.type === 'list' || extensionView?.type === 'grid'
@@ -603,6 +603,12 @@ export function App() {
     await aiChat.openChat(view)
   }
 
+  async function startBuilderChatFromQuery(prompt: string) {
+    const result = await window.nvm.startBuilderChat({ prompt, title: `Automate "${prompt}"` })
+    if (result?.view?.aiChat) await openAiChat(result.view)
+    else if (result?.view) showExtensionView(result.view, 'root')
+  }
+
   async function run(action: Action) {
     const dismissedImmediately = rootActionCanDismissImmediately(action)
     if (dismissedImmediately) window.nvm.hide()
@@ -729,7 +735,7 @@ export function App() {
 
   async function tweakActionWithAi(action: Action | null | undefined) {
     if (!action?.extensionFile) return
-    const result = await window.nvm.runViewAction({ type: 'tweakExtensionWithAi', title: action.title, extensionFile: action.extensionFile })
+    const result = await window.nvm.tweakExtension({ extensionFile: action.extensionFile, title: action.title })
     if (result?.view) {
       setOptionsFor(null)
       await openAiChat(result.view)
@@ -742,7 +748,7 @@ export function App() {
 
   function tabActionForRootAction(action: Action | null | undefined) {
     if (!action) return null
-    if ((action.kind === 'ai-chat' || action.rootAction?.type === 'openAiChat') && (action.aiChatId || action.rootAction?.aiChatId)) return () => run(action)
+    if (action.kind === 'extension-root-item' && action.extensionId === 'nevermind.ai-builder' && action.id.startsWith('extension-root:nevermind.ai-builder:ai-chat:')) return () => run(action)
     if (['extension-command', 'extension-root-item'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
     return null
   }
@@ -1357,16 +1363,7 @@ export function App() {
       if (createAction) {
         run(createAction)
       } else {
-        run({
-          id: `extension-root:nevermind.ai-builder:ai:${query}`,
-          kind: 'extension-root-item',
-          extensionId: 'nevermind.ai-builder',
-          title: `Automate "${query}"`,
-          subtitle: 'Build an action for this with AI',
-          icon: 'bolt',
-          score: 90,
-          rootAction: { type: 'startAiBuilderChat', title: `Automate "${query}"`, query },
-        })
+        startBuilderChatFromQuery(query)
       }
     }
   }

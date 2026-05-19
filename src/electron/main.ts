@@ -411,6 +411,21 @@ function aiChatView(item, options: any = {}) {
   }
 }
 
+function aiChatOpenAction(chatId) {
+  return buildAiBuilderAction('Open Chat', async () => {
+    const item = userState.aiChats[chatId] || draftAiChats.get(chatId)
+    if (!item) return { toast: { message: 'AI chat not found', tone: 'error' } }
+    return { view: aiChatView(item) }
+  })
+}
+
+function aiChatRemoveAction(chat) {
+  return wrapWithConfirmation(
+    buildAiBuilderAction('Remove Chat', () => removeAiChat(chat.id), { style: 'destructive' }),
+    { message: `Remove “${chat.title || chat.query || 'AI chat'}” and its history? Generated extension files stay.`, confirmLabel: 'Remove Chat', destructive: true },
+  )
+}
+
 function aiChatListItems() {
   const chats = Object.values(userState.aiChats || {}) as any[]
   return chats
@@ -420,11 +435,8 @@ function aiChatListItems() {
       title: chat.title || chat.query || 'AI Chat',
       subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
       icon: 'sparkles',
-      primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: chat.id },
-      actions: [wrapWithConfirmation(
-        { type: 'removeAiChat', title: 'Remove Chat', style: 'destructive', aiChatId: chat.id },
-        { message: `Remove “${chat.title || chat.query || 'AI chat'}” and its history? Generated extension files stay.`, confirmLabel: 'Remove Chat', destructive: true },
-      )],
+      primaryAction: aiChatOpenAction(chat.id),
+      actions: [aiChatRemoveAction(chat)],
     }))
 }
 
@@ -1209,23 +1221,6 @@ async function executeViewAction(action) {
     }
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
-    case 'openAiChats':
-      return { view: aiChatsView() }
-    case 'openAiChat': {
-      const item = userState.aiChats[action.aiChatId] || draftAiChats.get(action.aiChatId)
-      if (item) return { view: aiChatView(item) }
-      return { toast: { message: 'AI chat not found', tone: 'error' } }
-    }
-    case 'startAiBuilderChat': {
-      const item = createDraftAiChat(action.query || '')
-      return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
-    }
-    case 'tweakExtensionWithAi': {
-      const item = getOrCreateExtensionChat(action.extensionFile, action.title || action.extensionFile)
-      return { view: aiChatView(item) }
-    }
-    case 'removeAiChat':
-      return removeAiChat(action.aiChatId)
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
@@ -1769,10 +1764,7 @@ function createAiBuilderExtension() {
     const count = Object.keys(userState.aiChats || {}).length
     return `${count} builder ${count === 1 ? 'chat' : 'chats'}`
   }
-  function chatsItem() {
-    return { id: 'ai-chats', title: 'AI Chats', subtitle: chatsSubtitle(), icon: 'sparkles', score: 16, primaryAction: { type: 'openAiChats', title: 'AI Chats' } }
-  }
-  function chatItems(query = '') {
+  function chatItems(ctx, query = '') {
     return Object.values(userState.aiChats || {}).map((item: any) => ({
       id: `ai-chat:${item.id}`,
       title: item.title || item.query,
@@ -1781,20 +1773,20 @@ function createAiBuilderExtension() {
       icon: 'sparkles',
       score: 13,
       lastUsed: Math.max(item.updatedAt || 0, item.createdAt || 0),
-      primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: item.id },
+      primaryAction: ctx.aiBuilder.openChat(item.id),
     })).filter((item) => !query || rankAction(item, query))
   }
   return {
-    id: 'nevermind.ai-builder',
+    id: AI_BUILDER_EXTENSION_ID,
     title: 'AI Builder',
     commands: [{ id: 'ai-chats', actionId: 'ai-chats', title: 'AI Chats', get subtitle() { return chatsSubtitle() }, icon: 'sparkles', score: 16, run: () => aiChatsView() }],
-    rootItems() {
-      return chatItems().slice(0, 4)
+    rootItems(ctx) {
+      return chatItems(ctx).slice(0, 4)
     },
-    searchItems(_ctx, query) {
+    searchItems(ctx, query) {
       const q = String(query || '').trim()
-      const items: any[] = chatItems(q)
-      if (q && !getUrlFromQuery(q) && calculate(q) === null) items.push({ id: `ai:${q}`, title: `Press Tab to automate "${q}"`, subtitle: 'Automate with AI', query: q, icon: 'bolt', score: 40, primaryAction: { type: 'startAiBuilderChat', title: `Automate "${q}"`, query: q } })
+      const items: any[] = chatItems(ctx, q)
+      if (q && !getUrlFromQuery(q) && calculate(q) === null) items.push({ id: `ai:${q}`, title: `Press Tab to automate "${q}"`, subtitle: 'Automate with AI', query: q, icon: 'bolt', score: 40, primaryAction: ctx.aiBuilder.startChat({ prompt: q, title: `Automate "${q}"` }) })
       return items.filter((item) => rankAction(item, q)).slice(0, 5)
     },
   }
@@ -2074,6 +2066,97 @@ function createExtensionContext(extension, command) {
     views: createExtensionViewsApi(extension, command),
     state: {},
     ai: createExtensionAi(extension),
+    aiBuilder: createAiBuilderApi(extension),
+    extensions: { ownership: createExtensionOwnershipApi(extension) },
+  }
+}
+
+const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder'
+
+function assertAiBuilderPrivilege(extension) {
+  if (extension?.id !== AI_BUILDER_EXTENSION_ID) {
+    throw new Error('ctx.aiBuilder is only available to the built-in AI Builder extension')
+  }
+}
+
+function buildAiBuilderAction(title, handler, options: any = {}) {
+  return { ...options, type: 'runExtensionAction', title, __handler: handler }
+}
+
+function createAiBuilderApi(extension) {
+  const privileged = extension?.id === AI_BUILDER_EXTENSION_ID
+  if (!privileged) return undefined
+  return {
+    startChat: (input: any = {}) => {
+      const prompt = String(input.prompt || input.query || '')
+      return buildAiBuilderAction(input.title || `Automate "${prompt}"`, async () => {
+        const item = createDraftAiChat(prompt)
+        return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
+      }, input.options)
+    },
+    openChat: (chatId, input: any = {}) => buildAiBuilderAction(input.title || 'Open Chat', async () => {
+      const item = userState.aiChats[chatId] || draftAiChats.get(chatId)
+      if (!item) return { toast: { message: 'AI chat not found', tone: 'error' } }
+      return { view: aiChatView(item) }
+    }, input.options),
+    removeChat: (chatId, input: any = {}) => buildAiBuilderAction(input.title || 'Remove Chat', async () => {
+      return removeAiChat(chatId)
+    }, { style: 'destructive', ...(input.options || {}) }),
+    tweakExtension: (input: any = {}) => buildAiBuilderAction(input.title || 'Tweak with AI', async () => {
+      const file = input.extensionFile || input.extensionId
+      if (!file) return { toast: { message: 'No extension specified', tone: 'error' } }
+      const item = getOrCreateExtensionChat(file, input.title || file)
+      return { view: aiChatView(item, { initialPrompt: input.prompt }) }
+    }, input.options),
+    openChatsList: (input: any = {}) => buildAiBuilderAction(input.title || 'AI Chats', async () => ({ view: aiChatsView() }), input.options),
+    listChats: () => Object.values(userState.aiChats || {}).map((chat: any) => ({
+      id: chat.id,
+      title: chat.title || chat.query,
+      query: chat.query,
+      status: chat.status,
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      extensionFiles: chatTouchedExtensionFiles(chat),
+    })),
+    getChat: (chatId) => {
+      const chat = userState.aiChats[chatId] || draftAiChats.get(chatId)
+      if (!chat) return null
+      return {
+        id: chat.id,
+        title: chat.title || chat.query,
+        query: chat.query,
+        status: chat.status,
+        messages: chat.messages,
+        extensionFiles: chatTouchedExtensionFiles(chat),
+      }
+    },
+  }
+}
+
+function createExtensionOwnershipApi(extension) {
+  const privileged = extension?.id === AI_BUILDER_EXTENSION_ID
+  const readOnly = {
+    ownerOf: (extensionFile) => aiChatIdForExtensionFile(extensionFile),
+    filesForChat: (chatId) => {
+      const chat = userState.aiChats[chatId] || draftAiChats.get(chatId)
+      return chat ? chatTouchedExtensionFiles(chat) : []
+    },
+    canWrite: (extensionFile, chatId) => chatCanWriteExtension(extensionFile, chatId),
+  }
+  if (!privileged) return readOnly
+  return {
+    ...readOnly,
+    claim: (extensionFile, chatId) => {
+      const chat = chatId ? userState.aiChats[chatId] || draftAiChats.get(chatId) : null
+      if (!chat) return false
+      touchExtensionFileForChat(chat, extensionFile)
+      scheduleSaveState()
+      return true
+    },
+    reload: async () => {
+      await loadExtensions()
+      registerActionShortcuts()
+    },
   }
 }
 
@@ -2712,6 +2795,10 @@ async function removeAiChat(chatId) {
   if (!chatId || !userState.aiChats[chatId]) return { toast: { message: 'AI chat not found', tone: 'error' } }
   await nevermindAi?.reset?.(chatId)
   const chat = userState.aiChats[chatId]
+  // INVARIANT: removing a chat deletes only conversation history and AI session state.
+  // It must NEVER unlink generated extension files. Generated extensions are durable
+  // artifacts owned by chats via touchedExtensionFiles; chat removal preserves them so
+  // the user can keep the extension after discarding the conversation that built it.
   delete userState.aiChats[chatId]
   for (const actionId of Object.keys(userState.recents || {})) {
     if (actionId === `ai-chat:${chatId}`) delete userState.recents[actionId]
@@ -2824,6 +2911,16 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:clear-override', (_event, action) => clearOverride(action))
   ipcMain.handle('actions:duplicate-created', (_event, action) => duplicateCreatedAction(action))
   ipcMain.handle('actions:remove-created', (_event, action) => removeCreatedAction(action))
+  ipcMain.handle('ai-builder:tweak-extension', (_event, input: any = {}) => {
+    const file = input?.extensionFile || input?.extensionId
+    if (!file) return { toast: { message: 'No extension specified', tone: 'error' } }
+    const item = getOrCreateExtensionChat(file, input.title || file)
+    return { view: aiChatView(item, { initialPrompt: input.prompt }) }
+  })
+  ipcMain.handle('ai-builder:start-chat', (_event, input: any = {}) => {
+    const item = createDraftAiChat(String(input?.prompt || input?.query || ''))
+    return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
+  })
   ipcMain.handle('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
   ipcMain.handle('palette:set-mode', (_event, mode) => {
     paletteWindow.setPaletteSizeForMode(mode)

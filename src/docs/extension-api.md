@@ -139,6 +139,19 @@ const files = await ctx.storage.memoStale('recent-media', 60_000, 24 * 60 * 60_0
 )
 ```
 
+## AI Builder (host-only)
+
+The built-in `nevermind.ai-builder` extension is the only caller granted `ctx.aiBuilder.*`. The host gates this surface by extension id; public extensions get `undefined` for `ctx.aiBuilder` and a read-only `ctx.extensions.ownership` view. The AI Builder extension uses the same declarative primitives as every other extension — it is a reference implementation, not a privileged path through `executeAction`.
+
+- `ctx.aiBuilder.startChat({ prompt, title? })` returns a declarative action that opens a fresh builder draft chat.
+- `ctx.aiBuilder.openChat(chatId, { title? })` returns a declarative action that opens an existing chat.
+- `ctx.aiBuilder.removeChat(chatId, { title? })` returns a destructive declarative action that removes only the chat history and AI session state. Generated extension files are durable and are never unlinked by chat removal; wrap with `ctx.ui.confirm(...)` to confirm before invoking.
+- `ctx.aiBuilder.tweakExtension({ extensionFile, title?, prompt? })` returns a declarative action that opens (or creates) the tweak chat for a generated extension.
+- `ctx.aiBuilder.openChatsList({ title? })` returns a declarative action that opens the chats list view.
+- `ctx.aiBuilder.listChats()` and `ctx.aiBuilder.getChat(id)` are synchronous read helpers.
+
+`ctx.extensions.ownership` exposes durable generated-extension ownership. Read methods (`ownerOf(extensionFile)`, `filesForChat(chatId)`, `canWrite(extensionFile, chatId)`) are available to every extension. Mutating methods (`claim(extensionFile, chatId)`, `reload()`) are exposed only to the AI Builder extension.
+
 ## AI builder write scope
 
 The extension-building tools intentionally separate read access from write ownership. Builder chats can use `list_extensions` and `read_extension` to understand related generated extensions, but `write_extension` can only replace extension files already owned by the active chat. A single chat may own multiple related extension files. To change an extension owned by another chat, open that extension's tweak chat from the palette instead of overwriting it from the current conversation.
