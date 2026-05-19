@@ -625,7 +625,7 @@ function settingItemPatch(definition) {
   const value = getSetting(definition.id)
   const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
   const primaryAction = definition.type === 'shortcut'
-    ? { type: 'recordShortcut', title: 'Change Shortcut', shortcut: String(value || ''), action: { id: '__palette-hotkey__' } }
+    ? buildRecordShortcutAction({ scope: 'palette', title: 'Change Shortcut', shortcut: String(value || '') }, {})
     : { type: 'toggleSetting', title: value ? 'Turn Off' : 'Turn On', settingId: definition.id }
   return { id: `setting:${definition.id}`, accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
 }
@@ -1785,8 +1785,8 @@ function createUpdatesExtension() {
 
 function keyboardShortcutItems() {
   return getShortcuts().map((record) => {
-    const changeAction = { type: 'recordShortcut', title: 'Change shortcut', action: record.action }
-    const removeAction = record.source === 'user' ? { type: 'removeShortcut', title: 'Remove shortcut', style: 'destructive', actionId: record.actionId } : null
+    const changeAction = buildRecordShortcutAction({ actionId: record.actionId, action: record.action, title: 'Change shortcut' }, {})
+    const removeAction = record.source === 'user' ? buildRemoveShortcutAction({ actionId: record.actionId, title: 'Remove shortcut' }, {}) : null
     return {
       id: `shortcut:${record.actionId}`,
       title: record.action.title,
@@ -1834,6 +1834,31 @@ function createSettingsExtension() {
       items: settingsItems(),
     }) }],
   }
+}
+
+const PALETTE_HOTKEY_ACTION_ID = '__palette-hotkey__'
+
+function resolveShortcutTargetAction(input: any) {
+  if (input?.action) return input.action
+  const actionId = input?.actionId
+  if (!actionId) return null
+  if (actionId === PALETTE_HOTKEY_ACTION_ID || input?.scope === 'palette') return { id: PALETTE_HOTKEY_ACTION_ID }
+  const record = getShortcuts().find((item) => item.actionId === actionId)
+  return record?.action || { id: actionId }
+}
+
+function buildRecordShortcutAction(input: any, options: any) {
+  const scope = input?.scope === 'palette' || input?.actionId === PALETTE_HOTKEY_ACTION_ID ? 'palette' : 'action'
+  const targetAction = scope === 'palette' ? { id: PALETTE_HOTKEY_ACTION_ID } : resolveShortcutTargetAction(input)
+  const title = input?.title || options?.title || (scope === 'palette' ? 'Change Shortcut' : 'Record shortcut')
+  const shortcut = input?.shortcut !== undefined ? String(input.shortcut) : undefined
+  return { ...options, type: 'recordShortcut', title, action: targetAction, ...(shortcut !== undefined ? { shortcut } : {}) }
+}
+
+function buildRemoveShortcutAction(input: any, options: any) {
+  const actionId = input?.actionId || input?.action?.id
+  const title = input?.title || options?.title || 'Remove shortcut'
+  return { style: 'destructive', ...options, type: 'removeShortcut', title, actionId }
 }
 
 function createExtensionContext(extension, command) {
@@ -1887,7 +1912,9 @@ function createExtensionContext(extension, command) {
       shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       toggleSetting: (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'toggleSetting', title, settingId }),
-      setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => ({ ...options, type: 'recordShortcut', title, action: { id: '__palette-hotkey__' } }),
+      recordShortcut: (input: any = {}, options: any = {}) => buildRecordShortcutAction(input, options),
+      removeShortcut: (input: any = {}, options: any = {}) => buildRemoveShortcutAction(input, options),
+      setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => buildRecordShortcutAction({ scope: 'palette', title }, options),
       native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
     },
     navigation: {

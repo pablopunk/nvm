@@ -109,6 +109,8 @@ Current `ctx` namespaces:
 - `ctx.logs.debug/info/warn/error(message, data?)` writes extension-scoped diagnostics to the central Nevermind log. Entries are automatically tagged with the extension and command id.
 - `ctx.logs.recent(options)` reads a bounded slice of the central Nevermind log for diagnostics. Options include `{ limit, level, source, sinceMs, query, extensionId }`; limits are capped by the host and results are structured entries, not raw filesystem access.
 - `ctx.actions.toggleSetting(settingId, title)` and `ctx.actions.setPaletteShortcut(title)` for declarative settings actions
+- `ctx.actions.recordShortcut({ actionId, scope, title })` opens the host-rendered shortcut recorder for an action. Use `scope: 'palette'` (or `actionId: '__palette-hotkey__'`) to record the global palette hotkey; otherwise pass the `actionId` of the target action. The host renders the recorder UI and persists the result.
+- `ctx.actions.removeShortcut({ actionId, title })` removes a previously recorded shortcut by action id. Marked destructive by default.
 - `ctx.ai.ask(prompt, options)` for a one-shot AI call that returns text. Options may include `{ system }`.
 - `ctx.ai.session(id, options)` for a per-extension conversational AI session. The returned session supports `ask(prompt)` and `reset()`. Session ids are scoped to the extension, and options may include `{ system }`.
 - `ctx.extension.rename(title)` or `ctx.extension.rename({ title, subtitle, commandTitle, commandSubtitle })` to persistently rename the extension metadata shown in search results
