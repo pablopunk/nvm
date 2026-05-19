@@ -28,6 +28,8 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
+  extendInfo:
+    NSCameraUsageDescription: Nevermind needs camera access for extensions that display a live camera view.
   artifactName: '${productName}-${version}-mac-${arch}.${ext}'
 linux:
   icon: build/Icon.icon/Assets/icon.png

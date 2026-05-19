@@ -26,6 +26,12 @@ const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'selected-t
 export function hasCapability(capability: string) {
   if (macOnlyCapabilities.has(capability)) return osDependent({ darwin: true }, false)
   if (capability === 'auto-updates') return osDependent({ darwin: true, linux: Boolean(process.env.APPIMAGE) }, false)
+  if (capability === 'camera') return osDependent({ darwin: true, win32: true, linux: true }, false)
+  return true
+}
+
+export function canRequestMediaPermission(permission: string) {
+  if (permission === 'media') return hasCapability('camera')
   return true
 }
 

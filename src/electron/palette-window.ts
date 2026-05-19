@@ -1,5 +1,5 @@
 import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
-import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, paletteBrowserWindowOptions } from './os'
+import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, canRequestMediaPermission, paletteBrowserWindowOptions } from './os'
 import * as logger from './logger'
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
@@ -33,7 +33,7 @@ export function installPermissionHandlers(isDev: boolean, rendererUrl = process.
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL()
     const isAppPage = url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
-    if (isAppPage && ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)) return callback(true)
+    if (isAppPage && ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission) && canRequestMediaPermission(permission)) return callback(true)
     callback(false)
   })
 }

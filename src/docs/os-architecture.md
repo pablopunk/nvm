@@ -62,6 +62,7 @@ All desktop integrations are owned by OS capabilities. The rest of the app descr
 - Built-in system commands such as lock, sleep, restart, settings, and quit-related affordances are capability-driven.
 - File actions such as preview, reveal, open with, trash, drag, thumbnails, and selected files use OS-owned labels and availability.
 - Frontmost-app interactions such as paste are offered only when the current system can perform them reliably.
+- Camera access for host-owned extension views is capability-gated, uses OS privacy prompts where required, and must include platform packaging metadata such as macOS camera usage descriptions.
 - Palette window behavior such as focus, taskbar/dock visibility, all-workspaces behavior, and desktop-window-manager quirks is not spread through generic window lifecycle code.
 - Shortcut behavior such as default accelerators, conflicts, formatting, and keyboard-settings guidance reflects the current OS.
 - Update availability and packaging-dependent messaging are presented as platform capabilities, not as generic promises.
