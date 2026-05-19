@@ -63,6 +63,8 @@ export type CommandActionPanel = {
 }
 
 export type CommandItemAccessory = { text?: string; icon?: string }
+export type CommandItemForeground = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'pink'
+export type CommandItemAppearance = { foreground?: CommandItemForeground }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & { id: string }
 
@@ -84,6 +86,7 @@ export type CommandItem = {
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'hidden'
+  appearance?: CommandItemAppearance
 }
 
 export type CommandItemSection = {

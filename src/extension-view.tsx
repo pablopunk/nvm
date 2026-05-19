@@ -151,7 +151,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
       empty={renderEmpty(view)}
       isLoading={view.isLoading}
       pagination={pagination()}
-      renderItem={(item) => <CommandTile key={item.id} value={item.id} title={item.title} subtitle={item.subtitle} image={item.image} video={item.video || item.videoUrl} actionHint={tileActionHint(item)} draggable={Boolean(dragPathForItem(item))} onDragStart={(event) => startItemDrag(event, item)} onSelect={() => runDefaultAction(item)} />}
+      renderItem={(item) => <CommandTile key={item.id} value={item.id} title={item.title} subtitle={item.subtitle} image={item.image} video={item.video || item.videoUrl} actionHint={tileActionHint(item)} appearance={item.appearance} draggable={Boolean(dragPathForItem(item))} onDragStart={(event) => startItemDrag(event, item)} onSelect={() => runDefaultAction(item)} />}
     />
   }
 
@@ -164,7 +164,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
       empty={renderEmpty(view)}
       isLoading={view.isLoading}
       pagination={pagination()}
-      renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} onSelect={() => runDefaultAction(item)} />}
+      renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} appearance={item.appearance} onSelect={() => runDefaultAction(item)} />}
     />
   }
 

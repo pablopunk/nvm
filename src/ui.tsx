@@ -10,8 +10,9 @@ export const EMPTY_ACTIONS_TITLE = 'No actions'
 export const EMPTY_SHORTCUTS_TITLE = 'No keyboard shortcuts'
 
 export type KeyHintsProps = { shortcut?: string; extras?: string[]; showEnter?: boolean }
-export type CommandRowProps = { value: string; icon: ReactNode; title: string; subtitle?: string; accessories?: { text?: string; icon?: ReactNode }[]; shortcut?: string; extras?: string[]; className?: string; selectedOnlyShortcut?: boolean; onSelect: () => void }
-export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: string; video?: string; actionHint?: ReactNode; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
+export type ItemAppearance = { foreground?: string }
+export type CommandRowProps = { value: string; icon: ReactNode; title: string; subtitle?: string; accessories?: { text?: string; icon?: ReactNode }[]; shortcut?: string; extras?: string[]; className?: string; appearance?: ItemAppearance; selectedOnlyShortcut?: boolean; onSelect: () => void }
+export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: string; video?: string; actionHint?: ReactNode; appearance?: ItemAppearance; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
 export type EmptyStateProps = { icon: ReactNode; title: string; subtitle?: string }
 export type ToastProps = { message: string; tone?: 'default' | 'error' }
 export type PreviewViewProps = { content?: ReactNode; image?: string; video?: string; poster?: string; actions?: ReactNode }
@@ -34,16 +35,16 @@ export function KeyHints({ shortcut, extras = [], showEnter = true }: KeyHintsPr
   return <span className="keyHints">{extras.map((extra) => <span key={extra} className="shortcutHint selectedOnlyEnter">{extra}</span>)}{shortcut ? <span className="shortcutHint">{shortcutLabel(shortcut)}</span> : null}{showEnter ? <span className="enterHint selectedOnlyEnter">↵</span> : null}</span>
 }
 
-export function CommandRow({ value, icon, title, subtitle, accessories = [], shortcut, extras, className, selectedOnlyShortcut = false, onSelect }: CommandRowProps) {
+export function CommandRow({ value, icon, title, subtitle, accessories = [], shortcut, extras, className, appearance, selectedOnlyShortcut = false, onSelect }: CommandRowProps) {
   const keyHints = selectedOnlyShortcut
     ? (shortcut ? <span className="keyHints selectedOnlyEnter"><span className="shortcutHint">{shortcutLabel(shortcut)}</span><span className="enterHint">↵</span></span> : null)
     : <KeyHints shortcut={shortcut} extras={extras} />
   const itemClassName = className ? `result ${className}` : 'result'
-  return <Command.Item value={value} className={itemClassName} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{accessories.map((accessory, index) => <span key={index} className="accessory">{accessory.icon}{accessory.text}</span>)}</span> : null}{keyHints}</span></Command.Item>
+  return <Command.Item value={value} className={itemClassName} data-foreground={appearance?.foreground} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{accessories.map((accessory, index) => <span key={index} className="accessory">{accessory.icon}{accessory.text}</span>)}</span> : null}{keyHints}</span></Command.Item>
 }
 
-export function CommandTile({ value, title, subtitle, image, video, actionHint, draggable, onDragStart, onSelect }: CommandTileProps) {
-  return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia">{video ? <video src={video} poster={image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : image ? <img src={image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
+export function CommandTile({ value, title, subtitle, image, video, actionHint, appearance, draggable, onDragStart, onSelect }: CommandTileProps) {
+  return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} data-foreground={appearance?.foreground} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia">{video ? <video src={video} poster={image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : image ? <img src={image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
 }
 
 export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {

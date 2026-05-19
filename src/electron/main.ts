@@ -41,6 +41,7 @@ const THUMBNAIL_SIZE = 512
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000
 const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000
 const EXTENSION_ITEMS_PER_PROVIDER_LIMIT = 20
+const ITEM_FOREGROUND_COLORS = new Set(['yellow', 'blue', 'purple', 'green', 'red', 'orange', 'pink'])
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -920,6 +921,12 @@ function withTimeout(promise, timeoutMs) {
   ])
 }
 
+function normalizeItemAppearance(appearance) {
+  const foreground = appearance?.foreground
+  if (!ITEM_FOREGROUND_COLORS.has(foreground)) return undefined
+  return { foreground }
+}
+
 function extensionRootActionFromItem(entry, item) {
   if (!item?.id || !item.title) return null
   const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
@@ -941,6 +948,7 @@ function extensionRootActionFromItem(entry, item) {
     lastUsed: Number(item.lastUsed || 0),
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
     actionPanel,
+    appearance: normalizeItemAppearance(item.appearance),
   }
 }
 
@@ -1015,6 +1023,7 @@ function normalizeViewItems(items, entry) {
       actions: itemActions,
       actionPanel: normalizeActionPanel(item.actionPanel, itemActions, entry),
       primaryAction: normalizeViewAction(item.primaryAction, entry),
+      appearance: normalizeItemAppearance(item.appearance),
     }
   }) : items
 }
@@ -1774,6 +1783,7 @@ function createAiBuilderExtension() {
       score: 13,
       lastUsed: Math.max(item.updatedAt || 0, item.createdAt || 0),
       primaryAction: ctx.aiBuilder.openChat(item.id),
+      appearance: { foreground: 'yellow' },
     })).filter((item) => !query || rankAction(item, query))
   }
   return {

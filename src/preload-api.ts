@@ -1,4 +1,4 @@
-import type { CommandAction, CommandView, CommandViewPatch } from './model'
+import type { CommandAction, CommandItemAppearance, CommandView, CommandViewPatch } from './model'
 
 export type RootAction = {
   id: string
@@ -51,6 +51,7 @@ export type RootAction = {
   actionPanel?: CommandView['actionPanel']
   shortcut?: string
   userAliases?: string[]
+  appearance?: CommandItemAppearance
 }
 
 export type SaveResult = {

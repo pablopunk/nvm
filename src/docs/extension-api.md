@@ -70,6 +70,8 @@ module.exports = {
 
 Nevermind owns root ranking, rendering, limits, and failure isolation. Root/search contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. Root items use stale-while-revalidate semantics: the host returns the current cached snapshot for a palette render, refreshes stale/missing items in the background, and only shows refreshed items on a later search/open so the visible list does not shift under the user. Query-aware `searchItems(ctx, query)` contributions run under the same timeout and per-extension caps. Use `ctx.storage.memo` to cache expensive refreshes.
 
+Items in root, list, and grid views may include `appearance: { foreground }` to visually differentiate item families without custom rendering. `foreground` is a muted named color: `yellow`, `blue`, `purple`, `green`, `red`, `orange`, or `pink`. The host validates these names and ignores unsupported values.
+
 ## Views
 
 Commands can return native views. Nevermind owns keyboard navigation, filtering, Enter/default actions, Cmd+K item action panels, Escape/back navigation, nested view stacks, loading/empty/error rendering, accessories, icons, and toasts. Command, root item, and list item `icon` values accept any Lucide icon name in camel/Pascal case or kebab case, such as `mic`, `volume-2`, `audio-lines`, `calendar`, or `folder`; older aliases like `restart`, `grid`, and `sparkles` remain supported.
@@ -78,6 +80,7 @@ Commands can return:
 
 - `ctx.ui.list({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination })`; list items may include `accessories: [{ text }]` and `keywords`
 - `ctx.ui.grid({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination, refresh, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
+- List and grid items may include `appearance: { foreground: 'yellow' }` using the same muted foreground color names as root items.
 - `ctx.ui.preview({ title, content, image, video, actions, actionPanelVisibility })` for text, image, and video previews; `ctx.ui.preview(file, { title, content })` builds a large media preview from an extension file object
 - `ctx.ui.camera({ title, deviceId, showDeviceSwitcher, muted, controls, actions, size, actionPanelVisibility })` for a host-owned live camera surface. Use this instead of custom HTML for webcam previews; Nevermind owns permission, rendering, sizing, camera switching, and stream lifecycle. Declare `camera` permission. Desktop multi-camera switching is host-owned; use `deviceId` only when you already have a stable browser camera id.
 - `ctx.ui.webview({ title, html, actions, size, actionPanelVisibility })` for advanced custom live/interactive browser UI when no host-owned primitive fits. Webviews run sandboxed HTML/JS without Node access. Use `size: 'large'` when the webview needs a larger palette.
