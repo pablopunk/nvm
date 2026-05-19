@@ -461,6 +461,39 @@ function clipboardActionFromItem(item) {
   }
 }
 
+function clipboardPreviewAction(item) {
+  return {
+    type: 'previewClipboardItem',
+    title: 'Preview',
+    clipboardType: item.type,
+    text: item.text,
+    imageDataUrl: item.imageDataUrl,
+    imagePath: item.imagePath,
+    videoUrl: item.videoUrl,
+    filePath: item.filePath,
+    thumbnailUrl: item.thumbnailUrl,
+  }
+}
+
+function clipboardCopyAction(item) {
+  if (item.type === 'image') return { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, imagePath: item.imagePath, dismissAfterRun: 'auto' }
+  return { type: 'copyText', title: item.type === 'video' ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
+}
+
+function clipboardRootItem(item) {
+  return {
+    id: `clipboard:${item.id}`,
+    title: clipboardItemTitle(item),
+    subtitle: clipboardItemSubtitle(item),
+    icon: 'clipboard',
+    image: item.thumbnailUrl,
+    score: 60,
+    lastUsed: item.createdAt || 0,
+    primaryAction: clipboardCopyAction(item),
+    actionPanel: { sections: [{ actions: [clipboardPreviewAction(item), clipboardCopyAction(item)].filter(Boolean) }] },
+  }
+}
+
 function clipboardHistoryView() {
   return {
     type: 'list',
@@ -472,10 +505,8 @@ function clipboardHistoryView() {
     items: clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
       const isImage = item.type === 'image'
       const isVideo = item.type === 'video'
-      const copyAction = isImage
-        ? { type: 'copyImage', title: 'Copy Image', imageDataUrl: item.imageDataUrl, imagePath: item.imagePath, dismissAfterRun: 'auto' }
-        : { type: 'copyText', title: isVideo ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
-      const previewAction = { type: 'nativeAction', title: 'Preview', nativeAction: clipboardActionFromItem(item) }
+      const copyAction = clipboardCopyAction(item)
+      const previewAction = clipboardPreviewAction(item)
       const pasteAction = isImage || isVideo
         ? null
         : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
@@ -1572,11 +1603,12 @@ function createClipboardExtension() {
     }],
     rootItems() {
       if (!getSetting('showClipboardInRoot')) return [rootItemFromNativeAction(historyAction())]
-      return [rootItemFromNativeAction(historyAction()), ...clipboardHistory.slice(0, 10).map((item) => rootItemFromNativeAction(clipboardActionFromItem(item)))]
+      return [rootItemFromNativeAction(historyAction()), ...clipboardHistory.slice(0, 10).map(clipboardRootItem)]
     },
     searchItems(_ctx, query) {
-      const results = [historyAction(), ...clipboardHistory.map(clipboardActionFromItem)]
-      return results.map(rootItemFromNativeAction).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+      const historyItem = rootItemFromNativeAction(historyAction())
+      const items = [historyItem, ...clipboardHistory.map(clipboardRootItem)]
+      return items.filter((item) => rankAction(item.id === historyItem.id ? historyAction() : item, query)).slice(0, 5)
     },
   }
 }

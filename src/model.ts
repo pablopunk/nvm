@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -16,6 +16,7 @@ export type CommandAction = {
   url?: string
   text?: string
   imageDataUrl?: string
+  imagePath?: string
   view?: CommandView
   handlerId?: string
   shortcut?: string
@@ -24,6 +25,10 @@ export type CommandAction = {
   settingId?: string
   action?: unknown
   actionId?: string
+  clipboardType?: string
+  videoUrl?: string
+  filePath?: string
+  thumbnailUrl?: string
   command?: string
   args?: string[]
   script?: string
@@ -69,6 +74,7 @@ export type CommandItem = {
   primaryAction?: CommandAction
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
+  actionPanelVisibility?: 'visible' | 'hidden'
 }
 
 export type CommandItemSection = {
@@ -111,6 +117,7 @@ export type CommandView = {
   steps?: { title: string; status?: string }[]
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
+  actionPanelVisibility?: 'visible' | 'hidden'
   layout?: 'square' | 'wide' | 'compact'
   aspectRatio?: string | number
   columns?: number
@@ -148,6 +155,7 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'trash') return 'Move to Trash'
   if (action.type === 'pushView' || action.type === 'replaceView') return 'Open nested view'
   if (action.type === 'popView') return 'Go back'
+  if (action.type === 'previewClipboardItem') return 'Preview clipboard item'
   if (action.type === 'shellExec' || action.type === 'shellScript') return 'Run system command'
   if (action.type === 'toggleSetting') return 'Change setting'
   if (action.type === 'recordShortcut') return 'Record shortcut'

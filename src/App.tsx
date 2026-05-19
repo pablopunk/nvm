@@ -532,6 +532,25 @@ export function App() {
       }
       return
     }
+    if (action.type === 'previewClipboardItem') {
+      setPreviewFor({
+        id: `clipboard-preview:${action.text || action.imageDataUrl || action.videoUrl || action.filePath || action.title}`,
+        kind: 'clipboard',
+        title: action.title,
+        subtitle: action.clipboardType,
+        icon: 'clipboard',
+        score: 0,
+        clipboardType: action.clipboardType,
+        text: action.text,
+        imageDataUrl: action.imageDataUrl,
+        imagePath: action.imagePath,
+        videoUrl: action.videoUrl,
+        filePath: action.filePath,
+        thumbnailUrl: action.thumbnailUrl,
+      } as Action)
+      setExtensionItemOptionsFor(null)
+      return
+    }
     if (nativeAction?.kind === 'clipboard' && ('imageDataUrl' in nativeAction || 'videoUrl' in nativeAction || 'text' in nativeAction)) {
       setPreviewFor(nativeAction as Action)
       setExtensionItemOptionsFor(null)
@@ -1091,6 +1110,10 @@ export function App() {
     window.nvm.startFileDrag(filePath)
   }
 
+  function itemActionPanelIsVisible(item: ExtensionViewItem | null | undefined) {
+    return item?.actionPanelVisibility !== 'hidden'
+  }
+
   function renderSearchAccessory(view: ExtensionView | null) {
     if (!view?.searchAccessory?.items?.length) return null
     return <SearchAccessory
@@ -1234,7 +1257,7 @@ export function App() {
         setShortcutOptionsFor(selectedShortcutRecord)
         return
       }
-      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+      if (selectedExtensionItem && itemActionPanelIsVisible(selectedExtensionItem) && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         setChildQuery('')
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
@@ -1274,7 +1297,7 @@ export function App() {
         setOptionsFor(null)
         return
       }
-      if (selectedExtensionItem && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+      if (selectedExtensionItem && itemActionPanelIsVisible(selectedExtensionItem) && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         event.preventDefault()
         setChildQuery('')
         setExtensionItemOptionsFor(selectedExtensionItem)
