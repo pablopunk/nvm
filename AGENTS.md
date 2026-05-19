@@ -2,31 +2,40 @@
 
 ## Workflow
 
-* Always use `mise exec pnpm` for any package manager commands. Never use npm, yarn, or bun directly — the project pins Node v22 and pnpm v10 via mise.toml.
-* When changing/adding code, always explore the repo to understand conventions and similar use cases before assuming the intended architecture. Reuse existing helpers, overlays, and primitives before adding new ones — formatters, confirm-style flows, shortcut recorder plumbing, OS capabilities, etc. already exist. OS-specific desktop behavior must go through `src/electron/os.ts` as an intent-named capability and follow `src/docs/os-architecture.md`; never proxy one OS mechanism through an unrelated capability guard.
-* If you suddenly see changes you have not done, it might be the user in the background, do not mess it up.
-* When debugging generated/plugin behavior, inspect both the framework API and the installed/generated artifacts that consume it (for Nevermind extensions, check `~/Library/Application Support/nvm/extensions` as well as repo code). Extension command/action boundaries must catch, normalize, and clone-check results so extension failures surface as Nevermind error views, not raw Electron IPC/log errors.
-* When iterating, git is your friend. Commit early and often, and use the git log to understand recent changes.
+* Use `mise exec pnpm` for package-manager commands. Never call npm, yarn, pnpm, or bun directly; Node/pnpm are pinned in `mise.toml`.
+* Before changing code, inspect nearby conventions and reuse existing helpers, overlays, primitives, formatters, confirmation flows, shortcut plumbing, and OS capabilities.
+* Treat unexpected file changes as user work; do not overwrite them.
+* Use git while iterating: inspect history when useful and commit early/often.
 
-## Code and docs
+## Architecture
 
-* Try to keep files small and focused.
-* New primitives, especially extension API additions, must be generic first-party building blocks rather than helpers tailored to one generated extension or user prompt. For regressions in shared primitives or extension APIs, fix the underlying model/lifecycle rather than adding one-off UI compensations.
-* Treat extensions as first-class app contributors: users should be able to build workflows with extension APIs that feel as capable as native Nevermind features, while the host keeps ownership of safety, rendering, ranking, and core state. When migrating native features to extension-style APIs, preserve the full behavioral contract: return shape, identity, selection, shortcuts, icons/media, dismissal behavior, and async lifecycle.
-* Performance is a top priority. If you change/add code make sure it's performant. If you see existing slow/bab patterns change them for performance improvments.
-* Comments are a smell. 3 long named functions is better than 1 function with a comment.
-* If you spend a lot of iterations with the user to finally find a solution for something, document your learnings in src/docs/. But you shouldn't touch it if all goes smooth.
-* Documentation needs to hold intention, never implementation (except general quirks on the point above). Implementation details are already on files, you're not adding value to it. Document intention and guidelines.
-* Style with the design tokens defined in `:root` of `src/styles.css` (`--radius-*`, `--surface-*`, `--border-*`, `--text-*`, `--accent-*`, `--danger-*`). Do not reintroduce ad-hoc `rgba(255,255,255,…)` surfaces/borders/text or pixel border-radii — extend the token set if you need a new step.
+* Keep files small, focused, and performant; fix slow patterns when you touch them.
+* Prefer generic first-party primitives over one-off helpers. Fix shared models/lifecycles instead of compensating in UI.
+* OS-specific desktop behavior goes through intent-named capabilities in `src/electron/os.ts`; follow `src/docs/os-architecture.md` and never gate one OS mechanism through an unrelated capability.
+* Extension APIs are declarative host-controlled contribution points, not app-internal backdoors; follow `src/docs/extension-api.md` and `src/docs/design-system-and-extension-api.md`.
+* Extensions are first-class app contributors. Preserve native behavioral contracts when migrating features: return shape, identity, selection, shortcuts, icons/media, dismissal, and async lifecycle.
+* Extension command/action boundaries must catch, normalize, and clone-check results so failures render as Nevermind error views, not raw IPC/log errors. When debugging, inspect both repo code and installed/generated artifacts in `~/Library/Application Support/nvm/extensions`.
+* AI builder chats provide history/context and write scope. Generated extension files are durable; deleting chat history must not delete code. AI writes are limited to extension files already touched/owned by that chat.
 
-## Product conventions
+## Product and UX
 
-* This app is command-k first. Decisions, confirmations, warnings, and configuration live inside the palette — usually a `preview`/`list` view with an actionPanel, or an item in an existing view. Never use `window.confirm`, `window.prompt`, or `window.alert`, and never introduce a separate preferences window. Extension `requiresConfirmation` and destructive flows must render as in-palette confirmation/action-panel states.
-* Extension APIs should be declarative contribution points, not backdoors into app internals. Prefer host-controlled surfaces such as root items, views, actions, background refresh, permissions, quotas, TTLs, and bounded ranking over exposing mutable global state. Avoid migration shims that hardcode feature IDs or exclusion lists; prefer single ownership by moving the feature fully to its new provider/API.
-* Async UX should expose stable UI immediately: render the user’s intended surface or a cached snapshot first, show loading/progress in place, and refresh when work settles. Actions that open, launch, reveal, or otherwise hand off to external apps/resources must hide the palette before starting OS work and continue in the background by default, including extension API helpers. Keep visible passive surfaces snapshot-stable; never insert/reorder items into an already-rendered list unless the user explicitly refreshes or navigates. Host-inserted loading/progress surfaces must be transparent to extension navigation history: `replace`/`pop` results should preserve their declared semantics rather than stacking temporary views.
-* AI builder chats are history/context plus write scope for generated extensions. Extension files are standalone durable artifacts, and deleting chat history must not delete extension code, but AI writes are limited to extension files already touched/owned by that chat; other generated extensions may be inspected but not overwritten from an unrelated chat.
-* Reset scoped filters/search state when navigating into a different context unless inheritance is explicitly desired. Keep extension view presentation state scoped: action panels/submenus should own palette sizing and selection state while open.
-* Do not show empty-state UI in passive content surfaces; reserve empty states for places where the user expects result/action lists.
-* New user-configurable options go through the existing settings pipeline: add an entry to `SETTING_DEFINITIONS` in `src/electron/main.ts`, persist it under `userState.settings`, and surface it as an item in the Settings view. Booleans toggle via `toggle-setting`; richer types get their own `nativeAction` kind plus renderer handling.
-* Keyboard accelerators have two forms: the canonical `Command+Alt+K` for storage/registration, and the symbol form `⌘⌥K` for display. Anything user-visible must pass through `shortcutLabel` (renderer, `src/ui.tsx`) or `formatShortcut` (main, `src/electron/main.ts`). `Space` intentionally stays as the literal word.
-* Before committing palette/extension API migrations, verify representative user flows in addition to tests. For root/search bugs, use the palette debug CLI (`mise exec pnpm -- pnpm palette:debug --query ...`) and trace the full result pipeline before patching — provider output, caches, ranking, global limits, renderer refresh, and final rendered items. For file/metadata/thumbnail extension API changes, verify an installed extension with `mise exec pnpm -- pnpm palette:debug --query ... --execute ...` and keep OS/tool calls batched or bounded. Then verify open view, primary action, repeated shortcuts/navigation, back-stack behavior, action-panel action, selection, icons/media, and dismissal behavior.
+* Nevermind is command-k first: decisions, confirmations, warnings, and configuration live in the palette, usually as `preview`/`list` views with action panels or existing-view items. Never use `window.confirm`, `window.prompt`, `window.alert`, or a separate preferences window.
+* Async UX must show a stable intended surface or cached snapshot immediately, then refresh in place; see `src/docs/extension-api.md` for view/action lifecycle expectations. External handoff actions hide the palette before OS work and continue in the background. Do not insert/reorder passive visible lists unless the user explicitly refreshes/navigates; loading/progress surfaces must not pollute extension navigation history.
+* Scope presentation state to context: reset filters/search when navigating unless inheritance is intentional; action panels/submenus own palette sizing and selection while open.
+* Do not show empty-state UI in passive content surfaces; reserve empty states for result/action lists.
+* New settings use the existing pipeline: add `SETTING_DEFINITIONS` in `src/electron/main.ts`, persist under `userState.settings`, and surface in Settings. Booleans use `toggle-setting`; richer types get a `nativeAction` plus renderer handling.
+* Keyboard accelerators use canonical storage/registration form (`Command+Alt+K`) and symbol display form (`⌘⌥K`). User-visible labels must pass through `shortcutLabel` (`src/ui.tsx`) or `formatShortcut` (`src/electron/main.ts`); `Space` remains literal.
+
+## Code, docs, and style
+
+* Comments are a smell; prefer several well-named functions over explanatory comments.
+* Keep `AGENTS.md` minimal: only durable guidelines/instructions that apply repo-wide. Move overflow to `src/docs/` when needed.
+* Document hard-won learnings in `src/docs/` only after substantial iteration. Docs should capture intention/guidelines, not implementation details.
+* Use design tokens from `:root` in `src/styles.css` (`--radius-*`, `--surface-*`, `--border-*`, `--text-*`, `--accent-*`, `--danger-*`). Do not add ad-hoc `rgba(255,255,255,…)` surfaces/borders/text or pixel radii; extend tokens if needed.
+
+## Verification
+
+* Before committing palette or extension API migrations, run tests and verify representative flows.
+* For root/search bugs, follow `src/docs/palette-debug.md`; use `mise exec pnpm -- pnpm palette:debug --query ...` and trace provider output, caches, ranking, limits, renderer refresh, and final rendered items before patching.
+* For file/metadata/thumbnail extension API changes, verify an installed extension with `mise exec pnpm -- pnpm palette:debug --query ... --execute ...`; keep OS/tool calls batched or bounded.
+* Verify open view, primary action, repeated shortcuts/navigation, back stack, action-panel action, selection, icons/media, and dismissal behavior.
