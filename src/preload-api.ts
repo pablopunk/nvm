@@ -25,22 +25,7 @@ export type RootAction = {
     | 'extension-root-item'
   title: string
   subtitle: string
-  icon:
-    | 'globe'
-    | 'search'
-    | 'app'
-    | 'clipboard'
-    | 'sparkles'
-    | 'lock'
-    | 'moon'
-    | 'restart'
-    | 'settings'
-    | 'folder'
-    | 'power'
-    | 'calculator'
-    | 'bolt'
-    | 'grid'
-    | 'keyboard'
+  icon: string
   score: number
   iconUrl?: string | null
   url?: string

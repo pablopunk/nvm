@@ -1,9 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { CornerDownLeft, Search, Sparkles, Square } from 'lucide-react'
+import { CornerDownLeft, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
 import { RootCommandList } from './command-list'
-import { iconFor, type CommandIconName } from './command-icons'
+import { iconForItem } from './command-icons'
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>
@@ -87,10 +87,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
       empty={renderEmpty(view)}
       isLoading={view.isLoading}
       pagination={pagination()}
-      renderItem={(item) => {
-        const Icon = iconFor[(item.icon as CommandIconName) || 'sparkles'] ?? Sparkles
-        return <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={item.image ? <span className="thumbnailIcon"><img src={item.image} alt="" /></span> : <Icon size={18} />} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} onSelect={() => runDefaultAction(item)} />
-      }}
+      renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} onSelect={() => runDefaultAction(item)} />}
     />
   }
 

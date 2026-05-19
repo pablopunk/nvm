@@ -70,7 +70,7 @@ Nevermind owns root ranking, rendering, limits, and failure isolation. Root/sear
 
 ## Views
 
-Commands can return native views. Nevermind owns keyboard navigation, filtering, Enter/default actions, Cmd+K item action panels, Escape/back navigation, nested view stacks, loading/empty/error rendering, accessories, and toasts.
+Commands can return native views. Nevermind owns keyboard navigation, filtering, Enter/default actions, Cmd+K item action panels, Escape/back navigation, nested view stacks, loading/empty/error rendering, accessories, icons, and toasts. Command, root item, and list item `icon` values accept any Lucide icon name in camel/Pascal case or kebab case, such as `mic`, `volume-2`, `audio-lines`, `calendar`, or `folder`; older aliases like `restart`, `grid`, and `sparkles` remain supported.
 
 Commands can return:
 

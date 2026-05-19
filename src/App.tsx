@@ -50,22 +50,7 @@ type ActionKind =
   | 'extension-command'
   | 'extension-root-item'
 
-type ActionIcon =
-  | 'globe'
-  | 'search'
-  | 'app'
-  | 'clipboard'
-  | 'sparkles'
-  | 'lock'
-  | 'moon'
-  | 'restart'
-  | 'settings'
-  | 'folder'
-  | 'power'
-  | 'calculator'
-  | 'bolt'
-  | 'grid'
-  | 'keyboard'
+type ActionIcon = string
 
 type AppInfo = {
   name?: string
