@@ -72,16 +72,36 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
     let stream: MediaStream | null = null
     let cancelled = false
 
+    function requestCamera(video: boolean | MediaTrackConstraints) {
+      window.nvm.log('debug', 'camera.getUserMedia.start', { video })
+      return Promise.race([
+        navigator.mediaDevices.getUserMedia({ video, audio: false }).then((nextStream) => {
+          window.nvm.log('debug', 'camera.getUserMedia.resolved', { tracks: nextStream.getVideoTracks().map((track) => track.label) })
+          return nextStream
+        }),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('Camera request timed out')), 5_000)),
+      ])
+    }
+
     async function start() {
       setStatus('Requesting camera…')
       setError('')
       try {
+        const access = await window.nvm.requestCameraAccess()
+        if (access.status === 'denied' || access.status === 'restricted' || access.status === 'unsupported') throw new Error(access.status === 'denied' ? 'Camera access is denied in System Settings.' : `Camera access is ${access.status}.`)
         const video: boolean | MediaTrackConstraints = selectedDeviceId
           ? { deviceId: { exact: selectedDeviceId } }
           : view.facingMode
             ? { facingMode: view.facingMode }
             : true
-        stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+        try {
+          stream = await requestCamera(video)
+        } catch (err) {
+          if (!selectedDeviceId) throw err
+          localStorage.removeItem(storageKey)
+          setSelectedDeviceId('')
+          stream = await requestCamera(true)
+        }
         if (cancelled) return
         const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput')
         if (!cancelled) setDevices(inputs)
@@ -91,8 +111,10 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
         }
         setStatus('Live')
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        window.nvm.log('error', 'camera.start.failed', { message })
         setStatus('Camera unavailable')
-        setError(err instanceof Error ? err.message : String(err))
+        setError(message)
       }
     }
 
@@ -101,7 +123,7 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
       cancelled = true
       stream?.getTracks().forEach((track) => track.stop())
     }
-  }, [selectedDeviceId, view.facingMode])
+  }, [selectedDeviceId, storageKey, view.facingMode])
 
   function switchDevice() {
     if (devices.length < 2) return

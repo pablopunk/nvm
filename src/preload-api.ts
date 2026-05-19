@@ -114,6 +114,7 @@ export type NevermindApi = {
   setPaletteMode: (mode: PaletteMode) => Promise<void>
   hide: () => Promise<void>
   shortcutReady: () => Promise<void>
+  requestCameraAccess: () => Promise<{ ok: boolean; status: string }>
   log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => Promise<void>
   onShown: (callback: () => void) => () => void
   onShortcutShown: (callback: () => void) => () => void

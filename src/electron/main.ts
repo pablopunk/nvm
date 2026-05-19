@@ -1,4 +1,4 @@
-import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net } from 'electron'
+import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences } from 'electron'
 import electronUpdater from 'electron-updater'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -18,6 +18,8 @@ import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, f
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
+
+app.commandLine.appendSwitch('disable-gpu-compositing')
 
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
@@ -2692,6 +2694,14 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('palette:hide', () => paletteWindow.hidePalette())
   ipcMain.handle('palette:shortcut-ready', () => paletteWindow.revealPalette())
+  ipcMain.handle('camera:request-access', async () => {
+    if (!hasCapability('camera')) return { ok: false, status: 'unsupported' }
+    if (process.platform !== 'darwin') return { ok: true, status: 'unknown' }
+    const status = systemPreferences.getMediaAccessStatus('camera')
+    if (status === 'granted') return { ok: true, status }
+    if (status === 'denied' || status === 'restricted') return { ok: false, status }
+    return { ok: true, status }
+  })
   ipcMain.handle('logs:write', (_event, level, message, data) => {
     const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo
     method(String(message || ''), data, { source: 'renderer', scope: 'renderer' })

@@ -26,6 +26,7 @@ const api: NevermindApi = {
   setPaletteMode: (mode) => ipcRenderer.invoke('palette:set-mode', mode),
   hide: () => ipcRenderer.invoke('palette:hide'),
   shortcutReady: () => ipcRenderer.invoke('palette:shortcut-ready'),
+  requestCameraAccess: () => ipcRenderer.invoke('camera:request-access'),
   log: (level, message, data) => ipcRenderer.invoke('logs:write', level, message, data),
   onShown: (callback) => {
     const listener = () => callback()

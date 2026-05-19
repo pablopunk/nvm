@@ -30,10 +30,15 @@ function addWindowBlurMargin(size: { width: number; height: number }) {
 }
 
 export function installPermissionHandlers(isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
+  const isTrustedAppPage = (url: string) => url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
+  const allowedPermissions = ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write']
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    const url = webContents?.getURL() || ''
+    return isTrustedAppPage(url) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)
+  })
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL()
-    const isAppPage = url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
-    if (isAppPage && ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission) && canRequestMediaPermission(permission)) return callback(true)
+    if (isTrustedAppPage(url) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)) return callback(true)
     callback(false)
   })
 }
