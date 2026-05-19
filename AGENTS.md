@@ -29,8 +29,8 @@
 ## Code, docs, and style
 
 * Comments are a smell; prefer several well-named functions over explanatory comments.
-* Keep `AGENTS.md` minimal: only durable guidelines/instructions that apply repo-wide. Move overflow to `src/docs/` when needed.
-* Document hard-won learnings in `src/docs/` only after substantial iteration. Docs should capture intention/guidelines, not implementation details.
+* Keep `AGENTS.md` minimal: only durable guidelines/instructions that apply repo-wide. Move overflow guidelines to `src/docs/` when they need more room.
+* Document hard-won learnings in `src/docs/` only after substantial iteration. Docs are also guidelines and should capture intention, not implementation details.
 * Use design tokens from `:root` in `src/styles.css` (`--radius-*`, `--surface-*`, `--border-*`, `--text-*`, `--accent-*`, `--danger-*`). Do not add ad-hoc `rgba(255,255,255,…)` surfaces/borders/text or pixel radii; extend tokens if needed.
 
 ## Verification
