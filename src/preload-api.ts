@@ -134,6 +134,7 @@ export type NevermindApi = {
   onHidden: (callback: () => void) => () => void
   onAppsIndexed: (callback: (count: number) => void) => () => void
   onClipboardChanged: (callback: () => void) => () => void
+  onRootItemsChanged: (callback: () => void) => () => void
   onOpenActionView: (callback: (payload?: OpenActionViewPayload) => void) => () => void
   onAiChatEvent: (callback: (event: AiChatEvent) => void) => () => void
 }

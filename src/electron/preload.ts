@@ -51,6 +51,11 @@ const api: NevermindApi = {
     ipcRenderer.on('clipboard:changed', listener)
     return () => ipcRenderer.removeListener('clipboard:changed', listener)
   },
+  onRootItemsChanged: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('root-items:changed', listener)
+    return () => ipcRenderer.removeListener('root-items:changed', listener)
+  },
   onOpenActionView: (callback) => {
     const listener = (_event: IpcRendererEvent, payload?: Parameters<NevermindApi['onOpenActionView']>[0] extends (payload?: infer Payload) => void ? Payload : never) => callback(payload)
     ipcRenderer.on('action:view-open', listener)

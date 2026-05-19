@@ -265,6 +265,7 @@ export function App() {
     })
     const stopApps = window.nvm.onAppsIndexed(() => setRefreshNonce((nonce) => nonce + 1))
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
+    const stopRootItems = window.nvm.onRootItemsChanged(() => setRefreshNonce((nonce) => nonce + 1))
     const stopOpenActionView = window.nvm.onOpenActionView(async (payload) => {
       if (!payload?.view) return
       setOptionsFor(null)
@@ -294,6 +295,7 @@ export function App() {
       stopHidden()
       stopApps()
       stopClipboard()
+      stopRootItems()
       stopOpenActionView()
       stopAi()
     }

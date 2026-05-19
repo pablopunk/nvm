@@ -87,6 +87,7 @@ function setSetting(id: any, value: any) {
   if (!userState.settings) userState.settings = {}
   userState.settings[id] = value
   scheduleSaveState()
+  invalidateExtensionRootItems()
 }
 const appIconCache = new Map<string, string | null>()
 const extensionRegistry = new Map<string, any>()
@@ -652,6 +653,11 @@ function rootNativeActionCanDismissImmediately(action) {
   return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(String(action?.kind))
 }
 
+function invalidateExtensionRootItems() {
+  extensionRootItemsCache.clear()
+  paletteWindow.win?.webContents.send('root-items:changed')
+}
+
 function runInBackground(task) {
   Promise.resolve().then(task).catch((error) => console.error('Background action failed', error))
 }
@@ -829,8 +835,8 @@ async function extensionRootActionsForExtension(extension) {
   const cacheKey = extension.__filePath || extension.id
   const cached = extensionRootItemsCache.get(cacheKey)
   if (cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS) return cached.items
-  refreshExtensionRootActions(extension, cacheKey)
-  return cached?.items || []
+  const refresh = refreshExtensionRootActions(extension, cacheKey)
+  return cached?.items || await refresh
 }
 
 function refreshExtensionRootActions(extension, cacheKey) {
