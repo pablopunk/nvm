@@ -492,7 +492,7 @@ export function App() {
   }
 
   function actionCanDismissImmediately(action: ExtensionViewAction) {
-    return action.dismissAfterRun === 'auto' && ['nativeAction', 'openPath', 'revealPath', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'runExtensionAction'].includes(action.type)
+    return action.dismissAfterRun === 'auto' && ['nativeAction', 'openPath', 'revealPath', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'runExtensionAction', 'toggleSetting', 'removeShortcut'].includes(action.type)
   }
 
   function rootNativeActionCanDismissImmediately(action: Action | { kind?: string }) {
@@ -510,6 +510,11 @@ export function App() {
       return
     }
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string; action?: Action; actionId?: string } | undefined : undefined
+    if (action.type === 'recordShortcut') {
+      const target = (action.action as Action | undefined)?.id === PALETTE_HOTKEY_ACTION_ID ? PALETTE_HOTKEY_PSEUDO_ACTION : action.action as Action | undefined
+      if (target) startShortcutRecorder(target)
+      return
+    }
     if (nativeAction?.kind === 'record-palette-hotkey') {
       startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
       return

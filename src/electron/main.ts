@@ -578,8 +578,8 @@ function settingItemPatch(definition) {
   const value = getSetting(definition.id)
   const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
   const primaryAction = definition.type === 'shortcut'
-    ? { type: 'nativeAction', title: 'Change Shortcut', shortcut: String(value || ''), nativeAction: { kind: 'record-palette-hotkey' } }
-    : { type: 'nativeAction', title: value ? 'Turn Off' : 'Turn On', nativeAction: { kind: 'toggle-setting', settingId: definition.id } }
+    ? { type: 'recordShortcut', title: 'Change Shortcut', shortcut: String(value || ''), action: { id: '__palette-hotkey__' } }
+    : { type: 'toggleSetting', title: value ? 'Turn Off' : 'Turn On', settingId: definition.id }
   return { id: `setting:${definition.id}`, accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
 }
 
@@ -1119,6 +1119,19 @@ async function executeViewAction(action) {
       const result = await runShellScript(action.script, action.options || {})
       return { view: shellResultView(action.title || 'Script', result), navigation: 'push' }
     }
+    case 'toggleSetting': {
+      const definition = settingDefinition(action.settingId)
+      if (!definition || definition.type !== 'boolean') return { toast: { message: 'Setting not found', tone: 'error' } }
+      setSetting(definition.id, toggledSettingValue(definition, getSetting(definition.id)))
+      return { patch: { items: [settingItemPatch(definition)] } }
+    }
+    case 'removeShortcut': {
+      const result = await removeShortcut(action.actionId)
+      if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
+      return { view: keyboardShortcutsView(), navigation: 'replace', toast: { message: result.message } }
+    }
+    case 'recordShortcut':
+      return { toast: { message: 'Shortcut recording is handled by the palette' } }
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
@@ -1650,8 +1663,8 @@ function keyboardShortcutsView() {
     searchBarPlaceholder: 'Search Keyboard Shortcuts',
     emptyView: { title: 'No shortcuts found.' },
     items: getShortcuts().map((record) => {
-      const changeAction = { type: 'nativeAction', title: 'Change shortcut', nativeAction: { kind: 'record-shortcut', action: record.action } }
-      const removeAction = record.source === 'user' ? { type: 'nativeAction', title: 'Remove shortcut', style: 'destructive', nativeAction: { kind: 'remove-shortcut', actionId: record.actionId } } : null
+      const changeAction = { type: 'recordShortcut', title: 'Change shortcut', action: record.action }
+      const removeAction = record.source === 'user' ? { type: 'removeShortcut', title: 'Remove shortcut', style: 'destructive', actionId: record.actionId } : null
       return {
         id: `shortcut:${record.actionId}`,
         title: record.action.title,
@@ -1740,8 +1753,8 @@ function createExtensionContext(extension, command) {
       background: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
       shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
-      toggleSetting: (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'toggle-setting', settingId } }),
-      setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'record-palette-hotkey' } }),
+      toggleSetting: (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'toggleSetting', title, settingId }),
+      setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => ({ ...options, type: 'recordShortcut', title, action: { id: '__palette-hotkey__' } }),
       native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
     },
     navigation: {

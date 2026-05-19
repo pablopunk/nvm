@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -21,6 +21,9 @@ export type CommandAction = {
   shortcut?: string
   shortcutScope?: 'local' | 'global'
   nativeAction?: unknown
+  settingId?: string
+  action?: unknown
+  actionId?: string
   command?: string
   args?: string[]
   script?: string
@@ -146,6 +149,9 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'pushView' || action.type === 'replaceView') return 'Open nested view'
   if (action.type === 'popView') return 'Go back'
   if (action.type === 'shellExec' || action.type === 'shellScript') return 'Run system command'
+  if (action.type === 'toggleSetting') return 'Change setting'
+  if (action.type === 'recordShortcut') return 'Record shortcut'
+  if (action.type === 'removeShortcut') return 'Remove shortcut'
   if (action.type === 'nativeAction') return 'Run command'
   return 'Run action'
 }
