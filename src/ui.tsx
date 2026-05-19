@@ -79,12 +79,12 @@ function normalizedSections<T>(items?: T[], sections?: ItemSection<T>[]) {
 
 export function ListView<T>({ items, sections, renderItem, empty, subtitle, isLoading, pagination }: ListViewProps<T>) {
   const visibleSections = normalizedSections(items, sections).filter((section) => section.items.length > 0)
-  return <>{isLoading ? <div className="loadingBar" /> : null}{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{visibleSections.length > 0 ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="extensionSubtitle">{section.subtitle}</div> : null}{section.items.map(renderItem)}</div>) : empty}{pagination}</>
+  return <>{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{visibleSections.length > 0 ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="extensionSubtitle">{section.subtitle}</div> : null}{section.items.map(renderItem)}</div>) : empty}{pagination}</>
 }
 
 export function GridView<T>({ items, sections, renderItem, empty, subtitle, layout = 'square', style, isLoading, pagination }: GridViewProps<T>) {
   const visibleSections = normalizedSections(items, sections).filter((section) => section.items.length > 0)
-  return <div className="extensionView">{isLoading ? <div className="loadingBar" /> : null}{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{visibleSections.length > 0 ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="extensionSubtitle">{section.subtitle}</div> : null}<div className={`extensionGrid extensionGrid-${layout}`} style={style}>{section.items.map(renderItem)}</div></div>) : empty}{pagination}</div>
+  return <div className="extensionView">{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{visibleSections.length > 0 ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="extensionSubtitle">{section.subtitle}</div> : null}<div className={`extensionGrid extensionGrid-${layout}`} style={style}>{section.items.map(renderItem)}</div></div>) : empty}{pagination}</div>
 }
 
 export function ChatView({ messages, isBusy, input, messagesRef }: ChatViewProps) {

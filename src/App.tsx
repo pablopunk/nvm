@@ -492,6 +492,7 @@ export function App() {
     if (!patch) return
     extensionNavigation.setView((current) => current ? {
       ...current,
+      ...(patch.isLoading === undefined ? {} : { isLoading: patch.isLoading }),
       items: patchItems(current.items, patch.items || [], patch.mode || current.refresh?.mode),
       sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || [], patch.mode || current.refresh?.mode) || [] })),
     } : current)
@@ -1408,7 +1409,7 @@ export function App() {
           </div>
         ))}
 
-        <Command.List ref={resultsListRef} className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''}`}>
+        <Command.List ref={resultsListRef} className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}>
           {shortcutFor ? (
             <div className="shortcutRecorder">
               <div className="shortcutKeys">

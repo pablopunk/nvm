@@ -865,17 +865,30 @@ kbd {
   opacity: 1;
 }
 
-.loadingBar {
-  height: 2px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, rgba(255, 216, 77, 0), rgba(255, 216, 77, 0.86), rgba(255, 216, 77, 0));
-  background-size: 200% 100%;
-  animation: loadingSweep 900ms linear infinite;
+.card.loadingBorder::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--loading-border-angle), transparent 0deg, transparent 265deg, rgba(255, 216, 77, 0.05) 292deg, rgba(255, 216, 77, 0.95) 320deg, rgba(255, 216, 77, 0.05) 348deg, transparent 360deg);
+  pointer-events: none;
+  animation: loadingBorderSweep 900ms linear infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
 
-@keyframes loadingSweep {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
+@property --loading-border-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes loadingBorderSweep {
+  from { --loading-border-angle: 0deg; }
+  to { --loading-border-angle: 360deg; }
 }
 
 .loadMoreButton {
