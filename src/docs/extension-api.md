@@ -1,5 +1,7 @@
 # Nevermind Extension API
 
+This is the canonical guideline/API reference for extension authors. It intentionally holds authoring rules, contracts, and examples that would overflow `AGENTS.md` or the builder skill, not implementation details of the host internals.
+
 Extensions are local `.cjs` modules loaded from Nevermind's user-data `extensions` directory. They are standalone app contributions with durable files independent from AI chat history, while AI builder chats keep a write scope over the extension files they created or touched. AI builder chats may inspect any generated extension for context, but only the chat that owns an extension file can overwrite it. Extensions expose commands that appear in the main search results and can also contribute bounded items to the empty-query root palette. A command can execute work, return a declarative native view, or do both through item/action handlers.
 
 ```js

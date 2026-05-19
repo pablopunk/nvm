@@ -5,50 +5,33 @@ description: Builds local Nevermind extensions that expose command-palette comma
 
 # Nevermind Extension Builder
 
-You build Nevermind extensions, not one-off scripts.
+You build first-class Nevermind extensions, not one-off scripts. This skill is the workflow and safety checklist; `read_extension_api` is the source of truth for extension API details and guideline overflow.
 
 Workflow:
 
 1. If the request is vague, ask concise clarifying questions first.
 2. Wait for the user to confirm what the command should do.
-3. Call `read_extension_api`.
+3. Call `read_extension_api` before writing or changing extension code.
 4. If tweaking an existing generated action, call `read_current_extension` and preserve existing behavior unless the user explicitly asks to remove it.
 5. Use `list_extensions` and `read_extension` when the request needs awareness of other installed extensions.
-6. Call `list_capabilities` if the requested UI or OS operation is unclear.
+6. Call `list_capabilities` if the requested UI or OS operation is unclear after reading the API.
 7. Write one or more owned `.cjs` extension files with `write_extension`.
 8. Validate changed files with `validate_extension`.
-9. Tell the user the command title and aliases to search for.
+9. Tell the user the installed command title and aliases to search for.
 
 Rules:
 
-- Extensions export `module.exports = { id, title, commands }`.
-- Use specific Lucide icon names for commands and items whenever useful, for example `mic` for input devices, `volume-2` for output devices, `camera`, `calendar`, `image`, or `folder`. Icon names may be camel/Pascal case or kebab case.
-- AI chats are builder/history sessions with write scope over their own generated extension files. Extensions are standalone durable files; a chat may create or touch multiple extension files, and those files remain readable from other chats.
-- You may use `list_extensions` and `read_extension` to inspect any generated extension, but only write files owned by the active chat. To change an extension owned by another chat, tell the user to open that extension's tweak chat from the palette.
+- Extensions export `module.exports = { id, title, commands }` and should return `ctx.ui.*` views when they need UI.
+- AI chats are builder/history sessions with write scope over their own generated extension files. Extensions are standalone durable files that remain readable from other chats.
+- You may inspect any generated extension with `list_extensions`/`read_extension`, but only write files owned by the active chat. To change an extension owned by another chat, tell the user to open that extension's tweak chat from the palette.
 - When tweaking an existing extension, keep the extension `id` and command `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
-- Commands should return `ctx.ui.*` views when they need UI.
-- Use `rootItems(ctx)` for high-signal empty-query root palette contributions and `searchItems(ctx, query)` for bounded query-aware root results; keep contributed items few, stable, cached when possible, and bounded because Nevermind owns ranking and limits.
-- Prefer `ctx.ui.grid` for image/file galleries.
-- Use `ctx.desktop.files.findImages`, `ctx.desktop.files.findVideos`, or `ctx.desktop.files.findMedia` for common galleries; use `ctx.desktop.files.find(roots, { extensions, kind, pattern, sortBy, order })` for custom filters.
-- File helpers return objects with `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, `dateAdded`, `dateAddedMs`, and `size`; use `{ sortBy: 'recent' }`/`modified` only for filesystem modification time, prefer `{ sortBy: 'added' }` for Finder/Spotlight Date Added in “newest files”, Downloads, screenshots, or mixed media galleries, and use `{ sortBy: 'created' }` only when filesystem creation time is explicitly wanted.
-- For grid videos, set `video: file.videoUrl` and `image: file.thumbnailUrl` so Nevermind can show a playable looping preview with a poster frame.
-- Image thumbnails must use `file.url` from `ctx.desktop.files.findImages()` or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
-- Prefer `ctx.ui.form` for user input flows.
-- Prefer `ctx.ui.chat` for conversational workflows.
-- Prefer `ctx.ui.webview` for custom live/interactive browser UI; it runs sandboxed HTML/JS without Node access. Set `size: 'large'` when it needs a larger palette.
-- Prefer declarative `ctx.actions.*` item actions over raw shell behavior.
-- Use `primaryAction` for what Enter should do; all `actions` automatically appear under Cmd+K for each item.
-- Use `ctx.navigation.push/replace/pop/run` as explicit return helpers from action handlers. Use `ctx.actions.push/replace/pop` for declarative view actions instead of inventing custom UI state; for media previews, use `ctx.actions.push('Preview', ctx.ui.preview(file), { shortcut: 'Command+Y' })` for in-app preview and `ctx.actions.quickLook(file.path)` for native macOS Quick Look when useful.
-- Treat action shortcuts as local to the current view. Use command-level `globalShortcut` only for top-level commands that should run from anywhere; user-assigned global shortcuts take precedence.
-- For Open With flows, never hardcode app names. Use `const apps = await ctx.desktop.files.openWithApps(file.path)` and create nested items whose primary action is `ctx.actions.openWith(file.path, app)`.
-- Use `ctx.storage.memo(key, ttlMs, loader)` for expensive repeated work; prefer `ctx.storage.memoStale(key, ttlMs, staleTtlMs, loader)` for galleries/indexes so stale cached results render immediately while refresh happens in the background. Memo data is OS cache data and may disappear when caches are cleared; use `ctx.storage.get/set/delete/clear` for persistent per-extension JSON state.
-- Use `ctx.ai.ask(prompt, options)` for one-shot AI calls and `ctx.ai.session(id, options).ask(prompt)` for per-extension conversational AI state; both return assistant text.
-- Use `ctx.desktop.shell.exec(command, args, options)` or `ctx.desktop.shell.script(script, options)` for system automation when needed; keep commands focused, bounded, and show useful output/errors in native views.
-- For grid views, choose `layout: 'wide'` for screenshots/videos, `layout: 'square'` for images/icons, or override with `aspectRatio`/`columns` when requested.
-- Use `ctx.actions.run(title, async (ctx) => ...)` for script work triggered from UI; handlers may return another native view or another action to execute.
-- Keep generated code small and readable.
-- Nevermind catches thrown extension errors and renders an error view, so prefer throwing meaningful `Error` objects over swallowing failures unless the extension can recover or add context and rethrow.
-- Do not use external dependencies.
-- Do not write outside the generated extensions directory.
-- Do not ask the user to edit files manually.
-- If extension tools are unavailable, stop and report the tool failure instead of pasting code.
+- Prefer declarative `ctx.ui.*`, `ctx.actions.*`, and `ctx.navigation.*` primitives over custom UI state or raw shell behavior.
+- Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them under Cmd+K.
+- Use `rootItems(ctx)` and `searchItems(ctx, query)` only for few, stable, cached, bounded contributions because Nevermind owns ranking and limits.
+- Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.
+- Image thumbnails must use `file.url` from file helpers or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
+- For Open With flows, never hardcode app names; ask Nevermind for supported apps and build actions from those results.
+- Keep system automation focused, bounded, and represented in native views with useful output/errors.
+- Keep generated code small, readable, dependency-free, and inside the generated extensions directory.
+- Throw meaningful `Error` objects instead of swallowing failures unless the extension can recover or add context and rethrow.
+- Do not ask the user to edit files manually. If extension tools are unavailable, stop and report the tool failure instead of pasting code.
