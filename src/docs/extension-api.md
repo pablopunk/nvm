@@ -8,6 +8,7 @@ Extensions are local `.cjs` modules loaded from Nevermind's user-data `extension
 module.exports = {
   id: 'my.images',
   title: 'My Images',
+  permissions: ['desktop.files'],
   commands: [
     {
       id: 'image-grid',
@@ -15,7 +16,6 @@ module.exports = {
       subtitle: 'Browse recent images',
       aliases: ['pics', 'photos'],
       icon: 'grid',
-      permissions: ['files:read', 'ui:grid'],
       async run(ctx) {
         const images = await ctx.desktop.files.findImages(['~/Downloads', '~/Desktop'], { limit: 48 })
         return ctx.ui.grid({
@@ -159,8 +159,56 @@ The built-in `nevermind.ai-builder` extension is the only caller granted `ctx.ai
 
 The extension-building tools intentionally separate read access from write ownership. Builder chats can use `list_extensions` and `read_extension` to understand related generated extensions, but `write_extension` can only replace extension files already owned by the active chat. A single chat may own multiple related extension files. To change an extension owned by another chat, open that extension's tweak chat from the palette instead of overwriting it from the current conversation.
 
+## Provider contracts
+
+Root and search providers are the stable extension entry points the host calls to populate the palette. They follow these rules:
+
+- **`rootItems(ctx)`** runs for empty-query renders. It must return an array of root items (or a `Promise` of one). The host calls it on palette open and after invalidations; results are cached per extension and reused across renders. Items contribute to host-owned ranking through `score` and the recency/usage signals attached by the host to each item id (boosts from past activations and `lastUsed`). Latency budget: results should complete inside the host timeout (currently ~10s); slower providers are dropped for that render. Return a small bounded list of high-signal items.
+- **`searchItems(ctx, query)`** runs on each query change. The host debounces input before calling; providers should not introduce additional debounce. Return only matches relevant to `query`; the host applies a per-provider cap. Partial results are acceptable — return what is ready and rely on the next call for the rest.
+- **Clone-safety**: returned items must be JSON-serializable. Functions, class instances, `Map`, `Set`, `Date`, and similar are not allowed. The only non-JSON shape the host accepts is the documented `__handler` marker on declarative actions produced by `ctx.actions.*`; do not invent other private fields.
+- **Cache TTLs**: the host keeps a per-extension root snapshot for ~60s (`EXTENSION_ROOT_ITEMS_TTL_MS`). The `ctx.cache` namespace clamps `ttlMs` to a 24h ceiling and keeps at most 1000 entries per extension (oldest are evicted). Stale snapshots are served while the next refresh runs in the background; `ctx.cache.getStale(key)` returns the last value regardless of expiry.
+- **Refresh triggers**: `ctx.cache.invalidate(key?)` drops a cache entry and asks the host to refresh tied root/search snapshots. `ctx.views.refresh()` re-runs the current command and patches the visible view in place. Refresh calls from a single extension are limited to ~5 per 2s window; bursts above the limit are dropped and logged.
+- **Performance**: providers should target sub-100ms hot paths. Expensive work should use `ctx.storage.memo`/`memoStale` or `ctx.cache` so the visible list does not block on background refreshes. If a provider exceeds the host timeout the host drops that render's contribution and logs the failure — visible state from the prior render is preserved.
+
+## Permissions
+
+Extensions declare the host capabilities they need in a top-level `permissions` array on the manifest. The host gates the matching `ctx.*` surfaces: an undeclared capability becomes `undefined` on `ctx`, or throws `permission-denied` when called. Permissions are required for external extensions; internal extensions ship with explicit declarations and no implicit host privilege.
+
+Available permissions:
+
+| Permission | Grants |
+| --- | --- |
+| `desktop.apps` | `ctx.desktop.apps.*` |
+| `desktop.files` | `ctx.desktop.files.*` |
+| `clipboard.history` | `ctx.desktop.clipboard.*` |
+| `ai` | `ctx.ai.ask`, `ctx.ai.session` |
+| `extensions.ownership` | `ctx.extensions.ownership` (read-only; full access stays with the AI Builder extension) |
+| `shortcuts` | `ctx.actions.recordShortcut`, `ctx.actions.removeShortcut`, `ctx.actions.setPaletteShortcut` |
+| `system` | `ctx.desktop.shell.*` |
+| `places` | declares use of host-owned filesystem places (no extra `ctx` surface today) |
+| `updates` | declares participation in the update lifecycle (no extra `ctx` surface today) |
+| `settings.write` | `ctx.settings.set`, `ctx.settings.toggle`, `ctx.actions.toggleSetting` |
+
+```js
+module.exports = {
+  id: 'my.images',
+  title: 'My Images',
+  permissions: ['desktop.files', 'clipboard.history'],
+  // ...
+}
+```
+
+## Budgets
+
+The host applies lightweight per-extension budgets so misbehaving providers cannot starve the palette:
+
+- **Cache entries**: at most 1000 per extension; oldest entries are evicted when the limit is exceeded.
+- **Cache TTL**: `ctx.cache.set` clamps `ttlMs` to a 24h maximum.
+- **Refresh frequency**: `ctx.views.refresh()` is limited to 5 invocations per 2 seconds per extension. Excess calls are dropped (no view update, no error) and logged.
+- **AI calls**: `ctx.ai.ask` and `ctx.ai.session().ask` are capped at 30 invocations per minute per extension. Over the limit, the call throws an `Error` with `code: 'ai-rate-limit-exceeded'`.
+
+These limits are constants in `src/electron/main.ts` (`EXTENSION_CACHE_MAX_ENTRIES`, `EXTENSION_CACHE_MAX_TTL_MS`, `EXTENSION_REFRESH_MAX_BURST`, `EXTENSION_REFRESH_BURST_WINDOW_MS`, `EXTENSION_AI_CALLS_PER_MINUTE`) and are tuned for the host, not the extension; do not depend on specific values from inside an extension.
+
 ## Error handling
 
 Extension command and action handlers may throw errors. Nevermind catches thrown errors and renders a native extension error view with the stack/message, so extensions should prefer throwing meaningful `Error` objects over swallowing failures or returning silent no-op states. Only catch errors when the extension can recover or add user-facing context before rethrowing.
-
-Permissions are declared today and will become enforceable guardrails later.

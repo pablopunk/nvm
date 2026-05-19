@@ -42,6 +42,12 @@ const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000
 const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000
 const EXTENSION_ITEMS_PER_PROVIDER_LIMIT = 20
 const ITEM_FOREGROUND_COLORS = new Set(['yellow', 'blue', 'purple', 'green', 'red', 'orange', 'pink'])
+const EXTENSION_CACHE_MAX_TTL_MS = 24 * 60 * 60_000
+const EXTENSION_CACHE_MAX_ENTRIES = 1000
+const EXTENSION_REFRESH_MAX_BURST = 5
+const EXTENSION_REFRESH_BURST_WINDOW_MS = 2000
+const EXTENSION_AI_CALLS_PER_MINUTE = 30
+const EXTENSION_AI_RATE_WINDOW_MS = 60_000
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -120,6 +126,58 @@ function extensionCacheFor(extensionId) {
   return store
 }
 
+function enforceExtensionCacheBudget(store: Map<string, { value: any; expiresAt: number }>) {
+  if (store.size <= EXTENSION_CACHE_MAX_ENTRIES) return
+  const overflow = store.size - EXTENSION_CACHE_MAX_ENTRIES
+  const iterator = store.keys()
+  for (let i = 0; i < overflow; i++) {
+    const next = iterator.next()
+    if (next.done) break
+    store.delete(next.value)
+  }
+}
+
+const extensionRefreshBurstWindow = new Map<string, number[]>()
+const extensionAiCallWindow = new Map<string, number[]>()
+
+function isInternalExtension(extension: any) {
+  return typeof extension?.id === 'string' && extension.id.startsWith('nevermind.')
+}
+
+function hasExtensionPermission(extension: any, permission: string) {
+  const declared = Array.isArray(extension?.permissions) ? extension.permissions : null
+  if (declared) return declared.includes(permission)
+  return isInternalExtension(extension)
+}
+
+function permissionDeniedError(permission: string) {
+  return new Error(`Extension is missing required permission: ${permission}`)
+}
+
+function checkRefreshBurst(extension: any) {
+  const id = extension?.id || 'unknown'
+  const now = Date.now()
+  const recent = (extensionRefreshBurstWindow.get(id) || []).filter((time) => now - time < EXTENSION_REFRESH_BURST_WINDOW_MS)
+  if (recent.length >= EXTENSION_REFRESH_MAX_BURST) {
+    logWarn('extension.refresh.throttled', { count: recent.length }, { source: 'host', scope: 'extension', extensionId: id })
+    return false
+  }
+  recent.push(now)
+  extensionRefreshBurstWindow.set(id, recent)
+  return true
+}
+
+function checkAiRateLimit(extension: any) {
+  const id = extension?.id || 'unknown'
+  const now = Date.now()
+  const recent = (extensionAiCallWindow.get(id) || []).filter((time) => now - time < EXTENSION_AI_RATE_WINDOW_MS)
+  if (recent.length >= EXTENSION_AI_CALLS_PER_MINUTE) return false
+  recent.push(now)
+  extensionAiCallWindow.set(id, recent)
+  return true
+}
+
+
 function createExtensionCache(extension) {
   const store = extensionCacheFor(extension.id)
   return {
@@ -138,8 +196,10 @@ function createExtensionCache(extension) {
       return !entry.expiresAt || Date.now() <= entry.expiresAt
     },
     set(key, value, options: any = {}) {
-      const ttlMs = Number(options.ttlMs || 0)
-      store.set(key, { value, expiresAt: ttlMs > 0 ? Date.now() + ttlMs : 0 })
+      const rawTtl = Number(options.ttlMs || 0)
+      const clampedTtl = rawTtl > 0 ? Math.min(rawTtl, EXTENSION_CACHE_MAX_TTL_MS) : 0
+      store.set(key, { value, expiresAt: clampedTtl > 0 ? Date.now() + clampedTtl : 0 })
+      enforceExtensionCacheBudget(store)
       return value
     },
     invalidate(key) {
@@ -1609,9 +1669,24 @@ function createExtensionStorage(extension) {
 
 function createExtensionAi(extension) {
   const extensionKey = path.basename(extension.__filePath || extension.id || 'extension').replace(/[^a-zA-Z0-9._-]/g, '-')
+  const enforceAiQuota = () => {
+    if (!checkAiRateLimit(extension)) throw Object.assign(new Error('AI rate limit exceeded'), { code: 'ai-rate-limit-exceeded', extensionId: extension?.id })
+  }
   return {
-    ask: (prompt, options: any = {}) => nevermindAi.ask(String(prompt || ''), { system: options.system }),
-    session: (id = 'default', options: any = {}) => nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: options.system }),
+    ask: (prompt, options: any = {}) => {
+      enforceAiQuota()
+      return nevermindAi.ask(String(prompt || ''), { system: options.system })
+    },
+    session: (id = 'default', options: any = {}) => {
+      const session = nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: options.system })
+      return {
+        ...session,
+        ask: (prompt: any) => {
+          enforceAiQuota()
+          return session.ask(prompt)
+        },
+      }
+    },
   }
 }
 
@@ -1641,6 +1716,7 @@ function createSystemExtension() {
   return {
     id: 'nevermind.system',
     title: 'System',
+    permissions: ['system'] as const,
     commands: systemItems().map(commandFromItem),
     rootItems: () => systemItems(),
   }
@@ -1650,6 +1726,7 @@ function createPlacesExtension() {
   return {
     id: 'nevermind.places',
     title: 'Places',
+    permissions: ['places'] as const,
     commands: placesItems().map(commandFromItem),
     rootItems: () => placesItems(),
   }
@@ -1659,6 +1736,7 @@ function createCalculatorExtension() {
   return {
     id: 'nevermind.calculator',
     title: 'Calculator',
+    permissions: [] as const,
     commands: [],
     searchItems(_ctx, query) {
       const result = query ? calculate(query) : null
@@ -1672,6 +1750,7 @@ function createWebSearchExtension() {
   return {
     id: 'nevermind.web',
     title: 'Web',
+    permissions: [] as const,
     commands: [],
     searchItems(_ctx, query) {
       const q = String(query || '').trim()
@@ -1717,6 +1796,7 @@ function createClipboardExtension() {
   return {
     id: 'nevermind.clipboard',
     title: 'Clipboard',
+    permissions: ['clipboard.history'] as const,
     commands: [{
       id: 'clipboard-history',
       actionId: 'clipboard-history',
@@ -1740,6 +1820,7 @@ function createAppsExtension() {
   return {
     id: 'nevermind.apps',
     title: 'Applications',
+    permissions: ['desktop.apps'] as const,
     commands: [],
     async rootItems() {
       const items = appIndex.map(appRootItem)
@@ -1758,6 +1839,7 @@ function createFilesExtension() {
   return {
     id: 'nevermind.files',
     title: 'Files',
+    permissions: ['desktop.files'] as const,
     commands: [],
     rootItems() {
       return fileIndex.slice(0, FILE_RESULT_LIMIT).map(fileRootItem)
@@ -1789,6 +1871,7 @@ function createAiBuilderExtension() {
   return {
     id: AI_BUILDER_EXTENSION_ID,
     title: 'AI Builder',
+    permissions: ['ai', 'extensions.ownership'] as const,
     commands: [{ id: 'ai-chats', actionId: 'ai-chats', title: 'AI Chats', get subtitle() { return chatsSubtitle() }, icon: 'sparkles', score: 16, run: () => aiChatsView() }],
     rootItems(ctx) {
       return chatItems(ctx).slice(0, 4)
@@ -1807,6 +1890,7 @@ function createUpdatesExtension() {
   return {
     id: 'nevermind.updates',
     title: 'Updates',
+    permissions: ['updates'] as const,
     commands: [{ ...checkItem(), run: () => checkForUpdatesView() }],
     rootItems() {
       return [updatePromptAction() || checkItem()]
@@ -1846,6 +1930,7 @@ function createKeyboardShortcutsExtension() {
   return {
     id: 'nevermind.shortcuts',
     title: 'Keyboard Shortcuts',
+    permissions: ['shortcuts'] as const,
     commands: [{ id: 'keyboard-shortcuts', actionId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16, run: () => keyboardShortcutsView() }],
   }
 }
@@ -1854,6 +1939,7 @@ function createSettingsExtension() {
   return {
     id: 'nevermind.settings',
     title: 'Settings',
+    permissions: ['settings.write'] as const,
     commands: [{ id: 'app-settings', actionId: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 16, run: (ctx) => ctx.ui.list({
       type: 'list',
       id: 'app-settings',
@@ -1943,6 +2029,14 @@ function progressView(input: any = {}) {
 }
 
 function createExtensionContext(extension, command) {
+  const canUseDesktopApps = hasExtensionPermission(extension, 'desktop.apps')
+  const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
+  const canUseClipboard = hasExtensionPermission(extension, 'clipboard.history')
+  const canUseSystem = hasExtensionPermission(extension, 'system')
+  const canUseShortcuts = hasExtensionPermission(extension, 'shortcuts')
+  const canUseAi = hasExtensionPermission(extension, 'ai')
+  const canWriteSettings = hasExtensionPermission(extension, 'settings.write')
+  const denyShortcut = (name: string) => () => { throw permissionDeniedError(`shortcuts (${name})`) }
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
     command,
@@ -1995,10 +2089,18 @@ function createExtensionContext(extension, command) {
       background: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
       shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
       shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
-      toggleSetting: (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'toggleSetting', title, settingId }),
-      recordShortcut: (input: any = {}, options: any = {}) => buildRecordShortcutAction(input, options),
-      removeShortcut: (input: any = {}, options: any = {}) => buildRemoveShortcutAction(input, options),
-      setPaletteShortcut: (title = 'Change Shortcut', options: any = {}) => buildRecordShortcutAction({ scope: 'palette', title }, options),
+      toggleSetting: canWriteSettings
+        ? (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'toggleSetting', title, settingId })
+        : denyShortcut('settings.write'),
+      recordShortcut: canUseShortcuts
+        ? (input: any = {}, options: any = {}) => buildRecordShortcutAction(input, options)
+        : denyShortcut('recordShortcut'),
+      removeShortcut: canUseShortcuts
+        ? (input: any = {}, options: any = {}) => buildRemoveShortcutAction(input, options)
+        : denyShortcut('removeShortcut'),
+      setPaletteShortcut: canUseShortcuts
+        ? (title = 'Change Shortcut', options: any = {}) => buildRecordShortcutAction({ scope: 'palette', title }, options)
+        : denyShortcut('setPaletteShortcut'),
       native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
       camera: {
         switchDevice: (title = 'Switch Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.switchDevice' } }),
@@ -2015,7 +2117,7 @@ function createExtensionContext(extension, command) {
       run: (action) => ({ action }),
     },
     desktop: {
-      clipboard: {
+      clipboard: canUseClipboard ? {
         readText: () => clipboard.readText(),
         writeText: (text) => clipboard.writeText(String(text || '')),
         readImage: clipboardImageDataUrl,
@@ -2023,17 +2125,17 @@ function createExtensionContext(extension, command) {
         readFiles: clipboardFiles,
         read: readDesktopClipboard,
         write: writeDesktopClipboard,
-      },
+      } : undefined,
       selection: {
         text: selectedText,
         files: selectedFiles,
         read: readDesktopSelection,
       },
-      apps: {
+      apps: canUseDesktopApps ? {
         frontmost: frontmostApp,
         launch: (appPath) => runInBackground(() => shell.openPath(expandUserPath(appPath))),
-      },
-      files: {
+      } : undefined,
+      files: canUseDesktopFiles ? {
         find: findFiles,
         findImages: (roots, options) => findFiles(roots, { ...options, kind: 'image' }),
         findVideos: (roots, options) => findFiles(roots, { ...options, kind: 'video' }),
@@ -2044,8 +2146,8 @@ function createExtensionContext(extension, command) {
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
-      },
-      shell: {
+      } : undefined,
+      shell: canUseSystem ? {
         openExternal: (url) => runInBackground(() => shell.openExternal(url)),
         exec: runShellCommand,
         script: runShellScript,
@@ -2056,28 +2158,32 @@ function createExtensionContext(extension, command) {
         which: (command) => new Promise((resolve) => {
           execFile('/usr/bin/which', [String(command)], (error, stdout, stderr) => resolve({ stdout: stdout.trim(), stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
         }),
-      },
+      } : undefined,
     },
     storage: createExtensionStorage(extension),
     settings: {
       definitions: () => SETTING_DEFINITIONS.map((definition) => ({ ...definition, value: getSetting(definition.id) })),
       get: (id) => getSetting(id),
-      set: (id, value) => setSetting(id, value),
-      toggle: (id) => {
-        const definition = settingDefinition(id)
-        if (!definition) throw new Error(`Unknown setting: ${id}`)
-        const next = toggledSettingValue(definition, getSetting(id))
-        setSetting(id, next)
-        return next
-      },
+      set: canWriteSettings
+        ? (id, value) => setSetting(id, value)
+        : () => { throw permissionDeniedError('settings.write') },
+      toggle: canWriteSettings
+        ? (id) => {
+            const definition = settingDefinition(id)
+            if (!definition) throw new Error(`Unknown setting: ${id}`)
+            const next = toggledSettingValue(definition, getSetting(id))
+            setSetting(id, next)
+            return next
+          }
+        : () => { throw permissionDeniedError('settings.write') },
     },
     logs: extensionLogger(extension.id, command?.id),
     cache: createExtensionCache(extension),
     views: createExtensionViewsApi(extension, command),
     state: {},
-    ai: createExtensionAi(extension),
+    ai: canUseAi ? createExtensionAi(extension) : undefined,
     aiBuilder: createAiBuilderApi(extension),
-    extensions: { ownership: createExtensionOwnershipApi(extension) },
+    extensions: { ownership: hasExtensionPermission(extension, 'extensions.ownership') ? createExtensionOwnershipApi(extension) : undefined },
   }
 }
 
@@ -2177,6 +2283,7 @@ function createExtensionViewsApi(extension, command) {
       title: 'Refresh',
       __handler: async (innerCtx) => {
         if (!command || typeof command.run !== 'function') return { toast: { message: 'View cannot refresh', tone: 'error' } }
+        if (!checkRefreshBurst(extension)) return { skipped: true }
         invalidateExtensionRootItemsForExtension(extension)
         const result = await command.run(innerCtx)
         const view = result?.type ? result : result?.view?.type ? result.view : null

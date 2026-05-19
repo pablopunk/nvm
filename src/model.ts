@@ -1,5 +1,17 @@
 import type { ReactNode } from 'react'
 
+export type ExtensionPermission =
+  | 'desktop.apps'
+  | 'desktop.files'
+  | 'clipboard.history'
+  | 'ai'
+  | 'extensions.ownership'
+  | 'shortcuts'
+  | 'system'
+  | 'places'
+  | 'updates'
+  | 'settings.write'
+
 export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'toggleSetting' | 'recordShortcut' | 'setActionShortcut' | 'removeShortcut' | 'setActionAlias' | 'removeActionAlias' | 'duplicateCreatedAction' | 'removeCreatedAction' | 'clearActionOverride' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
