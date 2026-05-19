@@ -275,21 +275,6 @@ function extensionActionFromCommand(extension, command) {
   return shortcut ? { ...action, shortcut } : action
 }
 
-function aiChatActionFromItem(item) {
-  return {
-    id: `ai-chat:${item.id}`,
-    kind: 'ai-chat',
-    title: item.title || item.query,
-    subtitle: item.status === 'ready' ? 'AI builder chat' : 'Continue AI builder chat',
-    query: item.query,
-    aiChatId: item.id,
-    aliases: [item.query],
-    icon: 'sparkles',
-    score: 13,
-    lastUsed: item.updatedAt || item.createdAt || 0,
-  }
-}
-
 function getOrCreateAiChat(query, options: any = {}) {
   const trimmed = query.trim()
   const baseId = hashValue(trimmed)
@@ -449,25 +434,6 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   scheduleSaveState()
   invalidateExtensionRootItems()
   return item
-}
-
-function clipboardActionFromItem(item) {
-  return {
-    id: `clipboard:${item.id}`,
-    kind: 'clipboard',
-    title: clipboardItemTitle(item),
-    subtitle: clipboardItemSubtitle(item),
-    clipboardType: item.type,
-    text: item.text,
-    imageDataUrl: item.imageDataUrl,
-    imagePath: item.imagePath,
-    videoUrl: item.videoUrl,
-    filePath: item.filePath,
-    thumbnailUrl: item.thumbnailUrl,
-    icon: 'clipboard',
-    score: 60,
-    lastUsed: item.createdAt || 0,
-  }
 }
 
 function clipboardPreviewAction(item) {
@@ -704,13 +670,9 @@ async function searchActions(query, options: any = {}) {
   const q = query.trim()
 
   if (options.clipboardOnly) {
-    const results = []
-    for (const item of clipboardHistory) {
-      const action = clipboardActionFromItem(item)
-      const ranked = q ? rankAction(action, q) : action
-      if (ranked) results.push(ranked)
-    }
-    return results
+    return clipboardHistory
+      .map(clipboardRootItem)
+      .filter((item) => q ? rankAction(item, q) : true)
       .sort((a, b) => q ? b.score - a.score || b.lastUsed - a.lastUsed : b.lastUsed - a.lastUsed)
       .slice(0, CLIPBOARD_LIMIT)
   }
@@ -734,10 +696,6 @@ async function searchActions(query, options: any = {}) {
     .slice(0, 30)
 }
 
-function rootNativeActionCanDismissImmediately(action) {
-  return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(String(action?.kind))
-}
-
 function invalidateExtensionRootItems() {
   extensionRootItemsCache.clear()
   paletteWindow.win?.webContents.send('root-items:changed')
@@ -752,54 +710,8 @@ async function executeAction(action, options: any = {}) {
   recordRecent(action)
 
   switch (action.kind) {
-    case 'open-url':
-      runInBackground(() => shell.openExternal(action.url))
-      break
-    case 'web-search':
-      runInBackground(() => shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(action.query)}`))
-      break
-    case 'app':
-      runInBackground(() => launchOsApp(action.app))
-      break
-    case 'clipboard':
-      if (action.clipboardType === 'image' && (action.imagePath || action.imageDataUrl)) {
-        const image = action.imagePath
-          ? nativeImage.createFromPath(action.imagePath)
-          : nativeImage.createFromDataURL(action.imageDataUrl)
-        clipboard.writeImage(image)
-      } else {
-        clipboard.writeText(action.text || '')
-      }
-      break
-    case 'clipboard-history':
-      return { view: clipboardHistoryView() }
-    case 'app-settings':
-      return { view: settingsView() }
-    case 'check-for-updates':
-      return checkForUpdatesView()
-    case 'download-update':
-      return downloadUpdateView()
-    case 'install-update':
-      return installDownloadedUpdate()
     case 'open-keyboard-settings':
       runInBackground(openSystemKeyboardSettings)
-      break
-    case 'toggle-setting': {
-      const definition = settingDefinition(action.settingId)
-      if (!definition) return
-      const current = getSetting(definition.id)
-      const next = toggledSettingValue(definition, current)
-      setSetting(definition.id, next)
-      return { patch: { items: [settingItemPatch(definition)] } }
-    }
-    case 'file':
-      runInBackground(() => shell.openPath(action.filePath))
-      break
-    case 'calculate':
-      clipboard.writeText(action.result)
-      break
-    case 'builtin':
-      runInBackground(() => executeBuiltin(action))
       break
     case 'extension-root-item': {
       const result = await executeExtensionRootItem(action)
@@ -813,23 +725,6 @@ async function executeAction(action, options: any = {}) {
       if (result?.type) return { view: result }
       if (result) return result
       break
-    }
-    case 'ai-chats':
-      return { view: aiChatsView() }
-    case 'remove-ai-chat':
-      return removeAiChat(action.aiChatId)
-    case 'ai-chat': {
-      const item = userState.aiChats[action.aiChatId]
-      if (item) return { view: aiChatView(item) }
-      break
-    }
-    case 'ai-tweak-extension': {
-      const item = getOrCreateExtensionChat(action.extensionFile, action.title || action.extensionFile)
-      return { view: aiChatView(item) }
-    }
-    case 'ai-placeholder': {
-      const item = createDraftAiChat(action.query)
-      return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
     }
   }
 
@@ -1634,10 +1529,6 @@ function placesItems() {
   ]
 }
 
-function commandFromNativeAction(action) {
-  return { id: action.id, actionId: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, run: (ctx) => ctx.navigation.run(ctx.actions.native(action.title, action)) }
-}
-
 function commandFromItem(item) {
   return { ...item, run: (ctx) => ctx.navigation.run(item.primaryAction) }
 }
@@ -1690,11 +1581,6 @@ function createWebSearchExtension() {
   }
 }
 
-function rootItemFromNativeAction(action) {
-  const dismissAfterRun = rootNativeActionCanDismissImmediately(action) ? 'auto' : undefined
-  return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, image: action.thumbnailUrl || action.iconUrl || undefined, score: action.score, lastUsed: action.lastUsed, dismissAfterRun, primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, dismissAfterRun, nativeAction: action } }
-}
-
 function appRootItem(item) {
   return { id: `app:${item.id}`, title: item.name, subtitle: 'Launch application', icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
@@ -1704,16 +1590,16 @@ function fileRootItem(item) {
 }
 
 function createClipboardExtension() {
-  function historyAction() {
+  function historyItem() {
     const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
     return {
       id: 'clipboard-history',
-      kind: 'clipboard-history',
       title: 'Clipboard History',
       subtitle: clipboardHistory.length ? `Show all ${clipboardHistory.length} copied items` : 'Show copied items',
       icon: 'clipboard',
       score: 14,
       lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
+      primaryAction: { type: 'pushView', title: 'Clipboard History', view: clipboardHistoryView() },
     }
   }
 
@@ -1730,13 +1616,13 @@ function createClipboardExtension() {
       run: () => clipboardHistoryView(),
     }],
     rootItems() {
-      if (!getSetting('showClipboardInRoot')) return [rootItemFromNativeAction(historyAction())]
-      return [rootItemFromNativeAction(historyAction()), ...clipboardHistory.slice(0, 10).map(clipboardRootItem)]
+      if (!getSetting('showClipboardInRoot')) return [historyItem()]
+      return [historyItem(), ...clipboardHistory.slice(0, 10).map(clipboardRootItem)]
     },
     searchItems(_ctx, query) {
-      const historyItem = rootItemFromNativeAction(historyAction())
-      const items = [historyItem, ...clipboardHistory.map(clipboardRootItem)]
-      return items.filter((item) => rankAction(item.id === historyItem.id ? historyAction() : item, query)).slice(0, 5)
+      const history = historyItem()
+      const items = [history, ...clipboardHistory.map(clipboardRootItem)]
+      return items.filter((item) => rankAction(item, query)).slice(0, 5)
     },
   }
 }
