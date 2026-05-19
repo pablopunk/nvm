@@ -299,6 +299,8 @@ export function App() {
     }
   }, [])
 
+  const extensionViewSelectionKey = extensionView ? `${extensionView.id || ''}:${extensionView.type}:${extensionView.title}:${extensionView.selectedItemId || ''}` : ''
+
   useEffect(() => {
     if (shortcutFor) setSelectedValue('shortcut:save')
     else if (shortcutOptionsFor) setSelectedValue(getShortcutOptionRows()[0]?.value ?? '')
@@ -314,7 +316,7 @@ export function App() {
     else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) setSelectedValue('preview')
     else setSelectedValue(actions[0]?.id ?? '')
-  }, [actions, actionSubmenuFor, aliasFor, childQuery, confirmRemoveFor, confirmViewActionFor, extensionItemOptionsFor, optionsFor, previewFor, extensionView, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
+  }, [actions, actionSubmenuFor, aliasFor, childQuery, confirmRemoveFor, confirmViewActionFor, extensionItemOptionsFor, optionsFor, previewFor, extensionViewSelectionKey, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
     setChildQuery('')
@@ -484,8 +486,12 @@ export function App() {
     return action.dismissAfterRun === 'auto' && ['nativeAction', 'openPath', 'revealPath', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'runExtensionAction'].includes(action.type)
   }
 
-  function rootActionCanDismissImmediately(action: Action | { kind?: string }) {
-    return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(String(action.kind)) || (action.kind === 'extension-command' && ('background' in action && action.background || 'dismissAfterRun' in action && action.dismissAfterRun === 'auto'))
+  function rootNativeActionCanDismissImmediately(action: Action | { kind?: string }) {
+    return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(String(action.kind))
+  }
+
+  function rootActionCanDismissImmediately(action: Action | { kind?: string; background?: boolean; dismissAfterRun?: 'auto' }) {
+    return rootNativeActionCanDismissImmediately(action) || (['extension-command', 'extension-root-item'].includes(String(action.kind)) && (action.background || action.dismissAfterRun === 'auto'))
   }
 
   async function runViewAction(action: ExtensionViewAction, confirmed = false) {

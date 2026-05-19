@@ -650,6 +650,10 @@ async function searchActions(query, options: any = {}) {
     .slice(0, 10)
 }
 
+function rootNativeActionCanDismissImmediately(action) {
+  return ['open-url', 'web-search', 'app', 'clipboard', 'file', 'calculate', 'builtin', 'open-keyboard-settings'].includes(String(action?.kind))
+}
+
 function runInBackground(task) {
   Promise.resolve().then(task).catch((error) => console.error('Background action failed', error))
 }
@@ -875,6 +879,7 @@ function extensionRootActionFromItem(entry, item) {
     icon: item.icon || 'sparkles',
     score: Math.min(Number(item.score || 35), 90),
     lastUsed: Number(item.lastUsed || 0),
+    dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
     actionPanel,
   }
 }
@@ -1466,7 +1471,8 @@ function createWebSearchExtension() {
 }
 
 function rootItemFromNativeAction(action) {
-  return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, image: action.thumbnailUrl || action.iconUrl || undefined, score: action.score, lastUsed: action.lastUsed, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }
+  const dismissAfterRun = rootNativeActionCanDismissImmediately(action) ? 'auto' : undefined
+  return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, image: action.thumbnailUrl || action.iconUrl || undefined, score: action.score, lastUsed: action.lastUsed, dismissAfterRun, primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, dismissAfterRun, nativeAction: action } }
 }
 
 function createClipboardExtension() {
@@ -1514,8 +1520,14 @@ function createAppsExtension() {
     rootItems() {
       return appIndex.slice(0, 5).map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 }))
     },
-    searchItems(_ctx, query) {
-      return appIndex.map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+    async searchItems(_ctx, query) {
+      const matches = appIndex.map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+      await Promise.all(matches.map(async (item) => {
+        const appPath = item.primaryAction.nativeAction.app?.path
+        const iconUrl = await getAppIconDataUrl(appPath)
+        if (iconUrl) item.image = iconUrl
+      }))
+      return matches
     },
   }
 }
