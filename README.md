@@ -10,11 +10,3 @@
 </p>
 
 _*In the screenshot above, Screenshots and Open Camera were extensions done by our AI. Not builtin. That's all you need to know._
-
-## Development
-
-- [Palette debug CLI](src/docs/palette-debug.md): test palette/search/action logic without opening the UI.
-
-## License
-
-Nevermind is licensed under the [GNU General Public License v3.0](LICENSE).
