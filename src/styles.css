@@ -1,5 +1,7 @@
 :root {
   --window-blur-margin: 96px;
+  --search-row-height: 58px;
+  --palette-stack-gap: 10px;
 
   --radius-pill: 999px;
   --radius-xl: 22px;
@@ -177,8 +179,8 @@ input,
   display: flex;
   align-items: center;
   gap: 13px;
-  flex: 0 0 58px;
-  height: 58px;
+  flex: 0 0 var(--search-row-height);
+  height: var(--search-row-height);
   padding: 0 18px;
   -webkit-app-region: drag;
 }
@@ -271,7 +273,7 @@ kbd {
 }
 
 .optionsCard > [cmdk-list-sizer] {
-  max-height: calc(100vh - var(--window-blur-margin) * 2 - 68px);
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - var(--search-row-height) - var(--palette-stack-gap));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
