@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -29,6 +29,9 @@ export type CommandAction = {
   videoUrl?: string
   filePath?: string
   thumbnailUrl?: string
+  aiChatId?: string
+  query?: string
+  extensionFile?: string
   command?: string
   args?: string[]
   script?: string
@@ -165,6 +168,11 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'restartSystem') return 'Restart system'
   if (action.type === 'quitApp') return 'Quit app'
   if (action.type === 'openSystemSettings') return 'Open system settings'
+  if (action.type === 'openAiChats') return 'Open AI chats'
+  if (action.type === 'openAiChat') return 'Open AI chat'
+  if (action.type === 'startAiBuilderChat') return 'Start AI builder chat'
+  if (action.type === 'tweakExtensionWithAi') return 'Tweak extension with AI'
+  if (action.type === 'removeAiChat') return 'Remove AI chat'
   if (action.type === 'toggleSetting') return 'Change setting'
   if (action.type === 'recordShortcut') return 'Record shortcut'
   if (action.type === 'removeShortcut') return 'Remove shortcut'

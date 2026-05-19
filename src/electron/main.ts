@@ -381,13 +381,13 @@ function aiChatsView() {
         title: chat.title || chat.query || 'AI Chat',
         subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
         icon: 'sparkles',
-        primaryAction: { type: 'nativeAction', title: 'Open Chat', nativeAction: aiChatActionFromItem(chat) },
+        primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: chat.id },
         actions: [{
-          type: 'nativeAction',
+          type: 'removeAiChat',
           title: 'Remove Chat',
           style: 'destructive',
           requiresConfirmation: true,
-          nativeAction: { id: `remove-ai-chat:${chat.id}`, kind: 'remove-ai-chat', aiChatId: chat.id, title: 'Remove Chat', subtitle: chat.title || chat.query || 'AI chat', icon: 'sparkles', score: 0 },
+          aiChatId: chat.id,
         }],
       })),
   }
@@ -1187,6 +1187,23 @@ async function executeViewAction(action) {
     }
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
+    case 'openAiChats':
+      return { view: aiChatsView() }
+    case 'openAiChat': {
+      const item = userState.aiChats[action.aiChatId] || draftAiChats.get(action.aiChatId)
+      if (item) return { view: aiChatView(item) }
+      return { toast: { message: 'AI chat not found', tone: 'error' } }
+    }
+    case 'startAiBuilderChat': {
+      const item = createDraftAiChat(action.query || '')
+      return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
+    }
+    case 'tweakExtensionWithAi': {
+      const item = getOrCreateExtensionChat(action.extensionFile, action.title || action.extensionFile)
+      return { view: aiChatView(item) }
+    }
+    case 'removeAiChat':
+      return removeAiChat(action.aiChatId)
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
@@ -1708,28 +1725,33 @@ function createFilesExtension() {
 }
 
 function createAiBuilderExtension() {
-  function chatsAction() {
-    return { id: 'ai-chats', kind: 'ai-chats', title: 'AI Chats', subtitle: `${Object.keys(userState.aiChats || {}).length} builder chats`, icon: 'sparkles', score: 16 }
+  function chatsItem() {
+    return { id: 'ai-chats', title: 'AI Chats', subtitle: `${Object.keys(userState.aiChats || {}).length} builder chats`, icon: 'sparkles', score: 16, primaryAction: { type: 'openAiChats', title: 'AI Chats' } }
   }
   function chatItems(query = '') {
-    return Object.values(userState.aiChats || {}).map((item: any) => {
-      const action = aiChatActionFromItem(item)
-      action.lastUsed = Math.max(action.lastUsed || 0, item.updatedAt || item.createdAt || 0)
-      return rootItemFromNativeAction(action)
-    }).filter((item) => !query || rankAction(item.primaryAction.nativeAction, query))
+    return Object.values(userState.aiChats || {}).map((item: any) => ({
+      id: `ai-chat:${item.id}`,
+      title: item.title || item.query,
+      subtitle: item.status === 'ready' ? 'AI builder chat' : 'Continue AI builder chat',
+      aliases: [item.query],
+      icon: 'sparkles',
+      score: 13,
+      lastUsed: Math.max(item.updatedAt || 0, item.createdAt || 0),
+      primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: item.id },
+    })).filter((item) => !query || rankAction(item, query))
   }
   return {
     id: 'nevermind.ai-builder',
     title: 'AI Builder',
-    commands: [{ id: 'ai-chats', actionId: 'ai-chats', title: 'AI Chats', subtitle: 'Builder chats', icon: 'sparkles', score: 16, run: () => aiChatsView() }],
+    commands: [{ ...chatsItem(), actionId: 'ai-chats', run: () => aiChatsView() }],
     rootItems() {
-      return [rootItemFromNativeAction(chatsAction()), ...chatItems().slice(0, 4)]
+      return [chatsItem(), ...chatItems().slice(0, 4)]
     },
     searchItems(_ctx, query) {
       const q = String(query || '').trim()
-      const items = [rootItemFromNativeAction(chatsAction()), ...chatItems(q)]
-      if (q && !getUrlFromQuery(q) && calculate(q) === null) items.push(rootItemFromNativeAction({ id: `ai:${q}`, kind: 'ai-placeholder', title: `Press Tab to automate "${q}"`, subtitle: 'Automate with AI', query: q, icon: 'bolt', score: 40 }))
-      return items.filter((item) => rankAction(item.primaryAction.nativeAction, q)).slice(0, 5)
+      const items: any[] = [chatsItem(), ...chatItems(q)]
+      if (q && !getUrlFromQuery(q) && calculate(q) === null) items.push({ id: `ai:${q}`, title: `Press Tab to automate "${q}"`, subtitle: 'Automate with AI', query: q, icon: 'bolt', score: 40, primaryAction: { type: 'startAiBuilderChat', title: `Automate "${q}"`, query: q } })
+      return items.filter((item) => rankAction(item, q)).slice(0, 5)
     },
   }
 }

@@ -100,6 +100,7 @@ type Action = {
   removable?: boolean
   background?: boolean
   dismissAfterRun?: 'auto'
+  rootAction?: CommandAction
   actionPanel?: CommandActionPanel
   shortcut?: string
   userAliases?: string[]
@@ -380,7 +381,7 @@ export function App() {
     [actions, selectedValue],
   )
   const createAction = useMemo(
-    () => actions.find((action) => action.kind === 'ai-placeholder'),
+    () => actions.find((action) => action.kind === 'ai-placeholder' || (action.kind === 'extension-root-item' && action.rootAction?.type === 'startAiBuilderChat')),
     [actions],
   )
   const isFilterableExtensionView = extensionView?.type === 'list' || extensionView?.type === 'grid'
@@ -711,15 +712,7 @@ export function App() {
 
   async function tweakActionWithAi(action: Action | null | undefined) {
     if (!action?.extensionFile) return
-    const result = await window.nvm.execute({
-      id: `ai-tweak-extension:${action.extensionFile}`,
-      kind: 'ai-tweak-extension',
-      title: action.title,
-      subtitle: 'Tweak extension with AI',
-      icon: 'sparkles',
-      score: 0,
-      extensionFile: action.extensionFile,
-    })
+    const result = await window.nvm.runViewAction({ type: 'tweakExtensionWithAi', title: action.title, extensionFile: action.extensionFile })
     if (result?.view) {
       setOptionsFor(null)
       await openAiChat(result.view)
@@ -1331,13 +1324,14 @@ export function App() {
         run(createAction)
       } else {
         run({
-          id: `ai:${query}`,
-          kind: 'ai-placeholder',
+          id: `extension-root:nevermind.ai-builder:ai:${query}`,
+          kind: 'extension-root-item',
+          extensionId: 'nevermind.ai-builder',
           title: `Automate "${query}"`,
           subtitle: 'Build an action for this with AI',
-          query,
           icon: 'bolt',
           score: 90,
+          rootAction: { type: 'startAiBuilderChat', title: `Automate "${query}"`, query },
         })
       }
     }
