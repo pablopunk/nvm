@@ -108,7 +108,7 @@ Current `ctx` namespaces:
 - `ctx.ui.item/actions/empty/loading/error` helpers
 - `ctx.cache` and `ctx.state` placeholders
 
-`ctx.desktop.files.find(roots, options)` supports `{ limit, depth, extensions, kind, pattern, sortBy, order }`, where `kind` can be `image`, `video`, or `media`, and `sortBy` can be `recent`/`modified`, `added`/`created`, `name`, or `size`. Convenience helpers `findImages`, `findVideos`, and `findMedia` call the same implementation. Returned files include `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`. For grid videos, use `video: file.videoUrl` and `image: file.thumbnailUrl` to show a playable looping preview with a poster frame.
+`ctx.desktop.files.find(roots, options)` supports `{ limit, depth, extensions, kind, pattern, sortBy, order }`, where `kind` can be `image`, `video`, or `media`, and `sortBy` can be `recent`/`modified`, `added`, `created`, `name`, or `size`. `recent`/`modified` sorts by filesystem modification time (`mtimeMs`), which can be older than the download time when files preserve original metadata. `added` sorts by macOS Finder/Spotlight Date Added (`dateAddedMs`) with filesystem creation time as a fallback, and is usually the right choice for “newest files”, Downloads, screenshots, and mixed media galleries. `created` sorts by filesystem creation time (`birthtimeMs`). Convenience helpers `findImages`, `findVideos`, and `findMedia` call the same implementation. Returned files include `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, `dateAdded`, `dateAddedMs`, and `size`. For grid videos, use `video: file.videoUrl` and `image: file.thumbnailUrl` to show a playable looping preview with a poster frame.
 
 Use `await ctx.desktop.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
 
@@ -116,7 +116,7 @@ Use `await ctx.desktop.files.openWithApps(file.path)` to get installed apps that
 
 ```js
 const files = await ctx.storage.memo('recent-media', 60_000, () =>
-  ctx.desktop.files.findMedia(['~/Documents/CleanShot X'], { sortBy: 'recent', limit: 200 })
+  ctx.desktop.files.findMedia(['~/Downloads', '~/Desktop'], { sortBy: 'added', limit: 200 })
 )
 ```
 

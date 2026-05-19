@@ -953,6 +953,7 @@ export function App() {
         icon: <Search size={18} />,
         title: 'Preview',
         subtitle: 'Press → to preview an item',
+        shortcut: 'Command+Y',
         onSelect: () => optionsFor && setPreviewFor(optionsFor),
         show: canPreviewAction,
       },
@@ -961,6 +962,7 @@ export function App() {
         icon: <Search size={18} />,
         title: 'Preview File',
         subtitle: 'Preview this file',
+        shortcut: 'Command+Y',
         onSelect: quickLookOptionsAction,
         show: canQuickLookAction,
       },
@@ -1222,6 +1224,17 @@ export function App() {
     }
     if (localAccelerator && runLocalShortcut(localAccelerator)) {
       event.preventDefault()
+      return
+    }
+    if (!isChildOpen && normalizedShortcut(localAccelerator) === 'command+y' && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.text)) {
+      event.preventDefault()
+      setPreviewFor(selectedAction)
+      setOptionsFor(null)
+      return
+    }
+    if (!isChildOpen && normalizedShortcut(localAccelerator) === 'command+y' && selectedAction?.filePath) {
+      event.preventDefault()
+      runViewAction({ type: 'quickLook', title: 'Preview File', path: selectedAction.filePath })
       return
     }
 

@@ -21,7 +21,7 @@ export function osLabel() {
   return osDependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux')
 }
 
-const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'selected-text', 'frontmost-app', 'applescript', 'app-icons', 'open-with', 'frontmost-paste', 'keyboard-settings', 'window-panel-policy'])
+const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'selected-text', 'frontmost-app', 'applescript', 'app-icons', 'open-with', 'frontmost-paste', 'keyboard-settings', 'window-panel-policy', 'file-date-added'])
 
 export function hasCapability(capability: string) {
   if (macOnlyCapabilities.has(capability)) return osDependent({ darwin: true }, false)
@@ -193,6 +193,37 @@ function runAppleScript(script: string, timeout = 30_000) {
     if (!hasCapability('applescript')) return resolve({ stdout: '', stderr: 'AppleScript is not available on this OS', exitCode: 1 })
     execFile('osascript', ['-e', script], { timeout }, (error, stdout, stderr) => resolve({ stdout, stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
   })
+}
+
+function parseMetadataDate(value: string) {
+  const text = value.trim()
+  if (!text || text === '(null)') return 0
+  const match = text.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})$/)
+  const timestamp = Date.parse(match ? `${match[1]}T${match[2]}${match[3]}:${match[4]}` : text)
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size))
+  return chunks
+}
+
+export async function fileDateAddedMs(paths: string[]) {
+  if (!hasCapability('file-date-added') || paths.length === 0) return new Map<string, number>()
+  const dates = new Map<string, number>()
+  await Promise.all(chunkArray(paths, 100).map(async (chunk) => {
+    try {
+      const output = await new Promise<string>((resolve, reject) => {
+        execFile('mdls', ['-raw', '-name', 'kMDItemDateAdded', ...chunk], { timeout: 2_000, maxBuffer: 1024 * 1024 }, (error, stdout) => error ? reject(error) : resolve(stdout))
+      })
+      const values = output.split('\0').flatMap((part) => part.split('\n')).map((part) => part.trim()).filter(Boolean)
+      chunk.forEach((filePath, index) => dates.set(filePath, parseMetadataDate(values[index] || '')))
+    } catch {
+      chunk.forEach((filePath) => dates.set(filePath, 0))
+    }
+  }))
+  return dates
 }
 
 export function pasteIntoFrontmostApp() {

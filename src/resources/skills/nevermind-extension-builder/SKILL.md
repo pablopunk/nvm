@@ -28,7 +28,7 @@ Rules:
 - Use `rootItems(ctx)` for high-signal empty-query root palette contributions and `searchItems(ctx, query)` for bounded query-aware root results; keep contributed items few, stable, cached when possible, and bounded because Nevermind owns ranking and limits.
 - Prefer `ctx.ui.grid` for image/file galleries.
 - Use `ctx.desktop.files.findImages`, `ctx.desktop.files.findVideos`, or `ctx.desktop.files.findMedia` for common galleries; use `ctx.desktop.files.find(roots, { extensions, kind, pattern, sortBy, order })` for custom filters.
-- File helpers return objects with `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, and `size`; use `{ sortBy: 'recent' }` for recently modified and `{ sortBy: 'added' }` for recently added/created.
+- File helpers return objects with `path`, `name`, `displayPath`, `url`, `fileUrl`, `videoUrl`, `thumbnailUrl`, `kind`, `extension`, `mtime`, `mtimeMs`, `birthtime`, `birthtimeMs`, `dateAdded`, `dateAddedMs`, and `size`; use `{ sortBy: 'recent' }`/`modified` only for filesystem modification time, prefer `{ sortBy: 'added' }` for Finder/Spotlight Date Added in “newest files”, Downloads, screenshots, or mixed media galleries, and use `{ sortBy: 'created' }` only when filesystem creation time is explicitly wanted.
 - For grid videos, set `video: file.videoUrl` and `image: file.thumbnailUrl` so Nevermind can show a playable looping preview with a poster frame.
 - Image thumbnails must use `file.url` from `ctx.desktop.files.findImages()` or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
 - Prefer `ctx.ui.form` for user input flows.

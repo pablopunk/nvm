@@ -499,7 +499,13 @@ function capabilities() {
     findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
     fileKinds: ['image', 'video', 'media'],
     sortBy: ['recent', 'modified', 'added', 'created', 'name', 'size'],
-    fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'size'],
+    sortByDescriptions: {
+      recent: 'filesystem modification time (mtimeMs), not necessarily download/add time',
+      modified: 'filesystem modification time (mtimeMs), same as recent',
+      added: 'Finder/Spotlight Date Added (dateAddedMs) with creation-time fallback; prefer for newest Downloads, screenshots, and mixed media galleries',
+      created: 'filesystem birth/creation time (birthtimeMs)',
+    },
+    fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'dateAdded', 'dateAddedMs', 'size'],
     storage: ['get', 'set', 'delete', 'clear', 'memo'],
   }
 }

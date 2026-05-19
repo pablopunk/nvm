@@ -14,7 +14,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 
@@ -465,6 +465,7 @@ function clipboardPreviewAction(item) {
   return {
     type: 'previewClipboardItem',
     title: 'Preview',
+    shortcut: 'Command+Y',
     clipboardType: item.type,
     text: item.text,
     imageDataUrl: item.imageDataUrl,
@@ -1244,6 +1245,8 @@ async function fileToExtensionFile(filePath) {
     mtimeMs: stat?.mtimeMs || 0,
     birthtime: stat ? new Date(stat.birthtimeMs).toISOString() : null,
     birthtimeMs: stat?.birthtimeMs || 0,
+    dateAdded: null,
+    dateAddedMs: 0,
     size: stat?.size || 0,
   }
 }
@@ -1273,10 +1276,11 @@ function sortFoundFiles(files, options: any = {}) {
   if (!sortBy) return files
   const direction = options.order === 'asc' ? 1 : -1
   const field = sortBy === 'recent' || sortBy === 'modified' ? 'mtimeMs'
-    : sortBy === 'added' || sortBy === 'created' ? 'birthtimeMs'
-      : sortBy === 'name' ? 'name'
-        : sortBy === 'size' ? 'size'
-          : sortBy
+    : sortBy === 'added' ? 'dateAddedMs'
+      : sortBy === 'created' ? 'birthtimeMs'
+        : sortBy === 'name' ? 'name'
+          : sortBy === 'size' ? 'size'
+            : sortBy
   return [...files].sort((a, b) => {
     const av = a[field] || 0
     const bv = b[field] || 0
@@ -1285,11 +1289,19 @@ function sortFoundFiles(files, options: any = {}) {
   })
 }
 
+async function enrichDateAdded(files) {
+  const dates = await fileDateAddedMs(files.map((file) => file.path))
+  return files.map((file) => {
+    const addedMs = dates.get(file.path) || file.birthtimeMs || 0
+    return { ...file, dateAdded: addedMs ? new Date(addedMs).toISOString() : null, dateAddedMs: addedMs }
+  })
+}
+
 async function findFiles(roots, options: any = {}) {
   const limit = options.limit || 100
   const maxDepth = options.depth ?? 2
   const extensions = extensionsForFindOptions(options)
-  const found = []
+  let found = []
 
   async function walk(dir, depth) {
     let entries = []
@@ -1312,6 +1324,7 @@ async function findFiles(roots, options: any = {}) {
   }
 
   await Promise.all(normalizeFindRoots(roots).map((root) => walk(expandUserPath(root), maxDepth)))
+  if ((options.sortBy || options.sort) === 'added') found = await enrichDateAdded(found)
   return sortFoundFiles(found, options).slice(0, limit)
 }
 
@@ -1335,9 +1348,9 @@ function quickLookPath(filePath) {
   child.unref()
 }
 
-function execFileText(command, args) {
+function execFileText(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, (error, stdout) => error ? reject(error) : resolve(stdout))
+    execFile(command, args, options, (error, stdout) => error ? reject(error) : resolve(stdout))
   })
 }
 
@@ -1771,7 +1784,7 @@ function createExtensionContext(extension, command) {
     actions: {
       openPath: (filePath, title = 'Open', options: any = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
       revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
-      quickLook: (filePath, title = quickLookTitle(), options: any = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
+      quickLook: (filePath, title = quickLookTitle(), options: any = {}) => ({ shortcut: 'Command+Y', ...options, type: 'quickLook', title, path: filePath }),
       openWith: (filePath, app, title, options: any = {}) => ({ ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
