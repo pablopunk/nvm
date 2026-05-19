@@ -65,10 +65,14 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
   const [selectedDeviceId, setSelectedDeviceId] = useState(() => view.deviceId || localStorage.getItem(storageKey) || '')
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [activeDeviceLabel, setActiveDeviceLabel] = useState('')
+  const [muted, setMuted] = useState(view.muted !== false)
+  const [controls, setControls] = useState(Boolean(view.controls))
   const [status, setStatus] = useState('Initializing…')
   const [error, setError] = useState('')
 
   useEffect(() => setSelectedDeviceId(view.deviceId || localStorage.getItem(storageKey) || ''), [storageKey, view.deviceId])
+  useEffect(() => setMuted(view.muted !== false), [view.muted])
+  useEffect(() => setControls(Boolean(view.controls)), [view.controls])
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -119,20 +123,33 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
     }
   }, [selectedDeviceId, storageKey])
 
-  function switchDevice() {
+  function switchDevice(direction: 'next' | 'previous' = 'next') {
     if (devices.length < 2) return
     const activeIndex = activeDeviceLabel ? devices.findIndex((device) => device.label === activeDeviceLabel) : -1
     const selectedIndex = devices.findIndex((device) => device.deviceId === selectedDeviceId)
     const currentIndex = activeIndex >= 0 ? activeIndex : selectedIndex >= 0 ? selectedIndex : 0
-    const next = devices[(currentIndex + 1) % devices.length]
+    const offset = direction === 'previous' ? -1 : 1
+    const next = devices[(currentIndex + offset + devices.length) % devices.length]
     localStorage.setItem(storageKey, next.deviceId)
     setSelectedDeviceId(next.deviceId)
   }
 
-  const currentDevice = devices.find((device) => device.deviceId === selectedDeviceId) || devices.find((device) => device.label === activeDeviceLabel) || devices[0]
-  const switcher = view.showDeviceSwitcher === false || devices.length < 2 ? null : <button className="cameraSwitchButton" type="button" onClick={switchDevice}>Switch Camera{currentDevice?.label ? ` · ${currentDevice.label}` : ''}</button>
+  useEffect(() => {
+    function handleCameraAction(event: Event) {
+      const detail = (event as CustomEvent<{ kind?: string; direction?: 'next' | 'previous' }>).detail
+      if (detail?.kind === 'camera.switchDevice' || detail?.kind === 'camera.nextDevice') switchDevice('next')
+      else if (detail?.kind === 'camera.previousDevice') switchDevice('previous')
+      else if (detail?.kind === 'camera.toggleMuted') setMuted((value) => !value)
+      else if (detail?.kind === 'camera.toggleControls') setControls((value) => !value)
+    }
+    window.addEventListener('nvm:camera-action', handleCameraAction)
+    return () => window.removeEventListener('nvm:camera-action', handleCameraAction)
+  })
 
-  return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={view.muted !== false} controls={Boolean(view.controls)} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
+  const currentDevice = devices.find((device) => device.deviceId === selectedDeviceId) || devices.find((device) => device.label === activeDeviceLabel) || devices[0]
+  const switcher = view.showDeviceSwitcher === false || devices.length < 2 ? null : <button className="cameraSwitchButton" type="button" onClick={() => switchDevice()}>Switch Camera{currentDevice?.label ? ` · ${currentDevice.label}` : ''}</button>
+
+  return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={muted} controls={controls} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
 }
 
 export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {

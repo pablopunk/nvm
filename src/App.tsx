@@ -573,6 +573,10 @@ export function App() {
       setExtensionItemOptionsFor(null)
       return
     }
+    if (String(nativeAction?.kind || '').startsWith('camera.')) {
+      window.dispatchEvent(new CustomEvent('nvm:camera-action', { detail: nativeAction }))
+      return
+    }
     const actionKey = action.handlerId || `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`
     if (runningViewActionsRef.current.has(actionKey)) return
     runningViewActionsRef.current.add(actionKey)
