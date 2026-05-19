@@ -559,7 +559,7 @@ export function App() {
     runningViewActionsRef.current.add(actionKey)
     const dismissedImmediately = actionCanDismissImmediately(action) || Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction))
     const loadingNavigation = nativeAction ? 'root' : 'push'
-    const showsLoading = !dismissedImmediately && !nativeAction
+    const showsLoading = !dismissedImmediately && !nativeAction && action.type !== 'runExtensionAction'
     if (dismissedImmediately) window.nvm.hide()
     else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {

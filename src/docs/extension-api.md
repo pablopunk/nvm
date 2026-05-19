@@ -99,7 +99,7 @@ Current `ctx` namespaces:
 - `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return a `ctx.navigation.*` result, another view, another action to execute, `{ view }`, `{ action }`, `{ toast }`, or `{ patch: { items: [{ id, ...fields }] } }` to update the current view in place without rebuilding it.
 - `ctx.actions.background(title, async (ctx) => { ... })` for fire-and-forget custom work that should dismiss the palette immediately and does not need follow-up UI. Command entries can set `background: true` or `dismissAfterRun: 'auto'` for the same command-level behavior.
 - `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
-- `ctx.storage.get/set/delete/clear/memo` for persistent per-extension JSON storage
+- `ctx.storage.get/set/delete/clear/memo/memoStale` for persistent per-extension JSON storage
 - `ctx.settings.definitions/get/set/toggle` for host-owned app settings exposed to first-party extension workflows
 - `ctx.actions.toggleSetting(settingId, title)` and `ctx.actions.setPaletteShortcut(title)` for declarative settings actions
 - `ctx.ai.ask(prompt, options)` for a one-shot AI call that returns text. Options may include `{ system }`.
@@ -112,10 +112,10 @@ Current `ctx` namespaces:
 
 Use `await ctx.desktop.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
 
-`ctx.storage` is scoped per extension file/identity, not per AI chat. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires:
+`ctx.storage` is scoped per extension file/identity, not per AI chat. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires. `memoStale(key, ttlMs, staleTtlMs, loader)` returns a stale cached value immediately while refreshing in the background, and only waits for `loader` when there is no usable cached value:
 
 ```js
-const files = await ctx.storage.memo('recent-media', 60_000, () =>
+const files = await ctx.storage.memoStale('recent-media', 60_000, 24 * 60 * 60_000, () =>
   ctx.desktop.files.findMedia(['~/Downloads', '~/Desktop'], { sortBy: 'added', limit: 200 })
 )
 ```

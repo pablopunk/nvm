@@ -506,7 +506,7 @@ function capabilities() {
       created: 'filesystem birth/creation time (birthtimeMs)',
     },
     fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'dateAdded', 'dateAddedMs', 'size'],
-    storage: ['get', 'set', 'delete', 'clear', 'memo'],
+    storage: ['get', 'set', 'delete', 'clear', 'memo', 'memoStale'],
   }
 }
 

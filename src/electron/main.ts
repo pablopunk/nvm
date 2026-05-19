@@ -94,6 +94,7 @@ const extensionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
 const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
+const extensionStorageRefreshes = new Map<string, Promise<any>>()
 const extensionActionHandlers = new Map<string, any>()
 const registeredActionAccelerators = new Set<string>()
 
@@ -1482,6 +1483,10 @@ async function writeExtensionStorage(extension, data) {
   await fs.writeFile(extensionStoragePath(extension), JSON.stringify(data, null, 2))
 }
 
+function extensionStorageRefreshKey(extension, key) {
+  return `${extensionStoragePath(extension)}:${String(key)}`
+}
+
 function limitedOutput(value, limit = 200_000) {
   const text = String(value || '')
   return text.length > limit ? `${text.slice(0, limit)}\n… output truncated …` : text
@@ -1515,6 +1520,23 @@ function createExtensionStorage(extension) {
       data[key] = { value, updatedAt: Date.now() }
       await writeExtensionStorage(extension, data)
       return value
+    },
+    async memoStale(key, ttlMs, staleTtlMs, loader) {
+      const data = await readExtensionStorage(extension)
+      const cached = data[key]
+      const age = cached && typeof cached === 'object' ? Date.now() - Number(cached.updatedAt || 0) : Infinity
+      if (age < Number(ttlMs || 0)) return cached.value
+      const refreshKey = extensionStorageRefreshKey(extension, key)
+      const refresh = extensionStorageRefreshes.get(refreshKey) || (async () => {
+        const value = await loader()
+        const latest = await readExtensionStorage(extension)
+        latest[key] = { value, updatedAt: Date.now() }
+        await writeExtensionStorage(extension, latest)
+        return value
+      })().finally(() => extensionStorageRefreshes.delete(refreshKey))
+      extensionStorageRefreshes.set(refreshKey, refresh)
+      if (cached && age < Number(staleTtlMs || 0)) return cached.value
+      return refresh
     },
   }
 }
@@ -2258,10 +2280,20 @@ function unregisterShortcutForAction(actionId) {
 async function executeShortcutAction(action) {
   const currentAction = currentActionForStoredShortcut(action)
   const wasVisible = Boolean(paletteWindow.win?.isVisible())
+  if (!wasVisible) {
+    paletteWindow.showPalette({ skipShownEvent: true, deferReveal: true })
+    paletteWindow.win?.webContents.send('action:view-open', {
+      view: { type: 'progress', title: currentAction?.title || 'Opening…', steps: [{ title: 'Opening…', status: 'active' }] },
+      revealWhenReady: true,
+      asSibling: false,
+    })
+  }
   const result = await executeAction(currentAction, { keepPaletteOpen: true })
   if (result?.view) {
-    paletteWindow.showPalette({ skipShownEvent: true, deferReveal: !wasVisible })
-    paletteWindow.win?.webContents.send('action:view-open', { ...result, revealWhenReady: !wasVisible, asSibling: wasVisible })
+    if (wasVisible) paletteWindow.showPalette({ skipShownEvent: true })
+    paletteWindow.win?.webContents.send('action:view-open', { ...result, revealWhenReady: false, asSibling: wasVisible })
+  } else if (!wasVisible) {
+    paletteWindow.hidePalette()
   }
 }
 
