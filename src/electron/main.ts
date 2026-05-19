@@ -1467,8 +1467,7 @@ function createCalculatorExtension() {
     searchItems(_ctx, query) {
       const result = query ? calculate(query) : null
       if (result === null) return []
-      const action = { id: `calculate:${query}`, kind: 'calculate', title: `${query} = ${result}`, subtitle: 'Copy result to clipboard', query, result, icon: 'calculator', score: 105 }
-      return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+      return [{ id: `calculate:${query}`, title: `${query} = ${result}`, subtitle: 'Copy result to clipboard', icon: 'calculator', score: 105, dismissAfterRun: 'auto', primaryAction: { type: 'copyText', title: 'Copy Result', text: String(result), dismissAfterRun: 'auto' } }]
     },
   }
 }
@@ -1483,11 +1482,9 @@ function createWebSearchExtension() {
       if (!q) return []
       const url = getUrlFromQuery(q)
       if (url) {
-        const action = { id: `open-url:${url}`, kind: 'open-url', title: `Open ${url.replace(/^https?:\/\//, '')}`, subtitle: 'Open website', url, icon: 'globe', score: 100 }
-        return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+        return [{ id: `open-url:${url}`, title: `Open ${url.replace(/^https?:\/\//, '')}`, subtitle: 'Open website', icon: 'globe', score: 100, dismissAfterRun: 'auto', primaryAction: { type: 'openUrl', title: 'Open Website', url, dismissAfterRun: 'auto' } }]
       }
-      const action = { id: `web-search:${q}`, kind: 'web-search', title: `Search the web for "${q}"`, subtitle: 'Search instead', query: q, icon: 'search', score: 10 + usageBoost(`web-search:${q}`) + recentBoost(`web-search:${q}`) }
-      return [{ id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, primaryAction: { type: 'nativeAction', title: action.title, nativeAction: action } }]
+      return [{ id: `web-search:${q}`, title: `Search the web for "${q}"`, subtitle: 'Search instead', icon: 'search', score: 10 + usageBoost(`web-search:${q}`) + recentBoost(`web-search:${q}`), dismissAfterRun: 'auto', primaryAction: { type: 'openUrl', title: 'Search the Web', url: `https://www.google.com/search?q=${encodeURIComponent(q)}`, dismissAfterRun: 'auto' } }]
     },
   }
 }
@@ -1495,6 +1492,14 @@ function createWebSearchExtension() {
 function rootItemFromNativeAction(action) {
   const dismissAfterRun = rootNativeActionCanDismissImmediately(action) ? 'auto' : undefined
   return { id: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, image: action.thumbnailUrl || action.iconUrl || undefined, score: action.score, lastUsed: action.lastUsed, dismissAfterRun, primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, dismissAfterRun, nativeAction: action } }
+}
+
+function appRootItem(item) {
+  return { id: `app:${item.id}`, title: item.name, subtitle: 'Launch application', icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
+}
+
+function fileRootItem(item) {
+  return { id: `file:${item.path}`, title: item.name, subtitle: item.displayPath, icon: 'folder', score: 4, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
 
 function createClipboardExtension() {
@@ -1540,13 +1545,12 @@ function createAppsExtension() {
     title: 'Applications',
     commands: [],
     rootItems() {
-      return appIndex.slice(0, 5).map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 }))
+      return appIndex.slice(0, 5).map(appRootItem)
     },
     async searchItems(_ctx, query) {
-      const matches = appIndex.map((item) => rootItemFromNativeAction({ id: `app:${item.id}`, kind: 'app', title: item.name, subtitle: 'Launch application', app: item, icon: 'app', score: 30 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, 5)
+      const matches = appIndex.map(appRootItem).filter((item) => rankAction(item, query)).slice(0, 5)
       await Promise.all(matches.map(async (item) => {
-        const appPath = item.primaryAction.nativeAction.app?.path
-        const iconUrl = await getAppIconDataUrl(appPath)
+        const iconUrl = await getAppIconDataUrl(item.primaryAction.path)
         if (iconUrl) item.image = iconUrl
       }))
       return matches
@@ -1560,10 +1564,10 @@ function createFilesExtension() {
     title: 'Files',
     commands: [],
     rootItems() {
-      return fileIndex.slice(0, FILE_RESULT_LIMIT).map((item) => rootItemFromNativeAction({ id: `file:${item.path}`, kind: 'file', title: item.name, subtitle: item.displayPath, filePath: item.path, icon: 'folder', score: 4 }))
+      return fileIndex.slice(0, FILE_RESULT_LIMIT).map(fileRootItem)
     },
     searchItems(_ctx, query) {
-      return fileIndex.map((item) => rootItemFromNativeAction({ id: `file:${item.path}`, kind: 'file', title: item.name, subtitle: item.displayPath, filePath: item.path, icon: 'folder', score: 4 })).filter((item) => rankAction(item.primaryAction.nativeAction, query)).slice(0, FILE_RESULT_LIMIT)
+      return fileIndex.map(fileRootItem).filter((item) => rankAction(item, query)).slice(0, FILE_RESULT_LIMIT)
     },
   }
 }
