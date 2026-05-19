@@ -44,6 +44,9 @@ export type CommandAction = {
   lazySubmenu?: boolean
   style?: 'regular' | 'destructive'
   requiresConfirmation?: boolean
+  confirmMessage?: string
+  confirmLabel?: string
+  cancelLabel?: string
   dismissAfterRun?: 'auto'
 }
 

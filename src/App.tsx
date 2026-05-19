@@ -871,8 +871,8 @@ export function App() {
       {
         value: 'confirm:view-action',
         icon: action?.style === 'destructive' ? <Trash2 size={18} /> : <Zap size={18} />,
-        title: action?.title || 'Run action',
-        subtitle: 'Confirm this action',
+        title: action?.confirmLabel || action?.title || 'Run action',
+        subtitle: action?.confirmMessage || 'Confirm this action',
         onSelect: async () => {
           if (!action) return
           setConfirmViewActionFor(null)
@@ -883,7 +883,7 @@ export function App() {
       {
         value: 'confirm:view-cancel',
         icon: <RotateCcw size={18} />,
-        title: 'Cancel',
+        title: action?.cancelLabel || 'Cancel',
         subtitle: 'Do nothing',
         onSelect: () => setConfirmViewActionFor(null),
         className: 'result',

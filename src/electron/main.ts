@@ -421,13 +421,10 @@ function aiChatListItems() {
       subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
       icon: 'sparkles',
       primaryAction: { type: 'openAiChat', title: 'Open Chat', aiChatId: chat.id },
-      actions: [{
-        type: 'removeAiChat',
-        title: 'Remove Chat',
-        style: 'destructive',
-        requiresConfirmation: true,
-        aiChatId: chat.id,
-      }],
+      actions: [wrapWithConfirmation(
+        { type: 'removeAiChat', title: 'Remove Chat', style: 'destructive', aiChatId: chat.id },
+        { message: `Remove “${chat.title || chat.query || 'AI chat'}” and its history? Generated extension files stay.`, confirmLabel: 'Remove Chat', destructive: true },
+      )],
     }))
 }
 
@@ -494,10 +491,8 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
 }
 
 function clipboardPreviewAction(item) {
-  return {
-    type: 'previewClipboardItem',
-    title: 'Preview',
-    shortcut: 'Command+Y',
+  return buildPreviewItemAction({
+    kind: item.type === 'image' ? 'image' : item.type === 'video' ? 'video' : item.filePath ? 'file' : 'clipboard',
     clipboardType: item.type,
     text: item.text,
     imageDataUrl: item.imageDataUrl,
@@ -505,7 +500,7 @@ function clipboardPreviewAction(item) {
     videoUrl: item.videoUrl,
     filePath: item.filePath,
     thumbnailUrl: item.thumbnailUrl,
-  }
+  })
 }
 
 function clipboardCopyAction(item) {
@@ -1895,6 +1890,56 @@ function buildRemoveShortcutAction(input: any, options: any) {
   return { style: 'destructive', ...options, type: 'removeShortcut', title, actionId }
 }
 
+function wrapWithConfirmation(action: any, input: any) {
+  if (!action) return action
+  const destructive = input?.destructive ?? (action.style === 'destructive')
+  return {
+    ...action,
+    title: input?.title || action.title,
+    requiresConfirmation: true,
+    ...(destructive ? { style: 'destructive' } : {}),
+    ...(input?.message !== undefined ? { confirmMessage: String(input.message) } : {}),
+    ...(input?.confirmLabel !== undefined ? { confirmLabel: String(input.confirmLabel) } : {}),
+    ...(input?.cancelLabel !== undefined ? { cancelLabel: String(input.cancelLabel) } : {}),
+  }
+}
+
+function buildConfirmAction(input: any) {
+  const inner = input?.onConfirm || input?.action
+  if (!inner) throw new Error('ctx.ui.confirm requires onConfirm action')
+  return wrapWithConfirmation(inner, input)
+}
+
+function buildPreviewItemAction(input: any) {
+  const kind = input?.kind || (input?.text ? 'text' : input?.imageDataUrl || input?.imagePath ? 'image' : input?.videoUrl ? 'video' : input?.filePath ? 'file' : 'clipboard')
+  return {
+    type: 'previewClipboardItem',
+    title: input?.title || 'Preview',
+    shortcut: input?.shortcut || 'Command+Y',
+    clipboardType: input?.clipboardType || kind,
+    text: input?.text,
+    imageDataUrl: input?.imageDataUrl,
+    imagePath: input?.imagePath,
+    videoUrl: input?.videoUrl,
+    filePath: input?.filePath,
+    thumbnailUrl: input?.thumbnailUrl,
+  }
+}
+
+function progressView(input: any = {}) {
+  const hasSteps = Array.isArray(input.steps) && input.steps.length
+  const steps = hasSteps ? input.steps : [{ title: input.label || input.title || 'Loading…', status: input.status || 'active' }]
+  return {
+    ...input,
+    type: 'progress',
+    title: input.title || input.label || 'Loading…',
+    steps,
+    ...(input.id !== undefined ? { id: String(input.id) } : {}),
+    ...(typeof input.value === 'number' ? { value: input.value } : {}),
+    ...(typeof input.total === 'number' ? { total: input.total } : {}),
+  }
+}
+
 function createExtensionContext(extension, command) {
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
@@ -1903,6 +1948,7 @@ function createExtensionContext(extension, command) {
       list: (view) => ({ ...view, type: 'list' }),
       grid: (view) => ({ ...view, type: 'grid' }),
       preview: (fileOrView, view: any = {}) => {
+        if (fileOrView?.kind && ['clipboard', 'image', 'video', 'file', 'text'].includes(fileOrView.kind)) return buildPreviewItemAction(fileOrView)
         const isFile = fileOrView?.path || fileOrView?.fileUrl || fileOrView?.videoUrl || fileOrView?.thumbnailUrl
         if (!isFile) return { ...fileOrView, type: 'preview' }
         const file = fileOrView
@@ -1919,13 +1965,15 @@ function createExtensionContext(extension, command) {
       },
       chat: (view) => ({ ...view, type: 'chat' }),
       form: (view) => ({ ...view, type: 'form' }),
-      progress: (view) => ({ ...view, type: 'progress' }),
+      progress: (input: any = {}) => progressView(input),
+      confirm: (input: any = {}) => buildConfirmAction(input),
+      toast: (input: any = {}) => ({ toast: { message: String(input?.message || ''), tone: input?.tone || 'default' } }),
       webview: (view) => ({ ...view, type: 'webview' }),
       camera: (view = {}) => ({ title: 'Camera', size: 'large', muted: true, ...view, type: 'camera' }),
       item: (item) => item,
       actions: (actions) => actions,
       empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
-      loading: (title = 'Loading…') => ({ type: 'progress', title, steps: [{ title, status: 'active' }] }),
+      loading: (title = 'Loading…') => progressView({ title, label: title }),
       error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
     },
     actions: {
@@ -2433,7 +2481,7 @@ async function executeShortcutAction(action) {
   if (!wasVisible) {
     paletteWindow.showPalette({ skipShownEvent: true, deferReveal: true })
     paletteWindow.win?.webContents.send('action:view-open', {
-      view: { type: 'progress', title: currentAction?.title || 'Opening…', steps: [{ title: 'Opening…', status: 'active' }] },
+      view: progressView({ title: currentAction?.title || 'Opening…', label: 'Opening…' }),
       revealWhenReady: true,
       asSibling: false,
     })
