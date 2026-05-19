@@ -105,7 +105,6 @@ export type CommandView = {
   video?: string
   videoUrl?: string
   deviceId?: string
-  facingMode?: 'user' | 'environment' | 'left' | 'right'
   showDeviceSwitcher?: boolean
   muted?: boolean
   controls?: boolean

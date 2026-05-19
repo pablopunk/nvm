@@ -1033,6 +1033,8 @@ kbd {
   height: 100%;
   object-fit: cover;
   display: block;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .cameraStatus {

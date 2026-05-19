@@ -60,9 +60,11 @@ function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const storageKey = `camera-device:${view.id || view.title}`
   const [selectedDeviceId, setSelectedDeviceId] = useState(() => view.deviceId || localStorage.getItem(storageKey) || '')
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [activeDeviceLabel, setActiveDeviceLabel] = useState('')
   const [status, setStatus] = useState('Initializing…')
   const [error, setError] = useState('')
 
@@ -72,47 +74,35 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
     let stream: MediaStream | null = null
     let cancelled = false
 
-    function requestCamera(video: boolean | MediaTrackConstraints) {
-      window.nvm.log('debug', 'camera.getUserMedia.start', { video })
-      return Promise.race([
-        navigator.mediaDevices.getUserMedia({ video, audio: false }).then((nextStream) => {
-          window.nvm.log('debug', 'camera.getUserMedia.resolved', { tracks: nextStream.getVideoTracks().map((track) => track.label) })
-          return nextStream
-        }),
-        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('Camera request timed out')), 5_000)),
-      ])
-    }
-
     async function start() {
       setStatus('Requesting camera…')
       setError('')
       try {
         const access = await window.nvm.requestCameraAccess()
         if (access.status === 'denied' || access.status === 'restricted' || access.status === 'unsupported') throw new Error(access.status === 'denied' ? 'Camera access is denied in System Settings.' : `Camera access is ${access.status}.`)
-        const video: boolean | MediaTrackConstraints = selectedDeviceId
-          ? { deviceId: { exact: selectedDeviceId } }
-          : view.facingMode
-            ? { facingMode: view.facingMode }
-            : true
-        try {
-          stream = await requestCamera(video)
-        } catch (err) {
-          if (!selectedDeviceId) throw err
-          localStorage.removeItem(storageKey)
-          setSelectedDeviceId('')
-          stream = await requestCamera(true)
+        const constraints: MediaTrackConstraints = selectedDeviceId
+          ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          : { width: { ideal: 1280 }, height: { ideal: 720 } }
+        stream = await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false })
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
         }
-        if (cancelled) return
-        const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput')
-        if (!cancelled) setDevices(inputs)
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
-        }
-        setStatus('Live')
+        const videoElement = videoRef.current
+        if (!videoElement) throw new Error('Camera view is unavailable.')
+        streamRef.current?.getTracks().forEach((track) => track.stop())
+        streamRef.current = stream
+        setActiveDeviceLabel(stream.getVideoTracks()[0]?.label || '')
+        setDevices((await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput'))
+        setStatus('Stream acquired…')
+        videoElement.srcObject = stream
+        videoElement.onloadedmetadata = () => videoElement.play().catch(() => {})
+        videoElement.onplaying = () => setStatus('Live')
+        window.setTimeout(() => {
+          if (!cancelled && streamRef.current === stream && videoElement.readyState > 0) setStatus('Live')
+        }, 1_000)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        window.nvm.log('error', 'camera.start.failed', { message })
         setStatus('Camera unavailable')
         setError(message)
       }
@@ -121,19 +111,25 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
     start()
     return () => {
       cancelled = true
+      if (streamRef.current === stream) {
+        streamRef.current = null
+        if (videoRef.current?.srcObject === stream) videoRef.current.srcObject = null
+      }
       stream?.getTracks().forEach((track) => track.stop())
     }
-  }, [selectedDeviceId, storageKey, view.facingMode])
+  }, [selectedDeviceId, storageKey])
 
   function switchDevice() {
     if (devices.length < 2) return
-    const currentIndex = Math.max(0, devices.findIndex((device) => device.deviceId === selectedDeviceId))
+    const activeIndex = activeDeviceLabel ? devices.findIndex((device) => device.label === activeDeviceLabel) : -1
+    const selectedIndex = devices.findIndex((device) => device.deviceId === selectedDeviceId)
+    const currentIndex = activeIndex >= 0 ? activeIndex : selectedIndex >= 0 ? selectedIndex : 0
     const next = devices[(currentIndex + 1) % devices.length]
     localStorage.setItem(storageKey, next.deviceId)
     setSelectedDeviceId(next.deviceId)
   }
 
-  const currentDevice = devices.find((device) => device.deviceId === selectedDeviceId) || devices[0]
+  const currentDevice = devices.find((device) => device.deviceId === selectedDeviceId) || devices.find((device) => device.label === activeDeviceLabel) || devices[0]
   const switcher = view.showDeviceSwitcher === false || devices.length < 2 ? null : <button className="cameraSwitchButton" type="button" onClick={switchDevice}>Switch Camera{currentDevice?.label ? ` · ${currentDevice.label}` : ''}</button>
 
   return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={view.muted !== false} controls={Boolean(view.controls)} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>

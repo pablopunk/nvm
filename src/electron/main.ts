@@ -19,8 +19,6 @@ import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
 
-app.commandLine.appendSwitch('disable-gpu-compositing')
-
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
