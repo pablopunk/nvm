@@ -412,6 +412,10 @@ export function App() {
   }, [confirmRemoveFor?.id, confirmViewActionFor?.title, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, isFilterableChildOpen, optionsFor?.id, shortcutFor?.id])
 
   useEffect(() => {
+    if (optionsFor) refreshShortcuts()
+  }, [optionsFor?.id])
+
+  useEffect(() => {
     if (isChildOpen) {
       wasChildOpenRef.current = true
       return
@@ -696,6 +700,15 @@ export function App() {
     startShortcutRecorder(optionsFor)
   }
 
+  async function removeOptionsShortcut() {
+    if (!optionsFor?.id) return
+    const result = await window.nvm.removeShortcut(optionsFor.id)
+    showToast(result.message, result.ok ? 'default' : 'error')
+    if (!result.ok) return
+    setOptionsFor(null)
+    setRefreshNonce((nonce) => nonce + 1)
+  }
+
   async function quickLookOptionsAction() {
     if (!optionsFor?.filePath) return
     await window.nvm.runViewAction({ type: 'quickLook', title: 'Preview File', path: optionsFor.filePath })
@@ -761,6 +774,7 @@ export function App() {
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
   const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item'].includes(optionsFor?.kind || '') && optionsFor?.removable)
   const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
+  const canRemoveOptionsShortcut = Boolean(optionsFor && shortcutRecords.some((record) => record.actionId === optionsFor.id))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
   const selectedExtensionItem = useMemo(() => {
@@ -940,6 +954,15 @@ export function App() {
         subtitle: 'Run this action globally without opening Nevermind',
         onSelect: setShortcut,
         show: canCustomizeAction,
+      },
+      {
+        value: 'option:remove-shortcut',
+        icon: <Trash2 size={18} />,
+        title: 'Remove keyboard shortcut',
+        subtitle: optionsFor?.shortcut,
+        onSelect: removeOptionsShortcut,
+        show: canCustomizeAction && canRemoveOptionsShortcut,
+        className: 'dangerResult',
       },
       {
         value: 'option:preview',

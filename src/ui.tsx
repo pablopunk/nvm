@@ -38,7 +38,8 @@ export function CommandRow({ value, icon, title, subtitle, accessories = [], sho
   const keyHints = selectedOnlyShortcut
     ? (shortcut ? <span className="keyHints selectedOnlyEnter"><span className="shortcutHint">{shortcutLabel(shortcut)}</span><span className="enterHint">↵</span></span> : null)
     : <KeyHints shortcut={shortcut} extras={extras} />
-  return <Command.Item value={value} className={className || 'result'} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{accessories.map((accessory, index) => <span key={index} className="accessory">{accessory.icon}{accessory.text}</span>)}</span> : null}{keyHints}</span></Command.Item>
+  const itemClassName = className ? `result ${className}` : 'result'
+  return <Command.Item value={value} className={itemClassName} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{accessories.map((accessory, index) => <span key={index} className="accessory">{accessory.icon}{accessory.text}</span>)}</span> : null}{keyHints}</span></Command.Item>
 }
 
 export function CommandTile({ value, title, subtitle, image, video, actionHint, draggable, onDragStart, onSelect }: CommandTileProps) {

@@ -73,6 +73,7 @@ let userState: AnyRecord = {
   aliases: {},
   shortcuts: {},
   shortcutActions: {},
+  removedShortcuts: {},
   overrides: {},
   clipboardHistory: [],
   aiChats: {},
@@ -187,6 +188,7 @@ function invalidateShortcutCaches() {
 
 function shortcutForAction(action: any) {
   if (userState.shortcuts[action.id]) return userState.shortcuts[action.id]
+  if (userState.removedShortcuts?.[action.id]) return null
   if (!action.aiChatId) return null
   return shortcutByAiChatIdMap().get(action.aiChatId) || null
 }
@@ -282,7 +284,8 @@ function extensionActionFromCommand(extension, command) {
     dismissAfterRun: command.dismissAfterRun,
     background: command.background,
   }
-  const shortcut = shortcutForAction(action) || command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
+  const declaredShortcut = userState.removedShortcuts?.[action.id] ? null : command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
+  const shortcut = shortcutForAction(action) || declaredShortcut
   return shortcut ? { ...action, shortcut } : action
 }
 
@@ -2224,6 +2227,7 @@ async function loadUserState() {
       aliases: loaded.aliases || {},
       shortcuts: loaded.shortcuts || {},
       shortcutActions: loaded.shortcutActions || {},
+      removedShortcuts: loaded.removedShortcuts || {},
       overrides: loaded.overrides || {},
       clipboardHistory: loaded.clipboardHistory || [],
       aiChats: loaded.aiChats || {},
@@ -2395,7 +2399,7 @@ function registerActionShortcuts() {
     else logWarn('actionShortcut.register.failed', { actionId, accelerator }, { source: 'host', scope: 'shortcuts' })
   }
   for (const { actionId, accelerator, action } of declaredGlobalShortcuts()) {
-    if (userState.shortcuts[actionId] || bound.has(accelerator)) continue
+    if (userState.shortcuts[actionId] || userState.removedShortcuts?.[actionId] || bound.has(accelerator)) continue
     const ok = bindGlobalActionShortcut(actionId, accelerator, action)
     if (ok) bound.add(accelerator)
     else logWarn('declaredActionShortcut.register.failed', { actionId, accelerator }, { source: 'host', scope: 'shortcuts' })
@@ -2417,17 +2421,25 @@ function getShortcuts() {
     }))
     .filter((item) => item.action)
   const declared = declaredGlobalShortcuts()
-    .filter((item) => !userState.shortcuts[item.actionId])
+    .filter((item) => !userState.shortcuts[item.actionId] && !userState.removedShortcuts?.[item.actionId])
     .map((item) => ({ ...item, scope: 'global', source: 'extension' }))
   return [...configured, ...declared]
     .sort((a, b) => a.action.title.localeCompare(b.action.title))
 }
 
 async function removeShortcut(actionId) {
-  if (!actionId || !userState.shortcuts[actionId]) return { ok: false, message: 'Shortcut not found' }
-  globalShortcut.unregister(userState.shortcuts[actionId])
-  delete userState.shortcuts[actionId]
-  delete userState.shortcutActions[actionId]
+  if (!actionId) return { ok: false, message: 'Shortcut not found' }
+  if (userState.shortcuts[actionId]) {
+    globalShortcut.unregister(userState.shortcuts[actionId])
+    delete userState.shortcuts[actionId]
+    delete userState.shortcutActions[actionId]
+  } else {
+    const declared = declaredGlobalShortcuts().find((item) => item.actionId === actionId)
+    if (!declared) return { ok: false, message: 'Shortcut not found' }
+    globalShortcut.unregister(declared.accelerator)
+    if (!userState.removedShortcuts) userState.removedShortcuts = {}
+    userState.removedShortcuts[actionId] = declared.accelerator
+  }
   invalidateShortcutCaches()
   scheduleSaveState()
   return { ok: true, message: 'Shortcut removed' }
@@ -2469,6 +2481,7 @@ async function setShortcut(action, shortcut) {
     }
   }
   unregisterShortcutForAction(action.id)
+  delete userState.removedShortcuts?.[action.id]
   const ok = registerActionShortcut(action.id, accelerator, action)
   if (!ok) return { ok: false, message: `Could not register ${accelerator}` }
   scheduleSaveState()
