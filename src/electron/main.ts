@@ -1841,11 +1841,11 @@ function createExtensionContext(extension, command) {
       error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
     },
     actions: {
-      openPath: (filePath, title = 'Open', options: any = {}) => ({ ...options, type: 'openPath', title, path: filePath }),
-      revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ ...options, type: 'revealPath', title, path: filePath }),
+      openPath: (filePath, title = 'Open', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openPath', title, path: filePath }),
+      revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'revealPath', title, path: filePath }),
       quickLook: (filePath, title = quickLookTitle(), options: any = {}) => ({ shortcut: 'Command+Y', ...options, type: 'quickLook', title, path: filePath }),
-      openWith: (filePath, app, title, options: any = {}) => ({ ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
-      openUrl: (url, title = 'Open URL', options: any = {}) => ({ ...options, type: 'openUrl', title, url }),
+      openWith: (filePath, app, title, options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
+      openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
       pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
@@ -1884,7 +1884,7 @@ function createExtensionContext(extension, command) {
       },
       apps: {
         frontmost: frontmostApp,
-        launch: (appPath) => shell.openPath(expandUserPath(appPath)),
+        launch: (appPath) => runInBackground(() => shell.openPath(expandUserPath(appPath))),
       },
       files: {
         find: findFiles,
@@ -1892,14 +1892,14 @@ function createExtensionContext(extension, command) {
         findVideos: (roots, options) => findFiles(roots, { ...options, kind: 'video' }),
         findMedia: (roots, options) => findFiles(roots, { ...options, kind: 'media' }),
         openWithApps,
-        open: (filePath) => shell.openPath(expandUserPath(filePath)),
-        reveal: (filePath) => shell.showItemInFolder(expandUserPath(filePath)),
+        open: (filePath) => runInBackground(() => shell.openPath(expandUserPath(filePath))),
+        reveal: (filePath) => runInBackground(() => shell.showItemInFolder(expandUserPath(filePath))),
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
       },
       shell: {
-        openExternal: (url) => shell.openExternal(url),
+        openExternal: (url) => runInBackground(() => shell.openExternal(url)),
         exec: runShellCommand,
         script: runShellScript,
         appleScript: (script, options: any = {}) => new Promise((resolve) => {
