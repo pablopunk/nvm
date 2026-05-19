@@ -58,6 +58,7 @@ let iconCacheDir = ''
 let clipboardImagesDir = ''
 let extensionsDir = ''
 let extensionStorageDir = ''
+let extensionCacheDir = ''
 let saveTimer: NodeJS.Timeout | undefined
 let appIndexTimer: NodeJS.Timeout | undefined
 let appWatchers: Array<{ close: () => unknown }> = []
@@ -73,6 +74,13 @@ let userState: AnyRecord = {
   clipboardHistory: [],
   aiChats: {},
   settings: {},
+}
+
+function osCacheRoot() {
+  const appName = app.getName()
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Caches', appName)
+  if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA || app.getPath('appData'), appName, 'Cache')
+  return path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), appName)
 }
 
 function getPaletteHotkey() {
@@ -871,6 +879,8 @@ function extensionRootActionFromItem(entry, item) {
     subtitle: item.subtitle || entry.extension.title || 'Extension item',
     aliases: item.aliases || item.keywords || [],
     icon: item.icon || 'sparkles',
+    iconUrl: item.image || item.iconUrl || null,
+    thumbnailUrl: item.thumbnailUrl || null,
     score: Math.min(Number(item.score || 35), 90),
     lastUsed: Number(item.lastUsed || 0),
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
@@ -1426,27 +1436,50 @@ async function readDesktopSelection() {
   return { text, files, sourceApp: app }
 }
 
-function extensionStoragePath(extension) {
+function safeExtensionStorageKey(extension) {
   const key = extension.__filePath ? path.basename(extension.__filePath, '.cjs') : extension.id || 'extension'
-  const safeKey = String(key).replace(/[^a-zA-Z0-9._-]/g, '-')
-  return path.join(extensionStorageDir, `${safeKey}.json`)
+  return String(key).replace(/[^a-zA-Z0-9._-]/g, '-')
 }
 
-async function readExtensionStorage(extension) {
+function extensionStoragePath(extension) {
+  return path.join(extensionStorageDir, `${safeExtensionStorageKey(extension)}.json`)
+}
+
+function extensionCachePath(extension) {
+  return path.join(extensionCacheDir, `${safeExtensionStorageKey(extension)}.json`)
+}
+
+async function readJsonFile(filePath) {
   try {
-    return JSON.parse(await fs.readFile(extensionStoragePath(extension), 'utf8'))
+    return JSON.parse(await fs.readFile(filePath, 'utf8'))
   } catch {
     return {}
   }
 }
 
+async function writeJsonFile(filePath, data) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  await fs.writeFile(filePath, JSON.stringify(data, null, 2))
+}
+
+async function readExtensionStorage(extension) {
+  return readJsonFile(extensionStoragePath(extension))
+}
+
 async function writeExtensionStorage(extension, data) {
-  await fs.mkdir(extensionStorageDir, { recursive: true })
-  await fs.writeFile(extensionStoragePath(extension), JSON.stringify(data, null, 2))
+  await writeJsonFile(extensionStoragePath(extension), data)
+}
+
+async function readExtensionCache(extension) {
+  return readJsonFile(extensionCachePath(extension))
+}
+
+async function writeExtensionCache(extension, data) {
+  await writeJsonFile(extensionCachePath(extension), data)
 }
 
 function extensionStorageRefreshKey(extension, key) {
-  return `${extensionStoragePath(extension)}:${String(key)}`
+  return `${extensionCachePath(extension)}:${String(key)}`
 }
 
 function limitedOutput(value, limit = 200_000) {
@@ -1475,25 +1508,25 @@ function createExtensionStorage(extension) {
       await writeExtensionStorage(extension, {})
     },
     async memo(key, ttlMs, loader) {
-      const data = await readExtensionStorage(extension)
+      const data = await readExtensionCache(extension)
       const cached = data[key]
       if (cached && typeof cached === 'object' && Date.now() - Number(cached.updatedAt || 0) < Number(ttlMs || 0)) return cached.value
       const value = await loader()
       data[key] = { value, updatedAt: Date.now() }
-      await writeExtensionStorage(extension, data)
+      await writeExtensionCache(extension, data)
       return value
     },
     async memoStale(key, ttlMs, staleTtlMs, loader) {
-      const data = await readExtensionStorage(extension)
+      const data = await readExtensionCache(extension)
       const cached = data[key]
       const age = cached && typeof cached === 'object' ? Date.now() - Number(cached.updatedAt || 0) : Infinity
       if (age < Number(ttlMs || 0)) return cached.value
       const refreshKey = extensionStorageRefreshKey(extension, key)
       const refresh = extensionStorageRefreshes.get(refreshKey) || (async () => {
         const value = await loader()
-        const latest = await readExtensionStorage(extension)
+        const latest = await readExtensionCache(extension)
         latest[key] = { value, updatedAt: Date.now() }
-        await writeExtensionStorage(extension, latest)
+        await writeExtensionCache(extension, latest)
         return value
       })().finally(() => extensionStorageRefreshes.delete(refreshKey))
       extensionStorageRefreshes.set(refreshKey, refresh)
@@ -2134,11 +2167,14 @@ async function indexFiles() {
 }
 
 async function loadUserState() {
+  const cacheRoot = osCacheRoot()
   statePath = path.join(app.getPath('userData'), 'state.json')
-  iconCacheDir = path.join(app.getPath('userData'), 'icon-cache')
+  iconCacheDir = path.join(cacheRoot, 'icons')
   clipboardImagesDir = path.join(app.getPath('userData'), 'clipboard-images')
   extensionsDir = path.join(app.getPath('userData'), 'extensions')
   extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage')
+  extensionCacheDir = path.join(cacheRoot, 'extension-storage')
+  await fs.rm(path.join(app.getPath('userData'), 'icon-cache'), { recursive: true, force: true }).catch(() => {})
 
   try {
     const loaded = JSON.parse(await fs.readFile(statePath, 'utf8'))

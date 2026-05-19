@@ -114,7 +114,7 @@ Use `refresh` for open, stateful views whose backing data may change while visib
 
 Use `await ctx.desktop.files.openWithApps(file.path)` to get installed apps that advertise support for that file type, then build an Open With nested view with `ctx.actions.openWith(file.path, app)`.
 
-`ctx.storage` is scoped per extension file/identity, not per AI chat. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires. `memoStale(key, ttlMs, staleTtlMs, loader)` returns a stale cached value immediately while refreshing in the background, and only waits for `loader` when there is no usable cached value:
+`ctx.storage` is scoped per extension file/identity, not per AI chat. `get`/`set`/`delete`/`clear` persist extension-owned state in app data, while `memo` and `memoStale` write only OS cache data so clearing the system/app cache removes them. `memo(key, ttlMs, loader)` caches expensive async work until the TTL expires. `memoStale(key, ttlMs, staleTtlMs, loader)` returns a stale cached value immediately while refreshing in the background, and only waits for `loader` when there is no usable cached value:
 
 ```js
 const files = await ctx.storage.memoStale('recent-media', 60_000, 24 * 60 * 60_000, () =>
