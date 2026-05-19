@@ -38,6 +38,7 @@ const APP_REINDEX_DEBOUNCE_MS = 1000
 const THUMBNAIL_SIZE = 512
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000
 const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000
+const EXTENSION_ITEMS_PER_PROVIDER_LIMIT = 20
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -688,7 +689,7 @@ async function searchActions(query, options: any = {}) {
   const results = []
   const contributedItems = q ? await extensionSearchActions(q) : await extensionRootActions()
   for (const item of contributedItems) {
-    const ranked = rankAction(withShortcutHint(item), q)
+    const ranked = item.__ranked ? withShortcutHint(item) : rankAction(withShortcutHint(item), q)
     if (ranked) results.push(ranked)
   }
 
@@ -802,17 +803,24 @@ async function executeExtensionRootItem(action) {
 }
 
 async function extensionRootActions() {
-  const actions = []
-  for (const extension of extensionModules.values()) {
-    actions.push(...await extensionRootActionsForExtension(extension))
-    if (actions.length >= 20) break
-  }
-  return actions.slice(0, 20)
+  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionRootActionsForExtension(extension)))
+  return actionGroups.flat()
 }
 
 async function extensionSearchActions(query) {
   const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionSearchActionsForExtension(extension, query)))
-  return actionGroups.flat().slice(0, 20)
+  return actionGroups.flat()
+}
+
+function rankContributionActions(actions, query) {
+  return actions
+    .map((action) => {
+      const ranked = rankAction(action, query)
+      return ranked ? { ...ranked, __ranked: true } : null
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title))
+    .slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT)
 }
 
 async function extensionSearchActionsForExtension(extension, query) {
@@ -821,7 +829,7 @@ async function extensionSearchActionsForExtension(extension, query) {
     const entry = { extension, command: { id: 'search', title: extension.title || extension.id } }
     const items = await withTimeout(extension.searchItems(createExtensionContext(extension, null), query), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
     const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
-    return list.slice(0, 5).map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean)
+    return rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), query)
   } catch (error) {
     if (!String(error?.message || error).includes('Timed out')) console.error(`Extension search items failed: ${extension.id}`, error)
     return []
@@ -844,7 +852,7 @@ function refreshExtensionRootActions(extension, cacheKey) {
     const entry = { extension, command: { id: 'root', title: extension.title || extension.id } }
     const items = await withTimeout(extension.rootItems(createExtensionContext(extension, null)), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
     const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
-    const actions = list.slice(0, 5).map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean)
+    const actions = rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), '')
     extensionRootItemsCache.set(cacheKey, { updatedAt: Date.now(), items: actions })
     return actions
   })().catch((error) => {
@@ -1618,6 +1626,13 @@ function appRootItem(item) {
   return { id: `app:${item.id}`, title: item.name, subtitle: 'Launch application', icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
 
+async function attachAppIcons(items) {
+  await Promise.all(items.map(async (item) => {
+    const iconUrl = await getAppIconDataUrl(item.primaryAction?.path)
+    if (iconUrl) item.image = iconUrl
+  }))
+}
+
 function fileRootItem(item) {
   return { id: `file:${item.path}`, title: item.name, subtitle: item.displayPath, icon: 'folder', score: 4, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
@@ -1665,15 +1680,14 @@ function createAppsExtension() {
     id: 'nevermind.apps',
     title: 'Applications',
     commands: [],
-    rootItems() {
-      return appIndex.slice(0, 5).map(appRootItem)
+    async rootItems() {
+      const items = appIndex.map(appRootItem)
+      await attachAppIcons(items)
+      return items
     },
     async searchItems(_ctx, query) {
-      const matches = appIndex.map(appRootItem).filter((item) => rankAction(item, query)).slice(0, 5)
-      await Promise.all(matches.map(async (item) => {
-        const iconUrl = await getAppIconDataUrl(item.primaryAction.path)
-        if (iconUrl) item.image = iconUrl
-      }))
+      const matches = appIndex.map(appRootItem).filter((item) => rankAction(item, query))
+      await attachAppIcons(matches.slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT))
       return matches
     },
   }
