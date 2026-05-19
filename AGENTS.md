@@ -5,6 +5,7 @@
 * Use `mise exec pnpm` for package-manager commands. Never call npm, yarn, pnpm, or bun directly; Node/pnpm are pinned in `mise.toml`.
 * Before changing code, inspect nearby conventions and reuse existing helpers, overlays, primitives, formatters, confirmation flows, shortcut plumbing, and OS capabilities.
 * Treat unexpected file changes as user work; do not overwrite them.
+* Before manually editing Nevermind user state, stop the running app; restart it after editing so in-memory state cannot overwrite the fix.
 * Use git while iterating: inspect history when useful and commit early/often.
 
 ## Architecture
