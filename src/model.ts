@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -160,6 +160,11 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'checkForUpdates') return 'Check for updates'
   if (action.type === 'downloadUpdate') return 'Download update'
   if (action.type === 'installUpdate') return 'Install update'
+  if (action.type === 'lockScreen') return 'Lock screen'
+  if (action.type === 'sleepSystem') return 'Sleep system'
+  if (action.type === 'restartSystem') return 'Restart system'
+  if (action.type === 'quitApp') return 'Quit app'
+  if (action.type === 'openSystemSettings') return 'Open system settings'
   if (action.type === 'toggleSetting') return 'Change setting'
   if (action.type === 'recordShortcut') return 'Record shortcut'
   if (action.type === 'removeShortcut') return 'Remove shortcut'

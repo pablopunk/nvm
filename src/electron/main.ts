@@ -1151,6 +1151,22 @@ async function executeViewAction(action) {
       const result = await runShellScript(action.script, action.options || {})
       return { view: shellResultView(action.title || 'Script', result), navigation: 'push' }
     }
+    case 'lockScreen':
+      runInBackground(() => executeSystemBuiltin({ builtin: 'lock-screen' }, () => {}))
+      break
+    case 'sleepSystem':
+      runInBackground(() => executeSystemBuiltin({ builtin: 'sleep' }, () => {}))
+      break
+    case 'restartSystem':
+      runInBackground(() => executeSystemBuiltin({ builtin: 'restart' }, () => {}))
+      break
+    case 'openSystemSettings':
+      runInBackground(() => executeSystemBuiltin({ builtin: 'settings' }, () => {}))
+      break
+    case 'quitApp':
+      nevermindApp.isQuiting = true
+      app.quit()
+      break
     case 'checkForUpdates':
       return checkForUpdatesView()
     case 'downloadUpdate':
@@ -1511,21 +1527,21 @@ function createExtensionAi(extension) {
   }
 }
 
-function systemActions() {
+function systemItems() {
   return [
-    { id: 'builtin:lock-screen', kind: 'builtin', builtin: 'lock-screen', title: 'Lock Screen', subtitle: 'Secure this computer', icon: 'lock', score: 22 },
-    { id: 'builtin:sleep', kind: 'builtin', builtin: 'sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21 },
-    { id: 'builtin:restart', kind: 'builtin', builtin: 'restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20 },
-    { id: 'builtin:settings', kind: 'builtin', builtin: 'settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19 },
-    { id: 'builtin:quit', kind: 'builtin', builtin: 'quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15 },
+    { id: 'builtin:lock-screen', title: 'Lock Screen', subtitle: 'Secure this computer', icon: 'lock', score: 22, dismissAfterRun: 'auto', primaryAction: { type: 'lockScreen', title: 'Lock Screen', dismissAfterRun: 'auto' } },
+    { id: 'builtin:sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21, dismissAfterRun: 'auto', primaryAction: { type: 'sleepSystem', title: 'Sleep', dismissAfterRun: 'auto' } },
+    { id: 'builtin:restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20, dismissAfterRun: 'auto', primaryAction: { type: 'restartSystem', title: 'Restart Computer', dismissAfterRun: 'auto' } },
+    { id: 'builtin:settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19, dismissAfterRun: 'auto', primaryAction: { type: 'openSystemSettings', title: settingsTitle(), dismissAfterRun: 'auto' } },
+    { id: 'builtin:quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15, dismissAfterRun: 'auto', primaryAction: { type: 'quitApp', title: 'Quit Nevermind', dismissAfterRun: 'auto' } },
   ]
 }
 
-function placesActions() {
+function placesItems() {
   return [
-    { id: 'places:downloads', kind: 'file', title: 'Open Downloads', subtitle: '~/Downloads', filePath: path.join(os.homedir(), 'Downloads'), icon: 'folder', score: 18 },
-    { id: 'places:documents', kind: 'file', title: 'Open Documents', subtitle: '~/Documents', filePath: path.join(os.homedir(), 'Documents'), icon: 'folder', score: 17 },
-    { id: 'places:desktop', kind: 'file', title: 'Open Desktop', subtitle: '~/Desktop', filePath: path.join(os.homedir(), 'Desktop'), icon: 'folder', score: 16 },
+    { id: 'places:downloads', title: 'Open Downloads', subtitle: '~/Downloads', icon: 'folder', score: 18, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: 'Open Downloads', path: path.join(os.homedir(), 'Downloads'), dismissAfterRun: 'auto' } },
+    { id: 'places:documents', title: 'Open Documents', subtitle: '~/Documents', icon: 'folder', score: 17, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: 'Open Documents', path: path.join(os.homedir(), 'Documents'), dismissAfterRun: 'auto' } },
+    { id: 'places:desktop', title: 'Open Desktop', subtitle: '~/Desktop', icon: 'folder', score: 16, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: 'Open Desktop', path: path.join(os.homedir(), 'Desktop'), dismissAfterRun: 'auto' } },
   ]
 }
 
@@ -1533,12 +1549,16 @@ function commandFromNativeAction(action) {
   return { id: action.id, actionId: action.id, title: action.title, subtitle: action.subtitle, icon: action.icon, score: action.score, run: (ctx) => ctx.navigation.run(ctx.actions.native(action.title, action)) }
 }
 
+function commandFromItem(item) {
+  return { ...item, run: (ctx) => ctx.navigation.run(item.primaryAction) }
+}
+
 function createSystemExtension() {
   return {
     id: 'nevermind.system',
     title: 'System',
-    commands: systemActions().map(commandFromNativeAction),
-    rootItems: () => systemActions().map(rootItemFromNativeAction),
+    commands: systemItems().map(commandFromItem),
+    rootItems: () => systemItems(),
   }
 }
 
@@ -1546,8 +1566,8 @@ function createPlacesExtension() {
   return {
     id: 'nevermind.places',
     title: 'Places',
-    commands: placesActions().map(commandFromNativeAction),
-    rootItems: () => placesActions().map(rootItemFromNativeAction),
+    commands: placesItems().map(commandFromItem),
+    rootItems: () => placesItems(),
   }
 }
 
