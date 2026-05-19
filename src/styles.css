@@ -263,15 +263,15 @@ kbd {
 
 .optionsCard {
   flex: 0 1 auto;
+  height: auto !important;
   min-height: 0;
-  max-height: calc(100% - 68px);
   width: calc(100% - 58px);
   margin-left: 34px;
   overflow: visible;
 }
 
 .optionsCard > [cmdk-list-sizer] {
-  max-height: inherit;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 68px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
