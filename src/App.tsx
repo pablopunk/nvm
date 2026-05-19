@@ -170,6 +170,21 @@ export function App() {
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 })
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
 
+  useEffect(() => {
+    if (!extensionView?.refresh?.action || !extensionView.refresh.intervalMs) return
+    let cancelled = false
+    const refresh = async () => {
+      if (cancelled || !extensionView.refresh?.action) return
+      const result = await window.nvm.runViewAction(extensionView.refresh.action)
+      if (!cancelled) await handleViewActionResult(result, 'replace')
+    }
+    const timer = window.setInterval(refresh, Math.max(1000, extensionView.refresh.intervalMs))
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [extensionView?.id, extensionView?.refresh])
+
   useLayoutEffect(() => {
     const palette = paletteRef.current
     if (!palette) return
@@ -451,18 +466,22 @@ export function App() {
     extensionNavigation.popView()
   }
 
-  function patchItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']>) {
-    if (!Array.isArray(items)) return items
-    const byId = new Map(patches.map((patch) => [patch.id, patch]))
-    return items.map((item) => byId.has(item.id) ? { ...item, ...byId.get(item.id) } : item)
+  function patchItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']>, mode: CommandViewPatch['mode'] = 'patch') {
+    if (!Array.isArray(items) || patches.length === 0) return items
+    if (mode === 'replace') return patches as CommandItem[]
+    const byId = new Map(items.map((item) => [item.id, item]))
+    const patchedIds = new Set(patches.map((patch) => patch.id))
+    const patchedItems = patches.map((patch) => ({ ...(byId.get(patch.id) || {} as CommandItem), ...patch }))
+    if (mode === 'prepend') return [...patchedItems, ...items.filter((item) => !patchedIds.has(item.id))]
+    return items.map((item) => byId.has(item.id) && patchedIds.has(item.id) ? { ...item, ...patches.find((patch) => patch.id === item.id) } : item)
   }
 
   function applyViewPatch(patch?: CommandViewPatch) {
     if (!patch) return
     extensionNavigation.setView((current) => current ? {
       ...current,
-      items: patchItems(current.items, patch.items || []),
-      sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || []) || [] })),
+      items: patchItems(current.items, patch.items || [], patch.mode || current.refresh?.mode),
+      sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || [], patch.mode || current.refresh?.mode) || [] })),
     } : current)
   }
 

@@ -483,7 +483,7 @@ function capabilities() {
     rootContributions: ['rootItems(ctx) returns high-signal empty-query root palette items with stable ids, titles, optional subtitles/icons/scores, primaryAction, actions, and actionPanel'],
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
     views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview'],
-    viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination'],
+    viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
     itemOptions: ['accessories', 'keywords', 'actionPanel'],
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],

@@ -1004,6 +1004,7 @@ function normalizeView(view, entry) {
     onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
     submitAction: normalizeViewAction(view.submitAction, entry),
     searchAccessory: view.searchAccessory ? { ...view.searchAccessory, onChange: normalizeViewAction(view.searchAccessory.onChange, entry) } : view.searchAccessory,
+    refresh: view.refresh ? { ...view.refresh, action: normalizeViewAction(view.refresh.action, entry) } : view.refresh,
     items: normalizeViewItems(view.items, entry),
     sections: Array.isArray(view.sections) ? view.sections.map((section) => ({ ...section, items: normalizeViewItems(section.items, entry) })) : view.sections,
   }
