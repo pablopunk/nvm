@@ -2397,6 +2397,18 @@ async function removeCreatedAction(action) {
   return { ok: false, message: 'This action cannot be removed' }
 }
 
+async function runPaletteDebugCli() {
+  await indexApplications()
+  await indexFiles()
+  const query = String(process.env.NVM_PALETTE_QUERY || '')
+  const actions = await searchActions(query)
+  const selected = process.env.NVM_PALETTE_EXECUTE
+    ? actions.find((action) => action.id === process.env.NVM_PALETTE_EXECUTE || action.title === process.env.NVM_PALETTE_EXECUTE)
+    : null
+  const result = selected ? await executeActionForIpc(selected) : undefined
+  console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   prepareAppWindowPolicy()
@@ -2406,6 +2418,11 @@ app.whenReady().then(async () => {
 
   await loadUserState()
   await loadExtensions()
+  if (process.env.NVM_PALETTE_DEBUG) {
+    await runPaletteDebugCli()
+    app.quit()
+    return
+  }
   initNevermindAi()
   paletteWindow.createWindow()
   paletteWindow.registerHotkey()
