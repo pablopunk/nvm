@@ -32,6 +32,7 @@ type NevermindAiOptions = {
   getActiveChat?: () => ActiveChat | null
   getChat?: (chatId: string) => ActiveChat | null
   markGeneratedExtension?: (filePath: string, chatId?: string) => void
+  canWriteExtension?: (filename: string, chatId?: string) => boolean
   addAliasForChat?: (chatId: string) => void
   onEvent?: (event: AiEvent) => void
 }
@@ -166,7 +167,7 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   return { send, abort, reset, ask, session }
 
-  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
+  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
     await fs.mkdir(workspaceDir, { recursive: true })
     await fs.mkdir(extensionsDir, { recursive: true })
@@ -205,6 +206,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       reloadExtensions,
       getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
       markGeneratedExtension: (filePath) => markGeneratedExtension?.(filePath, chatId),
+      canWriteExtension: (filename) => canWriteExtension?.(filename, chatId) ?? true,
       addAliasForChat,
     })
 
@@ -335,7 +337,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'addAliasForChat'>) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
   const readFiles = new Set<string>()
 
   function markRead(filename: string) {
@@ -418,6 +420,7 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         const chat = getActiveChat?.()
         const exists = await fileExists(filePath)
         const focused = currentExtensionFile(chat) === filename
+        if (exists && !canWriteExtension?.(filename)) throw new Error(`Refusing to overwrite ${filename}: this AI chat does not own that extension.`)
         if (exists && !focused && !readFiles.has(filename)) throw new Error(`Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`)
         validateCommonJs(params.code)
         await fs.writeFile(filePath, params.code)
@@ -521,7 +524,7 @@ Never write XML or pseudo tool calls in the chat. Use real structured tool calls
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 Use read_extension_api before writing an extension.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
-When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it.
+When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write extensions owned by this chat.
 Use list_capabilities when unsure which UI or OS capabilities exist.
 Use list_extensions and read_extension when you need awareness of other installed extensions.
 Only write .cjs extension files with write_extension.

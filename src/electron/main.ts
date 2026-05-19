@@ -1958,6 +1958,7 @@ function initNevermindAi() {
     getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId) || null : null,
     getChat: (chatId) => userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
     markGeneratedExtension: (filePath, chatId) => markGeneratedExtensionForActiveChat(filePath, chatId),
+    canWriteExtension: (filename, chatId) => chatCanWriteExtension(filename, chatId),
     addAliasForChat: (chatId) => addAliasForGeneratedAction(chatId),
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId
@@ -1996,6 +1997,18 @@ function markGeneratedExtensionForActiveChat(filePath, chatId = activeAiChatId) 
   if (!chat) return
   touchExtensionFileForChat(chat, path.basename(filePath))
   scheduleSaveState()
+}
+
+function chatCanWriteExtension(filename, chatId = activeAiChatId) {
+  const base = path.basename(filename || '')
+  if (!base) return false
+  const chat = chatId ? userState.aiChats[chatId] || draftAiChats.get(chatId) : null
+  if (!chat) return false
+  const ownedFiles = chatTouchedExtensionFiles(chat)
+  if (ownedFiles.includes(base)) return true
+  const owner = (Object.values(userState.aiChats || {}) as any[]).find((item) => chatTouchedExtensionFiles(item).includes(base))
+  if (owner) return false
+  return !Array.from(extensionModules.values()).some((extension) => path.basename(extension.__filePath || '') === base)
 }
 
 function addAliasForGeneratedAction(chatId) {

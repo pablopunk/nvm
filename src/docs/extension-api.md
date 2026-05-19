@@ -1,6 +1,6 @@
 # Nevermind Extension API
 
-Extensions are local `.cjs` modules loaded from Nevermind's user-data `extensions` directory. They are standalone app contributions, independent from the AI chats that created or edited them. They expose commands that appear in the main search results and can also contribute bounded items to the empty-query root palette. A command can execute work, return a declarative native view, or do both through item/action handlers.
+Extensions are local `.cjs` modules loaded from Nevermind's user-data `extensions` directory. They are standalone app contributions with durable files independent from AI chat history, while AI builder chats keep a write scope over the extension files they created or touched. AI builder chats may inspect any generated extension for context, but only the chat that owns an extension file can overwrite it. Extensions expose commands that appear in the main search results and can also contribute bounded items to the empty-query root palette. A command can execute work, return a declarative native view, or do both through item/action handlers.
 
 ```js
 module.exports = {
@@ -119,6 +119,10 @@ const files = await ctx.storage.memoStale('recent-media', 60_000, 24 * 60 * 60_0
   ctx.desktop.files.findMedia(['~/Downloads', '~/Desktop'], { sortBy: 'added', limit: 200 })
 )
 ```
+
+## AI builder write scope
+
+The extension-building tools intentionally separate read access from write ownership. Builder chats can use `list_extensions` and `read_extension` to understand related generated extensions, but `write_extension` can only replace extension files already owned by the active chat. A single chat may own multiple related extension files. To change an extension owned by another chat, open that extension's tweak chat from the palette instead of overwriting it from the current conversation.
 
 ## Error handling
 
