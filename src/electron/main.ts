@@ -1757,11 +1757,11 @@ function createAiBuilderExtension() {
     title: 'AI Builder',
     commands: [{ id: 'ai-chats', actionId: 'ai-chats', title: 'AI Chats', get subtitle() { return chatsSubtitle() }, icon: 'sparkles', score: 16, run: () => aiChatsView() }],
     rootItems() {
-      return [chatsItem(), ...chatItems().slice(0, 4)]
+      return chatItems().slice(0, 4)
     },
     searchItems(_ctx, query) {
       const q = String(query || '').trim()
-      const items: any[] = [chatsItem(), ...chatItems(q)]
+      const items: any[] = chatItems(q)
       if (q && !getUrlFromQuery(q) && calculate(q) === null) items.push({ id: `ai:${q}`, title: `Press Tab to automate "${q}"`, subtitle: 'Automate with AI', query: q, icon: 'bolt', score: 40, primaryAction: { type: 'startAiBuilderChat', title: `Automate "${q}"`, query: q } })
       return items.filter((item) => rankAction(item, q)).slice(0, 5)
     },
