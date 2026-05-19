@@ -60,8 +60,13 @@ function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const storageKey = `camera-device:${view.id || view.title}`
+  const [selectedDeviceId, setSelectedDeviceId] = useState(() => view.deviceId || localStorage.getItem(storageKey) || '')
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [status, setStatus] = useState('Initializing…')
   const [error, setError] = useState('')
+
+  useEffect(() => setSelectedDeviceId(view.deviceId || localStorage.getItem(storageKey) || ''), [storageKey, view.deviceId])
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -71,13 +76,15 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
       setStatus('Requesting camera…')
       setError('')
       try {
-        const video: boolean | MediaTrackConstraints = view.deviceId
-          ? { deviceId: { exact: view.deviceId } }
+        const video: boolean | MediaTrackConstraints = selectedDeviceId
+          ? { deviceId: { exact: selectedDeviceId } }
           : view.facingMode
             ? { facingMode: view.facingMode }
             : true
         stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
         if (cancelled) return
+        const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput')
+        if (!cancelled) setDevices(inputs)
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
@@ -94,9 +101,20 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
       cancelled = true
       stream?.getTracks().forEach((track) => track.stop())
     }
-  }, [view.deviceId, view.facingMode])
+  }, [selectedDeviceId, view.facingMode])
 
-  return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={view.muted !== false} controls={Boolean(view.controls)} />{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
+  function switchDevice() {
+    if (devices.length < 2) return
+    const currentIndex = Math.max(0, devices.findIndex((device) => device.deviceId === selectedDeviceId))
+    const next = devices[(currentIndex + 1) % devices.length]
+    localStorage.setItem(storageKey, next.deviceId)
+    setSelectedDeviceId(next.deviceId)
+  }
+
+  const currentDevice = devices.find((device) => device.deviceId === selectedDeviceId) || devices[0]
+  const switcher = view.showDeviceSwitcher === false || devices.length < 2 ? null : <button className="cameraSwitchButton" type="button" onClick={switchDevice}>Switch Camera{currentDevice?.label ? ` · ${currentDevice.label}` : ''}</button>
+
+  return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={view.muted !== false} controls={Boolean(view.controls)} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
 }
 
 export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {

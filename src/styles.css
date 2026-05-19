@@ -262,10 +262,18 @@ kbd {
 }
 
 .optionsCard {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: calc(100% - 68px);
   width: calc(100% - 58px);
   margin-left: 34px;
   overflow: visible;
+}
+
+.optionsCard > [cmdk-list-sizer] {
+  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .optionsCard::before {
@@ -1034,6 +1042,22 @@ kbd {
   background: var(--surface-overlay);
   color: var(--text-1);
   font-size: 11px;
+}
+
+.cameraSwitchButton {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  max-width: calc(100% - 140px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-1);
+  padding: 6px 10px;
+  font: inherit;
 }
 
 .cameraError {

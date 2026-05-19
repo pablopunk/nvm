@@ -573,7 +573,7 @@ Nevermind catches thrown extension errors and shows a native error view, so thro
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
-Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Prefer host-owned native views such as ctx.ui.camera({ title, deviceId, actions }) for media/interactive surfaces; use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
+Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so do not use facingMode to switch USB/built-in desktop cameras. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }
 
