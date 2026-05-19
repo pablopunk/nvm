@@ -1079,12 +1079,20 @@ function isViewAction(value) {
   return Boolean(value?.type && ['nativeAction', 'openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'pushView', 'replaceView', 'popView', 'runExtensionAction', 'shellExec', 'shellScript'].includes(value.type))
 }
 
+function normalizeViewPatch(patch, entry) {
+  if (!patch) return patch
+  return {
+    ...patch,
+    items: normalizeViewItems(patch.items, entry),
+  }
+}
+
 async function executeViewActionResult(result, entry) {
   if (!result) return result
   if (isViewAction(result)) return executeViewAction(normalizeViewAction(result, entry))
   if (isViewAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry))
   const view = normalizeExtensionView(result, entry)
-  return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast, patch: result?.patch } : result
+  return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast, patch: normalizeViewPatch(result?.patch, entry) } : { ...result, patch: normalizeViewPatch(result?.patch, entry) }
 }
 
 async function executeViewActionForIpc(action) {
