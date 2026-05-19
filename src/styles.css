@@ -24,6 +24,13 @@
   --text-2: rgba(255, 255, 255, 0.72);
   --text-3: rgba(255, 255, 255, 0.54);
   --text-dim: rgba(255, 255, 255, 0.42);
+  --item-foreground-yellow: rgb(234, 220, 168);
+  --item-foreground-blue: rgb(188, 210, 235);
+  --item-foreground-purple: rgb(211, 197, 235);
+  --item-foreground-green: rgb(194, 222, 195);
+  --item-foreground-red: rgb(232, 191, 191);
+  --item-foreground-orange: rgb(232, 205, 177);
+  --item-foreground-pink: rgb(232, 197, 218);
 
   --accent: #ffd84d;
   --accent-strong: rgba(255, 216, 77, 0.72);
@@ -338,6 +345,41 @@ kbd {
 
 .dangerResult strong {
   color: var(--danger-text);
+}
+
+.result[data-foreground='yellow'] strong,
+.extensionTile[data-foreground='yellow'] strong {
+  color: var(--item-foreground-yellow);
+}
+
+.result[data-foreground='blue'] strong,
+.extensionTile[data-foreground='blue'] strong {
+  color: var(--item-foreground-blue);
+}
+
+.result[data-foreground='purple'] strong,
+.extensionTile[data-foreground='purple'] strong {
+  color: var(--item-foreground-purple);
+}
+
+.result[data-foreground='green'] strong,
+.extensionTile[data-foreground='green'] strong {
+  color: var(--item-foreground-green);
+}
+
+.result[data-foreground='red'] strong,
+.extensionTile[data-foreground='red'] strong {
+  color: var(--item-foreground-red);
+}
+
+.result[data-foreground='orange'] strong,
+.extensionTile[data-foreground='orange'] strong {
+  color: var(--item-foreground-orange);
+}
+
+.result[data-foreground='pink'] strong,
+.extensionTile[data-foreground='pink'] strong {
+  color: var(--item-foreground-pink);
 }
 
 .result[data-selected='true'] {

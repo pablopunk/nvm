@@ -25,7 +25,7 @@ import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
-import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandView, type CommandViewPatch } from './model'
+import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
 import type { NevermindApi, ShortcutRecord } from './preload-api'
 
 type ActionKind =
@@ -89,6 +89,7 @@ type Action = {
   actionPanel?: CommandActionPanel
   shortcut?: string
   userAliases?: string[]
+  appearance?: CommandItemAppearance
 }
 
 type ExtensionViewAction = CommandAction
@@ -1057,6 +1058,7 @@ export function App() {
       subtitle: action.isOverridden ? `AI override: ${action.overrideSummary}` : action.subtitle,
       icon: action.icon,
       image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id] || undefined,
+      appearance: action.appearance,
       primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action },
       actionPanel: action.actionPanel || actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
     }

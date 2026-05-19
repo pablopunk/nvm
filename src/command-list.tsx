@@ -28,6 +28,7 @@ export function RootCommandList({ items, iconForItem, onSelect, emptyTitle = EMP
       subtitle={item.subtitle || item.text}
       accessories={item.accessories}
       shortcut={primaryAction?.shortcut}
+      appearance={item.appearance}
       extras={extraForItem?.(item)}
       selectedOnlyShortcut={Boolean(primaryAction?.shortcut && !isGlobalShortcut(primaryAction))}
       onSelect={() => onSelect(item)}
