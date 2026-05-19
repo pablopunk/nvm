@@ -155,11 +155,15 @@ function defaultActionIdFor(action: any) {
 let shortcutByAiChatIdCache: Map<string, string> | null = null
 function shortcutByAiChatIdMap() {
   if (shortcutByAiChatIdCache) return shortcutByAiChatIdCache
-  const map = new Map<string, string>()
+  const shortcutsByChat = new Map<string, string[]>()
   for (const [actionId, storedAction] of Object.entries(userState.shortcutActions) as Array<[string, any]>) {
     if (storedAction?.aiChatId && userState.shortcuts[actionId]) {
-      map.set(storedAction.aiChatId, userState.shortcuts[actionId])
+      shortcutsByChat.set(storedAction.aiChatId, [...(shortcutsByChat.get(storedAction.aiChatId) || []), userState.shortcuts[actionId]])
     }
+  }
+  const map = new Map<string, string>()
+  for (const [chatId, shortcuts] of shortcutsByChat) {
+    if (shortcuts.length === 1 && chatTouchedExtensionFiles(userState.aiChats[chatId]).length === 1) map.set(chatId, shortcuts[0])
   }
   shortcutByAiChatIdCache = map
   return map
@@ -249,12 +253,14 @@ function extensionCommandActionId(extension, command) {
 }
 
 function extensionActionFromCommand(extension, command) {
+  const extensionFile = extension.__filePath ? path.basename(extension.__filePath) : undefined
   const action = {
     id: command.actionId || extensionCommandActionId(extension, command),
     kind: 'extension-command',
     extensionId: extension.id,
     commandId: command.id,
-    extensionFile: extension.__filePath ? path.basename(extension.__filePath) : undefined,
+    extensionFile,
+    aiChatId: extensionFile ? aiChatIdForExtensionFile(extensionFile) : undefined,
     removable: Boolean(extension.__generated),
     title: command.title,
     subtitle: command.subtitle || extension.title || 'Extension command',
@@ -387,7 +393,14 @@ function aiChatsView() {
 }
 
 function chatTouchedExtensionFiles(chat) {
-  return Array.from(new Set([...(chat?.touchedExtensionFiles || []), chat?.generatedExtensionFile].filter(Boolean).map((item) => path.basename(item))))
+  return Array.from(new Set([...(chat?.touchedExtensionFiles || []), chat?.generatedExtensionFile, chat?.contextExtensionFile].filter(Boolean).map((item) => path.basename(item))))
+}
+
+function aiChatIdForExtensionFile(filename) {
+  const base = path.basename(filename || '')
+  if (!base) return null
+  const matches = Object.values(userState.aiChats).filter((chat: any) => chatTouchedExtensionFiles(chat).includes(base))
+  return matches.length === 1 ? (matches[0] as any).id : null
 }
 
 function touchExtensionFileForChat(chat, filename) {
@@ -758,6 +771,12 @@ function extensionEntryForAction(action) {
   if (action.extensionFile) {
     const fileMatches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
     if (fileMatches.length === 1) return fileMatches[0]
+  }
+
+  if (action.aiChatId) {
+    const files = chatTouchedExtensionFiles(userState.aiChats[action.aiChatId])
+    const chatMatches = Array.from(extensionRegistry.values()).filter((entry) => files.includes(path.basename(entry.extension.__filePath || '')))
+    if (chatMatches.length === 1) return chatMatches[0]
   }
 
   const matches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.id === action.extensionId)
@@ -2271,8 +2290,13 @@ async function setShortcut(action, shortcut) {
   const conflictingActionId = Object.entries(userState.shortcuts)
     .find(([actionId, current]) => actionId !== action.id && current === accelerator)?.[0]
   if (conflictingActionId) {
-    const title = userState.shortcutActions[conflictingActionId]?.title || 'another action'
-    return { ok: false, message: `${accelerator} is already used by ${title}` }
+    const conflictingAction = userState.shortcutActions[conflictingActionId]
+    if (action.aiChatId && conflictingAction?.aiChatId === action.aiChatId && chatTouchedExtensionFiles(userState.aiChats[action.aiChatId]).length === 1) {
+      await removeShortcut(conflictingActionId)
+    } else {
+      const title = conflictingAction?.title || 'another action'
+      return { ok: false, message: `${accelerator} is already used by ${title}` }
+    }
   }
   unregisterShortcutForAction(action.id)
   const ok = registerActionShortcut(action.id, accelerator, action)
