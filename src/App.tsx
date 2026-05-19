@@ -647,9 +647,8 @@ export function App() {
       if (result.spotlightConflict) showExtensionView(spotlightConflictView(recordedShortcut), 'push')
       return
     }
-    const result = await window.nvm.setShortcut(shortcutFor, recordedShortcut)
-    showToast(result.message, result.ok ? 'default' : 'error')
-    if (!result.ok) return
+    const result = await window.nvm.runViewAction({ type: 'setActionShortcut', title: 'Save Shortcut', targetAction: shortcutFor, accelerator: recordedShortcut }) as any
+    if (!result?.ok) return
     setShortcutFor(null)
     setOptionsFor(null)
     setRefreshNonce((nonce) => nonce + 1)
@@ -676,12 +675,8 @@ export function App() {
     if (!aliasFor) return
     const alias = childQuery.trim()
     if (!alias) return
-    const result = await window.nvm.setAlias(aliasFor, alias)
-    if (!result.ok) {
-      showToast(result.message, 'error')
-      return
-    }
-    showToast(result.message)
+    const result = await window.nvm.runViewAction({ type: 'setActionAlias', title: 'Save Alias', targetAction: aliasFor, alias }) as any
+    if (!result?.ok) return
     const current = aliasFor.userAliases || []
     const userAliases = current.includes(alias) ? current : [...current, alias]
     setAliasFor({ ...aliasFor, userAliases })
@@ -690,12 +685,8 @@ export function App() {
 
   async function removeAliasEntry(alias: string) {
     if (!aliasFor) return
-    const result = await window.nvm.removeAlias(aliasFor, alias)
-    if (!result.ok) {
-      showToast(result.message, 'error')
-      return
-    }
-    showToast(result.message)
+    const result = await window.nvm.runViewAction({ type: 'removeActionAlias', title: 'Remove Alias', targetAction: aliasFor, alias }) as any
+    if (!result?.ok) return
     const userAliases = (aliasFor.userAliases || []).filter((value) => value !== alias)
     setAliasFor({ ...aliasFor, userAliases })
   }

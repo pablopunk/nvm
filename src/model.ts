@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'duplicateCreatedAction' | 'removeCreatedAction' | 'clearActionOverride' | 'refreshNativeView' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'setActionShortcut' | 'removeShortcut' | 'setActionAlias' | 'removeActionAlias' | 'duplicateCreatedAction' | 'removeCreatedAction' | 'clearActionOverride' | 'refreshNativeView' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -26,6 +26,8 @@ export type CommandAction = {
   action?: unknown
   actionId?: string
   targetAction?: unknown
+  alias?: string
+  accelerator?: string
   clipboardType?: string
   videoUrl?: string
   filePath?: string
@@ -179,7 +181,10 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'removeAiChat') return 'Remove AI chat'
   if (action.type === 'toggleSetting') return 'Change setting'
   if (action.type === 'recordShortcut') return 'Record shortcut'
+  if (action.type === 'setActionShortcut') return 'Set shortcut'
   if (action.type === 'removeShortcut') return 'Remove shortcut'
+  if (action.type === 'setActionAlias') return 'Set alias'
+  if (action.type === 'removeActionAlias') return 'Remove alias'
   if (action.type === 'duplicateCreatedAction') return 'Duplicate action'
   if (action.type === 'removeCreatedAction') return 'Remove action'
   if (action.type === 'clearActionOverride') return 'Restore original action'

@@ -1141,10 +1141,22 @@ async function executeViewAction(action) {
       setSetting(definition.id, toggledSettingValue(definition, getSetting(definition.id)))
       return { patch: { items: [settingItemPatch(definition)] } }
     }
+    case 'setActionShortcut': {
+      const result = await setShortcut(action.targetAction || action.action, action.accelerator || action.shortcut)
+      return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
+    }
     case 'removeShortcut': {
       const result = await removeShortcut(action.actionId)
       if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
-      return { view: keyboardShortcutsView(), navigation: 'replace', toast: { message: result.message } }
+      return { view: keyboardShortcutsView(), navigation: 'replace', toast: { message: result.message }, ok: true }
+    }
+    case 'setActionAlias': {
+      const result = await setAlias(action.targetAction || action.action, action.alias)
+      return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
+    }
+    case 'removeActionAlias': {
+      const result = await removeAlias(action.targetAction || action.action, action.alias)
+      return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
     }
     case 'duplicateCreatedAction': {
       const result = await duplicateCreatedAction(action.targetAction || action.action)
