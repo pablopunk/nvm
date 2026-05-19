@@ -109,8 +109,10 @@ export type CommandItemSection = {
 
 export type CommandViewPatch = {
   items?: CommandItemPatch[]
-  mode?: 'patch' | 'replace' | 'prepend'
+  mode?: 'patch' | 'replace' | 'prepend' | 'append'
+  removeItemIds?: string[]
   isLoading?: boolean
+  selectedItemId?: string
 }
 
 export type CommandView = {

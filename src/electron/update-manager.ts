@@ -29,6 +29,16 @@ const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000
 export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   let startupTimer: NodeJS.Timeout | null = null
   let pollTimer: NodeJS.Timeout | null = null
+  const stateListeners = new Set<() => void>()
+  function notifyStateChanged() {
+    for (const listener of stateListeners) {
+      try { listener() } catch {}
+    }
+  }
+  function onStateChange(listener: () => void) {
+    stateListeners.add(listener)
+    return () => stateListeners.delete(listener)
+  }
   const state: UpdateState = {
     checkInFlight: false,
     downloadInFlight: false,
@@ -45,6 +55,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   async function checkForUpdates(trigger = 'manual', options: { download?: boolean } = {}) {
     if (!canUseAutoUpdates()) {
       state.status = 'unsupported'
+      notifyStateChanged()
       return null
     }
     if (state.downloadedInfo) return state.downloadedInfo
@@ -52,6 +63,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     state.checkInFlight = true
     state.status = 'checking'
     state.errorMessage = ''
+    notifyStateChanged()
     try {
       logger.info('updater.checking', { trigger }, { source: 'host', scope: 'updater' })
       const result = await autoUpdater.checkForUpdates()
@@ -65,6 +77,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     } finally {
       state.checkInFlight = false
       if (state.status === 'checking') state.status = state.availableInfo ? 'available' : 'idle'
+      notifyStateChanged()
     }
   }
 
@@ -74,6 +87,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     state.downloadInFlight = true
     state.status = 'downloading'
     state.errorMessage = ''
+    notifyStateChanged()
     try {
       await autoUpdater.downloadUpdate()
     } catch (error) {
@@ -83,6 +97,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     } finally {
       state.downloadInFlight = false
       if (state.status === 'downloading') state.status = state.downloadedInfo ? 'downloaded' : state.availableInfo ? 'available' : 'idle'
+      notifyStateChanged()
     }
   }
 
@@ -109,12 +124,14 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     autoUpdater.on('checking-for-update', () => {
       state.status = 'checking'
       logger.info('updater.checking', undefined, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
     })
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       state.availableInfo = info
       state.status = 'available'
       logger.info('updater.available', info, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
     })
 
     autoUpdater.on('update-not-available', () => {
@@ -122,10 +139,12 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
       state.downloadedInfo = null
       state.status = 'idle'
       logger.info('updater.notAvailable', undefined, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
     })
 
     autoUpdater.on('download-progress', (progress: { percent: number }) => {
       logger.info('updater.download.progress', { percent: Math.floor(progress.percent) }, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
     })
 
     autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
@@ -133,12 +152,14 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
       state.availableInfo = info
       state.status = 'downloaded'
       logger.info('updater.downloaded', info, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
     })
 
     autoUpdater.on('error', (error: Error) => {
       state.status = 'error'
       state.errorMessage = error?.message || String(error)
       logger.error('updater.error', error, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
     })
 
     startupTimer = setTimeout(() => {
@@ -157,5 +178,5 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     autoUpdater.quitAndInstall()
   }
 
-  return { state, canUseAutoUpdates, checkForUpdates, downloadAvailableUpdate, clearTimers, configure, quitAndInstall }
+  return { state, canUseAutoUpdates, checkForUpdates, downloadAvailableUpdate, clearTimers, configure, quitAndInstall, onStateChange }
 }

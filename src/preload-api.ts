@@ -127,4 +127,5 @@ export type NevermindApi = {
   onRootItemsChanged: (callback: () => void) => () => void
   onOpenActionView: (callback: (payload?: OpenActionViewPayload) => void) => () => void
   onAiChatEvent: (callback: (event: AiChatEvent) => void) => () => void
+  onViewPatch: (callback: (payload: { viewId?: string; patch: CommandViewPatch }) => void) => () => void
 }

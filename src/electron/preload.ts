@@ -70,6 +70,11 @@ const api: NevermindApi = {
     ipcRenderer.on('ai:chat:event', listener)
     return () => ipcRenderer.removeListener('ai:chat:event', listener)
   },
+  onViewPatch: (callback) => {
+    const listener = (_event: IpcRendererEvent, payload: Parameters<NevermindApi['onViewPatch']>[0] extends (payload: infer Payload) => void ? Payload : never) => callback(payload)
+    ipcRenderer.on('view:patch', listener)
+    return () => ipcRenderer.removeListener('view:patch', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('nvm', api)

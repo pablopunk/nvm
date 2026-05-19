@@ -107,6 +107,7 @@ function setSetting(id: any, value: any) {
   userState.settings[id] = value
   scheduleSaveState()
   invalidateExtensionRootItems()
+  patchSettingsView(id)
 }
 const appIconCache = new Map<string, string | null>()
 const extensionRegistry = new Map<string, any>()
@@ -447,6 +448,7 @@ function appendAiChatMessage(chatId, role, content) {
   chat.messages = [...(chat.messages || []), { role, content }].slice(-100)
   chat.updatedAt = Date.now()
   scheduleSaveState()
+  patchAiChatsItem(chatId)
 }
 
 function appendAiChatDelta(chatId, text) {
@@ -487,18 +489,22 @@ function aiChatRemoveAction(chat) {
   )
 }
 
+function aiChatListItem(chat: any) {
+  return {
+    id: `ai-chat:${chat.id}`,
+    title: chat.title || chat.query || 'AI Chat',
+    subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
+    icon: 'sparkles',
+    primaryAction: aiChatOpenAction(chat.id),
+    actions: [aiChatRemoveAction(chat)],
+  }
+}
+
 function aiChatListItems() {
   const chats = Object.values(userState.aiChats || {}) as any[]
   return chats
     .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
-    .map((chat) => ({
-      id: `ai-chat:${chat.id}`,
-      title: chat.title || chat.query || 'AI Chat',
-      subtitle: chat.contextExtensionFile || (chat.touchedExtensionFiles || [])[0] || chat.status || 'Builder chat',
-      icon: 'sparkles',
-      primaryAction: aiChatOpenAction(chat.id),
-      actions: [aiChatRemoveAction(chat)],
-    }))
+    .map(aiChatListItem)
 }
 
 function aiChatsView() {
@@ -507,9 +513,28 @@ function aiChatsView() {
     id: 'ai-chats',
     title: 'AI Chats',
     searchBarPlaceholder: 'Search AI Chats',
-    refresh: { intervalMs: 3000, action: viewRefreshAction(aiChatListItems), mode: 'replace' },
     items: aiChatListItems(),
   }
+}
+
+function patchOpenView(viewId: string, patch: any) {
+  paletteWindow.win?.webContents.send('view:patch', { viewId, patch })
+}
+
+function patchAiChatsItem(chatId: string) {
+  const chat = userState.aiChats[chatId]
+  if (!chat) return
+  patchOpenView('ai-chats', { mode: 'patch', items: [aiChatListItem(chat)] })
+}
+
+function patchAiChatsPrepend(chatId: string) {
+  const chat = userState.aiChats[chatId]
+  if (!chat) return
+  patchOpenView('ai-chats', { mode: 'prepend', items: [aiChatListItem(chat)] })
+}
+
+function patchAiChatsRemove(chatId: string) {
+  patchOpenView('ai-chats', { removeItemIds: [`ai-chat:${chatId}`] })
 }
 
 function chatTouchedExtensionFiles(chat) {
@@ -530,6 +555,7 @@ function touchExtensionFileForChat(chat, filename) {
   if (!chat.generatedExtensionFile) chat.generatedExtensionFile = path.basename(filename)
   chat.status = 'ready'
   chat.updatedAt = Date.now()
+  patchAiChatsItem(chat.id)
 }
 
 function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
@@ -541,6 +567,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
     existing.contextExtensionFile = filename
     existing.updatedAt = Date.now()
     scheduleSaveState()
+    patchAiChatsItem(existing.id)
     return existing
   }
   const id = hashValue(`extension-chat:${filename}:${Date.now()}`)
@@ -560,6 +587,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   userState.aiChats[id] = item
   scheduleSaveState()
   invalidateExtensionRootItems()
+  patchAiChatsPrepend(id)
   return item
 }
 
@@ -595,30 +623,32 @@ function clipboardRootItem(item) {
   }
 }
 
+function clipboardHistoryItem(item: any) {
+  const isImage = item.type === 'image'
+  const isVideo = item.type === 'video'
+  const copyAction = clipboardCopyAction(item)
+  const previewAction = clipboardPreviewAction(item)
+  const pasteAction = isImage || isVideo
+    ? null
+    : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
+  return {
+    id: `clipboard:${item.id}`,
+    title: clipboardItemTitle(item),
+    subtitle: clipboardItemSubtitle(item),
+    icon: 'clipboard',
+    image: item.thumbnailUrl,
+    keywords: [item.text || '', item.type || '', `clipboard ${item.type || ''}`, isImage ? 'image photo picture screenshot' : '', isVideo ? 'video movie recording' : ''].filter(Boolean),
+    primaryAction: copyAction,
+    actionPanel: {
+      sections: [
+        { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
+      ],
+    },
+  }
+}
+
 function clipboardHistoryItems() {
-  return clipboardHistory.slice(0, CLIPBOARD_LIMIT).map((item) => {
-    const isImage = item.type === 'image'
-    const isVideo = item.type === 'video'
-    const copyAction = clipboardCopyAction(item)
-    const previewAction = clipboardPreviewAction(item)
-    const pasteAction = isImage || isVideo
-      ? null
-      : { type: 'pasteText', title: 'Paste Text', text: item.text, dismissAfterRun: 'auto' }
-    return {
-      id: `clipboard:${item.id}`,
-      title: clipboardItemTitle(item),
-      subtitle: clipboardItemSubtitle(item),
-      icon: 'clipboard',
-      image: item.thumbnailUrl,
-      keywords: [item.text || '', item.type || '', `clipboard ${item.type || ''}`, isImage ? 'image photo picture screenshot' : '', isVideo ? 'video movie recording' : ''].filter(Boolean),
-      primaryAction: copyAction,
-      actionPanel: {
-        sections: [
-          { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
-        ],
-      },
-    }
-  })
+  return clipboardHistory.slice(0, CLIPBOARD_LIMIT).map(clipboardHistoryItem)
 }
 
 function viewRefreshAction(itemsBuilder) {
@@ -637,7 +667,6 @@ function clipboardHistoryView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Clipboard History',
     emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
-    refresh: { intervalMs: 1000, action: viewRefreshAction(clipboardHistoryItems), mode: 'replace' },
     items: clipboardHistoryItems(),
   }
 }
@@ -647,11 +676,10 @@ function isNewerVersion(version) {
 }
 
 function updateStatusItems() {
-  const view = updateStatusView({ includeRefresh: false })
-  return view.items
+  return updateStatusView().items
 }
 
-function updateStatusView(options: any = {}) {
+function updateStatusView(_options: any = {}) {
   const downloadedInfo = isNewerVersion(updateManager.state.downloadedInfo?.version) ? updateManager.state.downloadedInfo : null
   const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   const version = downloadedInfo?.version || availableInfo?.version
@@ -690,7 +718,6 @@ function updateStatusView(options: any = {}) {
     presentation: 'root',
     searchBarPlaceholder: 'Search Updates',
     isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
-    ...(options.includeRefresh === false ? {} : { refresh: { intervalMs: 2000, action: viewRefreshAction(updateStatusItems), mode: 'replace' } }),
     items: [{
       id: 'update-status',
       title,
@@ -746,9 +773,26 @@ function settingsView(selectedItemId = '') {
     presentation: 'root',
     selectedItemId,
     searchBarPlaceholder: 'Search Settings',
-    refresh: { intervalMs: 2000, action: viewRefreshAction(settingsItems), mode: 'replace' },
     items: settingsItems(),
   }
+}
+
+function patchSettingsView(settingId: string, options: any = {}) {
+  const definition = SETTING_DEFINITIONS.find((item) => item.id === settingId)
+  if (!definition) return
+  patchOpenView('app-settings', {
+    mode: 'patch',
+    items: [{ id: `setting:${definition.id}`, ...settingItemPatch(definition) }],
+    ...options,
+  })
+}
+
+function patchUpdatesView() {
+  patchOpenView('app-updates', {
+    mode: 'patch',
+    items: updateStatusItems(),
+    isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
+  })
 }
 
 function updatePromptAction() {
@@ -1265,7 +1309,7 @@ async function executeViewAction(action) {
     case 'removeShortcut': {
       const result = await removeShortcut(action.actionId)
       if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
-      return { view: keyboardShortcutsView(), navigation: 'replace', toast: { message: result.message }, ok: true }
+      return { patch: { removeItemIds: [`shortcut:${action.actionId}`] }, toast: { message: result.message }, ok: true }
     }
     case 'setActionAlias': {
       const result = await setAlias(action.targetAction || action.action, action.alias)
@@ -1898,19 +1942,21 @@ function createUpdatesExtension() {
   }
 }
 
+function keyboardShortcutItem(record: any) {
+  const changeAction = buildRecordShortcutAction({ actionId: record.actionId, action: record.action, title: 'Change shortcut' }, {})
+  const removeAction = record.source === 'user' ? buildRemoveShortcutAction({ actionId: record.actionId, title: 'Remove shortcut' }, {}) : null
+  return {
+    id: `shortcut:${record.actionId}`,
+    title: record.action.title,
+    subtitle: record.accelerator,
+    icon: 'keyboard',
+    primaryAction: changeAction,
+    actionPanel: { sections: [{ actions: [changeAction, removeAction].filter(Boolean) }] },
+  }
+}
+
 function keyboardShortcutItems() {
-  return getShortcuts().map((record) => {
-    const changeAction = buildRecordShortcutAction({ actionId: record.actionId, action: record.action, title: 'Change shortcut' }, {})
-    const removeAction = record.source === 'user' ? buildRemoveShortcutAction({ actionId: record.actionId, title: 'Remove shortcut' }, {}) : null
-    return {
-      id: `shortcut:${record.actionId}`,
-      title: record.action.title,
-      subtitle: record.accelerator,
-      icon: 'keyboard',
-      primaryAction: changeAction,
-      actionPanel: { sections: [{ actions: [changeAction, removeAction].filter(Boolean) }] },
-    }
-  })
+  return getShortcuts().map(keyboardShortcutItem)
 }
 
 function keyboardShortcutsView() {
@@ -1921,9 +1967,12 @@ function keyboardShortcutsView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Keyboard Shortcuts',
     emptyView: { title: 'No shortcuts found.' },
-    refresh: { intervalMs: 2000, action: viewRefreshAction(keyboardShortcutItems), mode: 'replace' },
     items: keyboardShortcutItems(),
   }
+}
+
+function patchKeyboardShortcutsView() {
+  patchOpenView('keyboard-shortcuts', { mode: 'replace', items: keyboardShortcutItems() })
 }
 
 function createKeyboardShortcutsExtension() {
@@ -1947,7 +1996,6 @@ function createSettingsExtension() {
       presentation: 'root',
       selectedItemId: ctx.state.selectedItemId,
       searchBarPlaceholder: 'Search Settings',
-      refresh: { intervalMs: 2000, action: viewRefreshAction(settingsItems), mode: 'replace' },
       items: settingsItems(),
     }) }],
   }
@@ -2320,6 +2368,7 @@ function initNevermindAi() {
       if (chatId && event.type === 'done' && userState.aiChats[chatId]) {
         if (userState.aiChats[chatId].status !== 'ready') userState.aiChats[chatId].status = 'done'
         userState.aiChats[chatId].updatedAt = Date.now()
+        patchAiChatsItem(chatId)
         scheduleSaveState()
       }
       paletteWindow.win?.webContents.send('ai:chat:event', { ...event, chatId })
@@ -2637,6 +2686,7 @@ function readClipboardItem() {
 
 function rememberClipboardItem(item) {
   if (!item) return
+  const previousIds = new Set(clipboardHistory.map((entry) => entry.id))
   clipboardHistory = [
     item,
     ...clipboardHistory.filter((current) => current.id !== item.id),
@@ -2644,6 +2694,13 @@ function rememberClipboardItem(item) {
   scheduleSaveState()
   invalidateExtensionRootItems()
   paletteWindow.win?.webContents.send('clipboard:changed')
+  const currentIds = new Set(clipboardHistory.map((entry) => entry.id))
+  const removeItemIds = [...previousIds].filter((id) => !currentIds.has(id)).map((id) => `clipboard:${id}`)
+  patchOpenView('clipboard-history', {
+    mode: 'prepend',
+    items: [clipboardHistoryItem(item)],
+    removeItemIds,
+  })
 }
 
 function scheduleSaveState() {
@@ -2781,6 +2838,7 @@ async function removeShortcut(actionId) {
   }
   invalidateShortcutCaches()
   scheduleSaveState()
+  patchKeyboardShortcutsView()
   return { ok: true, message: 'Shortcut removed' }
 }
 
@@ -2824,6 +2882,7 @@ async function setShortcut(action, shortcut) {
   const ok = registerActionShortcut(action.id, accelerator, action)
   if (!ok) return { ok: false, message: `Could not register ${accelerator}` }
   scheduleSaveState()
+  patchKeyboardShortcutsView()
   return { ok: true, message: `Shortcut set: ${accelerator}` }
 }
 
@@ -2922,7 +2981,8 @@ async function removeAiChat(chatId) {
   }
   scheduleSaveState()
   invalidateExtensionRootItems()
-  return { view: aiChatsView(), navigation: 'replace', toast: { message: `Removed ${chat.title || chat.query || 'AI chat'}` } }
+  patchAiChatsRemove(chatId)
+  return { toast: { message: `Removed ${chat.title || chat.query || 'AI chat'}` } }
 }
 
 async function removeAiChatReferencesToExtensionFile(extensionFile) {
@@ -2991,6 +3051,7 @@ app.whenReady().then(async () => {
   registerLocalFileProtocol()
   installPermissionHandlers(isDev)
   updateManager.configure()
+  updateManager.onStateChange(() => patchUpdatesView())
 
   await loadUserState()
   await loadExtensions()

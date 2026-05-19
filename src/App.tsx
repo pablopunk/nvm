@@ -290,6 +290,13 @@ export function App() {
       else showExtensionView(payload.view, 'root')
       markShortcutReady(Boolean(payload?.revealWhenReady))
     })
+    const stopViewPatch = window.nvm.onViewPatch((payload) => {
+      if (!payload) return
+      const current = extensionViewRef.current
+      if (payload.viewId && current?.id !== payload.viewId) return
+      if (!current) return
+      applyViewPatch(payload.patch)
+    })
     const stopAi = window.nvm.onAiChatEvent((event) => {
       if (event.type === 'debug') window.nvm.log('debug', `Nevermind AI: ${event.label || ''}`, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
@@ -307,6 +314,7 @@ export function App() {
       stopClipboard()
       stopRootItems()
       stopOpenActionView()
+      stopViewPatch()
       stopAi()
     }
   }, [])
@@ -479,14 +487,20 @@ export function App() {
     extensionNavigation.popView()
   }
 
-  function patchItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']>, mode: CommandViewPatch['mode'] = 'patch') {
-    if (!Array.isArray(items) || patches.length === 0) return items
+  function patchItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']> = [], mode: CommandViewPatch['mode'] = 'patch', removeItemIds: string[] = []) {
+    let next = Array.isArray(items) ? items : []
+    if (removeItemIds.length) {
+      const remove = new Set(removeItemIds)
+      next = next.filter((item) => !remove.has(item.id))
+    }
+    if (patches.length === 0) return next
     if (mode === 'replace') return patches as CommandItem[]
-    const byId = new Map(items.map((item) => [item.id, item]))
+    const byId = new Map(next.map((item) => [item.id, item]))
     const patchedIds = new Set(patches.map((patch) => patch.id))
     const patchedItems = patches.map((patch) => ({ ...(byId.get(patch.id) || {} as CommandItem), ...patch }))
-    if (mode === 'prepend') return [...patchedItems, ...items.filter((item) => !patchedIds.has(item.id))]
-    return items.map((item) => byId.has(item.id) && patchedIds.has(item.id) ? { ...item, ...patches.find((patch) => patch.id === item.id) } : item)
+    if (mode === 'prepend') return [...patchedItems, ...next.filter((item) => !patchedIds.has(item.id))]
+    if (mode === 'append') return [...next.filter((item) => !patchedIds.has(item.id)), ...patchedItems]
+    return next.map((item) => patchedIds.has(item.id) ? { ...item, ...patches.find((patch) => patch.id === item.id) } : item)
   }
 
   function applyViewPatch(patch?: CommandViewPatch) {
@@ -494,10 +508,12 @@ export function App() {
     extensionNavigation.setView((current) => current ? {
       ...current,
       ...(patch.isLoading === undefined ? {} : { isLoading: patch.isLoading }),
-      items: patchItems(current.items, patch.items || [], patch.mode || current.refresh?.mode),
-      sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || [], patch.mode || current.refresh?.mode) || [] })),
+      ...(patch.selectedItemId === undefined ? {} : { selectedItemId: patch.selectedItemId }),
+      items: patchItems(current.items, patch.items || [], patch.mode || current.refresh?.mode, patch.removeItemIds || []),
+      sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || [], patch.mode || current.refresh?.mode, patch.removeItemIds || []) || [] })),
     } : current)
   }
+
 
   async function handleViewActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
     if (!result) return
