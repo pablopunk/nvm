@@ -182,6 +182,7 @@ export function App() {
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([])
   const extensionViewRef = useRef<ExtensionView | null>(null)
   const wasChildOpenRef = useRef(false)
+  const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 })
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
 
   useLayoutEffect(() => {
@@ -392,6 +393,10 @@ export function App() {
   const childPlaceholder = actionSubmenuFor ? `Filter ${actionSubmenuFor.title}` : shortcutOptionsFor ? `Actions for “${shortcutOptionsFor.action.title}”` : shortcutManagerOpen ? 'Filter keyboard shortcuts' : confirmRemoveFor || confirmViewActionFor ? 'Filter confirmation actions' : extensionItemOptionsFor ? `Filter actions for “${extensionItemOptionsFor.title}”` : optionsFor ? `Filter actions for “${optionsFor.title}”` : aliasFor ? `Alias for “${aliasFor.title}”` : extensionView ? `Filter ${extensionView.title}` : ''
   const inputValue = shortcutFor ? recordedShortcut : isFilterableChildOpen ? childQuery : previewFor ? previewFor.title : extensionView ? extensionView.title : optionsFor && !query ? optionsFor.title : query
   const placeholder = shortcutFor ? 'Press a keyboard shortcut' : isFilterableChildOpen ? (extensionView?.searchBarPlaceholder || childPlaceholder) : SEARCH_PLACEHOLDERS[placeholderIndex]
+  const activeSearchQuery = !shortcutFor && isFilterableChildOpen ? childQuery : !isChildOpen ? query : ''
+  const activeSearchScope = !shortcutFor && isFilterableChildOpen
+    ? `child:${actionSubmenuFor?.title || confirmRemoveFor?.id || confirmViewActionFor?.title || extensionItemOptionsFor?.id || optionsFor?.id || aliasFor?.id || extensionView?.id || extensionView?.title || shortcutManagerOpen}`
+    : !isChildOpen ? 'root' : ''
 
   useEffect(() => {
     if (!isFilterableChildOpen && !shortcutFor) return
@@ -408,10 +413,12 @@ export function App() {
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [isChildOpen])
 
-  useEffect(() => {
-    if (isChildOpen) return
-    requestAnimationFrame(() => resultsListRef.current?.scrollTo({ top: 0 }))
-  }, [query, actions, isChildOpen])
+  useLayoutEffect(() => {
+    if (!activeSearchQuery) return
+    scrollResultsToTop()
+    const frame = requestAnimationFrame(scrollResultsToTop)
+    return () => cancelAnimationFrame(frame)
+  }, [activeSearchQuery, activeSearchScope, actions])
 
   function markShortcutReady(shouldReveal: boolean) {
     if (shouldReveal) setPendingShortcutReveal(true)
@@ -1321,10 +1328,7 @@ export function App() {
             onValueChange={(value) => {
               if (shortcutFor) return
               if (isFilterableChildOpen) setChildQuery(value)
-              else if (!isChildOpen) {
-                resultsListRef.current?.scrollTo({ top: 0 })
-                setQuery(value)
-              }
+              else if (!isChildOpen) setQuery(value)
             }}
             placeholder={placeholder}
             readOnly={!shortcutFor && !isFilterableChildOpen && isChildOpen}
