@@ -646,7 +646,7 @@ async function searchActions(query, options: any = {}) {
     .sort((a, b) => {
       return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
     })
-    .slice(0, 10)
+    .slice(0, 30)
 }
 
 function rootNativeActionCanDismissImmediately(action) {
