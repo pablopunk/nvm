@@ -443,7 +443,7 @@ function clipboardActionFromItem(item) {
     filePath: item.filePath,
     thumbnailUrl: item.thumbnailUrl,
     icon: 'clipboard',
-    score: 3,
+    score: 13,
     lastUsed: item.createdAt || 0,
   }
 }
@@ -2120,6 +2120,7 @@ function rememberClipboardItem(item) {
     ...clipboardHistory.filter((current) => current.id !== item.id),
   ].slice(0, CLIPBOARD_LIMIT)
   scheduleSaveState()
+  invalidateExtensionRootItems()
   paletteWindow.win?.webContents.send('clipboard:changed')
 }
 
