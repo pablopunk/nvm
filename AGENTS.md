@@ -13,7 +13,7 @@
 * Keep files small, focused, and performant; fix slow patterns when you touch them.
 * Prefer generic first-party primitives over one-off helpers. Fix shared models/lifecycles instead of compensating in UI.
 * OS-specific desktop behavior goes through intent-named capabilities in `src/electron/os.ts`; follow `src/docs/os-architecture.md` and never gate one OS mechanism through an unrelated capability.
-* Extension APIs are declarative host-controlled contribution points, not app-internal backdoors; follow `src/docs/extension-api.md` and `src/docs/design-system-and-extension-api.md`.
+* Extension APIs are declarative host-controlled contribution points, not app-internal backdoors; follow `src/docs/extension-api.md` and `src/docs/design-system-and-extension-api.md`. Do not duplicate collection/list entry points as both commands and provider items; commands already participate in root/search, so providers should contribute distinct child, status, or query items.
 * Extensions are first-class app contributors. Preserve native behavioral contracts when migrating features: return shape, identity, selection, shortcuts, icons/media, dismissal, and async lifecycle.
 * Extension command/action boundaries must catch, normalize, and clone-check results so failures render as Nevermind error views, not raw IPC/log errors. When debugging, inspect both repo code and installed/generated artifacts in `~/Library/Application Support/nvm/extensions`.
 * AI builder chats provide history/context and write scope. Generated extension files are durable; deleting chat history must not delete code. AI writes are limited to extension files already touched/owned by that chat.
