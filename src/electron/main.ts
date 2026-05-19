@@ -808,8 +808,12 @@ async function executeExtensionRootItem(action) {
 }
 
 async function extensionRootActions() {
-  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map(extensionRootActionsForExtension))
-  return actionGroups.flat().slice(0, 20)
+  const actions = []
+  for (const extension of extensionModules.values()) {
+    actions.push(...await extensionRootActionsForExtension(extension))
+    if (actions.length >= 20) break
+  }
+  return actions.slice(0, 20)
 }
 
 async function extensionSearchActions(query) {
@@ -1536,7 +1540,7 @@ function createClipboardExtension() {
     }],
     rootItems() {
       if (!getSetting('showClipboardInRoot')) return [rootItemFromNativeAction(historyAction())]
-      return [rootItemFromNativeAction(historyAction()), ...clipboardHistory.slice(0, 5).map((item) => rootItemFromNativeAction(clipboardActionFromItem(item)))]
+      return [rootItemFromNativeAction(historyAction()), ...clipboardHistory.slice(0, 10).map((item) => rootItemFromNativeAction(clipboardActionFromItem(item)))]
     },
     searchItems(_ctx, query) {
       const results = [historyAction(), ...clipboardHistory.map(clipboardActionFromItem)]
