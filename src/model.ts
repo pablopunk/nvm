@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'refreshNativeView' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'openAiChats' | 'openAiChat' | 'startAiBuilderChat' | 'tweakExtensionWithAi' | 'removeAiChat' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'duplicateCreatedAction' | 'removeCreatedAction' | 'clearActionOverride' | 'refreshNativeView' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -25,6 +25,7 @@ export type CommandAction = {
   settingId?: string
   action?: unknown
   actionId?: string
+  targetAction?: unknown
   clipboardType?: string
   videoUrl?: string
   filePath?: string
@@ -179,6 +180,9 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'toggleSetting') return 'Change setting'
   if (action.type === 'recordShortcut') return 'Record shortcut'
   if (action.type === 'removeShortcut') return 'Remove shortcut'
+  if (action.type === 'duplicateCreatedAction') return 'Duplicate action'
+  if (action.type === 'removeCreatedAction') return 'Remove action'
+  if (action.type === 'clearActionOverride') return 'Restore original action'
   if (action.type === 'nativeAction') return 'Run command'
   return 'Run action'
 }

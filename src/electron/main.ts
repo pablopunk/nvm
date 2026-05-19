@@ -1146,6 +1146,19 @@ async function executeViewAction(action) {
       if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
       return { view: keyboardShortcutsView(), navigation: 'replace', toast: { message: result.message } }
     }
+    case 'duplicateCreatedAction': {
+      const result = await duplicateCreatedAction(action.targetAction || action.action)
+      if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
+      return { toast: { message: result.message }, action: result.action }
+    }
+    case 'removeCreatedAction': {
+      const result = await removeCreatedAction(action.targetAction || action.action)
+      return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
+    }
+    case 'clearActionOverride': {
+      const result = await clearOverride(action.targetAction || action.action)
+      return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
+    }
     case 'refreshNativeView':
       return refreshNativeViewPatch(action.viewId)
     case 'recordShortcut':

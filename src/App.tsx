@@ -737,16 +737,14 @@ export function App() {
 
   async function restoreOriginal() {
     if (!optionsFor) return
-    const result = await window.nvm.clearOverride(optionsFor)
-    showToast(result.message, result.ok ? 'default' : 'error')
-    if (result.ok) setOptionsFor(null)
+    const result = await window.nvm.runViewAction({ type: 'clearActionOverride', title: 'Restore Original', targetAction: optionsFor })
+    if ((result as any)?.ok) setOptionsFor(null)
   }
 
   async function duplicateCreatedAction() {
     if (!optionsFor) return
-    const result = await window.nvm.duplicateCreatedAction(optionsFor)
-    showToast(result.message, result.ok ? 'default' : 'error')
-    if (!result.ok) return
+    const result = await window.nvm.runViewAction({ type: 'duplicateCreatedAction', title: 'Duplicate Action', targetAction: optionsFor }) as any
+    if (!result?.action) return
     setOptionsFor(null)
     setRefreshNonce((nonce) => nonce + 1)
     await tweakActionWithAi(result.action)
@@ -759,9 +757,8 @@ export function App() {
 
   async function confirmRemoveCreatedAction() {
     if (!confirmRemoveFor) return
-    const result = await window.nvm.removeCreatedAction(confirmRemoveFor)
-    showToast(result.message, result.ok ? 'default' : 'error')
-    if (result.ok) {
+    const result = await window.nvm.runViewAction({ type: 'removeCreatedAction', title: 'Remove Action', targetAction: confirmRemoveFor }) as any
+    if (result?.ok) {
       setConfirmRemoveFor(null)
       setOptionsFor(null)
       setRefreshNonce((nonce) => nonce + 1)
