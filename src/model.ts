@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
+export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'toggleSetting' | 'recordShortcut' | 'removeShortcut' | 'nativeAction'
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -157,6 +157,9 @@ export function actionDescription(action: CommandAction) {
   if (action.type === 'popView') return 'Go back'
   if (action.type === 'previewClipboardItem') return 'Preview clipboard item'
   if (action.type === 'shellExec' || action.type === 'shellScript') return 'Run system command'
+  if (action.type === 'checkForUpdates') return 'Check for updates'
+  if (action.type === 'downloadUpdate') return 'Download update'
+  if (action.type === 'installUpdate') return 'Install update'
   if (action.type === 'toggleSetting') return 'Change setting'
   if (action.type === 'recordShortcut') return 'Record shortcut'
   if (action.type === 'removeShortcut') return 'Remove shortcut'

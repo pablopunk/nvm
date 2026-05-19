@@ -539,10 +539,10 @@ function updateStatusView() {
   const version = downloadedInfo?.version || availableInfo?.version
   const unsupported = updateManager.state.status === 'unsupported' || !updateManager.canUseAutoUpdates()
   const primaryAction = downloadedInfo
-    ? { type: 'nativeAction', title: 'Install and Restart', nativeAction: { kind: 'install-update' } }
+    ? { type: 'installUpdate', title: 'Install and Restart' }
     : availableInfo
-      ? { type: 'nativeAction', title: updateManager.state.downloadInFlight ? 'Downloading…' : 'Download Update', nativeAction: { kind: 'download-update' } }
-      : { type: 'nativeAction', title: updateManager.state.checkInFlight ? 'Checking…' : 'Check Again', nativeAction: { kind: 'check-for-updates' } }
+      ? { type: 'downloadUpdate', title: updateManager.state.downloadInFlight ? 'Downloading…' : 'Download Update' }
+      : { type: 'checkForUpdates', title: updateManager.state.checkInFlight ? 'Checking…' : 'Check Again' }
   const title = unsupported
     ? 'Updates unavailable'
     : downloadedInfo
@@ -639,22 +639,22 @@ function updatePromptAction() {
   const version = downloadedInfo?.version || availableInfo?.version
   if (downloadedInfo) {
     return {
-      id: 'builtin:install-update',
-      kind: 'install-update',
+      id: 'updates:install',
       title: `Install Nevermind ${version}`,
       subtitle: 'Restart Nevermind to finish updating',
       icon: 'restart',
       score: 1_000,
+      primaryAction: { type: 'installUpdate', title: `Install Nevermind ${version}` },
     }
   }
   if (availableInfo) {
     return {
-      id: 'builtin:download-update',
-      kind: 'download-update',
+      id: 'updates:download',
       title: `Download Nevermind ${version}`,
       subtitle: updateManager.state.downloadInFlight ? 'Downloading update…' : 'Update available',
       icon: 'restart',
       score: 1_000,
+      primaryAction: { type: 'downloadUpdate', title: `Download Nevermind ${version}` },
     }
   }
   return null
@@ -1151,6 +1151,12 @@ async function executeViewAction(action) {
       const result = await runShellScript(action.script, action.options || {})
       return { view: shellResultView(action.title || 'Script', result), navigation: 'push' }
     }
+    case 'checkForUpdates':
+      return checkForUpdatesView()
+    case 'downloadUpdate':
+      return downloadUpdateView()
+    case 'installUpdate':
+      return installDownloadedUpdate()
     case 'toggleSetting': {
       const definition = settingDefinition(action.settingId)
       if (!definition || definition.type !== 'boolean') return { toast: { message: 'Setting not found', tone: 'error' } }
@@ -1687,14 +1693,13 @@ function createAiBuilderExtension() {
 }
 
 function createUpdatesExtension() {
-  const checkAction = () => ({ id: 'updates:check', kind: 'check-for-updates', title: 'Check for Updates', subtitle: `Current version: ${app.getVersion()}`, icon: 'restart', score: 23 })
+  const checkItem = () => ({ id: 'updates:check', title: 'Check for Updates', subtitle: `Current version: ${app.getVersion()}`, icon: 'restart', score: 23, primaryAction: { type: 'checkForUpdates', title: 'Check for Updates' } })
   return {
     id: 'nevermind.updates',
     title: 'Updates',
-    commands: [commandFromNativeAction(checkAction())],
+    commands: [{ ...checkItem(), run: () => checkForUpdatesView() }],
     rootItems() {
-      const action = updatePromptAction() || checkAction()
-      return [rootItemFromNativeAction(action)]
+      return [updatePromptAction() || checkItem()]
     },
   }
 }
