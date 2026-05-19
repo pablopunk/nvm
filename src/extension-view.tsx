@@ -35,10 +35,16 @@ export type ExtensionViewRendererProps = {
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void
 }
 
-function tileActionHint(actions: CommandAction[] = []) {
+function tileActionHint(item: CommandItem) {
+  if (item.actionPanelVisibility === 'hidden') return null
+  const actions = actionsFromPanel(item.actionPanel, item.actions || [])
   if (actions.length === 0) return null
   const shortcut = actions.find((action) => action.shortcut)?.shortcut
   return <span className="tileActionHint">{shortcut ? shortcutLabel(shortcut) : '⌘K'}</span>
+}
+
+function visibleActionPanelRows(view: CommandView, rows: unknown[]) {
+  return view.actionPanelVisibility === 'hidden' ? [] : rows
 }
 
 function gridStyle(view: CommandView) {
@@ -68,7 +74,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
       empty={renderEmpty(view)}
       isLoading={view.isLoading}
       pagination={pagination()}
-      renderItem={(item) => <CommandTile key={item.id} value={item.id} title={item.title} subtitle={item.subtitle} image={item.image} video={item.video || item.videoUrl} actionHint={tileActionHint(actionsFromPanel(item.actionPanel, item.actions || []))} draggable={Boolean(dragPathForItem(item))} onDragStart={(event) => startItemDrag(event, item)} onSelect={() => runDefaultAction(item)} />}
+      renderItem={(item) => <CommandTile key={item.id} value={item.id} title={item.title} subtitle={item.subtitle} image={item.image} video={item.video || item.videoUrl} actionHint={tileActionHint(item)} draggable={Boolean(dragPathForItem(item))} onDragStart={(event) => startItemDrag(event, item)} onSelect={() => runDefaultAction(item)} />}
     />
   }
 
@@ -83,7 +89,7 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
       pagination={pagination()}
       renderItem={(item) => {
         const Icon = iconFor[(item.icon as CommandIconName) || 'sparkles'] ?? Sparkles
-        return <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={item.image ? <span className="thumbnailIcon"><img src={item.image} alt="" /></span> : <Icon size={18} />} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} onSelect={() => runDefaultAction(item)} />
+        return <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={item.image ? <span className="thumbnailIcon"><img src={item.image} alt="" /></span> : <Icon size={18} />} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} onSelect={() => runDefaultAction(item)} />
       }}
     />
   }
@@ -99,12 +105,12 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
   if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
 
   if (view.type === 'webview') {
-    const webviewActionRows = actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false)
+    const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
     const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
     return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox="allow-scripts allow-forms allow-same-origin" allow="camera; microphone; display-capture; autoplay; clipboard-read; clipboard-write" />{webviewActions}</div>
   }
 
-  const previewActionRows = actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false)
+  const previewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
   const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
   return <div className={view.presentation === 'preview' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
 }

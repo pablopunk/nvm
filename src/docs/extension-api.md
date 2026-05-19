@@ -76,8 +76,8 @@ Commands can return:
 
 - `ctx.ui.list({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination })`; list items may include `accessories: [{ text }]` and `keywords`
 - `ctx.ui.grid({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
-- `ctx.ui.preview({ title, content, image, video })` for text, image, and video previews; `ctx.ui.preview(file, { title, content })` builds a large media preview from an extension file object
-- `ctx.ui.webview({ title, html, actions, size })` for live/interactive browser UI. Webviews run sandboxed HTML/JS without Node access and may use browser APIs like `navigator.mediaDevices` when the extension declares matching permissions such as `camera`. Use `size: 'large'` when the webview needs a larger palette.
+- `ctx.ui.preview({ title, content, image, video, actions, actionPanelVisibility })` for text, image, and video previews; `ctx.ui.preview(file, { title, content })` builds a large media preview from an extension file object
+- `ctx.ui.webview({ title, html, actions, size, actionPanelVisibility })` for live/interactive browser UI. Webviews run sandboxed HTML/JS without Node access and may use browser APIs like `navigator.mediaDevices` when the extension declares matching permissions such as `camera`. Use `size: 'large'` when the webview needs a larger palette.
 - `ctx.ui.chat({ title, messages })`
 - `ctx.ui.form({ title, fields })`
 - `ctx.ui.progress({ title, steps })`
@@ -94,7 +94,7 @@ Current `ctx` namespaces:
 - `ctx.actions.openPath/revealPath/quickLook/openWith/openUrl/copyText/pasteText/copyImage/trash` (optional final `{ shortcut: 'Command+Y' }` for local shortcuts). `quickLook` opens native macOS Quick Look and reports an error on other platforms. `trash` is destructive and requires confirmation by default.
 - Shortcuts have two scopes: action shortcuts inside views are local by default; command-level shortcuts are global when declared as `globalShortcut` or `{ shortcut, shortcutScope: 'global' }`. User-assigned global shortcuts always win over extension defaults.
 - `ctx.actions.push(title, view, { shortcut })`, `ctx.actions.replace(title, view, { shortcut })`, `ctx.actions.pop(title, { shortcut })` for nested native navigation
-- Actions can be grouped with `actionPanel: { sections: [{ title, actions }] }`; actions may include `submenu: { sections: [...] }` for nested action panels, `style: 'destructive'`, and `requiresConfirmation: true`.
+- Actions can be grouped with `actionPanel: { sections: [{ title, actions }] }`; actions may include `submenu: { sections: [...] }` for nested action panels, `style: 'destructive'`, and `requiresConfirmation: true`. Views and items can set `actionPanelVisibility: 'hidden'` when actions should remain available to default actions/local shortcuts but not be rendered as an action menu or inline preview/webview panel.
 - `ctx.navigation.push(view)`, `ctx.navigation.replace(view)`, `ctx.navigation.pop()`, and `ctx.navigation.run(action)` are the preferred explicit return helpers from action handlers.
 - `ctx.actions.run(title, async (ctx) => { ... })` for custom work from a view action; it may return a `ctx.navigation.*` result, another view, another action to execute, `{ view }`, `{ action }`, `{ toast }`, or `{ patch: { items: [{ id, ...fields }] } }` to update the current view in place without rebuilding it.
 - `ctx.actions.background(title, async (ctx) => { ... })` for fire-and-forget custom work that should dismiss the palette immediately and does not need follow-up UI. Command entries can set `background: true` or `dismissAfterRun: 'auto'` for the same command-level behavior.
