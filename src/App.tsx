@@ -739,6 +739,13 @@ export function App() {
     await tweakActionWithAi(optionsFor)
   }
 
+  function tabActionForRootAction(action: Action | null | undefined) {
+    if (!action) return null
+    if ((action.kind === 'ai-chat' || action.rootAction?.type === 'openAiChat') && (action.aiChatId || action.rootAction?.aiChatId)) return () => run(action)
+    if (['extension-command', 'extension-root-item'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
+    return null
+  }
+
   async function restoreOriginal() {
     if (!optionsFor) return
     const result = await window.nvm.runViewAction({ type: 'clearActionOverride', title: 'Restore Original', targetAction: optionsFor })
@@ -1335,10 +1342,13 @@ export function App() {
       }
     }
 
-    if (!isChildOpen && event.key === 'Tab' && ['extension-command', 'extension-root-item'].includes(selectedAction?.kind || '') && selectedAction?.extensionFile) {
-      event.preventDefault()
-      tweakActionWithAi(selectedAction)
-      return
+    if (!isChildOpen && event.key === 'Tab') {
+      const tabAction = tabActionForRootAction(selectedAction)
+      if (tabAction) {
+        event.preventDefault()
+        tabAction()
+        return
+      }
     }
 
     if (!isChildOpen && event.key === 'Tab' && query) {
