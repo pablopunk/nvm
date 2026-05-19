@@ -46,7 +46,7 @@ module.exports = {
 
 ## Root contributions
 
-Extensions can export `rootItems(ctx)` to contribute passive items to the root palette when there is no query, and `searchItems(ctx, query)` to contribute bounded query-aware root results. Root items are for ambient, high-signal information such as an upcoming calendar event, a currently running timer, or a recent status that deserves quick access.
+Extensions can export `rootItems(ctx)` to contribute passive items to the root palette when there is no query, and `searchItems(ctx, query)` to contribute bounded query-aware root results. Commands already appear in root/search, so providers must not return command launchers or collection entry points; use providers only for distinct child items, ambient status, or query-specific results. Root items are for ambient, high-signal information such as an upcoming calendar event, a currently running timer, or a recent status that deserves quick access.
 
 ```js
 module.exports = {

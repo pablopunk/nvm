@@ -1691,13 +1691,11 @@ function createClipboardExtension() {
       run: () => clipboardHistoryView(),
     }],
     rootItems() {
-      if (!getSetting('showClipboardInRoot')) return [historyItem()]
-      return [historyItem(), ...clipboardHistory.slice(0, 10).map(clipboardRootItem)]
+      if (!getSetting('showClipboardInRoot')) return []
+      return clipboardHistory.slice(0, 10).map(clipboardRootItem)
     },
     searchItems(_ctx, query) {
-      const history = historyItem()
-      const items = [history, ...clipboardHistory.map(clipboardRootItem)]
-      return items.filter((item) => rankAction(item, query)).slice(0, 5)
+      return clipboardHistory.map(clipboardRootItem).filter((item) => rankAction(item, query)).slice(0, 5)
     },
   }
 }
