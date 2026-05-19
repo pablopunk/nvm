@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import vm from 'node:vm'
+import * as logger from './logger'
+import { readRecentLogs, type LogLevel, type LogSource } from './logger'
 
 type AiEvent = {
   type: string
@@ -232,12 +234,12 @@ function createNevermindAi(options: NevermindAiOptions) {
       if (isMessageUpdateEvent(event)) {
         const delta = event.assistantMessageEvent.delta
         if (delta.includes('<tool_calls>') || delta.includes('<tool name=')) {
-          console.warn('[Nevermind AI] model emitted raw tool-call text instead of structured tool calls', {
+          logger.warn('ai.rawToolCallText', {
             provider: model.provider,
             id: model.id,
             api: model.api,
             delta,
-          })
+          }, { source: 'host', scope: 'ai' })
         }
         emit({ type: 'delta', text: delta })
       }
@@ -370,6 +372,30 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       }),
     }),
     pi.defineTool({
+      name: 'read_app_logs',
+      label: 'Read App Logs',
+      description: 'Read recent structured Nevermind app logs to debug host, renderer, extension, or API failures. Use this when an extension fails, an API helper behaves unexpectedly, or the user asks about app diagnostics.',
+      parameters: Type.Object({
+        limit: Type.Optional(Type.Number({ description: 'Maximum number of entries to return. Defaults to 200 and is capped by the host.' })),
+        level: Type.Optional(Type.String({ description: 'Optional level filter: debug, info, warn, or error.' })),
+        source: Type.Optional(Type.String({ description: 'Optional source filter: main, renderer, extension, or host.' })),
+        sinceMs: Type.Optional(Type.Number({ description: 'Only return entries from the last N milliseconds.' })),
+        query: Type.Optional(Type.String({ description: 'Case-insensitive text filter across the structured log entry.' })),
+        extensionId: Type.Optional(Type.String({ description: 'Optional extension id filter.' })),
+      }),
+      execute: async (_toolCallId: string, params: { limit?: number; level?: string; source?: string; sinceMs?: number; query?: string; extensionId?: string }) => {
+        const logs = await readRecentLogs({
+          limit: params.limit,
+          level: normalizeLogLevel(params.level),
+          source: normalizeLogSource(params.source),
+          sinceMs: params.sinceMs,
+          query: params.query,
+          extensionId: params.extensionId,
+        })
+        return { content: [{ type: 'text', text: logs.length ? JSON.stringify(logs, null, 2) : 'No matching app logs.' }], details: { count: logs.length } }
+      },
+    }),
+    pi.defineTool({
       name: 'list_extensions',
       label: 'List Extensions',
       description: 'List generated Nevermind extension files available to inspect or reference.',
@@ -456,6 +482,14 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
   ]
 }
 
+function normalizeLogLevel(level?: string): LogLevel | undefined {
+  return level === 'debug' || level === 'info' || level === 'warn' || level === 'error' ? level : undefined
+}
+
+function normalizeLogSource(source?: string): LogSource | undefined {
+  return source === 'main' || source === 'renderer' || source === 'extension' || source === 'host' ? source : undefined
+}
+
 async function fileExists(filePath: string) {
   try {
     await fs.access(filePath)
@@ -482,7 +516,7 @@ function capabilities() {
     extensionExports: ['commands', 'rootItems'],
     rootContributions: ['rootItems(ctx) returns high-signal empty-query root palette items with stable ids, titles, optional subtitles/icons/scores, primaryAction, actions, and actionPanel'],
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
-    views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview'],
+    views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'camera', 'webview'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
     itemOptions: ['accessories', 'keywords', 'actionPanel'],
     actionPanel: ['sections', 'submenus'],
@@ -520,7 +554,7 @@ Build local Nevermind extensions, not shell scripts.
 When the first user message is vague, ask clarifying questions before using tools.
 Do not call read_extension_api, list_capabilities, write_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
 Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api is the source of truth for extension API details and guideline overflow.
@@ -528,6 +562,7 @@ Use read_extension_api before writing an extension.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
 When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write extensions owned by this chat.
 Use list_capabilities when unsure which UI or OS capabilities exist.
+Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed extensions.
 Only write .cjs extension files with write_extension.
 write_extension creates standalone extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
@@ -538,7 +573,7 @@ Nevermind catches thrown extension errors and shows a native error view, so thro
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
-Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.ui.webview for custom live/interactive browser UI; set size: 'large' when it needs a larger palette. Use ctx.actions.run for script work triggered from UI.
+Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Prefer host-owned native views such as ctx.ui.camera({ title, deviceId, actions }) for media/interactive surfaces; use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }
 

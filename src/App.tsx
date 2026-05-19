@@ -290,7 +290,7 @@ export function App() {
       markShortcutReady(Boolean(payload?.revealWhenReady))
     })
     const stopAi = window.nvm.onAiChatEvent((event) => {
-      if (event.type === 'debug') console.debug('[Nevermind AI]', event.label, event.data)
+      if (event.type === 'debug') window.nvm.log('debug', `Nevermind AI: ${event.label || ''}`, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
       if (event.type === 'start') aiChat.setBusy(true)
       if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') aiChat.setBusy(false)

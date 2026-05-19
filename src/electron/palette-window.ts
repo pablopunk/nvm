@@ -1,7 +1,6 @@
 import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, paletteBrowserWindowOptions } from './os'
+import * as logger from './logger'
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
 
@@ -10,7 +9,6 @@ type PaletteWindowOptions = {
   preloadPath: string
   rendererUrl?: string
   rendererIndexPath: string
-  userDataPath: string
   getPaletteHotkey: () => string
 }
 
@@ -46,10 +44,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let pendingShowOnReady = false
 
   function debugLog(message: string, data?: unknown) {
-    try {
-      const line = `${new Date().toISOString()} ${message}${data ? ` ${JSON.stringify(data)}` : ''}\n`
-      fs.appendFile(path.join(options.userDataPath, 'debug.log'), line).catch(() => {})
-    } catch {}
+    logger.debug(message, data, { source: 'host', scope: 'palette-window' })
   }
 
   function createWindow() {
@@ -190,9 +185,9 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     const hotkey = options.getPaletteHotkey()
     const ok = globalShortcut.register(hotkey, togglePalette)
     debugLog('registerHotkey', { accelerator: hotkey, ok, isRegistered: globalShortcut.isRegistered(hotkey) })
-    if (ok) console.log(`Registered global shortcut: ${hotkey}`)
+    if (ok) logger.info('globalShortcut.registered', { hotkey }, { source: 'host', scope: 'palette-window' })
     else {
-      console.warn(`Could not register global shortcut: ${hotkey}`)
+      logger.warn('globalShortcut.register.failed', { hotkey }, { source: 'host', scope: 'palette-window' })
       showPaletteWhenReady()
     }
 

@@ -79,7 +79,8 @@ Commands can return:
 - `ctx.ui.list({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination })`; list items may include `accessories: [{ text }]` and `keywords`
 - `ctx.ui.grid({ title, items, sections, selectedItemId, onSelectionChange, isLoading, emptyView, searchBarPlaceholder, searchAccessory, pagination, refresh, layout, aspectRatio, columns })` where `layout` can be `square`, `wide`, or `compact`
 - `ctx.ui.preview({ title, content, image, video, actions, actionPanelVisibility })` for text, image, and video previews; `ctx.ui.preview(file, { title, content })` builds a large media preview from an extension file object
-- `ctx.ui.webview({ title, html, actions, size, actionPanelVisibility })` for live/interactive browser UI. Webviews run sandboxed HTML/JS without Node access and may use browser APIs like `navigator.mediaDevices` when the extension declares matching permissions such as `camera`. Use `size: 'large'` when the webview needs a larger palette.
+- `ctx.ui.camera({ title, deviceId, facingMode, muted, controls, actions, size, actionPanelVisibility })` for a host-owned live camera surface. Use this instead of custom HTML for webcam previews; Nevermind owns permission, rendering, sizing, and stream lifecycle. Declare `camera` permission.
+- `ctx.ui.webview({ title, html, actions, size, actionPanelVisibility })` for advanced custom live/interactive browser UI when no host-owned primitive fits. Webviews run sandboxed HTML/JS without Node access. Use `size: 'large'` when the webview needs a larger palette.
 - `ctx.ui.chat({ title, messages })`
 - `ctx.ui.form({ title, fields })`
 - `ctx.ui.progress({ title, steps })`
@@ -105,6 +106,8 @@ Use `refresh` for open, stateful views whose backing data may change while visib
 - `ctx.actions.shellExec(title, command, args, options)` and `ctx.actions.shellScript(title, script, options)` for command actions that show structured output in a native preview view. These require confirmation by default.
 - `ctx.storage.get/set/delete/clear/memo/memoStale` for persistent per-extension JSON storage
 - `ctx.settings.definitions/get/set/toggle` for host-owned app settings exposed to first-party extension workflows
+- `ctx.logs.debug/info/warn/error(message, data?)` writes extension-scoped diagnostics to the central Nevermind log. Entries are automatically tagged with the extension and command id.
+- `ctx.logs.recent(options)` reads a bounded slice of the central Nevermind log for diagnostics. Options include `{ limit, level, source, sinceMs, query, extensionId }`; limits are capped by the host and results are structured entries, not raw filesystem access.
 - `ctx.actions.toggleSetting(settingId, title)` and `ctx.actions.setPaletteShortcut(title)` for declarative settings actions
 - `ctx.ai.ask(prompt, options)` for a one-shot AI call that returns text. Options may include `{ system }`.
 - `ctx.ai.session(id, options)` for a per-extension conversational AI session. The returned session supports `ask(prompt)` and `reset()`. Session ids are scoped to the extension, and options may include `{ system }`.

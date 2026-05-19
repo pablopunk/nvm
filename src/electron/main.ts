@@ -17,20 +17,22 @@ import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './
 import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
+import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
 
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
+const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
+configureLogger(isDev)
+
 const updateManager = createUpdateManager(autoUpdater as any)
 const paletteWindow = createPaletteWindowController({
   isDev: Boolean(process.env.ELECTRON_RENDERER_URL),
   preloadPath: path.join(__dirname, '..', 'preload', 'preload.cjs'),
   rendererUrl: process.env.ELECTRON_RENDERER_URL,
   rendererIndexPath: path.join(__dirname, '..', 'renderer', 'index.html'),
-  userDataPath: app.getPath('userData'),
   getPaletteHotkey: () => String(getPaletteHotkey()),
 })
 
-const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
@@ -247,7 +249,7 @@ async function getAppIconDataUrl(appPath) {
       await fs.writeFile(cachePath, png).catch(() => {})
       return `data:image/png;base64,${png.toString('base64')}`
     } catch (error) {
-      console.warn(`Failed to load app icon for ${appPath}`, error)
+      logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
       return null
     }
   })()
@@ -711,7 +713,7 @@ function invalidateExtensionRootItems() {
 }
 
 function runInBackground(task) {
-  Promise.resolve().then(task).catch((error) => console.error('Background action failed', error))
+  Promise.resolve().then(task).catch((error) => logError('backgroundAction.failed', error, { source: 'host' }))
 }
 
 async function executeAction(action, options: any = {}) {
@@ -775,7 +777,7 @@ function currentActionForStoredShortcut(action) {
 async function executeExtensionCommand(action) {
   const entry = extensionEntryForAction(action)
   if (!entry) {
-    console.warn(`Extension command not found: ${action.extensionId}:${action.commandId}`)
+    logWarn('extension.command.notFound', { extensionId: action.extensionId, commandId: action.commandId }, { source: 'host', scope: 'extension' })
     return null
   }
   try {
@@ -783,7 +785,7 @@ async function executeExtensionCommand(action) {
     const result = await entry.command.run(ctx)
     return executeViewActionResult(result, entry)
   } catch (error) {
-    console.error(`Extension command failed: ${entry.extension.id}:${entry.command.id}`, error)
+    logError('extension.command.failed', error, { source: 'host', scope: 'extension', extensionId: entry.extension.id, commandId: entry.command.id })
     return extensionErrorView(entry, error)
   }
 }
@@ -797,7 +799,7 @@ async function executeExtensionRootItem(action) {
     const result = await record.handler(createExtensionContext(record.entry.extension, null), action)
     return executeViewActionResult(result, record.entry)
   } catch (error) {
-    console.error(`Extension root item failed: ${record.entry.extension.id}`, error)
+    logError('extension.rootItem.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id })
     return { view: extensionErrorView(record.entry, error) }
   }
 }
@@ -831,7 +833,7 @@ async function extensionSearchActionsForExtension(extension, query) {
     const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
     return rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), query)
   } catch (error) {
-    if (!String(error?.message || error).includes('Timed out')) console.error(`Extension search items failed: ${extension.id}`, error)
+    if (!String(error?.message || error).includes('Timed out')) logError('extension.searchItems.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
     return []
   }
 }
@@ -856,7 +858,7 @@ function refreshExtensionRootActions(extension, cacheKey) {
     extensionRootItemsCache.set(cacheKey, { updatedAt: Date.now(), items: actions })
     return actions
   })().catch((error) => {
-    if (!String(error?.message || error).includes('Timed out')) console.error(`Extension root items failed: ${extension.id}`, error)
+    if (!String(error?.message || error).includes('Timed out')) logError('extension.rootItems.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
     return extensionRootItemsCache.get(cacheKey)?.items || []
   }).finally(() => {
     extensionRootItemsRefreshes.delete(cacheKey)
@@ -1199,7 +1201,7 @@ async function executeViewAction(action) {
         const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command), action)
         return executeViewActionResult(result, record.entry)
       } catch (error) {
-        console.error(`Extension action failed: ${record.entry.extension.id}:${record.entry.command.id}`, error)
+        logError('extension.action.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id, commandId: record.entry.command.id })
         return { view: extensionErrorView(record.entry, error), navigation: 'push' }
       }
     }
@@ -1251,7 +1253,7 @@ function registerLocalFileProtocol() {
     try {
       return await thumbnailResponseForPath(requestPath)
     } catch (error) {
-      console.error('Failed to create thumbnail', requestPath, error)
+      logError('thumbnail.create.failed', { requestPath, error }, { source: 'host', scope: 'thumbnail' })
       return new Response('Thumbnail not found', { status: 404 })
     }
   })
@@ -1859,6 +1861,7 @@ function createExtensionContext(extension, command) {
       form: (view) => ({ ...view, type: 'form' }),
       progress: (view) => ({ ...view, type: 'progress' }),
       webview: (view) => ({ ...view, type: 'webview' }),
+      camera: (view = {}) => ({ title: 'Camera', size: 'large', muted: true, ...view, type: 'camera' }),
       item: (item) => item,
       actions: (actions) => actions,
       empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
@@ -1949,6 +1952,7 @@ function createExtensionContext(extension, command) {
         return next
       },
     },
+    logs: extensionLogger(extension.id, command?.id),
     cache: new Map(),
     state: {},
     ai: createExtensionAi(extension),
@@ -2071,7 +2075,7 @@ async function loadExtensions() {
       await applyExtensionMetadataOverrides(extension)
       registerExtension(extension)
     } catch (error) {
-      console.error(`Failed to load extension ${fullPath}`, error)
+      logError('extension.load.failed', error, { source: 'host', scope: 'extension', extensionId: path.basename(fullPath) })
     }
   }
 }
@@ -2193,7 +2197,7 @@ async function indexApplications() {
     appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
     paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
   } catch (error) {
-    console.error('Failed to index applications', error)
+    logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
   }
 }
 
@@ -2201,7 +2205,7 @@ async function indexFiles() {
   try {
     fileIndex = await scanFiles()
   } catch (error) {
-    console.error('Failed to index files', error)
+    logError('files.index.failed', error, { source: 'host', scope: 'files' })
   }
 }
 
@@ -2246,7 +2250,7 @@ function persistClipboardImage(png, hash) {
   const imagePath = path.join(clipboardImagesDir, `${hash}.png`)
   fs.mkdir(clipboardImagesDir, { recursive: true })
     .then(() => fs.writeFile(imagePath, png))
-    .catch((error) => console.warn('Failed to persist clipboard image', error))
+    .catch((error) => logWarn('clipboard.image.persist.failed', error, { source: 'host', scope: 'clipboard' }))
   return imagePath
 }
 
@@ -2311,7 +2315,7 @@ async function saveUserState() {
   userState.clipboardHistory = clipboardHistory
   await fs.mkdir(path.dirname(statePath), { recursive: true })
   await fs.writeFile(statePath, JSON.stringify(userState, null, 2)).catch((error) => {
-    console.error('Failed to save state', error)
+    logError('state.save.failed', error, { source: 'host', scope: 'state' })
   })
 }
 
@@ -2390,13 +2394,13 @@ function registerActionShortcuts() {
     if (!action) continue
     const ok = bindGlobalActionShortcut(actionId, accelerator, action)
     if (ok) bound.add(accelerator)
-    else console.warn(`Could not register action shortcut ${accelerator} for ${actionId}`)
+    else logWarn('actionShortcut.register.failed', { actionId, accelerator }, { source: 'host', scope: 'shortcuts' })
   }
   for (const { actionId, accelerator, action } of declaredGlobalShortcuts()) {
     if (userState.shortcuts[actionId] || bound.has(accelerator)) continue
     const ok = bindGlobalActionShortcut(actionId, accelerator, action)
     if (ok) bound.add(accelerator)
-    else console.warn(`Could not register declared action shortcut ${accelerator} for ${actionId}`)
+    else logWarn('declaredActionShortcut.register.failed', { actionId, accelerator }, { source: 'host', scope: 'shortcuts' })
   }
 }
 
@@ -2653,6 +2657,10 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('palette:hide', () => paletteWindow.hidePalette())
   ipcMain.handle('palette:shortcut-ready', () => paletteWindow.revealPalette())
+  ipcMain.handle('logs:write', (_event, level, message, data) => {
+    const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo
+    method(String(message || ''), data, { source: 'renderer', scope: 'renderer' })
+  })
 })
 
 app.on('activate', () => paletteWindow.showPalette())

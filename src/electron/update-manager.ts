@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { supportsAutoUpdates } from './os'
+import * as logger from './logger'
 
 type UpdateInfo = { version?: string }
 type AutoUpdaterLike = {
@@ -52,14 +53,14 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     state.status = 'checking'
     state.errorMessage = ''
     try {
-      console.info(`[nvm-updater] checking for updates (${trigger})`)
+      logger.info('updater.checking', { trigger }, { source: 'host', scope: 'updater' })
       const result = await autoUpdater.checkForUpdates()
       if (options.download && result?.updateInfo && !state.downloadedInfo) await downloadAvailableUpdate(result.updateInfo)
       return result?.updateInfo || null
     } catch (error) {
       state.status = 'error'
       state.errorMessage = error instanceof Error ? error.message : String(error)
-      console.error('[nvm-updater] update check failed', error)
+      logger.error('updater.check.failed', error, { source: 'host', scope: 'updater' })
       return null
     } finally {
       state.checkInFlight = false
@@ -78,7 +79,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     } catch (error) {
       state.status = 'error'
       state.errorMessage = error instanceof Error ? error.message : String(error)
-      console.error('[nvm-updater] update download failed', error)
+      logger.error('updater.download.failed', error, { source: 'host', scope: 'updater' })
     } finally {
       state.downloadInFlight = false
       if (state.status === 'downloading') state.status = state.downloadedInfo ? 'downloaded' : state.availableInfo ? 'available' : 'idle'
@@ -98,7 +99,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
 
   function configure() {
     if (!canUseAutoUpdates()) {
-      console.info('[nvm-updater] disabled (development build or unsupported platform)')
+      logger.info('updater.disabled', undefined, { source: 'host', scope: 'updater' })
       return
     }
 
@@ -107,37 +108,37 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
 
     autoUpdater.on('checking-for-update', () => {
       state.status = 'checking'
-      console.info('[nvm-updater] checking for update')
+      logger.info('updater.checking', undefined, { source: 'host', scope: 'updater' })
     })
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       state.availableInfo = info
       state.status = 'available'
-      console.info(`[nvm-updater] update available ${info.version}`)
+      logger.info('updater.available', info, { source: 'host', scope: 'updater' })
     })
 
     autoUpdater.on('update-not-available', () => {
       state.availableInfo = null
       state.downloadedInfo = null
       state.status = 'idle'
-      console.info('[nvm-updater] no updates available')
+      logger.info('updater.notAvailable', undefined, { source: 'host', scope: 'updater' })
     })
 
     autoUpdater.on('download-progress', (progress: { percent: number }) => {
-      console.info(`[nvm-updater] download progress ${Math.floor(progress.percent)}%`)
+      logger.info('updater.download.progress', { percent: Math.floor(progress.percent) }, { source: 'host', scope: 'updater' })
     })
 
     autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
       state.downloadedInfo = info
       state.availableInfo = info
       state.status = 'downloaded'
-      console.info(`[nvm-updater] update downloaded ${info.version}`)
+      logger.info('updater.downloaded', info, { source: 'host', scope: 'updater' })
     })
 
     autoUpdater.on('error', (error: Error) => {
       state.status = 'error'
       state.errorMessage = error?.message || String(error)
-      console.error('[nvm-updater] updater error', error)
+      logger.error('updater.error', error, { source: 'host', scope: 'updater' })
     })
 
     startupTimer = setTimeout(() => {
