@@ -522,16 +522,16 @@ export function App() {
     runningViewActionsRef.current.add(actionKey)
     const dismissedImmediately = actionCanDismissImmediately(action) || Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction))
     const loadingNavigation = nativeAction ? 'root' : 'push'
-    const showsLoading = !dismissedImmediately
+    const showsLoading = !dismissedImmediately && !nativeAction
     if (dismissedImmediately) window.nvm.hide()
-    else showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
+    else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {
       const result = await window.nvm.runViewAction(action)
       await handleViewActionResult(result, showsLoading ? 'replace' : 'push')
-      if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && result?.navigation !== 'pop') {
+      if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
         else window.nvm.hide()
-      } else if (showsLoading && !result?.view && !result?.navigation) {
+      } else if (showsLoading && !result?.view && !result?.patch && !result?.navigation) {
         if (loadingNavigation === 'push') popExtensionView()
         else window.nvm.hide()
       }
