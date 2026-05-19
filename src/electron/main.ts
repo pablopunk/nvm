@@ -2582,6 +2582,29 @@ async function removeAiChat(chatId) {
   return { view: aiChatsView(), navigation: 'replace', toast: { message: `Removed ${chat.title || chat.query || 'AI chat'}` } }
 }
 
+async function removeAiChatReferencesToExtensionFile(extensionFile) {
+  const removedFile = path.basename(extensionFile || '')
+  if (!removedFile) return
+  for (const chat of Object.values(userState.aiChats || {}) as any[]) {
+    const touchedFiles = chatTouchedExtensionFiles(chat)
+    if (!touchedFiles.includes(removedFile)) continue
+    const remainingFiles = [] as string[]
+    for (const filename of touchedFiles.filter((item) => item !== removedFile)) {
+      const exists = await fs.stat(path.join(extensionsDir, filename)).then(() => true).catch(() => false)
+      if (exists) remainingFiles.push(filename)
+    }
+    if (remainingFiles.length === 0) {
+      await removeAiChat(chat.id)
+      continue
+    }
+    chat.touchedExtensionFiles = remainingFiles
+    if (chat.contextExtensionFile === removedFile) chat.contextExtensionFile = remainingFiles[0]
+    if (chat.generatedExtensionFile === removedFile) chat.generatedExtensionFile = remainingFiles[0]
+    chat.updatedAt = Date.now()
+    scheduleSaveState()
+  }
+}
+
 async function removeCreatedAction(action) {
   if (action?.kind === 'ai-chat' && action.aiChatId) {
     await removeAiChat(action.aiChatId)
@@ -2596,6 +2619,7 @@ async function removeCreatedAction(action) {
     await fs.unlink(filePath).catch((error) => {
       if (error?.code !== 'ENOENT') throw error
     })
+    await removeAiChatReferencesToExtensionFile(path.basename(filePath))
     delete userState.recents[action.id]
     scheduleSaveState()
     await loadExtensions()
