@@ -195,6 +195,22 @@ export function App() {
   }, [extensionView?.id, extensionView?.refresh?.intervalMs])
 
   useLayoutEffect(() => {
+    const card = resultsListRef.current
+    if (!card) return
+    const LOADING_BORDER_MS_PER_PX = 0.8
+    const updateDuration = () => {
+      const rect = card.getBoundingClientRect()
+      const perimeter = (rect.width + rect.height) * 2
+      if (!perimeter) return
+      card.style.setProperty('--loading-border-duration', `${Math.round(perimeter * LOADING_BORDER_MS_PER_PX)}ms`)
+    }
+    updateDuration()
+    const observer = new ResizeObserver(updateDuration)
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [extensionView?.id])
+
+  useLayoutEffect(() => {
     const palette = paletteRef.current
     if (!palette) return
     if (siblingViews.length === 0) {

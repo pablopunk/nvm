@@ -925,7 +925,7 @@ kbd {
   border-radius: inherit;
   background: conic-gradient(from var(--loading-border-angle), transparent 0deg, transparent 265deg, rgba(255, 216, 77, 0.05) 292deg, rgba(255, 216, 77, 0.95) 320deg, rgba(255, 216, 77, 0.05) 348deg, transparent 360deg);
   pointer-events: none;
-  animation: loadingBorderSweep 900ms linear infinite;
+  animation: loadingBorderSweep var(--loading-border-duration, 900ms) linear infinite;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
