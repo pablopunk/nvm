@@ -179,7 +179,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       import('@earendil-works/pi-ai') as Promise<any>,
     ])
 
-    const apiKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
+    const apiKey = await resolveOpenCodeApiKey()
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
     if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
 
@@ -260,7 +260,7 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
     import('@earendil-works/pi-coding-agent') as Promise<PiApi>,
     import('@earendil-works/pi-ai') as Promise<any>,
   ])
-  const apiKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
+  const apiKey = await resolveOpenCodeApiKey()
   const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
   if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
   const model = ai.getModel('opencode', process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
@@ -289,6 +289,15 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
     settingsManager: pi.SettingsManager.inMemory({ compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 } }),
   }) as { session: AgentSession }
   return result.session
+}
+
+async function resolveOpenCodeApiKey() {
+  const envKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
+  if (envKey) return envKey
+  const secretsPath = path.join(process.env.HOME || '', '.zshrc.d', '01-secrets.sh')
+  const secrets = await fs.readFile(secretsPath, 'utf8').catch(() => '')
+  const match = secrets.match(/^\s*export\s+(?:OPENCODE_API_KEY|NEVERMIND_OPENCODE_API_KEY)=(['"]?)([^'"\n]+)\1\s*$/m)
+  return match?.[2]
 }
 
 async function createResourceLoader(pi: PiApi, { agentDir, workspaceDir, extensionApiPath, skillPath }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'>) {
