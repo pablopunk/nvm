@@ -614,7 +614,8 @@ export function App() {
     runningViewActionsRef.current.add(actionKey)
     const dismissedImmediately = actionCanDismissImmediately(action) || Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction))
     const loadingNavigation = nativeAction ? 'root' : 'push'
-    const showsLoading = !dismissedImmediately && !nativeAction && action.type !== 'runExtensionAction'
+    const inlineHostActionType = ['toggleSetting', 'removeShortcut', 'setActionShortcut', 'setActionAlias', 'removeActionAlias', 'clearActionOverride'].includes(action.type)
+    const showsLoading = !dismissedImmediately && !nativeAction && !inlineHostActionType && action.type !== 'runExtensionAction'
     if (dismissedImmediately) window.nvm.hide()
     else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {
@@ -626,9 +627,10 @@ export function App() {
       if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
         else window.nvm.hide()
-      } else if (showsLoading && !result?.view && !result?.patch && !result?.navigation) {
+      } else if (showsLoading && !result?.view && !result?.navigation) {
         if (loadingNavigation === 'push') popExtensionView()
         else window.nvm.hide()
+        if (result?.patch && loadingNavigation === 'push') queueMicrotask(() => applyViewPatch(result.patch))
       }
     } finally {
       runningViewActionsRef.current.delete(actionKey)
