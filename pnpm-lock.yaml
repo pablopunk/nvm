@@ -17,6 +17,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: latest
         version: 6.0.2(vite@8.0.13(@types/node@25.8.0)(jiti@2.7.0)(yaml@2.9.0))
+      balanced-match:
+        specifier: ^4.0.4
+        version: 4.0.4
       brace-expansion:
         specifier: ^5.0.6
         version: 5.0.6
