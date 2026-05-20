@@ -29,6 +29,7 @@
     "@earendil-works/pi-ai": "^0.74.0",
     "@earendil-works/pi-coding-agent": "^0.74.0",
     "@vitejs/plugin-react": "latest",
+    "brace-expansion": "^5.0.6",
     "cmdk": "^1.1.1",
     "debug": "^4.4.3",
     "electron-log": "^5.4.4",
