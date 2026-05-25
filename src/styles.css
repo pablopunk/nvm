@@ -633,6 +633,10 @@ kbd {
 }
 
 .chatView {
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   padding: 22px 24px 18px;
 }
 
@@ -640,14 +644,17 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: 430px;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 2px 2px 8px;
+  scroll-padding-bottom: 8px;
 }
 
 .chatInputRow {
   position: relative;
   display: block;
+  min-height: 0;
   margin-top: 2px;
 }
 
