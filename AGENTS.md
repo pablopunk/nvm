@@ -38,6 +38,6 @@
 
 * Before committing palette or extension API migrations, run tests and verify representative flows.
 * After adding or changing runtime dependencies used by packaged app paths, especially AI/extension code, verify the built Electron app can resolve them from `app.asar` instead of relying on dev-only pnpm resolution.
-* For root/search bugs, follow `src/docs/palette-debug.md`; use `mise exec pnpm -- pnpm palette:debug --query ...` and trace provider output, caches, ranking, limits, renderer refresh, and final rendered items before patching.
+* For root/search/action-panel bugs, follow `src/docs/palette-debug.md`; use `mise exec pnpm -- pnpm palette:debug --query ...` and trace provider output, normalized action identity, persisted aliases/shortcuts, caches, ranking, limits, renderer refresh/options, host enforcement, and final rendered items before patching.
 * For file/metadata/thumbnail extension API changes, verify an installed extension with `mise exec pnpm -- pnpm palette:debug --query ... --execute ...`; keep OS/tool calls batched or bounded.
 * Verify open view, primary action, repeated shortcuts/navigation, back stack, action-panel action, selection, icons/media, and dismissal behavior.
