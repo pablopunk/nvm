@@ -52,6 +52,17 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     logger.debug(message, data, { source: 'host', scope: 'palette-window' })
   }
 
+  function dismissAfterFocusLoss(reason: string) {
+    const remainingBlurGrace = ignorePaletteBlurUntil - Date.now()
+    if (remainingBlurGrace > 0) {
+      setTimeout(() => dismissAfterFocusLoss(reason), remainingBlurGrace)
+      return
+    }
+    if (!win?.isVisible() || win.isFocused()) return
+    debugLog('dismissAfterFocusLoss', { reason })
+    hidePalette()
+  }
+
   function createWindow() {
     win = new BrowserWindow({
       width: DEFAULT_WINDOW_SIZE.width,
@@ -79,10 +90,11 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
 
     applyPaletteWindowPolicy()
 
-    win.on('blur', () => {
-      if (Date.now() < ignorePaletteBlurUntil) return
-      hidePalette()
+    win.on('blur', () => dismissAfterFocusLoss('window-blur'))
+    app.on('browser-window-blur', (_event, blurredWindow) => {
+      if (blurredWindow === win) dismissAfterFocusLoss('browser-window-blur')
     })
+    ;(app as typeof app & { on(event: 'deactivate', listener: () => void): Electron.App }).on('deactivate', () => dismissAfterFocusLoss('app-deactivate'))
     win.on('close', (event) => {
       if (!(app as typeof app & { isQuiting?: boolean }).isQuiting) {
         event.preventDefault()
