@@ -18,6 +18,7 @@ import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, f
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
+import { canCustomizeCommandAction } from '../model'
 
 const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
@@ -1051,6 +1052,7 @@ function extensionRootActionFromItem(entry, item) {
     score: Math.min(Number(item.score || 35), 90),
     lastUsed: Number(item.lastUsed || 0),
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
+    customizable: Boolean(item.customizable),
     actionPanel,
     appearance: normalizeItemAppearance(item.appearance),
   }
@@ -1809,7 +1811,8 @@ function createWebSearchExtension() {
 }
 
 function appRootItem(item) {
-  return { id: `app:${item.id}`, title: item.name, subtitle: 'Launch application', icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
+  const id = `app:${item.id}`
+  return { id, title: item.name, subtitle: 'Launch application', aliases: actionAliases(`extension-root:nevermind.apps:${id}`), icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', customizable: true, primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
 
 async function attachAppIcons(items) {
@@ -2803,7 +2806,7 @@ function registerActionShortcuts() {
 }
 
 function canCustomizeAction(action) {
-  return ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(action?.kind)
+  return canCustomizeCommandAction(action)
 }
 
 function getShortcuts() {

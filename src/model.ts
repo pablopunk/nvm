@@ -167,6 +167,14 @@ export type RowModel = {
   onSelect: () => void
 }
 
+export type CustomizableCommandAction = { kind?: string; customizable?: boolean }
+
+const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-command'])
+
+export function canCustomizeCommandAction(action: CustomizableCommandAction | null | undefined) {
+  return Boolean(action?.customizable) || CUSTOMIZABLE_ACTION_KINDS.has(String(action?.kind || ''))
+}
+
 export function actionPanelFromActions(actions?: CommandAction[], title?: string): CommandActionPanel | undefined {
   if (!actions?.length) return undefined
   return { title, sections: [{ actions }] }

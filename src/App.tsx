@@ -25,7 +25,7 @@ import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
-import { actionDescription, actionsFromPanel, actionPanelFromActions, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
+import { actionDescription, actionsFromPanel, actionPanelFromActions, canCustomizeCommandAction, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
 import type { NevermindApi, ShortcutRecord } from './preload-api'
 
 type ActionKind =
@@ -83,6 +83,7 @@ type Action = {
   aiChatId?: string
   extensionFile?: string
   removable?: boolean
+  customizable?: boolean
   background?: boolean
   dismissAfterRun?: 'auto'
   rootAction?: CommandAction
@@ -826,7 +827,7 @@ export function App() {
   const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-command', 'extension-root-item'].includes(optionsFor.kind))
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
   const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item'].includes(optionsFor?.kind || '') && optionsFor?.removable)
-  const canCustomizeAction = Boolean(optionsFor && ['app', 'builtin', 'clipboard-history', 'extension-command'].includes(optionsFor.kind))
+  const canCustomizeAction = canCustomizeCommandAction(optionsFor)
   const canRemoveOptionsShortcut = Boolean(optionsFor && shortcutRecords.some((record) => record.actionId === optionsFor.id))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
@@ -1491,15 +1492,7 @@ export function App() {
             renderActionResults()
           )}
 
-          {!isChildOpen && actions.length === 0 ? (
-            <Command.Empty asChild>
-              <EmptyState
-                icon={<Zap size={24} />}
-                title={EMPTY_ROOT_TITLE}
-                subtitle={EMPTY_ROOT_SUBTITLE}
-              />
-            </Command.Empty>
-          ) : null}
+
         </Command.List>
 
       </Command>
