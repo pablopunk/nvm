@@ -83,6 +83,7 @@ export function applyPaletteWindowPolicy(win: BrowserWindow | null) {
       if (!window) return
       window.setAlwaysOnTop(true, 'screen-saver')
       window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      window.setWindowButtonVisibility?.(false)
       window.setFullScreenable(false)
       window.setSkipTaskbar(true)
     },
