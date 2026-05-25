@@ -2,42 +2,40 @@
 
 ## Workflow
 
-* Use `mise exec pnpm` for package-manager commands. Never call npm, yarn, pnpm, or bun directly; Node/pnpm are pinned in `mise.toml`.
-* Before changing code, inspect nearby conventions and reuse existing helpers, overlays, primitives, formatters, confirmation flows, shortcut plumbing, and OS capabilities.
-* Treat unexpected file changes as user work; do not overwrite them.
-* Before manually editing Nevermind user state, stop the running app; restart it after editing so in-memory state cannot overwrite the fix.
-* Use git while iterating: inspect history when useful and commit early/often.
+* **Tooling**: Always use `mise exec pnpm` for all package management. Do not use npm, yarn, or bun directly.
+* **Reuse**: Leverage existing primitives, formatters, and OS capabilities instead of creating one-off helpers.
+* **Safety**: Respect manual file changes and stop the app before editing `userState` to prevent overwrites.
+* **Git**: Commit frequently and use history to guide changes.
 
 ## Architecture
 
-* Keep files small, focused, and performant; fix slow patterns when you touch them.
-* Prefer generic first-party primitives over one-off helpers. Fix shared models/lifecycles instead of compensating in UI.
-* OS-specific desktop behavior goes through intent-named capabilities in `src/electron/os.ts`; follow `src/docs/os-architecture.md` and never gate one OS mechanism through an unrelated capability.
-* Extension APIs are declarative host-controlled contribution points, not app-internal backdoors; follow `src/docs/extension-api.md` and `src/docs/design-system-and-extension-api.md`. Do not duplicate collection/list entry points as both commands and provider items; commands already participate in root/search, so providers should contribute distinct child, status, or query items.
-* Extensions are first-class app contributors. Preserve native behavioral contracts when migrating features: return shape, identity, selection, shortcuts, icons/media, dismissal, and async lifecycle.
-* Extension command/action boundaries must catch, normalize, and clone-check results so failures render as Nevermind error views, not raw IPC/log errors. When debugging, inspect both repo code and installed/generated artifacts in `~/Library/Application Support/nvm/extensions`.
-* AI builder chats provide history/context and write scope. Generated extension files are durable; deleting chat history must not delete code. AI writes are limited to extension files already touched/owned by that chat.
+* **Efficiency**: Keep files small and focused. Refactor slow patterns when encountered.
+* **Primitives**: Fix shared models and lifecycles at the source rather than patching UI behavior.
+* **OS Interop**: Use intent-named capabilities in `src/electron/os.ts`. Follow `src/docs/os-architecture.md`.
+* **Extensions**: Treat Extension APIs as declarative host points, not backdoors. Ensure commands and provider items remain distinct to avoid duplication in search.
+* **Consistency**: Maintain native behavioral contracts (shortcuts, icons, async lifecycle) when migrating features to extensions.
+* **Error Handling**: Normalize action results so failures appear as UI error views rather than raw logs.
+* **AI Scope**: AI-generated code is durable. AI writes are restricted to extension files relevant to the current chat context.
+* **Innovation**: When fixing bugs, evaluate how the system would look if built from scratch and propose improvements.
 
 ## Product and UX
 
-* Nevermind is command-k first: decisions, confirmations, warnings, and configuration live in the palette, usually as `preview`/`list` views with action panels or existing-view items. Never use `window.confirm`, `window.prompt`, `window.alert`, or a separate preferences window.
-* Async UX must show a stable intended surface or cached snapshot immediately, then refresh in place; see `src/docs/extension-api.md` for view/action lifecycle expectations. External handoff actions hide the palette before OS work and continue in the background. Do not insert/reorder passive visible lists unless the user explicitly refreshes/navigates; loading/progress surfaces must not pollute extension navigation history.
-* Scope presentation state to context: reset filters/search when navigating unless inheritance is intentional; action panels/submenus own palette sizing and selection while open.
-* Do not show empty-state UI in passive content surfaces; reserve empty states for result/action lists.
-* New settings use the existing pipeline: add `SETTING_DEFINITIONS` in `src/electron/main.ts`, persist under `userState.settings`, and surface in Settings. Booleans use `toggle-setting`; richer types get a `nativeAction` plus renderer handling.
-* Keyboard accelerators use canonical storage/registration form (`Command+Alt+K`) and symbol display form (`⌘⌥K`). User-visible labels must pass through `shortcutLabel` (`src/ui.tsx`) or `formatShortcut` (`src/electron/main.ts`); `Space` remains literal.
+* **Palette First**: Use the Command-K palette for all interactions. Avoid `window.confirm`, `alert`, or dedicated settings windows.
+* **Async UI**: Show cached snapshots immediately and refresh in place. Do not disrupt navigation history with passive loading states.
+* **Context**: Reset filters and search during navigation unless inheritance is explicit.
+* **Cleanliness**: Reserve empty states for active result lists; do not show them in passive surfaces.
+* **Settings**: Use the standard pipeline in `src/electron/main.ts` for new settings.
+* **Shortcuts**: Use canonical storage (`Command+Alt+K`) and symbol display (`⌘⌥K`) formats via `shortcutLabel`.
 
-## Code, docs, and style
+## Style and Documentation
 
-* Comments are a smell; prefer several well-named functions over explanatory comments.
-* Keep `AGENTS.md` minimal: only durable guidelines/instructions that apply repo-wide. Move overflow guidelines to `src/docs/` when they need more room.
-* Document hard-won learnings in `src/docs/` only after substantial iteration. Docs are also guidelines and should capture intention, not implementation details.
-* Use design tokens from `:root` in `src/styles.css` (`--radius-*`, `--surface-*`, `--border-*`, `--text-*`, `--accent-*`, `--danger-*`). Do not add ad-hoc `rgba(255,255,255,…)` surfaces/borders/text or pixel radii; extend tokens if needed.
+* **Code**: Prefer descriptive function naming over comments.
+* **Docs**: Keep `AGENTS.md` concise. Move detailed guides to `src/docs/`. Document intentions, not just implementations.
+* **Design**: Use CSS variables from `src/styles.css` (e.g., `--accent-*`, `--radius-*`). Avoid hardcoded colors or radii.
 
 ## Verification
 
-* Before committing palette or extension API migrations, run tests and verify representative flows.
-* After adding or changing runtime dependencies used by packaged app paths, especially AI/extension code, verify the built Electron app can resolve them from `app.asar` instead of relying on dev-only pnpm resolution.
-* For root/search/action-panel bugs, follow `src/docs/palette-debug.md`; use `mise exec pnpm -- pnpm palette:debug --query ...` and trace provider output, normalized action identity, persisted aliases/shortcuts, caches, ranking, limits, renderer refresh/options, host enforcement, and final rendered items before patching.
-* For file/metadata/thumbnail extension API changes, verify an installed extension with `mise exec pnpm -- pnpm palette:debug --query ... --execute ...`; keep OS/tool calls batched or bounded.
-* Verify open view, primary action, repeated shortcuts/navigation, back stack, action-panel action, selection, icons/media, and dismissal behavior.
+* **Testing**: Run tests and verify core flows before committing API or palette changes.
+* **Bundling**: Ensure new dependencies resolve correctly within the Electron `app.asar`.
+* **Debugging**: Use `mise exec pnpm -- pnpm palette:debug` to trace provider output and ranking.
+* **UX Audit**: Verify navigation, action panels, shortcuts, and dismissal behavior for all changes.

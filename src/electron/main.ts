@@ -1100,9 +1100,15 @@ function extensionErrorAiAction(entry, message) {
   }
 }
 
+const VIEW_TYPES = new Set(['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview', 'camera'])
+
+function isView(value) {
+  return Boolean(value?.type && VIEW_TYPES.has(value.type))
+}
+
 function normalizeExtensionView(result, entry) {
   if (!result) return null
-  const view = result.type ? result : result.view?.type ? result.view : null
+  const view = isView(result) ? result : isView(result.view) ? result.view : null
   return view ? normalizeView(view, entry) : null
 }
 
@@ -1187,8 +1193,8 @@ function runShellScript(script, options: any = {}) {
   return runShellCommand(options.shell || '/bin/bash', ['-lc', String(script)], { ...options, shell: false })
 }
 
-function isViewAction(value) {
-  return Boolean(value?.type && ['nativeAction', 'openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'pushView', 'replaceView', 'popView', 'runExtensionAction', 'shellExec', 'shellScript'].includes(value.type))
+function isAction(value) {
+  return Boolean(value?.type && !isView(value))
 }
 
 function normalizeViewPatch(patch, entry) {
@@ -1201,8 +1207,8 @@ function normalizeViewPatch(patch, entry) {
 
 async function executeViewActionResult(result, entry) {
   if (!result) return result
-  if (isViewAction(result)) return executeViewAction(normalizeViewAction(result, entry))
-  if (isViewAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry))
+  if (isAction(result)) return executeViewAction(normalizeViewAction(result, entry))
+  if (isAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry))
   const view = normalizeExtensionView(result, entry)
   return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast, patch: normalizeViewPatch(result?.patch, entry) } : { ...result, patch: normalizeViewPatch(result?.patch, entry) }
 }
@@ -1347,6 +1353,8 @@ async function executeViewAction(action) {
         return { view: extensionErrorView(record.entry, error), navigation: 'push' }
       }
     }
+    default:
+      throw new Error(`Unsupported action type: ${String(action?.type || 'unknown')}`)
   }
 }
 

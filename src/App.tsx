@@ -25,7 +25,7 @@ import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
-import { actionDescription, actionsFromPanel, actionPanelFromActions, canCustomizeCommandAction, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
+import { actionDefinition, actionDescription, actionsFromPanel, actionPanelFromActions, canCustomizeCommandAction, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
 import type { NevermindApi, ShortcutRecord } from './preload-api'
 
 type ActionKind =
@@ -542,7 +542,7 @@ export function App() {
   }
 
   function actionCanDismissImmediately(action: ExtensionViewAction) {
-    return action.dismissAfterRun === 'auto' && ['nativeAction', 'openPath', 'revealPath', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'runExtensionAction', 'toggleSetting', 'removeShortcut'].includes(action.type)
+    return action.dismissAfterRun === 'auto' && actionDefinition(action)?.dismiss === 'immediate'
   }
 
   function rootNativeActionCanDismissImmediately(action: Action | { kind?: string }) {
@@ -615,8 +615,8 @@ export function App() {
     runningViewActionsRef.current.add(actionKey)
     const dismissedImmediately = actionCanDismissImmediately(action) || Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction))
     const loadingNavigation = nativeAction ? 'root' : 'push'
-    const inlineHostActionType = ['toggleSetting', 'removeShortcut', 'setActionShortcut', 'setActionAlias', 'removeActionAlias', 'clearActionOverride'].includes(action.type)
-    const showsLoading = !dismissedImmediately && !nativeAction && !inlineHostActionType && action.type !== 'runExtensionAction'
+    const definition = actionDefinition(action)
+    const showsLoading = !dismissedImmediately && !nativeAction && definition?.loading === 'view'
     if (dismissedImmediately) window.nvm.hide()
     else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {

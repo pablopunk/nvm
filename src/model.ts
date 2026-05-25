@@ -12,7 +12,56 @@ export type ExtensionPermission =
   | 'updates'
   | 'settings.write'
 
-export type CommandActionType = 'openPath' | 'revealPath' | 'quickLook' | 'openWith' | 'openUrl' | 'copyText' | 'copyImage' | 'pasteText' | 'trash' | 'pushView' | 'replaceView' | 'popView' | 'previewClipboardItem' | 'runExtensionAction' | 'shellExec' | 'shellScript' | 'checkForUpdates' | 'downloadUpdate' | 'installUpdate' | 'lockScreen' | 'sleepSystem' | 'restartSystem' | 'quitApp' | 'openSystemSettings' | 'toggleSetting' | 'recordShortcut' | 'setActionShortcut' | 'removeShortcut' | 'setActionAlias' | 'removeActionAlias' | 'duplicateCreatedAction' | 'removeCreatedAction' | 'clearActionOverride' | 'nativeAction'
+export type ActionDismissBehavior = 'manual' | 'immediate' | 'after-success'
+export type ActionLoadingBehavior = 'view' | 'none'
+export type ActionExecutionLocation = 'main' | 'renderer'
+
+export type CommandActionDefinition = {
+  description: string
+  dismiss: ActionDismissBehavior
+  loading: ActionLoadingBehavior
+  execute: ActionExecutionLocation
+  inline?: boolean
+}
+
+export const ACTION_DEFINITIONS = {
+  openPath: { description: 'Open with the default app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  revealPath: { description: 'Reveal in file manager', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  quickLook: { description: 'Preview this file', dismiss: 'manual', loading: 'view', execute: 'main' },
+  openWith: { description: 'Open with another app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  openUrl: { description: 'Open URL', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  copyText: { description: 'Copy text to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  copyImage: { description: 'Copy image to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  pasteText: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  trash: { description: 'Move to Trash', dismiss: 'manual', loading: 'view', execute: 'main' },
+  pushView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
+  replaceView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
+  popView: { description: 'Go back', dismiss: 'manual', loading: 'view', execute: 'main' },
+  previewClipboardItem: { description: 'Preview clipboard item', dismiss: 'manual', loading: 'none', execute: 'renderer' },
+  runExtensionAction: { description: 'Run action', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  shellExec: { description: 'Run system command', dismiss: 'manual', loading: 'view', execute: 'main' },
+  shellScript: { description: 'Run system command', dismiss: 'manual', loading: 'view', execute: 'main' },
+  checkForUpdates: { description: 'Check for updates', dismiss: 'manual', loading: 'view', execute: 'main' },
+  downloadUpdate: { description: 'Download update', dismiss: 'manual', loading: 'view', execute: 'main' },
+  installUpdate: { description: 'Install update', dismiss: 'manual', loading: 'view', execute: 'main' },
+  lockScreen: { description: 'Lock screen', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  sleepSystem: { description: 'Sleep system', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  restartSystem: { description: 'Restart system', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  quitApp: { description: 'Quit app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  openSystemSettings: { description: 'Open system settings', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  toggleSetting: { description: 'Change setting', dismiss: 'immediate', loading: 'none', execute: 'main', inline: true },
+  recordShortcut: { description: 'Record shortcut', dismiss: 'manual', loading: 'none', execute: 'renderer' },
+  setActionShortcut: { description: 'Set shortcut', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
+  removeShortcut: { description: 'Remove shortcut', dismiss: 'immediate', loading: 'none', execute: 'main', inline: true },
+  setActionAlias: { description: 'Set alias', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
+  removeActionAlias: { description: 'Remove alias', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
+  duplicateCreatedAction: { description: 'Duplicate action', dismiss: 'manual', loading: 'view', execute: 'main' },
+  removeCreatedAction: { description: 'Remove action', dismiss: 'manual', loading: 'view', execute: 'main' },
+  clearActionOverride: { description: 'Restore original action', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
+  nativeAction: { description: 'Run command', dismiss: 'manual', loading: 'none', execute: 'main' },
+} as const satisfies Record<string, CommandActionDefinition>
+
+export type CommandActionType = keyof typeof ACTION_DEFINITIONS
 
 export type CommandApp = { name?: string; path?: string }
 
@@ -184,37 +233,13 @@ export function actionsFromPanel(panel?: CommandActionPanel, fallbackActions: Co
   return panel?.sections.flatMap((section) => section.actions) || fallbackActions
 }
 
+export function actionDefinition(action: Pick<CommandAction, 'type'> | null | undefined) {
+  return action?.type ? ACTION_DEFINITIONS[action.type] : undefined
+}
+
 export function actionDescription(action: CommandAction) {
   if (action.subtitle || action.description) return action.subtitle || action.description
-  if (action.type === 'quickLook') return action.title || 'Preview this file'
-  if (action.type === 'openWith') return action.app?.name ? `Open with ${action.app.name}` : 'Open with another app'
-  if (action.type === 'openPath') return 'Open with the default app'
-  if (action.type === 'revealPath') return action.title || 'Reveal in file manager'
-  if (action.type === 'copyText') return 'Copy text to the clipboard'
-  if (action.type === 'copyImage') return 'Copy image to the clipboard'
-  if (action.type === 'pasteText') return 'Paste into the frontmost app'
-  if (action.type === 'trash') return 'Move to Trash'
-  if (action.type === 'pushView' || action.type === 'replaceView') return 'Open nested view'
-  if (action.type === 'popView') return 'Go back'
-  if (action.type === 'previewClipboardItem') return 'Preview clipboard item'
-  if (action.type === 'shellExec' || action.type === 'shellScript') return 'Run system command'
-  if (action.type === 'checkForUpdates') return 'Check for updates'
-  if (action.type === 'downloadUpdate') return 'Download update'
-  if (action.type === 'installUpdate') return 'Install update'
-  if (action.type === 'lockScreen') return 'Lock screen'
-  if (action.type === 'sleepSystem') return 'Sleep system'
-  if (action.type === 'restartSystem') return 'Restart system'
-  if (action.type === 'quitApp') return 'Quit app'
-  if (action.type === 'openSystemSettings') return 'Open system settings'
-  if (action.type === 'toggleSetting') return 'Change setting'
-  if (action.type === 'recordShortcut') return 'Record shortcut'
-  if (action.type === 'setActionShortcut') return 'Set shortcut'
-  if (action.type === 'removeShortcut') return 'Remove shortcut'
-  if (action.type === 'setActionAlias') return 'Set alias'
-  if (action.type === 'removeActionAlias') return 'Remove alias'
-  if (action.type === 'duplicateCreatedAction') return 'Duplicate action'
-  if (action.type === 'removeCreatedAction') return 'Remove action'
-  if (action.type === 'clearActionOverride') return 'Restore original action'
-  if (action.type === 'nativeAction') return 'Run command'
-  return 'Run action'
+  if (action.type === 'quickLook' || action.type === 'revealPath') return action.title || actionDefinition(action)?.description || 'Run action'
+  if (action.type === 'openWith') return action.app?.name ? `Open with ${action.app.name}` : actionDefinition(action)?.description || 'Run action'
+  return actionDefinition(action)?.description || 'Run action'
 }
