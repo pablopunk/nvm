@@ -2134,7 +2134,7 @@ function createExtensionContext(extension, command) {
     actions: {
       openPath: (filePath, title = 'Open', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openPath', title, path: filePath }),
       revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'revealPath', title, path: filePath }),
-      quickLook: (filePath, title = quickLookTitle(), options: any = {}) => ({ shortcut: 'Command+Y', ...options, type: 'quickLook', title, path: filePath }),
+      quickLook: (filePath, title = quickLookTitle(), options: any = {}) => ({ ...options, type: 'quickLook', title, path: filePath }),
       openWith: (filePath, app, title, options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openWith', title: title || `Open with ${app?.name || 'App'}`, path: filePath, app, appPath: app?.path || app }),
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
@@ -2343,7 +2343,6 @@ function createExtensionViewsApi(extension, command) {
       __handler: async (innerCtx) => {
         if (!command || typeof command.run !== 'function') return { toast: { message: 'View cannot refresh', tone: 'error' } }
         if (!checkRefreshBurst(extension)) return { skipped: true }
-        invalidateExtensionRootItemsForExtension(extension)
         const result = await command.run(innerCtx)
         const view = result?.type ? result : result?.view?.type ? result.view : null
         if (view?.items) return { patch: { mode: 'replace', items: view.items } }

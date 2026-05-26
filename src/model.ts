@@ -146,7 +146,7 @@ export type CommandItem = {
   primaryAction?: CommandAction
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
-  actionPanelVisibility?: 'visible' | 'hidden'
+  actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
   appearance?: CommandItemAppearance
 }
 
@@ -199,7 +199,7 @@ export type CommandView = {
   steps?: { title: string; status?: string }[]
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
-  actionPanelVisibility?: 'visible' | 'hidden'
+  actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
   layout?: 'square' | 'wide' | 'compact'
   aspectRatio?: string | number
   columns?: number

@@ -44,7 +44,7 @@ function tileActionHint(item: CommandItem) {
 }
 
 function visibleActionPanelRows(view: CommandView, rows: unknown[]) {
-  return view.actionPanelVisibility === 'hidden' ? [] : rows
+  return view.actionPanelVisibility === 'hidden' || view.actionPanelVisibility === 'menu' ? [] : rows
 }
 
 function gridStyle(view: CommandView) {
@@ -209,5 +209,5 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
 
   const previewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
   const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
-  return <div className={view.presentation === 'preview' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
+  return <div className={view.presentation === 'preview' || view.size === 'large' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
 }

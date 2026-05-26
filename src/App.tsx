@@ -145,6 +145,7 @@ export function App() {
   const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
   const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({})
   const [selectedValue, setSelectedValue] = useState('')
+  const selectedValueRef = useRef('')
   const [optionsFor, setOptionsFor] = useState<Action | null>(null)
   const [extensionItemOptionsFor, setExtensionItemOptionsFor] = useState<ExtensionViewItem | null>(null)
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{ title: string; panel: CommandActionPanel } | null>(null)
@@ -170,7 +171,12 @@ export function App() {
   const extensionViewRef = useRef<ExtensionView | null>(null)
   const wasChildOpenRef = useRef(false)
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 })
+  function selectValue(value: string) {
+    selectedValueRef.current = value
+    setSelectedValue(value)
+  }
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
+  useEffect(() => { selectedValueRef.current = selectedValue }, [selectedValue])
 
   useEffect(() => {
     if (!extensionView?.refresh?.action || !extensionView.refresh.intervalMs) return
@@ -339,20 +345,24 @@ export function App() {
   const extensionViewSelectionKey = extensionView ? `${extensionView.id || ''}:${extensionView.type}:${extensionView.title}:${extensionView.selectedItemId || ''}` : ''
 
   useEffect(() => {
-    if (shortcutFor) setSelectedValue('shortcut:save')
-    else if (shortcutOptionsFor) setSelectedValue(getShortcutOptionRows()[0]?.value ?? '')
-    else if (shortcutManagerOpen) setSelectedValue(getShortcutRows()[0]?.value ?? '')
-    else if (aliasFor) setSelectedValue(getAliasActionRows()[0]?.value ?? '')
-    else if (confirmRemoveFor) setSelectedValue(getConfirmActionRows()[0]?.value ?? '')
-    else if (confirmViewActionFor) setSelectedValue(getConfirmViewActionRows()[0]?.value ?? '')
-    else if (actionSubmenuFor) setSelectedValue(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true).find((row) => !row.sectionHeader)?.value ?? '')
-    else if (extensionItemOptionsFor) setSelectedValue(getExtensionItemActionRows()[0]?.value ?? '')
-    else if (optionsFor) setSelectedValue(getOptionActionRows()[0]?.value ?? '')
-    else if (previewFor) setSelectedValue('preview')
-    else if (extensionView && isFilterableExtensionView) setSelectedValue(extensionView.selectedItemId || filterExtensionItems(allViewItems(extensionView))[0]?.id || '')
-    else if (extensionView?.actions?.length) setSelectedValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
-    else if (extensionView) setSelectedValue('preview')
-    else setSelectedValue(actions[0]?.id ?? '')
+    if (shortcutFor) selectValue('shortcut:save')
+    else if (shortcutOptionsFor) selectValue(getShortcutOptionRows()[0]?.value ?? '')
+    else if (shortcutManagerOpen) selectValue(getShortcutRows()[0]?.value ?? '')
+    else if (aliasFor) selectValue(getAliasActionRows()[0]?.value ?? '')
+    else if (confirmRemoveFor) selectValue(getConfirmActionRows()[0]?.value ?? '')
+    else if (confirmViewActionFor) selectValue(getConfirmViewActionRows()[0]?.value ?? '')
+    else if (actionSubmenuFor) selectValue(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true).find((row) => !row.sectionHeader)?.value ?? '')
+    else if (extensionItemOptionsFor) selectValue(getExtensionItemActionRows()[0]?.value ?? '')
+    else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '')
+    else if (previewFor) selectValue('preview')
+    else if (extensionView && isFilterableExtensionView) {
+      const items = filterExtensionItems(allViewItems(extensionView))
+      const current = selectedValueRef.current
+      selectValue(extensionView.selectedItemId || (current && items.some((item) => item.id === current) ? current : items[0]?.id || ''))
+    }
+    else if (extensionView?.actions?.length) selectValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
+    else if (extensionView) selectValue('preview')
+    else selectValue(actions[0]?.id ?? '')
   }, [actions, actionSubmenuFor, aliasFor, childQuery, confirmRemoveFor, confirmViewActionFor, extensionItemOptionsFor, optionsFor, previewFor, extensionViewSelectionKey, shortcutFor, shortcutManagerOpen, shortcutRecords, shortcutOptionsFor])
 
   useEffect(() => {
@@ -520,15 +530,53 @@ export function App() {
     return next.map((item) => patchedIds.has(item.id) ? { ...item, ...patches.find((patch) => patch.id === item.id) } : item)
   }
 
-  function applyViewPatch(patch?: CommandViewPatch) {
-    if (!patch) return
-    extensionNavigation.setView((current) => current ? {
+  function patchedView(current: ExtensionView, patch: CommandViewPatch): ExtensionView {
+    return {
       ...current,
       ...(patch.isLoading === undefined ? {} : { isLoading: patch.isLoading }),
       ...(patch.selectedItemId === undefined ? {} : { selectedItemId: patch.selectedItemId }),
       items: patchItems(current.items, patch.items || [], patch.mode || current.refresh?.mode, patch.removeItemIds || []),
       sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || [], patch.mode || current.refresh?.mode, patch.removeItemIds || []) || [] })),
-    } : current)
+    }
+  }
+
+  function selectionAfterPatch(current: ExtensionView, next: ExtensionView, patch: CommandViewPatch) {
+    const nextItems = allViewItems(next)
+    if (nextItems.length === 0) return ''
+    if (patch.selectedItemId !== undefined) return nextItems.some((item) => item.id === patch.selectedItemId) ? patch.selectedItemId : nextItems[0].id
+    const selected = selectedValueRef.current
+    if (selected && nextItems.some((item) => item.id === selected)) return selected
+    const currentItems = allViewItems(current)
+    const currentIndex = currentItems.findIndex((item) => item.id === selected)
+    const fallbackIndex = currentIndex < 0 ? 0 : Math.min(currentIndex, nextItems.length - 1)
+    return nextItems[fallbackIndex]?.id || ''
+  }
+
+  function viewIdentity(view: ExtensionView | null) {
+    return view ? `${view.id || ''}:${view.type}:${view.title}` : ''
+  }
+
+  function restorePatchViewport(viewKey: string, scrollTop: number | undefined, selectedItemId: string) {
+    requestAnimationFrame(() => {
+      if (viewIdentity(extensionViewRef.current) !== viewKey) return
+      if (selectedItemId && selectedValueRef.current !== selectedItemId) {
+        selectValue(selectedItemId)
+      }
+      if (scrollTop !== undefined && resultsListRef.current) resultsListRef.current.scrollTop = scrollTop
+    })
+  }
+
+  function applyViewPatch(patch?: CommandViewPatch) {
+    if (!patch) return
+    const current = extensionViewRef.current
+    if (!current) return
+    const scrollTop = resultsListRef.current?.scrollTop
+    const next = patchedView(current, patch)
+    const nextSelected = selectionAfterPatch(current, next, patch)
+    extensionViewRef.current = next
+    extensionNavigation.setView(next)
+    selectValue(nextSelected)
+    restorePatchViewport(viewIdentity(current), scrollTop, nextSelected)
   }
 
 
@@ -956,6 +1004,7 @@ export function App() {
           if (closeAfterSelect) {
             setActionSubmenuFor(null)
             setExtensionItemOptionsFor(null)
+            setOptionsFor(null)
             setChildQuery('')
           }
         },
@@ -999,8 +1048,27 @@ export function App() {
     return shortcutRecorderRows(recordedShortcut, shortcutFor, saveRecordedShortcut, () => setShortcutFor(null))
   }
 
+  function getRootActionRows() {
+    if (!optionsFor) return []
+    const primaryRow: ActionPanelRow = {
+      value: 'option:run',
+      icon: iconForCommandItem(commandItemFromAction(optionsFor)),
+      title: optionsFor.title,
+      subtitle: optionsFor.subtitle || 'Run action',
+      shortcut: optionsFor.shortcut,
+      onSelect: async () => {
+        setOptionsFor(null)
+        setChildQuery('')
+        await run(optionsFor)
+      },
+      className: 'result',
+    }
+    const rows = [primaryRow, ...actionPanelRows(optionsFor.actionPanel, [], 'root-action', true)]
+    return rows.filter((row) => 'sectionHeader' in row || childMatches(row.title, row.subtitle))
+  }
+
   function getOptionActionRows() {
-    return [
+    const optionRows = [
       {
         value: 'option:shortcut',
         icon: <Keyboard size={18} />,
@@ -1086,6 +1154,7 @@ export function App() {
         show: canRemoveCreatedAction,
       },
     ].filter((row) => row.show && childMatches(row.title, row.subtitle))
+    return [...getRootActionRows(), ...optionRows]
   }
 
   function renderChildEmpty(message = EMPTY_ACTIONS_TITLE, subtitle?: string) {
@@ -1188,6 +1257,14 @@ export function App() {
     return item?.actionPanelVisibility !== 'hidden'
   }
 
+  function viewActionPanelIsVisible(view: ExtensionView | null | undefined) {
+    return view?.actionPanelVisibility !== 'hidden'
+  }
+
+  function viewActionPanel(view: ExtensionView) {
+    return view.actionPanel || actionPanelFromActions(view.actions || [])
+  }
+
   function renderSearchAccessory(view: ExtensionView | null) {
     if (!view?.searchAccessory?.items?.length) return null
     return <SearchAccessory
@@ -1247,7 +1324,7 @@ export function App() {
     const nextIndex = Math.max(0, Math.min(items.length - 1, currentIndex + delta))
     const next = items[nextIndex]
     if (!next) return false
-    setSelectedValue(next.id)
+    selectValue(next.id)
     requestAnimationFrame(() => document.querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
     return true
   }
@@ -1341,6 +1418,11 @@ export function App() {
         setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
+      if (!selectedExtensionItem && extensionView && viewActionPanelIsVisible(extensionView) && actionsFromPanel(extensionView.actionPanel, extensionView.actions || []).length > 0 && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
+        setChildQuery('')
+        setActionSubmenuFor({ title: extensionView.title, panel: viewActionPanel(extensionView) })
+        return
+      }
       if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
         setPreviewFor(null)
         setOptionsFor(activeAction)
@@ -1419,7 +1501,7 @@ export function App() {
         loop
         shouldFilter={false}
         value={selectedValue}
-        onValueChange={setSelectedValue}
+        onValueChange={selectValue}
         onKeyDown={onCommandKeyDown}
       >
         <div className={`searchRow card searchCard ${isVisuallyStacked ? 'stackParentCard' : ''}`}>

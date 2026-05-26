@@ -1057,7 +1057,8 @@ kbd {
 .resultsCard > .webviewSurface.webviewLarge,
 .largeResultsCard .webviewSurface.webviewLarge,
 .resultsCard > .cameraSurface.cameraLarge,
-.largeResultsCard .cameraSurface.cameraLarge {
+.largeResultsCard .cameraSurface.cameraLarge,
+.largeResultsCard .previewMode {
   height: 100%;
   min-height: 0;
 }
