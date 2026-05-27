@@ -601,10 +601,26 @@ export function App() {
     return rootNativeActionCanDismissImmediately(action) || (['extension-command', 'extension-root-item'].includes(String(action.kind)) && (action.background || action.dismissAfterRun === 'auto'))
   }
 
+  function rootActionRequestsQuit(action: unknown) {
+    const root = action as Action | undefined
+    return root?.id === 'extension-root:nevermind.system:builtin:quit'
+      || root?.id === 'extension:nevermind.system:builtin:quit'
+      || (root?.extensionId === 'nevermind.system' && root?.commandId === 'builtin:quit')
+      || root?.rootAction?.type === 'quitApp'
+  }
+
+  function viewActionRequestsQuit(action: ExtensionViewAction) {
+    return action.type === 'quitApp' || (action.type === 'nativeAction' && rootActionRequestsQuit(action.nativeAction))
+  }
+
   async function runViewAction(action: ExtensionViewAction, confirmed = false) {
     if (action.requiresConfirmation && !confirmed) {
       setConfirmViewActionFor(action)
       setChildQuery('')
+      return
+    }
+    if (viewActionRequestsQuit(action)) {
+      await window.nvm.quitApp()
       return
     }
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string; action?: Action; actionId?: string } | undefined : undefined
@@ -665,10 +681,11 @@ export function App() {
     const loadingNavigation = nativeAction ? 'root' : 'push'
     const definition = actionDefinition(action)
     const showsLoading = !dismissedImmediately && !nativeAction && definition?.loading === 'view'
-    if (dismissedImmediately) window.nvm.hide()
-    else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
     try {
-      const result = await window.nvm.runViewAction(action)
+      const resultPromise = window.nvm.runViewAction(action)
+      if (dismissedImmediately) window.nvm.hide()
+      else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
+      const result = await resultPromise
       if (showsLoading && loadingNavigation === 'push' && (result?.navigation === 'replace' || result?.navigation === 'pop')) {
         extensionNavigation.setBackStack((stack) => stack.slice(0, -1))
       }
@@ -698,10 +715,15 @@ export function App() {
   }
 
   async function run(action: Action) {
+    if (rootActionRequestsQuit(action)) {
+      await window.nvm.quitApp()
+      return
+    }
     const dismissedImmediately = rootActionCanDismissImmediately(action)
+    const resultPromise = window.nvm.execute(action)
     if (dismissedImmediately) window.nvm.hide()
     else showActionLoadingView(action.title || 'Running…', action.subtitle || 'Waiting for the action to finish', 'root')
-    const result = await window.nvm.execute(action)
+    const result = await resultPromise
     if (result?.view) {
       setOptionsFor(null)
       setPreviewFor(null)
@@ -985,36 +1007,64 @@ export function App() {
     ].filter((row) => childMatches(row.title, row.subtitle))
   }
 
-  function actionPanelRows(panel = extensionItemOptionsFor?.actionPanel, fallbackActions = extensionItemOptionsFor?.actions || [], prefix = 'extension-item', closeAfterSelect = true): ActionPanelRow[] {
+  function actionIdentity(action: ExtensionViewAction) {
+    const nativeId = (action.nativeAction as { id?: string } | undefined)?.id
+    return [action.type, action.handlerId, nativeId, action.title, action.path, action.url, action.text].filter(Boolean).join('\u0000')
+  }
+
+  function closeActionPanels() {
+    setActionSubmenuFor(null)
+    setExtensionItemOptionsFor(null)
+    setOptionsFor(null)
+    setChildQuery('')
+  }
+
+  function actionRow(action: ExtensionViewAction, value: string, closeAfterSelect: boolean, icon = iconForAction(action)): ActionPanelRow {
+    return {
+      value,
+      icon,
+      title: action.title,
+      subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
+      shortcut: action.shortcut,
+      onSelect: async () => {
+        if (action.submenu) {
+          setActionSubmenuFor({ title: action.title, panel: action.submenu })
+          return
+        }
+        await runViewAction(action)
+        if (closeAfterSelect) closeActionPanels()
+      },
+      className: action.style === 'destructive' ? 'result dangerResult' : 'result',
+    }
+  }
+
+  function actionPanelRows(panel = extensionItemOptionsFor?.actionPanel, fallbackActions = extensionItemOptionsFor?.actions || [], prefix = 'extension-item', closeAfterSelect = true, skipActionIdentities = new Set<string>()): ActionPanelRow[] {
     const sections = panel?.sections?.length ? panel.sections : [{ actions: fallbackActions }]
-    return sections.flatMap((section, sectionIndex) => [
-      ...(section.title ? [{ value: `${prefix}:section:${sectionIndex}`, title: section.title, subtitle: '', sectionHeader: true, onSelect: () => {}, className: 'actionSectionHeader' }] : []),
-      ...(section.actions || []).map((action, index) => ({
-        value: `${prefix}:${sectionIndex}:${index}:${action.type}:${action.title}`,
-        icon: iconForAction(action),
-        title: action.title,
-        subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
-        shortcut: action.shortcut,
-        onSelect: async () => {
-          if (action.submenu) {
-            setActionSubmenuFor({ title: action.title, panel: action.submenu })
-            return
-          }
-          await runViewAction(action)
-          if (closeAfterSelect) {
-            setActionSubmenuFor(null)
-            setExtensionItemOptionsFor(null)
-            setOptionsFor(null)
-            setChildQuery('')
-          }
-        },
-        className: action.style === 'destructive' ? 'result dangerResult' : 'result',
-      })),
-    ]).filter((row) => 'sectionHeader' in row || childMatches(row.title, row.subtitle))
+    return sections.flatMap((section, sectionIndex) => {
+      const rows = (section.actions || [])
+        .filter((action) => !skipActionIdentities.has(actionIdentity(action)))
+        .map((action, index) => actionRow(action, `${prefix}:${sectionIndex}:${index}:${action.type}:${action.title}`, closeAfterSelect))
+        .filter((row) => childMatches(row.title, row.subtitle))
+      if (rows.length === 0) return []
+      return section.title ? [{ value: `${prefix}:section:${sectionIndex}`, title: section.title, subtitle: '', sectionHeader: true, onSelect: () => {}, className: 'actionSectionHeader' }, ...rows] : rows
+    })
+  }
+
+  function commandItemActionRows(item: CommandItem, prefix: string, closeAfterSelect = true) {
+    const primary = item.primaryAction
+    const skip = new Set<string>()
+    const primaryRows = primary && childMatches(primary.title, actionDescription(primary))
+      ? [actionRow(primary, `${prefix}:primary:${primary.type}:${primary.title}`, closeAfterSelect, iconForItem(item))]
+      : []
+    if (primary) skip.add(actionIdentity(primary))
+    return [
+      ...primaryRows,
+      ...actionPanelRows(item.actionPanel, item.actions || [], prefix, closeAfterSelect, skip),
+    ]
   }
 
   function getExtensionItemActionRows() {
-    return actionPanelRows()
+    return extensionItemOptionsFor ? commandItemActionRows(extensionItemOptionsFor, 'extension-item') : []
   }
 
   function getShortcutRows() {
@@ -1049,22 +1099,7 @@ export function App() {
   }
 
   function getRootActionRows() {
-    if (!optionsFor) return []
-    const primaryRow: ActionPanelRow = {
-      value: 'option:run',
-      icon: iconForCommandItem(commandItemFromAction(optionsFor)),
-      title: optionsFor.title,
-      subtitle: optionsFor.subtitle || 'Run action',
-      shortcut: optionsFor.shortcut,
-      onSelect: async () => {
-        setOptionsFor(null)
-        setChildQuery('')
-        await run(optionsFor)
-      },
-      className: 'result',
-    }
-    const rows = [primaryRow, ...actionPanelRows(optionsFor.actionPanel, [], 'root-action', true)]
-    return rows.filter((row) => 'sectionHeader' in row || childMatches(row.title, row.subtitle))
+    return optionsFor ? commandItemActionRows(commandItemFromAction(optionsFor), 'root-action') : []
   }
 
   function getOptionActionRows() {

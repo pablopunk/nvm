@@ -27,6 +27,7 @@ const api: NevermindApi = {
   getAppIcon: (appPath) => ipcRenderer.invoke('apps:icon', appPath),
   setPaletteMode: (mode) => ipcRenderer.invoke('palette:set-mode', mode),
   hide: () => ipcRenderer.invoke('palette:hide'),
+  quitApp: () => ipcRenderer.invoke('app:quit'),
   shortcutReady: () => ipcRenderer.invoke('palette:shortcut-ready'),
   requestCameraAccess: () => ipcRenderer.invoke('camera:request-access'),
   log: (level, message, data) => ipcRenderer.invoke('logs:write', level, message, data),

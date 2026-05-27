@@ -76,6 +76,7 @@ let appWatchers: Array<{ close: () => unknown }> = []
 let nevermindAi: any
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
+let didRunQuitCleanup = false
 let userState: AnyRecord = {
   recents: {},
   aliases: {},
@@ -1233,6 +1234,25 @@ function shellResultView(title, result) {
   }
 }
 
+function runQuitCleanup() {
+  if (didRunQuitCleanup) return
+  didRunQuitCleanup = true
+  if (app.isReady()) globalShortcut.unregisterAll()
+  updateManager.clearTimers()
+  for (const watcher of appWatchers) watcher.close()
+}
+
+function requestQuitApp(reason = 'action') {
+  nevermindApp.isQuiting = true
+  logInfo('app.quit.requested', { reason }, { source: 'host', scope: 'app' })
+  app.quit()
+  setTimeout(() => {
+    logWarn('app.quit.fallbackExit', { reason }, { source: 'host', scope: 'app' })
+    runQuitCleanup()
+    app.exit(0)
+  }, 250).unref?.()
+}
+
 async function executeViewAction(action) {
   switch (action?.type) {
     case 'nativeAction':
@@ -1295,8 +1315,7 @@ async function executeViewAction(action) {
       runInBackground(() => executeSystemBuiltin({ builtin: 'settings' }, () => {}))
       break
     case 'quitApp':
-      nevermindApp.isQuiting = true
-      app.quit()
+      requestQuitApp('view-action')
       break
     case 'checkForUpdates':
       return checkForUpdatesView()
@@ -1359,10 +1378,7 @@ async function executeViewAction(action) {
 }
 
 async function executeBuiltin(action) {
-  return executeSystemBuiltin(action, () => {
-    nevermindApp.isQuiting = true
-    app.quit()
-  })
+  return executeSystemBuiltin(action, () => requestQuitApp('builtin'))
 }
 
 async function thumbnailResponseForPath(filePath) {
@@ -3115,6 +3131,10 @@ app.whenReady().then(async () => {
     paletteWindow.centerWindow()
   })
   ipcMain.handle('palette:hide', () => paletteWindow.hidePalette())
+  ipcMain.handle('app:quit', () => {
+    requestQuitApp('ipc')
+    return { ok: true }
+  })
   ipcMain.handle('palette:shortcut-ready', () => paletteWindow.revealPalette())
   ipcMain.handle('camera:request-access', async () => {
     if (!hasCapability('camera')) return { ok: false, status: 'unsupported' }
@@ -3136,9 +3156,7 @@ app.on('before-quit', () => {
 })
 app.on('will-quit', () => {
   nevermindApp.isQuiting = true
-  if (app.isReady()) globalShortcut.unregisterAll()
-  updateManager.clearTimers()
-  for (const watcher of appWatchers) watcher.close()
+  runQuitCleanup()
 })
 
 if (!isDev) {
