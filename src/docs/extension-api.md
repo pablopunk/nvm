@@ -2,10 +2,14 @@
 
 This is the canonical guideline/API reference for extension authors. It intentionally holds authoring rules, contracts, and examples that would overflow `AGENTS.md` or the builder skill, not implementation details of the host internals.
 
-Extensions are local `.cjs` modules loaded from Nevermind's user-data `extensions` directory. They are standalone app contributions with durable files independent from AI chat history, while AI builder chats keep a write scope over the extension files they created or touched. AI builder chats may inspect any generated extension for context, but only the chat that owns an extension file can overwrite it. Extensions expose commands that appear in the main search results and can also contribute bounded items to the empty-query root palette. A command can execute work, return a declarative native view, or do both through item/action handlers.
+Extensions are local `.ts` modules loaded from Nevermind's user-data `extensions` directory with Electron/Node's native TypeScript type stripping. They are standalone app contributions with durable files independent from AI chat history, while AI builder chats keep a write scope over the extension files they created or touched. AI builder chats may inspect any generated extension for context, but only the chat that owns an extension file can overwrite it. Extensions expose commands that appear in the main search results and can also contribute bounded items to the empty-query root palette. A command can execute work, return a declarative native view, or do both through item/action handlers.
 
-```js
-module.exports = {
+Use erasable TypeScript syntax only: types, interfaces, generics, and `satisfies` are supported; runtime-only TypeScript features such as enums, decorators, namespaces with values, and parameter properties are not supported unless they are rewritten as plain JavaScript. Generated extensions can import host types with `import type { NevermindExtension } from './nevermind-extension-api'`.
+
+```ts
+import type { NevermindExtension } from './nevermind-extension-api'
+
+export default {
   id: 'my.images',
   title: 'My Images',
   permissions: ['desktop.files'],
@@ -41,15 +45,17 @@ module.exports = {
       },
     },
   ],
-}
+} satisfies NevermindExtension
 ```
 
 ## Root contributions
 
 Extensions can export `rootItems(ctx)` to contribute passive items to the root palette when there is no query, and `searchItems(ctx, query)` to contribute bounded query-aware root results. Commands already appear in root/search, so providers must not return command launchers or collection entry points; use providers only for distinct child items, ambient status, or query-specific results. Root items are for ambient, high-signal information such as an upcoming calendar event, a currently running timer, or a recent status that deserves quick access.
 
-```js
-module.exports = {
+```ts
+import type { NevermindExtension } from './nevermind-extension-api'
+
+export default {
   id: 'my.calendar',
   title: 'Calendar',
   async rootItems(ctx) {
@@ -65,7 +71,7 @@ module.exports = {
     }]
   },
   commands: [],
-}
+} satisfies NevermindExtension
 ```
 
 Nevermind owns root ranking, rendering, limits, and failure isolation. Root/search contribution scores are capped by the host; extensions should return only a few useful items with stable IDs and bounded work. Root items use stale-while-revalidate semantics: the host returns the current cached snapshot for a palette render, refreshes stale/missing items in the background, and only shows refreshed items on a later search/open so the visible list does not shift under the user. Query-aware `searchItems(ctx, query)` contributions run under the same timeout and per-extension caps. Use `ctx.storage.memo` to cache expensive refreshes.
@@ -188,14 +194,17 @@ Available permissions:
 | `places` | declares use of host-owned filesystem places (no extra `ctx` surface today) |
 | `updates` | declares participation in the update lifecycle (no extra `ctx` surface today) |
 | `settings.write` | `ctx.settings.set`, `ctx.settings.toggle`, `ctx.actions.toggleSetting` |
+| `camera` | declares use of host-owned camera views |
 
-```js
-module.exports = {
+```ts
+import type { NevermindExtension } from './nevermind-extension-api'
+
+export default {
   id: 'my.images',
   title: 'My Images',
   permissions: ['desktop.files', 'clipboard.history'],
   // ...
-}
+} satisfies NevermindExtension
 ```
 
 ## Budgets

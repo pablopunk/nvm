@@ -8,7 +8,6 @@ import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
-import { createRequire } from 'node:module'
 import { createNevermindAi } from './ai'
 import { createPaletteWindowController, installPermissionHandlers } from './palette-window'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
@@ -20,7 +19,6 @@ import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
 import { canCustomizeCommandAction } from '../model'
 
-const extensionRequire = createRequire(import.meta.url)
 const { autoUpdater } = electronUpdater
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 configureLogger(isDev)
@@ -49,6 +47,7 @@ const EXTENSION_REFRESH_MAX_BURST = 5
 const EXTENSION_REFRESH_BURST_WINDOW_MS = 2000
 const EXTENSION_AI_CALLS_PER_MINUTE = 30
 const EXTENSION_AI_RATE_WINDOW_MS = 60_000
+const EXTENSION_TYPES_FILENAME = 'nevermind-extension-api.d.ts'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -523,16 +522,24 @@ function patchOpenView(viewId: string, patch: any) {
   paletteWindow.win?.webContents.send('view:patch', { viewId, patch })
 }
 
+function aiBuilderRegistryEntry() {
+  return extensionRegistry.get(`${AI_BUILDER_EXTENSION_ID}:ai-chats`) || { extension: createAiBuilderExtension(), command: { id: 'ai-chats', title: 'AI Chats' } }
+}
+
+function normalizedAiChatListItem(chat: any) {
+  return normalizeViewItems([aiChatListItem(chat)], aiBuilderRegistryEntry())[0]
+}
+
 function patchAiChatsItem(chatId: string) {
   const chat = userState.aiChats[chatId]
   if (!chat) return
-  patchOpenView('ai-chats', { mode: 'patch', items: [aiChatListItem(chat)] })
+  patchOpenView('ai-chats', { mode: 'patch', items: [normalizedAiChatListItem(chat)] })
 }
 
 function patchAiChatsPrepend(chatId: string) {
   const chat = userState.aiChats[chatId]
   if (!chat) return
-  patchOpenView('ai-chats', { mode: 'prepend', items: [aiChatListItem(chat)] })
+  patchOpenView('ai-chats', { mode: 'prepend', items: [normalizedAiChatListItem(chat)] })
 }
 
 function patchAiChatsRemove(chatId: string) {
@@ -1637,8 +1644,18 @@ async function readDesktopSelection() {
   return { text, files, sourceApp: app }
 }
 
+function extensionSourceBasename(filePath) {
+  const base = path.basename(filePath || '')
+  if (base.endsWith('.d.ts')) return base.slice(0, -5)
+  return base.replace(/\.(cjs|ts)$/i, '')
+}
+
+function isExtensionSourceFile(entry) {
+  return entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')
+}
+
 function safeExtensionStorageKey(extension) {
-  const key = extension.__filePath ? path.basename(extension.__filePath, '.cjs') : extension.id || 'extension'
+  const key = extension.__filePath ? extensionSourceBasename(extension.__filePath) : extension.id || 'extension'
   return String(key).replace(/[^a-zA-Z0-9._-]/g, '-')
 }
 
@@ -2379,6 +2396,7 @@ function initNevermindAi() {
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
     extensionApiPath: path.join(app.getAppPath(), 'src', 'docs', 'extension-api.md'),
+    extensionTypesPath: path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME),
     skillPath: path.join(app.getAppPath(), 'src', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
     reloadExtensions: loadExtensions,
     getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId) || null : null,
@@ -2470,6 +2488,25 @@ async function resetAiChat(chatId) {
   return nevermindAi?.reset(activeAiChatId)
 }
 
+async function ensureExtensionTypeDefinitions() {
+  if (!extensionsDir) return
+  const sourcePath = path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME)
+  const targetPath = path.join(extensionsDir, EXTENSION_TYPES_FILENAME)
+  await fs.copyFile(sourcePath, targetPath).catch((error) => {
+    logWarn('extension.types.copy.failed', { error: error?.message || String(error) }, { source: 'host', scope: 'extension' })
+  })
+  await fs.writeFile(path.join(extensionsDir, 'package.json'), `${JSON.stringify({ type: 'module' }, null, 2)}\n`).catch((error) => {
+    logWarn('extension.packageJson.write.failed', { error: error?.message || String(error) }, { source: 'host', scope: 'extension' })
+  })
+}
+
+async function loadExtensionModule(fullPath) {
+  const url = pathToFileURL(fullPath)
+  url.searchParams.set('reload', String(Date.now()))
+  const imported = await import(url.href)
+  return imported.default || imported
+}
+
 async function loadExtensions() {
   extensionRegistry.clear()
   extensionModules.clear()
@@ -2478,13 +2515,13 @@ async function loadExtensions() {
   for (const extension of INTERNAL_EXTENSIONS) registerExtension(extension)
 
   await fs.mkdir(extensionsDir, { recursive: true })
+  await ensureExtensionTypeDefinitions()
   const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.cjs')) continue
+    if (!isExtensionSourceFile(entry)) continue
     const fullPath = path.join(extensionsDir, entry.name)
     try {
-      delete extensionRequire.cache[extensionRequire.resolve(fullPath)]
-      const extension = extensionRequire(fullPath)
+      const extension = await loadExtensionModule(fullPath)
       extension.__filePath = fullPath
       extension.__generated = true
       await applyExtensionMetadataOverrides(extension)
@@ -2967,9 +3004,9 @@ async function duplicateCreatedAction(action) {
 
   const duplicateId = hashValue(`${filePath}:${Date.now()}`)
   const duplicateTitle = `Copy of ${extension.title || action.title}`
-  const duplicateFile = `${path.basename(filePath, '.cjs')}-copy-${duplicateId.slice(0, 8)}.cjs`
+  const duplicateFile = `${extensionSourceBasename(filePath)}-copy-${duplicateId.slice(0, 8)}.ts`
   const sourceFile = path.basename(filePath)
-  const sourceCode = `const source = require('./${sourceFile.replace(/'/g, "\\'")}')\n\nmodule.exports = {\n  ...source,\n  id: ${JSON.stringify(`${extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n}\n`
+  const sourceCode = `import type { NevermindExtension } from './${EXTENSION_TYPES_FILENAME.replace(/\.d\.ts$/, '')}'\nimport source from './${sourceFile.replace(/'/g, "\\'")}'\n\nexport default {\n  ...source,\n  id: ${JSON.stringify(`${extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n} satisfies NevermindExtension\n`
 
   await fs.writeFile(path.join(extensionsDir, duplicateFile), sourceCode)
   userState.aiChats[duplicateId] = {

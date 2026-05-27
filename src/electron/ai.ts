@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import vm from 'node:vm'
+import { pathToFileURL } from 'node:url'
+import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
 
@@ -29,6 +30,7 @@ type NevermindAiOptions = {
   workspaceDir: string
   extensionsDir: string
   extensionApiPath: string
+  extensionTypesPath: string
   skillPath: string
   reloadExtensions: () => Promise<unknown> | unknown
   getActiveChat?: () => ActiveChat | null
@@ -169,7 +171,7 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   return { send, abort, reset, ask, session }
 
-  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
+  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
     await fs.mkdir(workspaceDir, { recursive: true })
     await fs.mkdir(extensionsDir, { recursive: true })
@@ -205,6 +207,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     const customTools = createTools(pi, ai.Type, {
       extensionsDir,
       extensionApiPath,
+      extensionTypesPath,
       reloadExtensions,
       getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
       markGeneratedExtension: (filePath) => markGeneratedExtension?.(filePath, chatId),
@@ -348,7 +351,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, reloadExtensions, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
   const readFiles = new Set<string>()
 
   function markRead(filename: string) {
@@ -411,15 +414,15 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       parameters: Type.Object({}),
       execute: async () => {
         const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
-        const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.cjs')).map((entry) => entry.name).sort()
+        const files = entries.filter((entry) => isExtensionSourceFile(entry.name)).map((entry) => entry.name).sort()
         return { content: [{ type: 'text', text: files.length ? files.join('\n') : 'No generated extensions installed.' }], details: { files } }
       },
     }),
     pi.defineTool({
       name: 'read_extension',
       label: 'Read Extension',
-      description: 'Read any generated Nevermind extension source by filename.',
-      parameters: Type.Object({ filename: Type.String({ description: 'Safe generated extension filename ending in .cjs' }) }),
+      description: 'Read any generated Nevermind TypeScript extension source by filename.',
+      parameters: Type.Object({ filename: Type.String({ description: 'Safe generated extension filename ending in .ts' }) }),
       execute: async (_toolCallId: string, params: { filename: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         const code = await fs.readFile(filePath, 'utf8')
@@ -444,10 +447,10 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
     pi.defineTool({
       name: 'write_extension',
       label: 'Write Extension',
-      description: 'Write a generated Nevermind extension CommonJS module into the generated extensions directory.',
+      description: 'Write a generated Nevermind TypeScript extension into the generated extensions directory.',
       parameters: Type.Object({
-        filename: Type.String({ description: 'Safe filename ending in .cjs, for example image-grid.cjs' }),
-        code: Type.String({ description: 'Complete CommonJS extension source code using module.exports = { ... }' }),
+        filename: Type.String({ description: 'Safe filename ending in .ts, for example image-grid.ts' }),
+        code: Type.String({ description: 'Complete TypeScript extension source code using export default { ... } satisfies NevermindExtension' }),
       }),
       execute: async (_toolCallId: string, params: { filename: string; code: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
@@ -457,8 +460,15 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         const focused = currentExtensionFile(chat) === filename
         if (exists && !canWriteExtension?.(filename)) throw new Error(`Refusing to overwrite ${filename}: this AI chat does not own that extension.`)
         if (exists && !focused && !readFiles.has(filename)) throw new Error(`Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`)
-        validateCommonJs(params.code)
+        const previous = exists ? await fs.readFile(filePath, 'utf8') : null
         await fs.writeFile(filePath, params.code)
+        try {
+          await validateTypeScriptExtension(filePath, extensionTypesPath, extensionsDir)
+        } catch (error) {
+          if (previous !== null) await fs.writeFile(filePath, previous)
+          else await fs.unlink(filePath).catch(() => {})
+          throw error
+        }
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
         if (chat?.id) addAliasForChat?.(chat.id)
@@ -468,11 +478,11 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
     pi.defineTool({
       name: 'validate_extension',
       label: 'Validate Extension',
-      description: 'Validate that the active generated extension file is syntactically valid CommonJS.',
+      description: 'Typecheck and runtime-validate a generated TypeScript extension file.',
       parameters: Type.Object({ filename: Type.String() }),
       execute: async (_toolCallId: string, params: { filename: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
-        validateCommonJs(await fs.readFile(filePath, 'utf8'))
+        await validateTypeScriptExtension(filePath, extensionTypesPath, extensionsDir)
         return { content: [{ type: 'text', text: `Validated ${path.basename(filePath)}` }], details: { filePath } }
       },
     }),
@@ -508,21 +518,65 @@ async function fileExists(filePath: string) {
   }
 }
 
+function isExtensionSourceFile(filename: string) {
+  return filename.endsWith('.ts') && !filename.endsWith('.d.ts')
+}
+
 function safeExtensionPath(root: string, filename: string) {
   const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '-')
-  if (!safeName.endsWith('.cjs')) throw new Error('Extension filename must end in .cjs')
+  if (!isExtensionSourceFile(safeName)) throw new Error('Extension filename must end in .ts')
   const fullPath = path.resolve(root, safeName)
   if (!fullPath.startsWith(path.resolve(root) + path.sep)) throw new Error('Invalid extension path')
   return fullPath
 }
 
-function validateCommonJs(code: string) {
-  new vm.Script(`(function (module, exports, require) {\n${code}\n})`)
+async function ensureExtensionTypeDefinitions(extensionsDir: string, extensionTypesPath: string) {
+  await fs.mkdir(extensionsDir, { recursive: true })
+  await fs.copyFile(extensionTypesPath, path.join(extensionsDir, 'nevermind-extension-api.d.ts'))
+  await fs.writeFile(path.join(extensionsDir, 'package.json'), `${JSON.stringify({ type: 'module' }, null, 2)}\n`)
+}
+
+function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
+  const options: ts.CompilerOptions = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: false,
+    noEmit: true,
+    skipLibCheck: true,
+    esModuleInterop: true,
+    allowSyntheticDefaultImports: true,
+    allowImportingTsExtensions: true,
+  }
+  const program = ts.createProgram([filePath, typeDefinitionsPath], options)
+  const diagnostics = ts.getPreEmitDiagnostics(program).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)
+  if (!diagnostics.length) return
+  const host: ts.FormatDiagnosticsHost = {
+    getCanonicalFileName: (fileName) => fileName,
+    getCurrentDirectory: () => path.dirname(filePath),
+    getNewLine: () => '\n',
+  }
+  throw new Error(`TypeScript validation failed:\n${ts.formatDiagnosticsWithColorAndContext(diagnostics, host)}`)
+}
+
+async function importExtensionForValidation(filePath: string) {
+  const url = pathToFileURL(filePath)
+  url.searchParams.set('validate', String(Date.now()))
+  const imported = await import(url.href)
+  const extension = imported.default || imported
+  if (!extension?.id || !extension?.title) throw new Error('Extension must export an object with id and title')
+  if (extension.commands !== undefined && !Array.isArray(extension.commands)) throw new Error('Extension commands must be an array')
+}
+
+async function validateTypeScriptExtension(filePath: string, extensionTypesPath: string, extensionsDir: string) {
+  await ensureExtensionTypeDefinitions(extensionsDir, extensionTypesPath)
+  typecheckExtension(filePath, path.join(extensionsDir, 'nevermind-extension-api.d.ts'))
+  await importExtensionForValidation(filePath)
 }
 
 function capabilities() {
   return {
-    extensionExports: ['commands', 'rootItems'],
+    extensionExports: ['export default { id, title, permissions, commands, rootItems, searchItems } satisfies NevermindExtension'],
     rootContributions: ['rootItems(ctx) returns high-signal empty-query root palette items with stable ids, titles, optional subtitles/icons/scores, primaryAction, actions, and actionPanel'],
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
     views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'camera', 'webview'],
@@ -573,9 +627,9 @@ When tweaking an existing generated action, call read_current_extension before w
 Use list_capabilities when unsure which UI or OS capabilities exist.
 Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed extensions.
-Only write .cjs extension files with write_extension.
-write_extension creates standalone extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
-validate_extension can be used to syntax-check changed extension files after writing.
+Only write .ts extension files with write_extension.
+write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
+validate_extension typechecks changed extension files and verifies they load with Electron's native TypeScript runtime.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
