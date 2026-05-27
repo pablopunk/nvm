@@ -325,6 +325,22 @@ export type ExtensionAiBuilder = {
   getChat(chatId: string): { id: string; title?: string; query?: string; status?: string; messages?: unknown[]; extensionFiles: string[] } | null
 }
 
+/**
+ * Read-only OS metadata. Use `capabilities.has(...)` to omit unsupported items from
+ * discovery instead of duplicating platform logic, and `labels.*` for OS-appropriate titles.
+ */
+export type ExtensionSystem = {
+  /** Display label for the host OS, e.g. `macOS`. */
+  os: string
+  capabilities: { has(id: string): boolean }
+  labels: {
+    revealInFileManager: string
+    previewFile: string
+    openSystemSettings: string
+    keyboardSettings: string
+  }
+}
+
 /** Serializable snapshot of the host update manager, returned by `ctx.updates.getState()`. */
 export type ExtensionUpdateState = {
   currentVersion: string
@@ -401,6 +417,9 @@ export type ExtensionContext = {
     updates: Record<'check' | 'download' | 'install', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
     camera: Record<'switchDevice' | 'nextDevice' | 'previousDevice' | 'toggleMuted' | 'toggleControls', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
   }
+
+  /** Read-only host OS metadata: capability checks and intent-named labels. */
+  system: ExtensionSystem
 
   /** Explicit return helpers from action handlers. Prefer these for imperative handler results. */
   navigation: {

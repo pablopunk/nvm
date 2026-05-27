@@ -13,7 +13,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, launchApp as launchOsApp, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
@@ -2281,6 +2281,16 @@ function createExtensionContext(extension, command) {
       replace: (view) => ({ view, navigation: 'replace' }),
       pop: () => ({ navigation: 'pop' }),
       run: (action) => ({ action }),
+    },
+    system: {
+      os: osLabel(),
+      capabilities: { has: (id) => hasCapability(String(id)) },
+      labels: {
+        revealInFileManager: revealPathTitle(),
+        previewFile: quickLookTitle(),
+        openSystemSettings: settingsTitle(),
+        keyboardSettings: keyboardSettingsSubtitle(),
+      },
     },
     desktop: {
       clipboard: canUseClipboard ? {
