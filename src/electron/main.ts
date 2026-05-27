@@ -749,6 +749,23 @@ function updateStatusView(_options: any = {}) {
   }
 }
 
+function updatesStateSnapshot() {
+  const state = updateManager.state
+  const downloadedInfo = isNewerVersion(state.downloadedInfo?.version) ? state.downloadedInfo : null
+  const availableInfo = isNewerVersion(state.availableInfo?.version) ? state.availableInfo : null
+  return {
+    currentVersion: app.getVersion(),
+    status: String(state.status || 'idle'),
+    supported: updateManager.canUseAutoUpdates() && state.status !== 'unsupported',
+    checking: Boolean(state.checkInFlight),
+    downloading: Boolean(state.downloadInFlight),
+    installing: Boolean(state.installInFlight || state.status === 'installing'),
+    availableVersion: availableInfo?.version || null,
+    downloadedVersion: downloadedInfo?.version || null,
+    errorMessage: state.errorMessage || null,
+  }
+}
+
 function checkForUpdatesView() {
   updateManager.checkForUpdates('manual', { download: true }).catch(() => {})
   return { view: updateStatusView(), navigation: 'replace' }
@@ -2017,11 +2034,11 @@ function createAiBuilderExtension() {
 }
 
 function createUpdatesExtension() {
-  const checkItem = () => ({ id: 'updates:check', title: 'Check for Updates', subtitle: `Current version: ${app.getVersion()}`, icon: 'restart', score: 23, primaryAction: { type: 'checkForUpdates', title: 'Check for Updates' } })
+  const extension = { id: 'nevermind.updates', title: 'Updates', permissions: ['updates'] as const }
+  const ctx: any = createExtensionContext(extension, null)
+  const checkItem = () => ({ id: 'updates:check', title: 'Check for Updates', subtitle: `Current version: ${app.getVersion()}`, icon: 'restart', score: 23, primaryAction: ctx.actions.updates.check('Check for Updates') })
   return {
-    id: 'nevermind.updates',
-    title: 'Updates',
-    permissions: ['updates'] as const,
+    ...extension,
     commands: [{ ...checkItem(), run: () => checkForUpdatesView() }],
     rootItems() {
       return [updatePromptAction() || checkItem()]
@@ -2168,6 +2185,7 @@ function createExtensionContext(extension, command) {
   const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
   const canUseClipboard = hasExtensionPermission(extension, 'clipboard.history')
   const canUseSystem = hasExtensionPermission(extension, 'system')
+  const canUseUpdates = hasExtensionPermission(extension, 'updates')
   const canUseShortcuts = hasExtensionPermission(extension, 'shortcuts')
   const canUseAi = hasExtensionPermission(extension, 'ai')
   const canWriteSettings = hasExtensionPermission(extension, 'settings.write')
@@ -2245,6 +2263,11 @@ function createExtensionContext(extension, command) {
         openKeyboardSettings: (title = 'Keyboard Settings', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openKeyboardSettings', title }),
         quit: (title = 'Quit Nevermind', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'quitApp', title }),
       } : denyShortcut('system'),
+      updates: canUseUpdates ? {
+        check: (title = 'Check for Updates', options: any = {}) => ({ ...options, type: 'checkForUpdates', title }),
+        download: (title = 'Download Update', options: any = {}) => ({ ...options, type: 'downloadUpdate', title }),
+        install: (title = 'Install and Restart', options: any = {}) => ({ ...options, type: 'installUpdate', title }),
+      } : denyShortcut('updates'),
       camera: {
         switchDevice: (title = 'Switch Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.switchDevice' } }),
         nextDevice: (title = 'Next Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.nextDevice' } }),
@@ -2323,6 +2346,7 @@ function createExtensionContext(extension, command) {
     logs: extensionLogger(extension.id, command?.id),
     cache: createExtensionCache(extension),
     views: createExtensionViewsApi(extension, command),
+    updates: canUseUpdates ? { getState: () => updatesStateSnapshot() } : undefined,
     state: {},
     ai: canUseAi ? createExtensionAi(extension) : undefined,
     aiBuilder: createAiBuilderApi(extension),

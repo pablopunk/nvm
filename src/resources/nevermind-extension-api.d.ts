@@ -325,6 +325,19 @@ export type ExtensionAiBuilder = {
   getChat(chatId: string): { id: string; title?: string; query?: string; status?: string; messages?: unknown[]; extensionFiles: string[] } | null
 }
 
+/** Serializable snapshot of the host update manager, returned by `ctx.updates.getState()`. */
+export type ExtensionUpdateState = {
+  currentVersion: string
+  status: string
+  supported: boolean
+  checking: boolean
+  downloading: boolean
+  installing: boolean
+  availableVersion: string | null
+  downloadedVersion: string | null
+  errorMessage: string | null
+}
+
 export type ExtensionContext = {
   /** Runtime metadata for the current extension plus host helpers such as persistent rename. */
   extension: NevermindExtension & { rename(metadata: string | { title?: string; subtitle?: string; commandTitle?: string; commandSubtitle?: string }): Promise<unknown> }
@@ -384,6 +397,8 @@ export type ExtensionContext = {
     native(title: string, nativeAction: unknown, options?: Record<string, unknown>): ExtensionAction
     /** OS-owned system actions. Requires the `system` permission. Titles default to OS-appropriate labels. */
     system: Record<'lockScreen' | 'sleep' | 'restart' | 'openSystemSettings' | 'openKeyboardSettings' | 'quit', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
+    /** App update actions. Requires the `updates` permission. */
+    updates: Record<'check' | 'download' | 'install', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
     camera: Record<'switchDevice' | 'nextDevice' | 'previousDevice' | 'toggleMuted' | 'toggleControls', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
   }
 
@@ -442,6 +457,8 @@ export type ExtensionContext = {
   cache: ExtensionRuntimeCache
   /** Current-view helpers. `refresh()` re-runs the command and patches/replaces the active view. */
   views: { refresh(): ExtensionAction; invalidate(): void }
+  /** App update state. Present only with the `updates` permission. Pair with `ctx.actions.updates.*`. */
+  updates?: { getState(): ExtensionUpdateState }
   state: Record<string, unknown>
   ai?: ExtensionAi
   aiBuilder?: ExtensionAiBuilder
