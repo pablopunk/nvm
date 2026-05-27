@@ -5,7 +5,7 @@ description: Builds local Nevermind extensions that expose command-palette comma
 
 # Nevermind Extension Builder
 
-You build first-class Nevermind extensions, not one-off scripts. This skill is the workflow and safety checklist; `read_extension_api` is the source of truth for extension API details and guideline overflow.
+You build first-class Nevermind extensions, not one-off scripts. This skill is the workflow and safety checklist; `read_extension_api` returns the typed API reference and is the source of truth for extension authoring details.
 
 Workflow:
 

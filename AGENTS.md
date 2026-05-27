@@ -30,7 +30,8 @@
 ## Style and Documentation
 
 * **Code**: Prefer descriptive function naming over comments.
-* **Docs**: Keep `AGENTS.md` concise. Move detailed guides to `src/docs/`. Document intentions, not just implementations.
+* **Docs**: Keep `AGENTS.md` concise. Move detailed guides to `src/docs/`. Document intention, NEVER implementation.
+* **Extension API Docs**: Keep extension-author documentation in `src/resources/nevermind-extension-api.d.ts` using TSDoc. Do not recreate API reference markdown; `read_extension_api` and extension validation both use the typed declaration file as the source of truth.
 * **Design**: Use CSS variables from `src/styles.css` (e.g., `--accent-*`, `--radius-*`). Avoid hardcoded colors or radii.
 
 ## Verification

@@ -2395,7 +2395,7 @@ function initNevermindAi() {
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
-    extensionApiPath: path.join(app.getAppPath(), 'src', 'docs', 'extension-api.md'),
+    extensionApiPath: path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME),
     extensionTypesPath: path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME),
     skillPath: path.join(app.getAppPath(), 'src', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
     reloadExtensions: loadExtensions,

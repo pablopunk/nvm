@@ -366,7 +366,7 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
     pi.defineTool({
       name: 'read_extension_api',
       label: 'Read Extension API',
-      description: 'Read Nevermind extension API documentation.',
+      description: 'Read the typed Nevermind extension API reference.',
       parameters: Type.Object({}),
       execute: async () => ({
         content: [{ type: 'text', text: await fs.readFile(extensionApiPath, 'utf8') }],
@@ -620,7 +620,7 @@ Once the user provides enough details, start building immediately by calling rea
 The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
-The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api is the source of truth for extension API details and guideline overflow.
+The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api returns the typed API reference and is the source of truth for extension authoring details.
 Use read_extension_api before writing an extension.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
 When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write extensions owned by this chat.
@@ -641,9 +641,9 @@ When done, tell the user what command was installed and how to find it.`
 }
 
 function systemContext(extensionApiPath: string) {
-  return `Nevermind is an Electron command palette. Your job is to create first-class local extensions using the documented API.
-Extension API docs path: ${extensionApiPath}
-The builder skill is workflow; the extension API docs are the canonical guideline/API reference.
+  return `Nevermind is an Electron command palette. Your job is to create first-class local extensions using the typed API reference.
+Extension API reference path: ${extensionApiPath}
+The builder skill is workflow; the extension API declaration file is the canonical authoring reference.
 Generated extensions are standalone app contributions. AI chats are builder/history sessions and can inspect or edit multiple extensions.`
 }
 
