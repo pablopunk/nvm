@@ -325,6 +325,25 @@ export type ExtensionAiBuilder = {
   getChat(chatId: string): { id: string; title?: string; query?: string; status?: string; messages?: unknown[]; extensionFiles: string[] } | null
 }
 
+/** A clipboard history entry returned by `ctx.clipboard.history.list/search`. */
+export type ExtensionClipboardEntry = {
+  id: string
+  type?: string
+  text?: string
+  imageDataUrl?: string
+  imagePath?: string
+  videoUrl?: string
+  filePath?: string
+  thumbnailUrl?: string
+  createdAt?: number
+}
+
+/** Read-only clipboard history access. Requires the `clipboard.history` permission. */
+export type ExtensionClipboardHistory = {
+  list(options?: { limit?: number; query?: string; types?: string[] }): ExtensionClipboardEntry[]
+  search(query: string, options?: { limit?: number; types?: string[] }): ExtensionClipboardEntry[]
+}
+
 /**
  * Read-only OS metadata. Use `capabilities.has(...)` to omit unsupported items from
  * discovery instead of duplicating platform logic, and `labels.*` for OS-appropriate titles.
@@ -420,6 +439,9 @@ export type ExtensionContext = {
 
   /** Read-only host OS metadata: capability checks and intent-named labels. */
   system: ExtensionSystem
+
+  /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
+  clipboard: { history?: ExtensionClipboardHistory }
 
   /** Explicit return helpers from action handlers. Prefer these for imperative handler results. */
   navigation: {

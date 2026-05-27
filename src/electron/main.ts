@@ -663,6 +663,28 @@ function clipboardHistoryItems() {
   return clipboardHistory.slice(0, CLIPBOARD_LIMIT).map(clipboardHistoryItem)
 }
 
+function clipboardHistorySnapshot(options: any = {}) {
+  const { limit, query, types } = options
+  let entries = clipboardHistory
+  if (Array.isArray(types) && types.length) entries = entries.filter((entry) => types.includes(entry.type))
+  if (query) {
+    const needle = String(query).toLowerCase()
+    entries = entries.filter((entry) => `${entry.text || ''} ${entry.type || ''} ${entry.filePath || ''}`.toLowerCase().includes(needle))
+  }
+  const max = typeof limit === 'number' ? limit : CLIPBOARD_LIMIT
+  return entries.slice(0, max).map((entry) => ({
+    id: entry.id,
+    type: entry.type,
+    text: entry.text,
+    imageDataUrl: entry.imageDataUrl,
+    imagePath: entry.imagePath,
+    videoUrl: entry.videoUrl,
+    filePath: entry.filePath,
+    thumbnailUrl: entry.thumbnailUrl,
+    createdAt: entry.createdAt,
+  }))
+}
+
 function viewRefreshAction(itemsBuilder) {
   return {
     type: 'runExtensionAction',
@@ -1954,12 +1976,12 @@ function createClipboardExtension() {
       score: 14,
       run: () => clipboardHistoryView(),
     }],
-    rootItems() {
+    rootItems(ctx) {
       if (!getSetting('showClipboardInRoot')) return []
-      return clipboardHistory.slice(0, 10).map(clipboardRootItem)
+      return ctx.clipboard.history.list({ limit: 10 }).map(clipboardRootItem)
     },
-    searchItems(_ctx, query) {
-      return clipboardHistory.map(clipboardRootItem).filter((item) => rankAction(item, query)).slice(0, 5)
+    searchItems(ctx, query) {
+      return ctx.clipboard.history.list().map(clipboardRootItem).filter((item) => rankAction(item, query)).slice(0, 5)
     },
   }
 }
@@ -2291,6 +2313,12 @@ function createExtensionContext(extension, command) {
         openSystemSettings: settingsTitle(),
         keyboardSettings: keyboardSettingsSubtitle(),
       },
+    },
+    clipboard: {
+      history: canUseClipboard ? {
+        list: (options: any = {}) => clipboardHistorySnapshot(options),
+        search: (query, options: any = {}) => clipboardHistorySnapshot({ ...options, query }),
+      } : undefined,
     },
     desktop: {
       clipboard: canUseClipboard ? {
