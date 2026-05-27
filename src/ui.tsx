@@ -35,12 +35,17 @@ export function KeyHints({ shortcut, extras = [], showEnter = true }: KeyHintsPr
   return <span className="keyHints">{extras.map((extra) => <span key={extra} className="shortcutHint selectedOnlyEnter">{extra}</span>)}{shortcut ? <span className="shortcutHint">{shortcutLabel(shortcut)}</span> : null}{showEnter ? <span className="enterHint selectedOnlyEnter">↵</span> : null}</span>
 }
 
+const MAX_VISIBLE_ACCESSORIES = 3
+
 export function CommandRow({ value, icon, title, subtitle, accessories = [], shortcut, extras, className, appearance, selectedOnlyShortcut = false, onSelect }: CommandRowProps) {
   const keyHints = selectedOnlyShortcut
     ? (shortcut ? <span className="keyHints selectedOnlyEnter"><span className="shortcutHint">{shortcutLabel(shortcut)}</span><span className="enterHint">↵</span></span> : null)
     : <KeyHints shortcut={shortcut} extras={extras} />
   const itemClassName = className ? `result ${className}` : 'result'
-  return <Command.Item value={value} className={itemClassName} data-foreground={appearance?.foreground} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{accessories.map((accessory, index) => <span key={index} className="accessory">{accessory.icon}{accessory.text}</span>)}</span> : null}{keyHints}</span></Command.Item>
+  const visibleAccessories = accessories.slice(0, MAX_VISIBLE_ACCESSORIES)
+  const overflowAccessories = accessories.slice(MAX_VISIBLE_ACCESSORIES)
+  const overflowTitle = overflowAccessories.map((accessory) => accessory.text).filter(Boolean).join(', ')
+  return <Command.Item value={value} className={itemClassName} data-foreground={appearance?.foreground} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{visibleAccessories.map((accessory, index) => <span key={index} className="accessory" title={accessory.text}>{accessory.icon}{accessory.text ? <span className="accessoryText">{accessory.text}</span> : null}</span>)}{overflowAccessories.length ? <span className="accessoryOverflow" title={overflowTitle}>+{overflowAccessories.length}</span> : null}</span> : null}{keyHints}</span></Command.Item>
 }
 
 export function CommandTile({ value, title, subtitle, image, video, actionHint, appearance, draggable, onDragStart, onSelect }: CommandTileProps) {
