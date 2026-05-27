@@ -263,6 +263,8 @@ export type ExtensionShellOptions = { cwd?: string; env?: Record<string, string>
 export type ExtensionOpenWithApp = { name?: string; path?: string; [key: string]: unknown }
 /** An installed application from `ctx.desktop.apps.list/search`. */
 export type ExtensionApp = { id: string; name: string; path: string }
+/** A host-indexed file from `ctx.desktop.files.recent/searchIndex`. */
+export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string }
 
 export type RecentLogOptions = { limit?: number; level?: LogLevel; source?: LogSource; sinceMs?: number; query?: string; extensionId?: string }
 export type LogEntry = { timestamp: string; level: LogLevel; source: LogSource; scope?: string; extensionId?: string; commandId?: string; message: string; data?: unknown }
@@ -490,6 +492,10 @@ export type ExtensionContext = {
       preview(filePath: string): unknown
       readText(filePath: string): Promise<string>
       toFileUrl(filePath: string): string
+      /** Entries from the host file index, most recent first. */
+      recent(options?: { limit?: number }): ExtensionIndexedFile[]
+      /** Host file index entries whose name or path matches the query. */
+      searchIndex(query: string, options?: { limit?: number }): ExtensionIndexedFile[]
     }
     shell?: {
       openExternal(url: string): unknown

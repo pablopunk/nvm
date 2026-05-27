@@ -1949,6 +1949,17 @@ function fileRootItem(item) {
   return { id: `file:${item.path}`, title: item.name, subtitle: item.displayPath, icon: 'folder', score: 4, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
 
+function fileIndexSnapshot(options: any = {}) {
+  const { limit, query } = options
+  let entries = fileIndex
+  if (query) {
+    const needle = String(query).toLowerCase()
+    entries = entries.filter((entry) => `${entry.name || ''} ${entry.displayPath || ''}`.toLowerCase().includes(needle))
+  }
+  const max = typeof limit === 'number' ? limit : entries.length
+  return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath }))
+}
+
 function createClipboardExtension() {
   function historyItem() {
     const latestClipboardTime = clipboardHistory[0]?.createdAt || 0
@@ -2011,11 +2022,11 @@ function createFilesExtension() {
     title: 'Files',
     permissions: ['desktop.files'] as const,
     commands: [],
-    rootItems() {
-      return fileIndex.slice(0, FILE_RESULT_LIMIT).map(fileRootItem)
+    rootItems(ctx) {
+      return ctx.desktop.files.recent({ limit: FILE_RESULT_LIMIT }).map(fileRootItem)
     },
-    searchItems(_ctx, query) {
-      return fileIndex.map(fileRootItem).filter((item) => rankAction(item, query)).slice(0, FILE_RESULT_LIMIT)
+    searchItems(ctx, query) {
+      return ctx.desktop.files.recent().map(fileRootItem).filter((item) => rankAction(item, query)).slice(0, FILE_RESULT_LIMIT)
     },
   }
 }
@@ -2358,6 +2369,8 @@ function createExtensionContext(extension, command) {
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
+        recent: (options: any = {}) => fileIndexSnapshot(options),
+        searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
       shell: canUseSystem ? {
         openExternal: (url) => runInBackground(() => shell.openExternal(url)),
