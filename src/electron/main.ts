@@ -1360,6 +1360,9 @@ async function executeViewAction(action) {
     case 'openSystemSettings':
       runInBackground(() => executeSystemBuiltin({ builtin: 'settings' }, () => {}))
       break
+    case 'openKeyboardSettings':
+      runInBackground(openSystemKeyboardSettings)
+      break
     case 'quitApp':
       requestQuitApp('view-action')
       break
@@ -1816,13 +1819,14 @@ function createExtensionAi(extension) {
   }
 }
 
-function systemItems() {
+function systemItems(ctx) {
+  const system = ctx.actions.system
   return [
-    { id: 'builtin:lock-screen', title: 'Lock Screen', subtitle: 'Secure this computer', icon: 'lock', score: 22, dismissAfterRun: 'auto', primaryAction: { type: 'lockScreen', title: 'Lock Screen', dismissAfterRun: 'auto' } },
-    { id: 'builtin:sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21, dismissAfterRun: 'auto', primaryAction: { type: 'sleepSystem', title: 'Sleep', dismissAfterRun: 'auto' } },
-    { id: 'builtin:restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20, dismissAfterRun: 'auto', primaryAction: { type: 'restartSystem', title: 'Restart Computer', dismissAfterRun: 'auto' } },
-    { id: 'builtin:settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19, dismissAfterRun: 'auto', primaryAction: { type: 'openSystemSettings', title: settingsTitle(), dismissAfterRun: 'auto' } },
-    { id: 'builtin:quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15, dismissAfterRun: 'auto', primaryAction: { type: 'quitApp', title: 'Quit Nevermind', dismissAfterRun: 'auto' } },
+    { id: 'builtin:lock-screen', title: 'Lock Screen', subtitle: 'Secure this computer', icon: 'lock', score: 22, dismissAfterRun: 'auto', primaryAction: system.lockScreen('Lock Screen') },
+    { id: 'builtin:sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21, dismissAfterRun: 'auto', primaryAction: system.sleep('Sleep') },
+    { id: 'builtin:restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20, dismissAfterRun: 'auto', primaryAction: system.restart('Restart Computer') },
+    { id: 'builtin:settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19, dismissAfterRun: 'auto', primaryAction: system.openSystemSettings(settingsTitle()) },
+    { id: 'builtin:quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15, dismissAfterRun: 'auto', primaryAction: system.quit('Quit Nevermind') },
   ]
 }
 
@@ -1839,12 +1843,12 @@ function commandFromItem(item) {
 }
 
 function createSystemExtension() {
+  const extension = { id: 'nevermind.system', title: 'System', permissions: ['system'] as const }
+  const commands = systemItems(createExtensionContext(extension, null)).map(commandFromItem)
   return {
-    id: 'nevermind.system',
-    title: 'System',
-    permissions: ['system'] as const,
-    commands: systemItems().map(commandFromItem),
-    rootItems: () => systemItems(),
+    ...extension,
+    commands,
+    rootItems: (ctx) => systemItems(ctx),
   }
 }
 
@@ -2233,6 +2237,14 @@ function createExtensionContext(extension, command) {
         ? (title = 'Change Shortcut', options: any = {}) => buildRecordShortcutAction({ scope: 'palette', title }, options)
         : denyShortcut('setPaletteShortcut'),
       native: (title, nativeAction, options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction }),
+      system: canUseSystem ? {
+        lockScreen: (title = 'Lock Screen', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'lockScreen', title }),
+        sleep: (title = 'Sleep', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'sleepSystem', title }),
+        restart: (title = 'Restart Computer', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'restartSystem', title }),
+        openSystemSettings: (title = settingsTitle(), options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openSystemSettings', title }),
+        openKeyboardSettings: (title = 'Keyboard Settings', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openKeyboardSettings', title }),
+        quit: (title = 'Quit Nevermind', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'quitApp', title }),
+      } : denyShortcut('system'),
       camera: {
         switchDevice: (title = 'Switch Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.switchDevice' } }),
         nextDevice: (title = 'Next Camera', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.nextDevice' } }),

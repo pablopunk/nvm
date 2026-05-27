@@ -382,6 +382,8 @@ export type ExtensionContext = {
     removeShortcut(input?: { actionId?: string; title?: string }, options?: Record<string, unknown>): ExtensionAction
     setPaletteShortcut(title?: string, options?: Record<string, unknown>): ExtensionAction
     native(title: string, nativeAction: unknown, options?: Record<string, unknown>): ExtensionAction
+    /** OS-owned system actions. Requires the `system` permission. Titles default to OS-appropriate labels. */
+    system: Record<'lockScreen' | 'sleep' | 'restart' | 'openSystemSettings' | 'openKeyboardSettings' | 'quit', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
     camera: Record<'switchDevice' | 'nextDevice' | 'previousDevice' | 'toggleMuted' | 'toggleControls', (title?: string, options?: Record<string, unknown>) => ExtensionAction>
   }
 

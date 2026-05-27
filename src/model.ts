@@ -50,6 +50,7 @@ export const ACTION_DEFINITIONS = {
   restartSystem: { description: 'Restart system', dismiss: 'immediate', loading: 'none', execute: 'main' },
   quitApp: { description: 'Quit app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   openSystemSettings: { description: 'Open system settings', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  openKeyboardSettings: { description: 'Open keyboard settings', dismiss: 'immediate', loading: 'none', execute: 'main' },
   toggleSetting: { description: 'Change setting', dismiss: 'immediate', loading: 'none', execute: 'main', inline: true },
   recordShortcut: { description: 'Record shortcut', dismiss: 'manual', loading: 'none', execute: 'renderer' },
   setActionShortcut: { description: 'Set shortcut', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
