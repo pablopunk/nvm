@@ -696,40 +696,47 @@ function updateStatusView(_options: any = {}) {
   const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   const version = downloadedInfo?.version || availableInfo?.version
   const unsupported = updateManager.state.status === 'unsupported' || !updateManager.canUseAutoUpdates()
-  const primaryAction = downloadedInfo
-    ? { type: 'installUpdate', title: 'Install and Restart' }
-    : availableInfo
-      ? { type: 'downloadUpdate', title: updateManager.state.downloadInFlight ? 'Downloading…' : 'Download Update' }
-      : { type: 'checkForUpdates', title: updateManager.state.checkInFlight ? 'Checking…' : 'Check Again' }
+  const installing = updateManager.state.installInFlight || updateManager.state.status === 'installing'
+  const primaryAction = installing
+    ? undefined
+    : downloadedInfo
+      ? { type: 'installUpdate', title: 'Install and Restart' }
+      : availableInfo
+        ? { type: 'downloadUpdate', title: updateManager.state.downloadInFlight ? 'Downloading…' : 'Download Update' }
+        : { type: 'checkForUpdates', title: updateManager.state.checkInFlight ? 'Checking…' : 'Check Again' }
   const title = unsupported
     ? 'Updates unavailable'
-    : downloadedInfo
-      ? `Nevermind ${version} is ready`
-      : availableInfo
-        ? `Nevermind ${version} is available`
-        : updateManager.state.checkInFlight
-          ? 'Checking for updates…'
-          : updateManager.state.status === 'error'
-            ? 'Update check failed'
-            : 'No versions available'
+    : installing
+      ? `Installing Nevermind ${version || ''}`.trim()
+      : downloadedInfo
+        ? `Nevermind ${version} is ready`
+        : availableInfo
+          ? `Nevermind ${version} is available`
+          : updateManager.state.checkInFlight
+            ? 'Checking for updates…'
+            : updateManager.state.status === 'error'
+              ? 'Update check failed'
+              : 'No versions available'
   const subtitle = unsupported
     ? autoUpdatesUnavailableMessage()
-    : downloadedInfo
-      ? 'Install the downloaded update and restart Nevermind'
-      : availableInfo
-        ? 'Download the update before installing it'
-        : updateManager.state.checkInFlight
-          ? `Current version: ${app.getVersion()}`
-          : updateManager.state.status === 'error'
-            ? updateManager.state.errorMessage
-            : `Current version: ${app.getVersion()}`
+    : installing
+      ? 'Restarting Nevermind to finish updating…'
+      : downloadedInfo
+        ? 'Install the downloaded update and restart Nevermind'
+        : availableInfo
+          ? 'Download the update before installing it'
+          : updateManager.state.checkInFlight
+            ? `Current version: ${app.getVersion()}`
+            : updateManager.state.status === 'error'
+              ? updateManager.state.errorMessage
+              : `Current version: ${app.getVersion()}`
   return {
     type: 'list',
     id: 'app-updates',
     title: 'Updates',
     presentation: 'root',
     searchBarPlaceholder: 'Search Updates',
-    isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
+    isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight || updateManager.state.installInFlight,
     items: [{
       id: 'update-status',
       title,
@@ -737,7 +744,7 @@ function updateStatusView(_options: any = {}) {
       icon: 'restart',
       accessories: version ? [{ text: version }] : [],
       primaryAction: unsupported ? undefined : primaryAction,
-      actionPanel: unsupported ? undefined : { sections: [{ actions: [primaryAction] }] },
+      actionPanel: unsupported || !primaryAction ? undefined : { sections: [{ actions: [primaryAction] }] },
     }],
   }
 }
@@ -752,10 +759,30 @@ function downloadUpdateView() {
   return { view: updateStatusView(), navigation: 'replace' }
 }
 
+let updateInstallQuitFallbackTimer: NodeJS.Timeout | null = null
+
+function scheduleUpdateInstallQuitFallback() {
+  if (updateInstallQuitFallbackTimer) return
+  updateInstallQuitFallbackTimer = setTimeout(() => {
+    updateInstallQuitFallbackTimer = null
+    logWarn('updater.install.quitFallback', undefined, { source: 'host', scope: 'updater' })
+    nevermindApp.isQuiting = true
+    app.quit()
+    setTimeout(() => {
+      logWarn('updater.install.exitFallback', undefined, { source: 'host', scope: 'updater' })
+      runQuitCleanup()
+      app.exit(0)
+    }, 2_000).unref?.()
+  }, 5_000)
+  updateInstallQuitFallbackTimer.unref?.()
+}
+
 function installDownloadedUpdate() {
   if (!updateManager.state.downloadedInfo) return { view: updateStatusView(), navigation: 'replace' }
   nevermindApp.isQuiting = true
-  updateManager.quitAndInstall()
+  const didStart = updateManager.quitAndInstall()
+  if (didStart || updateManager.state.installInFlight) scheduleUpdateInstallQuitFallback()
+  return { view: updateStatusView(), navigation: 'replace' }
 }
 
 function settingItemPatch(definition) {
@@ -803,7 +830,7 @@ function patchUpdatesView() {
   patchOpenView('app-updates', {
     mode: 'patch',
     items: updateStatusItems(),
-    isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight,
+    isLoading: updateManager.state.checkInFlight || updateManager.state.downloadInFlight || updateManager.state.installInFlight,
   })
 }
 
@@ -811,6 +838,15 @@ function updatePromptAction() {
   const downloadedInfo = isNewerVersion(updateManager.state.downloadedInfo?.version) ? updateManager.state.downloadedInfo : null
   const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   const version = downloadedInfo?.version || availableInfo?.version
+  if (updateManager.state.installInFlight || updateManager.state.status === 'installing') {
+    return {
+      id: 'updates:installing',
+      title: `Installing Nevermind ${version || ''}`.trim(),
+      subtitle: 'Restarting Nevermind to finish updating…',
+      icon: 'restart',
+      score: 1_000,
+    }
+  }
   if (downloadedInfo) {
     return {
       id: 'updates:install',

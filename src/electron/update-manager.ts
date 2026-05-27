@@ -12,11 +12,12 @@ type AutoUpdaterLike = {
   on: (event: string, listener: (...args: any[]) => void) => void
 }
 
-type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
+type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'error'
 
 type UpdateState = {
   checkInFlight: boolean
   downloadInFlight: boolean
+  installInFlight: boolean
   status: UpdateStatus
   availableInfo: UpdateInfo | null
   downloadedInfo: UpdateInfo | null
@@ -42,6 +43,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   const state: UpdateState = {
     checkInFlight: false,
     downloadInFlight: false,
+    installInFlight: false,
     status: 'idle',
     availableInfo: null,
     downloadedInfo: null,
@@ -59,7 +61,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
       return null
     }
     if (state.downloadedInfo) return state.downloadedInfo
-    if (state.checkInFlight || state.downloadInFlight) return state.availableInfo || state.downloadedInfo
+    if (state.checkInFlight || state.downloadInFlight || state.installInFlight) return state.availableInfo || state.downloadedInfo
     state.checkInFlight = true
     state.status = 'checking'
     state.errorMessage = ''
@@ -82,7 +84,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   }
 
   async function downloadAvailableUpdate(info = state.availableInfo) {
-    if (!canUseAutoUpdates() || state.downloadInFlight || state.downloadedInfo) return
+    if (!canUseAutoUpdates() || state.downloadInFlight || state.installInFlight || state.downloadedInfo) return
     state.availableInfo = info || state.availableInfo
     state.downloadInFlight = true
     state.status = 'downloading'
@@ -175,7 +177,23 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   }
 
   function quitAndInstall() {
-    autoUpdater.quitAndInstall()
+    if (!state.downloadedInfo || state.installInFlight) return false
+    state.installInFlight = true
+    state.status = 'installing'
+    state.errorMessage = ''
+    logger.info('updater.install.requested', state.downloadedInfo, { source: 'host', scope: 'updater' })
+    notifyStateChanged()
+    try {
+      autoUpdater.quitAndInstall()
+      return true
+    } catch (error) {
+      state.installInFlight = false
+      state.status = 'error'
+      state.errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('updater.install.failed', error, { source: 'host', scope: 'updater' })
+      notifyStateChanged()
+      return false
+    }
   }
 
   return { state, canUseAutoUpdates, checkForUpdates, downloadAvailableUpdate, clearTimers, configure, quitAndInstall, onStateChange }
