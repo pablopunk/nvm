@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
 
+      - name: Test app
+        run: mise exec -- pnpm test
+
       - name: Build app
         run: mise exec -- pnpm run build
 

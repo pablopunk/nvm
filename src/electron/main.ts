@@ -215,8 +215,11 @@ function createExtensionCache(extension) {
   }
 }
 const registeredActionAccelerators = new Set<string>()
+const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder'
 
-const INTERNAL_EXTENSIONS: any[] = [createSystemExtension(), createPlacesExtension(), createCalculatorExtension(), createWebSearchExtension(), createClipboardExtension(), createAppsExtension(), createFilesExtension(), createAiBuilderExtension(), createUpdatesExtension(), createKeyboardShortcutsExtension(), createSettingsExtension()]
+const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension]
+const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings']
+const REQUIRED_INTERNAL_COMMANDS = [{ extensionId: AI_BUILDER_EXTENSION_ID, commandId: 'ai-chats' }]
 
 function actionAliases(actionId: any) {
   const value = userState.aliases[actionId]
@@ -2279,8 +2282,6 @@ function createExtensionContext(extension, command) {
   }
 }
 
-const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder'
-
 function assertAiBuilderPrivilege(extension) {
   if (extension?.id !== AI_BUILDER_EXTENSION_ID) {
     throw new Error('ctx.aiBuilder is only available to the built-in AI Builder extension')
@@ -2512,7 +2513,7 @@ async function loadExtensions() {
   extensionModules.clear()
   extensionRootItemsCache.clear()
   extensionRootItemsRefreshes.clear()
-  for (const extension of INTERNAL_EXTENSIONS) registerExtension(extension)
+  registerInternalExtensions()
 
   await fs.mkdir(extensionsDir, { recursive: true })
   await ensureExtensionTypeDefinitions()
@@ -2578,6 +2579,23 @@ async function renameExtension(extension, command, metadata) {
   await loadExtensions()
   registerActionShortcuts()
   return { ok: true, title: extension.title, commandTitle: command?.title }
+}
+
+function registerInternalExtensions() {
+  for (const createExtension of INTERNAL_EXTENSION_FACTORIES) registerExtension(createExtension())
+  assertInternalExtensionsRegistered()
+}
+
+function assertInternalExtensionsRegistered() {
+  const missingExtensions = REQUIRED_INTERNAL_EXTENSIONS.filter((extensionId) => !extensionModules.has(extensionId))
+  const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(({ extensionId, commandId }) => !extensionRegistry.has(`${extensionId}:${commandId}`))
+  if (missingExtensions.length || missingCommands.length) {
+    const details = [
+      missingExtensions.length ? `extensions: ${missingExtensions.join(', ')}` : '',
+      missingCommands.length ? `commands: ${missingCommands.map(({ extensionId, commandId }) => `${extensionId}:${commandId}`).join(', ')}` : '',
+    ].filter(Boolean).join('; ')
+    throw new Error(`Missing required internal extensions (${details})`)
+  }
 }
 
 function registerExtension(extension) {
