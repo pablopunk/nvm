@@ -261,6 +261,8 @@ export type ExtensionFindFilesOptions = {
 export type ExtensionShellResult = { stdout: string; stderr: string; exitCode: number }
 export type ExtensionShellOptions = { cwd?: string; env?: Record<string, string>; timeout?: number; shell?: boolean; outputLimit?: number }
 export type ExtensionOpenWithApp = { name?: string; path?: string; [key: string]: unknown }
+/** An installed application from `ctx.desktop.apps.list/search`. */
+export type ExtensionApp = { id: string; name: string; path: string }
 
 export type RecentLogOptions = { limit?: number; level?: LogLevel; source?: LogSource; sinceMs?: number; query?: string; extensionId?: string }
 export type LogEntry = { timestamp: string; level: LogLevel; source: LogSource; scope?: string; extensionId?: string; commandId?: string; message: string; data?: unknown }
@@ -470,6 +472,12 @@ export type ExtensionContext = {
     apps?: {
       frontmost(): Promise<unknown> | unknown
       launch(appPath: string): unknown
+      /** Installed applications from the host index. */
+      list(): ExtensionApp[]
+      /** Installed applications whose name matches the query. */
+      search(query: string): ExtensionApp[]
+      /** Icon for an app path as a data URL, or null when unavailable. */
+      icon(appPath: string): Promise<string | null>
     }
     files?: {
       find(roots: string[], options?: ExtensionFindFilesOptions): Promise<ExtensionFile[]>

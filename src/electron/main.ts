@@ -1938,9 +1938,9 @@ function appRootItem(item) {
   return { id, title: item.name, subtitle: 'Launch application', aliases: actionAliases(`extension-root:nevermind.apps:${id}`), icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', customizable: true, primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
 
-async function attachAppIcons(items) {
+async function attachAppIcons(items, iconFor = getAppIconDataUrl) {
   await Promise.all(items.map(async (item) => {
-    const iconUrl = await getAppIconDataUrl(item.primaryAction?.path)
+    const iconUrl = await iconFor(item.primaryAction?.path)
     if (iconUrl) item.image = iconUrl
   }))
 }
@@ -1992,14 +1992,14 @@ function createAppsExtension() {
     title: 'Applications',
     permissions: ['desktop.apps'] as const,
     commands: [],
-    async rootItems() {
-      const items = appIndex.map(appRootItem)
-      await attachAppIcons(items)
+    async rootItems(ctx) {
+      const items = ctx.desktop.apps.list().map(appRootItem)
+      await attachAppIcons(items, ctx.desktop.apps.icon)
       return items
     },
-    async searchItems(_ctx, query) {
-      const matches = appIndex.map(appRootItem).filter((item) => rankAction(item, query))
-      await attachAppIcons(matches.slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT))
+    async searchItems(ctx, query) {
+      const matches = ctx.desktop.apps.list().map(appRootItem).filter((item) => rankAction(item, query))
+      await attachAppIcons(matches.slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT), ctx.desktop.apps.icon)
       return matches
     },
   }
@@ -2338,6 +2338,14 @@ function createExtensionContext(extension, command) {
       apps: canUseDesktopApps ? {
         frontmost: frontmostApp,
         launch: (appPath) => runInBackground(() => shell.openPath(expandUserPath(appPath))),
+        list: () => appIndex.map((entry) => ({ id: entry.id, name: entry.name, path: entry.path })),
+        search: (query) => {
+          const needle = String(query || '').toLowerCase()
+          return appIndex
+            .filter((entry) => !needle || String(entry.name || '').toLowerCase().includes(needle))
+            .map((entry) => ({ id: entry.id, name: entry.name, path: entry.path }))
+        },
+        icon: (appPath) => getAppIconDataUrl(appPath),
       } : undefined,
       files: canUseDesktopFiles ? {
         find: findFiles,
