@@ -107,6 +107,14 @@ export type ExtensionAction = {
   dismissAfterRun?: 'auto'
   /** Nested Cmd+K action panel. */
   submenu?: ExtensionActionPanel
+  /** Field values injected by the host when a form's `submitAction` runs. */
+  formValues?: Record<string, string | boolean>
+  /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
+  selectedItemId?: string
+  /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
+  value?: string
+  /** Legacy payload carrier for selection id / accessory value. Prefer `selectedItemId` or `value`. */
+  text?: string
   [key: string]: unknown
 }
 
@@ -364,9 +372,9 @@ export type ExtensionContext = {
     push(title: string, view: ExtensionView | null, options?: Record<string, unknown>): ExtensionAction
     replace(title: string, view: ExtensionView | null, options?: Record<string, unknown>): ExtensionAction
     pop(title?: string, options?: Record<string, unknown>): ExtensionAction
-    run(title: string, handler: (ctx: ExtensionContext) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
+    run(title: string, handler: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
     /** Fire-and-forget action that dismisses the palette immediately unless options override it. */
-    background(title: string, handler: (ctx: ExtensionContext) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
+    background(title: string, handler: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
     shellExec(title: string, command: string, args?: string[], options?: ExtensionShellOptions): ExtensionAction
     shellScript(title: string, script: string, options?: ExtensionShellOptions): ExtensionAction
     toggleSetting(settingId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
@@ -453,7 +461,7 @@ export type ExtensionCommand = {
   /** Dismiss immediately for fire-and-forget commands. */
   background?: boolean
   dismissAfterRun?: 'auto'
-  run(ctx: ExtensionContext): ExtensionActionResult | Promise<ExtensionActionResult>
+  run(ctx: ExtensionContext, action: ExtensionAction): ExtensionActionResult | Promise<ExtensionActionResult>
 }
 
 /**

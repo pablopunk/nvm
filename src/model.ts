@@ -102,6 +102,8 @@ export type CommandAction = {
   script?: string
   options?: Record<string, unknown>
   formValues?: Record<string, string | boolean>
+  selectedItemId?: string
+  value?: string
   submenu?: CommandActionPanel
   lazySubmenu?: boolean
   style?: 'regular' | 'destructive'

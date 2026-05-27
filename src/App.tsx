@@ -913,7 +913,7 @@ export function App() {
 
   useEffect(() => {
     if (!extensionView?.onSelectionChange || !selectedValue || !allViewItems(extensionView).some((item) => item.id === selectedValue)) return
-    runViewAction({ ...extensionView.onSelectionChange, text: selectedValue })
+    runViewAction({ ...extensionView.onSelectionChange, selectedItemId: selectedValue, text: selectedValue })
   }, [extensionView?.onSelectionChange, selectedValue])
 
   function childMatches(...values: Array<string | undefined>) {
@@ -1308,7 +1308,7 @@ export function App() {
       items={view.searchAccessory.items}
       onChange={(value) => {
         const action = view.searchAccessory?.onChange
-        if (action) runViewAction({ ...action, text: value })
+        if (action) runViewAction({ ...action, value, text: value })
       }}
     />
   }
