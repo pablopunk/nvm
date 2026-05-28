@@ -2085,7 +2085,7 @@ function keyboardShortcutItem(record: any) {
   return {
     id: `shortcut:${record.actionId}`,
     title: record.action.title,
-    subtitle: record.accelerator,
+    shortcut: record.accelerator,
     icon: 'keyboard',
     primaryAction: changeAction,
     actionPanel: { sections: [{ actions: [changeAction, removeAction].filter(Boolean) }] },

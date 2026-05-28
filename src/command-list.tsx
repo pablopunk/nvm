@@ -20,6 +20,7 @@ export function RootCommandList({ items, iconForItem, onSelect, emptyTitle = EMP
   if (items.length === 0) return <EmptyState icon={<Search size={24} />} title={emptyTitle} subtitle={emptySubtitle} />
   return <>{items.map((item) => {
     const primaryAction = item.primaryAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]
+    const shortcut = item.shortcut || primaryAction?.shortcut
     return <CommandRow
       key={item.id}
       value={item.id}
@@ -27,10 +28,10 @@ export function RootCommandList({ items, iconForItem, onSelect, emptyTitle = EMP
       title={item.title}
       subtitle={item.subtitle || item.text}
       accessories={item.accessories}
-      shortcut={primaryAction?.shortcut}
+      shortcut={shortcut}
       appearance={item.appearance}
       extras={extraForItem?.(item)}
-      selectedOnlyShortcut={Boolean(primaryAction?.shortcut && !isGlobalShortcut(primaryAction))}
+      selectedOnlyShortcut={Boolean(!item.shortcut && primaryAction?.shortcut && !isGlobalShortcut(primaryAction))}
       onSelect={() => onSelect(item)}
     />
   })}</>

@@ -138,6 +138,7 @@ export type CommandItem = {
   title: string
   subtitle?: string
   accessories?: CommandItemAccessory[]
+  shortcut?: string
   keywords?: string[]
   text?: string
   icon?: string
