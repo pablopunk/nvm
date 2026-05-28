@@ -24,6 +24,7 @@ export async function upsertUserWithFreeGrant(input: {
     await tx.insert(creditLedger).values({
       userId: created.id,
       delta: FREE_SIGNUP_GRANT,
+      kind: 'free',
       reason: 'grant_signup',
     });
 
@@ -37,4 +38,17 @@ export async function getBalance(userId: string): Promise<number> {
     .from(creditLedger)
     .where(eq(creditLedger.userId, userId));
   return rows[0]?.balance ?? 0;
+}
+
+export async function getBalances(userId: string): Promise<{ free: number; paid: number; total: number }> {
+  const [row] = await db
+    .select({
+      free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
+      paid: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'paid' then ${creditLedger.delta} else 0 end), 0)::int`,
+    })
+    .from(creditLedger)
+    .where(eq(creditLedger.userId, userId));
+  const free = row?.free ?? 0;
+  const paid = row?.paid ?? 0;
+  return { free, paid, total: free + paid };
 }

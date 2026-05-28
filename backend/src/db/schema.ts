@@ -30,6 +30,7 @@ export const creditLedger = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     delta: integer('delta').notNull(),
+    kind: text('kind').notNull().default('paid'),
     reason: text('reason').notNull(),
     refId: text('ref_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

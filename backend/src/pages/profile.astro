@@ -3,14 +3,14 @@ import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
 import { users } from '../db/schema';
-import { getBalance } from '../lib/users';
+import { getBalances } from '../lib/users';
 import { listApiTokens } from '../lib/tokens';
 
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 if (!session) return Astro.redirect('/api/auth/signin?return_to=/profile');
 
 const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
-const balance = user ? await getBalance(user.id) : 0;
+const balances = user ? await getBalances(user.id) : { free: 0, paid: 0, total: 0 };
 const tokens = user ? await listApiTokens(user.id) : [];
 const isAdmin = user?.role === 'admin';
 ---
@@ -29,7 +29,7 @@ const isAdmin = user?.role === 'admin';
 		<p>Email: {user?.email}</p>
 		<p>Plan: {user?.plan}</p>
 		<p>Role: {user?.role}</p>
-		<p>Balance: <strong>{balance}</strong> credits</p>
+		<p>Balance: <strong>{balances.total}</strong> credits ({balances.free} free · {balances.paid} paid)</p>
 		<form method="post" action="/api/auth/signout">
 			<button type="submit">Sign out</button>
 		</form>

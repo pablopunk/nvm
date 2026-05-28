@@ -3,9 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { streamText, generateText, type ModelMessage } from 'ai';
 import { modelFor } from '../../../../lib/provider';
 import { getUserFromBearer } from '../../../../lib/tokens';
-import { getBalance } from '../../../../lib/users';
+import { getBalances } from '../../../../lib/users';
 import { resolveModel, computeCostCredits } from '../../../../lib/pricing';
-import { getActiveModelId } from '../../../../lib/settings';
+import { getActiveModelId, getFreeModelId } from '../../../../lib/settings';
 import { db } from '../../../../db/client';
 import { creditLedger, usage } from '../../../../db/schema';
 
@@ -27,6 +27,7 @@ function toModelMessages(messages: OpenAIMessage[]): ModelMessage[] {
 async function recordUsage(args: {
   userId: string;
   model: string;
+  kind: 'free' | 'paid';
   inputTokens: number;
   outputTokens: number;
   costCredits: number;
@@ -36,6 +37,7 @@ async function recordUsage(args: {
     await tx.insert(creditLedger).values({
       userId: args.userId,
       delta: -args.costCredits,
+      kind: args.kind,
       reason: 'ai_usage',
       refId: args.requestId,
     });
@@ -54,8 +56,8 @@ export const POST: APIRoute = async ({ request }) => {
   const user = await getUserFromBearer(request.headers.get('authorization'));
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const balance = await getBalance(user.id);
-  if (balance <= 0) {
+  const balances = await getBalances(user.id);
+  if (balances.total <= 0) {
     return Response.json(
       { error: { type: 'insufficient_credits', message: 'No credits remaining' } },
       { status: 402 },
@@ -65,7 +67,9 @@ export const POST: APIRoute = async ({ request }) => {
   const body = (await request.json().catch(() => null)) as OpenAIRequest | null;
   if (!body?.messages?.length) return new Response('Bad request', { status: 400 });
 
-  const activeModelId = await getActiveModelId();
+  const usingFreeTier = balances.free > 0;
+  const kind: 'free' | 'paid' = usingFreeTier ? 'free' : 'paid';
+  const activeModelId = usingFreeTier ? await getFreeModelId() : await getActiveModelId();
   const pricing = resolveModel(activeModelId);
   const model = modelFor(pricing.realModel);
   const requestId = randomUUID();
@@ -78,7 +82,7 @@ export const POST: APIRoute = async ({ request }) => {
     const inputTokens = result.usage.inputTokens ?? 0;
     const outputTokens = result.usage.outputTokens ?? 0;
     const cost = computeCostCredits(pricing, inputTokens, outputTokens);
-    await recordUsage({ userId: user.id, model: pricing.realModel, inputTokens, outputTokens, costCredits: cost, requestId });
+    await recordUsage({ userId: user.id, model: pricing.realModel, kind, inputTokens, outputTokens, costCredits: cost, requestId });
     return Response.json({
       id: `chatcmpl-${requestId}`,
       object: 'chat.completion',
@@ -97,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
       const inputTokens = u.inputTokens ?? 0;
       const outputTokens = u.outputTokens ?? 0;
       const cost = computeCostCredits(pricing, inputTokens, outputTokens);
-      await recordUsage({ userId: user.id, model: pricing.realModel, inputTokens, outputTokens, costCredits: cost, requestId });
+      await recordUsage({ userId: user.id, model: pricing.realModel, kind, inputTokens, outputTokens, costCredits: cost, requestId });
     },
   });
 

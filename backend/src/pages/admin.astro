@@ -1,6 +1,6 @@
 ---
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { getActiveModelId } from '../lib/settings';
+import { getActiveModelId, getFreeModelId } from '../lib/settings';
 import { listModels } from '../lib/pricing';
 
 const user = await getCurrentUser(Astro.request);
@@ -8,6 +8,7 @@ if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
 const activeModel = await getActiveModelId();
+const freeModel = await getFreeModelId();
 const models = listModels();
 ---
 
@@ -37,16 +38,32 @@ const models = listModels();
 		<p>Signed in as <code>{user.email}</code></p>
 
 		<div class="section">
-			<h2>Active model</h2>
-			<p>The gateway routes every request to this model. Clients don't pick.</p>
-			<select id="model-select">
-				{models.map((m) => (
-					<option value={m.id} selected={m.id === activeModel}>
-						{m.id} (in {m.inputCreditsPerMTok}/Mtok · out {m.outputCreditsPerMTok}/Mtok)
-					</option>
-				))}
-			</select>
-			<button id="save-model">Save</button>
+			<h2>Models</h2>
+			<p>The gateway routes by which credit pool the user is drawing from. Free pool → free model; paid pool → paid model.</p>
+			<div>
+				<label><strong>Paid credits → </strong>
+					<select id="model-select-paid">
+						{models.map((m) => (
+							<option value={m.id} selected={m.id === activeModel}>
+								{m.id} (in {m.inputCreditsPerMTok}/Mtok · out {m.outputCreditsPerMTok}/Mtok)
+							</option>
+						))}
+					</select>
+				</label>
+				<button class="save-model" data-tier="paid">Save</button>
+			</div>
+			<div style="margin-top:0.5em;">
+				<label><strong>Free credits → </strong>
+					<select id="model-select-free">
+						{models.map((m) => (
+							<option value={m.id} selected={m.id === freeModel}>
+								{m.id} (in {m.inputCreditsPerMTok}/Mtok · out {m.outputCreditsPerMTok}/Mtok)
+							</option>
+						))}
+					</select>
+				</label>
+				<button class="save-model" data-tier="free">Save</button>
+			</div>
 			<span id="model-status" style="margin-left:0.5em;color:#080;"></span>
 		</div>
 
@@ -114,16 +131,19 @@ const models = listModels();
 					});
 				});
 			}
-			document.getElementById('save-model').addEventListener('click', async () => {
-				const model = document.getElementById('model-select').value;
-				const res = await fetch('/api/admin/model', {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ model }),
+			document.querySelectorAll('.save-model').forEach((btn) => {
+				btn.addEventListener('click', async () => {
+					const tier = btn.dataset.tier;
+					const model = document.getElementById(`model-select-${tier}`).value;
+					const res = await fetch('/api/admin/model', {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ model, tier }),
+					});
+					const status = document.getElementById('model-status');
+					if (res.ok) { status.textContent = `Saved ${tier} ✓`; setTimeout(() => status.textContent = '', 2000); }
+					else status.textContent = 'Failed';
 				});
-				const status = document.getElementById('model-status');
-				if (res.ok) { status.textContent = 'Saved ✓'; setTimeout(() => status.textContent = '', 2000); }
-				else status.textContent = 'Failed';
 			});
 			loadStats();
 			loadUsers();

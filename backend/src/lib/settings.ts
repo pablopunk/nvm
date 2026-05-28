@@ -4,18 +4,37 @@ import { appSettings } from '../db/schema';
 import { MODELS, DEFAULT_MODEL } from './pricing';
 
 const ACTIVE_MODEL_KEY = 'active_model';
+const FREE_MODEL_KEY = 'free_model';
+
+async function getSetting(key: string): Promise<string | null> {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key)).limit(1);
+  return row?.value ?? null;
+}
+
+async function setSetting(key: string, value: string) {
+  await db
+    .insert(appSettings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: sql`now()` } });
+}
 
 export async function getActiveModelId(): Promise<string> {
-  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, ACTIVE_MODEL_KEY)).limit(1);
-  const v = row?.value;
+  const v = await getSetting(ACTIVE_MODEL_KEY);
+  return v && MODELS[v] ? v : DEFAULT_MODEL;
+}
+
+export async function getFreeModelId(): Promise<string> {
+  const v = await getSetting(FREE_MODEL_KEY);
   if (v && MODELS[v]) return v;
-  return DEFAULT_MODEL;
+  return getActiveModelId();
 }
 
 export async function setActiveModelId(modelId: string) {
   if (!MODELS[modelId]) throw new Error(`Unknown model: ${modelId}`);
-  await db
-    .insert(appSettings)
-    .values({ key: ACTIVE_MODEL_KEY, value: modelId })
-    .onConflictDoUpdate({ target: appSettings.key, set: { value: modelId, updatedAt: sql`now()` } });
+  await setSetting(ACTIVE_MODEL_KEY, modelId);
+}
+
+export async function setFreeModelId(modelId: string) {
+  if (!MODELS[modelId]) throw new Error(`Unknown model: ${modelId}`);
+  await setSetting(FREE_MODEL_KEY, modelId);
 }
