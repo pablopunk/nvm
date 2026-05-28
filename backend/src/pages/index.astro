@@ -1,0 +1,20 @@
+---
+import { getSessionFromCookies } from '../lib/workos';
+const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>Nevermind</title>
+	</head>
+	<body>
+		<h1>Nevermind</h1>
+		{session ? (
+			<p>Signed in as {session.user.email}. <a href="/dashboard">Dashboard</a></p>
+		) : (
+			<p><a href="/api/auth/signin">Sign in</a></p>
+		)}
+	</body>
+</html>
