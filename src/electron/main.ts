@@ -1,5 +1,6 @@
 import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences } from 'electron'
 import electronUpdater from 'electron-updater'
+import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
@@ -59,6 +60,15 @@ type AnyRecord = Record<string, any>
 type NevermindApp = typeof app & { isQuiting?: boolean }
 
 const nevermindApp = app as NevermindApp
+
+function bundledResourcePath(...relativePath) {
+  const candidates = [
+    path.join(app.getAppPath(), 'src', 'resources', ...relativePath),
+    path.join(process.resourcesPath, 'app.asar', 'src', 'resources', ...relativePath),
+    path.join(process.resourcesPath, 'src', 'resources', ...relativePath),
+  ]
+  return candidates.find((candidate) => fsSync.existsSync(candidate)) || candidates[0]
+}
 
 let appIndex: any[] = []
 let fileIndex: any[] = []
@@ -1738,8 +1748,8 @@ function extensionSourceBasename(filePath) {
   return base.replace(/\.(cjs|ts)$/i, '')
 }
 
-function isExtensionSourceFile(entry) {
-  return entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')
+function isExtensionSourceFile(filename) {
+  return typeof filename === 'string' && filename.endsWith('.ts') && !filename.endsWith('.d.ts')
 }
 
 function safeExtensionStorageKey(extension) {
@@ -2534,10 +2544,11 @@ function initNevermindAi() {
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
-    extensionApiPath: path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME),
-    extensionTypesPath: path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME),
-    skillPath: path.join(app.getAppPath(), 'src', 'resources', 'skills', 'nevermind-extension-builder', 'SKILL.md'),
+    extensionApiPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
+    extensionTypesPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
+    skillPath: bundledResourcePath('skills', 'nevermind-extension-builder', 'SKILL.md'),
     reloadExtensions: loadExtensions,
+    getExtensionRuntimeState: (filename) => extensionRuntimeStateForFile(filename),
     getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId) || null : null,
     getChat: (chatId) => userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
     markGeneratedExtension: (filePath, chatId) => markGeneratedExtensionForActiveChat(filePath, chatId),
@@ -2557,6 +2568,16 @@ function initNevermindAi() {
       paletteWindow.win?.webContents.send('ai:chat:event', { ...event, chatId })
     },
   })
+}
+
+function extensionRuntimeStateForFile(filename) {
+  const base = path.basename(filename || '')
+  const matches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension?.__filePath || '') === base)
+  return {
+    loaded: matches.length > 0,
+    extensionId: matches[0]?.extension?.id,
+    commandIds: matches.map((entry) => entry.command?.id).filter(Boolean),
+  }
 }
 
 function aiChatPromptWithContext(message, chatId) {
@@ -2629,7 +2650,7 @@ async function resetAiChat(chatId) {
 
 async function ensureExtensionTypeDefinitions() {
   if (!extensionsDir) return
-  const sourcePath = path.join(app.getAppPath(), 'src', 'resources', EXTENSION_TYPES_FILENAME)
+  const sourcePath = bundledResourcePath(EXTENSION_TYPES_FILENAME)
   const targetPath = path.join(extensionsDir, EXTENSION_TYPES_FILENAME)
   await fs.copyFile(sourcePath, targetPath).catch((error) => {
     logWarn('extension.types.copy.failed', { error: error?.message || String(error) }, { source: 'host', scope: 'extension' })
@@ -2657,7 +2678,7 @@ async function loadExtensions() {
   await ensureExtensionTypeDefinitions()
   const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
   for (const entry of entries) {
-    if (!isExtensionSourceFile(entry)) continue
+    if (!isExtensionSourceFile(entry.name)) continue
     const fullPath = path.join(extensionsDir, entry.name)
     try {
       const extension = await loadExtensionModule(fullPath)

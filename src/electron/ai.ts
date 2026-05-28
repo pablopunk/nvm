@@ -33,6 +33,11 @@ type NevermindAiOptions = {
   extensionTypesPath: string
   skillPath: string
   reloadExtensions: () => Promise<unknown> | unknown
+  getExtensionRuntimeState?: (filename: string) => {
+    loaded: boolean
+    extensionId?: string
+    commandIds: string[]
+  }
   getActiveChat?: () => ActiveChat | null
   getChat?: (chatId: string) => ActiveChat | null
   markGeneratedExtension?: (filePath: string, chatId?: string) => void
@@ -171,7 +176,7 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   return { send, abort, reset, ask, session }
 
-  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
+  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getExtensionRuntimeState, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
     await fs.mkdir(workspaceDir, { recursive: true })
     await fs.mkdir(extensionsDir, { recursive: true })
@@ -209,6 +214,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       extensionApiPath,
       extensionTypesPath,
       reloadExtensions,
+      getExtensionRuntimeState,
       getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
       markGeneratedExtension: (filePath) => markGeneratedExtension?.(filePath, chatId),
       canWriteExtension: (filename) => canWriteExtension?.(filename, chatId) ?? true,
@@ -351,7 +357,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
   const readFiles = new Set<string>()
 
   function markRead(filename: string) {
@@ -360,6 +366,15 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
 
   function currentExtensionFile(chat?: ActiveChat | null) {
     return chat?.contextExtensionFile || chat?.generatedExtensionFile || chat?.touchedExtensionFiles?.[0]
+  }
+
+  function runtimeDetails(filename: string) {
+    const runtime = getExtensionRuntimeState?.(filename)
+    return {
+      extensionId: runtime?.extensionId,
+      commandIds: runtime?.commandIds || [],
+      loaded: runtime?.loaded ?? false,
+    }
   }
 
   return [
@@ -415,7 +430,16 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       execute: async () => {
         const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
         const files = entries.filter((entry) => isExtensionSourceFile(entry.name)).map((entry) => entry.name).sort()
-        return { content: [{ type: 'text', text: files.length ? files.join('\n') : 'No generated extensions installed.' }], details: { files } }
+        const listed = files.map((filename) => ({ filename, ...runtimeDetails(filename) }))
+        const lines = listed.map((item) => {
+          const commands = item.commandIds.length ? ` commands=${item.commandIds.join(', ')}` : ''
+          const extensionId = item.extensionId ? ` extensionId=${item.extensionId}` : ''
+          return `${item.filename} loaded=${item.loaded}${extensionId}${commands}`
+        })
+        return {
+          content: [{ type: 'text', text: lines.length ? lines.join('\n') : 'No generated extensions installed.' }],
+          details: { extensionsDir, files: listed },
+        }
       },
     }),
     pi.defineTool({
@@ -471,8 +495,18 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         }
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
+        const runtime = runtimeDetails(filename)
+        if (!runtime.loaded) {
+          if (previous !== null) await fs.writeFile(filePath, previous)
+          else await fs.unlink(filePath).catch(() => {})
+          await reloadExtensions()
+          throw new Error(`Extension ${filename} was written to ${filePath} but did not load. Check read_app_logs for extension.load.failed.`)
+        }
         if (chat?.id) addAliasForChat?.(chat.id)
-        return { content: [{ type: 'text', text: `Installed ${filename}` }], details: { filePath } }
+        return {
+          content: [{ type: 'text', text: `Installed ${filename} from ${filePath}${runtime.commandIds.length ? ` with commands: ${runtime.commandIds.join(', ')}` : ''}` }],
+          details: { filePath, extensionsDir, ...runtime },
+        }
       },
     }),
     pi.defineTool({
@@ -495,7 +529,12 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
-        return { content: [{ type: 'text', text: `${path.basename(filePath)} is already active.` }], details: { filePath } }
+        const runtime = runtimeDetails(path.basename(filePath))
+        if (!runtime.loaded) throw new Error(`Extension ${path.basename(filePath)} exists at ${filePath} but is not loaded. Check read_app_logs for extension.load.failed.`)
+        return {
+          content: [{ type: 'text', text: `${path.basename(filePath)} is active from ${filePath}` }],
+          details: { filePath, extensionsDir, ...runtime },
+        }
       },
     }),
   ]
