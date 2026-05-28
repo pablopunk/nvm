@@ -2244,41 +2244,57 @@ function createKeyboardShortcutsExtension() {
 }
 
 function createAccountExtension() {
-  return {
-    id: 'nevermind.account',
-    title: 'Nevermind Account',
-    permissions: [] as const,
-    commands: [
-      {
-        id: 'account-login',
-        actionId: 'account-login',
-        title: 'Log in to Nevermind',
-        subtitle: 'Connect this device to your Nevermind account',
+  const extensionId = 'nevermind.account'
+
+  async function accountItem() {
+    const existing = await getNevermindAuth()
+    if (existing) {
+      return {
+        id: 'account-logout',
+        actionId: 'account-logout',
+        title: 'Log out of Nevermind',
+        subtitle: `Signed in as ${existing.email}`,
         icon: 'person',
         score: 18,
-        run: async () => {
-          const existing = await getNevermindAuth()
-          if (existing) return { toast: { message: `Already logged in as ${existing.email}` } }
+        aliases: ['logout', 'sign out', 'nevermind', 'account', 'disconnect'],
+        primaryAction: {
+          type: 'runExtensionAction',
+          title: 'Log out',
+          __handler: async () => {
+            await clearNevermindAuth()
+            invalidateExtensionRootItems()
+            return { toast: { message: `Logged out of ${existing.email}` } }
+          },
+        },
+      }
+    }
+    return {
+      id: 'account-login',
+      actionId: 'account-login',
+      title: 'Log in to Nevermind',
+      subtitle: 'Connect this device to your Nevermind account',
+      icon: 'person',
+      score: 18,
+      aliases: ['login', 'sign in', 'nevermind', 'account', 'connect'],
+      primaryAction: {
+        type: 'runExtensionAction',
+        title: 'Log in',
+        __handler: async () => {
           const result = await signInToNevermind()
+          invalidateExtensionRootItems()
           const message = result.ok ? `Logged in as ${result.auth.email}` : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`
           return { toast: { message, tone: result.ok ? 'default' as const : 'error' as const } }
         },
       },
-      {
-        id: 'account-logout',
-        actionId: 'account-logout',
-        title: 'Log out of Nevermind',
-        subtitle: 'Disconnect this device',
-        icon: 'person',
-        score: 4,
-        run: async () => {
-          const existing = await getNevermindAuth()
-          if (!existing) return { toast: { message: 'Not logged in' } }
-          await clearNevermindAuth()
-          return { toast: { message: `Logged out of ${existing.email}` } }
-        },
-      },
-    ],
+    }
+  }
+
+  return {
+    id: extensionId,
+    title: 'Nevermind Account',
+    permissions: [] as const,
+    searchItems: async () => [await accountItem()],
+    rootItems: async () => [await accountItem()],
   }
 }
 
