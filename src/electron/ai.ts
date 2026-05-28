@@ -33,6 +33,8 @@ type NevermindAiOptions = {
   extensionTypesPath: string
   skillPath: string
   reloadExtensions: () => Promise<unknown> | unknown
+  getShortcuts?: () => Array<{ actionId: string; title: string; subtitle?: string; accelerator: string; scope: 'global'; source: 'user' | 'extension' }>
+  getPaletteShortcut?: () => { title: string; accelerator: string; scope: 'palette' }
   getExtensionRuntimeState?: (filename: string) => {
     loaded: boolean
     extensionId?: string
@@ -357,7 +359,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getShortcuts, getPaletteShortcut, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getShortcuts' | 'getPaletteShortcut' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
   const readFiles = new Set<string>()
 
   function markRead(filename: string) {
@@ -397,6 +399,20 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         content: [{ type: 'text', text: JSON.stringify(capabilities(), null, 2) }],
         details: {},
       }),
+    }),
+    pi.defineTool({
+      name: 'list_shortcuts',
+      label: 'List Shortcuts',
+      description: 'Read the current Nevermind keyboard shortcuts, including the app shortcut used to open Nevermind and active global action shortcuts.',
+      parameters: Type.Object({}),
+      execute: async () => {
+        const palette = getPaletteShortcut?.()
+        const shortcuts = getShortcuts?.() || []
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ palette, shortcuts }, null, 2) }],
+          details: { palette, count: shortcuts.length, shortcuts },
+        }
+      },
     }),
     pi.defineTool({
       name: 'read_app_logs',
@@ -656,11 +672,12 @@ Build local Nevermind extensions, not shell scripts.
 When the first user message is vague, ask clarifying questions before using tools.
 Do not call read_extension_api, list_capabilities, write_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
 Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api returns the typed API reference and is the source of truth for extension authoring details.
 Use read_extension_api before writing an extension.
+Use list_shortcuts when the extension should mention or depend on currently configured keyboard shortcuts. Never guess shortcut bindings.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
 When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write extensions owned by this chat.
 Use list_capabilities when unsure which UI or OS capabilities exist.

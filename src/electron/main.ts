@@ -13,7 +13,7 @@ import { createNevermindAi } from './ai'
 import { createPaletteWindowController, installPermissionHandlers } from './palette-window'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
-import { formatShortcut, isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
+import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -2097,11 +2097,12 @@ function createUpdatesExtension() {
 }
 
 function keyboardShortcutItem(record: any) {
-  const changeAction = buildRecordShortcutAction({ actionId: record.actionId, action: record.action, title: 'Change shortcut' }, {})
+  const changeAction = buildRecordShortcutAction({ actionId: record.actionId, title: 'Change shortcut' }, {})
   const removeAction = record.source === 'user' ? buildRemoveShortcutAction({ actionId: record.actionId, title: 'Remove shortcut' }, {}) : null
   return {
     id: `shortcut:${record.actionId}`,
-    title: record.action.title,
+    title: record.title,
+    subtitle: record.subtitle,
     shortcut: record.accelerator,
     icon: 'keyboard',
     primaryAction: changeAction,
@@ -2110,19 +2111,7 @@ function keyboardShortcutItem(record: any) {
 }
 
 function keyboardShortcutItems() {
-  return getShortcuts().map(keyboardShortcutItem)
-}
-
-function keyboardShortcutsView() {
-  return {
-    type: 'list',
-    id: 'keyboard-shortcuts',
-    title: 'Keyboard Shortcuts',
-    presentation: 'root',
-    searchBarPlaceholder: 'Search Keyboard Shortcuts',
-    emptyView: { title: 'No shortcuts found.' },
-    items: keyboardShortcutItems(),
-  }
+  return extensionShortcutRecords().map(keyboardShortcutItem)
 }
 
 function patchKeyboardShortcutsView() {
@@ -2134,7 +2123,22 @@ function createKeyboardShortcutsExtension() {
     id: 'nevermind.shortcuts',
     title: 'Keyboard Shortcuts',
     permissions: ['shortcuts'] as const,
-    commands: [{ id: 'keyboard-shortcuts', actionId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16, run: () => keyboardShortcutsView() }],
+    commands: [{
+      id: 'keyboard-shortcuts',
+      actionId: 'keyboard-shortcuts',
+      title: 'Keyboard Shortcuts',
+      subtitle: 'View, change, or remove global shortcuts',
+      icon: 'keyboard',
+      score: 16,
+      run: (ctx) => ctx.ui.list({
+        id: 'keyboard-shortcuts',
+        title: 'Keyboard Shortcuts',
+        presentation: 'root',
+        searchBarPlaceholder: 'Search Keyboard Shortcuts',
+        emptyView: { title: 'No shortcuts found.' },
+        items: ctx.shortcuts.list().map(keyboardShortcutItem),
+      }),
+    }],
   }
 }
 
@@ -2419,6 +2423,13 @@ function createExtensionContext(extension, command) {
           }
         : () => { throw permissionDeniedError('settings.write') },
     },
+    shortcuts: canUseShortcuts ? {
+      list: () => extensionShortcutRecords(),
+      palette: () => ({ title: 'Open Nevermind', accelerator: String(getPaletteHotkey()), scope: 'palette' as const }),
+    } : {
+      list: denyShortcut('list'),
+      palette: denyShortcut('palette'),
+    },
     logs: extensionLogger(extension.id, command?.id),
     cache: createExtensionCache(extension),
     views: createExtensionViewsApi(extension, command),
@@ -2548,6 +2559,8 @@ function initNevermindAi() {
     extensionTypesPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
     skillPath: bundledResourcePath('skills', 'nevermind-extension-builder', 'SKILL.md'),
     reloadExtensions: loadExtensions,
+    getShortcuts: () => extensionShortcutRecords(),
+    getPaletteShortcut: () => ({ title: 'Open Nevermind', accelerator: String(getPaletteHotkey()), scope: 'palette' as const }),
     getExtensionRuntimeState: (filename) => extensionRuntimeStateForFile(filename),
     getActiveChat: () => activeAiChatId ? userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId) || null : null,
     getChat: (chatId) => userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
@@ -2582,17 +2595,16 @@ function extensionRuntimeStateForFile(filename) {
 
 function aiChatPromptWithContext(message, chatId) {
   const chat = userState.aiChats[chatId]
+  const focused = chat?.contextExtensionFile ? `\n\nFocused extension file: ${chat.contextExtensionFile}. Use read_current_extension before editing it. You may list/read other extensions if needed.` : ''
   const messages = (chat?.messages || [])
     .filter((item) => item.role === 'user' || item.role === 'assistant')
     .slice(-12)
 
-  if (!messages.length) return message
+  if (!messages.length) return `Use this Nevermind AI chat transcript as context. If the user has provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}\n\nNew user message:\n${message}`
 
   const transcript = messages
     .map((item) => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`)
     .join('\n\n')
-
-  const focused = chat?.contextExtensionFile ? `\n\nFocused extension file: ${chat.contextExtensionFile}. Use read_current_extension before editing it. You may list/read other extensions if needed.` : ''
 
   return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}\n\n${transcript}\n\nNew user message:\n${message}`
 }
@@ -3050,17 +3062,28 @@ function getShortcuts() {
   const configured = Object.entries(userState.shortcuts)
     .map(([actionId, accelerator]) => ({
       actionId,
-      accelerator,
+      accelerator: String(accelerator),
       scope: 'global',
-      source: 'user',
+      source: 'user' as const,
       action: currentActionForStoredShortcut(userState.shortcutActions[actionId]),
     }))
     .filter((item) => item.action)
   const declared = declaredGlobalShortcuts()
     .filter((item) => !userState.shortcuts[item.actionId] && !userState.removedShortcuts?.[item.actionId])
-    .map((item) => ({ ...item, scope: 'global', source: 'extension' }))
+    .map((item) => ({ ...item, accelerator: String(item.accelerator), scope: 'global' as const, source: 'extension' as const }))
   return [...configured, ...declared]
     .sort((a, b) => a.action.title.localeCompare(b.action.title))
+}
+
+function extensionShortcutRecords() {
+  return getShortcuts().map((item) => ({
+    actionId: item.actionId,
+    title: item.action.title,
+    subtitle: item.action.subtitle,
+    accelerator: item.accelerator,
+    scope: 'global' as const,
+    source: item.source,
+  }))
 }
 
 async function removeShortcut(actionId) {

@@ -297,6 +297,21 @@ export type ExtensionSettings = {
   toggle(id: string): unknown
 }
 
+export type ExtensionShortcutRecord = {
+  actionId: string
+  title: string
+  subtitle?: string
+  accelerator: string
+  scope: 'global'
+  source: 'user' | 'extension'
+}
+
+export type ExtensionPaletteShortcut = {
+  title: string
+  accelerator: string
+  scope: 'palette'
+}
+
 export type ExtensionLogs = Record<LogLevel, (message: string, data?: unknown) => void> & {
   recent(options?: RecentLogOptions): Promise<LogEntry[]>
 }
@@ -508,6 +523,12 @@ export type ExtensionContext = {
 
   storage: ExtensionStorage
   settings: ExtensionSettings
+  shortcuts: {
+    /** Active global action shortcuts, including user overrides and declared extension shortcuts. */
+    list(): ExtensionShortcutRecord[]
+    /** Current app-wide shortcut used to open Nevermind. */
+    palette(): ExtensionPaletteShortcut
+  }
   logs: ExtensionLogs
   cache: ExtensionRuntimeCache
   /** Current-view helpers. `refresh()` re-runs the command and patches/replaces the active view. */
