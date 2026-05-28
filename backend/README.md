@@ -2,7 +2,7 @@
 
 Astro (SSR) + Vercel + Neon Postgres (Drizzle) + WorkOS AuthKit.
 
-Serves the dashboard at `nevermind.im` and the API the desktop app talks to.
+Serves the dashboard at `nvm.fyi` and the API the desktop app talks to.
 
 ## Setup
 
@@ -25,4 +25,4 @@ Serves the dashboard at `nevermind.im` and the API the desktop app talks to.
 
 ## Deploy
 
-Push to GitHub, import in Vercel, set env vars, point `nevermind.im` + `api.nevermind.im` at it.
+Push to GitHub, import in Vercel, set env vars, point `nvm.fyi` + `api.nvm.fyi` at it.

@@ -10,7 +10,7 @@ type StoredAuth = { encryptedToken: string; email: string; role: string; baseUrl
 type AuthSnapshot = { token: string; email: string; role: string; baseUrl: string } | null
 type SignInResult = { ok: true; auth: NonNullable<AuthSnapshot> } | { ok: false; error: string }
 
-const DEFAULT_BASE_URL = process.env.NEVERMIND_BASE_URL || (process.env.ELECTRON_RENDERER_URL ? 'http://localhost:4321' : 'https://nevermind.im')
+const DEFAULT_BASE_URL = process.env.NEVERMIND_BASE_URL || (process.env.ELECTRON_RENDERER_URL ? 'http://localhost:4321' : 'https://nvm.fyi')
 
 function authPath() {
   return path.join(app.getPath('userData'), FILENAME)

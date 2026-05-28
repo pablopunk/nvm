@@ -5,5 +5,5 @@ import vercel from '@astrojs/vercel';
 export default defineConfig({
   output: 'server',
   adapter: vercel(),
-  site: 'https://nevermind.im',
+  site: 'https://nvm.fyi',
 });
