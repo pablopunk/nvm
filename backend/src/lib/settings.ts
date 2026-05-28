@@ -1,12 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { appSettings } from '../db/schema';
-import { MODELS, DEFAULT_MODEL } from './pricing';
 
 const ACTIVE_MODEL_KEY = 'active_model';
 const FREE_MODEL_KEY = 'free_model';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter']);
 
 async function getSetting(key: string): Promise<string | null> {
@@ -22,23 +22,18 @@ async function setSetting(key: string, value: string) {
 }
 
 export async function getActiveModelId(): Promise<string> {
-  const v = await getSetting(ACTIVE_MODEL_KEY);
-  return v && MODELS[v] ? v : DEFAULT_MODEL;
+  return (await getSetting(ACTIVE_MODEL_KEY)) ?? DEFAULT_MODEL;
 }
 
 export async function getFreeModelId(): Promise<string> {
-  const v = await getSetting(FREE_MODEL_KEY);
-  if (v && MODELS[v]) return v;
-  return getActiveModelId();
+  return (await getSetting(FREE_MODEL_KEY)) ?? getActiveModelId();
 }
 
 export async function setActiveModelId(modelId: string) {
-  if (!MODELS[modelId]) throw new Error(`Unknown model: ${modelId}`);
   await setSetting(ACTIVE_MODEL_KEY, modelId);
 }
 
 export async function setFreeModelId(modelId: string) {
-  if (!MODELS[modelId]) throw new Error(`Unknown model: ${modelId}`);
   await setSetting(FREE_MODEL_KEY, modelId);
 }
 

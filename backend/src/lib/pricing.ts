@@ -1,30 +1,85 @@
-export type ModelPricing = {
-  realModel: string;
-  inputCreditsPerMTok: number;
-  outputCreditsPerMTok: number;
+export type ModelCost = {
+  provider: string;
+  modelId: string;
+  inputUsdPerMtok: number;
+  outputUsdPerMtok: number;
 };
 
-export const MODELS: Record<string, ModelPricing> = {
-  'gemini-3-flash': { realModel: 'gemini-3-flash', inputCreditsPerMTok: 30, outputCreditsPerMTok: 250 },
-  'gemini-3.5-flash': { realModel: 'gemini-3.5-flash', inputCreditsPerMTok: 30, outputCreditsPerMTok: 250 },
-  'gemini-3.1-pro': { realModel: 'gemini-3.1-pro', inputCreditsPerMTok: 1250, outputCreditsPerMTok: 10000 },
-  'claude-haiku-4-5': { realModel: 'claude-haiku-4-5', inputCreditsPerMTok: 800, outputCreditsPerMTok: 4000 },
-  'claude-sonnet-4-6': { realModel: 'claude-sonnet-4-6', inputCreditsPerMTok: 3000, outputCreditsPerMTok: 15000 },
-  'deepseek-v4-flash-free': { realModel: 'deepseek-v4-flash-free', inputCreditsPerMTok: 0, outputCreditsPerMTok: 0 },
+const MODELS_DEV_URL = 'https://models.dev/api.json';
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
+const PROVIDER_TO_MODELS_DEV: Record<string, string> = {
+  opencode_zen: 'opencode',
+  opencode: 'opencode',
+  openrouter: 'openrouter',
+  anthropic: 'anthropic',
+  google: 'google',
+  openai: 'openai',
 };
 
-export const DEFAULT_MODEL = 'gemini-3.5-flash';
+const FALLBACK: Record<string, Record<string, { input: number; output: number }>> = {
+  opencode: {
+    'claude-haiku-4-5': { input: 1, output: 5 },
+    'claude-sonnet-4-6': { input: 3, output: 15 },
+    'gemini-3.5-flash': { input: 1.5, output: 9 },
+    'gemini-3-flash': { input: 0.3, output: 2.5 },
+    'gemini-3.1-pro': { input: 12.5, output: 100 },
+  },
+};
 
-export function resolveModel(requested: string | undefined) {
-  return MODELS[requested ?? DEFAULT_MODEL] ?? MODELS[DEFAULT_MODEL];
+type ModelsDevModel = { id: string; cost?: { input?: number; output?: number } };
+type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
+type ModelsDevApi = Record<string, ModelsDevProvider>;
+
+let cache: { data: ModelsDevApi; at: number } | null = null;
+let inflight: Promise<ModelsDevApi> | null = null;
+
+async function fetchCatalog(): Promise<ModelsDevApi> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.data;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      const res = await fetch(MODELS_DEV_URL, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`models.dev ${res.status}`);
+      const data = (await res.json()) as ModelsDevApi;
+      cache = { data, at: Date.now() };
+      return data;
+    } catch (err) {
+      console.warn('[pricing] models.dev fetch failed, using fallback', err);
+      const data = Object.fromEntries(
+        Object.entries(FALLBACK).map(([id, models]) => [
+          id,
+          {
+            models: Object.fromEntries(
+              Object.entries(models).map(([mid, cost]) => [mid, { id: mid, cost }]),
+            ),
+          },
+        ]),
+      );
+      cache = { data, at: Date.now() };
+      return data;
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
-export function listModels() {
-  return Object.entries(MODELS).map(([id, p]) => ({ id, ...p }));
+function modelsDevKey(provider: string) {
+  return PROVIDER_TO_MODELS_DEV[provider] ?? provider;
 }
 
-export function computeCostCredits(pricing: ModelPricing, inputTokens: number, outputTokens: number) {
-  const input = (inputTokens * pricing.inputCreditsPerMTok) / 1_000_000;
-  const output = (outputTokens * pricing.outputCreditsPerMTok) / 1_000_000;
-  return Math.max(1, Math.ceil(input + output));
+export async function lookupModelCost(provider: string, modelId: string): Promise<ModelCost | null> {
+  const catalog = await fetchCatalog();
+  const key = modelsDevKey(provider);
+  const cost = catalog[key]?.models?.[modelId]?.cost;
+  if (!cost || cost.input == null || cost.output == null) return null;
+  return { provider, modelId, inputUsdPerMtok: cost.input, outputUsdPerMtok: cost.output };
+}
+
+export async function listModelsForProvider(provider: string): Promise<string[]> {
+  const catalog = await fetchCatalog();
+  const key = modelsDevKey(provider);
+  const models = catalog[key]?.models ?? {};
+  return Object.keys(models).sort();
 }

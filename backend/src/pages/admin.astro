@@ -1,7 +1,7 @@
 ---
 import { getCurrentUser, isAdmin } from '../lib/admin';
 import { getActiveModelId, getFreeModelId, getActiveProvider, listKnownProviders } from '../lib/settings';
-import { listModels } from '../lib/pricing';
+import { listModelsForProvider } from '../lib/pricing';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
@@ -11,7 +11,7 @@ const activeModel = await getActiveModelId();
 const freeModel = await getFreeModelId();
 const activeProvider = await getActiveProvider();
 const providers = listKnownProviders();
-const models = listModels();
+const models = await listModelsForProvider(activeProvider);
 ---
 
 <html lang="en">
@@ -45,9 +45,9 @@ const models = listModels();
 			<div>
 				<label><strong>Paid credits → </strong>
 					<select id="model-select-paid">
-						{models.map((m) => (
-							<option value={m.id} selected={m.id === activeModel}>
-								{m.id}
+						{models.map((id) => (
+							<option value={id} selected={id === activeModel}>
+								{id}
 </option>
 						))}
 					</select>
@@ -57,9 +57,9 @@ const models = listModels();
 			<div style="margin-top:0.5em;">
 				<label><strong>Free credits → </strong>
 					<select id="model-select-free">
-						{models.map((m) => (
-							<option value={m.id} selected={m.id === freeModel}>
-								{m.id}
+						{models.map((id) => (
+							<option value={id} selected={id === freeModel}>
+								{id}
 </option>
 						))}
 					</select>
@@ -71,7 +71,7 @@ const models = listModels();
 
 		<div class="section">
 			<h2>Upstream provider</h2>
-			<p>Credit cost is derived from <code>model_costs</code> for the active provider, multiplied by the markup.</p>
+			<p>Pricing is fetched automatically from <a href="https://models.dev" target="_blank">models.dev</a> for the active provider, multiplied by the markup.</p>
 			<label><strong>Provider: </strong>
 				<select id="provider-select">
 					{providers.map((p) => (
@@ -81,26 +81,6 @@ const models = listModels();
 			</label>
 			<button id="save-provider">Save</button>
 			<span id="provider-status" style="margin-left:0.5em;color:#080;"></span>
-		</div>
-
-		<div class="section">
-			<h2>Model costs (USD per Mtok)</h2>
-			<p>Edit prices we pay upstream. Credit cost = (USD * markup) / credit unit, computed per request.</p>
-			<table id="costs-table">
-				<thead><tr><th>Provider</th><th>Model</th><th>Input $/Mtok</th><th>Output $/Mtok</th><th></th></tr></thead>
-				<tbody></tbody>
-			</table>
-			<details>
-				<summary>Add row</summary>
-				<form id="add-cost">
-					<input name="provider" placeholder="provider (e.g. opencode_zen)" required />
-					<input name="modelId" placeholder="model id" required />
-					<input name="inputUsdPerMtok" type="number" step="0.0001" placeholder="input $/Mtok" required />
-					<input name="outputUsdPerMtok" type="number" step="0.0001" placeholder="output $/Mtok" required />
-					<button type="submit">Add</button>
-				</form>
-			</details>
-			<span id="costs-status" style="margin-left:0.5em;color:#080;"></span>
 		</div>
 
 		<div class="section">
@@ -140,59 +120,6 @@ const models = listModels();
 					return `<tr><td>${r.provider || '—'}</td><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${margin.toFixed(4)}</td></tr>`;
 				}).join('') || '<tr><td colspan="8"><em>No usage yet</em></td></tr>';
 			}
-			async function loadCosts() {
-				const res = await fetch('/api/admin/model-costs');
-				const { rows } = await res.json();
-				const tbody = document.querySelector('#costs-table tbody');
-				tbody.innerHTML = rows.map((r) => `
-					<tr data-provider="${r.provider}" data-model="${r.modelId}">
-						<td>${r.provider}</td>
-						<td><code>${r.modelId}</code></td>
-						<td><input class="in-price" type="number" step="0.0001" value="${r.inputUsdPerMtok}" /></td>
-						<td><input class="out-price" type="number" step="0.0001" value="${r.outputUsdPerMtok}" /></td>
-						<td><button class="save-cost">Save</button> <button class="del-cost">Delete</button></td>
-					</tr>
-				`).join('') || '<tr><td colspan="5"><em>No rows yet — run scripts/seed-model-costs.ts</em></td></tr>';
-				tbody.querySelectorAll('.save-cost').forEach((btn) => {
-					btn.addEventListener('click', async () => {
-						const tr = btn.closest('tr');
-						const payload = {
-							provider: tr.dataset.provider,
-							modelId: tr.dataset.model,
-							inputUsdPerMtok: Number(tr.querySelector('.in-price').value),
-							outputUsdPerMtok: Number(tr.querySelector('.out-price').value),
-						};
-						const r = await fetch('/api/admin/model-costs', {
-							method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-						});
-						const status = document.getElementById('costs-status');
-						status.textContent = r.ok ? 'Saved ✓' : 'Failed';
-						setTimeout(() => status.textContent = '', 2000);
-					});
-				});
-				tbody.querySelectorAll('.del-cost').forEach((btn) => {
-					btn.addEventListener('click', async () => {
-						const tr = btn.closest('tr');
-						if (!confirm(`Delete ${tr.dataset.provider}/${tr.dataset.model}?`)) return;
-						await fetch(`/api/admin/model-costs?provider=${encodeURIComponent(tr.dataset.provider)}&modelId=${encodeURIComponent(tr.dataset.model)}`, { method: 'DELETE' });
-						loadCosts();
-					});
-				});
-			}
-			document.getElementById('add-cost').addEventListener('submit', async (e) => {
-				e.preventDefault();
-				const fd = new FormData(e.target);
-				const payload = {
-					provider: fd.get('provider'),
-					modelId: fd.get('modelId'),
-					inputUsdPerMtok: Number(fd.get('inputUsdPerMtok')),
-					outputUsdPerMtok: Number(fd.get('outputUsdPerMtok')),
-				};
-				const r = await fetch('/api/admin/model-costs', {
-					method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-				});
-				if (r.ok) { e.target.reset(); loadCosts(); }
-			});
 			document.getElementById('save-provider').addEventListener('click', async () => {
 				const provider = document.getElementById('provider-select').value;
 				const r = await fetch('/api/admin/provider', {
@@ -249,7 +176,6 @@ const models = listModels();
 			});
 			loadStats();
 			loadUsers();
-			loadCosts();
 		</script>
 	</body>
 </html>
