@@ -723,6 +723,8 @@ function clipboardCopyAction(item) {
   return { type: 'copyText', title: item.type === 'video' ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
 }
 
+const CLIPBOARD_ITEM_APPEARANCE = { foreground: 'blue' } as const
+
 function clipboardRootItem(item) {
   return {
     id: `clipboard:${item.id}`,
@@ -732,6 +734,7 @@ function clipboardRootItem(item) {
     image: item.thumbnailUrl,
     score: 60,
     lastUsed: item.createdAt || 0,
+    appearance: CLIPBOARD_ITEM_APPEARANCE,
     primaryAction: clipboardCopyAction(item),
     actionPanel: { sections: [{ actions: [clipboardPreviewAction(item), clipboardCopyAction(item)].filter(Boolean) }] },
   }
@@ -752,6 +755,7 @@ function clipboardHistoryItem(item: any) {
     icon: 'clipboard',
     image: item.thumbnailUrl,
     keywords: [item.text || '', item.type || '', `clipboard ${item.type || ''}`, isImage ? 'image photo picture screenshot' : '', isVideo ? 'video movie recording' : ''].filter(Boolean),
+    appearance: CLIPBOARD_ITEM_APPEARANCE,
     primaryAction: copyAction,
     actionPanel: {
       sections: [
