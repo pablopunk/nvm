@@ -4,10 +4,18 @@ import { streamText, generateText, type ModelMessage } from 'ai';
 import { modelFor } from '../../../../lib/provider';
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { getBalances } from '../../../../lib/users';
-import { resolveModel, computeCostCredits } from '../../../../lib/pricing';
-import { getActiveModelId, getFreeModelId } from '../../../../lib/settings';
+import { getActiveModelId, getFreeModelId, getActiveProvider } from '../../../../lib/settings';
+import {
+  lookupModelCost,
+  computeUsdCost,
+  usdToCredits,
+  usdToMicrocents,
+} from '../../../../lib/cost';
 import { db } from '../../../../db/client';
 import { creditLedger, usage } from '../../../../db/schema';
+
+export const config = { maxDuration: 300 };
+const SOFT_CAP_MS = 240_000;
 
 type OpenAIMessage = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string };
 type OpenAIRequest = {
@@ -26,11 +34,13 @@ function toModelMessages(messages: OpenAIMessage[]): ModelMessage[] {
 
 async function recordUsage(args: {
   userId: string;
+  provider: string;
   model: string;
   kind: 'free' | 'paid';
   inputTokens: number;
   outputTokens: number;
   costCredits: number;
+  upstreamCostMicrocents: number;
   requestId: string;
 }) {
   await db.transaction(async (tx) => {
@@ -44,9 +54,11 @@ async function recordUsage(args: {
     await tx.insert(usage).values({
       userId: args.userId,
       model: args.model,
+      provider: args.provider,
       inputTokens: args.inputTokens,
       outputTokens: args.outputTokens,
       costCredits: args.costCredits,
+      upstreamCostMicrocents: args.upstreamCostMicrocents,
       requestId: args.requestId,
     });
   });
@@ -69,39 +81,68 @@ export const POST: APIRoute = async ({ request }) => {
 
   const usingFreeTier = balances.free > 0;
   const kind: 'free' | 'paid' = usingFreeTier ? 'free' : 'paid';
+  const provider = await getActiveProvider();
   const activeModelId = usingFreeTier ? await getFreeModelId() : await getActiveModelId();
-  const pricing = resolveModel(activeModelId);
-  const model = modelFor(pricing.realModel);
+
+  const costRow = await lookupModelCost(provider, activeModelId);
+  if (!costRow) {
+    console.error('[chat/completions] pricing_unavailable', { provider, model: activeModelId });
+    return Response.json(
+      { error: { type: 'pricing_unavailable', message: 'No pricing configured for active model' } },
+      { status: 503 },
+    );
+  }
+
+  const model = modelFor(activeModelId, provider);
   const requestId = randomUUID();
   const created = Math.floor(Date.now() / 1000);
-  const modelLabel = pricing.realModel;
   const messages = toModelMessages(body.messages);
+
+  const finalize = async (inputTokens: number, outputTokens: number) => {
+    const costUsd = computeUsdCost(costRow, inputTokens, outputTokens);
+    const creditsCharged = usdToCredits(costUsd);
+    const upstreamCostMicrocents = usdToMicrocents(costUsd);
+    await recordUsage({
+      userId: user.id,
+      provider,
+      model: activeModelId,
+      kind,
+      inputTokens,
+      outputTokens,
+      costCredits: creditsCharged,
+      upstreamCostMicrocents,
+      requestId,
+    });
+  };
 
   if (body.stream === false) {
     const result = await generateText({ model, messages, temperature: body.temperature });
-    const inputTokens = result.usage.inputTokens ?? 0;
-    const outputTokens = result.usage.outputTokens ?? 0;
-    const cost = computeCostCredits(pricing, inputTokens, outputTokens);
-    await recordUsage({ userId: user.id, model: pricing.realModel, kind, inputTokens, outputTokens, costCredits: cost, requestId });
+    await finalize(result.usage.inputTokens ?? 0, result.usage.outputTokens ?? 0);
     return Response.json({
       id: `chatcmpl-${requestId}`,
       object: 'chat.completion',
       created,
-      model: modelLabel,
+      model: activeModelId,
       choices: [{ index: 0, message: { role: 'assistant', content: result.text }, finish_reason: 'stop' }],
-      usage: { prompt_tokens: inputTokens, completion_tokens: outputTokens, total_tokens: inputTokens + outputTokens },
+      usage: {
+        prompt_tokens: result.usage.inputTokens ?? 0,
+        completion_tokens: result.usage.outputTokens ?? 0,
+        total_tokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
+      },
     });
   }
+
+  const abort = new AbortController();
+  const softCapTimer = setTimeout(() => abort.abort(), SOFT_CAP_MS);
 
   const result = streamText({
     model,
     messages,
     temperature: body.temperature,
+    abortSignal: abort.signal,
     onFinish: async ({ usage: u }) => {
-      const inputTokens = u.inputTokens ?? 0;
-      const outputTokens = u.outputTokens ?? 0;
-      const cost = computeCostCredits(pricing, inputTokens, outputTokens);
-      await recordUsage({ userId: user.id, model: pricing.realModel, kind, inputTokens, outputTokens, costCredits: cost, requestId });
+      clearTimeout(softCapTimer);
+      await finalize(u.inputTokens ?? 0, u.outputTokens ?? 0);
     },
   });
 
@@ -112,7 +153,7 @@ export const POST: APIRoute = async ({ request }) => {
         id: `chatcmpl-${requestId}`,
         object: 'chat.completion.chunk',
         created,
-        model: modelLabel,
+        model: activeModelId,
       };
       const send = (payload: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
       try {
@@ -121,7 +162,8 @@ export const POST: APIRoute = async ({ request }) => {
           send({ ...baseChunk, choices: [{ index: 0, delta: { content: delta }, finish_reason: null }] });
         }
         const finalUsage = await result.usage;
-        send({ ...baseChunk, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+        const finishReason = abort.signal.aborted ? 'length' : 'stop';
+        send({ ...baseChunk, choices: [{ index: 0, delta: {}, finish_reason: finishReason }] });
         send({
           ...baseChunk,
           choices: [],
@@ -136,6 +178,7 @@ export const POST: APIRoute = async ({ request }) => {
         send({ ...baseChunk, choices: [{ index: 0, delta: {}, finish_reason: 'error' }] });
         console.error('[chat/completions] stream error', err);
       } finally {
+        clearTimeout(softCapTimer);
         controller.close();
       }
     },

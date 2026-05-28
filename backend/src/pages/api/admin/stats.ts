@@ -26,13 +26,15 @@ export const GET: APIRoute = async ({ request }) => {
   const byModel = await db
     .select({
       model: usage.model,
+      provider: usage.provider,
       requests: sql<number>`count(*)::int`,
       inputTokens: sql<number>`sum(${usage.inputTokens})::int`,
       outputTokens: sql<number>`sum(${usage.outputTokens})::int`,
       costCredits: sql<number>`sum(${usage.costCredits})::int`,
+      upstreamCostMicrocents: sql<number>`coalesce(sum(${usage.upstreamCostMicrocents}),0)::bigint`,
     })
     .from(usage)
-    .groupBy(usage.model)
+    .groupBy(usage.model, usage.provider)
     .orderBy(sql`count(*) desc`);
 
   return Response.json({

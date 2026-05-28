@@ -3,9 +3,12 @@ import {
   text,
   timestamp,
   integer,
+  bigint,
   bigserial,
+  numeric,
   uuid,
   index,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -49,6 +52,8 @@ export const usage = pgTable(
     inputTokens: integer('input_tokens').notNull(),
     outputTokens: integer('output_tokens').notNull(),
     costCredits: integer('cost_credits').notNull(),
+    upstreamCostMicrocents: bigint('upstream_cost_microcents', { mode: 'number' }).notNull().default(0),
+    provider: text('provider'),
     requestId: text('request_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -71,6 +76,20 @@ export const apiTokens = pgTable(
   },
   (t) => ({
     userIdx: index('api_tokens_user_idx').on(t.userId),
+  }),
+);
+
+export const modelCosts = pgTable(
+  'model_costs',
+  {
+    provider: text('provider').notNull(),
+    modelId: text('model_id').notNull(),
+    inputUsdPerMtok: numeric('input_usd_per_mtok', { precision: 12, scale: 6 }).notNull(),
+    outputUsdPerMtok: numeric('output_usd_per_mtok', { precision: 12, scale: 6 }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.provider, t.modelId] }),
   }),
 );
 

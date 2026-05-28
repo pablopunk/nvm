@@ -1,6 +1,6 @@
 ---
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { getActiveModelId, getFreeModelId } from '../lib/settings';
+import { getActiveModelId, getFreeModelId, getActiveProvider, listKnownProviders } from '../lib/settings';
 import { listModels } from '../lib/pricing';
 
 const user = await getCurrentUser(Astro.request);
@@ -9,6 +9,8 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
 const activeModel = await getActiveModelId();
 const freeModel = await getFreeModelId();
+const activeProvider = await getActiveProvider();
+const providers = listKnownProviders();
 const models = listModels();
 ---
 
@@ -45,8 +47,8 @@ const models = listModels();
 					<select id="model-select-paid">
 						{models.map((m) => (
 							<option value={m.id} selected={m.id === activeModel}>
-								{m.id} (in {m.inputCreditsPerMTok}/Mtok · out {m.outputCreditsPerMTok}/Mtok)
-							</option>
+								{m.id}
+</option>
 						))}
 					</select>
 				</label>
@@ -57,8 +59,8 @@ const models = listModels();
 					<select id="model-select-free">
 						{models.map((m) => (
 							<option value={m.id} selected={m.id === freeModel}>
-								{m.id} (in {m.inputCreditsPerMTok}/Mtok · out {m.outputCreditsPerMTok}/Mtok)
-							</option>
+								{m.id}
+</option>
 						))}
 					</select>
 				</label>
@@ -68,10 +70,44 @@ const models = listModels();
 		</div>
 
 		<div class="section">
+			<h2>Upstream provider</h2>
+			<p>Credit cost is derived from <code>model_costs</code> for the active provider, multiplied by the markup.</p>
+			<label><strong>Provider: </strong>
+				<select id="provider-select">
+					{providers.map((p) => (
+						<option value={p} selected={p === activeProvider}>{p}</option>
+					))}
+				</select>
+			</label>
+			<button id="save-provider">Save</button>
+			<span id="provider-status" style="margin-left:0.5em;color:#080;"></span>
+		</div>
+
+		<div class="section">
+			<h2>Model costs (USD per Mtok)</h2>
+			<p>Edit prices we pay upstream. Credit cost = (USD * markup) / credit unit, computed per request.</p>
+			<table id="costs-table">
+				<thead><tr><th>Provider</th><th>Model</th><th>Input $/Mtok</th><th>Output $/Mtok</th><th></th></tr></thead>
+				<tbody></tbody>
+			</table>
+			<details>
+				<summary>Add row</summary>
+				<form id="add-cost">
+					<input name="provider" placeholder="provider (e.g. opencode_zen)" required />
+					<input name="modelId" placeholder="model id" required />
+					<input name="inputUsdPerMtok" type="number" step="0.0001" placeholder="input $/Mtok" required />
+					<input name="outputUsdPerMtok" type="number" step="0.0001" placeholder="output $/Mtok" required />
+					<button type="submit">Add</button>
+				</form>
+			</details>
+			<span id="costs-status" style="margin-left:0.5em;color:#080;"></span>
+		</div>
+
+		<div class="section">
 			<h2>System stats</h2>
 			<div class="stat-grid" id="stats"><em>loading…</em></div>
 			<h3>Usage by model</h3>
-			<table id="by-model"><thead><tr><th>Model</th><th>Requests</th><th>Input tok</th><th>Output tok</th><th>Credits spent</th></tr></thead><tbody></tbody></table>
+			<table id="by-model"><thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Input tok</th><th>Output tok</th><th>Credits</th><th>Real USD</th><th>Implied $ margin</th></tr></thead><tbody></tbody></table>
 		</div>
 
 		<div class="section">
@@ -96,10 +132,76 @@ const models = listModels();
 					<div class="stat"><div class="v">${s.credits.spent} / ${s.credits.granted}</div><div class="l">Credits spent / granted</div></div>
 				`;
 				const tbody = document.querySelector('#by-model tbody');
-				tbody.innerHTML = s.byModel.map((r) => `
-					<tr><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td></tr>
-				`).join('') || '<tr><td colspan="5"><em>No usage yet</em></td></tr>';
+				const creditUsd = 0.0001;
+				tbody.innerHTML = s.byModel.map((r) => {
+					const usd = Number(r.upstreamCostMicrocents || 0) / 1e8;
+					const collectedUsd = (r.costCredits || 0) * creditUsd;
+					const margin = collectedUsd - usd;
+					return `<tr><td>${r.provider || '—'}</td><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${margin.toFixed(4)}</td></tr>`;
+				}).join('') || '<tr><td colspan="8"><em>No usage yet</em></td></tr>';
 			}
+			async function loadCosts() {
+				const res = await fetch('/api/admin/model-costs');
+				const { rows } = await res.json();
+				const tbody = document.querySelector('#costs-table tbody');
+				tbody.innerHTML = rows.map((r) => `
+					<tr data-provider="${r.provider}" data-model="${r.modelId}">
+						<td>${r.provider}</td>
+						<td><code>${r.modelId}</code></td>
+						<td><input class="in-price" type="number" step="0.0001" value="${r.inputUsdPerMtok}" /></td>
+						<td><input class="out-price" type="number" step="0.0001" value="${r.outputUsdPerMtok}" /></td>
+						<td><button class="save-cost">Save</button> <button class="del-cost">Delete</button></td>
+					</tr>
+				`).join('') || '<tr><td colspan="5"><em>No rows yet — run scripts/seed-model-costs.ts</em></td></tr>';
+				tbody.querySelectorAll('.save-cost').forEach((btn) => {
+					btn.addEventListener('click', async () => {
+						const tr = btn.closest('tr');
+						const payload = {
+							provider: tr.dataset.provider,
+							modelId: tr.dataset.model,
+							inputUsdPerMtok: Number(tr.querySelector('.in-price').value),
+							outputUsdPerMtok: Number(tr.querySelector('.out-price').value),
+						};
+						const r = await fetch('/api/admin/model-costs', {
+							method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+						});
+						const status = document.getElementById('costs-status');
+						status.textContent = r.ok ? 'Saved ✓' : 'Failed';
+						setTimeout(() => status.textContent = '', 2000);
+					});
+				});
+				tbody.querySelectorAll('.del-cost').forEach((btn) => {
+					btn.addEventListener('click', async () => {
+						const tr = btn.closest('tr');
+						if (!confirm(`Delete ${tr.dataset.provider}/${tr.dataset.model}?`)) return;
+						await fetch(`/api/admin/model-costs?provider=${encodeURIComponent(tr.dataset.provider)}&modelId=${encodeURIComponent(tr.dataset.model)}`, { method: 'DELETE' });
+						loadCosts();
+					});
+				});
+			}
+			document.getElementById('add-cost').addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const fd = new FormData(e.target);
+				const payload = {
+					provider: fd.get('provider'),
+					modelId: fd.get('modelId'),
+					inputUsdPerMtok: Number(fd.get('inputUsdPerMtok')),
+					outputUsdPerMtok: Number(fd.get('outputUsdPerMtok')),
+				};
+				const r = await fetch('/api/admin/model-costs', {
+					method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+				});
+				if (r.ok) { e.target.reset(); loadCosts(); }
+			});
+			document.getElementById('save-provider').addEventListener('click', async () => {
+				const provider = document.getElementById('provider-select').value;
+				const r = await fetch('/api/admin/provider', {
+					method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }),
+				});
+				const status = document.getElementById('provider-status');
+				status.textContent = r.ok ? 'Saved ✓' : 'Failed';
+				setTimeout(() => status.textContent = '', 2000);
+			});
 			async function loadUsers() {
 				const res = await fetch('/api/admin/users');
 				const { users } = await res.json();
@@ -147,6 +249,7 @@ const models = listModels();
 			});
 			loadStats();
 			loadUsers();
+			loadCosts();
 		</script>
 	</body>
 </html>
