@@ -27,8 +27,8 @@
     "dist:win:x64": "pnpm build && electron-builder --config electron-builder.yml --win nsis portable --x64 --publish never"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.76.0",
+    "@earendil-works/pi-coding-agent": "^0.76.0",
     "@vitejs/plugin-react": "latest",
     "balanced-match": "^4.0.4",
     "brace-expansion": "^5.0.6",
