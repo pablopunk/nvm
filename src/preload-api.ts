@@ -96,6 +96,7 @@ export type NevermindApi = {
   runViewAction: (action: CommandAction) => Promise<ViewActionResult>
   startFileDrag: (filePath: string) => void
   sendAiMessage: (message: string, chatId?: string) => Promise<void>
+  aiChatExited: (chatId?: string) => Promise<void>
   abortAiChat: (chatId?: string) => Promise<void>
   resetAiChat: (chatId?: string) => Promise<void>
   setAlias: (action: RootAction, alias: string) => Promise<SaveResult>

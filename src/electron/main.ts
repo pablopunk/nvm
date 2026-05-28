@@ -18,6 +18,7 @@ import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, f
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
+import { LocalLearningStore, type LearningKind } from './learning-store'
 import { canCustomizeCommandAction } from '../model'
 
 const { autoUpdater } = electronUpdater
@@ -49,6 +50,9 @@ const EXTENSION_REFRESH_BURST_WINDOW_MS = 2000
 const EXTENSION_AI_CALLS_PER_MINUTE = 30
 const EXTENSION_AI_RATE_WINDOW_MS = 60_000
 const EXTENSION_TYPES_FILENAME = 'nevermind-extension-api.d.ts'
+const LEARNING_RULES_FILENAME = 'ai-learnings.md'
+const LEGACY_LEARNING_RULES_FILENAME = 'ai-learnings.json'
+const LEARNING_TRACES_FILENAME = 'ai-learning-traces.json'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
@@ -79,10 +83,15 @@ let clipboardImagesDir = ''
 let extensionsDir = ''
 let extensionStorageDir = ''
 let extensionCacheDir = ''
+let learningRulesPath = ''
+let legacyLearningRulesPath = ''
+let learningTracesPath = ''
 let saveTimer: NodeJS.Timeout | undefined
 let appIndexTimer: NodeJS.Timeout | undefined
 let appWatchers: Array<{ close: () => unknown }> = []
 let nevermindAi: any
+let learningStore: LocalLearningStore | null = null
+const learningReviewJobs = new Map<string, Promise<void>>()
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
 let didRunQuitCleanup = false
@@ -120,6 +129,82 @@ function setSetting(id: any, value: any) {
   invalidateExtensionRootItems()
   patchSettingsView(id)
 }
+
+function aiLearningMetadata(chatId: string) {
+  const chat = userState.aiChats[chatId] || draftAiChats.get(chatId)
+  return {
+    query: chat?.query,
+    title: chat?.title,
+    contextExtensionFile: chat?.contextExtensionFile,
+    extensionFiles: chatTouchedExtensionFiles(chat),
+  }
+}
+
+function relevantLearningContext(message: string, chatId: string) {
+  if (!learningStore) return ''
+  const metadata = aiLearningMetadata(chatId)
+  const learnings = learningStore.relevantLearnings({
+    message,
+    query: metadata.query,
+    contextExtensionFile: metadata.contextExtensionFile,
+    limit: 4,
+  })
+  if (!learnings.length) return ''
+  const lines = learnings.map((learning) => `- ${learning.summary}${learning.appliesWhen ? ` When relevant: ${learning.appliesWhen}.` : ''}`)
+  return `\n\nLocal machine learnings for future extension builds:\n${lines.join('\n')}`
+}
+
+function normalizedLearningReview(response: string) {
+  const raw = String(response || '').trim()
+  if (!raw) return []
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const candidate = (fencedMatch?.[1] || raw).trim()
+  const parsed = JSON.parse(candidate) as { learnings?: Array<{ kind?: string; summary?: string; appliesWhen?: string; keywords?: string[]; confidence?: string; evidence?: string }> }
+  return (parsed.learnings || []).map((learning) => ({
+    kind: learning.kind === 'workflow' || learning.kind === 'preference' ? learning.kind : 'environment',
+    summary: String(learning.summary || '').trim(),
+    appliesWhen: learning.appliesWhen ? String(learning.appliesWhen).trim() : undefined,
+    keywords: Array.isArray(learning.keywords) ? learning.keywords.map(String) : [],
+    confidence: learning.confidence === 'low' || learning.confidence === 'high' ? learning.confidence : 'medium',
+    evidence: learning.evidence ? String(learning.evidence).trim() : undefined,
+  })).filter((learning) => learning.summary)
+}
+
+function learningReviewPrompt(snapshot: any) {
+  return `You are curating the canonical user learning rules for Nevermind's extension-building AI on this machine.
+
+Analyze the conversation and trace for friction patterns, including misunderstandings, too many iterations, repeated back-and-forth, retries, environment quirks, tool misuse, or anything else that would help future extension-building chats go better.
+
+Your job is to update the current learning set, not append blindly. Merge overlapping rules, rewrite weak rules into stronger generic ones, remove stale or redundant rules, and keep the final set small. Prefer a tiny set of generic durable rules over many specific ones.
+
+Do not include product feedback about improving the extension API or builder prompt. Do not include volatile facts like absolute file paths, specific chat titles, or one-off task details unless they are stable machine conventions.
+
+Return the full resulting rule set as strict JSON only with this shape:
+{"learnings":[{"kind":"environment|workflow|preference","summary":"short generic rule","appliesWhen":"optional short trigger","keywords":["keyword"],"confidence":"low|medium|high","evidence":"brief rationale"}]}
+
+Keep the final list as small as possible. Returning {"learnings":[]} is valid when no durable user learnings should exist.
+
+Trace:
+${JSON.stringify(snapshot, null, 2)}`
+}
+
+function recordLearningReview(chatId: string) {
+  if (!learningStore?.shouldReview(chatId) || learningReviewJobs.has(chatId) || !nevermindAi?.ask) return
+  const snapshot = learningStore.reviewSnapshot(chatId)
+  if (!snapshot) return
+  const job = nevermindAi.ask(learningReviewPrompt(snapshot), {
+    system: 'You maintain a tiny canonical set of user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending. Return strict JSON and keep the final set minimal.',
+  }).then((response: string) => {
+    const learnings = normalizedLearningReview(response)
+    learningStore?.replaceLearningsFromReview(chatId, learnings as Array<{ kind: LearningKind; summary: string; appliesWhen?: string; keywords?: string[]; confidence?: "low" | "medium" | "high"; evidence?: string }>)
+  }).catch((error: unknown) => {
+    logWarn('ai.learning.review.failed', { chatId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'ai' })
+  }).finally(() => {
+    learningReviewJobs.delete(chatId)
+  })
+  learningReviewJobs.set(chatId, job)
+}
+
 const appIconCache = new Map<string, string | null>()
 const extensionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
@@ -416,6 +501,7 @@ function getOrCreateAiChat(query, options: any = {}) {
   const id = current && options.fresh ? hashValue(`${trimmed}:${Date.now()}:${crypto.randomUUID()}`) : baseId
   const item = aiChatItem(id, trimmed)
   userState.aiChats[id] = item
+   learningStore?.upsertTraceMetadata(id, aiLearningMetadata(id))
   scheduleSaveState()
   invalidateExtensionRootItems()
   return item
@@ -451,6 +537,7 @@ function promoteDraftAiChat(chatId) {
   draft.createdAt = Date.now()
   draft.updatedAt = Date.now()
   userState.aiChats[chatId] = draft
+   learningStore?.upsertTraceMetadata(chatId, aiLearningMetadata(chatId))
   scheduleSaveState()
   invalidateExtensionRootItems()
   return draft
@@ -461,6 +548,7 @@ function appendAiChatMessage(chatId, role, content) {
   if (!chat || !content) return
   chat.messages = [...(chat.messages || []), { role, content }].slice(-100)
   chat.updatedAt = Date.now()
+   learningStore?.appendMessage(chatId, role, content, aiLearningMetadata(chatId))
   scheduleSaveState()
   patchAiChatsItem(chatId)
 }
@@ -474,6 +562,7 @@ function appendAiChatDelta(chatId, text) {
   else messages.push({ role: 'assistant', content: text })
   chat.messages = messages.slice(-100)
   chat.updatedAt = Date.now()
+   learningStore?.appendAssistantDelta(chatId, text, aiLearningMetadata(chatId))
   scheduleSaveState()
 }
 
@@ -577,6 +666,7 @@ function touchExtensionFileForChat(chat, filename) {
   if (!chat.generatedExtensionFile) chat.generatedExtensionFile = path.basename(filename)
   chat.status = 'ready'
   chat.updatedAt = Date.now()
+  learningStore?.upsertTraceMetadata(chat.id, aiLearningMetadata(chat.id))
   patchAiChatsItem(chat.id)
 }
 
@@ -588,6 +678,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   if (existing) {
     existing.contextExtensionFile = filename
     existing.updatedAt = Date.now()
+    learningStore?.upsertTraceMetadata(existing.id, aiLearningMetadata(existing.id))
     scheduleSaveState()
     patchAiChatsItem(existing.id)
     return existing
@@ -607,6 +698,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
     ],
   }
   userState.aiChats[id] = item
+  learningStore?.upsertTraceMetadata(id, aiLearningMetadata(id))
   scheduleSaveState()
   invalidateExtensionRootItems()
   patchAiChatsPrepend(id)
@@ -2579,14 +2671,39 @@ function initNevermindAi() {
     addAliasForChat: (chatId) => addAliasForGeneratedAction(chatId),
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId
+      const metadata = chatId ? aiLearningMetadata(chatId) : undefined
+      if (chatId && event.type === 'start') learningStore?.recordStatus(chatId, 'start', metadata)
       if (chatId && event.type === 'delta' && event.text) appendAiChatDelta(chatId, event.text)
       if (chatId && event.type === 'tool_start' && event.name) appendAiChatMessage(chatId, 'system', event.name)
+      if (chatId && event.type === 'tool_trace_start' && event.name) learningStore?.recordToolStart(chatId, event.name, (event.data as any)?.input, metadata, (event.data as any)?.toolCallId)
+      if (chatId && event.type === 'tool_trace_end' && event.name) {
+        const toolData = event.data as any
+        learningStore?.recordToolEnd(chatId, event.name, { ok: !event.isError, outputSummary: toolData?.output, error: toolData?.error, toolCallId: toolData?.toolCallId }, metadata)
+        if (['write_extension', 'validate_extension', 'remove_extension', 'install_extension'].includes(event.name)) {
+          learningStore?.recordExtensionEvent(chatId, {
+            kind: event.name as 'write_extension' | 'validate_extension' | 'remove_extension' | 'install_extension',
+            filename: toolData?.output?.filePath || toolData?.input?.filename,
+            extensionId: toolData?.output?.extensionId,
+            commandIds: Array.isArray(toolData?.output?.commandIds) ? toolData.output.commandIds : undefined,
+            ok: !event.isError,
+            error: toolData?.error,
+            details: toolData?.output,
+          }, metadata)
+        }
+      }
       if (chatId && event.type === 'error' && event.message) appendAiChatMessage(chatId, 'system', event.message)
       if (chatId && event.type === 'done' && userState.aiChats[chatId]) {
         if (userState.aiChats[chatId].status !== 'ready') userState.aiChats[chatId].status = 'done'
         userState.aiChats[chatId].updatedAt = Date.now()
+        learningStore?.recordStatus(chatId, 'done', metadata)
         patchAiChatsItem(chatId)
         scheduleSaveState()
+      }
+      if (chatId && event.type === 'error' && event.message) {
+        learningStore?.recordStatus(chatId, 'error', metadata, event.message)
+      }
+      if (chatId && event.type === 'aborted') {
+        learningStore?.recordStatus(chatId, 'aborted', metadata)
       }
       paletteWindow.win?.webContents.send('ai:chat:event', { ...event, chatId })
     },
@@ -2606,17 +2723,18 @@ function extensionRuntimeStateForFile(filename) {
 function aiChatPromptWithContext(message, chatId) {
   const chat = userState.aiChats[chatId]
   const focused = chat?.contextExtensionFile ? `\n\nFocused extension file: ${chat.contextExtensionFile}. Use read_current_extension before editing it. You may list/read other extensions if needed.` : ''
+  const learnings = relevantLearningContext(message, chatId)
   const messages = (chat?.messages || [])
     .filter((item) => item.role === 'user' || item.role === 'assistant')
     .slice(-12)
 
-  if (!messages.length) return `Use this Nevermind AI chat transcript as context. If the user has provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}\n\nNew user message:\n${message}`
+  if (!messages.length) return `Use this Nevermind AI chat transcript as context. If the user has provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}${learnings}\n\nNew user message:\n${message}`
 
   const transcript = messages
     .map((item) => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`)
     .join('\n\n')
 
-  return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}\n\n${transcript}\n\nNew user message:\n${message}`
+  return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}${learnings}\n\n${transcript}\n\nNew user message:\n${message}`
 }
 
 function markGeneratedExtensionForActiveChat(filePath, chatId = activeAiChatId) {
@@ -2683,6 +2801,11 @@ async function abortAiChat(chatId) {
 async function resetAiChat(chatId) {
   activeAiChatId = chatId || activeAiChatId
   return nevermindAi?.reset(activeAiChatId)
+}
+
+async function noteAiChatExited(chatId) {
+  if (!chatId) return
+  recordLearningReview(chatId)
 }
 
 async function ensureExtensionTypeDefinitions() {
@@ -2878,11 +3001,16 @@ async function indexFiles() {
 async function loadUserState() {
   const cacheRoot = osCacheRoot()
   statePath = path.join(app.getPath('userData'), 'state.json')
+  learningRulesPath = path.join(app.getPath('userData'), LEARNING_RULES_FILENAME)
+  legacyLearningRulesPath = path.join(app.getPath('userData'), LEGACY_LEARNING_RULES_FILENAME)
+  learningTracesPath = path.join(app.getPath('userData'), LEARNING_TRACES_FILENAME)
   iconCacheDir = path.join(cacheRoot, 'icons')
   clipboardImagesDir = path.join(app.getPath('userData'), 'clipboard-images')
   extensionsDir = path.join(app.getPath('userData'), 'extensions')
   extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage')
   extensionCacheDir = path.join(cacheRoot, 'extension-storage')
+  learningStore = new LocalLearningStore({ tracesPath: learningTracesPath, learningsPath: learningRulesPath, legacyLearningsPath: legacyLearningRulesPath })
+  await learningStore.load()
   await fs.rm(path.join(app.getPath('userData'), 'icon-cache'), { recursive: true, force: true }).catch(() => {})
 
   try {
@@ -3376,6 +3504,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('view-action:execute', (_event, action) => executeViewActionForIpc(action))
   ipcMain.on('drag:file', startFileDrag)
   ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
+  ipcMain.handle('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))
   ipcMain.handle('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
   ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
   ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))

@@ -83,7 +83,7 @@ type SessionEntry = {
 type PiApi = any
 type TypeApi = any
 
-const DEFAULT_MODEL = 'gemini-3-flash'
+const DEFAULT_MODEL = 'gemini-3.5-flash'
 
 function isMessageUpdateEvent(event: AgentSessionEvent): event is MessageUpdateEvent {
   const assistantMessageEvent = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined
@@ -223,6 +223,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       canWriteExtension: (filename) => canWriteExtension?.(filename, chatId) ?? true,
       removeExtension: (filename) => removeExtension?.(filename, chatId) || { removed: false },
       addAliasForChat,
+      emitEvent: onEvent,
     })
 
     const result = await pi.createAgentSession({
@@ -361,7 +362,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getShortcuts, getPaletteShortcut, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getShortcuts' | 'getPaletteShortcut' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'removeExtension' | 'addAliasForChat'>) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getShortcuts, getPaletteShortcut, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat, emitEvent }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getShortcuts' | 'getPaletteShortcut' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'removeExtension' | 'addAliasForChat'> & { emitEvent?: (event: AiEvent) => void }) {
   const readFiles = new Set<string>()
 
   function markRead(filename: string) {
@@ -381,40 +382,54 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
     }
   }
 
+  function observedTool<TParams>(name: string, execute: (toolCallId: string, params: TParams) => Promise<any>) {
+    return async (toolCallId: string, params: TParams) => {
+      emitEvent?.({ type: 'tool_trace_start', name, data: { toolCallId, input: summarizedToolInput(params) } })
+      try {
+        const result = await execute(toolCallId, params)
+        emitEvent?.({ type: 'tool_trace_end', name, data: { toolCallId, output: summarizedToolResult(result) }, isError: false })
+        return result
+      } catch (error) {
+        emitEvent?.({ type: 'tool_trace_end', name, data: { toolCallId, error: error instanceof Error ? error.message : String(error) }, isError: true })
+        throw error
+      }
+    }
+  }
+
   return [
     pi.defineTool({
       name: 'read_extension_api',
       label: 'Read Extension API',
       description: 'Read the typed Nevermind extension API reference.',
       parameters: Type.Object({}),
-      execute: async () => ({
+      execute: observedTool('read_extension_api', async () => ({
         content: [{ type: 'text', text: await fs.readFile(extensionApiPath, 'utf8') }],
         details: {},
-      }),
+      })),
     }),
     pi.defineTool({
       name: 'list_capabilities',
       label: 'List Capabilities',
       description: 'List UI views and OS capabilities available to generated Nevermind extensions.',
       parameters: Type.Object({}),
-      execute: async () => ({
+      execute: observedTool('list_capabilities', async () => ({
         content: [{ type: 'text', text: JSON.stringify(capabilities(), null, 2) }],
         details: {},
-      }),
+      })),
     }),
     pi.defineTool({
       name: 'list_shortcuts',
       label: 'List Shortcuts',
       description: 'Read the current Nevermind keyboard shortcuts, including the app shortcut used to open Nevermind and active global action shortcuts.',
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: observedTool('list_shortcuts', async () => {
         const palette = getPaletteShortcut?.()
         const shortcuts = getShortcuts?.() || []
         return {
           content: [{ type: 'text', text: JSON.stringify({ palette, shortcuts }, null, 2) }],
           details: { palette, count: shortcuts.length, shortcuts },
         }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'read_app_logs',
@@ -428,7 +443,7 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         query: Type.Optional(Type.String({ description: 'Case-insensitive text filter across the structured log entry.' })),
         extensionId: Type.Optional(Type.String({ description: 'Optional extension id filter.' })),
       }),
-      execute: async (_toolCallId: string, params: { limit?: number; level?: string; source?: string; sinceMs?: number; query?: string; extensionId?: string }) => {
+      execute: observedTool('read_app_logs', async (_toolCallId: string, params: { limit?: number; level?: string; source?: string; sinceMs?: number; query?: string; extensionId?: string }) => {
         const logs = await readRecentLogs({
           limit: params.limit,
           level: normalizeLogLevel(params.level),
@@ -438,14 +453,14 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
           extensionId: params.extensionId,
         })
         return { content: [{ type: 'text', text: logs.length ? JSON.stringify(logs, null, 2) : 'No matching app logs.' }], details: { count: logs.length } }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'list_extensions',
       label: 'List Extensions',
       description: 'List generated Nevermind extension files available to inspect or reference.',
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: observedTool('list_extensions', async () => {
         const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
         const files = entries.filter((entry) => isExtensionSourceFile(entry.name)).map((entry) => entry.name).sort()
         const listed = files.map((filename) => ({ filename, ...runtimeDetails(filename) }))
@@ -458,33 +473,33 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
           content: [{ type: 'text', text: lines.length ? lines.join('\n') : 'No generated extensions installed.' }],
           details: { extensionsDir, files: listed },
         }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'read_extension',
       label: 'Read Extension',
       description: 'Read any generated Nevermind TypeScript extension source by filename.',
       parameters: Type.Object({ filename: Type.String({ description: 'Safe generated extension filename ending in .ts' }) }),
-      execute: async (_toolCallId: string, params: { filename: string }) => {
+      execute: observedTool('read_extension', async (_toolCallId: string, params: { filename: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         const code = await fs.readFile(filePath, 'utf8')
         markRead(filePath)
         return { content: [{ type: 'text', text: code }], details: { filePath } }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'read_current_extension',
       label: 'Read Current Extension',
       description: 'Read the active generated extension source for this chat/action before tweaking it.',
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: observedTool('read_current_extension', async () => {
         const filename = currentExtensionFile(getActiveChat?.())
         if (!filename) return { content: [{ type: 'text', text: 'No focused generated extension for this chat.' }], details: {} }
         const filePath = safeExtensionPath(extensionsDir, filename)
         const code = await fs.readFile(filePath, 'utf8')
         markRead(filePath)
         return { content: [{ type: 'text', text: code }], details: { filePath } }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'write_extension',
@@ -494,7 +509,7 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
         filename: Type.String({ description: 'Safe filename ending in .ts, for example image-grid.ts' }),
         code: Type.String({ description: 'Complete TypeScript extension source code using export default { ... } satisfies NevermindExtension' }),
       }),
-      execute: async (_toolCallId: string, params: { filename: string; code: string }) => {
+      execute: observedTool('write_extension', async (_toolCallId: string, params: { filename: string; code: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         const filename = path.basename(filePath)
         const chat = getActiveChat?.()
@@ -525,14 +540,14 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
           content: [{ type: 'text', text: `Installed ${filename} from ${filePath}${runtime.commandIds.length ? ` with commands: ${runtime.commandIds.join(', ')}` : ''}` }],
           details: { filePath, extensionsDir, ...runtime },
         }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'remove_extension',
       label: 'Remove Extension',
       description: 'Remove a generated Nevermind TypeScript extension owned by this AI chat.',
       parameters: Type.Object({ filename: Type.String({ description: 'Safe generated extension filename ending in .ts' }) }),
-      execute: async (_toolCallId: string, params: { filename: string }) => {
+      execute: observedTool('remove_extension', async (_toolCallId: string, params: { filename: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         const filename = path.basename(filePath)
         if (!canWriteExtension?.(filename)) throw new Error(`Refusing to remove ${filename}: this AI chat does not own that extension.`)
@@ -542,25 +557,25 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
           content: [{ type: 'text', text: `Removed ${filename} from ${result.filePath || filePath}` }],
           details: { filePath: result.filePath || filePath, extensionsDir },
         }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'validate_extension',
       label: 'Validate Extension',
       description: 'Typecheck and runtime-validate a generated TypeScript extension file.',
       parameters: Type.Object({ filename: Type.String() }),
-      execute: async (_toolCallId: string, params: { filename: string }) => {
+      execute: observedTool('validate_extension', async (_toolCallId: string, params: { filename: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         await validateTypeScriptExtension(filePath, extensionTypesPath, extensionsDir)
         return { content: [{ type: 'text', text: `Validated ${path.basename(filePath)}` }], details: { filePath } }
-      },
+      }),
     }),
     pi.defineTool({
       name: 'install_extension',
       label: 'Install Extension',
       description: 'No-op compatibility tool. write_extension already installs/replaces the active generated extension idempotently.',
       parameters: Type.Object({ filename: Type.String() }),
-      execute: async (_toolCallId: string, params: { filename: string }) => {
+      execute: observedTool('install_extension', async (_toolCallId: string, params: { filename: string }) => {
         const filePath = safeExtensionPath(extensionsDir, params.filename)
         markGeneratedExtension?.(filePath)
         await reloadExtensions()
@@ -570,9 +585,30 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
           content: [{ type: 'text', text: `${path.basename(filePath)} is active from ${filePath}` }],
           details: { filePath, extensionsDir, ...runtime },
         }
-      },
+      }),
     }),
   ]
+}
+
+function summarizedToolInput(params: unknown) {
+  if (params == null || typeof params !== 'object') return params
+  const value = { ...(params as Record<string, unknown>) }
+  if (typeof value.code === 'string') value.code = summarizeText(value.code, 500)
+  if (typeof value.script === 'string') value.script = summarizeText(value.script, 500)
+  return value
+}
+
+function summarizedToolResult(result: any) {
+  if (!result || typeof result !== 'object') return result
+  if (result.details && typeof result.details === 'object') return result.details
+  const text = Array.isArray(result.content)
+    ? result.content.map((item: { text?: string }) => item?.text).filter(Boolean).join('\n\n')
+    : ''
+  return text ? { text: summarizeText(text, 1_000) } : undefined
+}
+
+function summarizeText(text: string, limit: number) {
+  return String(text || '').slice(0, limit)
 }
 
 function normalizeLogLevel(level?: string): LogLevel | undefined {

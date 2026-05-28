@@ -7,6 +7,7 @@ const api: NevermindApi = {
   runViewAction: (action) => ipcRenderer.invoke('view-action:execute', action),
   startFileDrag: (filePath) => ipcRenderer.send('drag:file', filePath),
   sendAiMessage: (message, chatId) => ipcRenderer.invoke('ai:chat:send', message, chatId),
+  aiChatExited: (chatId) => ipcRenderer.invoke('ai:chat:exited', chatId),
   abortAiChat: (chatId) => ipcRenderer.invoke('ai:chat:abort', chatId),
   resetAiChat: (chatId) => ipcRenderer.invoke('ai:chat:reset', chatId),
   setAlias: (action, alias) => ipcRenderer.invoke('actions:set-alias', action, alias),

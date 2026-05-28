@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.check.json",
     "test": "node scripts/check-design-system.cjs && node scripts/check-internal-extensions.cjs && pnpm typecheck",
     "palette:debug": "node scripts/palette-debug.cjs",
+    "learnings:export": "node scripts/learnings-export.cjs",
     "logs:tail": "node scripts/tail-log.cjs",
     "electron": "electron .",
     "electron:dev": "node ./scripts/electron-dev.cjs",

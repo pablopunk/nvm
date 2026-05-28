@@ -141,6 +141,7 @@ export function App() {
   const requestedIcons = useRef(new Set<string>())
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
+  const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined)
   const runningViewActionsRef = useRef(new Set<string>())
   const [query, setQuery] = useState('')
   const [refreshNonce, setRefreshNonce] = useState(0)
@@ -285,6 +286,7 @@ export function App() {
       window.setTimeout(focusInput, 50)
     })
     const stopHidden = window.nvm.onHidden(() => {
+      const closedAiChatId = aiChatOpenRef.current ? aiChatIdRef.current : undefined
       setQuery('')
       setOptionsFor(null)
       setExtensionItemOptionsFor(null)
@@ -301,6 +303,7 @@ export function App() {
       }
       extensionNavigation.setBackStack([])
       setSiblingViews([])
+      if (closedAiChatId) void window.nvm.aiChatExited(closedAiChatId)
     })
     const stopApps = window.nvm.onAppsIndexed(() => setRefreshNonce((nonce) => nonce + 1))
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
@@ -397,6 +400,9 @@ export function App() {
     const isActionPanelOpen = Boolean(actionSubmenuFor || extensionItemOptionsFor)
     aiChatOpenRef.current = isAiChat
     aiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
+    const previousAiChatId = lastVisibleAiChatIdRef.current
+    if (previousAiChatId && (!isAiChat || previousAiChatId !== extensionView?.chatId)) void window.nvm.aiChatExited(previousAiChatId)
+    lastVisibleAiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
     const mode = previewFor || (isLarge && !isActionPanelOpen) ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
     window.nvm.setPaletteMode(mode)
   }, [actionSubmenuFor, extensionItemOptionsFor, extensionView, previewFor, siblingViews.length])
