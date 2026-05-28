@@ -163,7 +163,7 @@ input,
   background:
     radial-gradient(circle at 10% 0%, rgba(124, 92, 255, 0.18), transparent 34%),
     radial-gradient(circle at 90% 100%, rgba(255, 203, 71, 0.09), transparent 38%),
-    linear-gradient(145deg, rgba(17, 18, 26, 0.88), rgba(8, 9, 14, 0.84));
+    linear-gradient(145deg, rgba(17, 18, 26, 0.95), rgba(8, 9, 14, 0.95));
   box-shadow:
     0 20px 50px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
