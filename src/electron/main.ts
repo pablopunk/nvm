@@ -1706,6 +1706,10 @@ async function openPathWithApp(filePath, appPath) {
 }
 
 async function selectedFiles() {
+  return selectedFilePaths()
+}
+
+async function selectedExtensionFiles() {
   const paths = await selectedFilePaths()
   return Promise.all(paths.map(fileToExtensionFile))
 }
@@ -1738,7 +1742,7 @@ function writeDesktopClipboard(item) {
 }
 
 async function readDesktopSelection() {
-  const [text, files, app] = await Promise.all([selectedText(), selectedFiles(), frontmostApp()])
+  const [text, files, app] = await Promise.all([selectedText(), selectedExtensionFiles(), frontmostApp()])
   return { text, files, sourceApp: app }
 }
 

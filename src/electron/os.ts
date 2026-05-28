@@ -240,7 +240,7 @@ export function pasteIntoFrontmostApp() {
 export async function selectedFilePaths() {
   return osFunction({
     darwin: async () => {
-      const script = 'set AppleScript\'s text item delimiters to linefeed\ntell application "Finder" to get POSIX path of (selection as alias list) as text'
+      const script = 'set AppleScript\'s text item delimiters to linefeed\ntell application "Finder"\ntry\nset selectedItems to selection as alias list\non error\nreturn ""\nend try\nset selectedPaths to {}\nrepeat with selectedItem in selectedItems\nset end of selectedPaths to POSIX path of (selectedItem as alias)\nend repeat\nreturn selectedPaths as text\nend tell'
       const result = await runAppleScript(script)
       if (result.exitCode !== 0) return []
       return result.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
