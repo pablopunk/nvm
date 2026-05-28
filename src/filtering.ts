@@ -31,6 +31,7 @@ export function filterCommandItems(items: CommandItem[] = [], filter: string) {
     item.title,
     item.subtitle,
     item.text,
+    item.shortcut,
     ...(item.keywords || []),
     ...actionsFromPanel(item.actionPanel, item.actions || []).map((action) => action.title),
   ))

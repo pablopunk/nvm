@@ -27,8 +27,21 @@ export type ActionPanelRow = { value: string; icon?: ReactNode; title: string; s
 export type ActionPanelViewProps = { rows: ActionPanelRow[]; renderEmpty: () => ReactNode }
 export type SearchAccessoryProps = { tooltip?: string; value?: string; items: { title: string; value: string }[]; onChange?: (value: string) => void }
 
+let shortcutLabelHyperKey = 'Command+Control+Alt+Shift'
+
+export function setShortcutLabelHyperKey(shortcut: unknown) {
+  shortcutLabelHyperKey = String(shortcut || '').trim()
+}
+
+function shortcutLabelParts(shortcut?: string) {
+  const parts = String(shortcut || '').split('+').filter(Boolean)
+  const hyperParts = shortcutLabelHyperKey.split('+').filter(Boolean)
+  const startsWithHyper = hyperParts.length > 0 && hyperParts.every((part, index) => parts[index] === part)
+  return startsWithHyper ? ['✦', ...parts.slice(hyperParts.length)] : parts
+}
+
 export function shortcutLabel(shortcut?: string) {
-  return String(shortcut || '').split('+').map((part) => ({ Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Escape: 'Esc', Tab: 'Tab' }[part] || part)).join('')
+  return shortcutLabelParts(shortcut).map((part) => ({ Command: '⌘', Cmd: '⌘', Control: '⌃', Ctrl: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧', Enter: '↵', Return: '↵', Escape: 'Esc', Tab: 'Tab' }[part] || part)).join('')
 }
 
 export function KeyHints({ shortcut, extras = [], showEnter = true }: KeyHintsProps) {

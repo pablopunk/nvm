@@ -1,6 +1,6 @@
 export type SettingDefinition =
   | {
-      id: 'paletteHotkey'
+      id: 'paletteHotkey' | 'hyperKey'
       title: string
       description: string
       type: 'shortcut'
@@ -24,6 +24,13 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     description: 'Global keyboard shortcut that toggles the palette',
     type: 'shortcut',
     default: 'Alt+Space',
+  },
+  {
+    id: 'hyperKey',
+    title: 'Hyper Key',
+    description: 'Key combination displayed as Hyper in shortcut labels',
+    type: 'shortcut',
+    default: 'Command+Control+Alt+Shift',
   },
   {
     id: 'showClipboardInRoot',

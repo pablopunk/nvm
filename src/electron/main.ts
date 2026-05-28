@@ -826,9 +826,12 @@ function installDownloadedUpdate() {
 
 function settingItemPatch(definition) {
   const value = getSetting(definition.id)
-  const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
+  const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? String(value || '') : String(value)
+  const shortcutInput = definition.id === 'paletteHotkey'
+    ? { scope: 'palette', title: 'Change Shortcut', shortcut: String(value || '') }
+    : { action: { id: '__hyper-key__' }, title: 'Change Hyper Key', shortcut: String(value || '') }
   const primaryAction = definition.type === 'shortcut'
-    ? buildRecordShortcutAction({ scope: 'palette', title: 'Change Shortcut', shortcut: String(value || '') }, {})
+    ? buildRecordShortcutAction(shortcutInput, {})
     : { type: 'toggleSetting', title: value ? 'Turn Off' : 'Turn On', settingId: definition.id }
   return { id: `setting:${definition.id}`, accessories: accessoryText ? [{ text: accessoryText }] : [], primaryAction, actionPanel: { sections: [{ actions: [primaryAction] }] } }
 }
@@ -1420,6 +1423,10 @@ async function executeViewAction(action) {
     case 'setActionShortcut': {
       const result = await setShortcut(action.targetAction || action.action, action.accelerator || action.shortcut)
       return { toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
+    }
+    case 'setSettingShortcut': {
+      const result = setShortcutSetting(action.settingId, action.accelerator || action.shortcut)
+      return { patch: { items: result.ok ? [settingItemPatch(settingDefinition(action.settingId))] : [] }, toast: { message: result.message, tone: result.ok ? 'default' : 'error' }, ok: result.ok }
     }
     case 'removeShortcut': {
       const result = await removeShortcut(action.actionId)
@@ -3098,6 +3105,16 @@ async function setShortcut(action, shortcut) {
   return { ok: true, message: `Shortcut set: ${accelerator}` }
 }
 
+function setShortcutSetting(id, accelerator) {
+  const definition = settingDefinition(id)
+  if (!definition || definition.type !== 'shortcut') return { ok: false, message: 'Setting not found' }
+  if (id === 'paletteHotkey') return { ok: false, message: 'Use palette hotkey registration' }
+  if (!accelerator?.trim()) return { ok: false, message: 'Missing shortcut' }
+  const normalized = normalizeAccelerator(accelerator)
+  setSetting(id, normalized)
+  return { ok: true, message: `${definition.title} set: ${normalized}` }
+}
+
 async function setPaletteHotkey(accelerator) {
   if (!accelerator?.trim()) return { ok: false, message: 'Missing shortcut' }
   const normalized = normalizeAccelerator(accelerator)
@@ -3292,6 +3309,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:remove-alias', (_event, action, alias) => removeAlias(action, alias))
   ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
   ipcMain.handle('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
+  ipcMain.handle('settings:get', (_event, id) => getSetting(id))
   ipcMain.handle('system:open-keyboard-settings', () => openSystemKeyboardSettings())
   ipcMain.handle('actions:get-shortcuts', () => getShortcuts())
   ipcMain.handle('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))

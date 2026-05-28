@@ -14,7 +14,7 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
-import { EmptyState, SearchAccessory, Toast, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow } from './ui'
+import { EmptyState, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
@@ -104,6 +104,7 @@ declare global {
 }
 
 const PALETTE_HOTKEY_ACTION_ID = '__palette-hotkey__'
+const HYPER_KEY_ACTION_ID = '__hyper-key__'
 
 function spotlightConflictView(accelerator: string): ExtensionView {
   const label = shortcutLabel(accelerator)
@@ -125,6 +126,7 @@ function spotlightConflictView(accelerator: string): ExtensionView {
 
 const SETTINGS_ROOT_ACTION: Action = { id: 'app-settings', kind: 'app-settings', title: 'Settings', subtitle: 'Configure Nevermind', icon: 'settings', score: 0 }
 const PALETTE_HOTKEY_PSEUDO_ACTION: Action = { id: PALETTE_HOTKEY_ACTION_ID, kind: 'builtin', title: 'Set Nevermind shortcut', subtitle: 'Global shortcut that toggles the palette', icon: 'keyboard', score: 0 }
+const HYPER_KEY_PSEUDO_ACTION: Action = { id: HYPER_KEY_ACTION_ID, kind: 'builtin', title: 'Set Hyper key', subtitle: 'Key combination displayed as Hyper in shortcut labels', icon: 'keyboard', score: 0 }
 
 const SEARCH_PLACEHOLDERS = [
   'Watcha gonna do?',
@@ -177,6 +179,10 @@ export function App() {
   }
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
   useEffect(() => { selectedValueRef.current = selectedValue }, [selectedValue])
+
+  useEffect(() => {
+    window.nvm.getSetting('hyperKey').then(setShortcutLabelHyperKey).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!extensionView?.refresh?.action || !extensionView.refresh.intervalMs) return
@@ -625,7 +631,8 @@ export function App() {
     }
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string; action?: Action; actionId?: string } | undefined : undefined
     if (action.type === 'recordShortcut') {
-      const target = (action.action as Action | undefined)?.id === PALETTE_HOTKEY_ACTION_ID ? PALETTE_HOTKEY_PSEUDO_ACTION : action.action as Action | undefined
+      const targetAction = action.action as Action | undefined
+      const target = targetAction?.id === PALETTE_HOTKEY_ACTION_ID ? PALETTE_HOTKEY_PSEUDO_ACTION : targetAction?.id === HYPER_KEY_ACTION_ID ? HYPER_KEY_PSEUDO_ACTION : targetAction
       if (target) startShortcutRecorder(target)
       return
     }
@@ -738,6 +745,15 @@ export function App() {
     return acceleratorFromKeyboardEvent(event.nativeEvent)
   }
 
+  function modifierAcceleratorFromEvent(event: React.KeyboardEvent) {
+    const parts = []
+    if (event.metaKey) parts.push('Command')
+    if (event.ctrlKey) parts.push('Control')
+    if (event.altKey) parts.push('Alt')
+    if (event.shiftKey) parts.push('Shift')
+    return parts.join('+')
+  }
+
   async function refreshShortcuts() {
     setShortcutRecords(await window.nvm.getShortcuts())
   }
@@ -766,6 +782,18 @@ export function App() {
       const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION)
       if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
       if (result.spotlightConflict) showExtensionView(spotlightConflictView(recordedShortcut), 'push')
+      return
+    }
+    if (shortcutFor.id === HYPER_KEY_ACTION_ID) {
+      const result = await window.nvm.runViewAction({ type: 'setSettingShortcut', title: 'Save Hyper Key', settingId: 'hyperKey', shortcut: recordedShortcut }) as any
+      showToast(result?.toast?.message || 'Hyper key saved', result?.ok ? 'default' : 'error')
+      if (!result?.ok) return
+      setShortcutLabelHyperKey(recordedShortcut)
+      setShortcutFor(null)
+      setOptionsFor(null)
+      setRefreshNonce((nonce) => nonce + 1)
+      const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION)
+      if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
       return
     }
     const result = await window.nvm.runViewAction({ type: 'setActionShortcut', title: 'Save Shortcut', targetAction: shortcutFor, accelerator: recordedShortcut }) as any
@@ -1391,7 +1419,9 @@ export function App() {
         setRecordedShortcut('')
         return
       }
-      const accelerator = acceleratorFromEvent(event)
+      const accelerator = shortcutFor.id === HYPER_KEY_ACTION_ID
+        ? (acceleratorFromEvent(event) || modifierAcceleratorFromEvent(event))
+        : acceleratorFromEvent(event)
       if (accelerator) setRecordedShortcut(accelerator)
       return
     }

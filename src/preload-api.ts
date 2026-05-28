@@ -102,6 +102,7 @@ export type NevermindApi = {
   removeAlias: (action: RootAction, alias: string) => Promise<SaveResult>
   setShortcut: (action: RootAction, shortcut: string) => Promise<SaveResult>
   setPaletteHotkey: (accelerator: string) => Promise<SaveResult & { spotlightConflict?: boolean }>
+  getSetting: (id: string) => Promise<string | boolean | undefined>
   openSystemKeyboardSettings: () => Promise<{ ok: boolean }>
   getShortcuts: () => Promise<ShortcutRecord[]>
   removeShortcut: (actionId: string) => Promise<SaveResult>

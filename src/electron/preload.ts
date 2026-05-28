@@ -13,6 +13,7 @@ const api: NevermindApi = {
   removeAlias: (action, alias) => ipcRenderer.invoke('actions:remove-alias', action, alias),
   setShortcut: (action, shortcut) => ipcRenderer.invoke('actions:set-shortcut', action, shortcut),
   setPaletteHotkey: (accelerator) => ipcRenderer.invoke('palette:set-hotkey', accelerator),
+  getSetting: (id) => ipcRenderer.invoke('settings:get', id),
   openSystemKeyboardSettings: () => ipcRenderer.invoke('system:open-keyboard-settings'),
   getShortcuts: () => ipcRenderer.invoke('actions:get-shortcuts'),
   removeShortcut: (actionId) => ipcRenderer.invoke('actions:remove-shortcut', actionId),

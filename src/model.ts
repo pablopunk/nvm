@@ -54,6 +54,7 @@ export const ACTION_DEFINITIONS = {
   toggleSetting: { description: 'Change setting', dismiss: 'immediate', loading: 'none', execute: 'main', inline: true },
   recordShortcut: { description: 'Record shortcut', dismiss: 'manual', loading: 'none', execute: 'renderer' },
   setActionShortcut: { description: 'Set shortcut', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
+  setSettingShortcut: { description: 'Set shortcut setting', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
   removeShortcut: { description: 'Remove shortcut', dismiss: 'immediate', loading: 'none', execute: 'main', inline: true },
   setActionAlias: { description: 'Set alias', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
   removeActionAlias: { description: 'Remove alias', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },

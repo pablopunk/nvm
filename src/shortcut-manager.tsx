@@ -2,7 +2,7 @@ import { Keyboard, RotateCcw, Trash2 } from 'lucide-react'
 import { RootCommandList } from './command-list'
 import type { CommandItem } from './model'
 import type { ActionPanelRow } from './ui'
-import { EMPTY_SHORTCUTS_TITLE } from './ui'
+import { EMPTY_SHORTCUTS_TITLE, shortcutLabel } from './ui'
 
 type ShortcutAction = { id: string; title: string; subtitle?: string }
 export type ShortcutRecordLike = { actionId: string; accelerator: string; action: ShortcutAction }
@@ -11,10 +11,14 @@ export function shortcutItems(records: ShortcutRecordLike[], matches: (...values
   return records.map((record): CommandItem => ({
     id: `shortcut:${record.actionId}`,
     title: record.action.title,
-    subtitle: record.accelerator,
+    subtitle: shortcutLabel(record.accelerator),
     icon: 'keyboard',
     primaryAction: { type: 'nativeAction', title: 'Change shortcut', nativeAction: record.action },
-  })).filter((item) => matches(item.title, item.subtitle))
+  })).filter((item) => matches(item.title, item.subtitle, recordAcceleratorsForSearch(records, item.id)))
+}
+
+function recordAcceleratorsForSearch(records: ShortcutRecordLike[], itemId: string) {
+  return records.find((record) => `shortcut:${record.actionId}` === itemId)?.accelerator
 }
 
 export function ShortcutManagerView({ records, matches, onSelect }: { records: ShortcutRecordLike[]; matches: (...values: Array<string | undefined>) => boolean; onSelect: (record: ShortcutRecordLike) => void }) {
@@ -37,7 +41,7 @@ export function shortcutOptionRows(record: ShortcutRecordLike | null, startRecor
       value: 'shortcut-option:change',
       icon: <Keyboard size={18} />,
       title: 'Change shortcut',
-      subtitle: record.accelerator,
+      subtitle: shortcutLabel(record.accelerator),
       onSelect: () => startRecorder(record.action),
       className: 'result',
     },
@@ -57,7 +61,7 @@ export function shortcutRecorderRows(recordedShortcut: string, action: ShortcutA
     {
       value: 'shortcut:save',
       icon: <Keyboard size={18} />,
-      title: recordedShortcut || 'Press a keyboard shortcut',
+      title: recordedShortcut ? shortcutLabel(recordedShortcut) : 'Press a keyboard shortcut',
       subtitle: recordedShortcut ? `Save shortcut for “${action?.title}”` : 'Use at least one modifier, then press Enter',
       onSelect: saveShortcut,
       className: 'result',
