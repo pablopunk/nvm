@@ -2,26 +2,49 @@ import type { APIRoute } from 'astro';
 import { sql } from 'drizzle-orm';
 import { requireAdmin } from '../../../lib/admin';
 import { db } from '../../../db/client';
-import { users, usage, creditLedger } from '../../../db/schema';
 
 export const GET: APIRoute = async ({ request }) => {
   if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
 
-  const rows = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      plan: users.plan,
-      role: users.role,
-      createdAt: users.createdAt,
-      balance: sql<number>`coalesce((select sum(${creditLedger.delta}) from ${creditLedger} where ${creditLedger.userId} = ${users.id}), 0)::int`,
-      requests: sql<number>`coalesce((select count(*) from ${usage} where ${usage.userId} = ${users.id}), 0)::int`,
-      spent: sql<number>`coalesce((select sum(${usage.costCredits}) from ${usage} where ${usage.userId} = ${users.id}), 0)::int`,
-      lastModel: sql<string | null>`(select ${usage.model} from ${usage} where ${usage.userId} = ${users.id} order by ${usage.createdAt} desc limit 1)`,
-      lastUsedAt: sql<string | null>`(select ${usage.createdAt} from ${usage} where ${usage.userId} = ${users.id} order by ${usage.createdAt} desc limit 1)`,
-    })
-    .from(users)
-    .orderBy(sql`${users.createdAt} desc`);
+  const { rows } = await db.execute<{
+    id: string;
+    email: string;
+    plan: string;
+    role: string;
+    created_at: string;
+    balance: number;
+    requests: number;
+    spent: number;
+    last_model: string | null;
+    last_used_at: string | null;
+  }>(sql`
+    select
+      u.id,
+      u.email,
+      u.plan,
+      u.role,
+      u.created_at,
+      coalesce((select sum(delta) from credit_ledger where user_id = u.id), 0)::int as balance,
+      coalesce((select count(*) from usage where user_id = u.id), 0)::int as requests,
+      coalesce((select sum(cost_credits) from usage where user_id = u.id), 0)::int as spent,
+      (select model from usage where user_id = u.id order by created_at desc limit 1) as last_model,
+      (select created_at from usage where user_id = u.id order by created_at desc limit 1) as last_used_at
+    from users u
+    order by u.created_at desc
+  `);
 
-  return Response.json({ users: rows });
+  return Response.json({
+    users: rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      plan: r.plan,
+      role: r.role,
+      createdAt: r.created_at,
+      balance: r.balance,
+      requests: r.requests,
+      spent: r.spent,
+      lastModel: r.last_model,
+      lastUsedAt: r.last_used_at,
+    })),
+  });
 };
