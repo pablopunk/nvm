@@ -330,6 +330,8 @@ export type ExtensionOwnership = {
   /** Host-only mutator exposed to the built-in AI Builder extension. */
   claim?(extensionFile: string, chatId: string): boolean
   /** Host-only mutator exposed to the built-in AI Builder extension. */
+  remove?(extensionFile: string, chatId: string): Promise<boolean>
+  /** Host-only mutator exposed to the built-in AI Builder extension. */
   reload?(): Promise<void>
 }
 

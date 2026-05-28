@@ -2529,6 +2529,11 @@ function createExtensionOwnershipApi(extension) {
       await loadExtensions()
       registerActionShortcuts()
     },
+    remove: async (extensionFile, chatId) => {
+      if (!chatCanWriteExtension(extensionFile, chatId)) return false
+      const { removed } = await removeGeneratedExtensionForChat(extensionFile, chatId)
+      return removed
+    },
   }
 }
 
@@ -2570,6 +2575,7 @@ function initNevermindAi() {
     getChat: (chatId) => userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
     markGeneratedExtension: (filePath, chatId) => markGeneratedExtensionForActiveChat(filePath, chatId),
     canWriteExtension: (filename, chatId) => chatCanWriteExtension(filename, chatId),
+    removeExtension: (filename, chatId) => removeGeneratedExtensionForChat(filename, chatId),
     addAliasForChat: (chatId) => addAliasForGeneratedAction(chatId),
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId
@@ -2630,6 +2636,21 @@ function chatCanWriteExtension(filename, chatId = activeAiChatId) {
   const owner = (Object.values(userState.aiChats || {}) as any[]).find((item) => chatTouchedExtensionFiles(item).includes(base))
   if (owner) return false
   return !Array.from(extensionModules.values()).some((extension) => path.basename(extension.__filePath || '') === base)
+}
+
+async function removeGeneratedExtensionForChat(filename, chatId = activeAiChatId) {
+  const base = path.basename(filename || '')
+  if (!base || !isExtensionSourceFile(base)) return { removed: false }
+  if (!chatCanWriteExtension(base, chatId)) throw new Error(`Refusing to remove ${base}: this AI chat does not own that extension.`)
+  const filePath = path.join(extensionsDir, base)
+  const existed = await fs.stat(filePath).then(() => true).catch(() => false)
+  if (!existed) return { removed: false, filePath }
+  await fs.unlink(filePath)
+  await removeAiChatReferencesToExtensionFile(base, chatId)
+  scheduleSaveState()
+  await loadExtensions()
+  registerActionShortcuts()
+  return { removed: true, filePath }
 }
 
 function addAliasForGeneratedAction(chatId) {
@@ -3262,7 +3283,7 @@ async function removeAiChat(chatId) {
   return { toast: { message: `Removed ${chat.title || chat.query || 'AI chat'}` } }
 }
 
-async function removeAiChatReferencesToExtensionFile(extensionFile) {
+async function removeAiChatReferencesToExtensionFile(extensionFile, preserveChatId?: string) {
   const removedFile = path.basename(extensionFile || '')
   if (!removedFile) return
   for (const chat of Object.values(userState.aiChats || {}) as any[]) {
@@ -3273,11 +3294,15 @@ async function removeAiChatReferencesToExtensionFile(extensionFile) {
       const exists = await fs.stat(path.join(extensionsDir, filename)).then(() => true).catch(() => false)
       if (exists) remainingFiles.push(filename)
     }
-    if (remainingFiles.length === 0) {
+    if (remainingFiles.length === 0 && chat.id !== preserveChatId) {
       await removeAiChat(chat.id)
       continue
     }
     chat.touchedExtensionFiles = remainingFiles
+    if (remainingFiles.length === 0) {
+      delete chat.contextExtensionFile
+      delete chat.generatedExtensionFile
+    }
     if (chat.contextExtensionFile === removedFile) chat.contextExtensionFile = remainingFiles[0]
     if (chat.generatedExtensionFile === removedFile) chat.generatedExtensionFile = remainingFiles[0]
     chat.updatedAt = Date.now()

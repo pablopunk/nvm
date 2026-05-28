@@ -44,6 +44,7 @@ type NevermindAiOptions = {
   getChat?: (chatId: string) => ActiveChat | null
   markGeneratedExtension?: (filePath: string, chatId?: string) => void
   canWriteExtension?: (filename: string, chatId?: string) => boolean
+  removeExtension?: (filename: string, chatId?: string) => Promise<{ removed: boolean; filePath?: string }> | { removed: boolean; filePath?: string }
   addAliasForChat?: (chatId: string) => void
   onEvent?: (event: AiEvent) => void
 }
@@ -178,7 +179,7 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   return { send, abort, reset, ask, session }
 
-  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getExtensionRuntimeState, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
+  async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getExtensionRuntimeState, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
     await fs.mkdir(workspaceDir, { recursive: true })
     await fs.mkdir(extensionsDir, { recursive: true })
@@ -220,6 +221,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
       markGeneratedExtension: (filePath) => markGeneratedExtension?.(filePath, chatId),
       canWriteExtension: (filename) => canWriteExtension?.(filename, chatId) ?? true,
+      removeExtension: (filename) => removeExtension?.(filename, chatId) || { removed: false },
       addAliasForChat,
     })
 
@@ -359,7 +361,7 @@ async function findPiWebAccessPath() {
   return null
 }
 
-function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getShortcuts, getPaletteShortcut, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getShortcuts' | 'getPaletteShortcut' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'addAliasForChat'>) {
+function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath, extensionTypesPath, reloadExtensions, getShortcuts, getPaletteShortcut, getExtensionRuntimeState, getActiveChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat }: Pick<NevermindAiOptions, 'extensionsDir' | 'extensionApiPath' | 'extensionTypesPath' | 'reloadExtensions' | 'getShortcuts' | 'getPaletteShortcut' | 'getExtensionRuntimeState' | 'getActiveChat' | 'markGeneratedExtension' | 'canWriteExtension' | 'removeExtension' | 'addAliasForChat'>) {
   const readFiles = new Set<string>()
 
   function markRead(filename: string) {
@@ -526,6 +528,23 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
       },
     }),
     pi.defineTool({
+      name: 'remove_extension',
+      label: 'Remove Extension',
+      description: 'Remove a generated Nevermind TypeScript extension owned by this AI chat.',
+      parameters: Type.Object({ filename: Type.String({ description: 'Safe generated extension filename ending in .ts' }) }),
+      execute: async (_toolCallId: string, params: { filename: string }) => {
+        const filePath = safeExtensionPath(extensionsDir, params.filename)
+        const filename = path.basename(filePath)
+        if (!canWriteExtension?.(filename)) throw new Error(`Refusing to remove ${filename}: this AI chat does not own that extension.`)
+        const result = await removeExtension?.(filename)
+        if (!result?.removed) return { content: [{ type: 'text', text: `${filename} is already removed.` }], details: { filePath } }
+        return {
+          content: [{ type: 'text', text: `Removed ${filename} from ${result.filePath || filePath}` }],
+          details: { filePath: result.filePath || filePath, extensionsDir },
+        }
+      },
+    }),
+    pi.defineTool({
       name: 'validate_extension',
       label: 'Validate Extension',
       description: 'Typecheck and runtime-validate a generated TypeScript extension file.',
@@ -670,21 +689,22 @@ function systemPrompt() {
   return `You are Nevermind's extension-building agent.
 Build local Nevermind extensions, not shell scripts.
 When the first user message is vague, ask clarifying questions before using tools.
-Do not call read_extension_api, list_capabilities, write_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
+Do not call read_extension_api, list_capabilities, write_extension, remove_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
 Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, remove_extension, validate_extension, install_extension. Web access tools may also be available as web_search, code_search, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api returns the typed API reference and is the source of truth for extension authoring details.
 Use read_extension_api before writing an extension.
 Use list_shortcuts when the extension should mention or depend on currently configured keyboard shortcuts. Never guess shortcut bindings.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
-When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write extensions owned by this chat.
+When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write or remove extensions owned by this chat.
 Use list_capabilities when unsure which UI or OS capabilities exist.
 Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed extensions.
 Only write .ts extension files with write_extension.
 write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
+remove_extension deletes a generated .ts extension file only when this chat owns it.
 validate_extension typechecks changed extension files and verifies they load with Electron's native TypeScript runtime.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
