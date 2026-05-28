@@ -32,6 +32,7 @@ Rules:
 - Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.
 - Image thumbnails must use `file.url` from file helpers or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
 - For Open With flows, never hardcode app names; ask Nevermind for supported apps and build actions from those results.
+- Declare `permissions: ['system']` before using `ctx.desktop.shell`, `ctx.actions.shellExec`, `ctx.actions.shellScript`, or `ctx.actions.system`.
 - Keep system automation focused, bounded, and represented in native views with useful output/errors.
 - Keep generated code small, readable, dependency-free, and inside the generated extensions directory.
 - Throw meaningful `Error` objects instead of swallowing failures unless the extension can recover or add context and rethrow.

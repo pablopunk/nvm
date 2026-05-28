@@ -676,12 +676,22 @@ async function importExtensionForValidation(filePath: string) {
   const extension = imported.default || imported
   if (!extension?.id || !extension?.title) throw new Error('Extension must export an object with id and title')
   if (extension.commands !== undefined && !Array.isArray(extension.commands)) throw new Error('Extension commands must be an array')
+  return extension
+}
+
+function validateExtensionPermissions(extension: any, source: string) {
+  const permissions = new Set(Array.isArray(extension?.permissions) ? extension.permissions.map(String) : [])
+  const usesSystemShell = /ctx\.desktop\.shell\b/.test(source) || /ctx\.actions\.(?:shellExec|shellScript|system)\b/.test(source)
+  if (usesSystemShell && !permissions.has('system')) {
+    throw new Error("Extension uses shell or system helpers but does not declare the 'system' permission. Add `permissions: ['system']` to the extension manifest.")
+  }
 }
 
 async function validateTypeScriptExtension(filePath: string, extensionTypesPath: string, extensionsDir: string) {
   await ensureExtensionTypeDefinitions(extensionsDir, extensionTypesPath)
   typecheckExtension(filePath, path.join(extensionsDir, 'nevermind-extension-api.d.ts'))
-  await importExtensionForValidation(filePath)
+  const [source, extension] = await Promise.all([fs.readFile(filePath, 'utf8'), importExtensionForValidation(filePath)])
+  validateExtensionPermissions(extension, source)
 }
 
 function capabilities() {
@@ -695,7 +705,7 @@ function capabilities() {
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
-    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec', 'shellScript'],
+    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
     namespaces: ['desktop', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
     ai: ['ask(prompt, options)', 'session(id, options).ask(prompt)', 'session(id).reset()'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
@@ -704,7 +714,7 @@ function capabilities() {
       selection: ['text', 'files', 'read'],
       apps: ['frontmost', 'launch'],
       files: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl'],
-      shell: ['openExternal', 'exec', 'script', 'appleScript', 'which'],
+      shell: ['requires system permission', 'openExternal', 'exec', 'script', 'appleScript', 'which'],
     },
     fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl'],
     findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
@@ -745,6 +755,7 @@ validate_extension typechecks changed extension files and verifies they load wit
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
+Declare permissions explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls.
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.

@@ -50,6 +50,7 @@ export type ExtensionPermission =
   | 'ai'
   | 'extensions.ownership'
   | 'shortcuts'
+  /** Required for shell execution, system actions, and `ctx.desktop.shell`. */
   | 'system'
   | 'places'
   | 'updates'
@@ -444,7 +445,9 @@ export type ExtensionContext = {
     run(title: string, handler: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
     /** Fire-and-forget action that dismisses the palette immediately unless options override it. */
     background(title: string, handler: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
+    /** Run a shell command. Requires the `system` permission. */
     shellExec(title: string, command: string, args?: string[], options?: ExtensionShellOptions): ExtensionAction
+    /** Run a shell script through `/bin/bash -lc` by default. Requires the `system` permission. */
     shellScript(title: string, script: string, options?: ExtensionShellOptions): ExtensionAction
     toggleSetting(settingId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     recordShortcut(input?: { actionId?: string; scope?: 'palette' | ShortcutScope; title?: string; action?: ExtensionAction }, options?: Record<string, unknown>): ExtensionAction
@@ -514,6 +517,7 @@ export type ExtensionContext = {
       /** Host file index entries whose name or path matches the query. */
       searchIndex(query: string, options?: { limit?: number }): ExtensionIndexedFile[]
     }
+    /** Shell and process helpers. Present only with the `system` permission. */
     shell?: {
       openExternal(url: string): unknown
       exec(command: string, args?: string[], options?: ExtensionShellOptions): Promise<ExtensionShellResult>
