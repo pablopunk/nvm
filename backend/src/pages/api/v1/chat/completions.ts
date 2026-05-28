@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { randomUUID } from 'node:crypto';
 import { streamText, generateText, type ModelMessage } from 'ai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { modelFor } from '../../../../lib/provider';
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { getBalance } from '../../../../lib/users';
 import { resolveModel, computeCostCredits } from '../../../../lib/pricing';
@@ -65,12 +65,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (!body?.messages?.length) return new Response('Bad request', { status: 400 });
 
   const pricing = resolveModel(body.model);
-  const provider = createOpenAICompatible({
-    name: 'opencode',
-    baseURL: import.meta.env.OPENCODE_BASE_URL ?? 'https://opencode.ai/zen/v1',
-    apiKey: import.meta.env.OPENCODE_API_KEY,
-  });
-  const model = provider.chatModel(pricing.realModel);
+  const model = modelFor(pricing.realModel);
   const requestId = randomUUID();
   const created = Math.floor(Date.now() / 1000);
   const modelLabel = body.model ?? pricing.realModel;
