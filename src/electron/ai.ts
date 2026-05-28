@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
+import { getNevermindAuth } from './nevermind-auth'
 
 type AiEvent = {
   type: string
@@ -189,13 +190,11 @@ function createNevermindAi(options: NevermindAiOptions) {
       import('@earendil-works/pi-ai') as Promise<any>,
     ])
 
-    const apiKey = await resolveOpenCodeApiKey()
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
-    if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
-
+    const requestedModelId = process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL
+    const { model, source: modelSource } = await resolveAiModelAndAuth(pi, ai, authStorage, requestedModelId)
     const modelRegistry = pi.ModelRegistry.inMemory(authStorage)
-    const model = ai.getModel('opencode', process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
-    if (!model) throw new Error(`Missing opencode model: ${process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL}`)
+    onEvent?.({ type: 'debug', label: 'model-source', data: { source: modelSource, baseUrl: model.baseUrl } })
     const modelDebug = {
       provider: model.provider,
       id: model.id,
@@ -274,11 +273,8 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
     import('@earendil-works/pi-coding-agent') as Promise<PiApi>,
     import('@earendil-works/pi-ai') as Promise<any>,
   ])
-  const apiKey = await resolveOpenCodeApiKey()
   const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
-  if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
-  const model = ai.getModel('opencode', process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
-  if (!model) throw new Error(`Missing opencode model: ${process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL}`)
+  const { model } = await resolveAiModelAndAuth(pi, ai, authStorage, process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
   const resourceLoader = {
     getExtensions: () => ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
@@ -303,6 +299,44 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
     settingsManager: pi.SettingsManager.inMemory({ compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 } }),
   }) as { session: AgentSession }
   return result.session
+}
+
+const NEVERMIND_PROVIDER_ID = 'nevermind'
+
+function buildNevermindModel(ai: any, baseUrl: string, modelId: string) {
+  const trimmed = baseUrl.replace(/\/$/, '')
+  const opencodeRef = ai.getModel('opencode', modelId)
+  const fallback = {
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 32000,
+    input: ['text', 'image'] as const,
+  }
+  return {
+    id: modelId,
+    name: opencodeRef?.name || modelId,
+    api: 'openai-completions' as const,
+    provider: NEVERMIND_PROVIDER_ID,
+    baseUrl: `${trimmed}/api/v1`,
+    reasoning: false,
+    input: opencodeRef?.input || fallback.input,
+    cost: opencodeRef?.cost || fallback.cost,
+    contextWindow: opencodeRef?.contextWindow || fallback.contextWindow,
+    maxTokens: opencodeRef?.maxTokens || fallback.maxTokens,
+  }
+}
+
+async function resolveAiModelAndAuth(pi: any, ai: any, authStorage: any, modelId: string) {
+  const nevermind = await getNevermindAuth()
+  if (nevermind) {
+    authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token)
+    return { model: buildNevermindModel(ai, nevermind.baseUrl, modelId), source: 'nevermind' as const }
+  }
+  const apiKey = await resolveOpenCodeApiKey()
+  if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
+  const model = ai.getModel('opencode', modelId)
+  if (!model) throw new Error(`Missing opencode model: ${modelId}`)
+  return { model, source: 'opencode' as const }
 }
 
 async function resolveOpenCodeApiKey() {

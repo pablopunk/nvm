@@ -1,0 +1,67 @@
+---
+import { eq, and, gt } from 'drizzle-orm';
+import { getSessionFromCookies } from '../../lib/workos';
+import { db } from '../../db/client';
+import { users, deviceCodes } from '../../db/schema';
+
+const code = (Astro.url.searchParams.get('code') ?? '').trim();
+const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
+if (!session) return Astro.redirect(`/api/auth/signin?return_to=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
+
+const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
+const [row] = code
+  ? await db.select().from(deviceCodes).where(and(eq(deviceCodes.code, code), gt(deviceCodes.expiresAt, new Date()))).limit(1)
+  : [];
+
+const state = !code
+  ? 'missing'
+  : !row
+    ? 'expired'
+    : row.approvedAt
+      ? 'already'
+      : 'ready';
+---
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nevermind · Connect device</title>
+	</head>
+	<body style="font-family: system-ui, sans-serif; max-width: 560px; margin: 4em auto; padding: 0 1em;">
+		<h1>Connect a device</h1>
+		<p>Signed in as <code>{user?.email}</code></p>
+
+		{state === 'missing' && <p>Missing device code in URL.</p>}
+		{state === 'expired' && <p>This code has expired. Open the Nevermind app and try again.</p>}
+		{state === 'already' && <p>This device is already approved — return to the app.</p>}
+		{state === 'ready' && (
+			<>
+				<p>Approve "<strong>{row?.deviceLabel}</strong>" to sign it into your Nevermind account.</p>
+				<form id="approve-form">
+					<label>Device label: <input name="label" value={row?.deviceLabel} /></label><br /><br />
+					<button type="submit">Approve device</button>
+					<span id="approve-status" style="margin-left:0.5em;"></span>
+				</form>
+				<script is:inline define:vars={{ code }}>
+					document.getElementById('approve-form').addEventListener('submit', async (e) => {
+						e.preventDefault();
+						const label = e.target.elements.label.value;
+						const status = document.getElementById('approve-status');
+						status.textContent = 'Approving…';
+						const res = await fetch('/api/auth/device/approve', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ code, label }),
+						});
+						if (res.ok) {
+							status.style.color = '#080';
+							status.textContent = 'Approved — return to the app.';
+						} else {
+							status.style.color = '#a00';
+							status.textContent = await res.text();
+						}
+					});
+				</script>
+			</>
+		)}
+	</body>
+</html>

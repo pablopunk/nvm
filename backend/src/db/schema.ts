@@ -93,6 +93,16 @@ export const modelCosts = pgTable(
   }),
 );
 
+export const deviceCodes = pgTable('device_codes', {
+  code: text('code').primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  deviceLabel: text('device_label').notNull(),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const subscriptions = pgTable('subscriptions', {
   userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   stripeSubId: text('stripe_sub_id').notNull().unique(),

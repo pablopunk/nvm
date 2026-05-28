@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
+import { signInToNevermind, getNevermindAuth, clearNevermindAuth } from './nevermind-auth'
 import { createPaletteWindowController, installPermissionHandlers } from './palette-window'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
@@ -312,8 +313,8 @@ function createExtensionCache(extension) {
 const registeredActionAccelerators = new Set<string>()
 const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder'
 
-const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension]
-const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings']
+const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension, createAccountExtension]
+const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings', 'nevermind.account']
 const REQUIRED_INTERNAL_COMMANDS = [{ extensionId: AI_BUILDER_EXTENSION_ID, commandId: 'ai-chats' }]
 
 function actionAliases(actionId: any) {
@@ -2239,6 +2240,45 @@ function createKeyboardShortcutsExtension() {
         items: ctx.shortcuts.list().map(keyboardShortcutItem),
       }),
     }],
+  }
+}
+
+function createAccountExtension() {
+  return {
+    id: 'nevermind.account',
+    title: 'Nevermind Account',
+    permissions: [] as const,
+    commands: [
+      {
+        id: 'account-login',
+        actionId: 'account-login',
+        title: 'Log in to Nevermind',
+        subtitle: 'Connect this device to your Nevermind account',
+        icon: 'person',
+        score: 18,
+        run: async () => {
+          const existing = await getNevermindAuth()
+          if (existing) return { toast: { message: `Already logged in as ${existing.email}` } }
+          const result = await signInToNevermind()
+          const message = result.ok ? `Logged in as ${result.auth.email}` : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`
+          return { toast: { message, tone: result.ok ? 'default' as const : 'error' as const } }
+        },
+      },
+      {
+        id: 'account-logout',
+        actionId: 'account-logout',
+        title: 'Log out of Nevermind',
+        subtitle: 'Disconnect this device',
+        icon: 'person',
+        score: 4,
+        run: async () => {
+          const existing = await getNevermindAuth()
+          if (!existing) return { toast: { message: 'Not logged in' } }
+          await clearNevermindAuth()
+          return { toast: { message: `Logged out of ${existing.email}` } }
+        },
+      },
+    ],
   }
 }
 
