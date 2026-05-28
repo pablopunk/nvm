@@ -145,14 +145,14 @@ export class LocalLearningStore {
   async load() {
     if (this.loaded) return
     this.loaded = true
+    await migrateLegacyLearningsFile(this.paths)
     const [tracesText, learningsText] = await Promise.all([
       fs.readFile(this.paths.tracesPath, 'utf8').catch(() => ''),
-      readLearningRulesText(this.paths).catch(() => ''),
+      fs.readFile(this.paths.learningsPath, 'utf8').catch(() => ''),
     ])
     try {
-      const legacy = tracesText ? null : parseLegacyCombinedState(learningsText)
-      const parsedTraces = tracesText ? JSON.parse(tracesText) as Partial<Pick<LearningStoreState, 'traces'>> : legacy
-      const parsedLearnings = parseLearningsContent(learningsText) || legacy
+      const parsedTraces = tracesText ? JSON.parse(tracesText) as Partial<Pick<LearningStoreState, 'traces'>> : null
+      const parsedLearnings = parseLearningsContent(learningsText)
       this.state = {
         version: 1,
         traces: Array.isArray(parsedTraces?.traces) ? parsedTraces.traces.map((trace) => this.normalizedTrace(trace)) : [],
@@ -498,27 +498,8 @@ function containsBlockedLearningPattern(haystack: string) {
   return /extensionsdir|application support\/nvm|reference existing|pattern matching|get inspired|local extension implementations|stored in \/|extension files live|media-compressor|\/users\//.test(haystack)
 }
 
-function parseLegacyCombinedState(text: string): Partial<LearningStoreState> | null {
-  if (!text) return null
-  try {
-    const parsed = JSON.parse(text) as Partial<LearningStoreState>
-    return Array.isArray(parsed.traces) || Array.isArray(parsed.learnings) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-async function readLearningRulesText(paths: LocalLearningStorePaths) {
-  const current = await fs.readFile(paths.learningsPath, 'utf8').catch(() => '')
-  if (current) return current
-  if (!paths.legacyLearningsPath) return ''
-  return fs.readFile(paths.legacyLearningsPath, 'utf8').catch(() => '')
-}
-
 function parseLearningsContent(text: string): { learnings?: Partial<StoredLearning>[] } | null {
   if (!text) return null
-  const json = parseLegacyCombinedState(text)
-  if (json?.learnings) return { learnings: json.learnings }
   return { learnings: parseLearningsMarkdown(text) }
 }
 
@@ -589,4 +570,46 @@ function normalizedKindFromHeading(heading: string): LearningKind {
 
 function normalizeConfidence(value: string): LearningConfidence {
   return value === 'low' || value === 'high' ? value : 'medium'
+}
+
+async function migrateLegacyLearningsFile(paths: LocalLearningStorePaths) {
+  if (!paths.legacyLearningsPath) return
+  const current = await fs.readFile(paths.learningsPath, 'utf8').catch(() => '')
+  if (current) {
+    await fs.unlink(paths.legacyLearningsPath).catch(() => {})
+    return
+  }
+  const legacy = await fs.readFile(paths.legacyLearningsPath, 'utf8').catch(() => '')
+  if (!legacy) return
+  try {
+    const parsed = JSON.parse(legacy) as Partial<LearningStoreState>
+    const learnings = Array.isArray(parsed.learnings) ? parsed.learnings.map((learning) => normalizedStoredLearningForMigration(learning)) : []
+    await fs.mkdir(path.dirname(paths.learningsPath), { recursive: true })
+    await fs.writeFile(paths.learningsPath, renderLearningsMarkdown(learnings))
+    await fs.unlink(paths.legacyLearningsPath).catch(() => {})
+  } catch {
+    // Ignore unreadable legacy files.
+  }
+}
+
+function normalizedStoredLearningForMigration(learning: Partial<StoredLearning>): StoredLearning {
+  const kind = learning.kind === 'workflow' || learning.kind === 'preference' ? learning.kind : 'environment'
+  const summary = limitedText(learning.summary, 300)
+  return {
+    id: String(learning.id || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
+    fingerprint: learningFingerprint(kind, summary),
+    kind,
+    summary,
+    appliesWhen: learning.appliesWhen ? limitedText(learning.appliesWhen, 300) : undefined,
+    keywords: normalizedKeywords(learning.keywords),
+    confidence: learning.confidence === 'low' || learning.confidence === 'high' ? learning.confidence : 'medium',
+    status: 'active',
+    evidence: limitedText(learning.evidence, 500),
+    evidenceChatIds: Array.isArray(learning.evidenceChatIds) ? learning.evidenceChatIds.map(String) : [],
+    extensionFiles: normalizedExtensionFiles(learning.extensionFiles),
+    toolNames: Array.isArray(learning.toolNames) ? learning.toolNames.map((toolName) => limitedText(toolName, 100)).filter(Boolean) : [],
+    reinforcementCount: Math.max(1, Number(learning.reinforcementCount || 1)),
+    createdAt: Number(learning.createdAt || Date.now()),
+    updatedAt: Number(learning.updatedAt || learning.createdAt || Date.now()),
+  }
 }

@@ -5,7 +5,6 @@ const os = require('node:os')
 const path = require('node:path')
 
 const LEARNINGS_FILENAME = 'ai-learnings.md'
-const LEGACY_LEARNINGS_FILENAME = 'ai-learnings.json'
 const TRACES_FILENAME = 'ai-learning-traces.json'
 
 function timestampLabel() {
@@ -13,21 +12,21 @@ function timestampLabel() {
 }
 
 function userDataCandidates() {
-  if (process.env.NEVERMIND_LEARNING_STORE) return [{ learningsPath: process.env.NEVERMIND_LEARNING_STORE, legacyLearningsPath: process.env.NEVERMIND_LEARNING_STORE.replace(/ai-learnings\.md$/, LEGACY_LEARNINGS_FILENAME), tracesPath: process.env.NEVERMIND_LEARNING_STORE.replace(/ai-learnings\.(md|json)$/, TRACES_FILENAME) }]
+  if (process.env.NEVERMIND_LEARNING_STORE) return [{ learningsPath: process.env.NEVERMIND_LEARNING_STORE, tracesPath: process.env.NEVERMIND_LEARNING_STORE.replace(/ai-learnings\.md$/, TRACES_FILENAME) }]
   if (process.platform === 'darwin') {
     const base = path.join(os.homedir(), 'Library', 'Application Support')
-    return ['Nevermind', 'nvm'].map((name) => ({ learningsPath: path.join(base, name, LEARNINGS_FILENAME), legacyLearningsPath: path.join(base, name, LEGACY_LEARNINGS_FILENAME), tracesPath: path.join(base, name, TRACES_FILENAME) }))
+    return ['Nevermind', 'nvm'].map((name) => ({ learningsPath: path.join(base, name, LEARNINGS_FILENAME), tracesPath: path.join(base, name, TRACES_FILENAME) }))
   }
   if (process.platform === 'win32') {
     const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
-    return ['Nevermind', 'nvm'].map((name) => ({ learningsPath: path.join(base, name, LEARNINGS_FILENAME), legacyLearningsPath: path.join(base, name, LEGACY_LEARNINGS_FILENAME), tracesPath: path.join(base, name, TRACES_FILENAME) }))
+    return ['Nevermind', 'nvm'].map((name) => ({ learningsPath: path.join(base, name, LEARNINGS_FILENAME), tracesPath: path.join(base, name, TRACES_FILENAME) }))
   }
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
-  return ['Nevermind', 'nvm'].map((name) => ({ learningsPath: path.join(base, name, LEARNINGS_FILENAME), legacyLearningsPath: path.join(base, name, LEGACY_LEARNINGS_FILENAME), tracesPath: path.join(base, name, TRACES_FILENAME) }))
+  return ['Nevermind', 'nvm'].map((name) => ({ learningsPath: path.join(base, name, LEARNINGS_FILENAME), tracesPath: path.join(base, name, TRACES_FILENAME) }))
 }
 
 function existingStorePath() {
-  return userDataCandidates().find((candidate) => fs.existsSync(candidate.learningsPath) || fs.existsSync(candidate.legacyLearningsPath) || fs.existsSync(candidate.tracesPath)) || userDataCandidates()[0]
+  return userDataCandidates().find((candidate) => fs.existsSync(candidate.learningsPath) || fs.existsSync(candidate.tracesPath)) || userDataCandidates()[0]
 }
 
 function summaryMarkdown(state, storePaths) {
@@ -60,7 +59,7 @@ function summaryMarkdown(state, storePaths) {
 async function main() {
   const storePaths = existingStorePath()
   const [learningsText, tracesText] = await Promise.all([
-    fsp.readFile(storePaths.learningsPath, 'utf8').catch(() => '').then((text) => text || fsp.readFile(storePaths.legacyLearningsPath, 'utf8').catch(() => '')),
+    fsp.readFile(storePaths.learningsPath, 'utf8').catch(() => ''),
     fsp.readFile(storePaths.tracesPath, 'utf8').catch(() => ''),
   ])
   if (!learningsText && !tracesText) {
@@ -76,6 +75,7 @@ async function main() {
     fsp.writeFile(path.join(exportDir, 'state.json'), JSON.stringify(state, null, 2)),
     fsp.writeFile(path.join(exportDir, 'traces.json'), JSON.stringify(traces, null, 2)),
     fsp.writeFile(path.join(exportDir, 'learnings.json'), JSON.stringify(learnings, null, 2)),
+    learningsText ? fsp.writeFile(path.join(exportDir, 'learnings.md'), learningsText) : Promise.resolve(),
     fsp.writeFile(path.join(exportDir, 'summary.md'), summaryMarkdown(state, storePaths)),
   ])
   console.log(`Exported learnings to ${exportDir}`)
@@ -83,10 +83,6 @@ async function main() {
 
 function parseLearningsForExport(text) {
   if (!text) return []
-  try {
-    const parsed = JSON.parse(text)
-    return parsed.learnings || []
-  } catch {}
   const learnings = []
   const blocks = text.split(/^## /m).slice(1)
   for (const block of blocks) {
