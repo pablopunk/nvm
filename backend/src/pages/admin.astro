@@ -1,0 +1,132 @@
+---
+import { getCurrentUser, isAdmin } from '../lib/admin';
+import { getActiveModelId } from '../lib/settings';
+import { listModels } from '../lib/pricing';
+
+const user = await getCurrentUser(Astro.request);
+if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
+if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
+
+const activeModel = await getActiveModelId();
+const models = listModels();
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nevermind · Admin</title>
+		<style>
+			body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2em auto; padding: 0 1em; }
+			nav a { margin-right: 0.5em; }
+			table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+			th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 14px; }
+			th { background: #f5f5f5; }
+			.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1em; margin: 1em 0; }
+			.stat { border: 1px solid #ddd; padding: 1em; border-radius: 6px; }
+			.stat .v { font-size: 1.6em; font-weight: 700; }
+			.stat .l { color: #666; font-size: 0.85em; }
+			.section { margin-top: 2em; }
+			button { cursor: pointer; }
+		</style>
+	</head>
+	<body>
+		<nav>
+			<a href="/profile">Profile</a> · <a href="/admin"><strong>Admin</strong></a>
+		</nav>
+		<h1>Admin dashboard</h1>
+		<p>Signed in as <code>{user.email}</code></p>
+
+		<div class="section">
+			<h2>Active model</h2>
+			<p>The gateway routes every request to this model. Clients don't pick.</p>
+			<select id="model-select">
+				{models.map((m) => (
+					<option value={m.id} selected={m.id === activeModel}>
+						{m.id} (in {m.inputCreditsPerMTok}/Mtok · out {m.outputCreditsPerMTok}/Mtok)
+					</option>
+				))}
+			</select>
+			<button id="save-model">Save</button>
+			<span id="model-status" style="margin-left:0.5em;color:#080;"></span>
+		</div>
+
+		<div class="section">
+			<h2>System stats</h2>
+			<div class="stat-grid" id="stats"><em>loading…</em></div>
+			<h3>Usage by model</h3>
+			<table id="by-model"><thead><tr><th>Model</th><th>Requests</th><th>Input tok</th><th>Output tok</th><th>Credits spent</th></tr></thead><tbody></tbody></table>
+		</div>
+
+		<div class="section">
+			<h2>Users</h2>
+			<table id="users-table">
+				<thead><tr>
+					<th>Email</th><th>Role</th><th>Plan</th><th>Balance</th>
+					<th>Requests</th><th>Spent</th><th>Last model</th><th>Last used</th><th>Joined</th><th></th>
+				</tr></thead>
+				<tbody></tbody>
+			</table>
+		</div>
+
+		<script is:inline>
+			async function loadStats() {
+				const res = await fetch('/api/admin/stats');
+				const s = await res.json();
+				document.getElementById('stats').innerHTML = `
+					<div class="stat"><div class="v">${s.users}</div><div class="l">Users</div></div>
+					<div class="stat"><div class="v">${s.usage.requests}</div><div class="l">AI requests</div></div>
+					<div class="stat"><div class="v">${s.usage.inputTokens + s.usage.outputTokens}</div><div class="l">Total tokens</div></div>
+					<div class="stat"><div class="v">${s.credits.spent} / ${s.credits.granted}</div><div class="l">Credits spent / granted</div></div>
+				`;
+				const tbody = document.querySelector('#by-model tbody');
+				tbody.innerHTML = s.byModel.map((r) => `
+					<tr><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td></tr>
+				`).join('') || '<tr><td colspan="5"><em>No usage yet</em></td></tr>';
+			}
+			async function loadUsers() {
+				const res = await fetch('/api/admin/users');
+				const { users } = await res.json();
+				const tbody = document.querySelector('#users-table tbody');
+				tbody.innerHTML = users.map((u) => `
+					<tr>
+						<td>${u.email}</td>
+						<td>${u.role}</td>
+						<td>${u.plan}</td>
+						<td>${u.balance}</td>
+						<td>${u.requests}</td>
+						<td>${u.spent}</td>
+						<td>${u.lastModel ? `<code>${u.lastModel}</code>` : '—'}</td>
+						<td>${u.lastUsedAt ? new Date(u.lastUsedAt).toLocaleString() : '—'}</td>
+						<td>${new Date(u.createdAt).toLocaleDateString()}</td>
+						<td><button data-id="${u.id}" data-role="${u.role === 'admin' ? 'user' : 'admin'}" class="toggle-role">
+							${u.role === 'admin' ? 'Demote' : 'Promote'}
+						</button></td>
+					</tr>
+				`).join('');
+				tbody.querySelectorAll('.toggle-role').forEach((btn) => {
+					btn.addEventListener('click', async () => {
+						await fetch('/api/admin/admins', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ userId: btn.dataset.id, role: btn.dataset.role }),
+						});
+						loadUsers();
+					});
+				});
+			}
+			document.getElementById('save-model').addEventListener('click', async () => {
+				const model = document.getElementById('model-select').value;
+				const res = await fetch('/api/admin/model', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ model }),
+				});
+				const status = document.getElementById('model-status');
+				if (res.ok) { status.textContent = 'Saved ✓'; setTimeout(() => status.textContent = '', 2000); }
+				else status.textContent = 'Failed';
+			});
+			loadStats();
+			loadUsers();
+		</script>
+	</body>
+</html>

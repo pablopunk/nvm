@@ -13,8 +13,15 @@ export const users = pgTable('users', {
   workosUserId: text('workos_user_id').notNull().unique(),
   email: text('email').notNull().unique(),
   plan: text('plan').notNull().default('free'),
+  role: text('role').notNull().default('user'),
   stripeCustomerId: text('stripe_customer_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const creditLedger = pgTable(

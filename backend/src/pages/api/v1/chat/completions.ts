@@ -5,6 +5,7 @@ import { modelFor } from '../../../../lib/provider';
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { getBalance } from '../../../../lib/users';
 import { resolveModel, computeCostCredits } from '../../../../lib/pricing';
+import { getActiveModelId } from '../../../../lib/settings';
 import { db } from '../../../../db/client';
 import { creditLedger, usage } from '../../../../db/schema';
 
@@ -64,11 +65,12 @@ export const POST: APIRoute = async ({ request }) => {
   const body = (await request.json().catch(() => null)) as OpenAIRequest | null;
   if (!body?.messages?.length) return new Response('Bad request', { status: 400 });
 
-  const pricing = resolveModel(body.model);
+  const activeModelId = await getActiveModelId();
+  const pricing = resolveModel(activeModelId);
   const model = modelFor(pricing.realModel);
   const requestId = randomUUID();
   const created = Math.floor(Date.now() / 1000);
-  const modelLabel = body.model ?? pricing.realModel;
+  const modelLabel = pricing.realModel;
   const messages = toModelMessages(body.messages);
 
   if (body.stream === false) {
