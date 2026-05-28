@@ -3,7 +3,7 @@
   "version": "0.4.0",
   "description": "Nevermind: an AI-native command palette for your desktop",
   "author": "Pablo Varela",
-  "license": "GPL-3.0-only",
+  "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
   "main": "dist/main/main.js",
@@ -27,6 +27,9 @@
     "dist:win:x64": "pnpm build && electron-builder --config electron-builder.yml --win nsis portable --x64 --publish never"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.80",
+    "@ai-sdk/google": "^3.0.80",
+    "@ai-sdk/openai": "^3.0.66",
     "@earendil-works/pi-ai": "^0.76.0",
     "@earendil-works/pi-coding-agent": "^0.76.0",
     "@vitejs/plugin-react": "latest",
