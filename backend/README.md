@@ -11,8 +11,16 @@ Serves the dashboard at `nvm.fyi` and the API the desktop app talks to.
    - WorkOS `API_KEY`, `CLIENT_ID`, `REDIRECT_URI`
    - `WORKOS_COOKIE_PASSWORD` — `openssl rand -base64 32`
 2. `pnpm install`
-3. `pnpm db:push` to create tables on Neon
+3. `pnpm db:migrate` to apply migrations on Neon (idempotent; auto-bootstraps an existing DB)
 4. `pnpm dev` → http://localhost:4321
+
+## Migrations
+
+Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
+
+- Edit `src/db/schema.ts`
+- `pnpm db:generate` → produces a new `drizzle/NNNN_*.sql`
+- `pnpm db:migrate` → applies pending migrations (also runs automatically on `pnpm build` / Vercel deploy)
 
 ## Routes
 
