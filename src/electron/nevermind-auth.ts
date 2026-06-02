@@ -10,7 +10,14 @@ type StoredAuth = { encryptedToken: string; email: string; role: string; baseUrl
 type AuthSnapshot = { token: string; email: string; role: string; baseUrl: string } | null
 type SignInResult = { ok: true; auth: NonNullable<AuthSnapshot> } | { ok: false; error: string }
 
-const DEFAULT_BASE_URL = process.env.NEVERMIND_BASE_URL || (process.env.ELECTRON_RENDERER_URL ? 'http://localhost:4321' : 'https://nvm.fyi')
+const PRODUCTION_BASE_URL = 'https://api.nvm.fyi'
+const DEFAULT_BASE_URL = process.env.NEVERMIND_BASE_URL || (process.env.ELECTRON_RENDERER_URL ? 'http://localhost:4321' : PRODUCTION_BASE_URL)
+
+function normalizedBaseUrl(baseUrl: string) {
+  const trimmed = baseUrl.replace(/\/$/, '')
+  if (!process.env.ELECTRON_RENDERER_URL && !process.env.NEVERMIND_BASE_URL && ['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed)) return PRODUCTION_BASE_URL
+  return trimmed
+}
 
 function authPath() {
   return path.join(app.getPath('userData'), FILENAME)
@@ -31,7 +38,7 @@ async function load() {
       return null
     }
     const token = safeStorage.decryptString(Buffer.from(data.encryptedToken, 'base64'))
-    cached = { token, email: data.email, role: data.role, baseUrl: data.baseUrl }
+    cached = { token, email: data.email, role: data.role, baseUrl: normalizedBaseUrl(data.baseUrl) }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') logger.warn('Failed to read nevermind auth', err as Error)
     cached = null
@@ -85,7 +92,7 @@ export function isSigningIn() {
 
 export async function signInToNevermind({ baseUrl = DEFAULT_BASE_URL, label = defaultDeviceLabel() }: { baseUrl?: string; label?: string } = {}): Promise<SignInResult> {
   if (activeSignIn) return activeSignIn
-  const trimmedBase = baseUrl.replace(/\/$/, '')
+  const trimmedBase = normalizedBaseUrl(baseUrl)
   activeSignIn = (async (): Promise<SignInResult> => {
     try {
       const initRes = await postJson(`${trimmedBase}/api/auth/device/initiate`, { label })
