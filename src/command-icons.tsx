@@ -52,7 +52,7 @@ function lucideIcon(name: unknown, fallback: keyof typeof curatedIconAliases = '
 
 export function iconForAction(action: CommandAction) {
   if (action.type === 'copyText' || action.type === 'copyImage' || action.type === 'pasteText') return <LucideIcons.Clipboard size={18} />
-  if (action.type === 'trash') return <LucideIcons.Trash2 size={18} />
+  if (action.type === 'trash' || action.type === 'removeClipboardHistory') return <LucideIcons.Trash2 size={18} />
   if (action.type === 'revealPath' || action.type === 'openPath' || action.type === 'quickLook' || action.type === 'openWith') return <LucideIcons.Folder size={18} />
   if (action.type === 'nativeAction') return <LucideIcons.Sparkles size={18} />
   return <LucideIcons.Globe size={18} />

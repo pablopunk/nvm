@@ -38,6 +38,8 @@ const paletteWindow = createPaletteWindowController({
 const CLIPBOARD_LIMIT = 300
 const FILE_RESULT_LIMIT = 6
 const CLIPBOARD_POLL_INTERVAL_MS = 1000
+const CLIPBOARD_LAST_HOUR_MS = 60 * 60_000
+const CLIPBOARD_LAST_DAY_MS = 24 * CLIPBOARD_LAST_HOUR_MS
 const APP_REINDEX_DEBOUNCE_MS = 1000
 const THUMBNAIL_SIZE = 512
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000
@@ -724,6 +726,31 @@ function clipboardCopyAction(item) {
   return { type: 'copyText', title: item.type === 'video' ? 'Copy Video Path' : 'Copy Text', text: item.filePath || item.text, dismissAfterRun: 'auto' }
 }
 
+function clipboardHistoryRemovalAction(range, title, message, itemId = '') {
+  return {
+    type: 'removeClipboardHistory',
+    title,
+    clipboardHistoryRange: range,
+    clipboardHistoryItemId: itemId,
+    style: 'destructive',
+    requiresConfirmation: true,
+    confirmLabel: title,
+    confirmMessage: message,
+  }
+}
+
+function clipboardHistoryRemovalActions(item: any = null) {
+  if (clipboardHistory.length === 0) return []
+  const actions: any[] = []
+  if (item?.id) actions.push(clipboardHistoryRemovalAction('item', 'Remove Item', `Remove “${clipboardItemTitle(item)}” from clipboard history?`, item.id))
+  actions.push(
+    clipboardHistoryRemovalAction('last-hour', 'Remove Entries from Last Hour', 'Remove clipboard history entries copied in the last hour?'),
+    clipboardHistoryRemovalAction('last-day', 'Remove Entries from Last Day', 'Remove clipboard history entries copied in the last day?'),
+    clipboardHistoryRemovalAction('all', 'Remove All Entries', 'Remove all clipboard history entries?'),
+  )
+  return actions
+}
+
 const CLIPBOARD_ITEM_APPEARANCE = { foreground: 'blue' } as const
 
 function clipboardRootItem(item) {
@@ -761,6 +788,7 @@ function clipboardHistoryItem(item: any) {
     actionPanel: {
       sections: [
         { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
+        { title: 'Manage History', actions: clipboardHistoryRemovalActions(item) },
       ],
     },
   }
@@ -792,6 +820,31 @@ function clipboardHistorySnapshot(options: any = {}) {
   }))
 }
 
+function clipboardHistoryRemovalEntries(action) {
+  const range = action?.clipboardHistoryRange || 'item'
+  const now = Date.now()
+  if (range === 'item') return clipboardHistory.filter((entry) => entry.id === action?.clipboardHistoryItemId)
+  if (range === 'last-hour') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_HOUR_MS)
+  if (range === 'last-day') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_DAY_MS)
+  if (range === 'all') return clipboardHistory
+  return []
+}
+
+function clipboardHistoryRemovedMessage(count) {
+  return count === 1 ? 'Removed 1 clipboard item' : `Removed ${count} clipboard items`
+}
+
+function removeClipboardHistoryEntries(action) {
+  const removed = clipboardHistoryRemovalEntries(action)
+  if (removed.length === 0) return { toast: { message: 'No matching clipboard items to remove' } }
+  const removedIds = new Set(removed.map((entry) => entry.id))
+  clipboardHistory = clipboardHistory.filter((entry) => !removedIds.has(entry.id))
+  scheduleSaveState()
+  invalidateExtensionRootItems()
+  paletteWindow.win?.webContents.send('clipboard:changed')
+  return { view: clipboardHistoryView(), navigation: 'replace', toast: { message: clipboardHistoryRemovedMessage(removed.length) } }
+}
+
 function viewRefreshAction(itemsBuilder) {
   return {
     type: 'runExtensionAction',
@@ -801,6 +854,7 @@ function viewRefreshAction(itemsBuilder) {
 }
 
 function clipboardHistoryView() {
+  const actions = clipboardHistoryRemovalActions()
   return {
     type: 'list',
     id: 'clipboard-history',
@@ -808,6 +862,8 @@ function clipboardHistoryView() {
     presentation: 'root',
     searchBarPlaceholder: 'Search Clipboard History',
     emptyView: { title: 'No clipboard items found.', subtitle: 'Copy text or images and they will appear here.' },
+    actions,
+    actionPanel: actions.length ? { sections: [{ title: 'Manage History', actions }] } : undefined,
     items: clipboardHistoryItems(),
   }
 }
@@ -1478,6 +1534,8 @@ async function executeViewAction(action) {
       else if (action.imagePath) clipboard.writeImage(nativeImage.createFromPath(action.imagePath))
       else clipboard.writeImage(nativeImage.createFromDataURL(action.imageDataUrl))
       break
+    case 'removeClipboardHistory':
+      return removeClipboardHistoryEntries(action)
     case 'trash':
       for (const itemPath of action.paths || [action.path]) {
         if (itemPath) await shell.trashItem(expandUserPath(itemPath))

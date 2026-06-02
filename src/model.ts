@@ -39,6 +39,7 @@ export const ACTION_DEFINITIONS = {
   replaceView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
   popView: { description: 'Go back', dismiss: 'manual', loading: 'view', execute: 'main' },
   previewClipboardItem: { description: 'Preview clipboard item', dismiss: 'manual', loading: 'none', execute: 'renderer' },
+  removeClipboardHistory: { description: 'Remove clipboard history entries', dismiss: 'manual', loading: 'none', execute: 'main' },
   runExtensionAction: { description: 'Run action', dismiss: 'immediate', loading: 'none', execute: 'main' },
   shellExec: { description: 'Run system command', dismiss: 'manual', loading: 'view', execute: 'main' },
   shellScript: { description: 'Run system command', dismiss: 'manual', loading: 'view', execute: 'main' },
@@ -93,6 +94,8 @@ export type CommandAction = {
   alias?: string
   accelerator?: string
   clipboardType?: string
+  clipboardHistoryRange?: 'item' | 'last-hour' | 'last-day' | 'all'
+  clipboardHistoryItemId?: string
   videoUrl?: string
   filePath?: string
   thumbnailUrl?: string
