@@ -66,7 +66,12 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
     if (!trimmed || busy) return
     appendMessage('user', trimmed)
     setInput('')
-    await sendMessage(trimmed, chatId)
+    try {
+      await sendMessage(trimmed, chatId)
+    } catch (error) {
+      appendMessage('system', error instanceof Error ? error.message : String(error))
+      setBusy(false)
+    }
   }
 
   async function openChat(view: CommandView) {

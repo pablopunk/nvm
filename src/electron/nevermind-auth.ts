@@ -13,9 +13,22 @@ type SignInResult = { ok: true; auth: NonNullable<AuthSnapshot> } | { ok: false;
 const PRODUCTION_BASE_URL = 'https://api.nvm.fyi'
 const DEFAULT_BASE_URL = process.env.NEVERMIND_BASE_URL || (process.env.ELECTRON_RENDERER_URL ? 'http://localhost:4321' : PRODUCTION_BASE_URL)
 
+function shouldUseProductionBaseUrl() {
+  return app.isPackaged && !process.env.NEVERMIND_BASE_URL
+}
+
+function isLoopbackBaseUrl(baseUrl: string) {
+  try {
+    const host = new URL(baseUrl).hostname
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
+  }
+}
+
 function normalizedBaseUrl(baseUrl: string) {
   const trimmed = baseUrl.replace(/\/$/, '')
-  if (!process.env.ELECTRON_RENDERER_URL && !process.env.NEVERMIND_BASE_URL && ['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed)) return PRODUCTION_BASE_URL
+  if (shouldUseProductionBaseUrl() && (['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed) || isLoopbackBaseUrl(trimmed))) return PRODUCTION_BASE_URL
   return trimmed
 }
 
@@ -36,7 +49,9 @@ async function readFromDisk(): Promise<AuthSnapshot> {
       return null
     }
     const token = safeStorage.decryptString(Buffer.from(data.encryptedToken, 'base64'))
-    return { token, email: data.email, role: data.role, baseUrl: normalizedBaseUrl(data.baseUrl) }
+    const baseUrl = normalizedBaseUrl(data.baseUrl)
+    if (baseUrl !== data.baseUrl) logger.warn('normalized stored Nevermind auth base URL', { from: data.baseUrl, to: baseUrl })
+    return { token, email: data.email, role: data.role, baseUrl }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') logger.warn('Failed to read nevermind auth', err as Error)
     return null

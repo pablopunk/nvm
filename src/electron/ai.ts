@@ -116,12 +116,13 @@ function createNevermindAi(options: NevermindAiOptions) {
   }
 
   async function send(message: string, chatId = 'default') {
-    const session = await getSession(chatId)
     options.onEvent?.({ type: 'start', chatId })
     try {
+      const session = await getSession(chatId)
       await session.prompt(message)
       options.onEvent?.({ type: 'done', chatId })
     } catch (error) {
+      logger.error('ai.chat.send.failed', error, { source: 'host', scope: 'ai' })
       options.onEvent?.({ type: 'error', chatId, message: error instanceof Error ? error.message : String(error) })
     }
   }
