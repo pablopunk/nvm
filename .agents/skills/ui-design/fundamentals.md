@@ -20,19 +20,27 @@ Rules:
 ## Typography
 
 - **Limit to two families.** One for UI, optionally one for display/marketing. Often one is enough.
-- **Modular scale**: `12, 14, 16, 20, 24, 30, 36, 48`. Don't pick arbitrary sizes.
+- **Compact scale** (Nevermind): `11, 12, 13, 14, 16, 18` px. The generic 12/14/16/20/24 ramp is for marketing pages — palette chrome should be denser. The largest size (~18) is for the search input only.
 - **Line-height** scales inversely with size: ~1.5 for body, ~1.2 for headings, ~1.0 for very large display.
 - **Measure (line length)**: aim for 45–75 characters per line for body text.
 - **Numbers should be tabular** in tables and lists: `font-variant-numeric: tabular-nums`.
-- **Letter-spacing**: tighten slightly on large headings, loosen slightly on ALL-CAPS labels.
+- **Letter-spacing**: tighten slightly on large headings (`-0.02em` on the search input), loosen slightly on ALL-CAPS labels (`0.08em` on section headers).
 
 ## Spacing
 
-- **Constrained scale**: `4, 8, 12, 16, 24, 32, 48, 64, 96` px.
+- **Constrained scale**: `4, 8, 12, 16, 24, 32, 48, 64` px. No 5/6/7/10/13/14/21 px values.
+- **Tight by default.** Result rows at `8px 12px`, not `16px 20px`. Density is the aesthetic.
 - **Whitespace > borders.** Group related elements by proximity before drawing a box.
-- **Asymmetric padding** is normal — a card may have `16px 24px`, not `20px 20px`.
+- **Asymmetric padding** is normal — a row may have `8px 12px`, a card `24px 24px 16px`.
 - **Around vs between**: spacing between siblings is usually smaller than padding around the group.
 - **Don't center vertically** large blocks of text; align to the top so reading position is stable.
+
+## Radii (concentric rule)
+
+- **Scale**: `4, 8, 12, 16, 24` px. Plus `999px` for pills.
+- **Inner = outer − padding.** A card with `border-radius: 24px` and inner padding `8px` requires children at `16px`. Children of that child with `8px` more padding go to `8px`. Always step down the scale as you nest.
+- **Visible concentricity matters most for adjacent surfaces** — a row inside a card with thin padding. Deeply nested elements (grid tiles, icon-in-row) can deviate without looking wrong, but only one level at a time.
+- **Never use the same radius for parent and child** when they share an edge or near-edge — it makes the inner element look pasted on.
 
 ## Color
 

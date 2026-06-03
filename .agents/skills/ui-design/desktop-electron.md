@@ -17,6 +17,32 @@ code, kbd, samp {
 
 Never ship a webfont for app chrome — system fonts give the OS's rendering and weight quirks for free.
 
+## Focus rings — text inputs are special
+
+Native macOS apps put a soft system focus ring on text fields, but a custom Electron palette generally **should not** add a custom focus outline to inputs/textareas. Reasons:
+
+- The caret already indicates focus.
+- The main search input is permanently focused — a ring around it is visual noise on every screen.
+- Custom-colored rings (yellow, brand) feel un-native.
+
+Rule:
+
+```css
+:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[cmdk-input]:focus-visible {
+  outline: none;
+}
+```
+
+Keep the focus ring on buttons and links — keyboard users tabbing through actions still need it.
+
 ## Cursors
 
 ```css

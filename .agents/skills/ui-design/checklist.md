@@ -11,7 +11,7 @@ Run this on every visual change before considering it done. Yes/no answers only 
 
 ## Typography
 
-- [ ] All font sizes come from the modular scale (12/14/16/20/24/30/36/48)?
+- [ ] All font sizes come from the compact scale (11/12/13/14/16/18)?
 - [ ] No font weight below 400 in UI?
 - [ ] Line height ~1.5 for body, ~1.2 for headings?
 - [ ] Numbers in tables use `font-variant-numeric: tabular-nums`?
@@ -20,9 +20,15 @@ Run this on every visual change before considering it done. Yes/no answers only 
 ## Spacing
 
 - [ ] All padding/margin values come from the spacing scale (4/8/12/16/24/32/48/64)?
-- [ ] Generous whitespace (start too much, then remove)?
+- [ ] Compact density (Raycast/Linear-tight, not Stripe-airy)?
 - [ ] Related items grouped by proximity, not boxes?
 - [ ] Around > between (group padding > sibling gap)?
+
+## Radii (concentric)
+
+- [ ] All radii from `4/8/12/16/24` (plus 999 for pills)?
+- [ ] Inner radius = outer radius − padding for adjacent surfaces?
+- [ ] No parent and child sharing the same radius when they share an edge?
 
 ## Color
 
@@ -46,7 +52,8 @@ Run this on every visual change before considering it done. Yes/no answers only 
 
 - [ ] Every action reachable by mouse is reachable by keyboard?
 - [ ] Tab order is logical?
-- [ ] Visible focus ring on every interactive element?
+- [ ] Visible focus ring on buttons and links?
+- [ ] **No** focus ring on text inputs / textareas / selects (caret conveys focus)?
 - [ ] `Escape` closes overlays / modals / palette?
 - [ ] Shortcuts displayed inline next to actions where applicable?
 
