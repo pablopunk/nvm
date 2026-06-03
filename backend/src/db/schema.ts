@@ -7,6 +7,7 @@ import {
   bigserial,
   uuid,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -86,6 +87,22 @@ export const deviceCodes = pgTable('device_codes', {
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    meta: jsonb('meta'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    createdIdx: index('audit_log_created_idx').on(t.createdAt),
+  }),
+);
 
 export const subscriptions = pgTable('subscriptions', {
   userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

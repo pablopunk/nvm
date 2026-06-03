@@ -4,6 +4,7 @@ import { getSessionFromCookies } from '../../../lib/workos';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { createApiToken, listApiTokens } from '../../../lib/tokens';
+import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 
 async function getUser(request: Request) {
   const session = await getSessionFromCookies(request.headers.get('cookie'));
@@ -19,6 +20,8 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
+  const decision = await rateLimitIp('tokens', clientIp(request), 10, '1 m');
+  if (!decision.ok) return tooManyRequests(decision);
   const user = await getUser(request);
   if (!user) return new Response('Unauthorized', { status: 401 });
   const body = (await request.json().catch(() => ({}))) as { name?: string };

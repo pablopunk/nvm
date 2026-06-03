@@ -17,6 +17,8 @@ import {
 } from './cost';
 import { getUpstreamConfig, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
+import { rateLimitChat, tooManyRequests } from './ratelimit';
+import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
 
 export type UsageTokens = { inputTokens: number; outputTokens: number };
 
@@ -78,6 +80,7 @@ type ResolvedRouting = {
   activeModelId: string;
   costRow: ModelCost;
   kind: 'free' | 'paid';
+  balanceTotal: number;
   upstreamBaseUrl: string;
   upstreamApiKey: string;
 };
@@ -140,6 +143,7 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     activeModelId,
     costRow,
     kind,
+    balanceTotal: balances.total,
     upstreamBaseUrl: upstream.baseUrl,
     upstreamApiKey: upstream.apiKey,
   };
@@ -185,6 +189,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return routing;
 
+  const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
+  if (!rateDecision.ok) return tooManyRequests(rateDecision);
+
   const requestId = randomUUID();
   const upstreamUrl = cfg.buildUpstreamUrl({
     upstreamBaseUrl: routing.upstreamBaseUrl,
@@ -194,6 +201,20 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   let forwardBody: BodyInit | undefined;
   if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
     const text = await cfg.request.text();
+    const inputTokens = estimateInputTokensFromBody(text);
+    if (inputTokens > MAX_INPUT_TOKENS) {
+      return Response.json(
+        { error: { type: 'prompt_too_large', message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens` } },
+        { status: 413 },
+      );
+    }
+    const estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
+    if (estimatedCredits > routing.balanceTotal) {
+      return Response.json(
+        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceTotal } },
+        { status: 402 },
+      );
+    }
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
   }
 

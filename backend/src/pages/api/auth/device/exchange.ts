@@ -3,8 +3,11 @@ import { and, eq, gt, isNull, isNotNull } from 'drizzle-orm';
 import { db } from '../../../../db/client';
 import { users, deviceCodes } from '../../../../db/schema';
 import { createApiToken } from '../../../../lib/tokens';
+import { clientIp, rateLimitIp, tooManyRequests } from '../../../../lib/ratelimit';
 
 export const POST: APIRoute = async ({ request }) => {
+  const decision = await rateLimitIp('auth', clientIp(request), 60, '1 m');
+  if (!decision.ok) return tooManyRequests(decision);
   const body = (await request.json().catch(() => ({}))) as { code?: string };
   const code = (body.code ?? '').trim();
   if (!code) return new Response('Missing code', { status: 400 });

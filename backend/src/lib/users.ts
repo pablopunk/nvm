@@ -1,8 +1,16 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { users, creditLedger } from '../db/schema';
+import { isDisposableEmail } from './disposable';
 
 const FREE_SIGNUP_GRANT = 100;
+
+export class DisposableEmailError extends Error {
+  constructor(email: string) {
+    super(`Disposable email not allowed: ${email}`);
+    this.name = 'DisposableEmailError';
+  }
+}
 
 export async function upsertUserWithFreeGrant(input: {
   workosUserId: string;
@@ -15,6 +23,8 @@ export async function upsertUserWithFreeGrant(input: {
       .where(eq(users.workosUserId, input.workosUserId))
       .limit(1);
     if (existing[0]) return existing[0];
+
+    if (isDisposableEmail(input.email)) throw new DisposableEmailError(input.email);
 
     const [created] = await tx
       .insert(users)

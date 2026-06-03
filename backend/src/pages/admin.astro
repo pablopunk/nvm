@@ -79,6 +79,14 @@ const models = await listModelsForProvider(activeProvider);
   </div>
 
   <div class="section card">
+    <h2>Audit log</h2>
+    <table class="table" id="audit-table">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Meta</th></tr></thead>
+      <tbody><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section card">
     <h2>Users</h2>
     <table class="table" id="users-table">
       <thead><tr>
@@ -210,7 +218,26 @@ const models = await listModelsForProvider(activeProvider);
         });
       });
     }
+    async function loadAudit() {
+      const res = await fetch('/api/admin/audit?limit=50');
+      const { entries } = await res.json();
+      const tbody = document.querySelector('#audit-table tbody');
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No audit entries yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = entries.map((e) => `
+        <tr>
+          <td>${new Date(e.createdAt).toLocaleString()}</td>
+          <td>${e.actorEmail ?? '—'}</td>
+          <td><code>${e.action}</code></td>
+          <td>${e.targetType ? `${e.targetType}:${e.targetId ?? '—'}` : '—'}</td>
+          <td><code>${e.meta ? JSON.stringify(e.meta) : ''}</code></td>
+        </tr>
+      `).join('');
+    }
     loadStats();
     loadUsers();
+    loadAudit();
   </script>
 </Layout>
