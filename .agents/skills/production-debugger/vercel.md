@@ -20,6 +20,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 
 ## Env/domain rules
 
+- To retrieve production env locally for debugging, use `umask 077` and `cd backend && vercel env pull .vercel/.env.production.local --environment=production --yes`; never print or commit the pulled file.
 - `vercel env ls production` shows `Encrypted`; it cannot prove pasted whitespace.
 - Env edits require redeploys.
 - Confirm before env removals, secret changes, domain changes, project changes, or redeploys.

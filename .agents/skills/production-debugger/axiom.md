@@ -4,9 +4,18 @@ Verified skill search result: `axiomhq/skills@axiom-sre` (`https://skills.sh/axi
 
 Use this connector for Vercel runtime logs. Vercel drains production logs to Axiom, so Axiom is the primary backend runtime evidence source.
 
-## Connect and discover
+## Install/connect and discover
+
+Axiom CLI can be installed on macOS with Homebrew:
 
 ```bash
+brew install --cask axiomhq/tap/axiom
+```
+
+The Vercel app env does not necessarily include Axiom credentials because Vercel log drains are integration-managed. If `axiom auth status` says no deployments are configured, run `axiom auth login` or provide an Axiom API token/org out of band; do not expect `vercel env pull` to reveal it.
+
+```bash
+axiom version
 axiom auth status
 axiom dataset list
 axiom query "['DATASET'] | getschema"
