@@ -19,6 +19,8 @@ import { getUpstreamConfig, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
+import { log } from './log';
+import * as Sentry from '@sentry/astro';
 
 const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
 
@@ -50,29 +52,46 @@ type BillContext = {
   requestId: string;
 };
 
-async function recordUsage(ctx: BillContext, tokens: UsageTokens) {
-  if (tokens.outputTokens <= 0) return;
+async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number, latencyMs: number) {
   const costUsd = computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens);
   const credits = usdToCredits(costUsd);
   const microcents = usdToMicrocents(costUsd);
+  const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
   await db.transaction(async (tx) => {
-    await tx.insert(creditLedger).values({
-      userId: ctx.user.id,
-      delta: -credits,
-      kind: ctx.kind,
-      reason: 'ai_usage',
-      refId: ctx.requestId,
-    });
+    if (billable && credits > 0) {
+      await tx.insert(creditLedger).values({
+        userId: ctx.user.id,
+        delta: -credits,
+        kind: ctx.kind,
+        reason: 'ai_usage',
+        refId: ctx.requestId,
+      });
+    }
     await tx.insert(usage).values({
       userId: ctx.user.id,
       model: ctx.activeModelId,
       provider: ctx.provider,
       inputTokens: tokens.inputTokens,
       outputTokens: tokens.outputTokens,
-      costCredits: credits,
-      upstreamCostMicrocents: microcents,
+      costCredits: billable ? credits : 0,
+      upstreamCostMicrocents: billable ? microcents : 0,
       requestId: ctx.requestId,
+      status,
+      latencyMs,
     });
+  });
+  log.info('chat_completion', {
+    request_id: ctx.requestId,
+    user_id: ctx.user.id,
+    route: 'proxy',
+    model: ctx.activeModelId,
+    provider: ctx.provider,
+    kind: ctx.kind,
+    status,
+    latency_ms: latencyMs,
+    input_tokens: tokens.inputTokens,
+    output_tokens: tokens.outputTokens,
+    cost_credits: billable ? credits : 0,
   });
 }
 
@@ -119,7 +138,7 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
 
   const costRow = await lookupModelCost(provider, activeModelId);
   if (!costRow) {
-    console.error('[proxy] pricing_unavailable', { provider, model: activeModelId });
+    log.error('pricing_unavailable', { provider, model: activeModelId });
     return Response.json(
       { error: { type: 'pricing_unavailable', message: 'No pricing configured for active model' } },
       { status: 503 },
@@ -187,14 +206,25 @@ function isStreamingContentType(contentType: string | null): boolean {
   return contentType.includes('text/event-stream') || contentType.includes('stream');
 }
 
+function withRequestId(res: Response, requestId: string): Response {
+  res.headers.set('x-request-id', requestId);
+  return res;
+}
+
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
-  const routing = await resolveRouting(cfg.request, cfg.authHeaderName);
-  if (routing instanceof Response) return routing;
-
-  const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
-  if (!rateDecision.ok) return tooManyRequests(rateDecision);
-
   const requestId = randomUUID();
+  const startedAt = Date.now();
+  Sentry.getCurrentScope().setTag('request_id', requestId);
+  const routing = await resolveRouting(cfg.request, cfg.authHeaderName);
+  if (routing instanceof Response) return withRequestId(routing, requestId);
+
+  Sentry.getCurrentScope().setUser({ id: routing.user.id });
+  const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
+  if (!rateDecision.ok) {
+    log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope });
+    return withRequestId(tooManyRequests(rateDecision), requestId);
+  }
+
   const upstreamUrl = cfg.buildUpstreamUrl({
     upstreamBaseUrl: routing.upstreamBaseUrl,
     activeModelId: routing.activeModelId,
@@ -205,17 +235,17 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     const text = await cfg.request.text();
     const inputTokens = estimateInputTokensFromBody(text);
     if (inputTokens > MAX_INPUT_TOKENS) {
-      return Response.json(
+      return withRequestId(Response.json(
         { error: { type: 'prompt_too_large', message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens` } },
         { status: 413 },
-      );
+      ), requestId);
     }
     const estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
     if (estimatedCredits > routing.balanceTotal) {
-      return Response.json(
+      return withRequestId(Response.json(
         { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceTotal, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
-      );
+      ), requestId);
     }
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
   }
@@ -243,8 +273,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   };
 
   const responseHeaders = stripHopByHop(upstreamResponse.headers);
+  responseHeaders.set('x-request-id', requestId);
 
   if (!upstreamResponse.ok) {
+    const latencyMs = Date.now() - startedAt;
+    await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs).catch((err) => {
+      log.error('record_usage_failed', { request_id: requestId, error: err });
+    });
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
@@ -253,7 +288,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   }
 
   if (isStreamingContentType(upstreamResponse.headers.get('content-type'))) {
-    const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx);
+    const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
     return new Response(transformed, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
@@ -262,13 +297,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   }
 
   const buffered = await upstreamResponse.arrayBuffer();
+  const latencyMs = Date.now() - startedAt;
+  let tokens: UsageTokens = { inputTokens: 0, outputTokens: 0 };
   try {
     const json = JSON.parse(new TextDecoder().decode(buffered));
-    const tokens = cfg.parseUsageFromJson(json);
-    if (tokens) await recordUsage(billCtx, tokens);
+    tokens = cfg.parseUsageFromJson(json) ?? tokens;
   } catch (err) {
-    console.warn('[proxy] failed to parse usage from non-stream body', err);
+    log.warn('parse_usage_failed', { request_id: requestId, error: err });
   }
+  await recordUsage(billCtx, tokens, upstreamResponse.status, latencyMs);
   return new Response(buffered, {
     status: upstreamResponse.status,
     statusText: upstreamResponse.statusText,
@@ -289,6 +326,8 @@ function teeStreamAndBill(
   upstreamResponse: Response,
   cfg: ProxyConfig,
   billCtx: BillContext,
+  status: number,
+  startedAt: number,
 ): ReadableStream<Uint8Array> {
   const acc: StreamUsageAccumulator = { inputTokens: 0, outputTokens: 0, finalized: false };
   const decoder = new TextDecoder('utf-8', { fatal: false });
@@ -299,7 +338,7 @@ function teeStreamAndBill(
         const text = decoder.decode(chunk, { stream: true });
         cfg.parseUsageFromStreamChunk(text, acc);
       } catch (err) {
-        console.warn('[proxy] usage sniffer failed', err);
+        log.warn('usage_sniffer_failed', { request_id: billCtx.requestId, error: err });
       }
     },
     async flush() {
@@ -307,9 +346,13 @@ function teeStreamAndBill(
         const tail = decoder.decode();
         if (tail) cfg.parseUsageFromStreamChunk(tail, acc);
       } catch {}
-      if (acc.finalized || acc.outputTokens > 0) {
-        await recordUsage(billCtx, { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens });
-      }
+      const latencyMs = Date.now() - startedAt;
+      await recordUsage(
+        billCtx,
+        { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens },
+        status,
+        latencyMs,
+      );
     },
   });
   return upstreamResponse.body!.pipeThrough(transform);

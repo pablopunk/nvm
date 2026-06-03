@@ -66,6 +66,16 @@ const models = await listModelsForProvider(activeProvider);
     </div>
   </div>
 
+  <div class="section card">
+    <h2>Last 30 days</h2>
+    <div class="stat-grid" id="timeseries-grid">
+      <div class="stat"><div class="v" id="ts-requests">…</div><div class="l">Requests/day</div><svg class="spark" id="ts-requests-spark" viewBox="0 0 100 24" preserveAspectRatio="none"></svg></div>
+      <div class="stat"><div class="v" id="ts-credits">…</div><div class="l">Credits/day</div><svg class="spark" id="ts-credits-spark" viewBox="0 0 100 24" preserveAspectRatio="none"></svg></div>
+      <div class="stat"><div class="v" id="ts-errors">…</div><div class="l">Error rate</div><svg class="spark" id="ts-errors-spark" viewBox="0 0 100 24" preserveAspectRatio="none"></svg></div>
+      <div class="stat"><div class="v" id="ts-p95">…</div><div class="l">Latency p95 (ms)</div><svg class="spark" id="ts-p95-spark" viewBox="0 0 100 24" preserveAspectRatio="none"></svg></div>
+    </div>
+  </div>
+
   <div class="section">
     <h2>System stats</h2>
     <div class="stat-grid" id="stats"><div class="stat"><div class="v">…</div><div class="l">loading</div></div></div>
@@ -236,8 +246,39 @@ const models = await listModelsForProvider(activeProvider);
         </tr>
       `).join('');
     }
+    function sparkPath(values) {
+      if (!values.length) return '';
+      const max = Math.max(1, ...values);
+      const step = 100 / Math.max(1, values.length - 1);
+      return values.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(2)},${(24 - (v / max) * 22 - 1).toFixed(2)}`).join(' ');
+    }
+    function renderSpark(svgId, values) {
+      const el = document.getElementById(svgId);
+      if (!el) return;
+      el.innerHTML = `<path d="${sparkPath(values)}" fill="none" stroke="var(--accent-9, currentColor)" stroke-width="1.5"/>`;
+    }
+    async function loadTimeseries() {
+      const res = await fetch('/api/admin/timeseries?days=30');
+      const { series } = await res.json();
+      const requests = series.map((s) => s.requests);
+      const credits = series.map((s) => s.credits);
+      const errors = series.map((s) => s.errors);
+      const p95 = series.map((s) => s.p95 ?? 0);
+      const totReq = requests.reduce((a, b) => a + b, 0);
+      const totErr = errors.reduce((a, b) => a + b, 0);
+      const errRate = totReq ? ((totErr / totReq) * 100).toFixed(2) + '%' : '0%';
+      document.getElementById('ts-requests').textContent = requests.at(-1) ?? 0;
+      document.getElementById('ts-credits').textContent = credits.at(-1) ?? 0;
+      document.getElementById('ts-errors').textContent = errRate;
+      document.getElementById('ts-p95').textContent = p95.at(-1) ? Math.round(p95.at(-1)) : '—';
+      renderSpark('ts-requests-spark', requests);
+      renderSpark('ts-credits-spark', credits);
+      renderSpark('ts-errors-spark', errors);
+      renderSpark('ts-p95-spark', p95);
+    }
     loadStats();
     loadUsers();
     loadAudit();
+    loadTimeseries();
   </script>
 </Layout>

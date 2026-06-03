@@ -1,5 +1,6 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { log } from './log';
 
 const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
@@ -8,7 +9,7 @@ const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
 
 const redis = url && token ? new Redis({ url, token }) : null;
 if (!redis) {
-  console.warn('[ratelimit] UPSTASH_REDIS_REST_URL/TOKEN missing — rate limits disabled');
+  log.warn('ratelimit_disabled', { reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing' });
 }
 
 function makeLimiter(prefix: string, limit: number, window: `${number} ${'s' | 'm' | 'h' | 'd'}`) {

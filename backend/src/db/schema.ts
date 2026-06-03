@@ -54,10 +54,13 @@ export const usage = pgTable(
     upstreamCostMicrocents: bigint('upstream_cost_microcents', { mode: 'number' }).notNull().default(0),
     provider: text('provider'),
     requestId: text('request_id'),
+    status: integer('status'),
+    latencyMs: integer('latency_ms'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     userIdx: index('usage_user_idx').on(t.userId),
+    createdIdx: index('usage_created_idx').on(t.createdAt),
   }),
 );
 
