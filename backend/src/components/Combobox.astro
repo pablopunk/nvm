@@ -2,14 +2,33 @@
 import 'tom-select/dist/css/tom-select.css';
 ---
 <style is:global>
-  .ts-wrapper.input { padding: 0; min-width: 220px; }
-  .ts-wrapper .ts-control { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; min-height: 32px; padding: 4px 10px; box-shadow: none; }
+  .ts-wrapper.input { padding: 0; min-width: 220px; background: transparent; border: 0; }
+  .ts-wrapper .ts-control,
+  .ts-wrapper.single .ts-control,
+  .ts-wrapper.focus .ts-control,
+  .ts-wrapper.single.focus .ts-control {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 32px;
+    padding: 4px 10px;
+    box-shadow: none;
+    background-image: none;
+  }
   .ts-wrapper.focus .ts-control { outline: 2px solid var(--text); outline-offset: -1px; border-color: var(--text); }
-  .ts-wrapper .ts-control input { color: var(--text) !important; }
-  .ts-wrapper .ts-control input::placeholder { color: var(--muted); }
-  .ts-dropdown { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-  .ts-dropdown .option { padding: 6px 10px; font-size: 14px; }
-  .ts-dropdown .active { background: color-mix(in srgb, var(--text) 10%, var(--surface)); color: var(--text); }
+  .ts-wrapper .ts-control > input,
+  .ts-wrapper.single .ts-control > input {
+    background: transparent !important;
+    color: var(--text) !important;
+    box-shadow: none !important;
+  }
+  .ts-wrapper .ts-control > input::placeholder { color: var(--muted); }
+  .ts-wrapper .ts-control .item { color: var(--text); }
+  .ts-dropdown { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+  .ts-dropdown .option { padding: 6px 10px; font-size: 14px; color: var(--text); background: transparent; }
+  .ts-dropdown .active,
+  .ts-dropdown .option.active { background: color-mix(in srgb, var(--text) 12%, var(--surface)); color: var(--text); }
   .ts-dropdown .option.selected { font-weight: 500; }
   .ts-dropdown .no-results { padding: 8px 10px; color: var(--muted); font-size: 13px; }
 </style>
