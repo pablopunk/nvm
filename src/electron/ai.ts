@@ -112,6 +112,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       promise: createSession({ ...options, chatId }, (event) => options.onEvent?.({ ...event, chatId })),
     }
     sessions.set(chatId, entry)
+    entry.promise.catch(() => { if (sessions.get(chatId) === entry) sessions.delete(chatId) })
     return entry.promise
   }
 
@@ -163,6 +164,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     if (!promise) {
       promise = createGeneralSession(options, sessionOptions)
       generalSessions.set(key, promise)
+      promise.catch(() => { if (generalSessions.get(key) === promise) generalSessions.delete(key) })
     }
     return promise
   }
@@ -314,52 +316,27 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
 
 const NEVERMIND_PROVIDER_ID = 'nevermind'
 
-function buildNevermindModel(ai: any, baseUrl: string, modelId: string) {
+function buildNevermindModel(_ai: any, baseUrl: string, modelId: string) {
   const trimmed = baseUrl.replace(/\/$/, '')
-  const opencodeRef = ai.getModel('opencode', modelId)
-  const fallback = {
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 32000,
-    input: ['text', 'image'] as const,
-  }
   return {
     id: modelId,
-    name: opencodeRef?.name || modelId,
+    name: modelId,
     api: 'openai-completions' as const,
     provider: NEVERMIND_PROVIDER_ID,
     baseUrl: `${trimmed}/api/v1`,
     reasoning: false,
-    input: opencodeRef?.input || fallback.input,
-    cost: opencodeRef?.cost || fallback.cost,
-    contextWindow: opencodeRef?.contextWindow || fallback.contextWindow,
-    maxTokens: opencodeRef?.maxTokens || fallback.maxTokens,
+    input: ['text', 'image'] as const,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 32000,
   }
 }
-
-const IS_UNPACKAGED_DEV = Boolean(process.env.ELECTRON_RENDERER_URL)
 
 async function resolveAiModelAndAuth(pi: any, ai: any, authStorage: any, modelId: string) {
   const nevermind = await getNevermindAuth()
-  if (nevermind) {
-    authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token)
-    return { model: buildNevermindModel(ai, nevermind.baseUrl, modelId), source: 'nevermind' as const }
-  }
-  if (!IS_UNPACKAGED_DEV) throw new NevermindAuthRequiredError()
-  const apiKey = await resolveOpenCodeApiKey()
-  if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
-  const model = ai.getModel('opencode', modelId)
-  if (!model) throw new Error(`Missing opencode model: ${modelId}`)
-  return { model, source: 'opencode' as const }
-}
-
-async function resolveOpenCodeApiKey() {
-  const envKey = process.env.OPENCODE_API_KEY || process.env.NEVERMIND_OPENCODE_API_KEY
-  if (envKey) return envKey
-  const secretsPath = path.join(process.env.HOME || '', '.zshrc.d', '01-secrets.sh')
-  const secrets = await fs.readFile(secretsPath, 'utf8').catch(() => '')
-  const match = secrets.match(/^\s*export\s+(?:OPENCODE_API_KEY|NEVERMIND_OPENCODE_API_KEY)=(['"]?)([^'"\n]+)\1\s*$/m)
-  return match?.[2]
+  if (!nevermind) throw new NevermindAuthRequiredError()
+  authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token)
+  return { model: buildNevermindModel(ai, nevermind.baseUrl, modelId), source: 'nevermind' as const }
 }
 
 async function createResourceLoader(pi: PiApi, { agentDir, workspaceDir, extensionApiPath, skillPath }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'>) {

@@ -77,7 +77,7 @@ export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {
     try {
       const res = await fetch(`${current.baseUrl}/api/tokens/current`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${current.token}` },
+        headers: { Authorization: `Bearer ${current.token}`, Origin: current.baseUrl },
       })
       revoked = res.ok || res.status === 401
       if (!revoked) logger.warn(`token revoke returned ${res.status}`)
