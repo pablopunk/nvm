@@ -33,20 +33,19 @@ const models = await listModelsForProvider(activeProvider);
     <div class="stack">
       <div class="row">
         <label class="field field--inline">Paid →
-          <select id="model-select-paid" class="input combo">
+          <select id="model-select-paid" class="input combo autosave" data-tier="paid">
             {models.map((id) => <option value={id} selected={id === activeModel}>{id}</option>)}
           </select>
         </label>
-        <button class="button save-model" data-tier="paid">Save</button>
+        <span class="status" data-status-for="model-select-paid"></span>
       </div>
       <div class="row">
         <label class="field field--inline">Free →
-          <select id="model-select-free" class="input combo">
+          <select id="model-select-free" class="input combo autosave" data-tier="free">
             {models.map((id) => <option value={id} selected={id === freeModel}>{id}</option>)}
           </select>
         </label>
-        <button class="button save-model" data-tier="free">Save</button>
-        <span id="model-status" class="status"></span>
+        <span class="status" data-status-for="model-select-free"></span>
       </div>
     </div>
   </div>
@@ -56,12 +55,11 @@ const models = await listModelsForProvider(activeProvider);
     <p class="muted">Pricing is fetched from <a href="https://models.dev" target="_blank">models.dev</a> for the active provider and multiplied by the markup.</p>
     <div class="row">
       <label class="field field--inline">Provider
-        <select id="provider-select" class="input combo">
+        <select id="provider-select" class="input combo autosave-provider">
           {providers.map((p) => <option value={p} selected={p === activeProvider}>{p}</option>)}
         </select>
       </label>
-      <button class="button" id="save-provider">Save</button>
-      <span id="provider-status" class="status"></span>
+      <span class="status" data-status-for="provider-select"></span>
     </div>
   </div>
 
@@ -107,18 +105,50 @@ const models = await listModelsForProvider(activeProvider);
         return `<tr><td>${r.provider || '—'}</td><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${margin.toFixed(4)}</td></tr>`;
       }).join('') || '<tr><td colspan="8" class="muted">No usage yet</td></tr>';
     }
-    function flashStatus(el, ok, label) {
-      el.className = ok ? 'status status--ok' : 'status status--err';
-      el.textContent = ok ? `${label} ✓` : 'Failed';
-      setTimeout(() => { el.textContent = ''; el.className = 'status'; }, 2000);
+    function statusEl(selectId) {
+      return document.querySelector(`[data-status-for="${selectId}"]`);
     }
-    document.getElementById('save-provider').addEventListener('click', async () => {
-      const provider = document.getElementById('provider-select').value;
-      const r = await fetch('/api/admin/provider', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }),
+    function setState(el, state) {
+      const map = {
+        idle: { cls: 'status', text: '' },
+        saving: { cls: 'status', text: 'Saving…' },
+        saved: { cls: 'status status--ok', text: 'Saved ✓' },
+        error: { cls: 'status status--err', text: 'Failed' },
+      };
+      const s = map[state];
+      el.className = s.cls;
+      el.textContent = s.text;
+    }
+    async function autosave(select, fetcher) {
+      const status = statusEl(select.id);
+      const ts = select.tomselect;
+      setState(status, 'saving');
+      ts ? ts.disable() : (select.disabled = true);
+      try {
+        const res = await fetcher(select.value);
+        setState(status, res.ok ? 'saved' : 'error');
+      } catch {
+        setState(status, 'error');
+      } finally {
+        ts ? ts.enable() : (select.disabled = false);
+        setTimeout(() => setState(status, 'idle'), 1500);
+      }
+    }
+    function wireAutosave() {
+      document.querySelectorAll('.autosave').forEach((el) => {
+        el.addEventListener('change', () => autosave(el, (model) => fetch('/api/admin/model', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, tier: el.dataset.tier }),
+        })));
       });
-      flashStatus(document.getElementById('provider-status'), r.ok, 'Saved');
-    });
+      document.querySelectorAll('.autosave-provider').forEach((el) => {
+        el.addEventListener('change', () => autosave(el, (provider) => fetch('/api/admin/provider', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider }),
+        })));
+      });
+    }
+    wireAutosave();
     async function loadUsers() {
       const res = await fetch('/api/admin/users');
       const { users } = await res.json();
@@ -150,18 +180,6 @@ const models = await listModelsForProvider(activeProvider);
         });
       });
     }
-    document.querySelectorAll('.save-model').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const tier = btn.dataset.tier;
-        const model = document.getElementById(`model-select-${tier}`).value;
-        const res = await fetch('/api/admin/model', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, tier }),
-        });
-        flashStatus(document.getElementById('model-status'), res.ok, `Saved ${tier}`);
-      });
-    });
     loadStats();
     loadUsers();
   </script>
