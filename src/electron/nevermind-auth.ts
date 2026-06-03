@@ -24,12 +24,10 @@ function authPath() {
 }
 
 let cached: AuthSnapshot = null
-let loaded = false
+let loadPromise: Promise<AuthSnapshot> | null = null
 let activeSignIn: Promise<SignInResult> | null = null
 
-async function load() {
-  if (loaded) return cached
-  loaded = true
+async function readFromDisk(): Promise<AuthSnapshot> {
   try {
     const raw = await fs.readFile(authPath(), 'utf8')
     const data = JSON.parse(raw) as StoredAuth
@@ -38,12 +36,17 @@ async function load() {
       return null
     }
     const token = safeStorage.decryptString(Buffer.from(data.encryptedToken, 'base64'))
-    cached = { token, email: data.email, role: data.role, baseUrl: normalizedBaseUrl(data.baseUrl) }
+    return { token, email: data.email, role: data.role, baseUrl: normalizedBaseUrl(data.baseUrl) }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') logger.warn('Failed to read nevermind auth', err as Error)
-    cached = null
+    return null
   }
-  return cached
+}
+
+async function load() {
+  if (loadPromise) return loadPromise
+  loadPromise = readFromDisk().then((auth) => { cached = auth; return auth })
+  return loadPromise
 }
 
 export async function getNevermindAuth(): Promise<AuthSnapshot> {
@@ -61,13 +64,14 @@ async function persist({ token, email, role, baseUrl }: { token: string; email: 
   }
   await fs.writeFile(authPath(), JSON.stringify(payload, null, 2), { mode: 0o600 })
   cached = { token, email, role, baseUrl }
-  loaded = true
+  loadPromise = Promise.resolve(cached)
   return cached
 }
 
 export async function clearNevermindAuth() {
   await fs.rm(authPath(), { force: true })
   cached = null
+  loadPromise = Promise.resolve(null)
 }
 
 export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {

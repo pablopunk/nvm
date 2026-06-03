@@ -160,6 +160,7 @@ export function App() {
   const extensionView = extensionNavigation.view
   const extensionViewBackStack = extensionNavigation.backStack
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
+  const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null)
   const [toast, setToast] = useState<{ message: string; tone?: 'default' | 'error' } | null>(null)
   const [placeholderIndex, setPlaceholderIndex] = useState(SEARCH_PLACEHOLDERS.length - 1)
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false)
@@ -248,6 +249,13 @@ export function App() {
     palette.querySelectorAll('.siblingPane').forEach((node) => observer.observe(node))
     return () => observer.disconnect()
   }, [siblingViews, extensionView])
+
+  useEffect(() => {
+    let cancelled = false
+    window.nvm.getNevermindAuthStatus().then((status) => { if (!cancelled) setNevermindAuthed(status.authed) })
+    const stop = window.nvm.onNevermindAuthChanged((status) => setNevermindAuthed(status.authed))
+    return () => { cancelled = true; stop() }
+  }, [])
 
   useEffect(() => {
     const focusInput = () => {
@@ -1351,6 +1359,12 @@ export function App() {
     return <ExtensionViewRenderer
       view={view}
       aiChat={aiChat}
+      nevermindAuthed={nevermindAuthed}
+      onSignInToNevermind={async () => {
+        const result = await window.nvm.signInToNevermind()
+        if (result.ok) setNevermindAuthed(true)
+        else setToast({ message: `Sign-in failed: ${result.error || 'unknown'}`, tone: 'error' })
+      }}
       formValues={formValues}
       setFormValues={setFormValues}
       filterItems={filterExtensionItems}

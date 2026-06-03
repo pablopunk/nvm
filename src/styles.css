@@ -667,6 +667,59 @@ kbd {
   margin-top: 2px;
 }
 
+.nevermindSignInGate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  min-height: 280px;
+}
+
+.nevermindSignInGateInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  max-width: 360px;
+}
+
+.nevermindSignInGateInner h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.nevermindSignInGateInner p {
+  margin: 0;
+  color: var(--text-muted, rgba(255, 255, 255, 0.65));
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.nevermindSignInButton {
+  margin-top: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--surface-4, rgba(255, 255, 255, 0.12));
+  background: var(--surface-3, rgba(255, 255, 255, 0.08));
+  color: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.nevermindSignInButton:hover:not(:disabled) {
+  background: var(--surface-4, rgba(255, 255, 255, 0.14));
+  border-color: var(--surface-5, rgba(255, 255, 255, 0.2));
+}
+
+.nevermindSignInButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .chatInputRow textarea {
   display: block;
   width: 100%;

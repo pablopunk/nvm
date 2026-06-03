@@ -27,7 +27,15 @@ const FALLBACK: Record<string, Record<string, { input: number; output: number }>
   },
 };
 
-type ModelsDevModel = { id: string; cost?: { input?: number; output?: number } };
+type ModelsDevModel = {
+  id: string;
+  name?: string;
+  reasoning?: boolean;
+  attachment?: boolean;
+  modalities?: { input?: string[]; output?: string[] };
+  limit?: { context?: number; output?: number };
+  cost?: { input?: number; output?: number };
+};
 type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
 type ModelsDevApi = Record<string, ModelsDevProvider>;
 
@@ -75,6 +83,36 @@ export async function lookupModelCost(provider: string, modelId: string): Promis
   const cost = catalog[key]?.models?.[modelId]?.cost;
   if (!cost || cost.input == null || cost.output == null) return null;
   return { provider, modelId, inputUsdPerMtok: cost.input, outputUsdPerMtok: cost.output };
+}
+
+export type ModelDescriptor = {
+  id: string;
+  name: string;
+  contextWindow: number;
+  maxTokens: number;
+  reasoning: boolean;
+  input: string[];
+};
+
+const DEFAULT_DESCRIPTOR = {
+  contextWindow: 200_000,
+  maxTokens: 32_000,
+  reasoning: false,
+  input: ['text'],
+};
+
+export async function lookupModelDescriptor(provider: string, modelId: string): Promise<ModelDescriptor | null> {
+  const catalog = await fetchCatalog();
+  const m = catalog[modelsDevKey(provider)]?.models?.[modelId];
+  if (!m) return null;
+  return {
+    id: modelId,
+    name: m.name ?? modelId,
+    contextWindow: m.limit?.context ?? DEFAULT_DESCRIPTOR.contextWindow,
+    maxTokens: m.limit?.output ?? DEFAULT_DESCRIPTOR.maxTokens,
+    reasoning: m.reasoning ?? DEFAULT_DESCRIPTOR.reasoning,
+    input: m.modalities?.input ?? DEFAULT_DESCRIPTOR.input,
+  };
 }
 
 export async function listModelsForProvider(provider: string): Promise<string[]> {

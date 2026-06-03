@@ -33,6 +33,13 @@ const api: NevermindApi = {
   shortcutReady: () => ipcRenderer.invoke('palette:shortcut-ready'),
   requestCameraAccess: () => ipcRenderer.invoke('camera:request-access'),
   log: (level, message, data) => ipcRenderer.invoke('logs:write', level, message, data),
+  getNevermindAuthStatus: () => ipcRenderer.invoke('nevermind:auth-status'),
+  signInToNevermind: () => ipcRenderer.invoke('nevermind:sign-in'),
+  onNevermindAuthChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, status: { authed: boolean; email?: string }) => callback(status)
+    ipcRenderer.on('nevermind:auth-changed', listener)
+    return () => ipcRenderer.removeListener('nevermind:auth-changed', listener)
+  },
   onShown: (callback) => {
     const listener = () => callback()
     ipcRenderer.on('palette:shown', listener)

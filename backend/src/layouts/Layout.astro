@@ -19,5 +19,17 @@ const containerClass = width === 'wide' ? 'container container--wide' : width ==
     <main class={containerClass}>
       <slot />
     </main>
+    <script>
+      document.addEventListener('click', (event) => {
+        const target = event.target as Element;
+        document.querySelectorAll<HTMLDetailsElement>('details.dropdown[open]').forEach((el) => {
+          if (!el.contains(target)) el.open = false;
+        });
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        document.querySelectorAll<HTMLDetailsElement>('details.dropdown[open]').forEach((el) => { el.open = false; });
+      });
+    </script>
   </body>
 </html>

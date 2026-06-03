@@ -1110,6 +1110,10 @@ function invalidateExtensionRootItems() {
   paletteWindow.win?.webContents.send('root-items:changed')
 }
 
+function broadcastAuthChanged(status: { authed: boolean; email?: string }) {
+  paletteWindow.win?.webContents.send('nevermind:auth-changed', status)
+}
+
 function invalidateExtensionRootItemsForExtension(extension) {
   const cacheKey = extension.__filePath || extension.id
   extensionRootItemsCache.delete(cacheKey)
@@ -2322,6 +2326,7 @@ function createAccountExtension() {
             const { revoked } = await signOutFromNevermind()
             await nevermindAi?.disposeAllSessions?.()
             invalidateExtensionRootItems()
+            broadcastAuthChanged({ authed: false })
             const suffix = revoked ? '' : ' (token revoke failed — check connection)'
             return { toast: { message: `Logged out of ${existing.email}${suffix}`, tone: revoked ? 'default' as const : 'error' as const } }
           },
@@ -2342,6 +2347,7 @@ function createAccountExtension() {
         __handler: async () => {
           const result = await signInToNevermind()
           invalidateExtensionRootItems()
+          if (result.ok) broadcastAuthChanged({ authed: true, email: result.auth.email })
           const message = result.ok ? `Logged in as ${result.auth.email}` : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`
           return { toast: { message, tone: result.ok ? 'default' as const : 'error' as const } }
         },
@@ -3650,6 +3656,20 @@ app.whenReady().then(async () => {
   ipcMain.handle('ai-builder:start-chat', (_event, input: any = {}) => {
     const item = createDraftAiChat(String(input?.prompt || input?.query || ''))
     return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
+  })
+  ipcMain.handle('nevermind:auth-status', async () => {
+    const auth = await getNevermindAuth()
+    logInfo('nevermind.auth-status.check', { authed: Boolean(auth), email: auth?.email, userData: app.getPath('userData') }, { source: 'host', scope: 'nevermind' })
+    return auth ? { authed: true, email: auth.email } : { authed: false }
+  })
+  ipcMain.handle('nevermind:sign-in', async () => {
+    const result = await signInToNevermind()
+    if (result.ok) {
+      invalidateExtensionRootItems()
+      broadcastAuthChanged({ authed: true, email: result.auth.email })
+      return { ok: true, email: result.auth.email }
+    }
+    return { ok: false, error: 'error' in result ? result.error : 'unknown' }
   })
   ipcMain.handle('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
   ipcMain.handle('palette:set-mode', (_event, mode) => {

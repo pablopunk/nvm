@@ -2,15 +2,18 @@
 import Layout from '../layouts/Layout.astro';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { getActiveModelId, getFreeModelId, getActiveProvider, listKnownProviders } from '../lib/settings';
+import { getActiveModelId, getFreeModelId, getActiveProvider, listKnownProviders, ModelNotConfiguredError } from '../lib/settings';
 import { listModelsForProvider } from '../lib/pricing';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-const activeModel = await getActiveModelId();
-const freeModel = await getFreeModelId();
+const safeModel = async (fn: () => Promise<string>) => {
+  try { return await fn(); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
+};
+const activeModel = await safeModel(getActiveModelId);
+const freeModel = await safeModel(getFreeModelId);
 const activeProvider = await getActiveProvider();
 const providers = listKnownProviders();
 const models = await listModelsForProvider(activeProvider);
@@ -153,6 +156,9 @@ const models = await listModelsForProvider(activeProvider);
       const res = await fetch('/api/admin/users');
       const { users } = await res.json();
       const tbody = document.querySelector('#users-table tbody');
+      const iconMore = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>';
+      const iconPlus = '<svg class="dropdown__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>';
+      const iconShield = '<svg class="dropdown__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3z"/></svg>';
       tbody.innerHTML = users.map((u) => `
         <tr>
           <td>${u.email}</td>
@@ -164,9 +170,16 @@ const models = await listModelsForProvider(activeProvider);
           <td>${u.lastModel ? `<code>${u.lastModel}</code>` : '—'}</td>
           <td>${u.lastUsedAt ? new Date(u.lastUsedAt).toLocaleString() : '—'}</td>
           <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-          <td><button class="button toggle-role" data-id="${u.id}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">
-            ${u.role === 'admin' ? 'Demote' : 'Promote'}
-          </button></td>
+          <td>
+            <details class="dropdown">
+              <summary class="dropdown__trigger" aria-label="Actions">${iconMore}</summary>
+              <div class="dropdown__menu">
+                <button type="button" class="dropdown__item grant-credits" data-id="${u.id}" data-email="${u.email}">${iconPlus}Grant credits</button>
+                <div class="dropdown__separator"></div>
+                <button type="button" class="dropdown__item toggle-role" data-id="${u.id}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">${iconShield}${u.role === 'admin' ? 'Demote to user' : 'Promote to admin'}</button>
+              </div>
+            </details>
+          </td>
         </tr>
       `).join('');
       tbody.querySelectorAll('.toggle-role').forEach((btn) => {
@@ -177,6 +190,23 @@ const models = await listModelsForProvider(activeProvider);
             body: JSON.stringify({ userId: btn.dataset.id, role: btn.dataset.role }),
           });
           loadUsers();
+        });
+      });
+      tbody.querySelectorAll('.grant-credits').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const raw = prompt(`Grant credits to ${btn.dataset.email}\nPositive to add, negative to deduct. Append " free" to grant to the free pool.\nExample: 1000  or  500 free`);
+          if (!raw) return;
+          const [amountStr, kindRaw] = raw.trim().split(/\s+/);
+          const delta = Number(amountStr);
+          const kind = kindRaw === 'free' ? 'free' : 'paid';
+          if (!Number.isFinite(delta) || !delta) return alert('Invalid amount');
+          const res = await fetch('/api/admin/credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: btn.dataset.id, delta, kind }),
+          });
+          if (res.ok) loadUsers();
+          else alert('Failed to grant credits');
         });
       });
     }

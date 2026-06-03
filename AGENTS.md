@@ -6,6 +6,7 @@
 * Leverage existing primitives, formatters, and OS capabilities instead of creating one-off helpers.
 * Respect manual file changes and stop the app before editing `userState` to prevent overwrites.
 * Commit frequently and use history to guide changes.
+* Do not fix symtoms, fix diseases.
 
 ## Architecture
 

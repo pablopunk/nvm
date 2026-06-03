@@ -44,10 +44,8 @@ export async function revokeApiToken(userId: string, tokenId: string) {
     .where(and(eq(apiTokens.id, tokenId), eq(apiTokens.userId, userId)));
 }
 
-async function resolveBearer(authHeader: string | null) {
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice('Bearer '.length).trim();
-  if (!token.startsWith(TOKEN_PREFIX)) return null;
+async function resolveToken(token: string | null) {
+  if (!token || !token.startsWith(TOKEN_PREFIX)) return null;
   const hash = hashToken(token);
   const [row] = await db
     .select({ user: users, tokenId: apiTokens.id })
@@ -58,13 +56,35 @@ async function resolveBearer(authHeader: string | null) {
   return row ?? null;
 }
 
+function extractBearer(authHeader: string | null): string | null {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  return authHeader.slice('Bearer '.length).trim();
+}
+
+export type PatHeaderName = 'authorization' | 'x-api-key' | 'x-goog-api-key';
+
+export function extractPatFromHeaders(request: Request, headerName: PatHeaderName): string | null {
+  const raw = request.headers.get(headerName);
+  if (!raw) return null;
+  if (headerName === 'authorization') return extractBearer(raw);
+  return raw.trim();
+}
+
+export async function getUserFromHeaders(request: Request, headerName: PatHeaderName) {
+  const token = extractPatFromHeaders(request, headerName);
+  const row = await resolveToken(token);
+  if (!row) return null;
+  db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.tokenId)).catch(() => {});
+  return row.user;
+}
+
 export async function getUserFromBearer(authHeader: string | null) {
-  const row = await resolveBearer(authHeader);
+  const row = await resolveToken(extractBearer(authHeader));
   if (!row) return null;
   db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.tokenId)).catch(() => {});
   return row.user;
 }
 
 export async function getTokenAndUserFromBearer(authHeader: string | null) {
-  return resolveBearer(authHeader);
+  return resolveToken(extractBearer(authHeader));
 }

@@ -6,15 +6,19 @@ import {
   getFreeModelId,
   setActiveModelId,
   setFreeModelId,
+  ModelNotConfiguredError,
 } from '../../../lib/settings';
 import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
 
 export const GET: APIRoute = async ({ request }) => {
   if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
   const provider = await getActiveProvider();
+  const safe = async (fn: () => Promise<string>) => {
+    try { return await fn(); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
+  };
   return Response.json({
-    active: await getActiveModelId(),
-    free: await getFreeModelId(),
+    active: await safe(getActiveModelId),
+    free: await safe(getFreeModelId),
     models: await listModelsForProvider(provider),
   });
 };

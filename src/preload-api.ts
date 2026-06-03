@@ -122,6 +122,9 @@ export type NevermindApi = {
   shortcutReady: () => Promise<void>
   requestCameraAccess: () => Promise<{ ok: boolean; status: string }>
   log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => Promise<void>
+  getNevermindAuthStatus: () => Promise<{ authed: boolean; email?: string }>
+  signInToNevermind: () => Promise<{ ok: boolean; email?: string; error?: string }>
+  onNevermindAuthChanged: (callback: (status: { authed: boolean; email?: string }) => void) => () => void
   onShown: (callback: () => void) => () => void
   onShortcutShown: (callback: () => void) => () => void
   onHidden: (callback: () => void) => () => void

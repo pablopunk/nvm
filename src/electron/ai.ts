@@ -84,7 +84,6 @@ type SessionEntry = {
 type PiApi = any
 type TypeApi = any
 
-const DEFAULT_MODEL = 'gemini-3.5-flash'
 
 function isMessageUpdateEvent(event: AgentSessionEvent): event is MessageUpdateEvent {
   const assistantMessageEvent = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined
@@ -204,8 +203,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     ])
 
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
-    const requestedModelId = process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL
-    const { model, source: modelSource } = await resolveAiModelAndAuth(pi, ai, authStorage, requestedModelId)
+    const { model, source: modelSource } = await resolveAiModelAndAuth(pi, ai, authStorage)
     const modelRegistry = pi.ModelRegistry.inMemory(authStorage)
     onEvent?.({ type: 'debug', label: 'model-source', data: { source: modelSource, baseUrl: model.baseUrl } })
     const modelDebug = {
@@ -213,8 +211,6 @@ function createNevermindAi(options: NevermindAiOptions) {
       id: model.id,
       api: model.api,
       reasoning: model.reasoning,
-      thinkingLevelMap: model.thinkingLevelMap,
-      compat: model.compat,
     }
     onEvent?.({ type: 'debug', label: 'model', data: modelDebug })
 
@@ -287,7 +283,7 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
     import('@earendil-works/pi-ai') as Promise<any>,
   ])
   const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
-  const { model } = await resolveAiModelAndAuth(pi, ai, authStorage, process.env.NEVERMIND_AI_MODEL || DEFAULT_MODEL)
+  const { model } = await resolveAiModelAndAuth(pi, ai, authStorage)
   const resourceLoader = {
     getExtensions: () => ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
@@ -316,27 +312,49 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
 
 const NEVERMIND_PROVIDER_ID = 'nevermind'
 
-function buildNevermindModel(_ai: any, baseUrl: string, modelId: string) {
-  const trimmed = baseUrl.replace(/\/$/, '')
-  return {
-    id: modelId,
-    name: modelId,
-    api: 'openai-completions' as const,
-    provider: NEVERMIND_PROVIDER_ID,
-    baseUrl: `${trimmed}/api/v1`,
-    reasoning: false,
-    input: ['text', 'image'] as const,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 32000,
-  }
+type BackendDescriptor = {
+  id: string
+  name: string
+  contextWindow: number
+  maxTokens: number
+  reasoning: boolean
+  input: string[]
+  api: string
+  provider: string
+  baseUrl: string
 }
 
-async function resolveAiModelAndAuth(pi: any, ai: any, authStorage: any, modelId: string) {
+async function fetchActiveModelDescriptor(baseUrl: string, token: string): Promise<BackendDescriptor> {
+  const trimmed = baseUrl.replace(/\/$/, '')
+  const res = await fetch(`${trimmed}/api/v1/active-model`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (res.status === 401) throw new NevermindAuthRequiredError()
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`active-model fetch failed: ${res.status} ${body}`)
+  }
+  return (await res.json()) as BackendDescriptor
+}
+
+async function resolveAiModelAndAuth(_pi: any, _ai: any, authStorage: any) {
   const nevermind = await getNevermindAuth()
   if (!nevermind) throw new NevermindAuthRequiredError()
   authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token)
-  return { model: buildNevermindModel(ai, nevermind.baseUrl, modelId), source: 'nevermind' as const }
+  const descriptor = await fetchActiveModelDescriptor(nevermind.baseUrl, nevermind.token)
+  const model = {
+    id: descriptor.id,
+    name: descriptor.name,
+    api: descriptor.api as any,
+    provider: descriptor.provider,
+    baseUrl: descriptor.baseUrl,
+    reasoning: descriptor.reasoning,
+    input: descriptor.input as ReadonlyArray<string>,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: descriptor.contextWindow,
+    maxTokens: descriptor.maxTokens,
+  }
+  return { model, source: 'nevermind' as const }
 }
 
 async function createResourceLoader(pi: PiApi, { agentDir, workspaceDir, extensionApiPath, skillPath }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'>) {

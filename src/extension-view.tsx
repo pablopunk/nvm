@@ -18,6 +18,8 @@ type AiChatState = {
 export type ExtensionViewRendererProps = {
   view: CommandView
   aiChat: AiChatState
+  nevermindAuthed: boolean | null
+  onSignInToNevermind: () => void
   formValues: Record<string, string | boolean>
   setFormValues: React.Dispatch<React.SetStateAction<Record<string, string | boolean>>>
   filterItems: (items?: CommandItem[]) => CommandItem[]
@@ -56,6 +58,26 @@ function gridStyle(view: CommandView) {
 
 function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   return <EmptyState icon={<Search size={24} />} title={view.emptyView?.title || fallback} subtitle={view.emptyView?.subtitle} />
+}
+
+function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
+  const [busy, setBusy] = useState(false)
+  async function handle() {
+    if (busy) return
+    setBusy(true)
+    try { await onSignIn() } finally { setBusy(false) }
+  }
+  return (
+    <div className="nevermindSignInGate">
+      <div className="nevermindSignInGateInner">
+        <h2>Sign in to Nevermind</h2>
+        <p>Connect this device to your Nevermind account to use AI chats.</p>
+        <button className="nevermindSignInButton" type="button" onClick={handle} disabled={busy}>
+          {busy ? 'Opening browser…' : 'Sign in to Nevermind'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
@@ -152,7 +174,7 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
   return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={muted} controls={controls} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
 }
 
-export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {
+export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInToNevermind, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {
   function pagination() {
     if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
     return <button className="loadMoreButton" type="button" onClick={() => runAction(view.pagination!.onLoadMore!)}>Load More</button>
@@ -186,6 +208,9 @@ export function ExtensionViewRenderer({ view, aiChat, formValues, setFormValues,
   }
 
   if (view.type === 'chat') {
+    if (view.aiChat && nevermindAuthed === false) {
+      return <NevermindSignInGate onSignIn={onSignInToNevermind} />
+    }
     const messages = (view.aiChat ? aiChat.messages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
     const input = view.aiChat ? <form className="chatInputRow" onSubmit={(event) => { event.preventDefault(); sendAiPrompt(aiChat.input) }}><textarea ref={aiChat.inputRef} rows={1} value={aiChat.input} onChange={(event) => aiChat.setInput(event.target.value)} onInput={(event) => aiChat.resizeInput(event.currentTarget)} onKeyDown={(event) => { if (event.key !== 'Enter') return; event.stopPropagation(); if (!event.shiftKey) { event.preventDefault(); sendAiPrompt(aiChat.input) } }} placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'} />{aiChat.busy ? <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => abortAiChat(view.chatId)}><Square size={14} fill="currentColor" /></button> : <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiChat.input.trim()}><CornerDownLeft size={16} /></button>}</form> : null
     return <ChatView messages={messages} isBusy={aiChat.busy} input={input} messagesRef={view.aiChat ? aiChat.messagesRef : undefined} />
