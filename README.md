@@ -1,5 +1,7 @@
 # Nevermind
 
+> [!IMPORTANT]  
+> This app is not even in Alpha, expect bugs.
 
 <p align="center">
   <img src="https://github.com/pablopunk/nvm/blob/main/build/screenshot.jpg?raw=true"  />
