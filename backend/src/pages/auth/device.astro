@@ -1,4 +1,5 @@
 ---
+import Layout from '../../layouts/Layout.astro';
 import { eq, and, gt } from 'drizzle-orm';
 import { getSessionFromCookies } from '../../lib/workos';
 import { db } from '../../db/client';
@@ -21,47 +22,48 @@ const state = !code
       ? 'already'
       : 'ready';
 ---
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<title>Nevermind · Connect device</title>
-	</head>
-	<body style="font-family: system-ui, sans-serif; max-width: 560px; margin: 4em auto; padding: 0 1em;">
-		<h1>Connect a device</h1>
-		<p>Signed in as <code>{user?.email}</code></p>
+<Layout title="Nevermind · Connect device" width="narrow">
+  <h1>Connect a device</h1>
+  <p class="muted">Signed in as <code>{user?.email}</code></p>
 
-		{state === 'missing' && <p>Missing device code in URL.</p>}
-		{state === 'expired' && <p>This code has expired. Open the Nevermind app and try again.</p>}
-		{state === 'already' && <p>This device is already approved — return to the app.</p>}
-		{state === 'ready' && (
-			<>
-				<p>Approve "<strong>{row?.deviceLabel}</strong>" to sign it into your Nevermind account.</p>
-				<form id="approve-form">
-					<label>Device label: <input name="label" value={row?.deviceLabel} /></label><br /><br />
-					<button type="submit">Approve device</button>
-					<span id="approve-status" style="margin-left:0.5em;"></span>
-				</form>
-				<script is:inline define:vars={{ code }}>
-					document.getElementById('approve-form').addEventListener('submit', async (e) => {
-						e.preventDefault();
-						const label = e.target.elements.label.value;
-						const status = document.getElementById('approve-status');
-						status.textContent = 'Approving…';
-						const res = await fetch('/api/auth/device/approve', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ code, label }),
-						});
-						if (res.ok) {
-							status.style.color = '#080';
-							status.textContent = 'Approved — return to the app.';
-						} else {
-							status.style.color = '#a00';
-							status.textContent = await res.text();
-						}
-					});
-				</script>
-			</>
-		)}
-	</body>
-</html>
+  <div class="section card">
+    {state === 'missing' && <p>Missing device code in URL.</p>}
+    {state === 'expired' && <p>This code has expired. Open the Nevermind app and try again.</p>}
+    {state === 'already' && <p>This device is already approved — return to the app.</p>}
+    {state === 'ready' && (
+      <>
+        <p>Approve <strong>{row?.deviceLabel}</strong> to sign it into your Nevermind account.</p>
+        <form id="approve-form" class="stack">
+          <label class="field">Device label
+            <input class="input" name="label" value={row?.deviceLabel} />
+          </label>
+          <div class="row">
+            <button class="button button--primary" type="submit">Approve device</button>
+            <span id="approve-status" class="status"></span>
+          </div>
+        </form>
+        <script is:inline define:vars={{ code }}>
+          document.getElementById('approve-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const label = e.target.elements.label.value;
+            const status = document.getElementById('approve-status');
+            status.className = 'status';
+            status.textContent = 'Approving…';
+            const res = await fetch('/api/auth/device/approve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code, label }),
+            });
+            if (res.ok) {
+              status.className = 'status status--ok';
+              status.textContent = 'Approved — return to the app.';
+            } else {
+              status.className = 'status status--err';
+              status.textContent = await res.text();
+            }
+          });
+        </script>
+      </>
+    )}
+  </div>
+</Layout>

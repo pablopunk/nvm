@@ -1,20 +1,19 @@
 ---
+import Layout from '../layouts/Layout.astro';
 import { getSessionFromCookies } from '../lib/workos';
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 ---
-
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<title>Nevermind</title>
-	</head>
-	<body>
-		<h1>Nevermind</h1>
-		{session ? (
-			<p>Signed in as {session.user.email}. <a href="/dashboard">Dashboard</a></p>
-		) : (
-			<p><a href="/api/auth/signin">Sign in</a></p>
-		)}
-	</body>
-</html>
+<Layout title="Nevermind" width="narrow">
+  <h1>Nevermind</h1>
+  <p class="muted">Bring-your-own-credits gateway for AI desktop apps.</p>
+  <div class="section">
+    {session ? (
+      <div class="stack">
+        <p>Signed in as <code>{session.user.email}</code>.</p>
+        <div class="row"><a class="button button--primary" href="/profile">Open dashboard</a></div>
+      </div>
+    ) : (
+      <div class="row"><a class="button button--primary" href="/api/auth/signin">Sign in</a></div>
+    )}
+  </div>
+</Layout>

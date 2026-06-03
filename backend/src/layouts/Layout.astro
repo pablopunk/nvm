@@ -1,0 +1,23 @@
+---
+import '../styles/app.css';
+
+interface Props {
+  title: string;
+  width?: 'default' | 'wide' | 'narrow';
+}
+
+const { title, width = 'default' } = Astro.props;
+const containerClass = width === 'wide' ? 'container container--wide' : width === 'narrow' ? 'container container--narrow' : 'container';
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main class={containerClass}>
+      <slot />
+    </main>
+  </body>
+</html>

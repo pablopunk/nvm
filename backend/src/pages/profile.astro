@@ -1,4 +1,5 @@
 ---
+import Layout from '../layouts/Layout.astro';
 import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
@@ -14,66 +15,74 @@ const balances = user ? await getBalances(user.id) : { free: 0, paid: 0, total: 
 const tokens = user ? await listApiTokens(user.id) : [];
 const isAdmin = user?.role === 'admin';
 ---
+<Layout title="Nevermind · Profile">
+  <nav class="nav">
+    <a href="/profile" aria-current="page">Profile</a>
+    {isAdmin && <a href="/admin">Admin</a>}
+    <span class="spacer"></span>
+    <form method="post" action="/api/auth/signout"><button class="button" type="submit">Sign out</button></form>
+  </nav>
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<title>Nevermind · Profile</title>
-	</head>
-	<body>
-		<nav>
-			<a href="/profile">Profile</a>
-			{isAdmin && <> · <a href="/admin">Admin</a></>}
-		</nav>
-		<h1>Profile</h1>
-		<p>Email: {user?.email}</p>
-		<p>Plan: {user?.plan}</p>
-		<p>Role: {user?.role}</p>
-		<p>Balance: <strong>{balances.total}</strong> credits ({balances.free} free · {balances.paid} paid)</p>
-		<form method="post" action="/api/auth/signout">
-			<button type="submit">Sign out</button>
-		</form>
+  <h1>Profile</h1>
+  <p class="muted">Account, balance, and API tokens.</p>
 
-		<h2>API tokens</h2>
-		<p>Use these to call the API directly. The full token is shown only once.</p>
-		<form id="create-token-form">
-			<input type="text" name="name" placeholder="Token name (e.g. My Mac)" required />
-			<button type="submit">Create token</button>
-		</form>
-		<pre id="new-token" style="display:none; background:#eef; padding:8px;"></pre>
-		<ul id="token-list">
-			{tokens.map((t) => (
-				<li data-id={t.id}>
-					<code>{t.prefix}…</code> · {t.name} · created {new Date(t.createdAt).toLocaleString()}
-					{t.lastUsedAt ? ` · last used ${new Date(t.lastUsedAt).toLocaleString()}` : ' · never used'}
-					<button class="revoke" data-id={t.id}>Revoke</button>
-				</li>
-			))}
-		</ul>
+  <div class="section stat-grid">
+    <div class="stat"><div class="v">{balances.total}</div><div class="l">Credits</div></div>
+    <div class="stat"><div class="v">{balances.free}</div><div class="l">Free</div></div>
+    <div class="stat"><div class="v">{balances.paid}</div><div class="l">Paid</div></div>
+    <div class="stat"><div class="v">{user?.plan}</div><div class="l">Plan</div></div>
+  </div>
 
-		<script is:inline>
-			document.getElementById('create-token-form').addEventListener('submit', async (e) => {
-				e.preventDefault();
-				const fd = new FormData(e.target);
-				const res = await fetch('/api/tokens', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ name: fd.get('name') }),
-				});
-				if (!res.ok) return alert('Failed to create token');
-				const data = await res.json();
-				const el = document.getElementById('new-token');
-				el.style.display = 'block';
-				el.textContent = `Save this token now — it will not be shown again:\n${data.token}`;
-				setTimeout(() => location.reload(), 100);
-			});
-			document.querySelectorAll('.revoke').forEach((btn) => {
-				btn.addEventListener('click', async () => {
-					if (!confirm('Revoke this token?')) return;
-					await fetch(`/api/tokens/${btn.dataset.id}`, { method: 'DELETE' });
-					location.reload();
-				});
-			});
-		</script>
-	</body>
-</html>
+  <div class="section card">
+    <h3>Account</h3>
+    <p style="margin:0"><code>{user?.email}</code> · {user?.role}</p>
+  </div>
+
+  <div class="section">
+    <h2>API tokens</h2>
+    <p class="muted">Use these to call the API directly. The full token is shown only once.</p>
+    <form id="create-token-form" class="row" style="margin-bottom:12px;">
+      <input class="input" type="text" name="name" placeholder="Token name (e.g. My Mac)" required />
+      <button class="button button--primary" type="submit">Create token</button>
+    </form>
+    <pre id="new-token" style="display:none;"></pre>
+    <ul class="list-clean">
+      {tokens.map((t) => (
+        <li data-id={t.id}>
+          <code>{t.prefix}…</code>
+          <span>{t.name}</span>
+          <span class="muted">· created {new Date(t.createdAt).toLocaleString()}</span>
+          <span class="muted">{t.lastUsedAt ? `· last used ${new Date(t.lastUsedAt).toLocaleString()}` : '· never used'}</span>
+          <span class="spacer" style="flex:1"></span>
+          <button class="button button--danger revoke" data-id={t.id}>Revoke</button>
+        </li>
+      ))}
+      {tokens.length === 0 && <li class="muted">No tokens yet.</li>}
+    </ul>
+  </div>
+
+  <script is:inline>
+    document.getElementById('create-token-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await fetch('/api/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fd.get('name') }),
+      });
+      if (!res.ok) return alert('Failed to create token');
+      const data = await res.json();
+      const el = document.getElementById('new-token');
+      el.style.display = 'block';
+      el.textContent = `Save this token now — it will not be shown again:\n${data.token}`;
+      setTimeout(() => location.reload(), 100);
+    });
+    document.querySelectorAll('.revoke').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Revoke this token?')) return;
+        await fetch(`/api/tokens/${btn.dataset.id}`, { method: 'DELETE' });
+        location.reload();
+      });
+    });
+  </script>
+</Layout>
