@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { CornerDownLeft, Search, Square } from 'lucide-react'
+import { CornerDownLeft, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
 import { RootCommandList } from './command-list'
@@ -67,17 +67,7 @@ function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
     setBusy(true)
     try { await onSignIn() } finally { setBusy(false) }
   }
-  return (
-    <div className="nevermindSignInGate">
-      <div className="nevermindSignInGateInner">
-        <h2>Sign in to Nevermind</h2>
-        <p>Connect this device to your Nevermind account to use AI chats.</p>
-        <button className="nevermindSignInButton" type="button" onClick={handle} disabled={busy}>
-          {busy ? 'Opening browser…' : 'Sign in to Nevermind'}
-        </button>
-      </div>
-    </div>
-  )
+  return <EmptyState icon={<LogIn size={24} />} title="Sign in to Nevermind" subtitle="Connect this device to your Nevermind account to use AI chats." action={{ value: 'sign-in', icon: <LogIn size={16} />, title: busy ? 'Opening browser…' : 'Sign in to Nevermind', onSelect: handle }} />
 }
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {

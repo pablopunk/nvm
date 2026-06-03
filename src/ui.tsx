@@ -13,7 +13,7 @@ export type KeyHintsProps = { shortcut?: string; extras?: string[]; showEnter?: 
 export type ItemAppearance = { foreground?: string }
 export type CommandRowProps = { value: string; icon: ReactNode; title: string; subtitle?: string; accessories?: { text?: string; icon?: ReactNode }[]; shortcut?: string; extras?: string[]; className?: string; appearance?: ItemAppearance; selectedOnlyShortcut?: boolean; onSelect: () => void }
 export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: string; video?: string; actionHint?: ReactNode; appearance?: ItemAppearance; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
-export type EmptyStateProps = { icon: ReactNode; title: string; subtitle?: string }
+export type EmptyStateProps = { icon: ReactNode; title: string; subtitle?: string; action?: ActionPanelRow }
 export type ToastProps = { message: string; tone?: 'default' | 'error' }
 export type PreviewViewProps = { content?: ReactNode; image?: string; video?: string; poster?: string; actions?: ReactNode }
 export type ProgressViewProps = { steps: { title: string; status?: string }[] }
@@ -65,8 +65,8 @@ export function CommandTile({ value, title, subtitle, image, video, actionHint, 
   return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} data-foreground={appearance?.foreground} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia">{video ? <video src={video} poster={image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : image ? <img src={image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
 }
 
-export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
-  return <div className="empty" role="status">{icon}<strong>{title}</strong>{subtitle ? <span>{subtitle}</span> : null}</div>
+export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
+  return <div className="empty" role="status">{icon}<strong>{title}</strong>{subtitle ? <span>{subtitle}</span> : null}{action ? <CommandRow value={action.value} icon={action.icon} title={action.title} onSelect={action.onSelect} /> : null}</div>
 }
 
 export function Toast({ message, tone }: ToastProps) {

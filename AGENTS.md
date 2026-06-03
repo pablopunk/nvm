@@ -10,10 +10,10 @@
 
 ## Architecture
 
+* **Dogfood the Extension API as the app's primary development model. Treat extension APIs as declarative host points, not backdoors; fix missing primitives in the API instead of bypassing it with bespoke native code, and keep commands and provider items distinct to avoid duplication in search.**
 * Keep files small and focused. Refactor slow patterns when encountered.
 * Fix shared models and lifecycles at the source rather than patching UI behavior.
 * Use intent-named capabilities in `src/electron/os.ts`. Follow `src/docs/os-architecture.md`.
-* Dogfood the Extension API as the app's primary development model whenever practical. Treat extension APIs as declarative host points, not backdoors; fix missing primitives in the API instead of bypassing it with bespoke native code, and keep commands and provider items distinct to avoid duplication in search.
 * Maintain native behavioral contracts (shortcuts, icons, async lifecycle) when migrating features to extensions.
 * Normalize action results so failures appear as UI error views rather than raw logs.
 * AI-generated code is durable. AI writes are restricted to extension files relevant to the current chat context.
