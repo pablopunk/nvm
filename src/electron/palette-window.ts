@@ -47,6 +47,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let win: BrowserWindow | null = null
   let ignorePaletteBlurUntil = 0
   let pendingShowOnReady = false
+  let currentPaletteMode: PaletteMode = 'default'
 
   function debugLog(message: string, data?: unknown) {
     logger.debug(message, data, { source: 'host', scope: 'palette-window' })
@@ -130,7 +131,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   function setPaletteSizeForMode(mode: PaletteMode = 'default') {
-    if (!win) return
+    if (!win || mode === currentPaletteMode) return
+    currentPaletteMode = mode
     const size = mode === 'preview' ? PREVIEW_WINDOW_SIZE : mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
     win.setSize(size.width, size.height, false)
     if (win.isVisible()) centerWindow()

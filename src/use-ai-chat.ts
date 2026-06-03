@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CommandView } from './model'
 
 export type AiChatEvent = { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }
@@ -9,17 +9,42 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   const [messages, setMessages] = useState<NonNullable<CommandView['messages']>>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const pendingDeltaRef = useRef('')
+  const deltaFrameRef = useRef<number | null>(null)
+
+  function appendDeltaToMessages(current: NonNullable<CommandView['messages']>, text: string) {
+    const last = current[current.length - 1]
+    if (last?.role === 'assistant') return [...current.slice(0, -1), { ...last, content: `${last.content}${text}` }]
+    return [...current, { role: 'assistant' as const, content: text }]
+  }
+
+  function cancelDeltaFlush() {
+    if (deltaFrameRef.current == null) return
+    cancelAnimationFrame(deltaFrameRef.current)
+    deltaFrameRef.current = null
+  }
+
+  function flushDelta() {
+    deltaFrameRef.current = null
+    const text = pendingDeltaRef.current
+    pendingDeltaRef.current = ''
+    if (text) setMessages((current) => appendDeltaToMessages(current, text))
+  }
+
+  function appendPendingDelta(current: NonNullable<CommandView['messages']>) {
+    const text = pendingDeltaRef.current
+    pendingDeltaRef.current = ''
+    cancelDeltaFlush()
+    return text ? appendDeltaToMessages(current, text) : current
+  }
 
   function appendMessage(role: 'user' | 'assistant' | 'system', content: string) {
-    setMessages((current) => [...current, { role, content }])
+    setMessages((current) => [...appendPendingDelta(current), { role, content }])
   }
 
   function appendDelta(text: string) {
-    setMessages((current) => {
-      const last = current[current.length - 1]
-      if (last?.role === 'assistant') return [...current.slice(0, -1), { ...last, content: `${last.content}${text}` }]
-      return [...current, { role: 'assistant', content: text }]
-    })
+    pendingDeltaRef.current += text
+    if (deltaFrameRef.current == null) deltaFrameRef.current = requestAnimationFrame(flushDelta)
   }
 
   function resizeInput(textarea = inputRef.current) {
@@ -45,6 +70,8 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   }
 
   async function openChat(view: CommandView) {
+    pendingDeltaRef.current = ''
+    cancelDeltaFlush()
     setMessages(view.messages || [])
     setInput('')
     focusInput()
@@ -64,6 +91,8 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   useLayoutEffect(() => {
     resizeInput()
   }, [input])
+
+  useEffect(() => () => cancelDeltaFlush(), [])
 
   return { messages, setMessages, input, setInput, busy, setBusy, messagesRef, inputRef, appendMessage, appendDelta, resizeInput, focusInput, sendPrompt, openChat, handleEvent }
 }

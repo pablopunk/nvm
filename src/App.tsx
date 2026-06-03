@@ -26,7 +26,7 @@ import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
 import { actionDefinition, actionDescription, actionsFromPanel, actionPanelFromActions, canCustomizeCommandAction, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
-import type { NevermindApi, ShortcutRecord } from './preload-api'
+import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api'
 
 type ActionKind =
   | 'open-url'
@@ -143,6 +143,7 @@ export function App() {
   const aiChatIdRef = useRef<string | undefined>(undefined)
   const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined)
   const runningViewActionsRef = useRef(new Set<string>())
+  const paletteModeRef = useRef<PaletteMode | null>(null)
   const [query, setQuery] = useState('')
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
@@ -411,8 +412,11 @@ export function App() {
     const previousAiChatId = lastVisibleAiChatIdRef.current
     if (previousAiChatId && (!isAiChat || previousAiChatId !== extensionView?.chatId)) void window.nvm.aiChatExited(previousAiChatId)
     lastVisibleAiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
-    const mode = previewFor || (isLarge && !isActionPanelOpen) ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
-    window.nvm.setPaletteMode(mode)
+    const mode: PaletteMode = previewFor || (isLarge && !isActionPanelOpen) ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
+    if (paletteModeRef.current !== mode) {
+      paletteModeRef.current = mode
+      window.nvm.setPaletteMode(mode)
+    }
   }, [actionSubmenuFor, extensionItemOptionsFor, extensionView, previewFor, siblingViews.length])
 
   useEffect(() => {
@@ -431,10 +435,11 @@ export function App() {
 
   useEffect(() => {
     for (const action of actions) {
-      if (action.kind !== 'app' || !action.app?.path || requestedIcons.current.has(action.id)) continue
+      const appPath = appPathForIcon(action)
+      if (!appPath || requestedIcons.current.has(action.id)) continue
 
       requestedIcons.current.add(action.id)
-      window.nvm.getAppIcon(action.app.path).then((iconUrl) => {
+      window.nvm.getAppIcon(appPath).then((iconUrl) => {
         setIconUrls((current) => ({ ...current, [action.id]: iconUrl }))
       })
     }
@@ -1308,8 +1313,13 @@ export function App() {
     if (action) runViewAction(action)
   }
 
+  function appPathForIcon(action: Action | null | undefined) {
+    const candidate = action?.app?.path || action?.rootAction?.path
+    return candidate?.endsWith('.app') ? candidate : null
+  }
+
   function diskPathForAction(action: Action | null | undefined) {
-    return action?.filePath || action?.app?.path || null
+    return action?.filePath || action?.app?.path || action?.rootAction?.path || null
   }
 
   function diskPathForItem(item: ExtensionViewItem | null | undefined) {

@@ -209,6 +209,7 @@ function recordLearningReview(chatId: string) {
 }
 
 const appIconCache = new Map<string, string | null>()
+const appIconLoadPromises = new Map<string, Promise<string | null>>()
 const extensionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
 const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
@@ -445,6 +446,8 @@ function recordRecent(action: any) {
 async function getAppIconDataUrl(appPath) {
   if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
   if (appIconCache.has(appPath)) return appIconCache.get(appPath)
+  const inFlight = appIconLoadPromises.get(appPath)
+  if (inFlight) return inFlight
 
   const promise = (async () => {
     try {
@@ -463,9 +466,10 @@ async function getAppIconDataUrl(appPath) {
     }
   })()
 
-  const result = await promise
+  appIconLoadPromises.set(appPath, promise)
+  const result = await promise.finally(() => appIconLoadPromises.delete(appPath))
   if (result) appIconCache.set(appPath, result)
-  else appIconCache.delete(appPath)
+  else appIconCache.set(appPath, null)
   return result
 }
 
@@ -2118,13 +2122,6 @@ function appRootItem(item) {
   return { id, title: item.name, subtitle: 'Launch application', aliases: actionAliases(`extension-root:nevermind.apps:${id}`), icon: 'app', image: undefined as string | undefined, score: 30, dismissAfterRun: 'auto', customizable: true, primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
 
-async function attachAppIcons(items, iconFor = getAppIconDataUrl) {
-  await Promise.all(items.map(async (item) => {
-    const iconUrl = await iconFor(item.primaryAction?.path)
-    if (iconUrl) item.image = iconUrl
-  }))
-}
-
 function fileRootItem(item) {
   return { id: `file:${item.path}`, title: item.name, subtitle: item.displayPath, icon: 'folder', score: 4, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
 }
@@ -2183,15 +2180,11 @@ function createAppsExtension() {
     title: 'Applications',
     permissions: ['desktop.apps'] as const,
     commands: [],
-    async rootItems(ctx) {
-      const items = ctx.desktop.apps.list().map(appRootItem)
-      await attachAppIcons(items, ctx.desktop.apps.icon)
-      return items
+    rootItems(ctx) {
+      return ctx.desktop.apps.list().map(appRootItem)
     },
-    async searchItems(ctx, query) {
-      const matches = ctx.desktop.apps.list().map(appRootItem).filter((item) => rankAction(item, query))
-      await attachAppIcons(matches.slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT), ctx.desktop.apps.icon)
-      return matches
+    searchItems(ctx, query) {
+      return ctx.desktop.apps.list().map(appRootItem).filter((item) => rankAction(item, query))
     },
   }
 }
