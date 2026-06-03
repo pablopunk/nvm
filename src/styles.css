@@ -10,13 +10,13 @@
   --radius-sm: 8px;
   --radius-xs: 4px;
 
-  --fs-2xs: 12px;
+  --fs-2xs: 11px;
   --fs-xs: 12px;
-  --fs-sm: 12px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 24px;
+  --fs-sm: 13px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 16px;
+  --fs-2xl: 18px;
 
   --surface-1: rgba(255, 255, 255, 0.04);
   --surface-2: rgba(255, 255, 255, 0.06);
@@ -98,6 +98,13 @@ a[href] {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
   border-radius: var(--radius-xs);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[cmdk-input]:focus-visible {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -398,7 +405,7 @@ kbd {
   align-items: center;
   width: 100%;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 8px 12px;
   color: var(--text-primary);
   background: transparent;
@@ -776,7 +783,7 @@ kbd {
   max-height: 120px;
   box-sizing: border-box;
   border: 1px solid var(--surface-4);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 8px 44px 8px 12px;
   color: var(--text-primary);
   background: var(--surface-sunken);
