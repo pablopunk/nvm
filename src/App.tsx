@@ -20,7 +20,7 @@ import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } 
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
 import { iconFor, iconForAction, iconForItem, type CommandIconName } from './command-icons'
 import { useExtensionNavigation } from './use-extension-navigation'
-import { useAiChat } from './use-ai-chat'
+import { useAiChat, type AiLimitState } from './use-ai-chat'
 import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
@@ -341,11 +341,18 @@ export function App() {
     const stopAi = window.nvm.onAiChatEvent((event) => {
       if (event.type === 'debug') window.nvm.log('debug', `Nevermind AI: ${event.label || ''}`, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
-      if (event.type === 'start') aiChat.setBusy(true)
+      if (event.type === 'start') {
+        aiChat.setLimit(null)
+        aiChat.setBusy(true)
+      }
       if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') aiChat.setBusy(false)
       if (event.type === 'delta' && event.text) aiChat.appendDelta(event.text)
       if (event.type === 'tool_start' && event.name) aiChat.appendMessage('system', event.name)
-      if (event.type === 'error' && event.message) aiChat.appendMessage('system', event.message)
+      if (event.type === 'error') {
+        const limit = event.data as AiLimitState | undefined
+        if (limit?.title && limit.message) aiChat.setLimit(limit)
+        else if (event.message) aiChat.appendMessage('system', event.message)
+      }
     })
     return () => {
       stopShown()

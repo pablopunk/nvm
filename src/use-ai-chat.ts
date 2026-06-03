@@ -1,7 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CommandView } from './model'
 
+export type AiLimitState = { kind?: string; title: string; message: string; actionTitle?: string; dashboardUrl?: string }
 export type AiChatEvent = { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }
+
+function limitStateFromEvent(event: AiChatEvent): AiLimitState | null {
+  const data = event.data as AiLimitState | undefined
+  if (!data || typeof data !== 'object' || !data.title || !data.message) return null
+  return data
+}
 
 export function useAiChat(sendMessage: (message: string, chatId?: string) => Promise<void>, resetChat: (chatId?: string) => Promise<void>) {
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -9,6 +16,7 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   const [messages, setMessages] = useState<NonNullable<CommandView['messages']>>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [limit, setLimit] = useState<AiLimitState | null>(null)
   const pendingDeltaRef = useRef('')
   const deltaFrameRef = useRef<number | null>(null)
 
@@ -64,6 +72,7 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   async function sendPrompt(message: string, chatId?: string) {
     const trimmed = message.trim()
     if (!trimmed || busy) return
+    setLimit(null)
     appendMessage('user', trimmed)
     setInput('')
     try {
@@ -78,6 +87,7 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
     pendingDeltaRef.current = ''
     cancelDeltaFlush()
     setMessages(view.messages || [])
+    setLimit(null)
     setInput('')
     focusInput()
     if (view.initialPrompt) await sendPrompt(view.initialPrompt, view.chatId)
@@ -86,11 +96,18 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
 
   function handleEvent(event: AiChatEvent, activeChatId?: string) {
     if (event.chatId && event.chatId !== activeChatId) return
-    if (event.type === 'start') setBusy(true)
+    if (event.type === 'start') {
+      setLimit(null)
+      setBusy(true)
+    }
     if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') setBusy(false)
     if (event.type === 'delta' && event.text) appendDelta(event.text)
     if (event.type === 'tool_start' && event.name) appendMessage('system', `Using ${event.name}…`)
-    if (event.type === 'error' && event.message) appendMessage('system', event.message)
+    if (event.type === 'error') {
+      const nextLimit = limitStateFromEvent(event)
+      if (nextLimit) setLimit(nextLimit)
+      else if (event.message) appendMessage('system', event.message)
+    }
   }
 
   useLayoutEffect(() => {
@@ -99,5 +116,5 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
 
   useEffect(() => () => cancelDeltaFlush(), [])
 
-  return { messages, setMessages, input, setInput, busy, setBusy, messagesRef, inputRef, appendMessage, appendDelta, resizeInput, focusInput, sendPrompt, openChat, handleEvent }
+  return { messages, setMessages, input, setInput, busy, setBusy, limit, setLimit, messagesRef, inputRef, appendMessage, appendDelta, resizeInput, focusInput, sendPrompt, openChat, handleEvent }
 }

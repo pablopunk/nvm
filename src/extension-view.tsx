@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { CornerDownLeft, LogIn, Search, Square } from 'lucide-react'
+import { CornerDownLeft, CreditCard, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
+import type { AiLimitState } from './use-ai-chat'
 import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
 import { RootCommandList } from './command-list'
 import { iconForItem } from './command-icons'
@@ -10,6 +11,7 @@ type AiChatState = {
   input: string
   setInput: (value: string) => void
   busy: boolean
+  limit: AiLimitState | null
   inputRef: React.RefObject<HTMLTextAreaElement | null>
   messagesRef: React.RefObject<HTMLDivElement | null>
   resizeInput: (textarea?: HTMLTextAreaElement | null) => void
@@ -68,6 +70,16 @@ function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
     try { await onSignIn() } finally { setBusy(false) }
   }
   return <EmptyState icon={<LogIn size={24} />} title="Sign in to Nevermind" subtitle="Connect this device to your Nevermind account to use AI chats." action={{ value: 'sign-in', icon: <LogIn size={16} />, title: busy ? 'Opening browser…' : 'Sign in to Nevermind', onSelect: handle }} />
+}
+
+function NevermindLimitGate({ limit, runAction }: { limit: AiLimitState; runAction: (action: CommandAction) => void }) {
+  const action = limit.dashboardUrl ? {
+    value: 'open-dashboard',
+    icon: <CreditCard size={16} />,
+    title: limit.actionTitle || 'Open Dashboard',
+    onSelect: () => runAction({ type: 'openUrl', title: limit.actionTitle || 'Open Dashboard', url: limit.dashboardUrl }),
+  } : undefined
+  return <EmptyState icon={<CreditCard size={24} />} title={limit.title} subtitle={limit.message} action={action} />
 }
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
@@ -200,6 +212,9 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
   if (view.type === 'chat') {
     if (view.aiChat && nevermindAuthed === false) {
       return <NevermindSignInGate onSignIn={onSignInToNevermind} />
+    }
+    if (view.aiChat && aiChat.limit) {
+      return <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />
     }
     const messages = (view.aiChat ? aiChat.messages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
     const input = view.aiChat ? <form className="chatInputRow" onSubmit={(event) => { event.preventDefault(); sendAiPrompt(aiChat.input) }}><textarea ref={aiChat.inputRef} rows={1} value={aiChat.input} onChange={(event) => aiChat.setInput(event.target.value)} onInput={(event) => aiChat.resizeInput(event.currentTarget)} onKeyDown={(event) => { if (event.key !== 'Enter') return; event.stopPropagation(); if (!event.shiftKey) { event.preventDefault(); sendAiPrompt(aiChat.input) } }} placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'} />{aiChat.busy ? <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => abortAiChat(view.chatId)}><Square size={14} fill="currentColor" /></button> : <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiChat.input.trim()}><CornerDownLeft size={16} /></button>}</form> : null

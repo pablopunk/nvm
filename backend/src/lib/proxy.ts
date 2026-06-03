@@ -20,6 +20,8 @@ import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from '.
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
 
+const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
+
 export type UsageTokens = { inputTokens: number; outputTokens: number };
 
 export type ProxyConfig = {
@@ -95,7 +97,7 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
   const balances = await getBalances(user.id);
   if (balances.total <= 0) {
     return Response.json(
-      { error: { type: 'insufficient_credits', message: 'No credits remaining' } },
+      { error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: DASHBOARD_URL } },
       { status: 402 },
     );
   }
@@ -211,7 +213,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     const estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
     if (estimatedCredits > routing.balanceTotal) {
       return Response.json(
-        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceTotal } },
+        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceTotal, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
       );
     }

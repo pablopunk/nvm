@@ -17,6 +17,17 @@ type AiEvent = {
   isError?: boolean
 }
 
+type AiLimitNotice = {
+  kind: 'insufficient_credits' | 'rate_limited' | 'prompt_too_large'
+  title: string
+  message: string
+  actionTitle?: string
+  dashboardUrl?: string
+  retryAfterSec?: number
+}
+
+const NEVERMIND_DASHBOARD_URL = 'https://nvm.fyi/dashboard'
+
 type ActiveChat = {
   id?: string
   title?: string
@@ -76,6 +87,11 @@ type ToolExecutionEndEvent = AgentSessionEvent & {
   isError: boolean
 }
 
+type AssistantMessageEndEvent = AgentSessionEvent & {
+  type: 'message_end'
+  message: { role: 'assistant'; stopReason?: string; errorMessage?: string }
+}
+
 type SessionEntry = {
   unsubscribe: (() => void) | null
   promise: Promise<AgentSession>
@@ -96,6 +112,11 @@ function isToolExecutionStartEvent(event: AgentSessionEvent): event is ToolExecu
 
 function isToolExecutionEndEvent(event: AgentSessionEvent): event is ToolExecutionEndEvent {
   return event.type === 'tool_execution_end' && typeof event.toolName === 'string' && typeof event.isError === 'boolean'
+}
+
+function isAssistantErrorEndEvent(event: AgentSessionEvent): event is AssistantMessageEndEvent {
+  const message = event.message as { role?: unknown; stopReason?: unknown } | undefined
+  return event.type === 'message_end' && message?.role === 'assistant' && message.stopReason === 'error'
 }
 
 function createNevermindAi(options: NevermindAiOptions) {
@@ -123,7 +144,8 @@ function createNevermindAi(options: NevermindAiOptions) {
       options.onEvent?.({ type: 'done', chatId })
     } catch (error) {
       logger.error('ai.chat.send.failed', error, { source: 'host', scope: 'ai' })
-      options.onEvent?.({ type: 'error', chatId, message: error instanceof Error ? error.message : String(error) })
+      const limit = aiLimitNoticeFromError(error)
+      options.onEvent?.({ type: 'error', chatId, message: limit?.message || (error instanceof Error ? error.message : String(error)), data: limit })
     }
   }
 
@@ -268,10 +290,63 @@ function createNevermindAi(options: NevermindAiOptions) {
       }
       if (isToolExecutionStartEvent(event)) emit({ type: 'tool_start', name: event.toolName })
       if (isToolExecutionEndEvent(event)) emit({ type: 'tool_end', name: event.toolName, isError: event.isError })
+      if (isAssistantErrorEndEvent(event)) {
+        const message = event.message.errorMessage || 'AI request failed'
+        emit({ type: 'error', message, data: aiLimitNoticeFromError(message) })
+      }
     })
 
     onEvent?.({ type: 'ready' })
     return result.session
+  }
+}
+
+function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
+  const text = searchableErrorText(error)
+  const retryAfterSec = Number(text.match(/retry[_ -]?after[^0-9]*(\d+)/i)?.[1] || 0) || undefined
+  if (/insufficient[_ -]?credits|no credits remaining|402\b/i.test(text)) {
+    return {
+      kind: 'insufficient_credits',
+      title: 'Credits needed',
+      message: 'You’ve reached your Nevermind AI credit limit. Open your dashboard to review your account.',
+      actionTitle: 'Open Dashboard',
+      dashboardUrl: NEVERMIND_DASHBOARD_URL,
+    }
+  }
+  if (/rate[_ -]?limited|rate limit exceeded|429\b/i.test(text)) {
+    return {
+      kind: 'rate_limited',
+      title: 'AI limit reached',
+      message: retryAfterSec ? `You’re sending messages too quickly. Try again in about ${retryAfterSec} seconds, or open your dashboard for account details.` : 'You’ve reached a Nevermind AI usage limit. Open your dashboard for account details.',
+      actionTitle: 'Open Dashboard',
+      dashboardUrl: NEVERMIND_DASHBOARD_URL,
+      retryAfterSec,
+    }
+  }
+  if (/prompt[_ -]?too[_ -]?large|prompt exceeds|413\b/i.test(text)) {
+    return {
+      kind: 'prompt_too_large',
+      title: 'Prompt too large',
+      message: 'This request is too large for the current AI limit. Try a shorter message or open your dashboard for account details.',
+      actionTitle: 'Open Dashboard',
+      dashboardUrl: NEVERMIND_DASHBOARD_URL,
+    }
+  }
+  return null
+}
+
+function searchableErrorText(error: unknown) {
+  if (!error) return ''
+  if (!(error instanceof Error)) return stringifyError(error)
+  const own = Object.fromEntries(Object.getOwnPropertyNames(error).map((key) => [key, (error as any)[key]]))
+  return [error.name, error.message, error.stack, stringifyError(own)].filter(Boolean).join('\n')
+}
+
+function stringifyError(value: unknown) {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
   }
 }
 

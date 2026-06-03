@@ -4,6 +4,8 @@ import { Redis } from '@upstash/redis';
 const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
+const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
+
 const redis = url && token ? new Redis({ url, token }) : null;
 if (!redis) {
   console.warn('[ratelimit] UPSTASH_REDIS_REST_URL/TOKEN missing — rate limits disabled');
@@ -78,7 +80,7 @@ export function clientIp(request: Request): string | null {
 
 export function tooManyRequests(decision: RateLimitDecision & { ok: false }): Response {
   return Response.json(
-    { error: { type: 'rate_limited', message: `Rate limit exceeded (${decision.scope})`, retry_after: decision.retryAfterSec } },
+    { error: { type: 'rate_limited', message: `Rate limit exceeded (${decision.scope})`, retry_after: decision.retryAfterSec, dashboard_url: DASHBOARD_URL } },
     { status: 429, headers: { 'Retry-After': String(decision.retryAfterSec) } },
   );
 }
