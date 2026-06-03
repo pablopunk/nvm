@@ -406,7 +406,7 @@ kbd {
   width: 100%;
   border: 0;
   border-radius: var(--radius-lg);
-  padding: 8px 12px;
+  padding: 6px 10px;
   color: var(--text-primary);
   background: transparent;
   text-align: left;
