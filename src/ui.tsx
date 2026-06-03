@@ -45,14 +45,14 @@ export function shortcutLabel(shortcut?: string) {
 }
 
 export function KeyHints({ shortcut, extras = [], showEnter = true }: KeyHintsProps) {
-  return <span className="keyHints">{extras.map((extra) => <span key={extra} className="shortcutHint selectedOnlyEnter">{extra}</span>)}{shortcut ? <span className="shortcutHint">{shortcutLabel(shortcut)}</span> : null}{showEnter ? <span className="enterHint selectedOnlyEnter">↵</span> : null}</span>
+  return <span className="keyHints">{extras.map((extra) => <span key={extra} className="shortcutHint selectedOnlyEnter">{extra}</span>)}{shortcut ? <span className="shortcutHint">{shortcutLabel(shortcut)}</span> : null}{showEnter ? <span className="enterHint selectedOnlyEnter" aria-label="Enter"><span aria-hidden="true">↵</span></span> : null}</span>
 }
 
 const MAX_VISIBLE_ACCESSORIES = 3
 
 export function CommandRow({ value, icon, title, subtitle, accessories = [], shortcut, extras, className, appearance, selectedOnlyShortcut = false, onSelect }: CommandRowProps) {
   const keyHints = selectedOnlyShortcut
-    ? (shortcut ? <span className="keyHints selectedOnlyEnter"><span className="shortcutHint">{shortcutLabel(shortcut)}</span><span className="enterHint">↵</span></span> : null)
+    ? (shortcut ? <span className="keyHints selectedOnlyEnter"><span className="shortcutHint">{shortcutLabel(shortcut)}</span><span className="enterHint" aria-label="Enter"><span aria-hidden="true">↵</span></span></span> : null)
     : <KeyHints shortcut={shortcut} extras={extras} />
   const itemClassName = className ? `result ${className}` : 'result'
   const visibleAccessories = accessories.slice(0, MAX_VISIBLE_ACCESSORIES)
@@ -66,11 +66,11 @@ export function CommandTile({ value, title, subtitle, image, video, actionHint, 
 }
 
 export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
-  return <div className="empty">{icon}<strong>{title}</strong>{subtitle ? <span>{subtitle}</span> : null}</div>
+  return <div className="empty" role="status">{icon}<strong>{title}</strong>{subtitle ? <span>{subtitle}</span> : null}</div>
 }
 
 export function Toast({ message, tone }: ToastProps) {
-  return <div className={`toast ${tone === 'error' ? 'toastError' : ''}`}>{message}</div>
+  return <div className={`toast ${tone === 'error' ? 'toastError' : ''}`} role="status" aria-live={tone === 'error' ? 'assertive' : 'polite'}>{message}</div>
 }
 
 export function SearchAccessory({ tooltip, value, items, onChange }: SearchAccessoryProps) {

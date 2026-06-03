@@ -1604,7 +1604,7 @@ export function App() {
             spellCheck={false}
           />
           {renderSearchAccessory(extensionView)}
-          {!isChildOpen && query ? <div className="tabHint">✨ <kbd>Tab</kbd> to automate</div> : null}
+          {!isChildOpen && query ? <div className="tabHint"><Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to automate</div> : null}
         </div>
 
         {siblingViews.map((sib, index) => (
