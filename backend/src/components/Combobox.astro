@@ -1,0 +1,31 @@
+---
+import 'tom-select/dist/css/tom-select.css';
+---
+<style is:global>
+  .ts-wrapper.input { padding: 0; min-width: 220px; }
+  .ts-wrapper .ts-control { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; min-height: 32px; padding: 4px 10px; box-shadow: none; }
+  .ts-wrapper.focus .ts-control { outline: 2px solid var(--text); outline-offset: -1px; border-color: var(--text); }
+  .ts-wrapper .ts-control input { color: var(--text) !important; }
+  .ts-wrapper .ts-control input::placeholder { color: var(--muted); }
+  .ts-dropdown { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .ts-dropdown .option { padding: 6px 10px; font-size: 14px; }
+  .ts-dropdown .active { background: var(--bg); color: var(--text); }
+  .ts-dropdown .option.selected { font-weight: 500; }
+  .ts-dropdown .no-results { padding: 8px 10px; color: var(--muted); font-size: 13px; }
+</style>
+<script>
+  import TomSelect from 'tom-select';
+  const init = () => {
+    document.querySelectorAll<HTMLSelectElement>('select.combo:not(.tomselected)').forEach((el) => {
+      new TomSelect(el, {
+        maxOptions: 1000,
+        wrapperClass: 'ts-wrapper input',
+        controlClass: 'ts-control',
+        dropdownClass: 'ts-dropdown',
+        render: { no_results: () => '<div class="no-results">No matches</div>' },
+      });
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+</script>

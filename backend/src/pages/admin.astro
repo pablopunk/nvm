@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
 import { getActiveModelId, getFreeModelId, getActiveProvider, listKnownProviders } from '../lib/settings';
 import { listModelsForProvider } from '../lib/pricing';
@@ -15,6 +16,7 @@ const providers = listKnownProviders();
 const models = await listModelsForProvider(activeProvider);
 ---
 <Layout title="Nevermind · Admin" width="wide">
+  <Combobox />
   <nav class="nav">
     <a href="/profile">Profile</a>
     <a href="/admin" aria-current="page">Admin</a>
@@ -31,7 +33,7 @@ const models = await listModelsForProvider(activeProvider);
     <div class="stack">
       <div class="row">
         <label class="field field--inline">Paid →
-          <select id="model-select-paid" class="input">
+          <select id="model-select-paid" class="input combo">
             {models.map((id) => <option value={id} selected={id === activeModel}>{id}</option>)}
           </select>
         </label>
@@ -39,7 +41,7 @@ const models = await listModelsForProvider(activeProvider);
       </div>
       <div class="row">
         <label class="field field--inline">Free →
-          <select id="model-select-free" class="input">
+          <select id="model-select-free" class="input combo">
             {models.map((id) => <option value={id} selected={id === freeModel}>{id}</option>)}
           </select>
         </label>
@@ -54,7 +56,7 @@ const models = await listModelsForProvider(activeProvider);
     <p class="muted">Pricing is fetched from <a href="https://models.dev" target="_blank">models.dev</a> for the active provider and multiplied by the markup.</p>
     <div class="row">
       <label class="field field--inline">Provider
-        <select id="provider-select" class="input">
+        <select id="provider-select" class="input combo">
           {providers.map((p) => <option value={p} selected={p === activeProvider}>{p}</option>)}
         </select>
       </label>

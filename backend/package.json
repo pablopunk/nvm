@@ -27,6 +27,7 @@
     "astro": "^6.4.1",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.3",
+    "tom-select": "^2.6.1",
     "ws": "^8.21.0"
   },
   "devDependencies": {
