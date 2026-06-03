@@ -6,7 +6,10 @@ directories:
 files:
   - dist/**
   - src/docs/**
-  - src/resources/**
+  - from: src/resources
+    to: src/resources
+    filter:
+      - '**/*'
   - LICENSE
   - package.json
   - '!**/*.map'
