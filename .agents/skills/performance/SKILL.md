@@ -1,6 +1,12 @@
 ---
 name: performance
-description: Use when changing or reviewing performance-sensitive Nevermind paths: command palette search, keyboard input, AI chat streaming, extension views, cache invalidation, IPC, Electron window behavior, file/icon/thumbnail/clipboard work, or any request mentioning lag, latency, responsiveness, jank, render cost, or “performance is UX”. Trigger before making assumptions; explore the repo and identify the hot path first.
+description: >-
+  Use when changing or reviewing performance-sensitive Nevermind paths: command
+  palette search, keyboard input, AI chat streaming, extension views, cache
+  invalidation, IPC, Electron window behavior, file/icon/thumbnail/clipboard work,
+  or any request mentioning lag, latency, responsiveness, jank, render cost, or
+  “performance is UX”. Trigger before making assumptions; explore the repo and
+  identify the hot path first.
 ---
 
 # Performance
