@@ -183,6 +183,8 @@ Analyze the conversation and trace for friction patterns, including misunderstan
 
 Your job is to update the current learning set, not append blindly. Merge overlapping rules, rewrite weak rules into stronger generic ones, remove stale or redundant rules, and keep the final set small. Prefer a tiny set of generic durable rules over many specific ones.
 
+Generic means durable principles for future extension builds, not exact API/class workarounds, one extension's domain model, one bug's workaround, or transient host/client behavior. If a finding only applies to the current extension or technology, lift it to a broader principle or omit it.
+
 Do not include product feedback about improving the extension API or builder prompt. Do not include volatile facts like absolute file paths, specific chat titles, or one-off task details unless they are stable machine conventions.
 
 Return the full resulting rule set as strict JSON only with this shape:
@@ -199,7 +201,7 @@ function recordLearningReview(chatId: string) {
   const snapshot = learningStore.reviewSnapshot(chatId)
   if (!snapshot) return
   const job = nevermindAi.ask(learningReviewPrompt(snapshot), {
-    system: 'You maintain a tiny canonical set of user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending. Return strict JSON and keep the final set minimal.',
+    system: 'You maintain a tiny canonical set of generic user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending; omit one-off implementation details. Return strict JSON and keep the final set minimal.',
   }).then((response: string) => {
     const learnings = normalizedLearningReview(response)
     learningStore?.replaceLearningsFromReview(chatId, learnings as Array<{ kind: LearningKind; summary: string; appliesWhen?: string; keywords?: string[]; confidence?: "low" | "medium" | "high"; evidence?: string }>)
