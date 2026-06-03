@@ -20,6 +20,6 @@ The Neon skill says to verify claims against current Neon docs. Neon docs can be
 - AI proxy issues correlate through `request_id` in usage records.
 - Credit/balance issues correlate through ledger rows.
 - Migration failures should show in Vercel build events because migrations run during backend build.
-- Sentry error `terminating connection due to administrator command` from `@neondatabase/serverless` means Postgres/Neon closed the connection server-side. Treat it as a Neon connection/admin event until Axiom/Sentry evidence shows an app regression; verify current `/api/health` and search for repeated events before changing code.
+- Sentry error `terminating connection due to administrator command` from `@neondatabase/serverless` means Postgres/Neon closed the connection server-side. Treat it as a Neon connection/admin event until Axiom/Sentry evidence shows an app regression; verify current `/api/health`, search Sentry for repeated events, and check whether the correlated `usage` row already recorded a successful status before changing code.
 
 Confirm before prod DB writes, migrations, admin grants, credit edits, branch changes, or destructive SQL.

@@ -57,6 +57,6 @@ curl -sS -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
 
 ## Extract and pivot
 
-Extract environment, release, timestamp, exception, route/transaction/status, tags/contexts, `request_id`, deployment id/SHA, first/last seen, event count, and affected users. Then pivot to `axiom.md` with the timestamp ±15m plus request id, route, host, release, or error text.
+Extract environment, release, timestamp, exception, route/transaction/status, tags/contexts, `request_id`, deployment id/SHA, first/last seen, event count, and affected users. Also inspect `contexts.response.status_code`, `contexts.cloud_resource`, and recent breadcrumbs: for async uncaught exceptions, Sentry `dateCreated` can be minutes after the request breadcrumbs/DB usage row. Then pivot to `axiom.md` with the Sentry timestamp and breadcrumb/request timestamp ±15m plus request id, route, host, release, or error text.
 
 Never paste secrets, cookies, auth headers, raw request bodies, prompts, or full payloads.

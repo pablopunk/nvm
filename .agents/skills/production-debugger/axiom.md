@@ -22,7 +22,7 @@ axiom query "['DATASET'] | getschema"
 axiom query "['DATASET'] | where _time > ago(15m) | limit 5" -f json
 ```
 
-If multiple datasets exist, inspect schemas/recent rows and pick the Vercel drain dataset. Do not assume field names.
+If multiple datasets exist, inspect schemas/recent rows and pick the Vercel drain dataset. Do not assume field names. Learned for this app: Axiom org `pablopunk` has a `vercel` dataset with fields like `request.path`, `request.host`, `request.id`, `request.statusCode`, `vercel.projectName`, and `vercel.projectId`, but it may not include the current Nevermind Vercel project. Verify with `where ['vercel.projectId'] == PROJECT_ID` before claiming log absence/presence.
 
 ## Query patterns
 
