@@ -44,7 +44,7 @@ export async function revokeApiToken(userId: string, tokenId: string) {
     .where(and(eq(apiTokens.id, tokenId), eq(apiTokens.userId, userId)));
 }
 
-export async function getUserFromBearer(authHeader: string | null) {
+async function resolveBearer(authHeader: string | null) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice('Bearer '.length).trim();
   if (!token.startsWith(TOKEN_PREFIX)) return null;
@@ -55,7 +55,16 @@ export async function getUserFromBearer(authHeader: string | null) {
     .innerJoin(users, eq(users.id, apiTokens.userId))
     .where(and(eq(apiTokens.tokenHash, hash), isNull(apiTokens.revokedAt)))
     .limit(1);
+  return row ?? null;
+}
+
+export async function getUserFromBearer(authHeader: string | null) {
+  const row = await resolveBearer(authHeader);
   if (!row) return null;
   db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.tokenId)).catch(() => {});
   return row.user;
+}
+
+export async function getTokenAndUserFromBearer(authHeader: string | null) {
+  return resolveBearer(authHeader);
 }

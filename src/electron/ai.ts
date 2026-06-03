@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
-import { getNevermindAuth } from './nevermind-auth'
+import { getNevermindAuth, NevermindAuthRequiredError } from './nevermind-auth'
 
 type AiEvent = {
   type: string
@@ -178,7 +178,18 @@ function createNevermindAi(options: NevermindAiOptions) {
     }
   }
 
-  return { send, abort, reset, ask, session }
+  async function disposeAllSessions() {
+    const chatIds = Array.from(sessions.keys())
+    for (const chatId of chatIds) await reset(chatId)
+    const generalIds = Array.from(generalSessions.keys())
+    for (const id of generalIds) {
+      const s = await generalSessions.get(id)?.catch(() => null)
+      s?.dispose?.()
+      generalSessions.delete(id)
+    }
+  }
+
+  return { send, abort, reset, ask, session, disposeAllSessions }
 
   async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getExtensionRuntimeState, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
@@ -326,12 +337,15 @@ function buildNevermindModel(ai: any, baseUrl: string, modelId: string) {
   }
 }
 
+const IS_UNPACKAGED_DEV = Boolean(process.env.ELECTRON_RENDERER_URL)
+
 async function resolveAiModelAndAuth(pi: any, ai: any, authStorage: any, modelId: string) {
   const nevermind = await getNevermindAuth()
   if (nevermind) {
     authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token)
     return { model: buildNevermindModel(ai, nevermind.baseUrl, modelId), source: 'nevermind' as const }
   }
+  if (!IS_UNPACKAGED_DEV) throw new NevermindAuthRequiredError()
   const apiKey = await resolveOpenCodeApiKey()
   if (apiKey) authStorage.setRuntimeApiKey('opencode', apiKey)
   const model = ai.getModel('opencode', modelId)

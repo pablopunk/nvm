@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
-import { signInToNevermind, getNevermindAuth, clearNevermindAuth } from './nevermind-auth'
+import { signInToNevermind, getNevermindAuth, signOutFromNevermind } from './nevermind-auth'
 import { createPaletteWindowController, installPermissionHandlers } from './palette-window'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
@@ -2319,9 +2319,11 @@ function createAccountExtension() {
           type: 'runExtensionAction',
           title: 'Log out',
           __handler: async () => {
-            await clearNevermindAuth()
+            const { revoked } = await signOutFromNevermind()
+            await nevermindAi?.disposeAllSessions?.()
             invalidateExtensionRootItems()
-            return { toast: { message: `Logged out of ${existing.email}` } }
+            const suffix = revoked ? '' : ' (token revoke failed — check connection)'
+            return { toast: { message: `Logged out of ${existing.email}${suffix}`, tone: revoked ? 'default' as const : 'error' as const } }
           },
         },
       }

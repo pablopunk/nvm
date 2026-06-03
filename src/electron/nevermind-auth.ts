@@ -70,6 +70,32 @@ export async function clearNevermindAuth() {
   cached = null
 }
 
+export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {
+  const current = await load()
+  let revoked = false
+  if (current) {
+    try {
+      const res = await fetch(`${current.baseUrl}/api/tokens/current`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${current.token}` },
+      })
+      revoked = res.ok || res.status === 401
+      if (!revoked) logger.warn(`token revoke returned ${res.status}`)
+    } catch (err) {
+      logger.warn('token revoke failed', err as Error)
+    }
+  }
+  await clearNevermindAuth()
+  return { revoked }
+}
+
+export class NevermindAuthRequiredError extends Error {
+  constructor() {
+    super('Sign in to Nevermind to use AI features.')
+    this.name = 'NevermindAuthRequiredError'
+  }
+}
+
 export function getDefaultNevermindBaseUrl() {
   return DEFAULT_BASE_URL
 }
