@@ -130,8 +130,8 @@ const HYPER_KEY_PSEUDO_ACTION: Action = { id: HYPER_KEY_ACTION_ID, kind: 'builti
 
 const SEARCH_PLACEHOLDERS = [
   'Watcha gonna do?',
-  'I cannot do that... Nevermind, I can now',
-  'Make it happen',
+  'I cannot do that... Oh, nevermind.',
+  'Make it happen.',
 ]
 
 export function App() {
