@@ -28,6 +28,7 @@ Rules:
 - When tweaking an existing extension, keep the extension `id` and command `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Prefer declarative `ctx.ui.*`, `ctx.actions.*`, and `ctx.navigation.*` primitives over custom UI state or raw shell behavior.
 - Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them under Cmd+K.
+- Use `selectedItemId` to choose the initial focused list/grid item; keep visual sorting independent from selection.
 - Use `rootItems(ctx)` and `searchItems(ctx, query)` only for few, stable, cached, bounded contributions because Nevermind owns ranking and limits.
 - Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.
 - Image thumbnails must use `file.url` from file helpers or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.

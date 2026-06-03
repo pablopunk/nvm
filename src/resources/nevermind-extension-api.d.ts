@@ -80,7 +80,7 @@ export type ExtensionViewPatch = {
   removeItemIds?: string[]
   /** Explicit work-in-progress state; avoid using it for passive background refreshes. */
   isLoading?: boolean
-  /** Only set when intentionally moving focus; host otherwise preserves selection. */
+  /** Only set when intentionally moving focus to a visible item id; host otherwise preserves selection. */
   selectedItemId?: string
 }
 
@@ -206,6 +206,7 @@ export type ExtensionView = {
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
   searchBarPlaceholder?: string
+  /** Initial focused item for list/grid views. Must match a stable visible item id; sorting remains independent. */
   selectedItemId?: string
   onSelectionChange?: ExtensionAction
   pagination?: ExtensionPagination

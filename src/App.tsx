@@ -369,7 +369,14 @@ export function App() {
 
   const extensionViewSelectionKey = extensionView ? `${extensionView.id || ''}:${extensionView.type}:${extensionView.title}:${extensionView.selectedItemId || ''}` : ''
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    function selectExtensionItem(view: ExtensionView) {
+      const items = filterExtensionItems(allViewItems(view))
+      const current = selectedValueRef.current
+      const declaredSelection = view.selectedItemId && items.some((item) => item.id === view.selectedItemId) ? view.selectedItemId : ''
+      selectValue(declaredSelection || (current && items.some((item) => item.id === current) ? current : items[0]?.id || ''))
+    }
+
     if (shortcutFor) selectValue('shortcut:save')
     else if (shortcutOptionsFor) selectValue(getShortcutOptionRows()[0]?.value ?? '')
     else if (shortcutManagerOpen) selectValue(getShortcutRows()[0]?.value ?? '')
@@ -380,11 +387,7 @@ export function App() {
     else if (extensionItemOptionsFor) selectValue(getExtensionItemActionRows()[0]?.value ?? '')
     else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '')
     else if (previewFor) selectValue('preview')
-    else if (extensionView && isFilterableExtensionView) {
-      const items = filterExtensionItems(allViewItems(extensionView))
-      const current = selectedValueRef.current
-      selectValue(extensionView.selectedItemId || (current && items.some((item) => item.id === current) ? current : items[0]?.id || ''))
-    }
+    else if (extensionView && isFilterableExtensionView) selectExtensionItem(extensionView)
     else if (extensionView?.actions?.length) selectValue(`extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`)
     else if (extensionView) selectValue('preview')
     else selectValue(actions[0]?.id ?? '')
