@@ -6,7 +6,7 @@
 * Leverage existing primitives, formatters, and OS capabilities instead of creating one-off helpers.
 * Respect manual file changes and stop the app before editing `userState` to prevent overwrites.
 * Commit frequently and use history to guide changes.
-* Do not fix symtoms, fix diseases.
+* Do not fix symptoms, fix diseases. After two successive symptom patches in the same code path, stop patching and audit the architecture.
 
 ## Architecture
 
@@ -18,6 +18,7 @@
 * Normalize action results so failures appear as UI error views rather than raw logs.
 * AI-generated code is durable. AI writes are restricted to extension files relevant to the current chat context.
 * When fixing bugs, evaluate how the system would look if built from scratch and propose improvements.
+* For services sitting between a client SDK and an upstream provider, default to transparent reverse-proxy (auth swap + verbatim forward + usage sniff) over message translation — translators lose provider-specific fields (auth signatures, cache markers, tool metadata) and force per-feature patches.
 
 ## Product and UX
 
