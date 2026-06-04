@@ -52,6 +52,7 @@ export type RootAction = {
   shortcut?: string
   userAliases?: string[]
   appearance?: CommandItemAppearance
+  executionId?: string
 }
 
 export type SaveResult = {

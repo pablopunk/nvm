@@ -221,6 +221,8 @@ const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionStorageRefreshes = new Map<string, Promise<any>>()
 const extensionActionHandlers = new Map<string, any>()
+const viewActionExecutionRecords = new Map<string, { action: any; createdAt: number }>()
+const rootActionExecutionRecords = new Map<string, { action: any; createdAt: number }>()
 const extensionCaches = new Map<string, Map<string, { value: any; expiresAt: number }>>()
 
 function extensionCacheFor(extensionId) {
@@ -258,6 +260,103 @@ function hasExtensionPermission(extension: any, permission: string) {
 
 function permissionDeniedError(permission: string) {
   return new Error(`Extension is missing required permission: ${permission}`)
+}
+
+const ACTION_EXECUTION_TTL_MS = 30 * 60_000
+const ACTION_EXECUTION_MAX_RECORDS = 2_000
+const RENDERER_ONLY_VIEW_ACTION_TYPES = new Set(['recordShortcut', 'previewClipboardItem'])
+const TOKEN_REQUIRED_VIEW_ACTION_TYPES = new Set([
+  'runExtensionAction',
+  'openPath',
+  'openWith',
+  'pasteText',
+  'copyImage',
+  'trash',
+  'removeClipboardHistory',
+  'shellExec',
+  'shellScript',
+  'lockScreen',
+  'sleepSystem',
+  'restartSystem',
+  'openSystemSettings',
+  'openKeyboardSettings',
+  'quitApp',
+  'checkForUpdates',
+  'downloadUpdate',
+  'installUpdate',
+  'toggleSetting',
+])
+
+function clonePlain(value) {
+  if (!value) return value
+  return structuredClone(value)
+}
+
+function withoutExecutionId(value) {
+  if (!value || typeof value !== 'object') return value
+  const { executionId, ...rest } = value
+  return rest
+}
+
+function pruneExecutionRecords(store: Map<string, { createdAt: number }>) {
+  const now = Date.now()
+  for (const [id, record] of store) {
+    if (now - record.createdAt > ACTION_EXECUTION_TTL_MS) store.delete(id)
+  }
+  while (store.size > ACTION_EXECUTION_MAX_RECORDS) {
+    const oldest = store.keys().next().value
+    if (!oldest) break
+    store.delete(oldest)
+  }
+}
+
+function registerViewActionForRenderer(action) {
+  if (!action || typeof action !== 'object') return action
+  if (RENDERER_ONLY_VIEW_ACTION_TYPES.has(String(action.type || ''))) return action
+  pruneExecutionRecords(viewActionExecutionRecords)
+  const executionId = crypto.randomUUID()
+  const stored = clonePlain(withoutExecutionId(action))
+  viewActionExecutionRecords.set(executionId, { action: stored, createdAt: Date.now() })
+  return { ...action, executionId }
+}
+
+function registerRootActionForRenderer(action) {
+  if (!action || typeof action !== 'object') return action
+  pruneExecutionRecords(rootActionExecutionRecords)
+  const executionId = crypto.randomUUID()
+  const stored = clonePlain(withoutExecutionId(action))
+  rootActionExecutionRecords.set(executionId, { action: stored, createdAt: Date.now() })
+  return { ...action, executionId }
+}
+
+function mergeRendererActionInput(storedAction, rendererAction) {
+  const merged = { ...storedAction }
+  if (rendererAction && typeof rendererAction === 'object') {
+    if ('formValues' in rendererAction) merged.formValues = rendererAction.formValues
+    if ('selectedItemId' in rendererAction) merged.selectedItemId = rendererAction.selectedItemId
+    if ('value' in rendererAction) merged.value = rendererAction.value
+    if ('text' in rendererAction && !('text' in storedAction)) merged.text = rendererAction.text
+  }
+  return merged
+}
+
+function resolveRootActionForIpc(action) {
+  if (!action || typeof action !== 'object') return action
+  const record = action.executionId ? rootActionExecutionRecords.get(String(action.executionId)) : null
+  if (record) return clonePlain(record.action)
+  if (action.executionId) throw new Error('Expired action execution token')
+  if (action.kind === 'extension-root-item' && action.rootAction) throw new Error('Untrusted extension root action')
+  return action
+}
+
+function resolveViewActionForIpc(action) {
+  if (!action || typeof action !== 'object') return action
+  const record = action.executionId ? viewActionExecutionRecords.get(String(action.executionId)) : null
+  if (record) return mergeRendererActionInput(clonePlain(record.action), action)
+  if (action.executionId) throw new Error('Expired action execution token')
+  if (action.type === 'nativeAction') return { ...action, nativeAction: resolveRootActionForIpc(action.nativeAction) }
+  if (TOKEN_REQUIRED_VIEW_ACTION_TYPES.has(String(action.type || ''))) throw new Error(`Untrusted ${action.type} action`)
+  return action
 }
 
 function checkRefreshBurst(extension: any) {
@@ -1093,6 +1192,7 @@ async function searchActions(query, options: any = {}) {
       .filter((item) => q ? rankAction(item, q) : true)
       .sort((a, b) => q ? b.score - a.score || b.lastUsed - a.lastUsed : b.lastUsed - a.lastUsed)
       .slice(0, CLIPBOARD_LIMIT)
+      .map(prepareRootActionForRenderer)
   }
 
   const results = []
@@ -1112,6 +1212,7 @@ async function searchActions(query, options: any = {}) {
       return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
     })
     .slice(0, 30)
+    .map(prepareRootActionForRenderer)
 }
 
 function invalidateExtensionRootItems() {
@@ -1121,6 +1222,30 @@ function invalidateExtensionRootItems() {
 
 function broadcastAuthChanged(status: { authed: boolean; email?: string }) {
   paletteWindow.win?.webContents.send('nevermind:auth-changed', status)
+}
+
+function prepareActionPanelForRenderer(panel) {
+  if (!panel?.sections) return panel
+  return {
+    ...panel,
+    sections: panel.sections.map((section) => {
+      const { lazyActions, ...rest } = section
+      return {
+        ...rest,
+        actions: [...(section.actions || []), ...(section.lazyActions || [])].map((action) => normalizeViewAction(action, null)).filter(Boolean),
+      }
+    }),
+  }
+}
+
+function prepareRootActionForRenderer(action) {
+  if (!action || typeof action !== 'object') return action
+  return registerRootActionForRenderer({
+    ...action,
+    primaryAction: normalizeViewAction(action.primaryAction, null),
+    rootAction: normalizeViewAction(action.rootAction, null),
+    actionPanel: prepareActionPanelForRenderer(action.actionPanel),
+  })
 }
 
 function invalidateExtensionRootItemsForExtension(extension) {
@@ -1324,13 +1449,15 @@ function extensionRootActionFromItem(entry, item) {
 }
 
 async function executeActionForIpc(action) {
+  let trustedAction: any = null
   try {
-    const result = await executeAction(action)
+    trustedAction = resolveRootActionForIpc(action)
+    const result = await executeAction(trustedAction)
     structuredClone(result)
     return result
   } catch (error) {
-    if (action?.kind === 'extension-command') {
-      const entry = extensionEntryForAction(action)
+    if (trustedAction?.kind === 'extension-command') {
+      const entry = extensionEntryForAction(trustedAction)
       if (entry) return { view: extensionErrorView(entry, error) }
     }
     return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` } }
@@ -1432,9 +1559,9 @@ function normalizeViewAction(action, entry) {
   }
   const normalized = action.submenu ? { ...action, submenu: normalizeActionPanel(action.submenu, [], entry) } : action
   if ((normalized.type === 'pushView' || normalized.type === 'replaceView') && normalized.view) {
-    return { ...normalized, view: normalizeView(normalized.view, entry) }
+    return registerViewActionForRenderer({ ...normalized, view: normalizeView(normalized.view, entry) })
   }
-  return normalized
+  return registerViewActionForRenderer(normalized)
 }
 
 function runShellCommand(command, args = [], options: any = {}) {
@@ -1479,12 +1606,14 @@ async function executeViewActionResult(result, entry) {
 }
 
 async function executeViewActionForIpc(action) {
+  let trustedAction: any = null
   try {
-    const result = await executeViewAction(action)
+    trustedAction = resolveViewActionForIpc(action)
+    const result = await executeViewAction(trustedAction)
     structuredClone(result)
     return result
   } catch (error) {
-    const record = action?.type === 'runExtensionAction' ? extensionActionHandlers.get(action.handlerId) : null
+    const record = trustedAction?.type === 'runExtensionAction' ? extensionActionHandlers.get(trustedAction.handlerId) : null
     if (record) return { view: extensionErrorView(record.entry, error), navigation: 'push' }
     return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` }, navigation: 'push' }
   }
@@ -2514,8 +2643,12 @@ function createExtensionContext(extension, command) {
       pop: (title = 'Back', options: any = {}) => ({ ...options, type: 'popView', title }),
       run: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler }),
       background: (title, handler, options: any = {}) => ({ ...options, type: 'runExtensionAction', title, __handler: handler, dismissAfterRun: options.dismissAfterRun || 'auto' }),
-      shellExec: (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true }),
-      shellScript: (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true }),
+      shellExec: canUseSystem
+        ? (title, command, args = [], options: any = {}) => ({ ...options, type: 'shellExec', title, command, args, options, requiresConfirmation: options.requiresConfirmation ?? true })
+        : () => { throw permissionDeniedError('system') },
+      shellScript: canUseSystem
+        ? (title, script, options: any = {}) => ({ ...options, type: 'shellScript', title, script, options, requiresConfirmation: options.requiresConfirmation ?? true })
+        : () => { throw permissionDeniedError('system') },
       toggleSetting: canWriteSettings
         ? (settingId, title = 'Toggle', options: any = {}) => ({ ...options, type: 'toggleSetting', title, settingId })
         : denyShortcut('settings.write'),
@@ -2956,6 +3089,9 @@ async function loadExtensions() {
   extensionModules.clear()
   extensionRootItemsCache.clear()
   extensionRootItemsRefreshes.clear()
+  extensionActionHandlers.clear()
+  viewActionExecutionRecords.clear()
+  rootActionExecutionRecords.clear()
   registerInternalExtensions()
 
   await fs.mkdir(extensionsDir, { recursive: true })

@@ -117,6 +117,7 @@ export type CommandAction = {
   confirmLabel?: string
   cancelLabel?: string
   dismissAfterRun?: 'auto'
+  executionId?: string
 }
 
 export type CommandActionSection = {
