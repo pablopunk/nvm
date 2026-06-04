@@ -31,8 +31,42 @@ function formView(ctx: ExtensionContext) {
   })
 }
 
+function textInputView(ctx: ExtensionContext) {
+  return ctx.ui.list({
+    id: 'dev-ui-text-input',
+    title: 'Dev UI · Text Input',
+    subtitle: 'Paste/type primitives for snippet and selected-text workflows',
+    items: [
+      ctx.ui.item({
+        id: 'paste-concealed-restore',
+        title: 'Paste concealed text and restore clipboard',
+        subtitle: 'Paste into the frontmost app without keeping this text in clipboard history',
+        icon: 'clipboard-paste',
+        primaryAction: ctx.actions.pasteText('Nevermind concealed restored paste', 'Paste Concealed + Restore', { restoreClipboard: true, concealed: true, dismissAfterRun: 'auto' }),
+        actions: [ctx.actions.pasteText('Nevermind concealed restored paste', 'Paste Concealed + Restore', { restoreClipboard: true, concealed: true, dismissAfterRun: 'auto' })],
+      }),
+      ctx.ui.item({
+        id: 'paste-keep-open',
+        title: 'Paste text and keep palette open',
+        subtitle: 'Useful for repeated snippet insertion tests',
+        icon: 'panel-top-open',
+        primaryAction: ctx.actions.pasteText('Nevermind keep-open paste', 'Paste and Keep Open', { keepPaletteOpen: true, dismissAfterRun: 'auto' }),
+        actions: [ctx.actions.pasteText('Nevermind keep-open paste', 'Paste and Keep Open', { keepPaletteOpen: true, dismissAfterRun: 'auto' })],
+      }),
+      ctx.ui.item({
+        id: 'type-text',
+        title: 'Type text without clipboard',
+        subtitle: 'Uses host keyboard typing when supported',
+        icon: 'keyboard',
+        primaryAction: ctx.actions.typeText('Nevermind typed text', 'Type Text', { dismissAfterRun: 'auto' }),
+        actions: [ctx.actions.typeText('Nevermind typed text', 'Type Text', { dismissAfterRun: 'auto' })],
+      }),
+    ],
+  })
+}
+
 function promptView(ctx: ExtensionContext) {
-  const prompt = ctx.input.prompt({
+  const prompt = ctx.input.prompt({ 
     title: 'Create Quicklink URL',
     message: 'Prompt for lightweight arguments before running an action.',
     fields: [
@@ -87,6 +121,7 @@ function listView(ctx: ExtensionContext) {
       title: 'Rows',
       items: [
         ctx.ui.item({ id: 'form', title: 'Open Form Fixture', subtitle: 'Textarea, dropdowns, errors, descriptions', icon: 'list-checks', accessories: [{ text: 'form' }], primaryAction: ctx.actions.push('Open Form', formView(ctx)) }),
+        ctx.ui.item({ id: 'text-input', title: 'Open Text Input Fixture', subtitle: 'Paste/type actions for snippets and transforms', icon: 'keyboard', accessories: [{ text: 'text' }], primaryAction: ctx.actions.push('Open Text Input', textInputView(ctx)) }),
         ctx.ui.item({ id: 'prompt', title: 'Open Prompt Fixture', subtitle: 'Prompted arguments before an action runs', icon: 'text-cursor-input', accessories: [{ text: 'prompt' }], primaryAction: ctx.actions.push('Open Prompt', promptView(ctx)) }),
         ctx.ui.item({ id: 'editor', title: 'Open Editor Fixture', subtitle: 'Editable markdown, preview, submit payload', icon: 'file-pen-line', accessories: [{ text: 'editor' }], primaryAction: ctx.actions.push('Open Editor', editorView(ctx)) }),
         ctx.ui.item({ id: 'preview', title: 'Open Preview Fixture', subtitle: 'Markdown/text preview', icon: 'file-text', accessories: [{ text: 'preview' }], primaryAction: ctx.actions.push('Open Preview', previewView(ctx)) }),
@@ -180,6 +215,7 @@ const extension: NevermindExtension = {
     { id: 'grid', title: 'Dev UI: Grid', icon: 'grid', run: (ctx) => gridView(ctx) },
     { id: 'preview', title: 'Dev UI: Preview', icon: 'file-text', run: (ctx) => previewView(ctx) },
     { id: 'form', title: 'Dev UI: Form', icon: 'list-checks', run: (ctx) => formView(ctx) },
+    { id: 'text-input', title: 'Dev UI: Text Input', icon: 'keyboard', run: (ctx) => textInputView(ctx) },
     { id: 'prompt', title: 'Dev UI: Prompt', icon: 'text-cursor-input', run: (ctx) => promptView(ctx) },
     { id: 'editor', title: 'Dev UI: Editor', icon: 'file-pen-line', run: (ctx) => editorView(ctx) },
     { id: 'chat', title: 'Dev UI: Chat', icon: 'message-circle', run: (ctx) => chatView(ctx) },
