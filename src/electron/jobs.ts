@@ -276,8 +276,7 @@ export class JobRegistry {
       triggers: record.definition.triggers || [],
       history: record.history || [],
     })).sort((a, b) => a.title.localeCompare(b.title))
-    structuredClone(snapshots)
-    return snapshots
+    return structuredClone(snapshots)
   }
 
   onChange(listener: () => void) {
