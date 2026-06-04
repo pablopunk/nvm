@@ -826,8 +826,9 @@ function capabilities() {
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'durable action globalShortcut', 'command globalShortcut as shorthand', 'shortcutScope'], 
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
-    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
+    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)', 'durable actions/commands may declare mode and triggers for host-managed background jobs'],
     namespaces: ['desktop', 'text', 'input', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai', 'ocr'],
+    backgroundJobs: ['commands and actions(ctx) contributions can declare mode: view|noView|background and triggers such as startup, interval, and clipboard.changed; Nevermind owns scheduling, no-overlap, timeouts, and diagnostics in Background Tasks'], 
     files: ['ctx.desktop.files.metadata(path) returns canonical metadata and host-safe URLs; thumbnail(path) returns a thumbnail URL; indexedRoots(), indexSnapshot(options), searchIndex(query, options), and reindex(options) provide bounded host file-index controls'],
     ocr: ['requires ocr permission; ctx.ocr.image(pathOrFileOrDataUrl), ctx.ocr.screen(options), and ctx.ocr.region(rect, options) return recognized text plus blocks/confidence; check ctx.system.capabilities.has(\'ocr\') and render graceful unavailable states'], 
     text: ['template(input, variables) expands {name}/{{name}} placeholders plus date, time, datetime, uuid, selectedText, cursor, {calculator:1 + 2}, and clipboard when clipboard.history is declared'],
@@ -854,6 +855,7 @@ function capabilities() {
     },
     fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'dateAdded', 'dateAddedMs', 'size'],
     storage: ['get', 'set', 'delete', 'clear', 'memo', 'memoStale'],
+    triggerTypes: ['startup', 'interval', 'clipboard.changed', 'files.changed (declared intent)', 'app.frontmost.changed (declared intent)', 'wake', 'login'],
   }
 }
 

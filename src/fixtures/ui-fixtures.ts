@@ -59,6 +59,22 @@ function floatingWindowToggleAction(ctx: ExtensionContext) {
   })
 }
 
+function backgroundJobFixtureAction(ctx: ExtensionContext) {
+  return ctx.action({
+    id: 'background-job-fixture',
+    title: 'Background Job Fixture',
+    subtitle: 'Dev fixture for extension-owned host jobs and diagnostics',
+    icon: 'activity',
+    mode: 'background',
+    triggers: [{ type: 'startup', delayMs: 750 }],
+    async run(innerCtx) {
+      const count = await innerCtx.storage.get<number>('backgroundJobRuns', 0) || 0
+      await innerCtx.storage.set('backgroundJobRuns', count + 1)
+      return innerCtx.ui.toast({ message: `Background fixture run #${count + 1}` })
+    },
+  })
+}
+
 function floatingWindowToggleItem(ctx: ExtensionContext) {
   return ctx.ui.item({
     id: 'toggle-floating-note',
@@ -386,7 +402,7 @@ const extension: NevermindExtension = {
   subtitle: 'Dev-only extension API fixtures',
   permissions: ['camera', 'desktop.files', 'ocr'],
   actions(ctx) {
-    return [floatingWindowToggleAction(ctx)]
+    return [floatingWindowToggleAction(ctx), backgroundJobFixtureAction(ctx)]
   },
   commands: [
     { id: 'list', title: 'Dev UI: List', icon: 'list', run: (ctx) => listView(ctx) },

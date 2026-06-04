@@ -74,6 +74,14 @@ export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' 
 export type ExtensionFormOption = { title: string; value: string }
 
 export type ExtensionActionPlacement = 'search' | 'root' | 'hidden'
+export type ExtensionBackgroundMode = 'view' | 'noView' | 'background'
+export type ExtensionBackgroundTrigger =
+  | { type: 'startup'; delayMs?: number }
+  | { type: 'interval'; every: string | number; delayMs?: number }
+  | { type: 'files.changed'; roots: string | string[]; debounceMs?: number }
+  | { type: 'clipboard.changed'; debounceMs?: number }
+  | { type: 'app.frontmost.changed'; debounceMs?: number }
+  | { type: 'wake' | 'login' }
 
 export type ExtensionActionContribution = {
   /** Stable local id. Global shortcuts, aliases, recents, and action refs depend on this. */
@@ -95,6 +103,10 @@ export type ExtensionActionContribution = {
   customizable?: boolean
   /** Where this durable action should be discoverable. Defaults to `['search']`. */
   placement?: ExtensionActionPlacement[]
+  /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
+  mode?: ExtensionBackgroundMode
+  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, throttling, and diagnostics. */
+  triggers?: ExtensionBackgroundTrigger[]
   /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
   action?: ExtensionAction
   /** Handler to run when a simple declarative action is not enough. */
@@ -763,8 +775,12 @@ export type ExtensionCommand = {
   shortcut?: string
   shortcutScope?: ShortcutScope
   globalShortcut?: string
-  /** Dismiss immediately for fire-and-forget commands. */
+  /** Dismiss immediately for fire-and-forget commands. Prefer `mode: 'background'` for durable scheduled work. */
   background?: boolean
+  /** Execution lifecycle. `background`/`noView` commands are eligible for host-managed jobs and diagnostics. */
+  mode?: ExtensionBackgroundMode
+  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, throttling, and diagnostics. */
+  triggers?: ExtensionBackgroundTrigger[]
   dismissAfterRun?: 'auto'
   run(ctx: ExtensionContext, action: ExtensionAction): ExtensionActionResult | Promise<ExtensionActionResult>
 }

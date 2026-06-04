@@ -20,6 +20,7 @@ import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalize
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
+import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
 import { LocalLearningStore, type LearningKind } from './learning-store'
@@ -99,6 +100,8 @@ let learningTracesPath = ''
 let saveTimer: NodeJS.Timeout | undefined
 let appIndexTimer: NodeJS.Timeout | undefined
 let appWatchers: Array<{ close: () => unknown }> = []
+let clipboardWatcherLastId = ''
+const jobRegistry = new JobRegistry()
 let nevermindAi: any
 let learningStore: LocalLearningStore | null = null
 const learningReviewJobs = new Map<string, Promise<void>>()
@@ -203,19 +206,32 @@ ${JSON.stringify(snapshot, null, 2)}`
 }
 
 function recordLearningReview(chatId: string) {
-  if (!learningStore?.shouldReview(chatId) || learningReviewJobs.has(chatId) || !nevermindAi?.ask) return
+  const jobId = `ai.learning.review.${chatId}`
+  if (!learningStore?.shouldReview(chatId) || learningReviewJobs.has(chatId) || jobRegistry.snapshot().some((job) => job.id === jobId && job.running) || !nevermindAi?.ask) return
   const snapshot = learningStore.reviewSnapshot(chatId)
   if (!snapshot) return
-  const job = nevermindAi.ask(learningReviewPrompt(snapshot), {
-    system: 'You maintain a tiny canonical set of generic user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending; omit one-off implementation details. Return strict JSON and keep the final set minimal.',
-  }).then((response: string) => {
-    const learnings = normalizedLearningReview(response)
-    learningStore?.replaceLearningsFromReview(chatId, learnings as Array<{ kind: LearningKind; summary: string; appliesWhen?: string; keywords?: string[]; confidence?: "low" | "medium" | "high"; evidence?: string }>)
-  }).catch((error: unknown) => {
-    logWarn('ai.learning.review.failed', { chatId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'ai' })
-  }).finally(() => {
-    learningReviewJobs.delete(chatId)
+  jobRegistry.register({
+    id: jobId,
+    title: `AI Learning Review: ${chatId}`,
+    owner: 'host',
+    scope: 'ai',
+    timeoutMs: 60_000,
+    run: async () => {
+      try {
+        const response = await nevermindAi.ask(learningReviewPrompt(snapshot), {
+          system: 'You maintain a tiny canonical set of generic user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending; omit one-off implementation details. Return strict JSON and keep the final set minimal.',
+        })
+        const learnings = normalizedLearningReview(response)
+        learningStore?.replaceLearningsFromReview(chatId, learnings as Array<{ kind: LearningKind; summary: string; appliesWhen?: string; keywords?: string[]; confidence?: "low" | "medium" | "high"; evidence?: string }>)
+      } catch (error) {
+        logWarn('ai.learning.review.failed', { chatId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'ai' })
+        throw error
+      } finally {
+        learningReviewJobs.delete(chatId)
+      }
+    },
   })
+  const job = jobRegistry.run(jobId, 'ai-chat-exited').then(() => undefined).catch(() => undefined)
   learningReviewJobs.set(chatId, job)
 }
 
@@ -328,8 +344,8 @@ function createExtensionCache(extension) {
 const registeredActionAccelerators = new Set<string>()
 const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder'
 
-const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension, createAccountExtension]
-const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings', 'nevermind.account']
+const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension, createBackgroundTasksExtension, createAccountExtension]
+const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings', 'nevermind.background-tasks', 'nevermind.account']
 const REQUIRED_INTERNAL_COMMANDS = [{ extensionId: AI_BUILDER_EXTENSION_ID, commandId: 'ai-chats' }]
 
 function actionAliases(actionId: any) {
@@ -1689,6 +1705,7 @@ function runQuitCleanup() {
   didRunQuitCleanup = true
   if (app.isReady()) globalShortcut.unregisterAll()
   updateManager.clearTimers()
+  jobRegistry.clear()
   for (const record of extensionWindows.values()) record.win.close()
   extensionWindows.clear()
   for (const watcher of appWatchers) watcher.close()
@@ -2597,6 +2614,98 @@ function createKeyboardShortcutsExtension() {
   }
 }
 
+function jobTime(value?: number) {
+  return value ? new Date(value).toLocaleTimeString() : 'Never'
+}
+
+function jobTriggerSummary(job: JobSnapshot) {
+  if (!job.triggers.length) return 'Manual'
+  return job.triggers.map((trigger: any) => {
+    if (trigger.type === 'startup') return 'Startup'
+    if (trigger.type === 'interval') return `Every ${Math.round(trigger.everyMs / 1000)}s`
+    if (trigger.type === 'event') return `On ${trigger.event}`
+    return 'Manual'
+  }).join(' · ')
+}
+
+function jobSubtitle(job: JobSnapshot) {
+  const status = job.status === 'running' ? 'Running' : job.status === 'failed' ? `Failed: ${job.lastError || 'unknown error'}` : job.status
+  return `${status} · ${jobTriggerSummary(job)} · Last: ${jobTime(job.lastFinishedAt)}`
+}
+
+function jobDetailsMarkdown(job: JobSnapshot) {
+  return [
+    `# ${job.title}`,
+    '',
+    `- ID: ${job.id}`,
+    `- Owner: ${job.owner}`,
+    job.scope ? `- Scope: ${job.scope}` : '',
+    `- Status: ${job.status}`,
+    `- Enabled: ${job.enabled ? 'yes' : 'no'}`,
+    `- Running: ${job.running ? 'yes' : 'no'}`,
+    `- Triggers: ${jobTriggerSummary(job)}`,
+    `- Runs: ${job.runCount}`,
+    `- Failures: ${job.failureCount}`,
+    `- Last reason: ${job.lastReason || '—'}`,
+    `- Last started: ${jobTime(job.lastStartedAt)}`,
+    `- Last finished: ${jobTime(job.lastFinishedAt)}`,
+    job.lastDurationMs != null ? `- Last duration: ${job.lastDurationMs}ms` : '',
+    job.nextRunAt ? `- Next run: ${jobTime(job.nextRunAt)}` : '',
+    job.lastError ? `\n## Last error\n\n${job.lastError}` : '',
+  ].filter(Boolean).join('\n')
+}
+
+function jobItem(ctx, job: JobSnapshot) {
+  const runNow = ctx.actions.run('Run Now', async () => {
+    try {
+      await jobRegistry.run(job.id, 'manual')
+      return { toast: { message: `Ran ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
+    } catch (error) {
+      return { view: { type: 'preview', title: `${job.title} Failed`, content: `# ${job.title} Failed\n\n${error instanceof Error ? error.message : String(error)}` } }
+    }
+  })
+  const toggle = ctx.actions.run(job.enabled ? 'Disable Job' : 'Enable Job', () => {
+    jobRegistry.setEnabled(job.id, !job.enabled)
+    return { toast: { message: `${job.enabled ? 'Disabled' : 'Enabled'} ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
+  })
+  const clearError = ctx.actions.run('Clear Error', () => {
+    jobRegistry.clearError(job.id)
+    return { toast: { message: `Cleared ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
+  })
+  const showDetails = ctx.actions.push('Show Details', { type: 'preview', title: job.title, content: jobDetailsMarkdown(job) })
+  return {
+    id: `job:${job.id}`,
+    title: job.title,
+    subtitle: jobSubtitle(job),
+    icon: job.status === 'failed' ? 'circle-alert' : job.running ? 'loader' : job.enabled ? 'activity' : 'circle-pause',
+    accessories: [{ text: job.owner }, { text: job.status }],
+    primaryAction: showDetails,
+    actionPanel: { sections: [{ actions: [showDetails, runNow, toggle, job.lastError ? clearError : null].filter(Boolean) }] },
+  }
+}
+
+function backgroundTasksView(ctx) {
+  const jobs = jobRegistry.snapshot()
+  return ctx.ui.list({
+    id: 'background-tasks',
+    title: 'Background Tasks',
+    subtitle: `${jobs.length} host-managed jobs`,
+    presentation: 'root',
+    searchBarPlaceholder: 'Search background tasks',
+    emptyView: { title: 'No background tasks registered.' },
+    items: jobs.map((job) => jobItem(ctx, job)),
+  })
+}
+
+function createBackgroundTasksExtension() {
+  return {
+    id: 'nevermind.background-tasks',
+    title: 'Background Tasks',
+    permissions: [] as const,
+    commands: [{ id: 'background-tasks', actionId: 'background-tasks', title: 'Background Tasks', subtitle: 'Inspect and run host-managed background jobs', icon: 'activity', score: 16, run: (ctx) => backgroundTasksView(ctx) }],
+  }
+}
+
 function createAccountExtension() {
   const extensionId = 'nevermind.account'
 
@@ -3347,6 +3456,7 @@ async function loadExtensions() {
   fixtureExtensions = []
   extensionRootItemsCache.clear()
   extensionRootItemsRefreshes.clear()
+  jobRegistry.unregisterWhere((job) => job.owner === 'extension')
   registerInternalExtensions()
   if (isDev) await loadDevExtensions()
 
@@ -3500,6 +3610,49 @@ function registerInternalExtensions() {
   assertInternalExtensionsRegistered()
 }
 
+function durationMs(value: any) {
+  if (typeof value === 'number') return Math.max(1000, value)
+  const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?$/i)
+  if (!match) return 0
+  const amount = Number(match[1])
+  const unit = (match[2] || 'ms').toLowerCase()
+  const multiplier = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : unit === 's' ? 1000 : 1
+  return Math.max(1000, Math.round(amount * multiplier))
+}
+
+function jobTriggersFromExtensionTriggers(triggers: any[] = []) {
+  return triggers.map((trigger) => {
+    if (trigger?.type === 'startup') return { type: 'startup' as const, delayMs: trigger.delayMs || 0 }
+    if (trigger?.type === 'interval') {
+      const everyMs = durationMs(trigger.every)
+      return everyMs ? { type: 'interval' as const, everyMs, delayMs: trigger.delayMs } : null
+    }
+    if (trigger?.type === 'clipboard.changed') return { type: 'event' as const, event: 'clipboard.changed', debounceMs: trigger.debounceMs || 0 }
+    return null
+  }).filter(Boolean)
+}
+
+function registerExtensionBackgroundJob(entry, item) {
+  const mode = item.mode || (item.background ? 'background' : 'view')
+  const triggers = jobTriggersFromExtensionTriggers(item.triggers || [])
+  if (mode === 'view' && triggers.length === 0) return
+  const id = `extension.${entry.extension.id}.${item.id}`
+  jobRegistry.register({
+    id,
+    title: item.title,
+    owner: 'extension',
+    scope: entry.extension.id,
+    triggers,
+    timeoutMs: Number(item.timeoutMs || EXTENSION_ROOT_ITEMS_TIMEOUT_MS),
+    run: async () => {
+      const action = item.primaryAction || item.action
+      if (!action) return
+      const result = await executeViewAction(action)
+      if (result?.view) logInfo('extension.background.viewIgnored', { jobId: id, title: item.title }, { source: 'host', scope: 'extension', extensionId: entry.extension.id, commandId: item.id })
+    },
+  })
+}
+
 function assertInternalExtensionsRegistered() {
   const missingExtensions = REQUIRED_INTERNAL_EXTENSIONS.filter((extensionId) => !extensionModules.has(extensionId))
   const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(({ extensionId, commandId }) => !extensionActionRegistry.has(`${extensionId}:${commandId}`))
@@ -3531,11 +3684,14 @@ function registerExtension(extension) {
       shortcutScope: command.shortcutScope,
       globalShortcut: command.globalShortcut,
       dismissAfterRun: command.dismissAfterRun,
-      background: command.background,
+      background: command.background || command.mode === 'background' || command.mode === 'noView',
+      mode: command.mode,
+      triggers: command.triggers,
       primaryAction: action,
     }
     const normalizedItem = normalizeViewItems([item], entry)[0]
     extensionActionRegistry.set(`${extension.id}:${command.id}`, { ...entry, item: normalizedItem })
+    registerExtensionBackgroundJob(entry, normalizedItem)
   }
   if (typeof extension.actions === 'function') {
     try {
@@ -3545,8 +3701,9 @@ function registerExtension(extension) {
       for (const item of items) {
         if (!item?.id || !item.title) continue
         const action = item.run ? { type: 'runExtensionAction', title: item.title, __handler: item.run } : item.action
-        const normalizedItem = normalizeViewItems([{ ...item, primaryAction: action }], entry)[0]
+        const normalizedItem = normalizeViewItems([{ ...item, background: item.background || item.mode === 'background' || item.mode === 'noView', primaryAction: action }], entry)[0]
         extensionActionRegistry.set(`${extension.id}:${item.id}`, { ...entry, item: normalizedItem })
+        registerExtensionBackgroundJob(entry, normalizedItem)
       }
     } catch (error) {
       logError('extension.actions.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
@@ -3632,12 +3789,7 @@ async function scanFiles(options: any = {}) {
 }
 
 function scheduleIndexApplications() {
-  if (appIndexTimer) clearTimeout(appIndexTimer)
-  appIndexTimer = setTimeout(() => {
-    appIndexTimer = null
-    void indexApplications()
-  }, APP_REINDEX_DEBOUNCE_MS)
-  appIndexTimer.unref?.()
+  jobRegistry.emit('apps.changed')
 }
 
 async function startAppWatcher() {
@@ -3663,6 +3815,35 @@ async function indexFiles() {
   } catch (error) {
     logError('files.index.failed', error, { source: 'host', scope: 'files' })
   }
+}
+
+function registerHostJobs() {
+  jobRegistry.register({
+    id: 'state.save',
+    title: 'Save User State',
+    owner: 'host',
+    scope: 'state',
+    timeoutMs: 5_000,
+    run: saveUserState,
+  })
+  jobRegistry.register({
+    id: 'apps.index',
+    title: 'Application Index',
+    owner: 'host',
+    scope: 'apps',
+    triggers: [{ type: 'startup', delayMs: 100 }, { type: 'event', event: 'apps.changed', debounceMs: APP_REINDEX_DEBOUNCE_MS }],
+    timeoutMs: 30_000,
+    run: indexApplications,
+  })
+  jobRegistry.register({
+    id: 'files.index',
+    title: 'File Index',
+    owner: 'host',
+    scope: 'files',
+    triggers: [{ type: 'startup', delayMs: 200 }],
+    timeoutMs: 30_000,
+    run: indexFiles,
+  })
 }
 
 async function loadUserState() {
@@ -3765,6 +3946,7 @@ function rememberClipboardItem(item) {
   ].slice(0, CLIPBOARD_LIMIT)
   scheduleSaveState()
   invalidateExtensionRootItems()
+  jobRegistry.emit('clipboard.changed')
   paletteWindow.win?.webContents.send('clipboard:changed')
   const currentIds = new Set(clipboardHistory.map((entry) => entry.id))
   const removeItemIds = [...previousIds].filter((id) => !currentIds.has(id)).map((id) => `clipboard:${id}`)
@@ -3776,6 +3958,10 @@ function rememberClipboardItem(item) {
 }
 
 function scheduleSaveState() {
+  if (jobRegistry.has('state.save')) {
+    jobRegistry.schedule('state.save', 'state.changed', 200)
+    return
+  }
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(saveUserState, 200)
   saveTimer.unref?.()
@@ -3789,20 +3975,30 @@ async function saveUserState() {
   })
 }
 
+function pollClipboardChange() {
+  const item = readClipboardItem()
+  if (!item || item.id === clipboardWatcherLastId) return
+  const suppressUntil = suppressedClipboardItemIds.get(item.id) || 0
+  if (suppressUntil > Date.now()) {
+    clipboardWatcherLastId = item.id
+    return
+  }
+  if (suppressUntil) suppressedClipboardItemIds.delete(item.id)
+  clipboardWatcherLastId = item.id
+  rememberClipboardItem(item)
+}
+
 function startClipboardWatcher() {
-  let lastId = readClipboardItem()?.id || ''
-  setInterval(() => {
-    const item = readClipboardItem()
-    if (!item || item.id === lastId) return
-    const suppressUntil = suppressedClipboardItemIds.get(item.id) || 0
-    if (suppressUntil > Date.now()) {
-      lastId = item.id
-      return
-    }
-    if (suppressUntil) suppressedClipboardItemIds.delete(item.id)
-    lastId = item.id
-    rememberClipboardItem(item)
-  }, CLIPBOARD_POLL_INTERVAL_MS).unref?.()
+  clipboardWatcherLastId = readClipboardItem()?.id || ''
+  jobRegistry.register({
+    id: 'clipboard.poll',
+    title: 'Clipboard Poll',
+    owner: 'host',
+    scope: 'clipboard',
+    triggers: [{ type: 'interval', everyMs: CLIPBOARD_POLL_INTERVAL_MS, delayMs: CLIPBOARD_POLL_INTERVAL_MS }],
+    timeoutMs: 2_000,
+    run: pollClipboardChange,
+  })
 }
 
 function unregisterShortcutForAction(actionId) {
@@ -4176,6 +4372,7 @@ app.whenReady().then(async () => {
   updateManager.onStateChange(() => patchUpdatesView())
 
   await loadUserState()
+  registerHostJobs()
   await loadExtensions()
   if (process.env.NVM_PALETTE_DEBUG) {
     await runPaletteDebugCli()
@@ -4187,8 +4384,6 @@ app.whenReady().then(async () => {
   paletteWindow.registerHotkey()
   registerActionShortcuts()
   startClipboardWatcher()
-  setTimeout(indexApplications, 100)
-  setTimeout(indexFiles, 200)
   await startAppWatcher()
 
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
