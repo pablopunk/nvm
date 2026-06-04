@@ -64,7 +64,6 @@ export const ACTION_DEFINITIONS = {
   removeCreatedAction: { description: 'Remove action', dismiss: 'manual', loading: 'view', execute: 'main' },
   clearActionOverride: { description: 'Restore original action', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
   nativeAction: { description: 'Run command', dismiss: 'manual', loading: 'none', execute: 'main' },
-  runFixtureCommand: { description: 'Open fixture', dismiss: 'manual', loading: 'view', execute: 'main' },
   promptAction: { description: 'Prompt for input', dismiss: 'manual', loading: 'none', execute: 'main' },
   createWindow: { description: 'Open extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
   showWindow: { description: 'Show extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
@@ -265,7 +264,7 @@ export type RowModel = {
 
 export type CustomizableCommandAction = { kind?: string; customizable?: boolean }
 
-const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-command', 'extension-action'])
+const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-action'])
 
 export function canCustomizeCommandAction(action: CustomizableCommandAction | null | undefined) {
   return Boolean(action?.customizable) || CUSTOMIZABLE_ACTION_KINDS.has(String(action?.kind || ''))

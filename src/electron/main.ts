@@ -221,7 +221,6 @@ function recordLearningReview(chatId: string) {
 
 const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
-const extensionRegistry = new Map<string, any>()
 const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
 let fixtureExtensions: any[] = []
@@ -494,10 +493,6 @@ function visibleExtensions() {
   return Array.from(extensionModules.values()).filter((extension) => !isFixtureExtension(extension))
 }
 
-function visibleCommandEntries() {
-  return Array.from(extensionRegistry.values()).filter((entry) => !isFixtureExtension(entry.extension))
-}
-
 function visibleExtensionActionEntries() {
   return Array.from(extensionActionRegistry.values()).filter((entry) => !isFixtureExtension(entry.extension))
 }
@@ -506,28 +501,6 @@ function extensionCommandActionId(extension, command) {
   return `extension:${extension.id}:${command.id}`
 }
 
-function extensionActionFromCommand(extension, command) {
-  const extensionFile = extension.__filePath ? path.basename(extension.__filePath) : undefined
-  const action = {
-    id: command.actionId || extensionCommandActionId(extension, command),
-    kind: 'extension-command',
-    extensionId: extension.id,
-    commandId: command.id,
-    extensionFile,
-    aiChatId: extensionFile ? aiChatIdForExtensionFile(extensionFile) : undefined,
-    removable: Boolean(extension.__generated),
-    title: command.title,
-    subtitle: command.subtitle || extension.title || 'Extension command',
-    aliases: command.aliases || [],
-    icon: command.icon || 'sparkles',
-    score: command.score || 12,
-    dismissAfterRun: command.dismissAfterRun,
-    background: command.background,
-  }
-  const declaredShortcut = userState.removedShortcuts?.[action.id] ? null : command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
-  const shortcut = shortcutForAction(action) || declaredShortcut
-  return shortcut ? { ...action, shortcut } : action
-}
 
 function getOrCreateAiChat(query, options: any = {}) {
   const trimmed = query.trim()
@@ -661,7 +634,7 @@ function patchOpenView(viewId: string, patch: any) {
 }
 
 function aiBuilderRegistryEntry() {
-  return extensionRegistry.get(`${AI_BUILDER_EXTENSION_ID}:ai-chats`) || { extension: createAiBuilderExtension(), command: { id: 'ai-chats', title: 'AI Chats' } }
+  return extensionActionRegistry.get(`${AI_BUILDER_EXTENSION_ID}:ai-chats`) || { extension: createAiBuilderExtension(), command: { id: 'ai-chats', title: 'AI Chats' } }
 }
 
 function normalizedAiChatListItem(chat: any) {
@@ -1126,11 +1099,6 @@ async function searchActions(query, options: any = {}) {
     if (ranked) results.push(ranked)
   }
 
-  for (const command of visibleCommandEntries()) {
-    const ranked = rankAction(withShortcutHint(extensionActionFromCommand(command.extension, command.command)), q)
-    if (ranked) results.push(ranked)
-  }
-
   for (const entry of visibleExtensionActionEntries()) {
     const action = extensionActionFromContribution(entry)
     const ranked = action ? rankAction(withShortcutHint(action), q) : null
@@ -1178,11 +1146,8 @@ async function executeAction(action, options: any = {}) {
       break
     }
     case 'extension-command': {
-      const dismissImmediately = action.background || action.dismissAfterRun === 'auto'
-      if (dismissImmediately && !options.keepPaletteOpen) paletteWindow.hidePalette()
-      const result = await executeExtensionCommand(action)
-      if (result?.type) return { view: result }
-      if (result) return result
+      const upgraded = currentActionForStoredShortcut(action)
+      if (upgraded !== action) return executeAction(upgraded, options)
       break
     }
   }
@@ -1190,44 +1155,41 @@ async function executeAction(action, options: any = {}) {
   if (!options.keepPaletteOpen) paletteWindow.hidePalette()
 }
 
-function extensionEntryForAction(action) {
-  const direct = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
+function extensionActionEntryForAction(action) {
+  const registeredActionId = action?.registeredActionId || action?.commandId
+  const direct = extensionActionRegistry.get(`${action.extensionId}:${registeredActionId}`)
   if (direct) return direct
 
-  if (action.extensionFile) {
-    const fileMatches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
+  if (action?.extensionFile) {
+    const fileMatches = Array.from(extensionActionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
     if (fileMatches.length === 1) return fileMatches[0]
   }
 
-  if (action.aiChatId) {
+  if (action?.aiChatId) {
     const files = chatTouchedExtensionFiles(userState.aiChats[action.aiChatId])
-    const chatMatches = Array.from(extensionRegistry.values()).filter((entry) => files.includes(path.basename(entry.extension.__filePath || '')))
+    const chatMatches = Array.from(extensionActionRegistry.values()).filter((entry) => files.includes(path.basename(entry.extension.__filePath || '')))
     if (chatMatches.length === 1) return chatMatches[0]
   }
 
-  const matches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.id === action.extensionId)
+  const matches = Array.from(extensionActionRegistry.values()).filter((entry) => entry.extension.id === action?.extensionId)
   return matches.length === 1 ? matches[0] : null
 }
 
+function extensionEntryForAction(action) {
+  return extensionActionEntryForAction(action)
+}
+
 function extensionModuleForAction(action) {
-  const entry = extensionEntryForAction(action)
+  const entry = extensionActionEntryForAction(action)
   if (entry?.extension) return entry.extension
   if (!action?.extensionFile) return null
   return Array.from(extensionModules.values()).find((extension) => path.basename(extension.__filePath || '') === action.extensionFile) || null
 }
 
-function extensionActionEntryForAction(action) {
-  const direct = extensionActionRegistry.get(`${action.extensionId}:${action.registeredActionId}`)
-  if (direct) return direct
-  if (!action?.extensionFile) return null
-  const matches = Array.from(extensionActionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
-  return matches.length === 1 ? matches[0] : null
-}
-
 function currentActionForStoredShortcut(action) {
   if (action?.kind === 'extension-command') {
-    const entry = extensionEntryForAction(action)
-    return entry ? extensionActionFromCommand(entry.extension, entry.command) : action
+    const entry = extensionActionEntryForAction(action)
+    return entry ? extensionActionFromContribution(entry) : action
   }
   if (action?.kind === 'extension-action') {
     const entry = extensionActionEntryForAction(action)
@@ -1236,29 +1198,13 @@ function currentActionForStoredShortcut(action) {
   return action
 }
 
-async function executeExtensionCommand(action) {
-  const entry = extensionEntryForAction(action)
-  if (!entry) {
-    logWarn('extension.command.notFound', { extensionId: action.extensionId, commandId: action.commandId }, { source: 'host', scope: 'extension' })
-    return null
-  }
-  try {
-    const ctx = createExtensionContext(entry.extension, entry.command)
-    const result = await entry.command.run(ctx)
-    return executeViewActionResult(result, entry)
-  } catch (error) {
-    logError('extension.command.failed', error, { source: 'host', scope: 'extension', extensionId: entry.extension.id, commandId: entry.command.id })
-    return extensionErrorView(entry, error)
-  }
-}
-
 async function executeExtensionRootItem(action) {
   if (!action.rootAction) return { view: { type: 'preview', title: action.title || 'Extension item', content: action.subtitle || '' } }
   if (action.rootAction.type !== 'runExtensionAction') return executeViewAction(action.rootAction)
   const record = extensionActionHandlers.get(action.rootAction.handlerId)
   if (!record) return { view: { type: 'preview', title: 'Action unavailable', content: 'This extension item is no longer available.' } }
   try {
-    const result = await record.handler(createExtensionContext(record.entry.extension, null), action)
+    const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command || null), action)
     return executeViewActionResult(result, record.entry)
   } catch (error) {
     logError('extension.rootItem.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id })
@@ -1884,8 +1830,6 @@ async function executeViewAction(action) {
     }
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
-    case 'runFixtureCommand':
-      return executeExtensionCommand({ kind: 'extension-command', extensionId: action.extensionId, commandId: action.commandId })
     case 'runExtensionRegisteredAction': {
       const extensionId = action.extensionId
       const registeredActionId = action.registeredActionId || action.actionId
@@ -3182,7 +3126,7 @@ function initNevermindAi() {
 
 function extensionRuntimeStateForFile(filename) {
   const base = path.basename(filename || '')
-  const matches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension?.__filePath || '') === base)
+  const matches = Array.from(extensionActionRegistry.values()).filter((entry) => path.basename(entry.extension?.__filePath || '') === base)
   return {
     loaded: matches.length > 0,
     extensionId: matches[0]?.extension?.id,
@@ -3245,9 +3189,9 @@ function addAliasForGeneratedAction(chatId) {
   const chat = userState.aiChats[chatId]
   if (!chat?.query) return
   const files = chatTouchedExtensionFiles(chat)
-  const entry = Array.from(extensionRegistry.values()).find((e) => files.includes(path.basename(e.extension?.__filePath || '')))
+  const entry = Array.from(extensionActionRegistry.values()).find((e) => files.includes(path.basename(e.extension?.__filePath || '')))
   if (!entry) return
-  const action = extensionActionFromCommand(entry.extension, entry.command)
+  const action = extensionActionFromContribution(entry)
   if (!action?.id) return
   const aliases = new Set(actionAliases(action.id))
   aliases.add(chat.query.trim())
@@ -3298,7 +3242,6 @@ async function loadExtensionModule(fullPath) {
 }
 
 async function loadExtensions() {
-  extensionRegistry.clear()
   extensionActionRegistry.clear()
   extensionModules.clear()
   fixtureExtensions = []
@@ -3373,22 +3316,6 @@ async function renameExtension(extension, command, metadata) {
   return { ok: true, title: extension.title, commandTitle: command?.title }
 }
 
-function fixtureCommandAction(fixture, command) {
-  return { type: 'runFixtureCommand', title: command.title || 'Open Fixture', extensionId: fixture.id, commandId: command.id }
-}
-
-function fixtureCommandItem(fixture, command) {
-  const action = fixtureCommandAction(fixture, command)
-  return {
-    id: `fixture-command:${fixture.id}:${command.id}`,
-    title: command.title,
-    subtitle: command.subtitle || fixture.title || fixture.id,
-    icon: command.icon || 'wrench',
-    primaryAction: action,
-    actionPanel: { sections: [{ actions: [action] }] },
-  }
-}
-
 function fixturePersistentActionItems(fixture) {
   const registeredEntries = Array.from(extensionActionRegistry.values()).filter((entry) => entry.extension.id === fixture.id)
   return registeredEntries.map((entry) => {
@@ -3400,7 +3327,7 @@ function fixturePersistentActionItems(fixture) {
       persistentAction,
       primaryAction: persistentAction?.rootAction || item.primaryAction,
       subtitle: item.subtitle || `Persistent action · ${fixture.title || fixture.id}`,
-      accessories: [...(item.accessories || []), { text: 'action' }],
+      accessories: [...(item.accessories || []), { text: entry.source === 'command' ? 'command' : 'action' }],
     }
   })
 }
@@ -3415,24 +3342,20 @@ function fixturesIndexView(ctx) {
     sections: fixtureExtensions.map((fixture) => ({
       title: fixture.title || fixture.id,
       subtitle: fixture.subtitle || 'Extension API fixture',
-      items: [
-        ...fixturePersistentActionItems(fixture),
-        ...(Array.isArray(fixture.commands) ? fixture.commands : []).map((command) => fixtureCommandItem(fixture, command)),
-      ],
+      items: fixturePersistentActionItems(fixture),
     })), 
   })
 }
 
 function fixturesRootItem(ctx) {
-  const commands = fixtureExtensions.flatMap((fixture) => Array.isArray(fixture.commands) ? fixture.commands : [])
   const persistentItems = fixtureExtensions.flatMap((fixture) => fixturePersistentActionItems(fixture))
-  const runnableCount = commands.length + persistentItems.length
+  const runnableCount = persistentItems.length
   return {
     id: 'fixtures',
     title: 'Fixtures',
     subtitle: `${fixtureExtensions.length} dev-only extension API ${fixtureExtensions.length === 1 ? 'fixture' : 'fixtures'} · ${runnableCount} ${runnableCount === 1 ? 'item' : 'items'}`,
     icon: 'wrench',
-    aliases: ['fixture', 'fixtures', 'dev fixtures', 'extension fixtures', ...fixtureExtensions.map((fixture) => fixture.title || fixture.id), ...commands.map((command) => command.title), ...persistentItems.map((item) => item.title)].filter(Boolean),
+    aliases: ['fixture', 'fixtures', 'dev fixtures', 'extension fixtures', ...fixtureExtensions.map((fixture) => fixture.title || fixture.id), ...persistentItems.map((item) => item.title)].filter(Boolean),
     score: 100,
     primaryAction: ctx.actions.push('Open Fixtures', fixturesIndexView(ctx)),
   }
@@ -3479,7 +3402,7 @@ function registerInternalExtensions() {
 
 function assertInternalExtensionsRegistered() {
   const missingExtensions = REQUIRED_INTERNAL_EXTENSIONS.filter((extensionId) => !extensionModules.has(extensionId))
-  const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(({ extensionId, commandId }) => !extensionRegistry.has(`${extensionId}:${commandId}`))
+  const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(({ extensionId, commandId }) => !extensionActionRegistry.has(`${extensionId}:${commandId}`))
   if (missingExtensions.length || missingCommands.length) {
     const details = [
       missingExtensions.length ? `extensions: ${missingExtensions.join(', ')}` : '',
@@ -3494,13 +3417,31 @@ function registerExtension(extension) {
   extensionModules.set(extension.id, extension)
   for (const command of extension.commands || []) {
     if (!command?.id || !command.title || typeof command.run !== 'function') continue
-    extensionRegistry.set(`${extension.id}:${command.id}`, { extension, command })
+    const entry = { extension, command, source: 'command' }
+    const action = { type: 'runExtensionAction', title: command.title, __handler: async (ctx, actionArg) => command.run(ctx, actionArg) }
+    const item = {
+      id: command.id,
+      actionId: command.actionId || extensionCommandActionId(extension, command),
+      title: command.title,
+      subtitle: command.subtitle || extension.title || 'Extension command',
+      aliases: command.aliases || [],
+      icon: command.icon || 'sparkles',
+      score: command.score || 12,
+      shortcut: command.shortcut,
+      shortcutScope: command.shortcutScope,
+      globalShortcut: command.globalShortcut,
+      dismissAfterRun: command.dismissAfterRun,
+      background: command.background,
+      primaryAction: action,
+    }
+    const normalizedItem = normalizeViewItems([item], entry)[0]
+    extensionActionRegistry.set(`${extension.id}:${command.id}`, { ...entry, item: normalizedItem })
   }
   if (typeof extension.actions === 'function') {
     try {
       const result = extension.actions(createExtensionContext(extension, null))
       const items = Array.isArray(result) ? result : Array.isArray(result?.actions) ? result.actions : []
-      const entry = { extension, command: { id: 'actions', title: extension.title || extension.id } }
+      const entry = { extension, command: { id: 'actions', title: extension.title || extension.id }, source: 'action' }
       for (const item of items) {
         if (!item?.id || !item.title) continue
         const action = item.run ? { type: 'runExtensionAction', title: item.title, __handler: item.run } : item.action
@@ -3769,19 +3710,12 @@ function registerActionShortcut(actionId, accelerator, action) {
 }
 
 function declaredGlobalShortcuts() {
-  const commandShortcuts = visibleCommandEntries().map(({ extension, command }) => {
-    const accelerator = command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
-    if (!accelerator) return null
-    const action = extensionActionFromCommand(extension, command)
-    return { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action }
-  }).filter(Boolean)
-  const extensionActionShortcuts = visibleExtensionActionEntries().map((entry) => {
+  return visibleExtensionActionEntries().map((entry) => {
     const accelerator = entry.item.globalShortcut || (entry.item.shortcutScope === 'global' ? entry.item.shortcut : null)
     if (!accelerator) return null
     const action = extensionActionFromContribution(entry)
     return action ? { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action } : null
   }).filter(Boolean)
-  return [...commandShortcuts, ...extensionActionShortcuts]
 }
 
 function unregisterActionShortcuts() {
@@ -3960,7 +3894,7 @@ async function clearOverride(action) {
 }
 
 async function duplicateCreatedAction(action) {
-  if (!['extension-command', 'extension-root-item', 'extension-action'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
+  if (!['extension-root-item', 'extension-action'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
   const extension = extensionModuleForAction(action)
   const filePath = extension?.__filePath
   if (!filePath) return { ok: false, message: 'Generated extension not found' }
@@ -3989,8 +3923,8 @@ async function duplicateCreatedAction(action) {
   invalidateExtensionRootItems()
   await loadExtensions()
   registerActionShortcuts()
-  const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
-  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromCommand(duplicateEntry.extension, duplicateEntry.command) : { id: `ai-tweak-extension:${duplicateFile}`, kind: 'ai-tweak-extension', extensionFile: duplicateFile, title: duplicateTitle, subtitle: 'Tweak extension with AI', icon: 'sparkles', score: 0 } }
+  const duplicateEntry = Array.from(extensionActionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
+  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromContribution(duplicateEntry) : { id: `ai-tweak-extension:${duplicateFile}`, kind: 'ai-tweak-extension', extensionFile: duplicateFile, title: duplicateTitle, subtitle: 'Tweak extension with AI', icon: 'sparkles', score: 0 } }
 }
 
 async function removeAiChat(chatId) {
@@ -4045,7 +3979,7 @@ async function removeCreatedAction(action) {
     return { ok: true, message: 'AI chat removed' }
   }
 
-  if (['extension-command', 'extension-root-item', 'extension-action'].includes(action?.kind) && action.removable) {
+  if (['extension-root-item', 'extension-action'].includes(action?.kind) && action.removable) {
     const extension = extensionModuleForAction(action)
     const filePath = extension?.__filePath
     if (!filePath) return { ok: false, message: 'This extension cannot be removed' }

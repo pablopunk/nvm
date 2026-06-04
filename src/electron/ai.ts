@@ -817,14 +817,14 @@ async function validateTypeScriptExtension(filePath: string, extensionTypesPath:
 function capabilities() {
   return {
     extensionExports: ['export default { id, title, permissions, actions, commands, rootItems, searchItems } satisfies NevermindExtension'],
-    rootContributions: ['actions(ctx) returns persistent shortcutable actions; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items'], 
+    rootContributions: ['actions(ctx) returns persistent shortcutable actions; commands are shorthand durable actions; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items'], 
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
     views: ['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'camera', 'webview'],
     formFields: ['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'checkbox', 'dropdown/select', 'multiselect', 'description', 'separator'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
     itemOptions: ['accessories', 'keywords', 'actionPanel', 'appearance.foreground: muted named color yellow, blue, purple, green, red, orange, or pink'],
     actionPanel: ['sections', 'submenus'],
-    shortcuts: ['local action shortcut', 'command globalShortcut', 'persistent action globalShortcut', 'shortcutScope'], 
+    shortcuts: ['local action shortcut', 'durable action globalShortcut', 'command globalShortcut as shorthand', 'shortcutScope'], 
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
     namespaces: ['desktop', 'text', 'input', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],

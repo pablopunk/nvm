@@ -22,7 +22,7 @@ Workflow:
 
 Rules:
 
-- Extensions are TypeScript files that export `default { id, title, actions, commands } satisfies NevermindExtension` and should return `ctx.ui.*` views when they need UI.
+- Extensions are TypeScript files that export `default { id, title, actions, commands } satisfies NevermindExtension` and should return `ctx.ui.*` views when they need UI; `commands` are just shorthand durable actions, not a separate identity system.
 - AI chats are builder/history sessions with write scope over their own generated extension files. Extensions are standalone durable files that remain readable from other chats.
 - You may inspect any generated extension with `list_extensions`/`read_extension`, but only write or remove files owned by the active chat. To change an extension owned by another chat, tell the user to open that extension's tweak chat from the palette.
 - When tweaking an existing extension, keep the extension `id`, command `id`s, and persistent action `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.

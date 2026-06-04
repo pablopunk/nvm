@@ -47,7 +47,6 @@ type ActionKind =
   | 'remove-ai-chat'
   | 'builtin'
   | 'calculate'
-  | 'extension-command'
   | 'extension-root-item'
   | 'extension-action'
 
@@ -756,7 +755,7 @@ export function App() {
   }
 
   function rootActionCanDismissImmediately(action: Action | { kind?: string; background?: boolean; dismissAfterRun?: 'auto' }) {
-    return rootNativeActionCanDismissImmediately(action) || (['extension-command', 'extension-root-item'].includes(String(action.kind)) && (action.background || action.dismissAfterRun === 'auto'))
+    return rootNativeActionCanDismissImmediately(action) || (['extension-action', 'extension-root-item'].includes(String(action.kind)) && (action.background || action.dismissAfterRun === 'auto'))
   }
 
   function rootActionRequestsQuit(action: unknown) {
@@ -800,7 +799,7 @@ export function App() {
       const result = await window.nvm.removeShortcut(String(nativeAction.actionId))
       showToast(result.message, result.ok ? 'default' : 'error')
       if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
-        const refreshed = await window.nvm.execute({ id: 'keyboard-shortcuts', kind: 'extension-command', extensionId: 'nevermind.shortcuts', commandId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16 } as Action)
+        const refreshed = await window.nvm.execute({ id: 'keyboard-shortcuts', kind: 'extension-action', extensionId: 'nevermind.shortcuts', registeredActionId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16 } as Action)
         if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
       }
       return
@@ -1039,7 +1038,7 @@ export function App() {
   function tabActionForRootAction(action: Action | null | undefined) {
     if (!action) return null
     if (action.kind === 'extension-root-item' && action.extensionId === 'nevermind.ai-builder' && action.id.startsWith('extension-root:nevermind.ai-builder:ai-chat:')) return () => run(action)
-    if (['extension-command', 'extension-root-item', 'extension-action'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
+    if (['extension-root-item', 'extension-action'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
     return null
   }
 
@@ -1074,9 +1073,9 @@ export function App() {
   }
 
   const canOverride = Boolean(optionsFor?.defaultActionId)
-  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-command', 'extension-root-item', 'extension-action'].includes(optionsFor.kind))
+  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-root-item', 'extension-action'].includes(optionsFor.kind))
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
-  const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item', 'extension-action'].includes(optionsFor?.kind || '') && optionsFor?.removable)
+  const canDuplicateCreatedAction = Boolean(['extension-root-item', 'extension-action'].includes(optionsFor?.kind || '') && optionsFor?.removable)
   const canCustomizeAction = canCustomizeCommandAction(optionsFor)
   const canRemoveOptionsShortcut = Boolean(optionsFor && shortcutRecords.some((record) => record.actionId === optionsFor.id))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
@@ -1418,7 +1417,7 @@ export function App() {
       items={items}
       iconForItem={iconForCommandItem}
       onSelect={runCommandItem}
-      extraForItem={(item) => ['extension-command', 'extension-root-item', 'extension-action'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
+      extraForItem={(item) => ['extension-root-item', 'extension-action'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
     />
   }
 

@@ -702,7 +702,7 @@ export type ExtensionContext = {
 
 export type ExtensionCommand = {
   id: string
-  /** Stable action id for shortcuts/aliases. Defaults to the command id when omitted. */
+  /** Stable action id for shortcuts/aliases. Defaults to `extension:${extension.id}:${id}` for compatibility. */
   actionId?: string
   title: string
   subtitle?: string
@@ -719,14 +719,17 @@ export type ExtensionCommand = {
 }
 
 /**
- * Extension manifest. Commands appear in search automatically; provider methods
- * should contribute distinct child/status/query items, not duplicate command launchers.
+ * Extension manifest. `actions(ctx)` is the durable action registry. `commands` are
+ * ergonomic shorthand for durable actions that appear in search automatically; the
+ * host normalizes both into the same shortcut/alias/execution pipeline. Provider
+ * methods should contribute distinct child/status/query items, not duplicate command launchers.
  */
 export type NevermindExtension = {
   id: string
   title: string
   subtitle?: string
   permissions?: ExtensionPermission[]
+  /** Shorthand for search-visible durable actions with imperative `run(ctx)`. */
   commands?: ExtensionCommand[]
   /**
    * Persistent action registry. Use this for shortcut-worthy static variants such as
