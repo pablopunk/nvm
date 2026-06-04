@@ -533,7 +533,7 @@ kbd {
   overflow: auto;
   white-space: pre-wrap;
   color: var(--text-primary);
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font: inherit;
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
@@ -699,6 +699,14 @@ kbd {
   gap: 12px;
 }
 
+.formView,
+.progressView,
+.previewView {
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - var(--search-row-height) - var(--palette-stack-gap));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
 .chatView {
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
@@ -833,7 +841,9 @@ kbd {
 
 .chatBubble,
 .progressStep,
-.formView label {
+.progressOverview,
+.formField,
+.formStaticField {
   display: grid;
   gap: 4px;
   border-radius: var(--radius-md);
@@ -868,9 +878,132 @@ kbd {
 }
 
 .progressStep,
-.formView label {
+.progressOverview,
+.formField,
+.formStaticField {
   padding: 8px 10px;
   background: var(--surface-1);
+}
+
+.progressOverview {
+  gap: 8px;
+}
+
+.progressOverview > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progressOverview small,
+.progressStep small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.progressBar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.progressBar span {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
+.progressStep {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.progressStep > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.progressStep strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressStep small {
+  flex: none;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-pill);
+  padding: 1px 6px;
+  background: var(--surface-2);
+  line-height: 1.4;
+}
+
+.progressStepMarker {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.progressStep[data-status='done'] .progressStepMarker {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.progressStep[data-status='done'] .progressStepMarker::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid rgba(10, 11, 16, 0.9);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.progressStep[data-status='active'] .progressStepMarker {
+  border-color: var(--accent-strong);
+  background: transparent;
+  box-shadow: 0 0 0 3px var(--accent-faint);
+}
+
+.progressStep[data-status='active'] .progressStepMarker::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.progressStep[data-status='done'] small {
+  color: var(--accent);
+  background: var(--accent-faint);
+}
+
+.progressStep[data-status='active'] small {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+.progressStep[data-status='error'] .progressStepMarker {
+  border-color: var(--danger-text);
+  background: var(--danger-text);
+}
+
+.progressStep[data-status='error'] small {
+  color: var(--danger-text);
+  background: var(--danger-bg);
 }
 
 .markdownContent {
@@ -949,12 +1082,93 @@ kbd {
   padding-left: 4px;
 }
 
-.formView input {
+.formView input,
+.formView textarea,
+.formView select {
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text-primary);
   background: var(--surface-sunken);
+  font: inherit;
+}
+
+.previewText {
+  min-width: 0;
+  white-space: pre-wrap;
+}
+
+.previewText .markdownContent {
+  white-space: normal;
+}
+
+.formView textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.formCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.formCheckbox input {
+  flex: none;
+  width: auto;
+  accent-color: var(--accent-strong);
+}
+
+.formView select[multiple] {
+  min-height: 88px;
+  padding: 6px;
+}
+
+.formView select[multiple] option {
+  border-radius: var(--radius-xs);
+  padding: 4px 6px;
+}
+
+.formSubmitButton {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-strong);
+  background: var(--surface-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.formSubmitButton:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.formSubmitButton:hover {
+  background: var(--surface-4);
+}
+
+.formDescription,
+.formField small {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.formFieldError {
+  color: var(--danger-text) !important;
+}
+
+.formSeparator {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border-1);
+}
+
+.formStaticField-separator {
+  padding-block: 4px;
 }
 
 .resultText {
@@ -1116,12 +1330,20 @@ kbd {
 }
 
 .actionSectionHeader {
-  padding: 8px 12px 4px;
+  padding: 8px 12px 0;
   color: var(--text-dim);
   font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
+  line-height: 1.2;
   text-transform: uppercase;
+}
+
+.actionSectionSubtitle {
+  padding: 0 12px 8px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
 }
 
 .empty {

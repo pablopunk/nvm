@@ -22,7 +22,8 @@ const backend = spawn(astroBin, ['dev'], {
   env: process.env,
 })
 
-const child = spawn(bin, ['dev', '--watch'], {
+const remoteDebuggingPort = process.env.NVM_DEV_REMOTE_DEBUGGING_PORT || '9222'
+const child = spawn(bin, ['dev', '--watch', '--remoteDebuggingPort', remoteDebuggingPort], {
   cwd: root,
   stdio: 'inherit',
   shell: isWindows,

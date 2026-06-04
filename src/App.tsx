@@ -14,7 +14,7 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
-import { EmptyState, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow } from './ui'
+import { EmptyState, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow, type FormValue } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
@@ -171,7 +171,7 @@ export function App() {
   const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false)
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([])
   const [shortcutOptionsFor, setShortcutOptionsFor] = useState<ShortcutRecord | null>(null)
-  const [formValues, setFormValues] = useState<Record<string, string | boolean>>({})
+  const [formValues, setFormValues] = useState<Record<string, FormValue>>({})
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([])
   const extensionViewRef = useRef<ExtensionView | null>(null)
   const wasChildOpenRef = useRef(false)
@@ -399,7 +399,11 @@ export function App() {
 
   useEffect(() => {
     if (extensionView?.type !== 'form') return
-    setFormValues(Object.fromEntries((extensionView.fields || []).map((field) => [field.id, field.type === 'checkbox' ? Boolean(field.value) : field.value || ''])))
+    setFormValues(Object.fromEntries((extensionView.fields || []).map((field) => {
+      if (field.type === 'checkbox') return [field.id, Boolean(field.value)]
+      if (field.type === 'multiselect') return [field.id, Array.isArray(field.value) ? field.value : []]
+      return [field.id, field.value || '']
+    })))
   }, [extensionView])
 
   useEffect(() => {

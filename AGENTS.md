@@ -32,8 +32,10 @@
 ## Style and Documentation
 
 * Prefer descriptive function naming over comments.
+* Prefer named functions over anonymous arrow functions.
 * Keep `AGENTS.md` concise. Move detailed guides to `src/docs/`. Document intention, NEVER implementation.
 * Treat `src/resources/nevermind-extension-api.d.ts` as the self-documenting source of truth for the app's extension platform: runtime contract, validation types, author guidance, and AI builder context. Update its types/TSDoc with every API change and do not recreate API reference markdown.
+* Every extension API endpoint that renders UI must have a dev-only fixture under `src/fixtures/`; use `.agents/skills/extensions-ui-test/SKILL.md` for dogfooding and see `src/docs/extension-api-ui-fixtures.md`.
 * Use CSS variables from `src/styles.css` (e.g., `--accent-*`, `--radius-*`). Avoid hardcoded colors or radii.
 
 ## Verification

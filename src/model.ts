@@ -63,6 +63,7 @@ export const ACTION_DEFINITIONS = {
   removeCreatedAction: { description: 'Remove action', dismiss: 'manual', loading: 'view', execute: 'main' },
   clearActionOverride: { description: 'Restore original action', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
   nativeAction: { description: 'Run command', dismiss: 'manual', loading: 'none', execute: 'main' },
+  runFixtureCommand: { description: 'Open fixture', dismiss: 'manual', loading: 'view', execute: 'main' },
 } as const satisfies Record<string, CommandActionDefinition>
 
 export type CommandActionType = keyof typeof ACTION_DEFINITIONS
@@ -90,6 +91,8 @@ export type CommandAction = {
   settingId?: string
   action?: unknown
   actionId?: string
+  extensionId?: string
+  commandId?: string
   targetAction?: unknown
   alias?: string
   accelerator?: string
@@ -106,7 +109,7 @@ export type CommandAction = {
   args?: string[]
   script?: string
   options?: Record<string, unknown>
-  formValues?: Record<string, string | boolean>
+  formValues?: Record<string, CommandFormValue>
   selectedItemId?: string
   value?: string
   submenu?: CommandActionPanel
@@ -136,6 +139,10 @@ export type CommandItemForeground = 'yellow' | 'blue' | 'purple' | 'green' | 're
 export type CommandItemAppearance = { foreground?: CommandItemForeground }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & { id: string }
+export type CommandFormValue = string | boolean | string[]
+export type CommandFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'description' | 'separator'
+export type CommandFormOption = { title: string; value: string }
+export type CommandFormField = { id: string; label?: string; type?: CommandFormFieldType; value?: CommandFormValue; placeholder?: string; required?: boolean; options?: CommandFormOption[]; description?: string; error?: string; rows?: number }
 
 export type CommandItem = {
   id: string
@@ -203,9 +210,12 @@ export type CommandView = {
   searchAccessory?: { id?: string; tooltip?: string; value?: string; items: { title: string; value: string }[]; onChange?: CommandAction }
   refresh?: { intervalMs?: number; action?: CommandAction; mode?: CommandViewPatch['mode'] }
   messages?: { role: 'user' | 'assistant' | 'system'; content: string }[]
-  fields?: { id: string; label: string; type?: string; value?: string; placeholder?: string; required?: boolean }[]
+  fields?: CommandFormField[]
   submitAction?: CommandAction
   steps?: { title: string; status?: string }[]
+  value?: number
+  total?: number
+  status?: string
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'menu' | 'hidden'

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { CornerDownLeft, CreditCard, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import type { AiLimitState } from './use-ai-chat'
-import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
+import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE, type FormValue } from './ui'
 import { RootCommandList } from './command-list'
 import { iconForItem } from './command-icons'
 
@@ -22,8 +22,8 @@ export type ExtensionViewRendererProps = {
   aiChat: AiChatState
   nevermindAuthed: boolean | null
   onSignInToNevermind: () => void
-  formValues: Record<string, string | boolean>
-  setFormValues: React.Dispatch<React.SetStateAction<Record<string, string | boolean>>>
+  formValues: Record<string, FormValue>
+  setFormValues: React.Dispatch<React.SetStateAction<Record<string, FormValue>>>
   filterItems: (items?: CommandItem[]) => CommandItem[]
   filterSections: (view: CommandView) => CommandView['sections']
   renderMarkdown: (content: string) => ReactNode
@@ -223,7 +223,7 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
 
   if (view.type === 'form') return <FormView fields={view.fields || []} values={formValues} onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))} onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, formValues }) : undefined} submitTitle={view.submitAction?.title} />
 
-  if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
+  if (view.type === 'progress') return <ProgressView steps={view.steps || []} value={view.value} total={view.total} status={view.status} />
 
   if (view.type === 'webview') {
     const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
@@ -239,5 +239,6 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
 
   const previewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
   const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
-  return <div className={view.presentation === 'preview' || view.size === 'large' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
+  const previewContent = view.content ? renderMarkdown(view.content) : view.subtitle || ''
+  return <div className={view.presentation === 'preview' || view.size === 'large' ? 'previewMode' : undefined}><PreviewView content={previewContent} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
 }

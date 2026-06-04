@@ -66,6 +66,9 @@ export type ForegroundColor = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | '
 export type ShortcutScope = 'local' | 'global'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogSource = 'main' | 'renderer' | 'extension' | 'host'
+export type ExtensionFormValue = string | boolean | string[]
+export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'description' | 'separator'
+export type ExtensionFormOption = { title: string; value: string }
 
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
 export type ExtensionToastResult = { toast: { message: string; tone?: 'default' | 'error' } }
@@ -109,7 +112,7 @@ export type ExtensionAction = {
   /** Nested Cmd+K action panel. */
   submenu?: ExtensionActionPanel
   /** Field values injected by the host when a form's `submitAction` runs. */
-  formValues?: Record<string, string | boolean>
+  formValues?: Record<string, ExtensionFormValue>
   /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
   selectedItemId?: string
   /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
@@ -220,10 +223,29 @@ export type ExtensionView = {
   aspectRatio?: string | number
   columns?: number
   messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
-  fields?: Array<{ id: string; label: string; type?: string; value?: string; placeholder?: string; required?: boolean }>
+  fields?: ExtensionFormField[]
   submitAction?: ExtensionAction
   steps?: Array<{ title: string; status?: string }>
+  /** Current progress value for progress views. Pair with `total` for a determinate bar. */
+  value?: number
+  /** Total progress value for progress views. Pair with `value` for a determinate bar. */
+  total?: number
+  /** Human-readable progress summary, e.g. `Downloading assets…`. */
+  status?: string
   [key: string]: unknown
+}
+
+export type ExtensionFormField = {
+  id: string
+  label?: string
+  type?: ExtensionFormFieldType
+  value?: ExtensionFormValue
+  placeholder?: string
+  required?: boolean
+  options?: ExtensionFormOption[]
+  description?: string
+  error?: string
+  rows?: number
 }
 
 export type ExtensionFileKind = 'image' | 'video' | 'file' | string
@@ -335,6 +357,16 @@ export type ExtensionOwnership = {
   remove?(extensionFile: string, chatId: string): Promise<boolean>
   /** Host-only mutator exposed to the built-in AI Builder extension. */
   reload?(): Promise<void>
+}
+
+export type ExtensionText = {
+  /**
+   * Expand host-standard text templates. Variables use `{name}` or `{{name}}`.
+   * Built-ins include `{date}`, `{time}`, `{datetime}`, `{uuid}`, `{selectedText}`, `{cursor}`,
+   * and `{calculator:1 + 2}`. `{clipboard}` is available when the extension declares
+   * `clipboard.history`. Explicit variables override built-ins.
+   */
+  template(input: string, variables?: Record<string, string | number | boolean | null | undefined>): Promise<string>
 }
 
 export type ExtensionAiBuilder = {
@@ -464,6 +496,9 @@ export type ExtensionContext = {
 
   /** Read-only host OS metadata: capability checks and intent-named labels. */
   system: ExtensionSystem
+
+  /** Text and template helpers for snippets, quicklinks, prompts, and selected-text transforms. */
+  text: ExtensionText
 
   /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
   clipboard: { history?: ExtensionClipboardHistory }

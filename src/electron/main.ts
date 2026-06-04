@@ -217,6 +217,7 @@ const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
 const extensionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
+let fixtureExtensions: any[] = []
 const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionStorageRefreshes = new Map<string, Promise<any>>()
@@ -476,6 +477,18 @@ async function getAppIconDataUrl(appPath) {
   if (result) appIconCache.set(appPath, result)
   else appIconCache.set(appPath, null)
   return result
+}
+
+function isFixtureExtension(extension) {
+  return Boolean(extension?.__fixture)
+}
+
+function visibleExtensions() {
+  return Array.from(extensionModules.values()).filter((extension) => !isFixtureExtension(extension))
+}
+
+function visibleCommandEntries() {
+  return Array.from(extensionRegistry.values()).filter((entry) => !isFixtureExtension(entry.extension))
 }
 
 function extensionCommandActionId(extension, command) {
@@ -1102,7 +1115,7 @@ async function searchActions(query, options: any = {}) {
     if (ranked) results.push(ranked)
   }
 
-  for (const command of extensionRegistry.values()) {
+  for (const command of visibleCommandEntries()) {
     const ranked = rankAction(withShortcutHint(extensionActionFromCommand(command.extension, command.command)), q)
     if (ranked) results.push(ranked)
   }
@@ -1222,12 +1235,12 @@ async function executeExtensionRootItem(action) {
 }
 
 async function extensionRootActions() {
-  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionRootActionsForExtension(extension)))
+  const actionGroups = await Promise.all(visibleExtensions().map((extension) => extensionRootActionsForExtension(extension)))
   return actionGroups.flat()
 }
 
 async function extensionSearchActions(query) {
-  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionSearchActionsForExtension(extension, query)))
+  const actionGroups = await Promise.all(visibleExtensions().map((extension) => extensionSearchActionsForExtension(extension, query)))
   return actionGroups.flat()
 }
 
@@ -1634,6 +1647,8 @@ async function executeViewAction(action) {
     }
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
+    case 'runFixtureCommand':
+      return executeExtensionCommand({ kind: 'extension-command', extensionId: action.extensionId, commandId: action.commandId })
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
@@ -2454,6 +2469,38 @@ function progressView(input: any = {}) {
   }
 }
 
+async function safeSelectedText() {
+  try { return String(await selectedText()) } catch { return '' }
+}
+
+function templateDateParts(now = new Date()) {
+  return {
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    datetime: now.toLocaleString(),
+  }
+}
+
+async function expandTextTemplate(input: string, variables: Record<string, unknown> = {}, options: { includeClipboard?: boolean } = {}) {
+  const builtins = {
+    ...templateDateParts(),
+    uuid: crypto.randomUUID(),
+    clipboard: options.includeClipboard ? clipboard.readText() : '',
+    selectedText: await safeSelectedText(),
+    cursor: '',
+  }
+  const values = { ...builtins, ...variables }
+  return String(input || '').replace(/\{\{\s*([^{}]+?)\s*\}\}|\{\s*([^{}]+?)\s*\}/g, (_match, doubleName, singleName) => {
+    const rawName = String(doubleName || singleName || '').trim()
+    if (rawName.startsWith('calculator:')) {
+      const result = calculate(rawName.slice('calculator:'.length).trim())
+      return result == null ? '' : String(result)
+    }
+    const value = values[rawName]
+    return value == null ? '' : String(value)
+  })
+}
+
 function createExtensionContext(extension, command) {
   const canUseDesktopApps = hasExtensionPermission(extension, 'desktop.apps')
   const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
@@ -2565,6 +2612,9 @@ function createExtensionContext(extension, command) {
         openSystemSettings: settingsTitle(),
         keyboardSettings: keyboardSettingsSubtitle(),
       },
+    },
+    text: {
+      template: (input, variables) => expandTextTemplate(input, variables, { includeClipboard: canUseClipboard }),
     },
     clipboard: {
       history: canUseClipboard ? {
@@ -2954,9 +3004,11 @@ async function loadExtensionModule(fullPath) {
 async function loadExtensions() {
   extensionRegistry.clear()
   extensionModules.clear()
+  fixtureExtensions = []
   extensionRootItemsCache.clear()
   extensionRootItemsRefreshes.clear()
   registerInternalExtensions()
+  if (isDev) await loadDevExtensions()
 
   await fs.mkdir(extensionsDir, { recursive: true })
   await ensureExtensionTypeDefinitions()
@@ -3022,6 +3074,84 @@ async function renameExtension(extension, command, metadata) {
   await loadExtensions()
   registerActionShortcuts()
   return { ok: true, title: extension.title, commandTitle: command?.title }
+}
+
+function fixtureCommandAction(fixture, command) {
+  return { type: 'runFixtureCommand', title: command.title || 'Open Fixture', extensionId: fixture.id, commandId: command.id }
+}
+
+function fixtureCommandItem(fixture, command) {
+  const action = fixtureCommandAction(fixture, command)
+  return {
+    id: `fixture-command:${fixture.id}:${command.id}`,
+    title: command.title,
+    subtitle: command.subtitle || fixture.title || fixture.id,
+    icon: command.icon || 'wrench',
+    primaryAction: action,
+    actionPanel: { sections: [{ actions: [action] }] },
+  }
+}
+
+function fixturesIndexView(ctx) {
+  return ctx.ui.list({
+    id: 'extension-api-fixtures',
+    title: 'Extension API Fixtures',
+    subtitle: 'Dev-only runnable fixtures for host-rendered extension UI',
+    searchBarPlaceholder: 'Search fixture commands',
+    emptyView: { title: 'No fixtures found', subtitle: 'Add fixture extensions under src/fixtures.' },
+    sections: fixtureExtensions.map((fixture) => ({
+      title: fixture.title || fixture.id,
+      subtitle: fixture.subtitle || 'Extension API fixture',
+      items: (Array.isArray(fixture.commands) ? fixture.commands : []).map((command) => fixtureCommandItem(fixture, command)),
+    })),
+  })
+}
+
+function fixturesRootItem(ctx) {
+  const commands = fixtureExtensions.flatMap((fixture) => Array.isArray(fixture.commands) ? fixture.commands : [])
+  return {
+    id: 'fixtures',
+    title: 'Fixtures',
+    subtitle: `${fixtureExtensions.length} dev-only extension API ${fixtureExtensions.length === 1 ? 'fixture' : 'fixtures'} · ${commands.length} ${commands.length === 1 ? 'command' : 'commands'}`,
+    icon: 'wrench',
+    aliases: ['fixture', 'fixtures', 'dev fixtures', 'extension fixtures', ...fixtureExtensions.map((fixture) => fixture.title || fixture.id), ...commands.map((command) => command.title)].filter(Boolean),
+    score: 100,
+    primaryAction: ctx.actions.push('Open Fixtures', fixturesIndexView(ctx)),
+  }
+}
+
+function createFixturesExtension() {
+  return {
+    id: 'dev.fixtures',
+    title: 'Fixtures',
+    subtitle: 'Dev-only extension API fixtures',
+    rootItems(ctx) {
+      return [fixturesRootItem(ctx)]
+    },
+    searchItems(ctx) {
+      return [fixturesRootItem(ctx)]
+    },
+  }
+}
+
+async function loadDevExtensions() {
+  const fixturesDir = path.join(app.getAppPath(), 'src', 'fixtures')
+  const entries = await fs.readdir(fixturesDir, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (!isExtensionSourceFile(entry.name)) continue
+    const fullPath = path.join(fixturesDir, entry.name)
+    try {
+      const extension = await loadExtensionModule(fullPath)
+      extension.__filePath = fullPath
+      extension.__dev = true
+      extension.__fixture = true
+      fixtureExtensions.push(extension)
+      registerExtension(extension)
+    } catch (error) {
+      logError('extension.dev.load.failed', error, { source: 'host', scope: 'extension', extensionId: path.basename(fullPath) })
+    }
+  }
+  if (fixtureExtensions.length) registerExtension(createFixturesExtension())
 }
 
 function registerInternalExtensions() {
@@ -3300,7 +3430,7 @@ function registerActionShortcut(actionId, accelerator, action) {
 }
 
 function declaredGlobalShortcuts() {
-  return Array.from(extensionRegistry.values()).map(({ extension, command }) => {
+  return visibleCommandEntries().map(({ extension, command }) => {
     const accelerator = command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
     if (!accelerator) return null
     const action = extensionActionFromCommand(extension, command)
