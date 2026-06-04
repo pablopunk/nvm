@@ -156,6 +156,28 @@ function editorView(ctx: ExtensionContext) {
   })
 }
 
+function fileIndexControlsAction(ctx: ExtensionContext) {
+  return ctx.actions.run('Show File Index Snapshot', async (innerCtx) => {
+    const files = innerCtx.desktop.files
+    if (!files) return innerCtx.ui.preview({ title: 'File Index Unavailable', content: 'The `desktop.files` permission is not available.' })
+    const roots = files.indexedRoots()
+    const snapshot = files.indexSnapshot({ roots: ['~/Downloads'], extensions: ['png', 'jpg', 'jpeg', 'mp4', 'mov'], limit: 8, ignore: ['*.tmp'] })
+    return innerCtx.ui.preview({
+      title: 'File Index Snapshot',
+      content: [`# File Index Snapshot`, '', `Default roots: ${roots.join(', ')}`, '', ...snapshot.map((file) => `- **${file.name}** · ${file.kind || 'file'} · ${file.displayPath || file.path}`)].join('\n'),
+    })
+  })
+}
+
+function reindexDownloadsAction(ctx: ExtensionContext) {
+  return ctx.actions.run('Reindex Downloads Media', async (innerCtx) => {
+    const files = innerCtx.desktop.files
+    if (!files) return innerCtx.ui.preview({ title: 'File Index Unavailable', content: 'The `desktop.files` permission is not available.' })
+    const result = await files.reindex({ roots: ['~/Downloads'], kind: 'media', depth: 2, limit: 500, ignore: ['*.tmp'] })
+    return innerCtx.ui.preview({ title: 'Reindex Complete', content: `# Reindex Complete\n\nIndexed ${result.count} files from ${result.roots.join(', ')}.` })
+  })
+}
+
 function listView(ctx: ExtensionContext) {
   const confirm = ctx.ui.confirm({
     title: 'Confirm Dev Action',
@@ -177,6 +199,7 @@ function listView(ctx: ExtensionContext) {
         ctx.ui.item({ id: 'prompt', title: 'Open Prompt Fixture', subtitle: 'Prompted arguments before an action runs', icon: 'text-cursor-input', accessories: [{ text: 'prompt' }], primaryAction: ctx.actions.push('Open Prompt', promptView(ctx)) }),
         ctx.ui.item({ id: 'editor', title: 'Open Editor Fixture', subtitle: 'Editable markdown, preview, submit payload', icon: 'file-pen-line', accessories: [{ text: 'editor' }], primaryAction: ctx.actions.push('Open Editor', editorView(ctx)) }),
         ctx.ui.item({ id: 'preview', title: 'Open Preview Fixture', subtitle: 'Markdown/text preview', icon: 'file-text', accessories: [{ text: 'preview' }], primaryAction: ctx.actions.push('Open Preview', previewView(ctx)) }),
+        ctx.ui.item({ id: 'file-index', title: 'File Index Controls', subtitle: 'Snapshot and bounded reindex helpers for generated file searchers', icon: 'folder-search', accessories: [{ text: 'files' }], primaryAction: fileIndexControlsAction(ctx), actions: [fileIndexControlsAction(ctx), reindexDownloadsAction(ctx)] }),
         ctx.ui.item({ id: 'confirm', title: 'Confirmation Fixture', subtitle: 'Host-owned confirm step', icon: 'shield-check', accessories: [{ text: 'confirm' }], primaryAction: confirm, actionPanel: { sections: [{ actions: [confirm, ctx.actions.copyText('copied from dev fixture', 'Copy Fixture Text')] }] } }),
       ],
     }],

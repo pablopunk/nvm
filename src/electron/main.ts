@@ -2365,13 +2365,25 @@ function fileRootItem(item) {
 
 function fileIndexSnapshot(options: any = {}) {
   const { limit, query } = options
+  const roots = normalizeFindRoots(options.roots).map(expandUserPath).filter(Boolean)
+  const extensions = extensionsForFindOptions(options)
+  const ignored = normalizedIgnorePatterns(options.ignore)
   let entries = fileIndex
+  if (roots.length) entries = entries.filter((entry) => roots.some((root) => entry.path === root || entry.path.startsWith(`${root}${path.sep}`)))
+  if (extensions) entries = entries.filter((entry) => extensions.has(entry.extension || extensionForPath(entry.path)))
+  if (options.ignore) entries = entries.filter((entry) => !ignoredByPattern(entry.path, entry.name, ignored))
   if (query) {
     const needle = String(query).toLowerCase()
     entries = entries.filter((entry) => `${entry.name || ''} ${entry.displayPath || ''}`.toLowerCase().includes(needle))
   }
-  const max = typeof limit === 'number' ? limit : entries.length
-  return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath }))
+  const max = typeof limit === 'number' ? Math.max(0, Math.min(limit, entries.length)) : entries.length
+  return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath, extension: entry.extension, kind: entry.kind }))
+}
+
+async function reindexFiles(options: any = {}) {
+  fileIndex = await scanFiles(options)
+  paletteWindow.win?.webContents.send('root-items:changed')
+  return { count: fileIndex.length, roots: normalizedIndexRoots(options).map(displayUserPath) }
 }
 
 function createClipboardExtension() {
@@ -2929,6 +2941,9 @@ function createExtensionContext(extension, command) {
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
         thumbnail: (filePath) => thumbnailUrlForPreviewablePath(filePath),
         metadata: (filePath) => fileToExtensionFile(filePath),
+        indexedRoots: () => defaultFileIndexRoots().map(displayUserPath),
+        indexSnapshot: (options: any = {}) => fileIndexSnapshot(options),
+        reindex: (options: any = {}) => reindexFiles(options),
         recent: (options: any = {}) => fileIndexSnapshot(options),
         searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
@@ -3488,12 +3503,45 @@ function displayUserPath(filePath) {
   return filePath.startsWith(home) ? `~${filePath.slice(home.length)}` : filePath
 }
 
-async function scanFiles() {
-  const roots = ['Desktop', 'Documents', 'Downloads'].map((name) => path.join(os.homedir(), name))
-  const ignored = new Set(['node_modules', '.git', 'Library', 'Applications'])
+const DEFAULT_FILE_INDEX_IGNORES = ['node_modules', '.git', 'Library', 'Applications']
+const DEFAULT_FILE_INDEX_LIMIT = 5_000
+const MAX_FILE_INDEX_LIMIT = 20_000
+
+function defaultFileIndexRoots() {
+  return ['Desktop', 'Documents', 'Downloads'].map((name) => path.join(os.homedir(), name))
+}
+
+function normalizedIndexRoots(options: any = {}) {
+  const roots = normalizeFindRoots(options.roots)
+  return (roots.length ? roots : defaultFileIndexRoots()).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
+}
+
+function normalizedIgnorePatterns(ignore) {
+  const values = Array.isArray(ignore) ? ignore : ignore ? [ignore] : []
+  return [...DEFAULT_FILE_INDEX_IGNORES, ...values].map((value) => String(value).trim()).filter(Boolean)
+}
+
+function wildcardPatternMatches(pattern, value) {
+  if (!pattern.includes('*')) return false
+  const escaped = pattern.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')
+  return new RegExp(`^${escaped}$`, 'i').test(value)
+}
+
+function ignoredByPattern(fullPath, name, patterns) {
+  return patterns.some((pattern) => pattern === name || wildcardPatternMatches(pattern, name) || fullPath.includes(pattern))
+}
+
+async function scanFiles(options: any = {}) {
+  const roots = normalizedIndexRoots(options)
+  const ignored = normalizedIgnorePatterns(options.ignore)
+  const includeHidden = Boolean(options.includeHidden)
+  const maxDepth = options.depth ?? 2
+  const limit = Math.max(1, Math.min(Number(options.limit || DEFAULT_FILE_INDEX_LIMIT), MAX_FILE_INDEX_LIMIT))
+  const extensions = extensionsForFindOptions(options)
   const found = []
 
   async function walk(dir, depth) {
+    if (found.length >= limit) return
     let entries = []
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -3501,24 +3549,30 @@ async function scanFiles() {
       return
     }
 
-    await Promise.all(entries.map(async (entry) => {
-      if (entry.name.startsWith('.') || ignored.has(entry.name)) return
+    for (const entry of entries) {
+      if (found.length >= limit) return
+      if (!includeHidden && entry.name.startsWith('.')) continue
       const fullPath = path.join(dir, entry.name)
+      if (ignoredByPattern(fullPath, entry.name, ignored)) continue
       if (entry.isFile()) {
+        const ext = extensionForPath(entry.name)
+        if (extensions && !extensions.has(ext)) continue
         found.push({
           id: fullPath,
           name: entry.name,
           path: fullPath,
           displayPath: displayUserPath(fullPath),
+          extension: ext,
+          kind: isImagePath(fullPath) ? 'image' : isVideoPath(fullPath) ? 'video' : 'file',
         })
-        return
+        continue
       }
       if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
-    }))
+    }
   }
 
-  await Promise.all(roots.map((root) => walk(root, 2)))
-  return found.slice(0, 5000)
+  await Promise.all(roots.map((root) => walk(root, maxDepth)))
+  return found.slice(0, limit)
 }
 
 function scheduleIndexApplications() {

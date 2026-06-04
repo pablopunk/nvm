@@ -383,13 +383,24 @@ export type ExtensionFindFilesOptions = {
   order?: 'asc' | 'desc'
 }
 
+export type ExtensionFileIndexOptions = Omit<ExtensionFindFilesOptions, 'sortBy' | 'order'> & {
+  /** Roots to scan or filter, e.g. ['~/Downloads']. Defaults to Desktop/Documents/Downloads. */
+  roots?: string | string[]
+  /** Include hidden dotfiles during explicit reindex scans. Defaults to false. */
+  includeHidden?: boolean
+  /** Ignore basenames or simple wildcard patterns such as '*.tmp'. Defaults include node_modules, .git, Library, and Applications. */
+  ignore?: string | string[]
+  /** Filter an existing snapshot by query. `searchIndex(query)` sets this for you. */
+  query?: string
+}
+
 export type ExtensionShellResult = { stdout: string; stderr: string; exitCode: number }
 export type ExtensionShellOptions = { cwd?: string; env?: Record<string, string>; timeout?: number; shell?: boolean; outputLimit?: number }
 export type ExtensionOpenWithApp = { name?: string; path?: string; [key: string]: unknown }
 /** An installed application from `ctx.desktop.apps.list/search`. */
 export type ExtensionApp = { id: string; name: string; path: string }
-/** A host-indexed file from `ctx.desktop.files.recent/searchIndex`. */
-export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string }
+/** A host-indexed file from `ctx.desktop.files.indexSnapshot/recent/searchIndex`. */
+export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string; extension?: string; kind?: ExtensionFileKind }
 
 export type RecentLogOptions = { limit?: number; level?: LogLevel; source?: LogSource; sinceMs?: number; query?: string; extensionId?: string }
 export type LogEntry = { timestamp: string; level: LogLevel; source: LogSource; scope?: string; extensionId?: string; commandId?: string; message: string; data?: unknown }
@@ -682,10 +693,16 @@ export type ExtensionContext = {
       thumbnail(filePath: string): string | null
       /** Canonical file metadata with host-safe URLs and image dimensions when available. */
       metadata(filePath: string): Promise<ExtensionFile>
-      /** Entries from the host file index, most recent first. */
-      recent(options?: { limit?: number }): ExtensionIndexedFile[]
+      /** Configured default roots for the lightweight host file index. */
+      indexedRoots(): string[]
+      /** Snapshot of the host file index, filtered without rescanning. */
+      indexSnapshot(options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
+      /** Rebuild the lightweight host file index with bounded roots/depth/filter controls. */
+      reindex(options?: ExtensionFileIndexOptions): Promise<{ count: number; roots: string[] }>
+      /** Entries from the current host file index snapshot. */
+      recent(options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
       /** Host file index entries whose name or path matches the query. */
-      searchIndex(query: string, options?: { limit?: number }): ExtensionIndexedFile[]
+      searchIndex(query: string, options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
     }
     /** Shell and process helpers. Present only with the `system` permission. */
     shell?: {
