@@ -69,6 +69,7 @@ From the `Fixtures` root item, open every command in every fixture extension.
 For each command, verify:
 
 - It opens without throwing or showing raw logs.
+- Search/open/action results do not trigger Electron IPC clone errors such as `An object could not be cloned`; extension handlers must be converted to handler IDs before crossing IPC.
 - It is reachable by keyboard only.
 - `Enter` runs the primary action.
 - `Cmd+K` opens useful actions when actions exist.
@@ -115,6 +116,7 @@ Apply the `ui-design` skill checklist, especially:
 - Preview content renders as raw monospace text when markdown was expected.
 - Grid tiles crop awkwardly or action hints overlap media/title.
 - Action panels open empty or duplicate the primary action without value.
+- Raw functions or handlers leak into search/view/action payloads, causing `actions:search` or view-action IPC clone failures.
 - Loading states replace cached content unnecessarily.
 - Camera/webview surfaces ignore action panel space or overflow the card.
 
@@ -135,6 +137,7 @@ Apply the `ui-design` skill checklist, especially:
    ```bash
    mise exec pnpm -- pnpm test
    ```
+   This includes clone-safety checks for common extension IPC payload leaks.
 7. Dogfood the affected fixture again.
 
 ## Done criteria
