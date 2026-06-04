@@ -8,7 +8,7 @@ import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
-import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
+import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, verifyLocalFileToken, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
 import { signInToNevermind, getNevermindAuth, signOutFromNevermind } from './nevermind-auth'
 import { initSentry } from './sentry'
@@ -61,8 +61,8 @@ const LEGACY_LEARNING_RULES_FILENAME = 'ai-learnings.json'
 const LEARNING_TRACES_FILENAME = 'ai-learning-traces.json'
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
-  { scheme: LOCAL_THUMB_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } },
+  { scheme: LOCAL_FILE_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: LOCAL_THUMB_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ])
 
 type AnyRecord = Record<string, any>
@@ -1810,14 +1810,17 @@ function registerLocalFileProtocol() {
   protocol.handle(LOCAL_FILE_PROTOCOL, (request) => {
     const url = new URL(request.url)
     const encodedPath = url.host ? `/${url.host}${url.pathname}` : url.pathname
-    const requestPath = decodeURIComponent(encodedPath)
+    const requestPath = path.resolve(decodeURIComponent(encodedPath))
     if (!path.isAbsolute(requestPath)) return new Response('Invalid file path', { status: 400 })
+    if (!verifyLocalFileToken('file', requestPath, url.searchParams.get('token'))) return new Response('Forbidden', { status: 403 })
     return net.fetch(pathToFileURL(requestPath).href)
   })
 
   protocol.handle(LOCAL_THUMB_PROTOCOL, async (request) => {
-    const requestPath = decodeURIComponent(new URL(request.url).searchParams.get('path') || '')
+    const url = new URL(request.url)
+    const requestPath = path.resolve(decodeURIComponent(url.searchParams.get('path') || ''))
     if (!path.isAbsolute(requestPath)) return new Response('Invalid file path', { status: 400 })
+    if (!verifyLocalFileToken('thumb', requestPath, url.searchParams.get('token'))) return new Response('Forbidden', { status: 403 })
     try {
       return await thumbnailResponseForPath(requestPath)
     } catch (error) {

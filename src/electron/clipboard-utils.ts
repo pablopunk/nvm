@@ -26,7 +26,7 @@ export function normalizeClipboardHistory(items: unknown, limit: number, persist
           type: 'image',
           imagePath,
           imageDataUrl: imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl,
-          thumbnailUrl: item.thumbnailUrl || (imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl),
+          thumbnailUrl: imagePath ? fileUrlForPath(imagePath) : item.thumbnailUrl || item.imageDataUrl,
           createdAt: item.createdAt || Date.now(),
         }
       }
@@ -37,8 +37,8 @@ export function normalizeClipboardHistory(items: unknown, limit: number, persist
           id: item.id || `video:${hashValue(filePath)}`,
           type: 'video',
           filePath,
-          videoUrl: item.videoUrl || fileUrlForPath(filePath),
-          thumbnailUrl: item.thumbnailUrl || thumbnailUrlForPath(filePath),
+          videoUrl: fileUrlForPath(filePath),
+          thumbnailUrl: thumbnailUrlForPath(filePath),
           createdAt: item.createdAt || Date.now(),
         }
       }
