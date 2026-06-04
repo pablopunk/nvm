@@ -23,6 +23,8 @@ When adding or changing an extension API method that renders UI:
 - `ctx.ui.preview`
 - `ctx.ui.chat`
 - `ctx.ui.form`
+- `ctx.input.prompt`
+- `ctx.ui.editor`
 - `ctx.ui.progress`
 - `ctx.ui.webview`
 - `ctx.ui.camera`

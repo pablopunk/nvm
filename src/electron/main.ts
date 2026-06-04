@@ -1378,7 +1378,7 @@ function extensionErrorAiAction(entry, message) {
   }
 }
 
-const VIEW_TYPES = new Set(['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview', 'camera'])
+const VIEW_TYPES = new Set(['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'webview', 'camera'])
 
 function isView(value) {
   return Boolean(value?.type && VIEW_TYPES.has(value.type))
@@ -1446,6 +1446,9 @@ function normalizeViewAction(action, entry) {
   const normalized = action.submenu ? { ...action, submenu: normalizeActionPanel(action.submenu, [], entry) } : action
   if ((normalized.type === 'pushView' || normalized.type === 'replaceView') && normalized.view) {
     return { ...normalized, view: normalizeView(normalized.view, entry) }
+  }
+  if (normalized.type === 'promptAction' && normalized.targetAction) {
+    return { ...normalized, targetAction: normalizeViewAction(normalized.targetAction, entry) }
   }
   return normalized
 }
@@ -1649,6 +1652,8 @@ async function executeViewAction(action) {
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
     case 'runFixtureCommand':
       return executeExtensionCommand({ kind: 'extension-command', extensionId: action.extensionId, commandId: action.commandId })
+    case 'promptAction':
+      return { view: promptActionView(action), navigation: 'push' }
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
@@ -2433,6 +2438,35 @@ function wrapWithConfirmation(action: any, input: any) {
   }
 }
 
+function buildPromptAction(input: any = {}, options: any = {}) {
+  const targetAction = input?.action || input?.onSubmit
+  if (!targetAction) throw new Error('ctx.input.prompt requires action')
+  const title = String(input?.title || targetAction.title || 'Prompt')
+  return {
+    ...options,
+    type: 'promptAction',
+    title,
+    subtitle: input?.message !== undefined ? String(input.message) : options.subtitle,
+    promptMessage: input?.message !== undefined ? String(input.message) : undefined,
+    fields: Array.isArray(input?.fields) ? input.fields : [],
+    targetAction,
+    submitTitle: input?.submitTitle !== undefined ? String(input.submitTitle) : undefined,
+  }
+}
+
+function promptActionView(action: any = {}) {
+  const targetAction = action.targetAction || action.action
+  if (!targetAction) throw new Error('Prompt action is missing its target action')
+  const fields = Array.isArray(action.fields) ? action.fields : []
+  const promptMessage = action.promptMessage || action.subtitle
+  return {
+    type: 'form',
+    title: action.title || 'Prompt',
+    fields: promptMessage ? [{ id: '__prompt_message', type: 'description', description: String(promptMessage) }, ...fields] : fields,
+    submitAction: { ...targetAction, title: action.submitTitle || targetAction.title || 'Submit' },
+  }
+}
+
 function buildConfirmAction(input: any) {
   const inner = input?.onConfirm || input?.action
   if (!inner) throw new Error('ctx.ui.confirm requires onConfirm action')
@@ -2535,6 +2569,7 @@ function createExtensionContext(extension, command) {
       },
       chat: (view) => ({ ...view, type: 'chat' }),
       form: (view) => ({ ...view, type: 'form' }),
+      editor: (view) => ({ ...view, type: 'editor' }),
       progress: (input: any = {}) => progressView(input),
       confirm: (input: any = {}) => buildConfirmAction(input),
       toast: (input: any = {}) => ({ toast: { message: String(input?.message || ''), tone: input?.tone || 'default' } }),
@@ -2615,6 +2650,9 @@ function createExtensionContext(extension, command) {
     },
     text: {
       template: (input, variables) => expandTextTemplate(input, variables, { includeClipboard: canUseClipboard }),
+    },
+    input: {
+      prompt: buildPromptAction,
     },
     clipboard: {
       history: canUseClipboard ? {

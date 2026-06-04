@@ -694,17 +694,87 @@ kbd {
 
 .chatView,
 .formView,
-.progressView {
+.progressView,
+.editorView {
   display: grid;
   gap: 12px;
 }
 
 .formView,
 .progressView,
-.previewView {
+.previewView,
+.editorView {
   max-height: calc(100vh - var(--window-blur-margin) * 2 - var(--search-row-height) - var(--palette-stack-gap));
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+.editorViewSplit {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.editorPane,
+.editorPreviewPane {
+  min-height: 260px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.editorPreviewPane {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.editorToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-1);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.editorToolbar small {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.editorTextarea {
+  min-height: 0;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.editorTextarea:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.editorPreviewPane .previewText {
+  overflow: auto;
+  padding: 12px;
+}
+
+.editorSubmitButton {
+  margin: 10px;
+}
+
+.editorActions {
+  display: grid;
+  gap: 4px;
+  grid-column: 1 / -1;
 }
 
 .chatView {

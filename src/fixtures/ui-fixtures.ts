@@ -31,6 +31,46 @@ function formView(ctx: ExtensionContext) {
   })
 }
 
+function promptView(ctx: ExtensionContext) {
+  const prompt = ctx.input.prompt({
+    title: 'Create Quicklink URL',
+    message: 'Prompt for lightweight arguments before running an action.',
+    fields: [
+      { id: 'query', label: 'Search query', type: 'text', placeholder: 'never mind extension api', required: true },
+      { id: 'site', label: 'Site', type: 'dropdown', value: 'github.com', options: [{ title: 'GitHub', value: 'github.com' }, { title: 'Docs', value: 'docs' }, { title: 'Web', value: 'web' }] },
+    ],
+    submitTitle: 'Build URL',
+    action: ctx.actions.run('Show Prompt Values', (_ctx, action) => {
+      const query = String(action.formValues?.query || '')
+      const site = String(action.formValues?.site || '')
+      const url = `https://www.google.com/search?q=${encodeURIComponent(site && site !== 'web' ? `site:${site} ${query}` : query)}`
+      return _ctx.ui.preview({ title: 'Prompt Result', content: `# Prompt Result\n\n- Query: ${query || '_empty_'}\n- Site: ${site || '_empty_'}\n- URL: ${url}` })
+    }),
+  })
+  return ctx.ui.list({
+    id: 'dev-ui-prompt',
+    title: 'Dev UI · Prompt',
+    subtitle: 'Host-owned lightweight argument prompt before an action runs',
+    items: [ctx.ui.item({ id: 'prompt', title: 'Prompt for Quicklink Arguments', subtitle: 'Opens a form and then runs the wrapped action', icon: 'text-cursor-input', primaryAction: prompt, actions: [prompt] })],
+  })
+}
+
+function editorView(ctx: ExtensionContext) {
+  return ctx.ui.editor({ 
+    id: 'dev-ui-editor',
+    title: 'Dev UI · Editor',
+    subtitle: 'Editable markdown with a host-rendered preview and submit action',
+    format: 'markdown',
+    placeholder: 'Write markdown…',
+    content: '# Release Note Draft\n\n- Built with host-owned editor UI.\n- Supports **markdown preview**.\n- Submit injects `editorContent` into the action.',
+    submitAction: ctx.actions.run('Preview Draft', (_ctx, action) => ctx.ui.preview({
+      title: 'Submitted Editor Content',
+      content: `# Submitted Editor Content\n\n${action.editorContent || '_Empty draft_'}`,
+    })),
+    actions: [ctx.actions.copyText('Copied from editor fixture', 'Copy Sample Text')],
+  })
+}
+
 function listView(ctx: ExtensionContext) {
   const confirm = ctx.ui.confirm({
     title: 'Confirm Dev Action',
@@ -47,6 +87,8 @@ function listView(ctx: ExtensionContext) {
       title: 'Rows',
       items: [
         ctx.ui.item({ id: 'form', title: 'Open Form Fixture', subtitle: 'Textarea, dropdowns, errors, descriptions', icon: 'list-checks', accessories: [{ text: 'form' }], primaryAction: ctx.actions.push('Open Form', formView(ctx)) }),
+        ctx.ui.item({ id: 'prompt', title: 'Open Prompt Fixture', subtitle: 'Prompted arguments before an action runs', icon: 'text-cursor-input', accessories: [{ text: 'prompt' }], primaryAction: ctx.actions.push('Open Prompt', promptView(ctx)) }),
+        ctx.ui.item({ id: 'editor', title: 'Open Editor Fixture', subtitle: 'Editable markdown, preview, submit payload', icon: 'file-pen-line', accessories: [{ text: 'editor' }], primaryAction: ctx.actions.push('Open Editor', editorView(ctx)) }),
         ctx.ui.item({ id: 'preview', title: 'Open Preview Fixture', subtitle: 'Markdown/text preview', icon: 'file-text', accessories: [{ text: 'preview' }], primaryAction: ctx.actions.push('Open Preview', previewView(ctx)) }),
         ctx.ui.item({ id: 'confirm', title: 'Confirmation Fixture', subtitle: 'Host-owned confirm step', icon: 'shield-check', accessories: [{ text: 'confirm' }], primaryAction: confirm, actionPanel: { sections: [{ actions: [confirm, ctx.actions.copyText('copied from dev fixture', 'Copy Fixture Text')] }] } }),
       ],
@@ -138,6 +180,8 @@ const extension: NevermindExtension = {
     { id: 'grid', title: 'Dev UI: Grid', icon: 'grid', run: (ctx) => gridView(ctx) },
     { id: 'preview', title: 'Dev UI: Preview', icon: 'file-text', run: (ctx) => previewView(ctx) },
     { id: 'form', title: 'Dev UI: Form', icon: 'list-checks', run: (ctx) => formView(ctx) },
+    { id: 'prompt', title: 'Dev UI: Prompt', icon: 'text-cursor-input', run: (ctx) => promptView(ctx) },
+    { id: 'editor', title: 'Dev UI: Editor', icon: 'file-pen-line', run: (ctx) => editorView(ctx) },
     { id: 'chat', title: 'Dev UI: Chat', icon: 'message-circle', run: (ctx) => chatView(ctx) },
     { id: 'progress', title: 'Dev UI: Progress', icon: 'loader', run: (ctx) => progressView(ctx) },
     { id: 'webview', title: 'Dev UI: Webview', icon: 'globe', run: (ctx) => webviewView(ctx) },

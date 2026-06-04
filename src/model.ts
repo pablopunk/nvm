@@ -64,6 +64,7 @@ export const ACTION_DEFINITIONS = {
   clearActionOverride: { description: 'Restore original action', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
   nativeAction: { description: 'Run command', dismiss: 'manual', loading: 'none', execute: 'main' },
   runFixtureCommand: { description: 'Open fixture', dismiss: 'manual', loading: 'view', execute: 'main' },
+  promptAction: { description: 'Prompt for input', dismiss: 'manual', loading: 'none', execute: 'main' },
 } as const satisfies Record<string, CommandActionDefinition>
 
 export type CommandActionType = keyof typeof ACTION_DEFINITIONS
@@ -110,6 +111,10 @@ export type CommandAction = {
   script?: string
   options?: Record<string, unknown>
   formValues?: Record<string, CommandFormValue>
+  editorContent?: string
+  fields?: CommandFormField[]
+  promptMessage?: string
+  submitTitle?: string
   selectedItemId?: string
   value?: string
   submenu?: CommandActionPanel
@@ -182,7 +187,7 @@ export type CommandViewPatch = {
 
 export type CommandView = {
   id?: string
-  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview' | 'camera'
+  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'editor' | 'progress' | 'webview' | 'camera'
   title: string
   size?: 'default' | 'large'
   image?: string
@@ -197,6 +202,10 @@ export type CommandView = {
   initialPrompt?: string
   subtitle?: string
   content?: string
+  placeholder?: string
+  format?: 'text' | 'markdown'
+  language?: string
+  readOnly?: boolean
   html?: string
   items?: CommandItem[]
   sections?: CommandItemSection[]

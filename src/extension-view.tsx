@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { CornerDownLeft, CreditCard, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import type { AiLimitState } from './use-ai-chat'
-import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE, type FormValue } from './ui'
+import { ChatView, CommandRow, CommandTile, EditorView, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE, type FormValue } from './ui'
 import { RootCommandList } from './command-list'
 import { iconForItem } from './command-icons'
 
@@ -80,6 +80,25 @@ function NevermindLimitGate({ limit, runAction }: { limit: AiLimitState; runActi
     onSelect: () => runAction({ type: 'openUrl', title: limit.actionTitle || 'Open Dashboard', url: limit.dashboardUrl }),
   } : undefined
   return <EmptyState icon={<CreditCard size={24} />} title={limit.title} subtitle={limit.message} action={action} />
+}
+
+function EditorSurface({ view, actions, renderMarkdown, runAction }: { view: CommandView; actions: ReactNode; renderMarkdown: (content: string) => ReactNode; runAction: (action: CommandAction) => void }) {
+  const [value, setValue] = useState(view.content || '')
+  const viewKey = `${view.id || ''}:${view.title}`
+  useEffect(() => setValue(view.content || ''), [viewKey, view.content])
+  const preview = view.format === 'markdown' ? renderMarkdown(value) : undefined
+  return <EditorView
+    value={value}
+    format={view.format || 'text'}
+    language={view.language}
+    placeholder={view.placeholder}
+    readOnly={view.readOnly}
+    preview={preview}
+    actions={actions}
+    submitTitle={view.submitAction?.title}
+    onChange={setValue}
+    onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, editorContent: value }) : undefined}
+  />
 }
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
@@ -222,6 +241,12 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
   }
 
   if (view.type === 'form') return <FormView fields={view.fields || []} values={formValues} onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))} onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, formValues }) : undefined} submitTitle={view.submitAction?.title} />
+
+  if (view.type === 'editor') {
+    const editorActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-editor', false))
+    const editorActions = editorActionRows.length ? renderActionPanel(editorActionRows) : null
+    return <EditorSurface view={view} actions={editorActions} renderMarkdown={renderMarkdown} runAction={runAction} />
+  }
 
   if (view.type === 'progress') return <ProgressView steps={view.steps || []} value={view.value} total={view.total} status={view.status} />
 

@@ -20,6 +20,7 @@ export type ProgressViewProps = { steps: { title: string; status?: string }[]; v
 export type FormValue = string | boolean | string[]
 export type FormField = { id: string; label?: string; type?: string; value?: FormValue; placeholder?: string; required?: boolean; options?: { title: string; value: string }[]; description?: string; error?: string; rows?: number }
 export type FormViewProps = { fields: FormField[]; values?: Record<string, FormValue>; onChange?: (id: string, value: FormValue) => void; onSubmit?: () => void; submitTitle?: string }
+export type EditorViewProps = { value: string; format?: 'text' | 'markdown'; language?: string; placeholder?: string; readOnly?: boolean; preview?: ReactNode; actions?: ReactNode; submitTitle?: string; onChange?: (value: string) => void; onSubmit?: () => void }
 export type ItemSection<T> = { title?: string; subtitle?: string; items: T[] }
 export type ListViewProps<T> = { items?: T[]; sections?: ItemSection<T>[]; renderItem: (item: T) => ReactNode; empty?: ReactNode; subtitle?: string; isLoading?: boolean; pagination?: ReactNode }
 export type GridViewProps<T> = { items?: T[]; sections?: ItemSection<T>[]; renderItem: (item: T) => ReactNode; empty?: ReactNode; subtitle?: string; layout?: string; style?: React.CSSProperties; isLoading?: boolean; pagination?: ReactNode }
@@ -130,6 +131,19 @@ export function FormView({ fields, values = {}, onChange, onSubmit, submitTitle 
     })}
     {onSubmit ? <button className="formSubmitButton" type="submit">{submitTitle}</button> : null}
   </form>
+}
+
+export function EditorView({ value, format = 'text', language, placeholder, readOnly, preview, actions, submitTitle = 'Save', onChange, onSubmit }: EditorViewProps) {
+  const showsPreview = format === 'markdown' && Boolean(preview)
+  return <div className={`extensionView editorView ${showsPreview ? 'editorViewSplit' : ''}`}>
+    <div className="editorPane">
+      <div className="editorToolbar"><span>{format === 'markdown' ? 'Markdown' : 'Plain text'}</span>{language ? <small>{language}</small> : null}</div>
+      <textarea className="editorTextarea" value={value} placeholder={placeholder} readOnly={readOnly} spellCheck={format !== 'markdown'} onChange={(event) => onChange?.(event.currentTarget.value)} />
+      {onSubmit ? <button className="formSubmitButton editorSubmitButton" type="button" onClick={onSubmit}>{submitTitle}</button> : null}
+    </div>
+    {showsPreview ? <div className="editorPreviewPane"><div className="editorToolbar"><span>Preview</span></div><div className="previewText">{preview}</div></div> : null}
+    {actions ? <div className="editorActions">{actions}</div> : null}
+  </div>
 }
 
 function normalizedSections<T>(items?: T[], sections?: ItemSection<T>[]) {

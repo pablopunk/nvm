@@ -80,32 +80,18 @@ For each command, verify:
 - Focus, hover, selected, disabled, and destructive states are visible but not noisy.
 - The UI works in default, stacked, and preview/large palette modes when applicable.
 
-## Current fixture surface matrix
+## Fixture surface discovery
 
-`src/fixtures/ui-fixtures.ts` should exercise at least:
+Do not maintain a hand-written list of every UI endpoint in this skill. Discover the current surface from the public contract and compare it with fixtures:
 
-- `ctx.ui.list`
-  - Sections, rows, accessories, icons, action hints, action panels, confirmation, navigation.
-- `ctx.ui.grid`
-  - Images, aspect ratio, columns, title/subtitle clipping, action hints, selected tile state.
-- `ctx.ui.preview`
-  - Markdown/text/media rendering, action panels, scroll behavior.
-- `ctx.ui.chat`
-  - User/assistant/system messages, markdown content, scrolling, busy state if available.
-- `ctx.ui.form`
-  - Text, textarea, password, URL, number, date, checkbox, dropdown/select, multiselect, description, separator, field descriptions, field errors, submit action, submitted values.
-- `ctx.ui.progress`
-  - Step statuses, loading density, long titles.
-- `ctx.ui.webview`
-  - Sandbox presentation, focusability, sizing, action panel coexistence.
-- `ctx.ui.camera`
-  - Permission states, loading, live state, unavailable/error state, device switcher, controls.
-- `ctx.ui.confirm`
-  - Confirmation copy, destructive/regular state, keyboard path, cancellation.
-- `ctx.ui.toast`
-  - Placement, timing, default/error tone, not hiding important state.
+```bash
+rg "^    [a-zA-Z]+\(|input:" src/resources/nevermind-extension-api.d.ts
+rg "ctx\.(ui|input)\." src/fixtures
+```
 
-When adding a new UI method, add it to this matrix and to the fixture.
+For each public method that returns or displays host-owned UI, verify there is a reachable fixture command or nested fixture row that exercises realistic states. If a method only returns an inline helper/action, verify it is covered inside a related fixture.
+
+When adding a new UI method, update the public contract and add fixture coverage in the same change; update this skill only if the discovery workflow itself changes.
 
 ## Visual review heuristics
 

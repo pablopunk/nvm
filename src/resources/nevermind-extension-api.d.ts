@@ -64,6 +64,7 @@ export type ViewPresentation = 'root' | 'stacked' | 'preview'
 export type PatchMode = 'patch' | 'replace' | 'prepend' | 'append'
 export type ForegroundColor = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'pink'
 export type ShortcutScope = 'local' | 'global'
+export type ExtensionEditorFormat = 'text' | 'markdown'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogSource = 'main' | 'renderer' | 'extension' | 'host'
 export type ExtensionFormValue = string | boolean | string[]
@@ -113,12 +114,18 @@ export type ExtensionAction = {
   submenu?: ExtensionActionPanel
   /** Field values injected by the host when a form's `submitAction` runs. */
   formValues?: Record<string, ExtensionFormValue>
+  /** Current text injected by the host when an editor view's `submitAction` runs. */
+  editorContent?: string
   /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
   selectedItemId?: string
   /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
   value?: string
   /** Legacy payload carrier for selection id / accessory value. Prefer `selectedItemId` or `value`. */
   text?: string
+  /** Prompt fields carried by `ctx.input.prompt(...)`. */
+  fields?: ExtensionFormField[]
+  promptMessage?: string
+  submitTitle?: string
   [key: string]: unknown
 }
 
@@ -190,12 +197,20 @@ export type ExtensionSearchAccessory = {
 /** Host-rendered view. Prefer helpers such as `ctx.ui.list(...)` so the `type` is set for you. */
 export type ExtensionView = {
   id?: string
-  type?: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview' | 'camera'
+  type?: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'editor' | 'progress' | 'webview' | 'camera'
   title: string
   size?: ViewSize
   presentation?: ViewPresentation
   subtitle?: string
   content?: string
+  /** Placeholder for editable text surfaces such as `ctx.ui.editor(...)`. */
+  placeholder?: string
+  /** Text format for editable text surfaces. Markdown editors get a host-rendered preview. */
+  format?: ExtensionEditorFormat
+  /** Optional language hint for text/code editors. */
+  language?: string
+  /** Render an editor as read-only while preserving selection/copy behavior. */
+  readOnly?: boolean
   html?: string
   image?: string
   video?: string
@@ -445,6 +460,8 @@ export type ExtensionContext = {
     preview(input: { kind?: 'clipboard' | 'image' | 'video' | 'file' | 'text'; title?: string; text?: string; imageDataUrl?: string; imagePath?: string; videoUrl?: string; filePath?: string; thumbnailUrl?: string; clipboardType?: string; shortcut?: string }): ExtensionAction
     chat(view: ExtensionView): ExtensionView
     form(view: ExtensionView): ExtensionView
+    /** Editable host-owned text/markdown surface. The host injects `editorContent` into `submitAction`. */
+    editor(view: ExtensionView): ExtensionView
     progress(input?: { title?: string; label?: string; steps?: Array<{ title: string; status?: string }>; id?: string; value?: number; total?: number; status?: string }): ExtensionView
     /** Wrap a declarative action in a host-rendered confirmation step. */
     confirm(input?: { title?: string; message?: string; confirmLabel?: string; cancelLabel?: string; destructive?: boolean; onConfirm?: ExtensionAction; action?: ExtensionAction }): ExtensionAction
@@ -499,6 +516,11 @@ export type ExtensionContext = {
 
   /** Text and template helpers for snippets, quicklinks, prompts, and selected-text transforms. */
   text: ExtensionText
+
+  /** Lightweight input helpers for command arguments. Prompted values are injected into the wrapped action as `formValues`. */
+  input: {
+    prompt(input: { title?: string; message?: string; fields: ExtensionFormField[]; action: ExtensionAction; submitTitle?: string }, options?: Record<string, unknown>): ExtensionAction
+  }
 
   /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
   clipboard: { history?: ExtensionClipboardHistory }
