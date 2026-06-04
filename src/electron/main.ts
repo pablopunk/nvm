@@ -18,7 +18,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
@@ -83,6 +83,7 @@ function bundledResourcePath(...relativePath) {
 let appIndex: any[] = []
 let fileIndex: any[] = []
 let clipboardHistory: any[] = []
+const suppressedClipboardItemIds = new Map<string, number>()
 let statePath = ''
 let iconCacheDir = ''
 let clipboardImagesDir = ''
@@ -1506,6 +1507,57 @@ async function executeViewActionForIpc(action) {
   }
 }
 
+function clipboardSnapshot() {
+  const image = clipboard.readImage()
+  return {
+    text: clipboard.readText(),
+    html: clipboard.readHTML(),
+    rtf: clipboard.readRTF(),
+    bookmark: clipboard.readBookmark(),
+    image: image.isEmpty() ? null : image,
+  }
+}
+
+function restoreClipboardSnapshot(snapshot: ReturnType<typeof clipboardSnapshot>) {
+  if (!snapshot) return
+  const data: any = {}
+  if (snapshot.text) data.text = snapshot.text
+  if (snapshot.html) data.html = snapshot.html
+  if (snapshot.rtf) data.rtf = snapshot.rtf
+  if (snapshot.bookmark?.title || snapshot.bookmark?.url) data.bookmark = snapshot.bookmark
+  if (snapshot.image && !snapshot.image.isEmpty()) data.image = snapshot.image
+  if (Object.keys(data).length === 0) clipboard.clear()
+  else clipboard.write(data)
+}
+
+function clipboardHistoryIdForText(text: string) {
+  const value = String(text || '').trim()
+  return value ? `text:${hashValue(value)}` : ''
+}
+
+function suppressClipboardHistoryId(id: string, durationMs = 2_000) {
+  if (id) suppressedClipboardItemIds.set(id, Date.now() + durationMs)
+}
+
+function pasteTextAction(action: any) {
+  const text = String(action.text || '')
+  const restoreClipboard = Boolean(action.restoreClipboard)
+  const concealed = Boolean(action.concealed || restoreClipboard)
+  const snapshot = restoreClipboard ? clipboardSnapshot() : null
+  const suppressedId = clipboardHistoryIdForText(text)
+  if (concealed) suppressClipboardHistoryId(suppressedId)
+  if (action.plainText === false && action.html) clipboard.write({ text, html: String(action.html) })
+  else clipboard.writeText(text)
+  pasteIntoFrontmostApp()
+  if (restoreClipboard && snapshot) {
+    const delay = Math.max(50, Math.min(5_000, Number(action.restoreDelayMs || 250)))
+    setTimeout(() => {
+      suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text))
+      restoreClipboardSnapshot(snapshot)
+    }, delay).unref?.()
+  }
+}
+
 function shellResultView(title, result) {
   return {
     type: 'preview',
@@ -1555,9 +1607,11 @@ async function executeViewAction(action) {
       clipboard.writeText(action.text || '')
       break
     case 'pasteText':
-      clipboard.writeText(action.text || '')
-      pasteIntoFrontmostApp()
+      pasteTextAction(action)
       return { toast: { message: 'Pasted' } }
+    case 'typeText':
+      typeTextIntoFrontmostApp(action.text || '', { delayMs: action.delayMs })
+      return { toast: { message: 'Typed' } }
     case 'copyImage':
       if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
       else if (action.imagePath) clipboard.writeImage(nativeImage.createFromPath(action.imagePath))
@@ -2589,6 +2643,7 @@ function createExtensionContext(extension, command) {
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
       pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
+      typeText: (text, title = 'Type Text', options: any = {}) => ({ ...options, type: 'typeText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
       trash: (paths, title = 'Move to Trash', options: any = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
       push: (title, view, options: any = {}) => ({ ...options, type: 'pushView', title, view }),
@@ -2661,6 +2716,9 @@ function createExtensionContext(extension, command) {
       } : undefined,
     },
     desktop: {
+      keyboard: {
+        typeText: (text, options: any = {}) => typeTextIntoFrontmostApp(String(text || ''), options),
+      },
       clipboard: canUseClipboard ? {
         readText: () => clipboard.readText(),
         writeText: (text) => clipboard.writeText(String(text || '')),
@@ -3419,6 +3477,12 @@ function startClipboardWatcher() {
   setInterval(() => {
     const item = readClipboardItem()
     if (!item || item.id === lastId) return
+    const suppressUntil = suppressedClipboardItemIds.get(item.id) || 0
+    if (suppressUntil > Date.now()) {
+      lastId = item.id
+      return
+    }
+    if (suppressUntil) suppressedClipboardItemIds.delete(item.id)
     lastId = item.id
     rememberClipboardItem(item)
   }, CLIPBOARD_POLL_INTERVAL_MS).unref?.()

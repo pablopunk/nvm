@@ -825,13 +825,14 @@ function capabilities() {
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
-    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
+    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
     namespaces: ['desktop', 'text', 'input', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
     text: ['template(input, variables) expands {name}/{{name}} placeholders plus date, time, datetime, uuid, selectedText, cursor, {calculator:1 + 2}, and clipboard when clipboard.history is declared'],
     input: ['prompt({ title, message, fields, action, submitTitle }) opens a host prompt form, then runs the wrapped action with submitted values in action.formValues'],
     ai: ['ask(prompt, options)', 'session(id, options).ask(prompt)', 'session(id).reset()'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     desktop: {
+      keyboard: ['typeText(text, options) types into the frontmost app without touching the clipboard when keyboard.type-text is available'],
       clipboard: ['readText', 'writeText', 'readImage', 'writeImage', 'readFiles', 'read', 'write'],
       selection: ['text', 'files', 'read'],
       apps: ['frontmost', 'launch'],
@@ -881,7 +882,7 @@ Declare permissions explicitly: use 'system' for shell helpers and system action
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
-Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.input.prompt({ fields, action }) when an action needs lightweight arguments before it runs; the wrapped action receives submitted values in action.formValues. Use ctx.ui.editor({ title, content, format: 'markdown', submitAction }) for host-owned editable text/markdown surfaces; submit actions receive action.editorContent. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
+Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.input.prompt({ fields, action }) when an action needs lightweight arguments before it runs; the wrapped action receives submitted values in action.formValues. Use ctx.actions.pasteText(text, title, { restoreClipboard: true, concealed: true }) for snippets/transforms that should paste without polluting clipboard history, and use ctx.actions.typeText or ctx.desktop.keyboard.typeText when an extension must avoid touching the clipboard. Use ctx.ui.editor({ title, content, format: 'markdown', submitAction }) for host-owned editable text/markdown surfaces; submit actions receive action.editorContent. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }
 

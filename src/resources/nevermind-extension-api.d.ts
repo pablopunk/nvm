@@ -71,6 +71,24 @@ export type ExtensionFormValue = string | boolean | string[]
 export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'description' | 'separator'
 export type ExtensionFormOption = { title: string; value: string }
 
+export type ExtensionPasteTextOptions = {
+  /** Keep the palette visible after dispatching paste. Defaults to false unless the action also overrides dismiss behavior. */
+  keepPaletteOpen?: boolean
+  /** Restore the previous clipboard contents shortly after paste is dispatched. */
+  restoreClipboard?: boolean
+  /** Write only plain text for paste, omitting HTML/RTF flavors. Defaults to true. */
+  plainText?: boolean
+  /** Prevent temporary paste contents from being added to Nevermind clipboard history. Implies history suppression for the paste write. */
+  concealed?: boolean
+  /** Delay before restoring clipboard contents, in milliseconds. Defaults to 250. */
+  restoreDelayMs?: number
+}
+
+export type ExtensionTypeTextOptions = {
+  /** Delay between typed characters in milliseconds where supported. */
+  delayMs?: number
+}
+
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
 export type ExtensionToastResult = { toast: { message: string; tone?: 'default' | 'error' } }
 
@@ -485,7 +503,9 @@ export type ExtensionContext = {
     openWith(filePath: string, app: ExtensionOpenWithApp | string, title?: string, options?: Record<string, unknown>): ExtensionAction
     openUrl(url: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     copyText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
-    pasteText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    pasteText(text: string, title?: string, options?: ExtensionPasteTextOptions & Record<string, unknown>): ExtensionAction
+    /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
+    typeText(text: string, title?: string, options?: ExtensionTypeTextOptions & Record<string, unknown>): ExtensionAction
     copyImage(image: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     /** Destructive by default and confirmation-gated by the host. */
     trash(paths: string | string[], title?: string, options?: Record<string, unknown>): ExtensionAction
@@ -535,6 +555,10 @@ export type ExtensionContext = {
 
   /** Desktop capabilities. Optional namespaces require matching top-level permissions. */
   desktop: {
+    keyboard: {
+      /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
+      typeText(text: string, options?: ExtensionTypeTextOptions): Promise<unknown> | unknown
+    }
     clipboard?: {
       readText(): string
       writeText(text: string): void

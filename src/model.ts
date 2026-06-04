@@ -34,6 +34,7 @@ export const ACTION_DEFINITIONS = {
   copyText: { description: 'Copy text to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
   copyImage: { description: 'Copy image to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
   pasteText: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  typeText: { description: 'Type into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   trash: { description: 'Move to Trash', dismiss: 'manual', loading: 'view', execute: 'main' },
   pushView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
   replaceView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
@@ -82,6 +83,13 @@ export type CommandAction = {
   appPath?: string
   url?: string
   text?: string
+  html?: string
+  keepPaletteOpen?: boolean
+  restoreClipboard?: boolean
+  plainText?: boolean
+  concealed?: boolean
+  restoreDelayMs?: number
+  delayMs?: number
   imageDataUrl?: string
   imagePath?: string
   view?: CommandView

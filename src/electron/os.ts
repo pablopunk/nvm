@@ -21,7 +21,7 @@ export function osLabel() {
   return osDependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux')
 }
 
-const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'selected-text', 'frontmost-app', 'applescript', 'app-icons', 'open-with', 'frontmost-paste', 'keyboard-settings', 'window-panel-policy', 'file-date-added'])
+const macOnlyCapabilities = new Set(['quick-look', 'selected-files', 'selected-text', 'frontmost-app', 'frontmost-paste', 'keyboard.type-text', 'applescript', 'app-icons', 'open-with', 'keyboard-settings', 'window-panel-policy', 'file-date-added'])
 
 export function hasCapability(capability: string) {
   if (macOnlyCapabilities.has(capability)) return osDependent({ darwin: true }, false)
@@ -235,6 +235,16 @@ export async function fileDateAddedMs(paths: string[]) {
 
 export function pasteIntoFrontmostApp() {
   return osFunction({ darwin: () => execFile('osascript', ['-e', 'tell application "System Events" to keystroke "v" using command down'], () => {}) })()
+}
+
+function appleScriptString(value: string) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '" & return & "')}"`
+}
+
+export function typeTextIntoFrontmostApp(text: string, options: any = {}) {
+  return osFunction<[string, any], any>({
+    darwin: (value, opts) => execFile('osascript', ['-e', `tell application "System Events" to keystroke ${appleScriptString(value)}`], { timeout: Math.max(5_000, Number(opts?.timeoutMs || 30_000)) }, () => {}),
+  }, () => null)(text, options)
 }
 
 export async function selectedFilePaths() {

@@ -629,7 +629,7 @@ export function App() {
   }
 
   function actionCanDismissImmediately(action: ExtensionViewAction) {
-    return action.dismissAfterRun === 'auto' && actionDefinition(action)?.dismiss === 'immediate'
+    return !action.keepPaletteOpen && action.dismissAfterRun === 'auto' && actionDefinition(action)?.dismiss === 'immediate'
   }
 
   function rootNativeActionCanDismissImmediately(action: Action | { kind?: string }) {
@@ -730,7 +730,7 @@ export function App() {
         extensionNavigation.setBackStack((stack) => stack.slice(0, -1))
       }
       await handleViewActionResult(result, showsLoading ? 'replace' : 'push')
-      if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
+      if (!dismissedImmediately && !action.keepPaletteOpen && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
         else window.nvm.hide()
       } else if (showsLoading && !result?.view && !result?.navigation) {
