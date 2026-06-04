@@ -49,6 +49,7 @@ type ActionKind =
   | 'calculate'
   | 'extension-command'
   | 'extension-root-item'
+  | 'extension-action'
 
 type ActionIcon = string
 
@@ -133,6 +134,124 @@ const SEARCH_PLACEHOLDERS = [
   'I cannot do that... Oh, nevermind.',
   'Make it happen.',
 ]
+
+export function ExtensionWindowApp({ windowId }: { windowId: string }) {
+  const [view, setView] = useState<ExtensionView | null>(null)
+  const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>({})
+  const [formValues, setFormValues] = useState<Record<string, FormValue>>({})
+  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
+  const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    window.nvm.getNevermindAuthStatus().then((status) => setNevermindAuthed(Boolean(status.authed))).catch(() => setNevermindAuthed(false))
+    window.nvm.getExtensionWindowState(windowId).then((state) => { if (state?.view) { setView(state.view); setWindowOptions(state.options || {}) } })
+    return window.nvm.onExtensionWindowView((payload) => { if (payload.id === windowId) { setView(payload.view); setWindowOptions(payload.options || {}) } })
+  }, [windowId])
+
+  function applyPatch(patch: CommandViewPatch) {
+    setView((current) => {
+      if (!current) return current
+      const patchItems = patch.items || []
+      const removeIds = new Set(patch.removeItemIds || [])
+      const patchMap = new Map(patchItems.map((item) => [item.id, item]))
+      const applyItems = (items: ExtensionViewItem[] = []) => {
+        if (patch.mode === 'replace') return patchItems as ExtensionViewItem[]
+        if (patch.mode === 'prepend') return [...patchItems as ExtensionViewItem[], ...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id))]
+        if (patch.mode === 'append') return [...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id)), ...patchItems as ExtensionViewItem[]]
+        return items.filter((item) => !removeIds.has(item.id)).map((item) => patchMap.has(item.id) ? { ...item, ...patchMap.get(item.id) } : item)
+      }
+      return {
+        ...current,
+        ...(patch.isLoading !== undefined ? { isLoading: patch.isLoading } : {}),
+        ...(patch.selectedItemId !== undefined ? { selectedItemId: patch.selectedItemId } : {}),
+        items: current.items ? applyItems(current.items) : current.items,
+        sections: current.sections?.map((section) => ({ ...section, items: applyItems(section.items) })),
+      }
+    })
+  }
+
+  async function handleActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
+    if (!result) return
+    if (result.patch) applyPatch(result.patch)
+    if (result.navigation === 'pop') await window.nvm.closeExtensionWindow()
+    else if (result.view) setView(result.view)
+  }
+
+  async function runAction(action: ExtensionViewAction) {
+    if (String(action.type || '').startsWith('camera.')) {
+      window.dispatchEvent(new CustomEvent('nvm:camera-action', { detail: action }))
+      return
+    }
+    await handleActionResult(await window.nvm.runViewAction(action))
+  }
+
+  function actionPanelRows(panel?: CommandView['actionPanel'], fallbackActions: ExtensionViewAction[] = []): ActionPanelRow[] {
+    const sections = panel?.sections?.length ? panel.sections : [{ actions: fallbackActions }]
+    return sections.flatMap((section, sectionIndex) => {
+      const rows = (section.actions || []).map((action, index) => ({
+        value: `window-action:${sectionIndex}:${index}:${action.type}:${action.title}`,
+        icon: iconForAction(action),
+        title: action.title,
+        subtitle: actionDescription(action),
+        shortcut: action.shortcut,
+        onSelect: () => runAction(action),
+        className: action.style === 'destructive' ? 'result dangerResult' : 'result',
+      }))
+      return section.title ? [{ value: `window-section:${sectionIndex}`, title: section.title, subtitle: '', sectionHeader: true, onSelect: () => {}, className: 'actionSectionHeader' }, ...rows] : rows
+    })
+  }
+
+  function renderMarkdown(content: string) {
+    return <div className="markdownContent"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown></div>
+  }
+
+  function runDefaultAction(item: ExtensionViewItem) {
+    const action = item.primaryAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]
+    if (action) runAction(action)
+  }
+
+  function dragPathForItem(item: ExtensionViewItem) {
+    return item.path || item.filePath || null
+  }
+
+  function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
+    const filePath = dragPathForItem(item)
+    if (!filePath) return
+    event.preventDefault()
+    window.nvm.startFileDrag(filePath)
+  }
+
+  if (!view) return <div className="extensionWindowShell"><EmptyState icon={<Search size={24} />} title="Loading window…" /></div>
+
+  function renderWindowActionPanel(rows: unknown[]) {
+    const actionRows = (rows as ActionPanelRow[]).filter((row) => !row.sectionHeader)
+    if (actionRows.length === 0) return null
+    return <div className="extensionWindowActions">{actionRows.map((row) => <button key={row.value} className={row.className?.includes('danger') ? 'dangerWindowAction' : undefined} type="button" onClick={row.onSelect}>{row.icon}<span>{row.title}</span>{row.shortcut ? <small>{shortcutLabel(row.shortcut)}</small> : null}</button>)}</div>
+  }
+
+  return <Command className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`}>
+    <main className="extensionWindowBody"><ExtensionViewRenderer
+      view={view}
+      aiChat={aiChat}
+      nevermindAuthed={nevermindAuthed}
+      onSignInToNevermind={() => window.nvm.signInToNevermind().then((result) => setNevermindAuthed(Boolean(result.ok)))}
+      formValues={formValues}
+      setFormValues={setFormValues}
+      filterItems={(items) => items || []}
+      filterSections={(currentView) => currentView.sections}
+      renderMarkdown={renderMarkdown}
+      renderActionPanel={(rows) => renderWindowActionPanel(rows)}
+      actionPanelRows={(panel, fallbackActions) => actionPanelRows(panel, fallbackActions as ExtensionViewAction[])}
+      renderRootIcon={(item) => iconForItem(item)}
+      runDefaultAction={runDefaultAction}
+      runAction={runAction}
+      sendAiPrompt={(message) => aiChat.sendPrompt(message, view.chatId)}
+      abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+      dragPathForItem={dragPathForItem}
+      startItemDrag={startItemDrag}
+    /></main>
+  </Command>
+}
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -920,7 +1039,7 @@ export function App() {
   function tabActionForRootAction(action: Action | null | undefined) {
     if (!action) return null
     if (action.kind === 'extension-root-item' && action.extensionId === 'nevermind.ai-builder' && action.id.startsWith('extension-root:nevermind.ai-builder:ai-chat:')) return () => run(action)
-    if (['extension-command', 'extension-root-item'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
+    if (['extension-command', 'extension-root-item', 'extension-action'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
     return null
   }
 
@@ -955,9 +1074,9 @@ export function App() {
   }
 
   const canOverride = Boolean(optionsFor?.defaultActionId)
-  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-command', 'extension-root-item'].includes(optionsFor.kind))
+  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-command', 'extension-root-item', 'extension-action'].includes(optionsFor.kind))
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
-  const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item'].includes(optionsFor?.kind || '') && optionsFor?.removable)
+  const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item', 'extension-action'].includes(optionsFor?.kind || '') && optionsFor?.removable)
   const canCustomizeAction = canCustomizeCommandAction(optionsFor)
   const canRemoveOptionsShortcut = Boolean(optionsFor && shortcutRecords.some((record) => record.actionId === optionsFor.id))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
@@ -1299,7 +1418,7 @@ export function App() {
       items={items}
       iconForItem={iconForCommandItem}
       onSelect={runCommandItem}
-      extraForItem={(item) => ['extension-command', 'extension-root-item'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
+      extraForItem={(item) => ['extension-command', 'extension-root-item', 'extension-action'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
     />
   }
 
@@ -1354,8 +1473,12 @@ export function App() {
     window.nvm.startFileDrag(filePath)
   }
 
+  function persistentActionForItem(item: ExtensionViewItem | null | undefined) {
+    return item?.persistentAction as Action | undefined
+  }
+
   function itemActionPanelIsVisible(item: ExtensionViewItem | null | undefined) {
-    return item?.actionPanelVisibility !== 'hidden'
+    return Boolean(persistentActionForItem(item)) || item?.actionPanelVisibility !== 'hidden'
   }
 
   function viewActionPanelIsVisible(view: ExtensionView | null | undefined) {
@@ -1524,7 +1647,9 @@ export function App() {
       }
       if (selectedExtensionItem && itemActionPanelIsVisible(selectedExtensionItem) && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         setChildQuery('')
-        setExtensionItemOptionsFor(selectedExtensionItem)
+        const persistentAction = persistentActionForItem(selectedExtensionItem)
+        if (persistentAction) setOptionsFor(persistentAction)
+        else setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
       if (!selectedExtensionItem && extensionView && viewActionPanelIsVisible(extensionView) && actionsFromPanel(extensionView.actionPanel, extensionView.actions || []).length > 0 && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
@@ -1570,7 +1695,9 @@ export function App() {
       if (selectedExtensionItem && itemActionPanelIsVisible(selectedExtensionItem) && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         event.preventDefault()
         setChildQuery('')
-        setExtensionItemOptionsFor(selectedExtensionItem)
+        const persistentAction = persistentActionForItem(selectedExtensionItem)
+        if (persistentAction) setOptionsFor(persistentAction)
+        else setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
       if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
@@ -1660,6 +1787,8 @@ export function App() {
             renderActionPanel(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true))
           ) : extensionItemOptionsFor ? (
             renderActionPanel(getExtensionItemActionRows())
+          ) : optionsFor ? (
+            renderActionPanel(getOptionActionRows())
           ) : previewFor ? (
             <div className="previewPane">
               {previewFor.videoUrl ? (
@@ -1677,8 +1806,6 @@ export function App() {
             </div>
           ) : extensionView ? (
             renderExtensionView(extensionView)
-          ) : optionsFor ? (
-            renderActionPanel(getOptionActionRows())
           ) : (
             renderActionResults()
           )}

@@ -1,4 +1,4 @@
-import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences, screen } from 'electron'
 import electronUpdater from 'electron-updater'
 import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
@@ -30,11 +30,14 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 configureLogger(isDev)
 
 const updateManager = createUpdateManager(autoUpdater as any)
+const rendererUrl = process.env.ELECTRON_RENDERER_URL
+const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs')
+const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html')
 const paletteWindow = createPaletteWindowController({
-  isDev: Boolean(process.env.ELECTRON_RENDERER_URL),
-  preloadPath: path.join(__dirname, '..', 'preload', 'preload.cjs'),
-  rendererUrl: process.env.ELECTRON_RENDERER_URL,
-  rendererIndexPath: path.join(__dirname, '..', 'renderer', 'index.html'),
+  isDev: Boolean(rendererUrl),
+  preloadPath,
+  rendererUrl,
+  rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
 })
 
@@ -101,6 +104,8 @@ let learningStore: LocalLearningStore | null = null
 const learningReviewJobs = new Map<string, Promise<void>>()
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
+type ExtensionWindowRecord = { id: string; win: BrowserWindow; view: any; options: any }
+const extensionWindows = new Map<string, ExtensionWindowRecord>()
 let didRunQuitCleanup = false
 let userState: AnyRecord = {
   recents: {},
@@ -217,6 +222,7 @@ function recordLearningReview(chatId: string) {
 const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
 const extensionRegistry = new Map<string, any>()
+const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
 let fixtureExtensions: any[] = []
 const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
@@ -490,6 +496,10 @@ function visibleExtensions() {
 
 function visibleCommandEntries() {
   return Array.from(extensionRegistry.values()).filter((entry) => !isFixtureExtension(entry.extension))
+}
+
+function visibleExtensionActionEntries() {
+  return Array.from(extensionActionRegistry.values()).filter((entry) => !isFixtureExtension(entry.extension))
 }
 
 function extensionCommandActionId(extension, command) {
@@ -1121,6 +1131,12 @@ async function searchActions(query, options: any = {}) {
     if (ranked) results.push(ranked)
   }
 
+  for (const entry of visibleExtensionActionEntries()) {
+    const action = extensionActionFromContribution(entry)
+    const ranked = action ? rankAction(withShortcutHint(action), q) : null
+    if (ranked) results.push(ranked)
+  }
+
   return results
     .sort((a, b) => {
       return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
@@ -1155,7 +1171,8 @@ async function executeAction(action, options: any = {}) {
     case 'open-keyboard-settings':
       runInBackground(openSystemKeyboardSettings)
       break
-    case 'extension-root-item': {
+    case 'extension-root-item':
+    case 'extension-action': {
       const result = await executeExtensionRootItem(action)
       if (result) return result
       break
@@ -1199,10 +1216,24 @@ function extensionModuleForAction(action) {
   return Array.from(extensionModules.values()).find((extension) => path.basename(extension.__filePath || '') === action.extensionFile) || null
 }
 
+function extensionActionEntryForAction(action) {
+  const direct = extensionActionRegistry.get(`${action.extensionId}:${action.registeredActionId}`)
+  if (direct) return direct
+  if (!action?.extensionFile) return null
+  const matches = Array.from(extensionActionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
+  return matches.length === 1 ? matches[0] : null
+}
+
 function currentActionForStoredShortcut(action) {
-  if (action?.kind !== 'extension-command') return action
-  const entry = extensionEntryForAction(action)
-  return entry ? extensionActionFromCommand(entry.extension, entry.command) : action
+  if (action?.kind === 'extension-command') {
+    const entry = extensionEntryForAction(action)
+    return entry ? extensionActionFromCommand(entry.extension, entry.command) : action
+  }
+  if (action?.kind === 'extension-action') {
+    const entry = extensionActionEntryForAction(action)
+    return entry ? extensionActionFromContribution(entry) : action
+  }
+  return action
 }
 
 async function executeExtensionCommand(action) {
@@ -1337,6 +1368,39 @@ function extensionRootActionFromItem(entry, item) {
   }
 }
 
+function extensionActionFromContribution(entry) {
+  const item = entry.item
+  if (!item?.id || !item.title) return null
+  const extensionFile = entry.extension.__filePath ? path.basename(entry.extension.__filePath) : undefined
+  const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
+  const actionId = item.actionId || `extension-action:${entry.extension.id}:${item.id}`
+  const action = {
+    id: actionId,
+    kind: 'extension-action',
+    extensionId: entry.extension.id,
+    registeredActionId: item.id,
+    extensionFile,
+    aiChatId: extensionFile ? aiChatIdForExtensionFile(extensionFile) : undefined,
+    rootAction: primaryAction,
+    removable: Boolean(entry.extension.__generated),
+    customizable: item.customizable !== false,
+    title: item.title,
+    subtitle: item.subtitle || entry.extension.title || 'Extension action',
+    aliases: item.aliases || item.keywords || [],
+    icon: item.icon || 'sparkles',
+    iconUrl: item.image || item.iconUrl || null,
+    thumbnailUrl: item.thumbnailUrl || null,
+    score: item.score || 12,
+    dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
+    background: item.background,
+    actionPanel: normalizeActionPanel(item.actionPanel, item.actions || [], entry),
+    appearance: normalizeItemAppearance(item.appearance),
+  }
+  const declaredShortcut = userState.removedShortcuts?.[action.id] ? null : item.globalShortcut || (item.shortcutScope === 'global' ? item.shortcut : null)
+  const shortcut = shortcutForAction(action) || declaredShortcut
+  return shortcut ? { ...action, shortcut } : action
+}
+
 async function executeActionForIpc(action) {
   try {
     const result = await executeAction(action)
@@ -1345,6 +1409,10 @@ async function executeActionForIpc(action) {
   } catch (error) {
     if (action?.kind === 'extension-command') {
       const entry = extensionEntryForAction(action)
+      if (entry) return { view: extensionErrorView(entry, error) }
+    }
+    if (action?.kind === 'extension-action') {
+      const entry = extensionActionEntryForAction(action)
       if (entry) return { view: extensionErrorView(entry, error) }
     }
     return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` } }
@@ -1406,14 +1474,24 @@ function normalizeView(view, entry) {
   }
 }
 
+function persistentActionForRef(action, entry) {
+  if (action?.type !== 'runExtensionRegisteredAction') return null
+  const extensionId = action.extensionId || entry?.extension?.id
+  const registeredActionId = action.registeredActionId || action.actionId
+  const registered = extensionActionRegistry.get(`${extensionId}:${registeredActionId}`)
+  return registered ? extensionActionFromContribution(registered) : null
+}
+
 function normalizeViewItems(items, entry) {
   return Array.isArray(items) ? items.map((item) => {
     const itemActions = normalizeViewActions(item.actions, entry)
+    const primaryAction = normalizeViewAction(item.primaryAction, entry)
     return {
       ...item,
       actions: itemActions,
       actionPanel: normalizeActionPanel(item.actionPanel, itemActions, entry),
-      primaryAction: normalizeViewAction(item.primaryAction, entry),
+      primaryAction,
+      persistentAction: item.persistentAction || persistentActionForRef(primaryAction, entry),
       appearance: normalizeItemAppearance(item.appearance),
     }
   }) : items
@@ -1450,6 +1528,9 @@ function normalizeViewAction(action, entry) {
   }
   if (normalized.type === 'promptAction' && normalized.targetAction) {
     return { ...normalized, targetAction: normalizeViewAction(normalized.targetAction, entry) }
+  }
+  if ((normalized.type === 'createWindow' || normalized.type === 'toggleWindow') && normalized.view) {
+    return { ...normalized, view: normalizeView(normalized.view, entry) }
   }
   return normalized
 }
@@ -1558,6 +1639,97 @@ function pasteTextAction(action: any) {
   }
 }
 
+function extensionWindowSize(options: any = {}) {
+  const large = options.size === 'large'
+  return {
+    width: Math.max(320, Math.min(1600, Number(options.width || (large ? 900 : 560)))),
+    height: Math.max(240, Math.min(1200, Number(options.height || (large ? 680 : 420)))),
+  }
+}
+
+function extensionWindowId(view: any, options: any = {}) {
+  return String(options.id || view?.id || `window:${hashValue(`${view?.title || 'Extension Window'}:${JSON.stringify(view || {})}`)}`)
+}
+
+function loadExtensionWindow(win: BrowserWindow, id: string) {
+  if (isDev && rendererUrl) return win.loadURL(`${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}`)
+  return win.loadFile(rendererIndexPath, { query: { extensionWindowId: id } })
+}
+
+function centerExtensionWindow(win: BrowserWindow) {
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  const bounds = win.getBounds()
+  const { x, y, width, height } = display.workArea
+  win.setBounds({ x: Math.round(x + (width - bounds.width) / 2), y: Math.round(y + (height - bounds.height) / 2), width: bounds.width, height: bounds.height })
+}
+
+function applyExtensionWindowOptions(win: BrowserWindow, options: any = {}) {
+  const alwaysOnTop = options.alwaysOnTop !== false
+  win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal')
+  if (options.visibleOnAllSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+}
+
+function createOrUpdateExtensionWindow(view: any, options: any = {}) {
+  const normalizedView = view
+  const id = extensionWindowId(normalizedView, options)
+  const existing = extensionWindows.get(id)
+  if (existing && !existing.win.isDestroyed()) {
+    existing.view = normalizedView
+    existing.options = { ...existing.options, ...options, id }
+    existing.win.setTitle(String(options.title || normalizedView.title || 'Nevermind'))
+    existing.win.webContents.send('extension-window:view', { id, view: normalizedView, options: existing.options })
+    existing.win.show()
+    existing.win.focus()
+    return existing
+  }
+
+  const size = extensionWindowSize(options)
+  const hiddenTitleBar = options.titleBar === 'hidden'
+  const win = new BrowserWindow({
+    width: size.width,
+    height: size.height,
+    minWidth: 320,
+    minHeight: 240,
+    show: false,
+    frame: true,
+    ...(hiddenTitleBar ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } } : {}),
+    title: String(options.title || normalizedView.title || 'Nevermind'),
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f7f7',
+    webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
+  } satisfies Electron.BrowserWindowConstructorOptions)
+  const record = { id, win, view: normalizedView, options: { ...options, id } }
+  extensionWindows.set(id, record)
+  applyExtensionWindowOptions(win, options)
+  win.once('ready-to-show', () => { centerExtensionWindow(win); win.show() })
+  if (options.hideOnBlur) win.on('blur', () => win.hide())
+  win.on('closed', () => { if (extensionWindows.get(id)?.win === win) extensionWindows.delete(id) })
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => loggerDebug('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }, { source: 'host', scope: 'extensions' }))
+  loadExtensionWindow(win, id)
+  return record
+}
+
+function executeWindowAction(action: any) {
+  const id = String(action.windowId || action.id || '')
+  if (action.type === 'createWindow') {
+    createOrUpdateExtensionWindow(action.view, action.windowOptions || {})
+    return { toast: { message: 'Opened window' } }
+  }
+  const record = extensionWindows.get(id)
+  if (!record) {
+    if (action.type === 'toggleWindow' && action.view) {
+      createOrUpdateExtensionWindow(action.view, { ...(action.windowOptions || {}), id })
+      return { toast: { message: 'Opened window' } }
+    }
+    return { toast: { message: 'Window is not open', tone: 'error' } }
+  }
+  if (action.type === 'showWindow') { record.win.show(); record.win.focus(); return { toast: { message: 'Shown window' } } }
+  if (action.type === 'hideWindow') { record.win.hide(); return { toast: { message: 'Hidden window' } } }
+  if (action.type === 'toggleWindow') { if (record.win.isVisible()) record.win.hide(); else { record.win.show(); record.win.focus() }; return { toast: { message: 'Toggled window' } } }
+  if (action.type === 'closeWindow') { record.win.close(); return { toast: { message: 'Closed window' } } }
+  return null
+}
+
 function shellResultView(title, result) {
   return {
     type: 'preview',
@@ -1571,6 +1743,8 @@ function runQuitCleanup() {
   didRunQuitCleanup = true
   if (app.isReady()) globalShortcut.unregisterAll()
   updateManager.clearTimers()
+  for (const record of extensionWindows.values()) record.win.close()
+  extensionWindows.clear()
   for (const watcher of appWatchers) watcher.close()
 }
 
@@ -1612,6 +1786,12 @@ async function executeViewAction(action) {
     case 'typeText':
       typeTextIntoFrontmostApp(action.text || '', { delayMs: action.delayMs })
       return { toast: { message: 'Typed' } }
+    case 'createWindow':
+    case 'showWindow':
+    case 'hideWindow':
+    case 'toggleWindow':
+    case 'closeWindow':
+      return executeWindowAction(action)
     case 'copyImage':
       if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
       else if (action.imagePath) clipboard.writeImage(nativeImage.createFromPath(action.imagePath))
@@ -1706,6 +1886,13 @@ async function executeViewAction(action) {
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
     case 'runFixtureCommand':
       return executeExtensionCommand({ kind: 'extension-command', extensionId: action.extensionId, commandId: action.commandId })
+    case 'runExtensionRegisteredAction': {
+      const extensionId = action.extensionId
+      const registeredActionId = action.registeredActionId || action.actionId
+      const entry = extensionActionRegistry.get(`${extensionId}:${registeredActionId}`)
+      const rootAction = entry ? extensionActionFromContribution(entry) : null
+      return rootAction ? executeExtensionRootItem(rootAction) : { toast: { message: 'Action unavailable', tone: 'error' } }
+    }
     case 'promptAction':
       return { view: promptActionView(action), navigation: 'push' }
     case 'runExtensionAction': {
@@ -2643,6 +2830,7 @@ function createExtensionContext(extension, command) {
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
       pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
+      ref: (actionId, title = 'Run Action', options: any = {}) => ({ ...options, type: 'runExtensionRegisteredAction', title, extensionId: extension.id, registeredActionId: actionId }),
       typeText: (text, title = 'Type Text', options: any = {}) => ({ ...options, type: 'typeText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
       trash: (paths, title = 'Move to Trash', options: any = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
@@ -2687,6 +2875,7 @@ function createExtensionContext(extension, command) {
         toggleControls: (title = 'Toggle Camera Controls', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.toggleControls' } }),
       },
     },
+    action: (input) => input,
     navigation: {
       push: (view) => ({ view, navigation: 'push' }),
       replace: (view) => ({ view, navigation: 'replace' }),
@@ -2708,6 +2897,17 @@ function createExtensionContext(extension, command) {
     },
     input: {
       prompt: buildPromptAction,
+    },
+    windows: {
+      create: (view, options: any = {}) => ({ dismissAfterRun: 'auto', type: 'createWindow', title: options.title || view?.title || 'Open Window', view, windowOptions: options, windowId: options.id || view?.id }),
+      show: (id, title = 'Show Window', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'showWindow', title, windowId: id }),
+      hide: (id, title = 'Hide Window', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'hideWindow', title, windowId: id }),
+      toggle: (idOrView, titleOrOptions: any = 'Toggle Window', options: any = {}) => {
+        if (typeof idOrView === 'string') return { dismissAfterRun: 'auto', ...options, type: 'toggleWindow', title: typeof titleOrOptions === 'string' ? titleOrOptions : titleOrOptions.title || 'Toggle Window', windowId: idOrView, windowOptions: typeof titleOrOptions === 'string' ? options : titleOrOptions }
+        const windowOptions = typeof titleOrOptions === 'string' ? options : titleOrOptions || {}
+        return { dismissAfterRun: 'auto', type: 'toggleWindow', title: typeof titleOrOptions === 'string' ? titleOrOptions : windowOptions.title || idOrView?.title || 'Toggle Window', view: idOrView, windowOptions, windowId: windowOptions.id || idOrView?.id }
+      },
+      close: (id, title = 'Close Window', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'closeWindow', title, windowId: id }),
     },
     clipboard: {
       history: canUseClipboard ? {
@@ -3099,6 +3299,7 @@ async function loadExtensionModule(fullPath) {
 
 async function loadExtensions() {
   extensionRegistry.clear()
+  extensionActionRegistry.clear()
   extensionModules.clear()
   fixtureExtensions = []
   extensionRootItemsCache.clear()
@@ -3188,29 +3389,50 @@ function fixtureCommandItem(fixture, command) {
   }
 }
 
+function fixturePersistentActionItems(fixture) {
+  const registeredEntries = Array.from(extensionActionRegistry.values()).filter((entry) => entry.extension.id === fixture.id)
+  return registeredEntries.map((entry) => {
+    const item = entry.item
+    const persistentAction = extensionActionFromContribution(entry)
+    return {
+      ...item,
+      id: `fixture-action:${fixture.id}:${item.id}`,
+      persistentAction,
+      primaryAction: persistentAction?.rootAction || item.primaryAction,
+      subtitle: item.subtitle || `Persistent action · ${fixture.title || fixture.id}`,
+      accessories: [...(item.accessories || []), { text: 'action' }],
+    }
+  })
+}
+
 function fixturesIndexView(ctx) {
   return ctx.ui.list({
     id: 'extension-api-fixtures',
     title: 'Extension API Fixtures',
     subtitle: 'Dev-only runnable fixtures for host-rendered extension UI',
-    searchBarPlaceholder: 'Search fixture commands',
+    searchBarPlaceholder: 'Search fixture commands and persistent actions',
     emptyView: { title: 'No fixtures found', subtitle: 'Add fixture extensions under src/fixtures.' },
     sections: fixtureExtensions.map((fixture) => ({
       title: fixture.title || fixture.id,
       subtitle: fixture.subtitle || 'Extension API fixture',
-      items: (Array.isArray(fixture.commands) ? fixture.commands : []).map((command) => fixtureCommandItem(fixture, command)),
-    })),
+      items: [
+        ...fixturePersistentActionItems(fixture),
+        ...(Array.isArray(fixture.commands) ? fixture.commands : []).map((command) => fixtureCommandItem(fixture, command)),
+      ],
+    })), 
   })
 }
 
 function fixturesRootItem(ctx) {
   const commands = fixtureExtensions.flatMap((fixture) => Array.isArray(fixture.commands) ? fixture.commands : [])
+  const persistentItems = fixtureExtensions.flatMap((fixture) => fixturePersistentActionItems(fixture))
+  const runnableCount = commands.length + persistentItems.length
   return {
     id: 'fixtures',
     title: 'Fixtures',
-    subtitle: `${fixtureExtensions.length} dev-only extension API ${fixtureExtensions.length === 1 ? 'fixture' : 'fixtures'} · ${commands.length} ${commands.length === 1 ? 'command' : 'commands'}`,
+    subtitle: `${fixtureExtensions.length} dev-only extension API ${fixtureExtensions.length === 1 ? 'fixture' : 'fixtures'} · ${runnableCount} ${runnableCount === 1 ? 'item' : 'items'}`,
     icon: 'wrench',
-    aliases: ['fixture', 'fixtures', 'dev fixtures', 'extension fixtures', ...fixtureExtensions.map((fixture) => fixture.title || fixture.id), ...commands.map((command) => command.title)].filter(Boolean),
+    aliases: ['fixture', 'fixtures', 'dev fixtures', 'extension fixtures', ...fixtureExtensions.map((fixture) => fixture.title || fixture.id), ...commands.map((command) => command.title), ...persistentItems.map((item) => item.title)].filter(Boolean),
     score: 100,
     primaryAction: ctx.actions.push('Open Fixtures', fixturesIndexView(ctx)),
   }
@@ -3273,6 +3495,21 @@ function registerExtension(extension) {
   for (const command of extension.commands || []) {
     if (!command?.id || !command.title || typeof command.run !== 'function') continue
     extensionRegistry.set(`${extension.id}:${command.id}`, { extension, command })
+  }
+  if (typeof extension.actions === 'function') {
+    try {
+      const result = extension.actions(createExtensionContext(extension, null))
+      const items = Array.isArray(result) ? result : Array.isArray(result?.actions) ? result.actions : []
+      const entry = { extension, command: { id: 'actions', title: extension.title || extension.id } }
+      for (const item of items) {
+        if (!item?.id || !item.title) continue
+        const action = item.run ? { type: 'runExtensionAction', title: item.title, __handler: item.run } : item.action
+        const normalizedItem = normalizeViewItems([{ ...item, primaryAction: action }], entry)[0]
+        extensionActionRegistry.set(`${extension.id}:${item.id}`, { ...entry, item: normalizedItem })
+      }
+    } catch (error) {
+      logError('extension.actions.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
+    }
   }
 }
 
@@ -3532,12 +3769,19 @@ function registerActionShortcut(actionId, accelerator, action) {
 }
 
 function declaredGlobalShortcuts() {
-  return visibleCommandEntries().map(({ extension, command }) => {
+  const commandShortcuts = visibleCommandEntries().map(({ extension, command }) => {
     const accelerator = command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
     if (!accelerator) return null
     const action = extensionActionFromCommand(extension, command)
     return { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action }
   }).filter(Boolean)
+  const extensionActionShortcuts = visibleExtensionActionEntries().map((entry) => {
+    const accelerator = entry.item.globalShortcut || (entry.item.shortcutScope === 'global' ? entry.item.shortcut : null)
+    if (!accelerator) return null
+    const action = extensionActionFromContribution(entry)
+    return action ? { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action } : null
+  }).filter(Boolean)
+  return [...commandShortcuts, ...extensionActionShortcuts]
 }
 
 function unregisterActionShortcuts() {
@@ -3615,7 +3859,7 @@ async function removeShortcut(actionId) {
 }
 
 async function setAlias(action, alias) {
-  if (!canCustomizeAction(action)) return { ok: false, message: 'Aliases are only available for persistent commands' }
+  if (!canCustomizeAction(action)) return { ok: false, message: 'Aliases are only available for persistent actions' }
   if (!action?.id || !alias.trim()) return { ok: false, message: 'Missing alias' }
   const aliases = new Set(actionAliases(action.id))
   aliases.add(alias.trim())
@@ -3634,7 +3878,7 @@ async function removeAlias(action, alias) {
 }
 
 async function setShortcut(action, shortcut) {
-  if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent commands' }
+  if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent actions' }
   if (!action?.id || !shortcut.trim()) return { ok: false, message: 'Missing shortcut' }
   const accelerator = normalizeAccelerator(shortcut)
   if (accelerator === getPaletteHotkey()) return { ok: false, message: `${accelerator} is reserved for opening Nevermind` }
@@ -3716,7 +3960,7 @@ async function clearOverride(action) {
 }
 
 async function duplicateCreatedAction(action) {
-  if (!['extension-command', 'extension-root-item'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
+  if (!['extension-command', 'extension-root-item', 'extension-action'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
   const extension = extensionModuleForAction(action)
   const filePath = extension?.__filePath
   if (!filePath) return { ok: false, message: 'Generated extension not found' }
@@ -3801,7 +4045,7 @@ async function removeCreatedAction(action) {
     return { ok: true, message: 'AI chat removed' }
   }
 
-  if (['extension-command', 'extension-root-item'].includes(action?.kind) && action.removable) {
+  if (['extension-command', 'extension-root-item', 'extension-action'].includes(action?.kind) && action.removable) {
     const extension = extensionModuleForAction(action)
     const filePath = extension?.__filePath
     if (!filePath) return { ok: false, message: 'This extension cannot be removed' }
@@ -3919,6 +4163,14 @@ app.whenReady().then(async () => {
     if (status === 'granted') return { ok: true, status }
     if (status === 'denied' || status === 'restricted') return { ok: false, status }
     return { ok: true, status }
+  })
+  ipcMain.handle('extension-window:get-state', (_event, id) => {
+    const record = extensionWindows.get(String(id || ''))
+    return record ? { id: record.id, view: record.view, options: record.options } : null
+  })
+  ipcMain.handle('extension-window:close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.close()
   })
   ipcMain.handle('logs:write', (_event, level, message, data) => {
     const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo

@@ -31,8 +31,56 @@ function formView(ctx: ExtensionContext) {
   })
 }
 
+const FLOATING_WINDOW_ID = 'dev-ui-floating-window'
+const FLOATING_WINDOW_OPTIONS = { id: FLOATING_WINDOW_ID, title: 'Nevermind Floating Note', titleBar: 'hidden' as const, chrome: 'none' as const, width: 560, height: 520, alwaysOnTop: true, visibleOnAllSpaces: true }
+
+function floatingNoteEditorView(ctx: ExtensionContext) {
+  return ctx.ui.editor({
+    id: FLOATING_WINDOW_ID,
+    title: 'Floating Note',
+    subtitle: 'Editable host-rendered note',
+    format: 'text',
+    placeholder: 'Write a floating note…',
+    content: 'Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- No palette chrome, preview, or action menu',
+  })
+}
+
+function floatingWindowToggleAction(ctx: ExtensionContext) {
+  return ctx.action({
+    id: 'toggle-floating-note',
+    title: 'Toggle Floating Note',
+    subtitle: 'Persistent action: creates the note if needed, then shows or hides it',
+    icon: 'panel-top-open',
+    keywords: ['window', 'note', 'shortcut', 'persistent action'],
+    action: ctx.windows.toggle(floatingNoteEditorView(ctx), FLOATING_WINDOW_OPTIONS),
+  })
+}
+
+function floatingWindowToggleItem(ctx: ExtensionContext) {
+  return ctx.ui.item({
+    id: 'toggle-floating-note',
+    title: 'Toggle Floating Note',
+    subtitle: 'References the persistent action, so aliases and shortcuts attach to the durable action id',
+    icon: 'panel-top-open',
+    keywords: ['window', 'note', 'shortcut', 'persistent action'],
+    primaryAction: ctx.actions.ref('toggle-floating-note', 'Toggle Floating Note'),
+  })
+}
+
+function floatingWindowView(ctx: ExtensionContext) {
+  return ctx.ui.list({ 
+    id: 'dev-ui-floating-window-controls',
+    title: 'Dev UI · Floating Window',
+    subtitle: 'Open, toggle, and close an independent host-rendered extension window',
+    items: [
+      floatingWindowToggleItem(ctx),
+      ctx.ui.item({ id: 'close', title: 'Close Floating Note', subtitle: 'Closes the existing window', icon: 'x', primaryAction: ctx.windows.close(FLOATING_WINDOW_ID, 'Close Floating Note') }),
+    ],
+  })
+}
+
 function textInputView(ctx: ExtensionContext) {
-  return ctx.ui.list({
+  return ctx.ui.list({ 
     id: 'dev-ui-text-input',
     title: 'Dev UI · Text Input',
     subtitle: 'Paste/type primitives for snippet and selected-text workflows',
@@ -122,6 +170,7 @@ function listView(ctx: ExtensionContext) {
       items: [
         ctx.ui.item({ id: 'form', title: 'Open Form Fixture', subtitle: 'Textarea, dropdowns, errors, descriptions', icon: 'list-checks', accessories: [{ text: 'form' }], primaryAction: ctx.actions.push('Open Form', formView(ctx)) }),
         ctx.ui.item({ id: 'text-input', title: 'Open Text Input Fixture', subtitle: 'Paste/type actions for snippets and transforms', icon: 'keyboard', accessories: [{ text: 'text' }], primaryAction: ctx.actions.push('Open Text Input', textInputView(ctx)) }),
+        ctx.ui.item({ id: 'floating-window', title: 'Open Floating Window Fixture', subtitle: 'Independent host-rendered extension window', icon: 'panel-top-open', accessories: [{ text: 'window' }], primaryAction: ctx.actions.push('Open Floating Window', floatingWindowView(ctx)) }),
         ctx.ui.item({ id: 'prompt', title: 'Open Prompt Fixture', subtitle: 'Prompted arguments before an action runs', icon: 'text-cursor-input', accessories: [{ text: 'prompt' }], primaryAction: ctx.actions.push('Open Prompt', promptView(ctx)) }),
         ctx.ui.item({ id: 'editor', title: 'Open Editor Fixture', subtitle: 'Editable markdown, preview, submit payload', icon: 'file-pen-line', accessories: [{ text: 'editor' }], primaryAction: ctx.actions.push('Open Editor', editorView(ctx)) }),
         ctx.ui.item({ id: 'preview', title: 'Open Preview Fixture', subtitle: 'Markdown/text preview', icon: 'file-text', accessories: [{ text: 'preview' }], primaryAction: ctx.actions.push('Open Preview', previewView(ctx)) }),
@@ -210,12 +259,16 @@ const extension: NevermindExtension = {
   title: 'Dev UI Fixtures',
   subtitle: 'Dev-only extension API fixtures',
   permissions: ['camera'],
+  actions(ctx) {
+    return [floatingWindowToggleAction(ctx)]
+  },
   commands: [
     { id: 'list', title: 'Dev UI: List', icon: 'list', run: (ctx) => listView(ctx) },
     { id: 'grid', title: 'Dev UI: Grid', icon: 'grid', run: (ctx) => gridView(ctx) },
     { id: 'preview', title: 'Dev UI: Preview', icon: 'file-text', run: (ctx) => previewView(ctx) },
     { id: 'form', title: 'Dev UI: Form', icon: 'list-checks', run: (ctx) => formView(ctx) },
     { id: 'text-input', title: 'Dev UI: Text Input', icon: 'keyboard', run: (ctx) => textInputView(ctx) },
+    { id: 'floating-window', title: 'Dev UI: Floating Window', icon: 'panel-top-open', run: (ctx) => floatingWindowView(ctx) },
     { id: 'prompt', title: 'Dev UI: Prompt', icon: 'text-cursor-input', run: (ctx) => promptView(ctx) },
     { id: 'editor', title: 'Dev UI: Editor', icon: 'file-pen-line', run: (ctx) => editorView(ctx) },
     { id: 'chat', title: 'Dev UI: Chat', icon: 'message-circle', run: (ctx) => chatView(ctx) },

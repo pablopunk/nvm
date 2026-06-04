@@ -1563,3 +1563,122 @@ kbd {
 .cameraError strong {
   color: var(--danger-text);
 }
+
+.extensionWindowShell {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: #111217;
+  padding: 12px;
+}
+
+.extensionWindowBody {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.extensionWindowTitleBarHidden {
+  padding-top: 36px;
+  -webkit-app-region: drag;
+}
+
+.extensionWindowTitleBarHidden .extensionWindowBody,
+.extensionWindowTitleBarHidden textarea,
+.extensionWindowTitleBarHidden button,
+.extensionWindowTitleBarHidden [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+.extensionWindowShell .extensionView {
+  height: 100%;
+  padding: 0;
+}
+
+.extensionWindowShell .formView,
+.extensionWindowShell .progressView,
+.extensionWindowShell .previewView,
+.extensionWindowShell .editorView,
+.extensionWindowShell .chatView,
+.extensionWindowShell .cameraSurface,
+.extensionWindowShell .webviewSurface {
+  max-height: none;
+  height: 100%;
+  min-height: 0;
+}
+
+.extensionWindowShell .editorView {
+  gap: 8px;
+  overflow: hidden;
+}
+
+.extensionWindowShell .editorView:not(.editorViewSplit) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.extensionWindowShell .editorPane,
+.extensionWindowShell .editorPreviewPane {
+  border-color: var(--border-1);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.extensionWindowChromeNone .editorPane,
+.extensionWindowChromeNone .editorPreviewPane {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.extensionWindowChromeNone .editorToolbar {
+  display: none;
+}
+
+.extensionWindowShell .editorTextarea {
+  padding: 14px;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.extensionWindowChromeNone .editorTextarea {
+  padding: 18px 14px 14px;
+}
+
+.extensionWindowShell .editorSubmitButton {
+  justify-self: end;
+  min-width: 96px;
+}
+
+.extensionWindowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.extensionWindowActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  font: inherit;
+  font-size: var(--fs-xs);
+}
+
+.extensionWindowActions button:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.extensionWindowActions small {
+  color: var(--text-muted);
+}
+
+.extensionWindowActions .dangerWindowAction {
+  color: var(--danger-text);
+}

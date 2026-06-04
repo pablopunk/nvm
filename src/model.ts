@@ -66,6 +66,12 @@ export const ACTION_DEFINITIONS = {
   nativeAction: { description: 'Run command', dismiss: 'manual', loading: 'none', execute: 'main' },
   runFixtureCommand: { description: 'Open fixture', dismiss: 'manual', loading: 'view', execute: 'main' },
   promptAction: { description: 'Prompt for input', dismiss: 'manual', loading: 'none', execute: 'main' },
+  createWindow: { description: 'Open extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  showWindow: { description: 'Show extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  hideWindow: { description: 'Hide extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  toggleWindow: { description: 'Toggle extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  closeWindow: { description: 'Close extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  runExtensionRegisteredAction: { description: 'Run persistent extension action', dismiss: 'immediate', loading: 'none', execute: 'main' },
 } as const satisfies Record<string, CommandActionDefinition>
 
 export type CommandActionType = keyof typeof ACTION_DEFINITIONS
@@ -102,7 +108,10 @@ export type CommandAction = {
   actionId?: string
   extensionId?: string
   commandId?: string
+  registeredActionId?: string
   targetAction?: unknown
+  windowId?: string
+  windowOptions?: Record<string, unknown>
   alias?: string
   accelerator?: string
   clipboardType?: string
@@ -173,6 +182,8 @@ export type CommandItem = {
   filePath?: string
   fileUrl?: string
   primaryAction?: CommandAction
+  /** Persistent root/search action represented by this view item; enables aliases/shortcuts/options for durable actions shown inside views. */
+  persistentAction?: unknown
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
@@ -254,7 +265,7 @@ export type RowModel = {
 
 export type CustomizableCommandAction = { kind?: string; customizable?: boolean }
 
-const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-command'])
+const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-command', 'extension-action'])
 
 export function canCustomizeCommandAction(action: CustomizableCommandAction | null | undefined) {
   return Boolean(action?.customizable) || CUSTOMIZABLE_ACTION_KINDS.has(String(action?.kind || ''))

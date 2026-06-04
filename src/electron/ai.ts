@@ -795,6 +795,7 @@ async function importExtensionForValidation(filePath: string) {
   const extension = imported.default || imported
   if (!extension?.id || !extension?.title) throw new Error('Extension must export an object with id and title')
   if (extension.commands !== undefined && !Array.isArray(extension.commands)) throw new Error('Extension commands must be an array')
+  if (extension.actions !== undefined && typeof extension.actions !== 'function') throw new Error('Extension actions must be a function')
   return extension
 }
 
@@ -815,15 +816,15 @@ async function validateTypeScriptExtension(filePath: string, extensionTypesPath:
 
 function capabilities() {
   return {
-    extensionExports: ['export default { id, title, permissions, commands, rootItems, searchItems } satisfies NevermindExtension'],
-    rootContributions: ['rootItems(ctx) returns high-signal empty-query root palette items with stable ids, titles, optional subtitles/icons/scores, primaryAction, actions, and actionPanel'],
+    extensionExports: ['export default { id, title, permissions, actions, commands, rootItems, searchItems } satisfies NevermindExtension'],
+    rootContributions: ['actions(ctx) returns persistent shortcutable actions; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items'], 
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
     views: ['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'camera', 'webview'],
     formFields: ['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'checkbox', 'dropdown/select', 'multiselect', 'description', 'separator'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
     itemOptions: ['accessories', 'keywords', 'actionPanel', 'appearance.foreground: muted named color yellow, blue, purple, green, red, orange, or pink'],
     actionPanel: ['sections', 'submenus'],
-    shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
+    shortcuts: ['local action shortcut', 'command globalShortcut', 'persistent action globalShortcut', 'shortcutScope'], 
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
     actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
     namespaces: ['desktop', 'text', 'input', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
@@ -881,7 +882,7 @@ Nevermind catches thrown extension errors and shows a native error view, so thro
 Declare permissions explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls.
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
-Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
+Use actions(ctx) for persistent shortcut-worthy variants such as “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippet actions; these are searchable, aliasable, and global-shortcutable without opening a view. When a view row should run one of those durable actions, set primaryAction: ctx.actions.ref('action-id') instead of duplicating inline logic. Use rootItems(ctx) for high-signal empty-query dynamic/status contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
 Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.input.prompt({ fields, action }) when an action needs lightweight arguments before it runs; the wrapped action receives submitted values in action.formValues. Use ctx.actions.pasteText(text, title, { restoreClipboard: true, concealed: true }) for snippets/transforms that should paste without polluting clipboard history, and use ctx.actions.typeText or ctx.desktop.keyboard.typeText when an extension must avoid touching the clipboard. Use ctx.ui.editor({ title, content, format: 'markdown', submitAction }) for host-owned editable text/markdown surfaces; submit actions receive action.editorContent. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }

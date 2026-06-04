@@ -23,6 +23,7 @@ export type RootAction = {
     | 'calculate'
     | 'extension-command'
     | 'extension-root-item'
+    | 'extension-action'
   title: string
   subtitle: string
   icon: string
@@ -133,5 +134,8 @@ export type NevermindApi = {
   onRootItemsChanged: (callback: () => void) => () => void
   onOpenActionView: (callback: (payload?: OpenActionViewPayload) => void) => () => void
   onAiChatEvent: (callback: (event: AiChatEvent) => void) => () => void
+  getExtensionWindowState: (id: string) => Promise<{ id: string; view: CommandView; options?: Record<string, unknown> } | null>
+  closeExtensionWindow: () => Promise<void>
+  onExtensionWindowView: (callback: (payload: { id: string; view: CommandView; options?: Record<string, unknown> }) => void) => () => void
   onViewPatch: (callback: (payload: { viewId?: string; patch: CommandViewPatch }) => void) => () => void
 }

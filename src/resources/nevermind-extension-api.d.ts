@@ -71,6 +71,34 @@ export type ExtensionFormValue = string | boolean | string[]
 export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'description' | 'separator'
 export type ExtensionFormOption = { title: string; value: string }
 
+export type ExtensionActionPlacement = 'search' | 'root' | 'hidden'
+
+export type ExtensionActionContribution = {
+  /** Stable local id. Global shortcuts, aliases, recents, and action refs depend on this. */
+  id: string
+  /** Optional stable global action id. Defaults to `extension-action:${extension.id}:${id}`. */
+  actionId?: string
+  title: string
+  subtitle?: string
+  aliases?: string[]
+  keywords?: string[]
+  icon?: string
+  image?: string
+  score?: number
+  shortcut?: string
+  shortcutScope?: ShortcutScope
+  globalShortcut?: string
+  dismissAfterRun?: 'auto'
+  background?: boolean
+  customizable?: boolean
+  /** Where this durable action should be discoverable. Defaults to `['search']`. */
+  placement?: ExtensionActionPlacement[]
+  /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
+  action?: ExtensionAction
+  /** Handler to run when a simple declarative action is not enough. */
+  run?: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>
+}
+
 export type ExtensionPasteTextOptions = {
   /** Keep the palette visible after dispatching paste. Defaults to false unless the action also overrides dismiss behavior. */
   keepPaletteOpen?: boolean
@@ -87,6 +115,24 @@ export type ExtensionPasteTextOptions = {
 export type ExtensionTypeTextOptions = {
   /** Delay between typed characters in milliseconds where supported. */
   delayMs?: number
+}
+
+export type ExtensionWindowOptions = {
+  /** Stable id for reusing and controlling a window. Defaults to the view id/title. */
+  id?: string
+  title?: string
+  /** Native window title bar. Use `hidden` for title-less floating companion windows. */
+  titleBar?: 'default' | 'hidden'
+  /** Host chrome around the view. Use `none` for edge-to-edge companion tools. */
+  chrome?: 'default' | 'none'
+  width?: number
+  height?: number
+  size?: ViewSize
+  alwaysOnTop?: boolean
+  visibleOnAllSpaces?: boolean
+  hideOnBlur?: boolean
+  persistent?: boolean
+  remembersFrame?: boolean
 }
 
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
@@ -167,6 +213,8 @@ export type ExtensionItemAppearance = { foreground?: ForegroundColor }
 export type ExtensionItem = {
   /** Stable id used for ranking, recents, patching, and shortcut ownership. */
   id: string
+  /** Optional stable action id for shortcuts/aliases when promoted into a persistent action. */
+  actionId?: string
   title: string
   subtitle?: string
   accessories?: ExtensionItemAccessory[]
@@ -189,6 +237,13 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel
   actionPanelVisibility?: ActionPanelVisibility
   appearance?: ExtensionItemAppearance
+  shortcut?: string
+  shortcutScope?: ShortcutScope
+  globalShortcut?: string
+  /** Set false when an item should be searchable but not user-customizable. */
+  customizable?: boolean
+  /** Dismiss immediately for fire-and-forget persistent actions. */
+  background?: boolean
   /** Ranking hint. The host caps provider scores and combines them with usage signals. */
   score?: number
   lastUsed?: number
@@ -504,6 +559,8 @@ export type ExtensionContext = {
     openUrl(url: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     copyText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     pasteText(text: string, title?: string, options?: ExtensionPasteTextOptions & Record<string, unknown>): ExtensionAction
+    /** Reference a persistent action declared by `actions(ctx)`. Use inside views so rows share aliases/shortcuts with the durable action. */
+    ref(actionId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
     typeText(text: string, title?: string, options?: ExtensionTypeTextOptions & Record<string, unknown>): ExtensionAction
     copyImage(image: string, title?: string, options?: Record<string, unknown>): ExtensionAction
@@ -542,8 +599,22 @@ export type ExtensionContext = {
     prompt(input: { title?: string; message?: string; fields: ExtensionFormField[]; action: ExtensionAction; submitTitle?: string }, options?: Record<string, unknown>): ExtensionAction
   }
 
+  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. */
+  windows: {
+    /** Open or update an independent window rendering the given host-owned view. */
+    create(view: ExtensionView, options?: ExtensionWindowOptions): ExtensionAction
+    show(id: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    hide(id: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    /** Toggle an existing window by id, or create it first when given a fallback view plus stable `options.id`. */
+    toggle(idOrView: string | ExtensionView, titleOrOptions?: string | ExtensionWindowOptions, options?: ExtensionWindowOptions): ExtensionAction
+    close(id: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+  }
+
   /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
   clipboard: { history?: ExtensionClipboardHistory }
+
+  /** Build a persistent action contribution for `actions(ctx)`. */
+  action(action: ExtensionActionContribution): ExtensionActionContribution
 
   /** Explicit return helpers from action handlers. Prefer these for imperative handler results. */
   navigation: {
@@ -657,6 +728,14 @@ export type NevermindExtension = {
   subtitle?: string
   permissions?: ExtensionPermission[]
   commands?: ExtensionCommand[]
+  /**
+   * Persistent action registry. Use this for shortcut-worthy static variants such as
+   * “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippets.
+   * These actions are searchable, aliasable, global-shortcutable, and runnable without
+   * opening a view. Dynamic/state-driven rows such as calendar events, search results,
+   * and files belong in views, `rootItems`, or `searchItems` instead.
+   */
+  actions?(ctx: ExtensionContext): ExtensionActionContribution[] | { actions: ExtensionActionContribution[] }
   /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. */
   rootItems?(ctx: ExtensionContext): ExtensionItem[] | Promise<ExtensionItem[]> | { items: ExtensionItem[] } | Promise<{ items: ExtensionItem[] }>
   /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. */
