@@ -1121,11 +1121,13 @@ async function searchActions(query, options: any = {}) {
     if (ranked) results.push(ranked)
   }
 
-  return results
+  const sorted = results
     .sort((a, b) => {
       return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
     })
     .slice(0, 30)
+  structuredClone(sorted)
+  return sorted
 }
 
 function invalidateExtensionRootItems() {
@@ -1447,9 +1449,10 @@ function persistentActionForRef(action, entry) {
 function normalizeViewItems(items, entry) {
   return Array.isArray(items) ? items.map((item) => {
     const itemActions = normalizeViewActions(item.actions, entry)
-    const primaryAction = normalizeViewAction(item.primaryAction, entry)
+    const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
+    const { run, __handler, action, ...safeItem } = item
     return {
-      ...item,
+      ...safeItem,
       actions: itemActions,
       actionPanel: normalizeActionPanel(item.actionPanel, itemActions, entry),
       primaryAction,
@@ -1462,10 +1465,13 @@ function normalizeViewItems(items, entry) {
 function normalizeActionPanel(panel, fallbackActions, entry) {
   if (panel?.sections) return {
     ...panel,
-    sections: panel.sections.map((section) => ({
-      ...section,
-      actions: normalizeViewActions([...(section.actions || []), ...(section.lazyActions || [])], entry),
-    })),
+    sections: panel.sections.map((section) => {
+      const { lazyActions, ...safeSection } = section
+      return {
+        ...safeSection,
+        actions: normalizeViewActions([...(section.actions || []), ...(lazyActions || [])], entry),
+      }
+    }),
   }
   if (Array.isArray(fallbackActions) && fallbackActions.length) return { sections: [{ actions: normalizeViewActions(fallbackActions, entry) }] }
   return panel
