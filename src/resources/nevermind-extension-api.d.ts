@@ -68,7 +68,7 @@ export type ExtensionEditorFormat = 'text' | 'markdown'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogSource = 'main' | 'renderer' | 'extension' | 'host'
 export type ExtensionFormValue = string | boolean | string[]
-export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'description' | 'separator'
+export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'file' | 'files' | 'folder' | 'description' | 'separator'
 export type ExtensionFormOption = { title: string; value: string }
 
 export type ExtensionActionPlacement = 'search' | 'root' | 'hidden'
@@ -334,6 +334,16 @@ export type ExtensionFormField = {
   description?: string
   error?: string
   rows?: number
+  /** File extensions allowed by file/files fields, e.g. ['png', 'jpg'] or ['.md']. */
+  extensions?: string[]
+  /** Display name for extension filters in native file pickers. */
+  filterName?: string
+  /** Picker button label for file/files/folder fields. */
+  buttonLabel?: string
+  /** Optional starting path for file/files/folder fields. Supports ~ expansion. */
+  defaultPath?: string
+  /** Whether folder pickers should allow creating folders. Defaults to true. */
+  canCreateDirectories?: boolean
 }
 
 export type ExtensionFileKind = 'image' | 'video' | 'file' | string

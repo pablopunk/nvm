@@ -161,9 +161,9 @@ export type CommandItemAppearance = { foreground?: CommandItemForeground }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & { id: string }
 export type CommandFormValue = string | boolean | string[]
-export type CommandFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'description' | 'separator'
+export type CommandFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'file' | 'files' | 'folder' | 'description' | 'separator'
 export type CommandFormOption = { title: string; value: string }
-export type CommandFormField = { id: string; label?: string; type?: CommandFormFieldType; value?: CommandFormValue; placeholder?: string; required?: boolean; options?: CommandFormOption[]; description?: string; error?: string; rows?: number }
+export type CommandFormField = { id: string; label?: string; type?: CommandFormFieldType; value?: CommandFormValue; placeholder?: string; required?: boolean; options?: CommandFormOption[]; description?: string; error?: string; rows?: number; extensions?: string[]; filterName?: string; buttonLabel?: string; defaultPath?: string; canCreateDirectories?: boolean }
 
 export type CommandItem = {
   id: string

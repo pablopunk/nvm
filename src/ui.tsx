@@ -18,7 +18,7 @@ export type ToastProps = { message: string; tone?: 'default' | 'error' }
 export type PreviewViewProps = { content?: ReactNode; image?: string; video?: string; poster?: string; actions?: ReactNode }
 export type ProgressViewProps = { steps: { title: string; status?: string }[]; value?: number; total?: number; status?: string }
 export type FormValue = string | boolean | string[]
-export type FormField = { id: string; label?: string; type?: string; value?: FormValue; placeholder?: string; required?: boolean; options?: { title: string; value: string }[]; description?: string; error?: string; rows?: number }
+export type FormField = { id: string; label?: string; type?: string; value?: FormValue; placeholder?: string; required?: boolean; options?: { title: string; value: string }[]; description?: string; error?: string; rows?: number; extensions?: string[]; filterName?: string; buttonLabel?: string; defaultPath?: string; canCreateDirectories?: boolean }
 export type FormViewProps = { fields: FormField[]; values?: Record<string, FormValue>; onChange?: (id: string, value: FormValue) => void; onSubmit?: () => void; submitTitle?: string }
 export type EditorViewProps = { value: string; format?: 'text' | 'markdown'; language?: string; placeholder?: string; readOnly?: boolean; preview?: ReactNode; actions?: ReactNode; submitTitle?: string; onChange?: (value: string) => void; onSubmit?: () => void }
 export type ItemSection<T> = { title?: string; subtitle?: string; items: T[] }
@@ -108,6 +108,20 @@ function normalizedFormValue(value: FormValue | undefined) {
 
 function formFieldControl(field: FormField, value: FormValue, onChange?: FormViewProps['onChange']) {
   const type = field.type || 'text'
+  if (type === 'file' || type === 'files' || type === 'folder') {
+    const values = Array.isArray(value) ? value : String(value || '').split('\n').map((item) => item.trim()).filter(Boolean)
+    const label = values.length ? values.join('\n') : ''
+    const placeholder = field.placeholder || (type === 'folder' ? 'No folder selected' : type === 'files' ? 'No files selected' : 'No file selected')
+    async function choosePath() {
+      const result = await window.nvm.pickFormFieldPaths({ type: type as 'file' | 'files' | 'folder', title: field.label, buttonLabel: field.buttonLabel, defaultPath: field.defaultPath, extensions: field.extensions, filterName: field.filterName, canCreateDirectories: field.canCreateDirectories })
+      if (result.canceled) return
+      onChange?.(field.id, type === 'files' ? result.paths : result.paths[0] || '')
+    }
+    function clearPath() {
+      onChange?.(field.id, type === 'files' ? [] : '')
+    }
+    return <div className="formPickerControl"><pre title={label || placeholder}>{label || placeholder}</pre><button type="button" aria-label={`${field.buttonLabel || 'Choose'} ${field.label || field.id}`} onClick={choosePath}>{field.buttonLabel || 'Choose…'}</button>{values.length ? <button type="button" className="formPickerClear" aria-label={`Clear ${field.label || field.id}`} onClick={clearPath}>Clear</button> : null}</div>
+  }
   if (type === 'description') return <p className="formDescription">{field.description || field.label}</p>
   if (type === 'separator') return <hr className="formSeparator" />
   if (type === 'textarea') return <textarea value={String(value)} placeholder={field.placeholder} required={field.required} rows={field.rows || 4} onChange={(event) => onChange?.(field.id, event.currentTarget.value)} />
@@ -127,6 +141,7 @@ export function FormView({ fields, values = {}, onChange, onSubmit, submitTitle 
       const value = normalizedFormValue(values[field.id] ?? field.value)
       if (type === 'description' || type === 'separator') return <div key={field.id} className={`formStaticField formStaticField-${type}`}>{formFieldControl(field, value, onChange)}</div>
       if (type === 'checkbox') return <div key={field.id} className="formField formField-checkbox">{formFieldControl(field, value, onChange)}{field.description ? <small>{field.description}</small> : null}{field.error ? <small className="formFieldError">{field.error}</small> : null}</div>
+      if (type === 'file' || type === 'files' || type === 'folder') return <div key={field.id} className="formField"><span>{field.label}</span>{formFieldControl(field, value, onChange)}{field.description ? <small>{field.description}</small> : null}{field.error ? <small className="formFieldError">{field.error}</small> : null}</div>
       return <label key={field.id} className="formField"><span>{field.label}</span>{formFieldControl(field, value, onChange)}{field.description ? <small>{field.description}</small> : null}{field.error ? <small className="formFieldError">{field.error}</small> : null}</label>
     })}
     {onSubmit ? <button className="formSubmitButton" type="submit">{submitTitle}</button> : null}

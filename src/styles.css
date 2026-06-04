@@ -1199,6 +1199,54 @@ kbd {
   padding: 4px 6px;
 }
 
+.formPickerControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.formPickerControl pre {
+  min-width: 0;
+  max-height: 72px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--surface-sunken);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.formPickerControl button {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: var(--surface-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.formPickerControl button:hover {
+  background: var(--surface-4);
+}
+
+.formPickerControl button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.formPickerClear {
+  color: var(--text-tertiary) !important;
+  background: var(--surface-1) !important;
+}
+
 .formSubmitButton {
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);

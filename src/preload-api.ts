@@ -94,6 +94,7 @@ export type NevermindApi = {
   search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<RootAction[]>
   execute: (action: RootAction) => Promise<{ view?: CommandView }>
   runViewAction: (action: CommandAction) => Promise<ViewActionResult>
+  pickFormFieldPaths: (input: { type?: 'file' | 'files' | 'folder'; title?: string; buttonLabel?: string; defaultPath?: string; extensions?: string[]; filterName?: string; canCreateDirectories?: boolean }) => Promise<{ canceled: boolean; paths: string[] }>
   startFileDrag: (filePath: string) => void
   sendAiMessage: (message: string, chatId?: string) => Promise<void>
   aiChatExited: (chatId?: string) => Promise<void>

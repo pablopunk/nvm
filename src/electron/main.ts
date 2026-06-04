@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences, screen } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences, screen, dialog } from 'electron'
 import electronUpdater from 'electron-updater'
 import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
@@ -4009,6 +4009,25 @@ async function runPaletteDebugCli() {
   console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
 }
 
+async function pickFormFieldPaths(event, input: any = {}) {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender) || paletteWindow.win || undefined
+  const type = input.type === 'folder' ? 'folder' : input.type === 'files' ? 'files' : 'file'
+  const properties: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'> = type === 'folder' ? ['openDirectory'] : ['openFile']
+  if (type === 'files') properties.push('multiSelections')
+  if (type === 'folder' && input.canCreateDirectories !== false) properties.push('createDirectory')
+  const filters = Array.isArray(input.extensions) && input.extensions.length
+    ? [{ name: input.filterName || 'Allowed files', extensions: input.extensions.map((value) => String(value).replace(/^\./, '')).filter(Boolean) }]
+    : undefined
+  const result = await dialog.showOpenDialog(senderWindow, {
+    title: input.title || (type === 'folder' ? 'Choose Folder' : type === 'files' ? 'Choose Files' : 'Choose File'),
+    buttonLabel: input.buttonLabel || 'Choose',
+    properties,
+    filters,
+    defaultPath: typeof input.defaultPath === 'string' ? expandUserPath(input.defaultPath) : undefined,
+  })
+  return result.canceled ? { canceled: true, paths: [] } : { canceled: false, paths: result.filePaths }
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   prepareAppWindowPolicy()
@@ -4036,6 +4055,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))
   ipcMain.handle('view-action:execute', (_event, action) => executeViewActionForIpc(action))
+  ipcMain.handle('dialog:pick-form-field-paths', pickFormFieldPaths)
   ipcMain.on('drag:file', startFileDrag)
   ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
   ipcMain.handle('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))

@@ -22,6 +22,9 @@ function formView(ctx: ExtensionContext) {
       { id: 'separator', type: 'separator' },
       { id: 'color', label: 'Dropdown', type: 'dropdown', value: 'blue', options: [{ title: 'Blue', value: 'blue' }, { title: 'Green', value: 'green' }, { title: 'Purple', value: 'purple' }] },
       { id: 'tags', label: 'Multiselect', type: 'multiselect', value: ['templates', 'forms'], options: [{ title: 'Templates', value: 'templates' }, { title: 'Forms', value: 'forms' }, { title: 'Files', value: 'files' }] },
+      { id: 'inputFile', label: 'File picker', type: 'file', placeholder: 'Choose one source file', description: 'Single path value from the host native file picker.' },
+      { id: 'inputFiles', label: 'Files picker', type: 'files', placeholder: 'Choose one or more images', extensions: ['png', 'jpg', 'jpeg', 'webp'], filterName: 'Images', description: 'Array value from a multi-select native file picker.' },
+      { id: 'outputFolder', label: 'Folder picker', type: 'folder', placeholder: 'Choose an output folder', description: 'Folder path value from the host native folder picker.' },
       { id: 'invalid', label: 'Error State', type: 'text', value: 'Bad value', error: 'Example field-level error copy.' },
     ],
     submitAction: ctx.actions.run('Show Submitted Values', (_ctx, action) => ctx.ui.preview({
