@@ -344,19 +344,19 @@ function resolveRootActionForIpc(action) {
   if (!action || typeof action !== 'object') return action
   const record = action.executionId ? rootActionExecutionRecords.get(String(action.executionId)) : null
   if (record) return clonePlain(record.action)
-  if (action.executionId) throw new Error('Expired action execution token')
-  if (action.kind === 'extension-root-item' && action.rootAction) throw new Error('Untrusted extension root action')
-  return action
+  const fallback = withoutExecutionId(action)
+  if (fallback.kind === 'extension-root-item' && fallback.rootAction) throw new Error('Untrusted extension root action')
+  return fallback
 }
 
 function resolveViewActionForIpc(action) {
   if (!action || typeof action !== 'object') return action
   const record = action.executionId ? viewActionExecutionRecords.get(String(action.executionId)) : null
   if (record) return mergeRendererActionInput(clonePlain(record.action), action)
-  if (action.executionId) throw new Error('Expired action execution token')
-  if (action.type === 'nativeAction') return { ...action, nativeAction: resolveRootActionForIpc(action.nativeAction) }
-  if (TOKEN_REQUIRED_VIEW_ACTION_TYPES.has(String(action.type || ''))) throw new Error(`Untrusted ${action.type} action`)
-  return action
+  const fallback = withoutExecutionId(action)
+  if (fallback.type === 'nativeAction') return { ...fallback, nativeAction: resolveRootActionForIpc(fallback.nativeAction) }
+  if (TOKEN_REQUIRED_VIEW_ACTION_TYPES.has(String(fallback.type || ''))) throw new Error(`Untrusted ${fallback.type} action`)
+  return fallback
 }
 
 function checkRefreshBurst(extension: any) {
