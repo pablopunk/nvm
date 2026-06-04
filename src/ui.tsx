@@ -153,7 +153,11 @@ export function EditorView({ value, format = 'text', language, placeholder, read
   return <div className={`extensionView editorView ${showsPreview ? 'editorViewSplit' : ''}`}>
     <div className="editorPane">
       <div className="editorToolbar"><span>{format === 'markdown' ? 'Markdown' : 'Plain text'}</span>{language ? <small>{language}</small> : null}</div>
-      <textarea className="editorTextarea" value={value} placeholder={placeholder} readOnly={readOnly} spellCheck={format !== 'markdown'} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => onChange?.(event.currentTarget.value)} />
+      <textarea className="editorTextarea" value={value} placeholder={placeholder} readOnly={readOnly} spellCheck={format !== 'markdown'} onKeyDown={(event) => {
+        if (event.key === 'Escape') return
+        if (event.metaKey || event.ctrlKey || event.altKey) return
+        event.stopPropagation()
+      }} onChange={(event) => onChange?.(event.currentTarget.value)} />
       {onSubmit ? <button className="formSubmitButton editorSubmitButton" type="button" onClick={onSubmit}>{submitTitle}</button> : null}
     </div>
     {showsPreview ? <div className="editorPreviewPane"><div className="editorToolbar"><span>Preview</span></div><div className="previewText">{preview}</div></div> : null}

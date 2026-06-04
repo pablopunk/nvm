@@ -134,17 +134,48 @@ const SEARCH_PLACEHOLDERS = [
   'Make it happen.',
 ]
 
+function seedFormValuesFromView(view: ExtensionView | null) {
+  if (view?.type !== 'form') return {}
+  return Object.fromEntries((view.fields || []).map((field) => {
+    if (field.type === 'checkbox') return [field.id, Boolean(field.value)]
+    if (field.type === 'multiselect' || field.type === 'files') return [field.id, Array.isArray(field.value) ? field.value : []]
+    return [field.id, field.value || '']
+  }))
+}
+
+function selectedItemIdForView(view: ExtensionView | null, current = '') {
+  if (!view) return ''
+  const items = allViewItems(view)
+  const declaredSelection = view.selectedItemId && items.some((item) => item.id === view.selectedItemId) ? view.selectedItemId : ''
+  return declaredSelection || (current && items.some((item) => item.id === current) ? current : items[0]?.id || '')
+}
+
 export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [view, setView] = useState<ExtensionView | null>(null)
   const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>({})
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({})
+  const [selectedValue, setSelectedValue] = useState('')
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null)
 
   useEffect(() => {
     window.nvm.getNevermindAuthStatus().then((status) => setNevermindAuthed(Boolean(status.authed))).catch(() => setNevermindAuthed(false))
-    window.nvm.getExtensionWindowState(windowId).then((state) => { if (state?.view) { setView(state.view); setWindowOptions(state.options || {}) } })
-    return window.nvm.onExtensionWindowView((payload) => { if (payload.id === windowId) { setView(payload.view); setWindowOptions(payload.options || {}) } })
+    window.nvm.getExtensionWindowState(windowId).then((state) => {
+      if (state?.view) {
+        setView(state.view)
+        setFormValues(seedFormValuesFromView(state.view))
+        setSelectedValue(selectedItemIdForView(state.view))
+        setWindowOptions(state.options || {})
+      }
+    })
+    return window.nvm.onExtensionWindowView((payload) => {
+      if (payload.id === windowId) {
+        setView(payload.view)
+        setFormValues(seedFormValuesFromView(payload.view))
+        setSelectedValue(selectedItemIdForView(payload.view))
+        setWindowOptions(payload.options || {})
+      }
+    })
   }, [windowId])
 
   function applyPatch(patch: CommandViewPatch) {
@@ -159,13 +190,15 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         if (patch.mode === 'append') return [...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id)), ...patchItems as ExtensionViewItem[]]
         return items.filter((item) => !removeIds.has(item.id)).map((item) => patchMap.has(item.id) ? { ...item, ...patchMap.get(item.id) } : item)
       }
-      return {
+      const nextView = {
         ...current,
         ...(patch.isLoading !== undefined ? { isLoading: patch.isLoading } : {}),
         ...(patch.selectedItemId !== undefined ? { selectedItemId: patch.selectedItemId } : {}),
         items: current.items ? applyItems(current.items) : current.items,
         sections: current.sections?.map((section) => ({ ...section, items: applyItems(section.items) })),
       }
+      setSelectedValue(selectedItemIdForView(nextView, selectedValue))
+      return nextView
     })
   }
 
@@ -173,7 +206,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (!result) return
     if (result.patch) applyPatch(result.patch)
     if (result.navigation === 'pop') await window.nvm.closeExtensionWindow()
-    else if (result.view) setView(result.view)
+    else if (result.view) {
+      setView(result.view)
+      setFormValues(seedFormValuesFromView(result.view))
+      setSelectedValue(selectedItemIdForView(result.view, selectedValue))
+    }
   }
 
   async function runAction(action: ExtensionViewAction) {
@@ -228,7 +265,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     return <div className="extensionWindowActions">{actionRows.map((row) => <button key={row.value} className={row.className?.includes('danger') ? 'dangerWindowAction' : undefined} type="button" onClick={row.onSelect}>{row.icon}<span>{row.title}</span>{row.shortcut ? <small>{shortcutLabel(row.shortcut)}</small> : null}</button>)}</div>
   }
 
-  return <Command className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`}>
+  return <Command className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`} value={selectedValue} onValueChange={setSelectedValue}>
     <main className="extensionWindowBody"><ExtensionViewRenderer
       view={view}
       aiChat={aiChat}

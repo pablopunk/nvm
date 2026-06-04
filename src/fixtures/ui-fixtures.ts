@@ -398,7 +398,7 @@ function webviewView(ctx: ExtensionContext) {
   return ctx.ui.webview({
     id: 'dev-ui-webview',
     title: 'Dev UI · Webview',
-    html: '<main style="font-family: system-ui; color: white; padding: 24px"><h1>Sandboxed Webview Fixture</h1><p>No Node access. Use only when host primitives do not fit.</p><button>Focusable button</button></main>',
+    html: '<style>:root{color-scheme:dark;--surface-webview:Canvas;--text-webview:CanvasText}body{margin:0;background:var(--surface-webview);color:var(--text-webview);font-family:system-ui}main{min-height:100vh;padding:24px}</style><main><h1>Sandboxed Webview Fixture</h1><p>No Node access. Use only when host primitives do not fit.</p><button>Focusable button</button></main>',
   })
 }
 

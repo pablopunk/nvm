@@ -605,8 +605,8 @@ export type ExtensionContext = {
     openUrl(url: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     copyText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     pasteText(text: string, title?: string, options?: ExtensionPasteTextOptions & Record<string, unknown>): ExtensionAction
-    /** Reference a persistent action declared by `actions(ctx)`. Use inside views so rows share aliases/shortcuts with the durable action. */
-    ref(actionId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use inside views so rows share aliases/shortcuts with the durable action. */
+    ref(registeredActionId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
     typeText(text: string, title?: string, options?: ExtensionTypeTextOptions & Record<string, unknown>): ExtensionAction
     copyImage(image: string, title?: string, options?: Record<string, unknown>): ExtensionAction

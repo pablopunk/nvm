@@ -245,9 +245,13 @@ function appleScriptString(value: string) {
 }
 
 export function typeTextIntoFrontmostApp(text: string, options: any = {}) {
-  return osFunction<[string, any], any>({
-    darwin: (value, opts) => execFile('osascript', ['-e', `tell application "System Events" to keystroke ${appleScriptString(value)}`], { timeout: Math.max(5_000, Number(opts?.timeoutMs || 30_000)) }, () => {}),
-  }, () => null)(text, options)
+  return osFunction<[string, any], Promise<{ ok: boolean; error?: string }>>({
+    darwin: (value, opts) => new Promise((resolve) => {
+      execFile('osascript', ['-e', `tell application "System Events" to keystroke ${appleScriptString(value)}`], { timeout: Math.max(5_000, Number(opts?.timeoutMs || 30_000)) }, (error, _stdout, stderr) => {
+        resolve(error ? { ok: false, error: String(stderr || error.message || 'Unable to type text') } : { ok: true })
+      })
+    }),
+  }, async () => ({ ok: false, error: `${osLabel()} does not support keyboard text injection` }))(text, options)
 }
 
 export async function selectedFilePaths() {

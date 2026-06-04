@@ -1708,7 +1708,11 @@ function executeWindowAction(action: any) {
   }
   if (action.type === 'showWindow') { record.win.show(); record.win.focus(); return { toast: { message: 'Shown window' } } }
   if (action.type === 'hideWindow') { record.win.hide(); return { toast: { message: 'Hidden window' } } }
-  if (action.type === 'toggleWindow') { if (record.win.isVisible()) record.win.hide(); else { record.win.show(); record.win.focus() }; return { toast: { message: 'Toggled window' } } }
+  if (action.type === 'toggleWindow') {
+    if (action.view || action.windowOptions) createOrUpdateExtensionWindow(action.view || record.view, { ...(record.options || {}), ...(action.windowOptions || {}), id })
+    if (record.win.isVisible()) record.win.hide(); else { record.win.show(); record.win.focus() }
+    return { toast: { message: 'Toggled window' } }
+  }
   if (action.type === 'closeWindow') { record.win.close(); return { toast: { message: 'Closed window' } } }
   return null
 }
@@ -1768,9 +1772,10 @@ async function executeViewAction(action) {
     case 'pasteText':
       pasteTextAction(action)
       return { toast: { message: 'Pasted' } }
-    case 'typeText':
-      typeTextIntoFrontmostApp(action.text || '', { delayMs: action.delayMs })
-      return { toast: { message: 'Typed' } }
+    case 'typeText': {
+      const result = await typeTextIntoFrontmostApp(action.text || '', { delayMs: action.delayMs })
+      return result?.ok ? { toast: { message: 'Typed' } } : { toast: { message: result?.error || 'Unable to type text', tone: 'error' } }
+    }
     case 'createWindow':
     case 'showWindow':
     case 'hideWindow':
@@ -1870,11 +1875,9 @@ async function executeViewAction(action) {
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
     case 'runExtensionRegisteredAction': {
-      const extensionId = action.extensionId
-      const registeredActionId = action.registeredActionId || action.actionId
-      const entry = extensionActionRegistry.get(`${extensionId}:${registeredActionId}`)
-      const rootAction = entry ? extensionActionFromContribution(entry) : null
-      return rootAction ? executeExtensionRootItem(rootAction) : { toast: { message: 'Action unavailable', tone: 'error' } }
+      const resolved = resolveRegisteredActionRef(action)
+      if (resolved.error) return { toast: { message: resolved.error, tone: 'error' } }
+      return resolved.rootAction ? executeExtensionRootItem(resolved.rootAction) : { toast: { message: 'Action unavailable', tone: 'error' } }
     }
     case 'promptAction':
       return { view: promptActionView(action), navigation: 'push' }
@@ -1892,6 +1895,24 @@ async function executeViewAction(action) {
     default:
       throw new Error(`Unsupported action type: ${String(action?.type || 'unknown')}`)
   }
+}
+
+function resolveRegisteredActionRef(action) {
+  let current = action
+  const visited = new Set<string>()
+  while (current?.type === 'runExtensionRegisteredAction') {
+    const extensionId = current.extensionId
+    const registeredActionId = current.registeredActionId || current.actionId
+    const key = `${extensionId}:${registeredActionId}`
+    if (visited.has(key)) return { error: 'Action reference cycle detected' }
+    visited.add(key)
+    const entry = extensionActionRegistry.get(key)
+    const rootAction = entry ? extensionActionFromContribution(entry) : null
+    if (!rootAction) return { error: 'Action unavailable' }
+    if (rootAction.rootAction?.type !== 'runExtensionRegisteredAction') return { rootAction }
+    current = rootAction.rootAction
+  }
+  return { error: 'Action unavailable' }
 }
 
 async function executeBuiltin(action) {
@@ -2104,12 +2125,15 @@ async function enrichDateAdded(files) {
 }
 
 async function findFiles(roots, options: any = {}) {
-  const limit = options.limit || 100
+  const limit = Math.max(1, Math.min(Number(options.limit || 100), MAX_FILE_INDEX_LIMIT))
   const maxDepth = options.depth ?? 2
   const extensions = extensionsForFindOptions(options)
+  const ignored = normalizedIgnorePatterns(options.ignore)
+  const includeHidden = Boolean(options.includeHidden)
   let found = []
 
   async function walk(dir, depth) {
+    if (found.length >= limit) return
     let entries = []
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -2118,8 +2142,10 @@ async function findFiles(roots, options: any = {}) {
     }
 
     for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue
+      if (found.length >= limit) return
+      if (!includeHidden && entry.name.startsWith('.')) continue
       const fullPath = path.join(dir, entry.name)
+      if (ignoredByPattern(fullPath, entry.name, ignored)) continue
       if (entry.isFile()) {
         const ext = extensionForPath(entry.name)
         if (!extensions || extensions.has(ext)) found.push(await fileToExtensionFile(fullPath))
@@ -2129,7 +2155,8 @@ async function findFiles(roots, options: any = {}) {
     }
   }
 
-  await Promise.all(normalizeFindRoots(roots).map((root) => walk(expandUserPath(root), maxDepth)))
+  const findRoots = normalizeFindRoots(roots).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
+  await Promise.all(findRoots.map((root) => walk(root, maxDepth)))
   if ((options.sortBy || options.sort) === 'added') found = await enrichDateAdded(found)
   return sortFoundFiles(found, options).slice(0, limit)
 }
@@ -3020,7 +3047,7 @@ function createExtensionContext(extension, command) {
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
       pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
-      ref: (actionId, title = 'Run Action', options: any = {}) => ({ ...options, type: 'runExtensionRegisteredAction', title, extensionId: extension.id, registeredActionId: actionId }),
+      ref: (registeredActionId, title = 'Run Action', options: any = {}) => ({ ...options, type: 'runExtensionRegisteredAction', title, extensionId: extension.id, registeredActionId }),
       typeText: (text, title = 'Type Text', options: any = {}) => ({ ...options, type: 'typeText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
       trash: (paths, title = 'Move to Trash', options: any = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
@@ -4351,10 +4378,11 @@ async function duplicateCreatedAction(action) {
   if (!filePath) return { ok: false, message: 'Generated extension not found' }
 
   const duplicateId = hashValue(`${filePath}:${Date.now()}`)
+  const duplicateExtensionId = `${extension.id}-copy-${duplicateId.slice(0, 8)}`
   const duplicateTitle = `Copy of ${extension.title || action.title}`
   const duplicateFile = `${extensionSourceBasename(filePath)}-copy-${duplicateId.slice(0, 8)}.ts`
   const sourceFile = path.basename(filePath)
-  const sourceCode = `import type { NevermindExtension } from './${EXTENSION_TYPES_FILENAME.replace(/\.d\.ts$/, '')}'\nimport source from './${sourceFile.replace(/'/g, "\\'")}'\n\nexport default {\n  ...source,\n  id: ${JSON.stringify(`${extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n} satisfies NevermindExtension\n`
+  const sourceCode = `import type { NevermindExtension } from './${EXTENSION_TYPES_FILENAME.replace(/\.d\.ts$/, '')}'\nimport source from './${sourceFile.replace(/'/g, "\\'")}'\n\nconst duplicateExtensionId = ${JSON.stringify(duplicateExtensionId)}\nconst namespacedActionId = (actionId: unknown) => typeof actionId === 'string' && actionId ? duplicateExtensionId + ':' + actionId : undefined\nconst duplicateContributions = (items: any[]) => items.map((item) => ({ ...item, ...(item.actionId ? { actionId: namespacedActionId(item.actionId) } : {}) }))\n\nexport default {\n  ...source,\n  id: duplicateExtensionId,\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command, ...(command.actionId ? { actionId: namespacedActionId(command.actionId) } : {}) })),\n  actions: source.actions ? (ctx) => {\n    const result = source.actions(ctx)\n    const items = Array.isArray(result) ? result : Array.isArray(result?.actions) ? result.actions : []\n    return duplicateContributions(items)\n  } : undefined,\n} satisfies NevermindExtension\n`
 
   await fs.writeFile(path.join(extensionsDir, duplicateFile), sourceCode)
   userState.aiChats[duplicateId] = {
@@ -4374,7 +4402,10 @@ async function duplicateCreatedAction(action) {
   invalidateExtensionRootItems()
   await loadExtensions()
   registerActionShortcuts()
-  const duplicateEntry = Array.from(extensionActionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
+  const targetRegisteredActionId = action.registeredActionId || action.commandId
+  const duplicateEntry = targetRegisteredActionId
+    ? extensionActionRegistry.get(`${duplicateExtensionId}:${targetRegisteredActionId}`)
+    : Array.from(extensionActionRegistry.values()).find((candidate) => candidate.extension?.id === duplicateExtensionId)
   return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromContribution(duplicateEntry) : { id: `ai-tweak-extension:${duplicateFile}`, kind: 'ai-tweak-extension', extensionFile: duplicateFile, title: duplicateTitle, subtitle: 'Tweak extension with AI', icon: 'sparkles', score: 0 } }
 }
 
