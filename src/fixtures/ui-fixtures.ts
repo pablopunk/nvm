@@ -66,7 +66,13 @@ function backgroundJobFixtureAction(ctx: ExtensionContext) {
     subtitle: 'Dev fixture for extension-owned host jobs and diagnostics',
     icon: 'activity',
     mode: 'background',
-    triggers: [{ type: 'startup', delayMs: 750 }],
+    triggers: [
+      { type: 'startup', delayMs: 750 },
+      { type: 'files.changed', roots: ['~/Downloads'], debounceMs: 2000 },
+      { type: 'app.frontmost.changed', debounceMs: 1000 },
+      { type: 'wake' },
+      { type: 'login' },
+    ],
     async run(innerCtx) {
       const count = await innerCtx.storage.get<number>('backgroundJobRuns', 0) || 0
       await innerCtx.storage.set('backgroundJobRuns', count + 1)
@@ -400,7 +406,7 @@ const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
   title: 'Dev UI Fixtures',
   subtitle: 'Dev-only extension API fixtures',
-  permissions: ['camera', 'desktop.files', 'ocr'],
+  permissions: ['camera', 'desktop.files', 'desktop.apps', 'ocr'],
   actions(ctx) {
     return [floatingWindowToggleAction(ctx), backgroundJobFixtureAction(ctx)]
   },

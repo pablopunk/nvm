@@ -78,8 +78,11 @@ export type ExtensionBackgroundMode = 'view' | 'noView' | 'background'
 export type ExtensionBackgroundTrigger =
   | { type: 'startup'; delayMs?: number }
   | { type: 'interval'; every: string | number; delayMs?: number }
+  /** Requires `desktop.files`; roots are watched by the host with debouncing and quotas. */
   | { type: 'files.changed'; roots: string | string[]; debounceMs?: number }
+  /** Requires `clipboard.history`; fires after Nevermind records a changed clipboard item. */
   | { type: 'clipboard.changed'; debounceMs?: number }
+  /** Requires `desktop.apps`; backed by a host frontmost-app poller. */
   | { type: 'app.frontmost.changed'; debounceMs?: number }
   | { type: 'wake' | 'login' }
 
@@ -105,7 +108,7 @@ export type ExtensionActionContribution = {
   placement?: ExtensionActionPlacement[]
   /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode
-  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, throttling, and diagnostics. */
+  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, no-overlap, backoff, and diagnostics. */
   triggers?: ExtensionBackgroundTrigger[]
   /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
   action?: ExtensionAction
@@ -779,7 +782,7 @@ export type ExtensionCommand = {
   background?: boolean
   /** Execution lifecycle. `background`/`noView` commands are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode
-  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, throttling, and diagnostics. */
+  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, no-overlap, backoff, and diagnostics. */
   triggers?: ExtensionBackgroundTrigger[]
   dismissAfterRun?: 'auto'
   run(ctx: ExtensionContext, action: ExtensionAction): ExtensionActionResult | Promise<ExtensionActionResult>

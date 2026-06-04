@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences, screen, dialog } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences, screen, dialog, powerMonitor } from 'electron'
 import electronUpdater from 'electron-updater'
 import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
@@ -100,7 +100,9 @@ let learningTracesPath = ''
 let saveTimer: NodeJS.Timeout | undefined
 let appIndexTimer: NodeJS.Timeout | undefined
 let appWatchers: Array<{ close: () => unknown }> = []
+let extensionFileWatchers: Array<{ close: () => unknown }> = []
 let clipboardWatcherLastId = ''
+let frontmostWatcherLastId = ''
 const jobRegistry = new JobRegistry()
 let nevermindAi: any
 let learningStore: LocalLearningStore | null = null
@@ -120,6 +122,7 @@ let userState: AnyRecord = {
   clipboardHistory: [],
   aiChats: {},
   settings: {},
+  jobSettings: {},
 }
 
 function osCacheRoot() {
@@ -237,6 +240,8 @@ function recordLearningReview(chatId: string) {
 
 const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
+const pendingAppIconPaths = new Set<string>()
+const pendingThumbnailPaths = new Map<string, string>()
 const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
 let fixtureExtensions: any[] = []
@@ -471,33 +476,43 @@ function recordRecent(action: any) {
   scheduleSaveState()
 }
 
+async function loadAppIconDataUrl(appPath) {
+  try {
+    const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
+    const cached = await fs.readFile(cachePath).catch(() => null)
+    if (cached) return `data:image/png;base64,${cached.toString('base64')}`
+
+    const { fileIconToBuffer } = await import('file-icon')
+    const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
+    await fs.mkdir(iconCacheDir, { recursive: true })
+    await fs.writeFile(cachePath, png).catch(() => {})
+    return `data:image/png;base64,${png.toString('base64')}`
+  } catch (error) {
+    logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
+    return null
+  }
+}
+
+async function processPendingAppIcons() {
+  const paths = Array.from(pendingAppIconPaths).slice(0, 20)
+  pendingAppIconPaths.clear()
+  await Promise.all(paths.map(async (appPath) => {
+    const result = await loadAppIconDataUrl(appPath)
+    appIconCache.set(appPath, result)
+  }))
+}
+
 async function getAppIconDataUrl(appPath) {
   if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
   if (appIconCache.has(appPath)) return appIconCache.get(appPath)
   const inFlight = appIconLoadPromises.get(appPath)
   if (inFlight) return inFlight
 
-  const promise = (async () => {
-    try {
-      const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
-      const cached = await fs.readFile(cachePath).catch(() => null)
-      if (cached) return `data:image/png;base64,${cached.toString('base64')}`
-
-      const { fileIconToBuffer } = await import('file-icon')
-      const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
-      await fs.mkdir(iconCacheDir, { recursive: true })
-      await fs.writeFile(cachePath, png).catch(() => {})
-      return `data:image/png;base64,${png.toString('base64')}`
-    } catch (error) {
-      logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
-      return null
-    }
-  })()
-
+  pendingAppIconPaths.add(appPath)
+  const promise = jobRegistry.run('cache.app-icons', 'icon-request').then(() => appIconCache.get(appPath) ?? null)
   appIconLoadPromises.set(appPath, promise)
   const result = await promise.finally(() => appIconLoadPromises.delete(appPath))
-  if (result) appIconCache.set(appPath, result)
-  else appIconCache.set(appPath, null)
+  appIconCache.set(appPath, result)
   return result
 }
 
@@ -1715,6 +1730,7 @@ function runQuitCleanup() {
   for (const record of extensionWindows.values()) record.win.close()
   extensionWindows.clear()
   for (const watcher of appWatchers) watcher.close()
+  for (const watcher of extensionFileWatchers) watcher.close()
 }
 
 function requestQuitApp(reason = 'action') {
@@ -1882,27 +1898,43 @@ async function executeBuiltin(action) {
   return executeSystemBuiltin(action, () => requestQuitApp('builtin'))
 }
 
-async function thumbnailResponseForPath(filePath) {
+async function thumbnailCachePath(filePath) {
   const stat = await fs.stat(filePath)
   const key = crypto.createHash('sha1').update(`${filePath}:${stat.mtimeMs}:${stat.size}:${THUMBNAIL_SIZE}`).digest('hex')
-  const cachedPath = path.join(iconCacheDir, 'thumbs', `${key}.png`)
+  return path.join(iconCacheDir, 'thumbs', `${key}.png`)
+}
 
-  try {
-    const cached = await fs.readFile(cachedPath)
-    return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
-  } catch {}
-
+async function generateThumbnail(filePath, cachedPath) {
   let image = null
   if (typeof nativeImage.createThumbnailFromPath === 'function') {
     image = await nativeImage.createThumbnailFromPath(filePath, { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE })
   }
   if (!image || image.isEmpty()) image = nativeImage.createFromPath(filePath).resize({ width: THUMBNAIL_SIZE, quality: 'good' })
-  if (!image || image.isEmpty()) return net.fetch(pathToFileURL(filePath).href)
-
+  if (!image || image.isEmpty()) return false
   const png = image.toPNG()
   await fs.mkdir(path.dirname(cachedPath), { recursive: true })
   await fs.writeFile(cachedPath, png).catch(() => {})
-  return new Response(png, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+  return true
+}
+
+async function processPendingThumbnails() {
+  const entries = Array.from(pendingThumbnailPaths.entries()).slice(0, 12)
+  for (const [filePath] of entries) pendingThumbnailPaths.delete(filePath)
+  await Promise.all(entries.map(([filePath, cachedPath]) => generateThumbnail(filePath, cachedPath).catch((error) => {
+    logWarn('thumbnail.generate.failed', { filePath, error }, { source: 'host', scope: 'cache' })
+  })))
+}
+
+async function thumbnailResponseForPath(filePath) {
+  const cachedPath = await thumbnailCachePath(filePath)
+  const cached = await fs.readFile(cachedPath).catch(() => null)
+  if (cached) return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+
+  pendingThumbnailPaths.set(filePath, cachedPath)
+  await jobRegistry.run('cache.thumbnails', 'thumbnail-request').catch(() => {})
+  const generated = await fs.readFile(cachedPath).catch(() => null)
+  if (generated) return new Response(generated, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+  return net.fetch(pathToFileURL(filePath).href)
 }
 
 function registerLocalFileProtocol() {
@@ -2635,8 +2667,13 @@ function jobTriggerSummary(job: JobSnapshot) {
 }
 
 function jobSubtitle(job: JobSnapshot) {
-  const status = job.status === 'running' ? 'Running' : job.status === 'failed' ? `Failed: ${job.lastError || 'unknown error'}` : job.status
+  const status = job.status === 'running' ? 'Running' : job.status === 'failed' ? `Failed: ${job.lastError || 'unknown error'}` : job.status === 'backing-off' ? `Backing off until ${jobTime(job.backoffUntil)}` : job.status
   return `${status} · ${jobTriggerSummary(job)} · Last: ${jobTime(job.lastFinishedAt)}`
+}
+
+function jobHistoryMarkdown(job: JobSnapshot) {
+  if (!job.history.length) return '_No runs recorded yet._'
+  return job.history.map((entry) => `- ${new Date(entry.finishedAt).toLocaleTimeString()} · ${entry.status} · ${entry.reason} · ${entry.durationMs}ms${entry.error ? ` · ${entry.error}` : ''}`).join('\n')
 }
 
 function jobDetailsMarkdown(job: JobSnapshot) {
@@ -2657,7 +2694,10 @@ function jobDetailsMarkdown(job: JobSnapshot) {
     `- Last finished: ${jobTime(job.lastFinishedAt)}`,
     job.lastDurationMs != null ? `- Last duration: ${job.lastDurationMs}ms` : '',
     job.nextRunAt ? `- Next run: ${jobTime(job.nextRunAt)}` : '',
+    job.backoffUntil ? `- Backoff until: ${jobTime(job.backoffUntil)}` : '',
+    `- Consecutive failures: ${job.consecutiveFailures}`,
     job.lastError ? `\n## Last error\n\n${job.lastError}` : '',
+    `\n## Recent runs\n\n${jobHistoryMarkdown(job)}`,
   ].filter(Boolean).join('\n')
 }
 
@@ -2670,8 +2710,9 @@ function jobItem(ctx, job: JobSnapshot) {
       return { view: { type: 'preview', title: `${job.title} Failed`, content: `# ${job.title} Failed\n\n${error instanceof Error ? error.message : String(error)}` } }
     }
   })
-  const toggle = ctx.actions.run(job.enabled ? 'Disable Job' : 'Enable Job', () => {
+  const toggle = ctx.actions.run(job.enabled ? 'Disable Job' : 'Enable Job', async () => {
     jobRegistry.setEnabled(job.id, !job.enabled)
+    await saveUserState()
     return { toast: { message: `${job.enabled ? 'Disabled' : 'Enabled'} ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
   })
   const clearError = ctx.actions.run('Clear Error', () => {
@@ -2683,7 +2724,7 @@ function jobItem(ctx, job: JobSnapshot) {
     id: `job:${job.id}`,
     title: job.title,
     subtitle: jobSubtitle(job),
-    icon: job.status === 'failed' ? 'circle-alert' : job.running ? 'loader' : job.enabled ? 'activity' : 'circle-pause',
+    icon: job.status === 'failed' || job.status === 'backing-off' ? 'circle-alert' : job.running ? 'loader' : job.enabled ? 'activity' : 'circle-pause',
     accessories: [{ text: job.owner }, { text: job.status }],
     primaryAction: showDetails,
     actionPanel: { sections: [{ actions: [showDetails, runNow, toggle, job.lastError ? clearError : null].filter(Boolean) }] },
@@ -3463,6 +3504,8 @@ async function loadExtensions() {
   extensionRootItemsCache.clear()
   extensionRootItemsRefreshes.clear()
   jobRegistry.unregisterWhere((job) => job.owner === 'extension')
+  for (const watcher of extensionFileWatchers) watcher.close()
+  extensionFileWatchers = []
   registerInternalExtensions()
   if (isDev) await loadDevExtensions()
 
@@ -3626,21 +3669,51 @@ function durationMs(value: any) {
   return Math.max(1000, Math.round(amount * multiplier))
 }
 
-function jobTriggersFromExtensionTriggers(triggers: any[] = []) {
+function triggerPermission(extension, trigger: any) {
+  if (trigger?.type === 'clipboard.changed') return hasExtensionPermission(extension, 'clipboard.history')
+  if (trigger?.type === 'files.changed') return hasExtensionPermission(extension, 'desktop.files')
+  if (trigger?.type === 'app.frontmost.changed') return hasExtensionPermission(extension, 'desktop.apps')
+  return true
+}
+
+function watchExtensionFileTrigger(trigger: any) {
+  const roots = normalizeFindRoots(trigger.roots).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
+  for (const root of roots) {
+    if (!fsSync.existsSync(root)) continue
+    try {
+      const watcher = fsSync.watch(root, { recursive: process.platform === 'darwin' || process.platform === 'win32' }, () => jobRegistry.emit('files.changed'))
+      watcher.on('error', () => {})
+      extensionFileWatchers.push(watcher)
+    } catch {}
+  }
+}
+
+function jobTriggersFromExtensionTriggers(extension, triggers: any[] = []) {
   return triggers.map((trigger) => {
+    if (!triggerPermission(extension, trigger)) {
+      logWarn('extension.jobTrigger.permissionDenied', { trigger: trigger?.type }, { source: 'host', scope: 'extension', extensionId: extension.id })
+      return null
+    }
     if (trigger?.type === 'startup') return { type: 'startup' as const, delayMs: trigger.delayMs || 0 }
+    if (trigger?.type === 'login') return { type: 'event' as const, event: 'login', debounceMs: trigger.debounceMs || 0 }
+    if (trigger?.type === 'wake') return { type: 'event' as const, event: 'wake', debounceMs: trigger.debounceMs || 0 }
     if (trigger?.type === 'interval') {
       const everyMs = durationMs(trigger.every)
       return everyMs ? { type: 'interval' as const, everyMs, delayMs: trigger.delayMs } : null
     }
     if (trigger?.type === 'clipboard.changed') return { type: 'event' as const, event: 'clipboard.changed', debounceMs: trigger.debounceMs || 0 }
+    if (trigger?.type === 'app.frontmost.changed') return { type: 'event' as const, event: 'app.frontmost.changed', debounceMs: trigger.debounceMs || 0 }
+    if (trigger?.type === 'files.changed') {
+      watchExtensionFileTrigger(trigger)
+      return { type: 'event' as const, event: 'files.changed', debounceMs: trigger.debounceMs || 0 }
+    }
     return null
   }).filter(Boolean)
 }
 
 function registerExtensionBackgroundJob(entry, item) {
   const mode = item.mode || (item.background ? 'background' : 'view')
-  const triggers = jobTriggersFromExtensionTriggers(item.triggers || [])
+  const triggers = jobTriggersFromExtensionTriggers(entry.extension, item.triggers || [])
   if (mode === 'view' && triggers.length === 0) return
   const id = `extension.${entry.extension.id}.${item.id}`
   jobRegistry.register({
@@ -3823,6 +3896,15 @@ async function indexFiles() {
   }
 }
 
+async function pollFrontmostAppChange() {
+  if (!hasCapability('frontmost-app')) return
+  const current: any = await frontmostApp()
+  const currentId = current?.bundleId || current?.path || current?.name || ''
+  if (!currentId || currentId === frontmostWatcherLastId) return
+  frontmostWatcherLastId = currentId
+  jobRegistry.emit('app.frontmost.changed')
+}
+
 function registerHostJobs() {
   jobRegistry.register({
     id: 'state.save',
@@ -3849,6 +3931,31 @@ function registerHostJobs() {
     triggers: [{ type: 'startup', delayMs: 200 }],
     timeoutMs: 30_000,
     run: indexFiles,
+  })
+  jobRegistry.register({
+    id: 'frontmost-app.poll',
+    title: 'Frontmost App Poll',
+    owner: 'host',
+    scope: 'apps',
+    triggers: [{ type: 'interval', everyMs: 5_000, delayMs: 5_000 }],
+    timeoutMs: 3_000,
+    run: pollFrontmostAppChange,
+  })
+  jobRegistry.register({
+    id: 'cache.app-icons',
+    title: 'App Icon Cache',
+    owner: 'host',
+    scope: 'cache',
+    timeoutMs: 15_000,
+    run: processPendingAppIcons,
+  })
+  jobRegistry.register({
+    id: 'cache.thumbnails',
+    title: 'Thumbnail Cache',
+    owner: 'host',
+    scope: 'cache',
+    timeoutMs: 20_000,
+    run: processPendingThumbnails,
   })
 }
 
@@ -3879,6 +3986,7 @@ async function loadUserState() {
       clipboardHistory: loaded.clipboardHistory || [],
       aiChats: loaded.aiChats || {},
       settings: loaded.settings || {},
+      jobSettings: loaded.jobSettings || {},
     }
   } catch {
     // First run.
@@ -3886,6 +3994,7 @@ async function loadUserState() {
 
   migrateAiChats()
   clipboardHistory = normalizeClipboardHistory(userState.clipboardHistory, CLIPBOARD_LIMIT, persistClipboardImage)
+  jobRegistry.hydrateEnabled(userState.jobSettings?.enabled || {})
 }
 
 function migrateAiChats() {
@@ -3975,6 +4084,7 @@ function scheduleSaveState() {
 
 async function saveUserState() {
   userState.clipboardHistory = clipboardHistory
+  userState.jobSettings = { ...(userState.jobSettings || {}), enabled: jobRegistry.enabledOverridesSnapshot() }
   await fs.mkdir(path.dirname(statePath), { recursive: true })
   await fs.writeFile(statePath, JSON.stringify(userState, null, 2)).catch((error) => {
     logError('state.save.failed', error, { source: 'host', scope: 'state' })
@@ -4391,6 +4501,8 @@ app.whenReady().then(async () => {
   registerActionShortcuts()
   startClipboardWatcher()
   await startAppWatcher()
+  powerMonitor.on('resume', () => jobRegistry.emit('wake'))
+  jobRegistry.emit('login')
 
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))

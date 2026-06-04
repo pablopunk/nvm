@@ -1,10 +1,19 @@
 export type JobOwner = 'host' | 'extension'
-export type JobStatus = 'idle' | 'running' | 'succeeded' | 'failed' | 'disabled'
+export type JobStatus = 'idle' | 'running' | 'succeeded' | 'failed' | 'disabled' | 'backing-off'
 export type JobTrigger =
   | { type: 'manual' }
   | { type: 'startup'; delayMs?: number }
   | { type: 'interval'; everyMs: number; delayMs?: number }
   | { type: 'event'; event: string; debounceMs?: number }
+
+export type JobHistoryEntry = {
+  startedAt: number
+  finishedAt: number
+  durationMs: number
+  status: 'succeeded' | 'failed'
+  reason: string
+  error?: string
+}
 
 export type JobDefinition = {
   id: string
@@ -15,6 +24,7 @@ export type JobDefinition = {
   triggers?: JobTrigger[]
   timeoutMs?: number
   maxConcurrency?: 1
+  backoff?: { initialMs?: number; maxMs?: number }
   run: (context: { id: string; reason: string }) => unknown | Promise<unknown>
 }
 
@@ -28,6 +38,8 @@ export type JobSnapshot = {
   running: boolean
   runCount: number
   failureCount: number
+  consecutiveFailures: number
+  backoffUntil?: number
   lastReason?: string
   lastStartedAt?: number
   lastFinishedAt?: number
@@ -35,6 +47,7 @@ export type JobSnapshot = {
   lastError?: string
   nextRunAt?: number
   triggers: JobTrigger[]
+  history: JobHistoryEntry[]
 }
 
 type JobRecord = {
@@ -44,16 +57,25 @@ type JobRecord = {
   pendingReason: string | null
   runCount: number
   failureCount: number
+  consecutiveFailures: number
   status: JobStatus
+  backoffUntil?: number
   lastReason?: string
   lastStartedAt?: number
   lastFinishedAt?: number
   lastDurationMs?: number
   lastError?: string
   nextRunAt?: number
+  history: JobHistoryEntry[]
   timers: NodeJS.Timeout[]
   scheduledTimers: Map<string, NodeJS.Timeout>
 }
+
+const HISTORY_LIMIT = 10
+const DEFAULT_EXTENSION_BACKOFF_MS = 30_000
+const DEFAULT_EXTENSION_MAX_BACKOFF_MS = 15 * 60_000
+
+type EnabledOverrides = Record<string, boolean>
 
 function timeout<T>(promise: Promise<T>, timeoutMs: number, title: string) {
   let timer: NodeJS.Timeout | undefined
@@ -66,29 +88,50 @@ function timeout<T>(promise: Promise<T>, timeoutMs: number, title: string) {
   })
 }
 
+function backoffDelay(record: JobRecord) {
+  if (record.definition.owner !== 'extension' && !record.definition.backoff) return 0
+  const initial = record.definition.backoff?.initialMs ?? DEFAULT_EXTENSION_BACKOFF_MS
+  const max = record.definition.backoff?.maxMs ?? DEFAULT_EXTENSION_MAX_BACKOFF_MS
+  return Math.min(max, initial * Math.max(1, 2 ** Math.max(0, record.consecutiveFailures - 1)))
+}
+
 export class JobRegistry {
   private records = new Map<string, JobRecord>()
   private listeners = new Set<() => void>()
+  private enabledOverrides: EnabledOverrides = {}
+
+  hydrateEnabled(overrides: EnabledOverrides = {}) {
+    this.enabledOverrides = { ...overrides }
+  }
+
+  enabledOverridesSnapshot() {
+    return { ...this.enabledOverrides }
+  }
 
   register(definition: JobDefinition) {
     const existing = this.records.get(definition.id)
     if (existing) this.clearTimers(existing)
+    const override = this.enabledOverrides[definition.id]
+    const enabled = typeof override === 'boolean' ? override : definition.enabled !== false
     const record: JobRecord = existing || {
       definition,
-      enabled: definition.enabled !== false,
+      enabled,
       running: false,
       pendingReason: null,
       runCount: 0,
       failureCount: 0,
-      status: definition.enabled === false ? 'disabled' : 'idle',
+      consecutiveFailures: 0,
+      status: enabled ? 'idle' : 'disabled',
+      history: [],
       timers: [],
       scheduledTimers: new Map(),
     }
     record.definition = definition
-    record.enabled = definition.enabled !== false && record.enabled !== false
+    record.enabled = enabled
     record.status = record.enabled ? (record.running ? 'running' : record.status === 'disabled' ? 'idle' : record.status) : 'disabled'
     record.timers = []
     record.scheduledTimers ||= new Map()
+    record.history ||= []
     this.records.set(definition.id, record)
     this.installTriggers(record)
     this.notify()
@@ -122,6 +165,13 @@ export class JobRegistry {
       this.notify()
       return null
     }
+    const now = Date.now()
+    if (reason !== 'manual' && record.backoffUntil && record.backoffUntil > now) {
+      record.status = 'backing-off'
+      this.schedule(id, 'backoff', record.backoffUntil - now)
+      this.notify()
+      return null
+    }
     record.running = true
     record.status = 'running'
     record.lastReason = reason
@@ -133,16 +183,22 @@ export class JobRegistry {
       const result = record.definition.timeoutMs ? await timeout(promise, record.definition.timeoutMs, record.definition.title) : await promise
       record.status = 'succeeded'
       record.runCount += 1
+      record.consecutiveFailures = 0
+      record.backoffUntil = undefined
       return result
     } catch (error) {
       record.status = 'failed'
       record.failureCount += 1
+      record.consecutiveFailures += 1
       record.lastError = error instanceof Error ? error.message : String(error)
+      const delay = backoffDelay(record)
+      if (delay) record.backoffUntil = Date.now() + delay
       throw error
     } finally {
       record.running = false
       record.lastFinishedAt = Date.now()
       record.lastDurationMs = record.lastStartedAt ? record.lastFinishedAt - record.lastStartedAt : undefined
+      this.rememberHistory(record)
       const pending = record.pendingReason
       record.pendingReason = null
       this.notify()
@@ -178,6 +234,7 @@ export class JobRegistry {
   setEnabled(id: string, enabled: boolean) {
     const record = this.records.get(id)
     if (!record) return false
+    this.enabledOverrides[id] = enabled
     record.enabled = enabled
     record.status = enabled ? 'idle' : 'disabled'
     if (!enabled) this.clearTimers(record)
@@ -190,13 +247,15 @@ export class JobRegistry {
     const record = this.records.get(id)
     if (!record) return false
     record.lastError = undefined
-    if (!record.running && record.status === 'failed') record.status = 'idle'
+    record.consecutiveFailures = 0
+    record.backoffUntil = undefined
+    if (!record.running && (record.status === 'failed' || record.status === 'backing-off')) record.status = 'idle'
     this.notify()
     return true
   }
 
   snapshot(): JobSnapshot[] {
-    return Array.from(this.records.values()).map((record) => ({
+    const snapshots = Array.from(this.records.values()).map((record) => ({
       id: record.definition.id,
       title: record.definition.title,
       owner: record.definition.owner || 'host',
@@ -206,6 +265,8 @@ export class JobRegistry {
       running: record.running,
       runCount: record.runCount,
       failureCount: record.failureCount,
+      consecutiveFailures: record.consecutiveFailures,
+      backoffUntil: record.backoffUntil,
       lastReason: record.lastReason,
       lastStartedAt: record.lastStartedAt,
       lastFinishedAt: record.lastFinishedAt,
@@ -213,7 +274,10 @@ export class JobRegistry {
       lastError: record.lastError,
       nextRunAt: record.nextRunAt,
       triggers: record.definition.triggers || [],
+      history: record.history || [],
     })).sort((a, b) => a.title.localeCompare(b.title))
+    structuredClone(snapshots)
+    return snapshots
   }
 
   onChange(listener: () => void) {
@@ -225,6 +289,18 @@ export class JobRegistry {
     for (const record of this.records.values()) this.clearTimers(record)
     this.records.clear()
     this.notify()
+  }
+
+  private rememberHistory(record: JobRecord) {
+    if (!record.lastStartedAt || !record.lastFinishedAt || !record.lastDurationMs) return
+    record.history = [{
+      startedAt: record.lastStartedAt,
+      finishedAt: record.lastFinishedAt,
+      durationMs: record.lastDurationMs,
+      status: record.status === 'failed' ? 'failed' as const : 'succeeded' as const,
+      reason: record.lastReason || 'manual',
+      error: record.lastError,
+    }, ...(record.history || [])].slice(0, HISTORY_LIMIT)
   }
 
   private installTriggers(record: JobRecord) {
