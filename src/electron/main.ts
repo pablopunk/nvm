@@ -6,7 +6,7 @@ import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
@@ -18,7 +18,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
@@ -1926,6 +1926,56 @@ function thumbnailUrlForPreviewablePath(filePath) {
   return isImagePath(expandedPath) || isVideoPath(expandedPath) ? thumbnailUrlForPath(expandedPath) : null
 }
 
+function dataUrlExtension(dataUrl: string) {
+  const mime = dataUrl.match(/^data:([^;,]+)/)?.[1] || 'image/png'
+  if (mime.includes('jpeg')) return 'jpg'
+  if (mime.includes('webp')) return 'webp'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('tiff')) return 'tiff'
+  if (mime.includes('heic')) return 'heic'
+  return 'png'
+}
+
+async function writeOcrDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/)
+  if (!match) throw new Error('Invalid OCR data URL')
+  const outputPath = path.join(os.tmpdir(), `nevermind-ocr-input-${crypto.randomUUID()}.${dataUrlExtension(dataUrl)}`)
+  const body = decodeURIComponent(match[3] || '')
+  await fs.writeFile(outputPath, match[2] ? Buffer.from(match[3] || '', 'base64') : Buffer.from(body))
+  return outputPath
+}
+
+function filePathFromLocalUrl(value: string) {
+  if (value.startsWith(`${LOCAL_FILE_PROTOCOL}:`)) return fileURLToPath(`file:${value.slice(`${LOCAL_FILE_PROTOCOL}:`.length)}`)
+  if (value.startsWith('file:')) return fileURLToPath(value)
+  return null
+}
+
+async function ocrInputPath(input: any) {
+  const value = typeof input === 'string' ? input : input?.path || input?.filePath || input?.fileUrl || input?.url
+  if (!value) throw new Error('OCR requires an image path, file URL, data URL, or ExtensionFile')
+  const text = String(value)
+  if (text.startsWith('data:')) return { path: await writeOcrDataUrl(text), cleanup: true }
+  const urlPath = filePathFromLocalUrl(text)
+  return { path: expandUserPath(urlPath || text), cleanup: false }
+}
+
+async function ocrImage(input: any, options: any = {}) {
+  const resolved = await ocrInputPath(input)
+  try {
+    if (!isImagePath(resolved.path)) throw new Error('OCR currently supports image files only')
+    return await recognizeTextInImage(resolved.path, options)
+  } finally {
+    if (resolved.cleanup) await fs.rm(resolved.path, { force: true }).catch(() => {})
+  }
+}
+
+async function ocrScreen(options: any = {}) {
+  const imagePath = await captureScreenImage(options)
+  try { return await recognizeTextInImage(imagePath, options) }
+  finally { await fs.rm(imagePath, { force: true }).catch(() => {}) }
+}
+
 async function fileToExtensionFile(filePath) {
   const expandedPath = expandUserPath(filePath)
   const stat = await fs.stat(expandedPath).catch(() => null)
@@ -2764,6 +2814,7 @@ function createExtensionContext(extension, command) {
   const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
   const canUseClipboard = hasExtensionPermission(extension, 'clipboard.history')
   const canUseSystem = hasExtensionPermission(extension, 'system')
+  const canUseOcr = hasExtensionPermission(extension, 'ocr')
   const canUseUpdates = hasExtensionPermission(extension, 'updates')
   const canUseShortcuts = hasExtensionPermission(extension, 'shortcuts')
   const canUseAi = hasExtensionPermission(extension, 'ai')
@@ -2960,6 +3011,11 @@ function createExtensionContext(extension, command) {
         }),
       } : undefined,
     },
+    ocr: canUseOcr ? {
+      image: ocrImage,
+      screen: (options: any = {}) => ocrScreen(options),
+      region: (rect, options: any = {}) => ocrScreen({ ...options, region: rect }),
+    } : undefined,
     storage: createExtensionStorage(extension),
     settings: {
       definitions: () => SETTING_DEFINITIONS.map((definition) => ({ ...definition, value: getSetting(definition.id) })),

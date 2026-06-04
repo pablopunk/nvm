@@ -56,6 +56,8 @@ export type ExtensionPermission =
   | 'updates'
   | 'settings.write'
   | 'camera'
+  /** Required for `ctx.ocr` image/screen/region text recognition helpers. */
+  | 'ocr'
 
 /** Action panels can be visible, menu-only, or hidden while still allowing shortcuts. */
 export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden'
@@ -394,6 +396,11 @@ export type ExtensionFileIndexOptions = Omit<ExtensionFindFilesOptions, 'sortBy'
   query?: string
 }
 
+export type ExtensionOcrBlock = { text: string; confidence?: number; boundingBox?: { x: number; y: number; width: number; height: number } }
+export type ExtensionOcrResult = { text: string; confidence?: number | null; language?: string | null; blocks?: ExtensionOcrBlock[] }
+export type ExtensionOcrOptions = { language?: string; languages?: string[]; timeoutMs?: number }
+export type ExtensionOcrRegion = { x: number; y: number; width: number; height: number }
+
 export type ExtensionShellResult = { stdout: string; stderr: string; exitCode: number }
 export type ExtensionShellOptions = { cwd?: string; env?: Record<string, string>; timeout?: number; shell?: boolean; outputLimit?: number }
 export type ExtensionOpenWithApp = { name?: string; path?: string; [key: string]: unknown }
@@ -636,6 +643,16 @@ export type ExtensionContext = {
 
   /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
   clipboard: { history?: ExtensionClipboardHistory }
+
+  /** OCR helpers. Present only with the `ocr` permission; check `ctx.system.capabilities.has('ocr')` for OS support. */
+  ocr?: {
+    /** Recognize text in an image path, file URL, data URL, or `ExtensionFile`. */
+    image(input: string | ExtensionFile | { path?: string; filePath?: string; fileUrl?: string; url?: string }, options?: ExtensionOcrOptions): Promise<ExtensionOcrResult>
+    /** Capture the screen and recognize visible text when screen recording permission is available. */
+    screen(options?: ExtensionOcrOptions): Promise<ExtensionOcrResult>
+    /** Capture a screen region in physical screen coordinates and recognize text. */
+    region(rect: ExtensionOcrRegion, options?: ExtensionOcrOptions): Promise<ExtensionOcrResult>
+  }
 
   /** Build a persistent action contribution for `actions(ctx)`. */
   action(action: ExtensionActionContribution): ExtensionActionContribution
