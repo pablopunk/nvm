@@ -360,6 +360,9 @@ export type ExtensionFile = {
   thumbnailUrl?: string
   kind?: ExtensionFileKind
   extension?: string
+  mimeType?: string
+  width?: number
+  height?: number
   mtime?: string
   mtimeMs?: number
   birthtime?: string
@@ -675,6 +678,10 @@ export type ExtensionContext = {
       preview(filePath: string): unknown
       readText(filePath: string): Promise<string>
       toFileUrl(filePath: string): string
+      /** Host-safe thumbnail URL for an image/video/file path when previewable. */
+      thumbnail(filePath: string): string | null
+      /** Canonical file metadata with host-safe URLs and image dimensions when available. */
+      metadata(filePath: string): Promise<ExtensionFile>
       /** Entries from the host file index, most recent first. */
       recent(options?: { limit?: number }): ExtensionIndexedFile[]
       /** Host file index entries whose name or path matches the query. */

@@ -1903,18 +1903,45 @@ function registerLocalFileProtocol() {
   })
 }
 
+function mimeTypeForPath(filePath) {
+  const extension = extensionForPath(filePath)
+  const types = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic',
+    mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/x-m4v', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+    txt: 'text/plain', md: 'text/markdown', json: 'application/json', pdf: 'application/pdf', html: 'text/html', htm: 'text/html', csv: 'text/csv',
+  }
+  return types[extension] || 'application/octet-stream'
+}
+
+async function imageDimensionsForPath(filePath) {
+  if (!isImagePath(filePath)) return {}
+  const image = nativeImage.createFromPath(filePath)
+  if (!image || image.isEmpty()) return {}
+  const size = image.getSize()
+  return size.width && size.height ? { width: size.width, height: size.height } : {}
+}
+
+function thumbnailUrlForPreviewablePath(filePath) {
+  const expandedPath = expandUserPath(filePath)
+  return isImagePath(expandedPath) || isVideoPath(expandedPath) ? thumbnailUrlForPath(expandedPath) : null
+}
+
 async function fileToExtensionFile(filePath) {
-  const stat = await fs.stat(filePath).catch(() => null)
+  const expandedPath = expandUserPath(filePath)
+  const stat = await fs.stat(expandedPath).catch(() => null)
+  const dimensions = await imageDimensionsForPath(expandedPath)
   return {
-    path: filePath,
-    name: path.basename(filePath),
-    displayPath: displayUserPath(filePath),
-    url: isImagePath(filePath) || isVideoPath(filePath) ? thumbnailUrlForPath(filePath) : fileUrlForPath(filePath),
-    fileUrl: fileUrlForPath(filePath),
-    videoUrl: isVideoPath(filePath) ? fileUrlForPath(filePath) : null,
-    thumbnailUrl: isImagePath(filePath) || isVideoPath(filePath) ? thumbnailUrlForPath(filePath) : null,
-    kind: isImagePath(filePath) ? 'image' : isVideoPath(filePath) ? 'video' : 'file',
-    extension: extensionForPath(filePath),
+    path: expandedPath,
+    name: path.basename(expandedPath),
+    displayPath: displayUserPath(expandedPath),
+    url: thumbnailUrlForPreviewablePath(expandedPath) || fileUrlForPath(expandedPath),
+    fileUrl: fileUrlForPath(expandedPath),
+    videoUrl: isVideoPath(expandedPath) ? fileUrlForPath(expandedPath) : null,
+    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath),
+    kind: isImagePath(expandedPath) ? 'image' : isVideoPath(expandedPath) ? 'video' : 'file',
+    extension: extensionForPath(expandedPath),
+    mimeType: mimeTypeForPath(expandedPath),
+    ...dimensions,
     mtime: stat ? new Date(stat.mtimeMs).toISOString() : null,
     mtimeMs: stat?.mtimeMs || 0,
     birthtime: stat ? new Date(stat.birthtimeMs).toISOString() : null,
@@ -2900,6 +2927,8 @@ function createExtensionContext(extension, command) {
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
+        thumbnail: (filePath) => thumbnailUrlForPreviewablePath(filePath),
+        metadata: (filePath) => fileToExtensionFile(filePath),
         recent: (options: any = {}) => fileIndexSnapshot(options),
         searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
