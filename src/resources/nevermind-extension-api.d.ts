@@ -469,9 +469,10 @@ export type ExtensionOcrRegion = { x: number; y: number; width: number; height: 
 
 export type ExtensionShellResult = { stdout: string; stderr: string; exitCode: number }
 export type ExtensionShellOptions = { cwd?: string; env?: Record<string, string>; timeout?: number; shell?: boolean; outputLimit?: number }
-export type ExtensionOpenWithApp = { name?: string; path?: string; [key: string]: unknown }
-/** An installed application from `ctx.desktop.apps.list/search`. */
-export type ExtensionApp = { id: string; name: string; path: string }
+/** An installed application from `ctx.desktop.apps.list/search`. Use `id` for item identity and `name` for display titles. */
+export type ExtensionApp = { id: string; name: string; path: string; [key: string]: unknown }
+/** An app that can open a specific file. Returned by `ctx.desktop.files.openWithApps(filePath)`. */
+export type ExtensionOpenWithApp = ExtensionApp
 /** A host-indexed file from `ctx.desktop.files.indexSnapshot/recent/searchIndex`. */
 export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string; extension?: string; kind?: ExtensionFileKind }
 
@@ -841,6 +842,7 @@ export type ExtensionContext = {
       findImages(roots: string[], options?: Omit<ExtensionFindFilesOptions, 'kind'>): Promise<ExtensionFile[]>
       findVideos(roots: string[], options?: Omit<ExtensionFindFilesOptions, 'kind'>): Promise<ExtensionFile[]>
       findMedia(roots: string[], options?: Omit<ExtensionFindFilesOptions, 'kind'>): Promise<ExtensionFile[]>
+      /** Supported apps for this file. When rendering a picker, map each app to `{ id: app.id, title: app.name, primaryAction: ctx.actions.openWith(filePath, app) }`. */
       openWithApps(filePath: string): Promise<ExtensionOpenWithApp[]>
       open(filePath: string): unknown
       reveal(filePath: string): unknown

@@ -32,7 +32,7 @@ Rules:
 - Use `actions(ctx)` for stable shortcut-worthy actions/variants such as fixed compression presets or window toggles. Use `ctx.actions.ref(id)` inside views to reference durable actions. Use `rootItems(ctx)` and `searchItems(ctx, query)` for dynamic/status/query items that should not become global shortcuts.
 - Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.
 - Image thumbnails must use `file.url` from file helpers or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
-- For Open With flows, never hardcode app names; ask Nevermind for supported apps and build actions from those results.
+- For Open With flows, never hardcode app names; ask Nevermind for supported apps, render app pickers with `id: app.id` and `title: app.name`, and attach `ctx.actions.openWith(filePath, app)`.
 - Declare `permissions: ['system']` before using `ctx.desktop.shell`, `ctx.actions.shellExec`, `ctx.actions.shellScript`, or `ctx.actions.system`.
 - Keep system automation focused, bounded, and represented in native views with useful output/errors.
 - Keep generated code small, readable, dependency-free, and inside the generated extensions directory.

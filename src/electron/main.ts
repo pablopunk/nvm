@@ -2362,9 +2362,8 @@ async function findFiles(roots, options: any = {}) {
   const extensions = extensionsForFindOptions(options)
   const ignored = normalizedIgnorePatterns(options.ignore)
   const includeHidden = Boolean(options.includeHidden)
-  let found = []
 
-  async function walk(dir, depth) {
+  async function walk(dir, depth, found) {
     if (found.length >= limit) return
     let entries = []
     try {
@@ -2383,12 +2382,17 @@ async function findFiles(roots, options: any = {}) {
         if (!extensions || extensions.has(ext)) found.push(await fileToExtensionFile(fullPath))
         continue
       }
-      if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
+      if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1, found)
     }
   }
 
   const findRoots = normalizeFindRoots(roots).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
-  await Promise.all(findRoots.map((root) => walk(root, maxDepth)))
+  const rootResults = await Promise.all(findRoots.map(async (root) => {
+    const found = []
+    await walk(root, maxDepth, found)
+    return found
+  }))
+  let found = rootResults.flat()
   if ((options.sortBy || options.sort) === 'added') found = await enrichDateAdded(found)
   return sortFoundFiles(found, options).slice(0, limit)
 }
