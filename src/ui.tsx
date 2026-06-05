@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import React, { type ReactNode } from 'react'
 import { Command } from 'cmdk'
 import { Folder } from 'lucide-react'
 import type { CommandImage } from './model'

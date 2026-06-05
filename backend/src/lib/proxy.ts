@@ -19,6 +19,7 @@ import { getUpstreamConfig, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
+import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
 import * as Sentry from '@sentry/astro';
 
@@ -50,6 +51,7 @@ type BillContext = {
   costRow: ModelCost;
   kind: 'free' | 'paid';
   requestId: string;
+  client: DesktopClient;
 };
 
 async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number, latencyMs: number) {
@@ -92,6 +94,11 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
     input_tokens: tokens.inputTokens,
     output_tokens: tokens.outputTokens,
     cost_credits: billable ? credits : 0,
+    client_name: ctx.client.name,
+    client_version: ctx.client.version,
+    client_api_version: ctx.client.apiVersion,
+    client_platform: ctx.client.platform,
+    client_arch: ctx.client.arch,
   });
 }
 
@@ -193,6 +200,7 @@ function buildForwardHeaders(
   for (const [name, value] of request.headers) {
     const lower = name.toLowerCase();
     if (HOP_BY_HOP.has(lower)) continue;
+    if (lower === 'x-request-id' || lower.startsWith('x-nevermind-')) continue;
     if (lower === desktopAuthHeader) continue;
     if (lower === upstreamAuthHeader) continue;
     out.set(name, value);
@@ -208,20 +216,25 @@ function isStreamingContentType(contentType: string | null): boolean {
 
 function withRequestId(res: Response, requestId: string): Response {
   res.headers.set('x-request-id', requestId);
+  res.headers.set('x-nevermind-backend-version', backendVersion());
   return res;
 }
 
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const requestId = randomUUID();
+  if (backendKillSwitchEnabled('ai_proxy')) return killSwitchResponse('ai_proxy', 'AI proxy is temporarily disabled.', requestId);
   const startedAt = Date.now();
+  const client = desktopClientFromRequest(cfg.request);
   Sentry.getCurrentScope().setTag('request_id', requestId);
+  if (client.version) Sentry.getCurrentScope().setTag('client_version', client.version);
+  if (client.apiVersion) Sentry.getCurrentScope().setTag('client_api_version', String(client.apiVersion));
   const routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
 
   Sentry.getCurrentScope().setUser({ id: routing.user.id });
   const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
   if (!rateDecision.ok) {
-    log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope });
+    log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope, client_version: client.version, client_api_version: client.apiVersion });
     return withRequestId(tooManyRequests(rateDecision), requestId);
   }
 
@@ -270,10 +283,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     costRow: routing.costRow,
     kind: routing.kind,
     requestId,
+    client,
   };
 
   const responseHeaders = stripHopByHop(upstreamResponse.headers);
   responseHeaders.set('x-request-id', requestId);
+  responseHeaders.set('x-nevermind-backend-version', backendVersion());
 
   if (!upstreamResponse.ok) {
     const latencyMs = Date.now() - startedAt;
@@ -288,6 +303,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   }
 
   if (isStreamingContentType(upstreamResponse.headers.get('content-type'))) {
+    if (backendKillSwitchEnabled('ai_streaming')) return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
     const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
     return new Response(transformed, {
       status: upstreamResponse.status,

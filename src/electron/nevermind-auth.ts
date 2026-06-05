@@ -3,6 +3,8 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import * as logger from './logger'
+import { checkNevermindCompatibility } from './nevermind-compatibility'
+import { nevermindDesktopHeaders } from './nevermind-api'
 
 const FILENAME = 'nevermind-auth.json'
 
@@ -96,7 +98,7 @@ export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {
     try {
       const res = await fetch(`${current.baseUrl}/api/tokens/current`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${current.token}`, Origin: current.baseUrl },
+        headers: nevermindDesktopHeaders({ Authorization: `Bearer ${current.token}`, Origin: current.baseUrl }),
       })
       revoked = res.ok || res.status === 401
       if (!revoked) logger.warn(`token revoke returned ${res.status}`)
@@ -126,7 +128,7 @@ function defaultDeviceLabel() {
 async function postJson(url: string, body: unknown) {
   return fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: nevermindDesktopHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   })
 }
@@ -140,6 +142,7 @@ export async function signInToNevermind({ baseUrl = DEFAULT_BASE_URL, label = de
   const trimmedBase = normalizedBaseUrl(baseUrl)
   activeSignIn = (async (): Promise<SignInResult> => {
     try {
+      await checkNevermindCompatibility(trimmedBase)
       const initRes = await postJson(`${trimmedBase}/api/auth/device/initiate`, { label })
       if (!initRes.ok) return { ok: false, error: `initiate failed: ${initRes.status}` }
       const { code, verifyUrl, expiresAt, pollIntervalMs } = (await initRes.json()) as { code: string; verifyUrl: string; expiresAt: string; pollIntervalMs?: number }

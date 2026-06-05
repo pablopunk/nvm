@@ -4,6 +4,9 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
+import { checkNevermindCompatibility, requireNevermindCompatibilityFeature } from './nevermind-compatibility'
+import type { CommandAction } from '../model'
+import { nevermindDesktopHeaders } from './nevermind-api'
 import { getNevermindAuth, NevermindAuthRequiredError } from './nevermind-auth'
 
 type AiEvent = {
@@ -18,15 +21,17 @@ type AiEvent = {
 }
 
 type AiLimitNotice = {
-  kind: 'insufficient_credits' | 'rate_limited' | 'prompt_too_large'
+  kind: 'insufficient_credits' | 'rate_limited' | 'prompt_too_large' | 'unsupported_client'
   title: string
   message: string
   actionTitle?: string
   dashboardUrl?: string
+  action?: CommandAction
   retryAfterSec?: number
 }
 
 const NEVERMIND_DASHBOARD_URL = 'https://nvm.fyi/dashboard'
+const NEVERMIND_UPDATE_URL = 'https://github.com/pablopunk/nvm/releases/latest'
 
 type ActiveChat = {
   id?: string
@@ -404,6 +409,16 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       dashboardUrl: NEVERMIND_DASHBOARD_URL,
     }
   }
+  if (/unsupported[_ -]?client|unsupported[_ -]?desktop|unsupported[_ -]?api|no longer supported|426\b/i.test(text)) {
+    return {
+      kind: 'unsupported_client',
+      title: 'Update Nevermind',
+      message: 'This version of Nevermind is no longer supported by the backend. Install the latest version to keep using AI features.',
+      actionTitle: 'Check for Update',
+      dashboardUrl: NEVERMIND_UPDATE_URL,
+      action: { type: 'checkForUpdates', title: 'Check for Update' },
+    }
+  }
   return null
 }
 
@@ -474,8 +489,10 @@ type BackendDescriptor = {
 
 async function fetchActiveModelDescriptor(baseUrl: string, token: string): Promise<BackendDescriptor> {
   const trimmed = baseUrl.replace(/\/$/, '')
+  const manifest = await checkNevermindCompatibility(trimmed)
+  requireNevermindCompatibilityFeature('active_model_descriptor', manifest)
   const res = await fetch(`${trimmed}/api/v1/active-model`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
   })
   if (res.status === 401) throw new NevermindAuthRequiredError()
   if (!res.ok) {
@@ -501,6 +518,7 @@ async function resolveAiModelAndAuth(_pi: any, _ai: any, authStorage: any) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: descriptor.contextWindow,
     maxTokens: descriptor.maxTokens,
+    headers: nevermindDesktopHeaders(),
   }
   return { model, source: 'nevermind' as const }
 }

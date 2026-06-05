@@ -3,6 +3,7 @@ import { getUserFromBearer } from '../../../lib/tokens';
 import { getActiveModelId, getFreeModelId, getActiveProvider, ModelNotConfiguredError } from '../../../lib/settings';
 import { getBalances } from '../../../lib/users';
 import { lookupModelDescriptor } from '../../../lib/pricing';
+import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
 import { selectApiForModel, type UpstreamApi } from '../../../lib/upstream';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
@@ -43,10 +44,11 @@ export const GET: APIRoute = async ({ request }) => {
   const api = selectApiForModel(provider, modelId);
   const baseUrl = backendBaseUrlForApi(new URL(request.url), api);
 
+  const requestId = requestIdFromHeaders(request.headers);
   return Response.json({
     ...descriptor,
     api,
     provider: NEVERMIND_PROVIDER_ID,
     baseUrl,
-  });
+  }, { headers: compatibilityHeaders(requestId) });
 };

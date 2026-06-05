@@ -3,9 +3,12 @@ import { and, eq, gt, isNull, isNotNull } from 'drizzle-orm';
 import { db } from '../../../../db/client';
 import { users, deviceCodes } from '../../../../db/schema';
 import { createApiToken } from '../../../../lib/tokens';
+import { killSwitchResponse, backendKillSwitchEnabled, requestIdFromHeaders } from '../../../../lib/compatibility';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../../lib/ratelimit';
 
 export const POST: APIRoute = async ({ request }) => {
+  const requestId = requestIdFromHeaders(request.headers);
+  if (backendKillSwitchEnabled('auth_device')) return killSwitchResponse('auth_device', 'Device authorization is temporarily disabled.', requestId);
   const decision = await rateLimitIp('auth', clientIp(request), 60, '1 m');
   if (!decision.ok) return tooManyRequests(decision);
   const body = (await request.json().catch(() => ({}))) as { code?: string };

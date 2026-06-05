@@ -14,6 +14,7 @@
 * Keep files small and focused. Refactor slow patterns when encountered.
 * Maintain native behavioral contracts (shortcuts, icons, async lifecycle) when migrating features to extensions.
 * Keep every action/search/view payload that crosses Electron IPC `structuredClone`-safe; strip handlers/functions after registering them and add clone-safety checks for new payload shapes.
+* Keep desktop/backend API changes backward-compatible for supported released clients; see `src/docs/backend-api-compatibility.md`.
 * When fixing bugs, evaluate how the system would look if built from scratch and propose improvements.
 
 ## Product and UX

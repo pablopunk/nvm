@@ -1,12 +1,20 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CommandView } from './model'
+import type { CommandAction, CommandView } from './model'
 
-export type AiLimitState = { kind?: string; title: string; message: string; actionTitle?: string; dashboardUrl?: string }
+export type AiLimitState = { kind?: string; title: string; message: string; actionTitle?: string; dashboardUrl?: string; action?: CommandAction }
 export type AiChatEvent = { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }
+
+function isSafeLimitAction(action: unknown): action is CommandAction {
+  if (!action || typeof action !== 'object') return false
+  const candidate = action as { type?: unknown; title?: unknown }
+  if (typeof candidate.type !== 'string' || typeof candidate.title !== 'string') return false
+  return Object.values(action).every((value) => typeof value !== 'function')
+}
 
 function limitStateFromEvent(event: AiChatEvent): AiLimitState | null {
   const data = event.data as AiLimitState | undefined
-  if (!data || typeof data !== 'object' || !data.title || !data.message) return null
+  if (!data || typeof data !== 'object' || typeof data.title !== 'string' || typeof data.message !== 'string') return null
+  if (data.action && !isSafeLimitAction(data.action)) return { ...data, action: undefined }
   return data
 }
 
