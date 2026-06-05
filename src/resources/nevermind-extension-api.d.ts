@@ -575,14 +575,34 @@ export type ExtensionOwnership = {
   reload?(): Promise<void>
 }
 
+export type ExtensionTemplateValue = string | number | boolean | string[] | null | undefined
+export type ExtensionTemplateResult = { text: string; cursor?: number; missingVariables?: string[] }
+export type ExtensionTemplateOptions = {
+  variables?: Record<string, ExtensionTemplateValue>
+  /** Return `{ text, cursor, missingVariables }` instead of a string. */
+  returnResult?: boolean
+  /** Return cursor position for `{cursor}` placeholders. Alias for `returnResult`. */
+  returnCursor?: boolean
+  /** Internal marker used while calculating cursor position. Defaults to a private sentinel. */
+  cursorToken?: string
+  /** Include `{clipboard}` when the extension has `clipboard.history`. Defaults to true when permitted. */
+  includeClipboard?: boolean
+  /** Include `{selectedText}`. Defaults to true. */
+  includeSelectedText?: boolean
+  /** Include missing variable names in the result; pair with `ctx.input.prompt(...)` for prompted arguments. */
+  promptMissing?: boolean
+}
+
 export type ExtensionText = {
   /**
    * Expand host-standard text templates. Variables use `{name}` or `{{name}}`.
-   * Built-ins include `{date}`, `{time}`, `{datetime}`, `{uuid}`, `{selectedText}`, `{cursor}`,
-   * and `{calculator:1 + 2}`. `{clipboard}` is available when the extension declares
-   * `clipboard.history`. Explicit variables override built-ins.
+   * Built-ins include `{date}`, `{time}`, `{datetime}`, `{uuid}`, `{selectedText}`, `{clipboard}`,
+   * `{cursor}`, `{argument:name}`, and `{calculator:1 + 2}`. Explicit variables override built-ins.
    */
-  template(input: string, variables?: Record<string, string | number | boolean | null | undefined>): Promise<string>
+  template(input: string, variables?: Record<string, ExtensionTemplateValue>): Promise<string>
+  template(input: string, options: ExtensionTemplateOptions & { returnResult: true }): Promise<ExtensionTemplateResult>
+  template(input: string, options: ExtensionTemplateOptions & { returnCursor: true }): Promise<ExtensionTemplateResult>
+  template(input: string, options: ExtensionTemplateOptions): Promise<string | ExtensionTemplateResult>
 }
 
 export type ExtensionAiBuilder = {

@@ -220,11 +220,12 @@ function promptView(ctx: ExtensionContext) {
       { id: 'site', label: 'Site', type: 'dropdown', value: 'github.com', options: [{ title: 'GitHub', value: 'github.com' }, { title: 'Docs', value: 'docs' }, { title: 'Web', value: 'web' }] },
     ],
     submitTitle: 'Build URL',
-    action: ctx.actions.run('Show Prompt Values', (_ctx, action) => {
+    action: ctx.actions.run('Show Prompt Values', async (_ctx, action) => {
       const query = String(action.formValues?.query || '')
       const site = String(action.formValues?.site || '')
       const url = `https://www.google.com/search?q=${encodeURIComponent(site && site !== 'web' ? `site:${site} ${query}` : query)}`
-      return _ctx.ui.preview({ title: 'Prompt Result', content: `# Prompt Result\n\n- Query: ${query || '_empty_'}\n- Site: ${site || '_empty_'}\n- URL: ${url}` })
+      const template = await _ctx.text.template('Open {argument:site} for {argument:query}{cursor}', { variables: action.formValues, returnCursor: true })
+      return _ctx.ui.preview({ title: 'Prompt Result', content: `# Prompt Result\n\n- Query: ${query || '_empty_'}\n- Site: ${site || '_empty_'}\n- URL: ${url}\n\nTemplate result:\n\n\`\`\`json\n${JSON.stringify(template, null, 2)}\n\`\`\`` })
     }),
   })
   return ctx.ui.list({
@@ -429,7 +430,8 @@ async function gridView(ctx: ExtensionContext) {
 function previewView(ctx: ExtensionContext) {
   const templateAction = ctx.actions.run('Expand Template', async (innerCtx) => {
     const output = await innerCtx.text.template('Today is {date} at {time}. 6 * 7 = {calculator:6*7}. Selection: {selectedText}', { name: 'Nevermind' })
-    return innerCtx.ui.preview({ title: 'Template Output', content: `# Template Output\n\n${output}` })
+    const cursor = await innerCtx.text.template('Snippet for {name}: {cursor}done. Missing {argument:topic}', { variables: { name: 'Nevermind' }, returnCursor: true, promptMissing: true })
+    return innerCtx.ui.preview({ title: 'Template Output', content: `# Template Output\n\n${output}\n\nCursor-aware result:\n\n\`\`\`json\n${JSON.stringify(cursor, null, 2)}\n\`\`\`` })
   })
   return ctx.ui.preview({
     id: 'dev-ui-preview',
