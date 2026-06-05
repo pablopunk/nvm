@@ -13,6 +13,16 @@ neonConfig.webSocketConstructor = ws;
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../drizzle');
 const BASELINE_TAG = '0000_remarkable_meltdown';
 const BASELINE_WHEN = 1779990985460;
+const DATABASE_URL = process.env.DATABASE_URL;
+const IS_BUILD_LIFECYCLE = process.env.npm_lifecycle_event === 'build';
+
+if (!DATABASE_URL) {
+  if (IS_BUILD_LIFECYCLE) {
+    console.warn('[migrate] skipped: DATABASE_URL is not configured for this build');
+    process.exit(0);
+  }
+  throw new Error('DATABASE_URL is required to run migrations');
+}
 
 async function markBaselineAppliedIfPreexistingDb(db: ReturnType<typeof drizzle>) {
   await db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`);
@@ -42,7 +52,7 @@ async function markBaselineAppliedIfPreexistingDb(db: ReturnType<typeof drizzle>
   console.log(`[migrate] marked baseline ${BASELINE_TAG} as already applied`);
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString: DATABASE_URL });
 const db = drizzle(pool);
 
 await markBaselineAppliedIfPreexistingDb(db);

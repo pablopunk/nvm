@@ -5,6 +5,7 @@ const api: NevermindApi = {
   search: (query, options) => ipcRenderer.invoke('actions:search', query, options),
   execute: (action) => ipcRenderer.invoke('actions:execute', action),
   runViewAction: (action) => ipcRenderer.invoke('view-action:execute', action),
+  pickFormFieldPaths: (input) => ipcRenderer.invoke('dialog:pick-form-field-paths', input),
   startFileDrag: (filePath) => ipcRenderer.send('drag:file', filePath),
   sendAiMessage: (message, chatId) => ipcRenderer.invoke('ai:chat:send', message, chatId),
   aiChatExited: (chatId) => ipcRenderer.invoke('ai:chat:exited', chatId),
@@ -32,6 +33,8 @@ const api: NevermindApi = {
   quitApp: () => ipcRenderer.invoke('app:quit'),
   shortcutReady: () => ipcRenderer.invoke('palette:shortcut-ready'),
   requestCameraAccess: () => ipcRenderer.invoke('camera:request-access'),
+  getExtensionWindowState: (id) => ipcRenderer.invoke('extension-window:get-state', id),
+  closeExtensionWindow: () => ipcRenderer.invoke('extension-window:close'),
   log: (level, message, data) => ipcRenderer.invoke('logs:write', level, message, data),
   getNevermindAuthStatus: () => ipcRenderer.invoke('nevermind:auth-status'),
   signInToNevermind: () => ipcRenderer.invoke('nevermind:sign-in'),
@@ -79,6 +82,11 @@ const api: NevermindApi = {
     const listener = (_event: IpcRendererEvent, payload: Parameters<NevermindApi['onAiChatEvent']>[0] extends (event: infer Event) => void ? Event : never) => callback(payload)
     ipcRenderer.on('ai:chat:event', listener)
     return () => ipcRenderer.removeListener('ai:chat:event', listener)
+  },
+  onExtensionWindowView: (callback) => {
+    const listener = (_event: IpcRendererEvent, payload: Parameters<NevermindApi['onExtensionWindowView']>[0] extends (payload: infer Payload) => void ? Payload : never) => callback(payload)
+    ipcRenderer.on('extension-window:view', listener)
+    return () => ipcRenderer.removeListener('extension-window:view', listener)
   },
   onViewPatch: (callback) => {
     const listener = (_event: IpcRendererEvent, payload: Parameters<NevermindApi['onViewPatch']>[0] extends (payload: infer Payload) => void ? Payload : never) => callback(payload)

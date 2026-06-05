@@ -21,8 +21,8 @@ export type RootAction = {
     | 'remove-ai-chat'
     | 'builtin'
     | 'calculate'
-    | 'extension-command'
     | 'extension-root-item'
+    | 'extension-action'
   title: string
   subtitle: string
   icon: string
@@ -95,6 +95,7 @@ export type NevermindApi = {
   search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<RootAction[]>
   execute: (action: RootAction) => Promise<{ view?: CommandView }>
   runViewAction: (action: CommandAction) => Promise<ViewActionResult>
+  pickFormFieldPaths: (input: { type?: 'file' | 'files' | 'folder'; title?: string; buttonLabel?: string; defaultPath?: string; extensions?: string[]; filterName?: string; canCreateDirectories?: boolean }) => Promise<{ canceled: boolean; paths: string[] }>
   startFileDrag: (filePath: string) => void
   sendAiMessage: (message: string, chatId?: string) => Promise<void>
   aiChatExited: (chatId?: string) => Promise<void>
@@ -134,5 +135,8 @@ export type NevermindApi = {
   onRootItemsChanged: (callback: () => void) => () => void
   onOpenActionView: (callback: (payload?: OpenActionViewPayload) => void) => () => void
   onAiChatEvent: (callback: (event: AiChatEvent) => void) => () => void
+  getExtensionWindowState: (id: string) => Promise<{ id: string; view: CommandView; options?: Record<string, unknown> } | null>
+  closeExtensionWindow: () => Promise<void>
+  onExtensionWindowView: (callback: (payload: { id: string; view: CommandView; options?: Record<string, unknown> }) => void) => () => void
   onViewPatch: (callback: (payload: { viewId?: string; patch: CommandViewPatch }) => void) => () => void
 }
