@@ -528,8 +528,10 @@ export type ExtensionLogs = Record<LogLevel, (message: string, data?: unknown) =
 export type ExtensionAiAttachment =
   | string
   | { type: 'text'; text: string; title?: string }
-  | { type: 'image'; path?: string; filePath?: string; dataUrl?: string; imageDataUrl?: string; data?: string; title?: string; ocr?: boolean }
+  | { type: 'image'; path?: string; filePath?: string; dataUrl?: string; imageDataUrl?: string; data?: string; mimeType?: string; title?: string; ocr?: boolean }
   | { type: 'file'; path?: string; filePath?: string; file?: ExtensionFile; title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }
+
+export type ExtensionAiResolvableAttachment = ExtensionAiAttachment | ExtensionAiAttachment[] | null | Promise<ExtensionAiAttachment | ExtensionAiAttachment[] | null>
 
 export type ExtensionAiStreamEvent =
   | { type: 'start' }
@@ -542,7 +544,7 @@ export type ExtensionAiStreamEvent =
 export type ExtensionAiOptions = {
   system?: string
   /** Text, file, image, selected, clipboard, or OCR context. File/image attachments require `desktop.files`; clipboard helpers require `clipboard.history`; OCR requires `ocr`. */
-  attachments?: ExtensionAiAttachment | Promise<ExtensionAiAttachment> | Array<ExtensionAiAttachment | Promise<ExtensionAiAttachment> | ExtensionAiAttachment[]>
+  attachments?: ExtensionAiResolvableAttachment | ExtensionAiResolvableAttachment[]
   /** Abort the request with a standard AbortController. */
   signal?: AbortSignal
   onDelta?: (delta: string) => void

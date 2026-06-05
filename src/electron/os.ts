@@ -247,7 +247,12 @@ function appleScriptString(value: string) {
 export function typeTextIntoFrontmostApp(text: string, options: any = {}) {
   return osFunction<[string, any], Promise<{ ok: boolean; error?: string }>>({
     darwin: (value, opts) => new Promise((resolve) => {
-      execFile('osascript', ['-e', `tell application "System Events" to keystroke ${appleScriptString(value)}`], { timeout: Math.max(5_000, Number(opts?.timeoutMs || 30_000)) }, (error, _stdout, stderr) => {
+      const delayMs = Math.max(0, Number(opts?.delayMs || 0))
+      const delaySeconds = delayMs / 1000
+      const script = delayMs > 0
+        ? `tell application "System Events"\n${Array.from(String(value)).map((char) => `keystroke ${appleScriptString(char)}\ndelay ${delaySeconds}`).join('\n')}\nend tell`
+        : `tell application "System Events" to keystroke ${appleScriptString(value)}`
+      execFile('osascript', ['-e', script], { timeout: Math.max(5_000, Number(opts?.timeoutMs || 30_000)) }, (error, _stdout, stderr) => {
         resolve(error ? { ok: false, error: String(stderr || error.message || 'Unable to type text') } : { ok: true })
       })
     }),

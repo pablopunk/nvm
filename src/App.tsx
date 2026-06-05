@@ -157,6 +157,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [selectedValue, setSelectedValue] = useState('')
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null)
+  const [toast, setToast] = useState<{ message: string; tone?: 'default' | 'error' } | null>(null)
 
   useEffect(() => {
     window.nvm.getNevermindAuthStatus().then((status) => setNevermindAuthed(Boolean(status.authed))).catch(() => setNevermindAuthed(false))
@@ -210,6 +211,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setView(result.view)
       setFormValues(seedFormValuesFromView(result.view))
       setSelectedValue(selectedItemIdForView(result.view, selectedValue))
+    }
+    if (result.toast) {
+      setToast(result.toast)
+      window.setTimeout(() => setToast(null), 2_000)
     }
   }
 
@@ -266,6 +271,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   return <Command className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`} value={selectedValue} onValueChange={setSelectedValue}>
+    {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     <main className="extensionWindowBody"><ExtensionViewRenderer
       view={view}
       aiChat={aiChat}
@@ -554,12 +560,7 @@ export function App() {
   }, [actionSubmenuFor?.title, confirmRemoveFor?.id, confirmViewActionFor?.title, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
 
   useEffect(() => {
-    if (extensionView?.type !== 'form') return
-    setFormValues(Object.fromEntries((extensionView.fields || []).map((field) => {
-      if (field.type === 'checkbox') return [field.id, Boolean(field.value)]
-      if (field.type === 'multiselect') return [field.id, Array.isArray(field.value) ? field.value : []]
-      return [field.id, field.value || '']
-    })))
+    setFormValues(seedFormValuesFromView(extensionView))
   }, [extensionView])
 
   useEffect(() => {

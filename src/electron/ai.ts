@@ -177,20 +177,24 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   async function ask(message: string, askOptions: AiPromptOptions = {}) {
     const text: string[] = []
-    const session = await generalSession(askOptions)
-    const unsubscribe = session.subscribe((event) => {
-      if (isMessageUpdateEvent(event)) {
-        const delta = event.assistantMessageEvent.delta
-        text.push(delta)
-        askOptions.onEvent?.({ type: 'delta', text: delta })
-      }
-      if (isToolExecutionStartEvent(event)) askOptions.onEvent?.({ type: 'tool_start', name: event.toolName })
-      if (isToolExecutionEndEvent(event)) askOptions.onEvent?.({ type: 'tool_end', name: event.toolName, isError: event.isError })
-      if (isAssistantErrorEndEvent(event)) askOptions.onEvent?.({ type: 'error', message: event.message.errorMessage || 'AI request failed', data: aiLimitNoticeFromError(event.message.errorMessage) })
-    })
-    const removeAbortListener = bindAbortSignal(askOptions.signal, () => { void session.abort?.() })
+    let session: Awaited<ReturnType<typeof generalSession>> | null = null
+    let unsubscribe = () => {}
+    let removeAbortListener = () => {}
     askOptions.onEvent?.({ type: 'start' })
     try {
+      if (askOptions.signal?.aborted) throw aiAbortError()
+      session = await generalSession(askOptions)
+      unsubscribe = session.subscribe((event) => {
+        if (isMessageUpdateEvent(event)) {
+          const delta = event.assistantMessageEvent.delta
+          text.push(delta)
+          askOptions.onEvent?.({ type: 'delta', text: delta })
+        }
+        if (isToolExecutionStartEvent(event)) askOptions.onEvent?.({ type: 'tool_start', name: event.toolName })
+        if (isToolExecutionEndEvent(event)) askOptions.onEvent?.({ type: 'tool_end', name: event.toolName, isError: event.isError })
+        if (isAssistantErrorEndEvent(event)) askOptions.onEvent?.({ type: 'error', message: event.message.errorMessage || 'AI request failed', data: aiLimitNoticeFromError(event.message.errorMessage) })
+      })
+      removeAbortListener = bindAbortSignal(askOptions.signal, () => { void session?.abort?.() })
       if (askOptions.signal?.aborted) throw aiAbortError()
       await session.prompt(aiPromptWithContext(message, askOptions.context), { images: askOptions.images })
       if (askOptions.signal?.aborted) throw aiAbortError()
@@ -206,7 +210,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     } finally {
       removeAbortListener()
       unsubscribe()
-      if (!askOptions.sessionId) session.dispose?.()
+      if (!askOptions.sessionId) session?.dispose?.()
     }
   }
 
