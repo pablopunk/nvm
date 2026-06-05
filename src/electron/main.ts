@@ -2155,13 +2155,29 @@ async function thumbnailCachePath(filePath) {
   return path.join(iconCacheDir, 'thumbs', `${key}.png`)
 }
 
+async function generateQuickLookThumbnail(filePath, cachedPath) {
+  if (!hasCapability('quick-look')) return false
+  const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-thumb-'))
+  try {
+    await execFileText('qlmanage', ['-t', '-s', String(THUMBNAIL_SIZE), '-o', outputDir, filePath], { timeout: 10_000 })
+    const generatedPath = path.join(outputDir, `${path.basename(filePath)}.png`)
+    await fs.mkdir(path.dirname(cachedPath), { recursive: true })
+    await fs.copyFile(generatedPath, cachedPath)
+    return true
+  } catch {
+    return false
+  } finally {
+    await fs.rm(outputDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 async function generateThumbnail(filePath, cachedPath) {
   let image = null
   if (typeof nativeImage.createThumbnailFromPath === 'function') {
     image = await nativeImage.createThumbnailFromPath(filePath, { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE })
   }
   if (!image || image.isEmpty()) image = nativeImage.createFromPath(filePath).resize({ width: THUMBNAIL_SIZE, quality: 'good' })
-  if (!image || image.isEmpty()) return false
+  if (!image || image.isEmpty()) return generateQuickLookThumbnail(filePath, cachedPath)
   const png = image.toPNG()
   await fs.mkdir(path.dirname(cachedPath), { recursive: true })
   await fs.writeFile(cachedPath, png).catch(() => {})
