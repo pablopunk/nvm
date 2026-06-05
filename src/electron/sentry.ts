@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 
 type SentryMain = typeof import('@sentry/electron/main')
 
-const require = createRequire(import.meta.url)
+const requireSentryModule = createRequire(import.meta.url)
 let initialized = false
 let sentry: SentryMain | undefined
 let didTryLoadSentry = false
@@ -12,7 +12,7 @@ function loadSentry() {
   if (sentry || didTryLoadSentry) return sentry
   didTryLoadSentry = true
   try {
-    sentry = require('@sentry/electron/main') as SentryMain
+    sentry = requireSentryModule('@sentry/electron/main') as SentryMain
   } catch (error) {
     console.warn('Sentry disabled because @sentry/electron/main could not be loaded.', error)
   }
