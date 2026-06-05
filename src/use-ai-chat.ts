@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CommandView } from './model'
+import type { CommandAction, CommandView } from './model'
 
-export type AiLimitState = { kind?: string; title: string; message: string; actionTitle?: string; dashboardUrl?: string }
+export type AiLimitState = { kind?: string; title: string; message: string; actionTitle?: string; dashboardUrl?: string; action?: CommandAction }
 export type AiChatEvent = { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }
 
 function limitStateFromEvent(event: AiChatEvent): AiLimitState | null {

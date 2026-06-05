@@ -3,7 +3,7 @@ import { compatibilityHeaders, compatibilityManifestForRequest, requestIdFromHea
 
 export const GET: APIRoute = ({ request }) => {
   const requestId = requestIdFromHeaders(request.headers);
-  return Response.json(compatibilityManifestForRequest(request), {
+  return Response.json(compatibilityManifestForRequest(request, { requestId, route: 'compatibility' }), {
     headers: compatibilityHeaders(requestId),
   });
 };

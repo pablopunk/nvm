@@ -98,7 +98,12 @@ function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
 }
 
 function NevermindLimitGate({ limit, runAction }: { limit: AiLimitState; runAction: (action: CommandAction) => void }) {
-  const action = limit.dashboardUrl ? {
+  const action = limit.action ? {
+    value: 'run-limit-action',
+    icon: <CreditCard size={16} />,
+    title: limit.actionTitle || limit.action.title,
+    onSelect: () => runAction(limit.action!),
+  } : limit.dashboardUrl ? {
     value: 'open-dashboard',
     icon: <CreditCard size={16} />,
     title: limit.actionTitle || 'Open Dashboard',

@@ -1,0 +1,29 @@
+{
+  "backend": {
+    "version": "abcdef1",
+    "environment": "preview"
+  },
+  "api": {
+    "currentVersion": 1,
+    "supportedVersions": [1]
+  },
+  "desktop": {
+    "minimumSupportedVersion": "0.6.0",
+    "latestVersion": "0.7.0",
+    "updateUrl": "https://example.com/update",
+    "supportPolicy": "latest_two_minor_versions_or_90_days"
+  },
+  "client": {
+    "name": "desktop",
+    "version": "0.6.1",
+    "apiVersion": 1,
+    "platform": "darwin",
+    "arch": "arm64",
+    "compatible": true,
+    "unsupportedReason": null
+  },
+  "features": {
+    "streaming_v2": true
+  },
+  "notices": []
+}

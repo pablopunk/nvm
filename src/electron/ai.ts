@@ -5,6 +5,7 @@ import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
 import { checkNevermindCompatibility } from './nevermind-compatibility'
+import type { CommandAction } from '../model'
 import { nevermindDesktopHeaders } from './nevermind-api'
 import { getNevermindAuth, NevermindAuthRequiredError } from './nevermind-auth'
 
@@ -25,6 +26,7 @@ type AiLimitNotice = {
   message: string
   actionTitle?: string
   dashboardUrl?: string
+  action?: CommandAction
   retryAfterSec?: number
 }
 
@@ -412,8 +414,9 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       kind: 'unsupported_client',
       title: 'Update Nevermind',
       message: 'This version of Nevermind is no longer supported by the backend. Install the latest version to keep using AI features.',
-      actionTitle: 'Download Update',
+      actionTitle: 'Check for Update',
       dashboardUrl: updateUrlFromErrorText(text) || NEVERMIND_UPDATE_URL,
+      action: { type: 'checkForUpdates', title: 'Check for Update' },
     }
   }
   return null

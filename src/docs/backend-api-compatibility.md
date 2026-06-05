@@ -39,7 +39,17 @@ Desktop should translate these responses into palette-safe account/update UI and
 
 New backend capabilities should be gated by explicit manifest features, not inferred from backend deploy versions. Desktop should ignore unknown features and only enable new behavior when the expected feature is present.
 
+Feature flags may be returned by `GET /api/compatibility` in the `features` object. Backend configuration supports simple comma-list flags and JSON rules with desktop version, user, plan, and rollout constraints. Rollout percentages must be deterministic for a client/user so support can reason about why a user did or did not receive a feature.
+
 Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes.
+
+## API-major breaking-change criteria
+
+Create a new API major, such as `/api/v2`, only when a backend change cannot be safely represented as an additive field, optional feature flag, compatibility shim, or explicit unsupported-client block inside the current major.
+
+A change is API-major breaking when it removes or renames a field used by a supported desktop release, changes an error type/status that desktop handles specially, changes auth or billing semantics, changes model descriptor/provider routing in a way old clients cannot understand, changes streaming framing or termination semantics, or requires desktop to send a new non-optional request field/header.
+
+Before retiring an API major, the backend owner must document the sunset date, verify active client counts are below the supported-client threshold, preserve user-visible update messaging, and keep compatibility errors available until the final sunset window closes.
 
 ## Contract testing
 
