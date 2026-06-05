@@ -352,6 +352,10 @@ function aiPromptWithContext(message: string, context?: string) {
 
 function bindAbortSignal(signal: AiPromptOptions['signal'], abort: () => void) {
   if (!signal?.addEventListener) return () => {}
+  if (signal.aborted) {
+    abort()
+    return () => {}
+  }
   const listener = () => abort()
   signal.addEventListener('abort', listener, { once: true })
   return () => signal.removeEventListener?.('abort', listener)
