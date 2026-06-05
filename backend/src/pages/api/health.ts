@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { getUpstreamConfig } from '../../lib/upstream';
 import { getActiveProvider } from '../../lib/settings';
+import { compatibilityHeaders } from '../../lib/compatibility';
 import { log } from '../../lib/log';
 
 const VERSION = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev';
@@ -45,6 +46,6 @@ export const GET: APIRoute = async () => {
   const ok = dbOk && upstreamOk;
   return Response.json(
     { ok, db: dbOk, upstream: upstreamOk, version: VERSION },
-    { status: ok ? 200 : 503 },
+    { status: ok ? 200 : 503, headers: compatibilityHeaders() },
   );
 };
