@@ -24,7 +24,9 @@ jobs:
         uses: jdx/mise-action@v2
 
       - name: Install dependencies
-        run: mise exec -- pnpm install --frozen-lockfile
+        run: |
+          mise exec -- pnpm install --frozen-lockfile
+          mise exec -- pnpm -C backend install --frozen-lockfile
 
       - name: Test app
         run: mise exec -- pnpm test
