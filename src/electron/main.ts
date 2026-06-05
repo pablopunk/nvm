@@ -374,6 +374,7 @@ function pruneViewRefreshRecords() {
 
 function registerViewRefreshForRenderer(refresh, entry, view) {
   if (!refresh || typeof refresh !== 'object') return refresh
+  if (refresh.id && !refresh.action) return refresh
   pruneViewRefreshRecords()
   const { action, ...safeRefresh } = refresh
   const refreshId = crypto.randomUUID()
@@ -793,7 +794,9 @@ function aiChatsView() {
 }
 
 function patchOpenView(viewId: string, patch: any) {
-  paletteWindow.win?.webContents.send('view:patch', { viewId, patch })
+  const normalizedPatch = normalizeViewPatch(patch, null)
+  structuredClone(normalizedPatch)
+  paletteWindow.win?.webContents.send('view:patch', { viewId, patch: normalizedPatch })
 }
 
 function aiBuilderRegistryEntry() {
@@ -1598,7 +1601,7 @@ async function executeActionForIpc(action) {
   let trustedAction: any = null
   try {
     trustedAction = resolveRootActionForIpc(action)
-    const result = await executeAction(trustedAction)
+    const result = normalizeHostViewResult(await executeAction(trustedAction))
     structuredClone(result)
     return result
   } catch (error) {
@@ -1769,6 +1772,15 @@ function normalizeViewPatch(patch, entry) {
   }
 }
 
+function normalizeHostViewResult(result) {
+  if (!result) return result
+  return {
+    ...result,
+    ...(result.view ? { view: normalizeView(result.view, null) } : {}),
+    ...(result.patch ? { patch: normalizeViewPatch(result.patch, null) } : {}),
+  }
+}
+
 async function executeViewActionResult(result, entry, launchContext?: any) {
   if (!result) return result
   if (isAction(result)) return executeViewAction(normalizeViewAction(result, entry), launchContext)
@@ -1807,7 +1819,7 @@ async function refreshViewForIpc(input: any = {}) {
   if (record.running) return { skipped: true }
   record.running = (async () => {
     try {
-      const result = await executeHostRefreshAction(record, { refresh: true })
+      const result = normalizeHostViewResult(await executeHostRefreshAction(record, { refresh: true }))
       structuredClone(result)
       record.failureCount = 0
       record.backoffUntil = undefined
@@ -1828,7 +1840,7 @@ async function executeViewActionForIpc(action) {
   let trustedAction: any = null
   try {
     trustedAction = resolveViewActionForIpc(action)
-    const result = await executeViewAction(trustedAction)
+    const result = normalizeHostViewResult(await executeViewAction(trustedAction))
     structuredClone(result)
     return result
   } catch (error) {
