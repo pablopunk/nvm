@@ -41,7 +41,9 @@ New backend capabilities should be gated by explicit manifest features, not infe
 
 Feature flags may be returned by `GET /api/compatibility` in the `features` object. Backend configuration supports simple comma-list flags and JSON rules with desktop version, user, plan, and rollout constraints. Rollout percentages must be deterministic for a client/user so support can reason about why a user did or did not receive a feature.
 
-Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes.
+Desktop must use `requireNevermindCompatibilityFeature` or `nevermindCompatibilityFeatureEnabled` before relying on new backend-advertised behavior. The backend currently advertises `active_model_descriptor` and `proxy_streaming` by default so desktop can gate dynamic model routing and future streaming behavior explicitly.
+
+Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes. `NEVERMIND_KILL_SWITCHES` supports comma-list or JSON boolean switches for `ai_proxy`, `ai_streaming`, and `auth_device`.
 
 ## API-major breaking-change criteria
 

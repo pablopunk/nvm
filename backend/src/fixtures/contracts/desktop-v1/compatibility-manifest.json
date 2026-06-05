@@ -23,6 +23,8 @@
     "unsupportedReason": null
   },
   "features": {
+    "active_model_descriptor": true,
+    "proxy_streaming": true,
     "streaming_v2": true
   },
   "notices": []

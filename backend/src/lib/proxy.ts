@@ -19,7 +19,7 @@ import { getUpstreamConfig, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
-import { backendVersion, desktopClientFromRequest, type DesktopClient } from './compatibility';
+import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
 import * as Sentry from '@sentry/astro';
 
@@ -222,6 +222,7 @@ function withRequestId(res: Response, requestId: string): Response {
 
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const requestId = randomUUID();
+  if (backendKillSwitchEnabled('ai_proxy')) return killSwitchResponse('ai_proxy', 'AI proxy is temporarily disabled.', requestId);
   const startedAt = Date.now();
   const client = desktopClientFromRequest(cfg.request);
   Sentry.getCurrentScope().setTag('request_id', requestId);
@@ -302,6 +303,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   }
 
   if (isStreamingContentType(upstreamResponse.headers.get('content-type'))) {
+    if (backendKillSwitchEnabled('ai_streaming')) return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
     const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
     return new Response(transformed, {
       status: upstreamResponse.status,

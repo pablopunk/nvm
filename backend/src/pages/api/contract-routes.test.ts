@@ -105,6 +105,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   delete process.env.OPENCODE_API_KEY;
   delete process.env.OPENCODE_BASE_URL;
+  delete process.env.NEVERMIND_KILL_SWITCHES;
 });
 
 test('device auth initiate returns the desktop-v1 initiation contract', async () => {
@@ -123,6 +124,21 @@ test('device auth initiate returns the desktop-v1 initiation contract', async ()
   assert.match(body.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(body.pollIntervalMs, 2000);
   assert.equal((db.insertedValues[0] as any).deviceLabel, 'Pablo Mac');
+});
+
+test('device auth kill switch returns service-unavailable contract', async () => {
+  process.env.NEVERMIND_KILL_SWITCHES = 'auth_device';
+  const response = await initiateDeviceAuth(routeContext(new Request('https://api.nvm.fyi/api/auth/device/initiate', {
+    method: 'POST',
+    headers: { 'x-request-id': 'req_auth_disabled' },
+    body: '{}',
+  })));
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('x-request-id'), 'req_auth_disabled');
+  assert.deepEqual(await response.json(), {
+    error: { type: 'service_unavailable', message: 'Device authorization is temporarily disabled.' },
+  });
 });
 
 test('device auth exchange returns pending and missing-code contracts', async () => {
@@ -155,6 +171,17 @@ test('active-model route returns descriptor contract with compatibility headers'
   assert.equal(body.provider, 'nevermind');
   assert.equal(body.api, 'google-generative-ai');
   assert.equal(body.baseUrl, 'https://api.nvm.fyi/api/v1');
+});
+
+test('proxy route kill switch returns service-unavailable contract', async () => {
+  process.env.NEVERMIND_KILL_SWITCHES = 'ai_proxy';
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+
+  assert.equal(response.status, 503);
+  assert.ok(response.headers.get('x-request-id'));
+  assert.deepEqual(await response.json(), {
+    error: { type: 'service_unavailable', message: 'AI proxy is temporarily disabled.' },
+  });
 });
 
 test('proxy route returns stable auth, credits, model config, and prompt-size errors', async () => {

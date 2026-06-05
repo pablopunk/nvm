@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
-import { checkNevermindCompatibility } from './nevermind-compatibility'
+import { checkNevermindCompatibility, requireNevermindCompatibilityFeature } from './nevermind-compatibility'
 import type { CommandAction } from '../model'
 import { nevermindDesktopHeaders } from './nevermind-api'
 import { getNevermindAuth, NevermindAuthRequiredError } from './nevermind-auth'
@@ -493,7 +493,8 @@ type BackendDescriptor = {
 
 async function fetchActiveModelDescriptor(baseUrl: string, token: string): Promise<BackendDescriptor> {
   const trimmed = baseUrl.replace(/\/$/, '')
-  await checkNevermindCompatibility(trimmed)
+  const manifest = await checkNevermindCompatibility(trimmed)
+  requireNevermindCompatibilityFeature('active_model_descriptor', manifest)
   const res = await fetch(`${trimmed}/api/v1/active-model`, {
     headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
   })

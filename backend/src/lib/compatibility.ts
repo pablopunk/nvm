@@ -12,6 +12,11 @@ export type DesktopClient = {
   arch: string | null;
 };
 
+const DEFAULT_FEATURES: Record<string, FeatureFlagRule> = {
+  active_model_descriptor: true,
+  proxy_streaming: true,
+};
+
 type FeatureFlagRule = boolean | {
   enabled?: boolean;
   minDesktopVersion?: string;
@@ -130,6 +135,27 @@ export function compatibilityFeaturesForClient(client: DesktopClient, context: F
   return Object.fromEntries(Object.entries(definitions).map(([name, rule]) => [name, evaluateFeatureFlag(name, rule, client, context)]));
 }
 
+export function backendKillSwitchEnabled(name: string) {
+  const raw = process.env.NEVERMIND_KILL_SWITCHES?.trim();
+  if (!raw) return false;
+  if (!raw.startsWith('{')) return raw.split(',').map((value) => value.trim()).includes(name);
+  try {
+    const parsed = JSON.parse(raw) as Record<string, boolean>;
+    return parsed?.[name] === true;
+  } catch (error) {
+    log.warn('kill_switches_parse_failed', { error });
+    return false;
+  }
+}
+
+export function killSwitchResponse(name: string, message: string, requestId?: string) {
+  log.warn('kill_switch_triggered', { kill_switch: name, request_id: requestId });
+  return Response.json(
+    { error: { type: 'service_unavailable', message } },
+    { status: 503, headers: compatibilityHeaders(requestId) },
+  );
+}
+
 export function unsupportedClientReason(client: DesktopClient) {
   if (client.apiVersion !== null && !SUPPORTED_API_VERSIONS.includes(client.apiVersion as 1)) return 'unsupported_api_version';
   if (client.version && compareVersions(client.version, minimumSupportedDesktopVersion()) < 0) return 'unsupported_desktop_version';
@@ -165,16 +191,17 @@ export function compareVersions(left: string, right: string) {
 
 function featureFlagDefinitions(): Record<string, FeatureFlagRule> {
   const raw = process.env.NEVERMIND_FEATURE_FLAGS?.trim();
-  if (!raw) return {};
+  if (!raw) return DEFAULT_FEATURES;
   if (!raw.startsWith('{')) {
-    return Object.fromEntries(raw.split(',').map((name) => [name.trim(), true]).filter(([name]) => Boolean(name)));
+    const envFeatures = Object.fromEntries(raw.split(',').map((name) => [name.trim(), true]).filter(([name]) => Boolean(name)));
+    return { ...DEFAULT_FEATURES, ...envFeatures };
   }
   try {
     const parsed = JSON.parse(raw) as Record<string, FeatureFlagRule>;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...DEFAULT_FEATURES, ...parsed } : DEFAULT_FEATURES;
   } catch (error) {
     log.warn('feature_flags_parse_failed', { error });
-    return {};
+    return DEFAULT_FEATURES;
   }
 }
 

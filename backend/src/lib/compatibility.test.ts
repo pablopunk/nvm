@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import {
+  backendKillSwitchEnabled,
   compareVersions,
   compatibilityError,
   compatibilityFeaturesForClient,
@@ -15,6 +16,7 @@ afterEach(() => {
   delete process.env.NEVERMIND_LATEST_DESKTOP_VERSION;
   delete process.env.NEVERMIND_DESKTOP_UPDATE_URL;
   delete process.env.NEVERMIND_FEATURE_FLAGS;
+  delete process.env.NEVERMIND_KILL_SWITCHES;
   delete process.env.VERCEL_GIT_COMMIT_SHA;
   delete process.env.VERCEL_ENV;
 });
@@ -74,7 +76,7 @@ test('returns comma-list feature flags in the manifest', () => {
 
   const manifest = compatibilityManifestForRequest(request, { requestId: 'req_flags' });
 
-  assert.deepEqual(manifest.features, { new_models: true, streaming_v2: true });
+  assert.deepEqual(manifest.features, { active_model_descriptor: true, proxy_streaming: true, new_models: true, streaming_v2: true });
 });
 
 test('evaluates version, user, plan, and rollout feature rules', () => {
@@ -89,6 +91,8 @@ test('evaluates version, user, plan, and rollout feature rules', () => {
   });
 
   assert.deepEqual(compatibilityFeaturesForClient(client, { userId: 'user_1', plan: 'pro' }), {
+    active_model_descriptor: true,
+    proxy_streaming: true,
     enabled: true,
     needs_newer_desktop: false,
     allowed_user_plan: true,
@@ -96,6 +100,16 @@ test('evaluates version, user, plan, and rollout feature rules', () => {
     zero_rollout: false,
     full_rollout: true,
   });
+});
+
+test('evaluates backend kill switches from comma-list and JSON config', () => {
+  process.env.NEVERMIND_KILL_SWITCHES = 'ai_proxy,auth_device';
+  assert.equal(backendKillSwitchEnabled('ai_proxy'), true);
+  assert.equal(backendKillSwitchEnabled('ai_streaming'), false);
+
+  process.env.NEVERMIND_KILL_SWITCHES = JSON.stringify({ ai_streaming: true, ai_proxy: false });
+  assert.equal(backendKillSwitchEnabled('ai_proxy'), false);
+  assert.equal(backendKillSwitchEnabled('ai_streaming'), true);
 });
 
 test('matches the desktop-v1 compatibility manifest fixture', () => {
