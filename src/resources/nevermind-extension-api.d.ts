@@ -149,6 +149,30 @@ export type ExtensionTypeTextOptions = {
   delayMs?: number
 }
 
+export type ExtensionClipboardContent =
+  | { type: 'text'; text: string; html?: string; concealed?: boolean }
+  | { type: 'html'; html: string; text?: string; concealed?: boolean }
+  | { type: 'image'; imageDataUrl?: string; image?: string; path?: string; concealed?: boolean }
+  | { type: 'files'; paths: string[]; concealed?: boolean }
+
+export type ExtensionClipboardWriteOptions = {
+  /** Prevent this write from being retained by Nevermind clipboard history where possible. */
+  concealed?: boolean
+}
+
+export type ExtensionPasteOptions = ExtensionClipboardWriteOptions & {
+  /** Restore the previous clipboard contents shortly after paste is dispatched. */
+  restoreClipboard?: boolean
+  /** Delay before restoring clipboard contents, in milliseconds. Defaults to 250. */
+  restoreDelayMs?: number
+}
+
+export type ExtensionClipboardReadOptions = { formats?: Array<'text' | 'html' | 'image' | 'files'> }
+
+export type ExtensionClipboardReadResult =
+  | (ExtensionClipboardContent & { files?: ExtensionFile[] })
+  | { type: 'empty' }
+
 export type ExtensionWindowOptions = {
   /** Stable id for reusing and controlling a window. Defaults to the view id/title. */
   id?: string
@@ -585,10 +609,13 @@ export type ExtensionClipboardEntry = {
   createdAt?: number
 }
 
-/** Read-only clipboard history access. Requires the `clipboard.history` permission. */
+/** Clipboard history access. Requires the `clipboard.history` permission. Destructive helpers are host-managed and return counts. */
 export type ExtensionClipboardHistory = {
   list(options?: { limit?: number; query?: string; types?: string[] }): ExtensionClipboardEntry[]
   search(query: string, options?: { limit?: number; types?: string[] }): ExtensionClipboardEntry[]
+  get(id: string): ExtensionClipboardEntry | null
+  remove(idOrIds: string | string[]): Promise<{ removed: number }>
+  clear(options?: { types?: string[]; olderThanMs?: number }): Promise<{ removed: number }>
 }
 
 /**
@@ -665,6 +692,8 @@ export type ExtensionContext = {
     openUrl(url: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     copyText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     pasteText(text: string, title?: string, options?: ExtensionPasteTextOptions & Record<string, unknown>): ExtensionAction
+    /** Paste text/html/image/files through the host while preserving concealed/restore behavior. */
+    paste(content: ExtensionClipboardContent, title?: string, options?: ExtensionPasteOptions & Record<string, unknown>): ExtensionAction
     /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use inside views so rows share aliases/shortcuts with the durable action. */
     ref(registeredActionId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
@@ -748,12 +777,15 @@ export type ExtensionContext = {
     }
     clipboard?: {
       readText(): string
-      writeText(text: string): void
-      readImage(): string
-      writeImage(image: unknown): unknown
-      readFiles(): string[]
-      read(): unknown
-      write(value: unknown): unknown
+      writeText(text: string, options?: ExtensionClipboardWriteOptions): void
+      readHtml(): string
+      writeHtml(html: string, text?: string, options?: ExtensionClipboardWriteOptions): void
+      readImage(): string | null
+      writeImage(image: unknown, options?: ExtensionClipboardWriteOptions): unknown
+      readFiles(): Promise<ExtensionFile[]>
+      writeFiles(paths: string[], options?: ExtensionClipboardWriteOptions): void
+      read(options?: ExtensionClipboardReadOptions): Promise<ExtensionClipboardReadResult>
+      write(value: ExtensionClipboardContent | string, options?: ExtensionClipboardWriteOptions): unknown
     }
     selection: {
       text(): Promise<string> | string

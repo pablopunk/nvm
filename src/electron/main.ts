@@ -860,11 +860,33 @@ function clipboardHistorySnapshot(options: any = {}) {
 function clipboardHistoryRemovalEntries(action) {
   const range = action?.clipboardHistoryRange || 'item'
   const now = Date.now()
-  if (range === 'item') return clipboardHistory.filter((entry) => entry.id === action?.clipboardHistoryItemId)
-  if (range === 'last-hour') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_HOUR_MS)
-  if (range === 'last-day') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_DAY_MS)
-  if (range === 'all') return clipboardHistory
+  const types = new Set(Array.isArray(action?.types) ? action.types.map(String) : [])
+  const typeMatches = (entry) => !types.size || types.has(entry.type)
+  if (range === 'item') return clipboardHistory.filter((entry) => entry.id === action?.clipboardHistoryItemId && typeMatches(entry))
+  if (range === 'ids') {
+    const ids = new Set(Array.isArray(action?.clipboardHistoryItemIds) ? action.clipboardHistoryItemIds : [action?.clipboardHistoryItemId].filter(Boolean))
+    return clipboardHistory.filter((entry) => ids.has(entry.id) && typeMatches(entry))
+  }
+  if (range === 'last-hour') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_HOUR_MS && typeMatches(entry))
+  if (range === 'last-day') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_DAY_MS && typeMatches(entry))
+  if (range === 'older-than') return clipboardHistory.filter((entry) => (entry.createdAt || 0) < now - Math.max(0, Number(action?.olderThanMs || 0)) && typeMatches(entry))
+  if (range === 'all') return clipboardHistory.filter(typeMatches)
   return []
+}
+
+function clipboardHistoryGet(id) {
+  return clipboardHistorySnapshot().find((entry) => entry.id === id) || null
+}
+
+function removeClipboardHistoryByAction(action) {
+  const removed = clipboardHistoryRemovalEntries(action)
+  if (removed.length === 0) return 0
+  const removedIds = new Set(removed.map((entry) => entry.id))
+  clipboardHistory = clipboardHistory.filter((entry) => !removedIds.has(entry.id))
+  scheduleSaveState()
+  invalidateExtensionRootItems()
+  paletteWindow.win?.webContents.send('clipboard:changed')
+  return removed.length
 }
 
 function clipboardHistoryRemovedMessage(count) {
@@ -872,14 +894,9 @@ function clipboardHistoryRemovedMessage(count) {
 }
 
 function removeClipboardHistoryEntries(action) {
-  const removed = clipboardHistoryRemovalEntries(action)
-  if (removed.length === 0) return { toast: { message: 'No matching clipboard items to remove' } }
-  const removedIds = new Set(removed.map((entry) => entry.id))
-  clipboardHistory = clipboardHistory.filter((entry) => !removedIds.has(entry.id))
-  scheduleSaveState()
-  invalidateExtensionRootItems()
-  paletteWindow.win?.webContents.send('clipboard:changed')
-  return { view: clipboardHistoryView(), navigation: 'replace', toast: { message: clipboardHistoryRemovedMessage(removed.length) } }
+  const removed = removeClipboardHistoryByAction(action)
+  if (removed === 0) return { toast: { message: 'No matching clipboard items to remove' } }
+  return { view: clipboardHistoryView(), navigation: 'replace', toast: { message: clipboardHistoryRemovedMessage(removed) } }
 }
 
 function viewRefreshAction(itemsBuilder) {
@@ -1772,6 +1789,9 @@ async function executeViewAction(action, launchContext?: any) {
     case 'pasteText':
       pasteTextAction(action)
       return { toast: { message: 'Pasted' } }
+    case 'pasteClipboard':
+      pasteClipboardAction(action)
+      return { toast: { message: 'Pasted' } }
     case 'typeText': {
       const result = await typeTextIntoFrontmostApp(action.text || '', { delayMs: action.delayMs })
       return result?.ok ? { toast: { message: 'Typed' } } : { toast: { message: result?.error || 'Unable to type text', tone: 'error' } }
@@ -2255,21 +2275,75 @@ function clipboardImageDataUrl() {
   return image.isEmpty() ? null : image.toDataURL()
 }
 
-async function readDesktopClipboard() {
-  const files = await clipboardFiles()
-  if (files.length) return { type: 'files', files }
-  const image = clipboardImageDataUrl()
-  if (image) return { type: 'image', image }
-  const text = clipboard.readText()
-  return text ? { type: 'text', text } : { type: 'empty' }
+function clipboardFormats(options: any = {}) {
+  const formats = Array.isArray(options.formats) ? options.formats.map(String) : []
+  return formats.length ? new Set(formats) : null
 }
 
-function writeDesktopClipboard(item) {
-  if (typeof item === 'string') return clipboard.writeText(item)
-  if (item?.type === 'text' || item?.text != null) return clipboard.writeText(String(item.text || ''))
+async function readDesktopClipboard(options: any = {}) {
+  const formats = clipboardFormats(options)
+  if (!formats || formats.has('files')) {
+    const files = await clipboardFiles()
+    if (files.length) return { type: 'files', files, paths: files.map((file: any) => file.path) }
+  }
+  if (!formats || formats.has('image')) {
+    const image = clipboardImageDataUrl()
+    if (image) return { type: 'image', imageDataUrl: image, image }
+  }
+  if (!formats || formats.has('html')) {
+    const html = clipboard.readHTML()
+    if (html) return { type: 'html', html, text: clipboard.readText() }
+  }
+  if (!formats || formats.has('text')) {
+    const text = clipboard.readText()
+    if (text) return { type: 'text', text, html: clipboard.readHTML() || undefined }
+  }
+  return { type: 'empty' }
+}
+
+function clipboardImageForContent(item: any) {
   const image = item?.image || item?.imageDataUrl || item?.path
-  if (item?.type === 'image' || image) {
-    return String(image || '').startsWith('data:') ? clipboard.writeImage(nativeImage.createFromDataURL(image)) : clipboard.writeImage(nativeImage.createFromPath(expandUserPath(image)))
+  if (!image) return null
+  return String(image).startsWith('data:') ? nativeImage.createFromDataURL(String(image)) : nativeImage.createFromPath(expandUserPath(String(image)))
+}
+
+function suppressClipboardHistoryForContent(item: any) {
+  if (!item) return
+  if (typeof item === 'string') return suppressClipboardHistoryId(clipboardHistoryIdForText(item))
+  const text = item.text || (item.type === 'html' ? item.html : '')
+  if (text) suppressClipboardHistoryId(clipboardHistoryIdForText(String(text)))
+  const image = clipboardImageForContent(item)
+  if (image && !image.isEmpty()) suppressClipboardHistoryId(`image:${hashValue(image.toPNG())}`)
+  const paths = Array.isArray(item.paths) ? item.paths : Array.isArray(item.files) ? item.files.map((file) => file.path || file).filter(Boolean) : []
+  for (const filePath of paths) if (isVideoPath(String(filePath))) suppressClipboardHistoryId(`video:${hashValue(expandUserPath(String(filePath)))}`)
+}
+
+function writeDesktopClipboardFiles(paths) {
+  const resolvedPaths = (Array.isArray(paths) ? paths : [paths]).map((filePath) => expandUserPath(String(filePath))).filter(Boolean)
+  const fileUrls = resolvedPaths.map((filePath) => pathToFileURL(filePath).href).join('\n')
+  clipboard.write({ text: resolvedPaths.join('\n') })
+  if (fileUrls) clipboard.writeBuffer('public.file-url', Buffer.from(fileUrls, 'utf8'))
+}
+
+function writeDesktopClipboard(item, options: any = {}) {
+  const content = typeof item === 'string' ? { type: 'text', text: item } : item || {}
+  if (content.concealed || options.concealed) suppressClipboardHistoryForContent(content)
+  if (content.type === 'files' || Array.isArray(content.paths) || Array.isArray(content.files)) return writeDesktopClipboardFiles(content.paths || content.files)
+  if (content.type === 'html' || content.html != null) return clipboard.write({ text: String(content.text || ''), html: String(content.html || '') })
+  if (content.type === 'text' || content.text != null) return content.html ? clipboard.write({ text: String(content.text || ''), html: String(content.html) }) : clipboard.writeText(String(content.text || ''))
+  const image = clipboardImageForContent(content)
+  if (content.type === 'image' || image) return clipboard.writeImage(image || nativeImage.createEmpty())
+}
+
+function pasteClipboardAction(action: any) {
+  const restoreClipboard = Boolean(action.restoreClipboard)
+  const snapshot = restoreClipboard ? clipboardSnapshot() : null
+  const content = action.content || action.clipboard || action
+  writeDesktopClipboard(content, { concealed: action.concealed || restoreClipboard })
+  pasteIntoFrontmostApp()
+  if (restoreClipboard && snapshot) {
+    const delay = Math.max(50, Math.min(5_000, Number(action.restoreDelayMs || 250)))
+    setTimeout(() => restoreClipboardSnapshot(snapshot), delay).unref?.()
   }
 }
 
@@ -3208,6 +3282,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
       pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
+      paste: (content, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteClipboard', title, content }),
       ref: (registeredActionId, title = 'Run Action', options: any = {}) => ({ ...options, type: 'runExtensionRegisteredAction', title, extensionId: extension.id, registeredActionId }),
       typeText: (text, title = 'Type Text', options: any = {}) => ({ ...options, type: 'typeText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
@@ -3291,6 +3366,9 @@ function createExtensionContext(extension, command, launchContext?: any) {
       history: canUseClipboard ? {
         list: (options: any = {}) => clipboardHistorySnapshot(options),
         search: (query, options: any = {}) => clipboardHistorySnapshot({ ...options, query }),
+        get: (id) => clipboardHistoryGet(String(id || '')),
+        remove: async (idOrIds) => ({ removed: removeClipboardHistoryByAction({ clipboardHistoryRange: 'ids', clipboardHistoryItemIds: Array.isArray(idOrIds) ? idOrIds : [idOrIds] }) }),
+        clear: async (options: any = {}) => ({ removed: removeClipboardHistoryByAction({ clipboardHistoryRange: options.olderThanMs ? 'older-than' : 'all', olderThanMs: options.olderThanMs, types: options.types }) }),
       } : undefined,
     },
     desktop: {
@@ -3299,10 +3377,13 @@ function createExtensionContext(extension, command, launchContext?: any) {
       },
       clipboard: canUseClipboard ? {
         readText: () => clipboard.readText(),
-        writeText: (text) => clipboard.writeText(String(text || '')),
+        writeText: (text, options: any = {}) => writeDesktopClipboard({ type: 'text', text }, options),
+        readHtml: () => clipboard.readHTML(),
+        writeHtml: (html, text = '', options: any = {}) => writeDesktopClipboard({ type: 'html', html, text }, options),
         readImage: clipboardImageDataUrl,
-        writeImage: (image) => writeDesktopClipboard({ type: 'image', image }),
+        writeImage: (image, options: any = {}) => writeDesktopClipboard({ type: 'image', image }, options),
         readFiles: clipboardFiles,
+        writeFiles: (paths, options: any = {}) => writeDesktopClipboard({ type: 'files', paths }, options),
         read: readDesktopClipboard,
         write: writeDesktopClipboard,
       } : undefined,

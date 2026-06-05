@@ -894,7 +894,7 @@ function capabilities() {
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'durable action globalShortcut', 'command globalShortcut as shorthand', 'shortcutScope'], 
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
-    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)', 'durable actions/commands may declare mode and triggers for host-managed background jobs'],
+    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'paste(text/html/image/files content with concealed/restore options)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)', 'durable actions/commands may declare mode and triggers for host-managed background jobs'],
     namespaces: ['desktop', 'text', 'input', 'windows', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai', 'ocr'],
     backgroundJobs: ['commands and actions(ctx) contributions can declare mode: view|noView|background and triggers startup, interval, clipboard.changed, files.changed, app.frontmost.changed, wake, and login; Nevermind owns scheduling, no-overlap, timeouts, backoff, enable/disable persistence, and diagnostics in Background Tasks; triggered runs receive ctx.launch with reason, trigger, startedAt, and changed file context when applicable'], 
     files: ['ctx.desktop.files.metadata(path) returns canonical metadata and host-safe URLs; thumbnail(path) returns a thumbnail URL; indexedRoots(), indexSnapshot(options), searchIndex(query, options), and reindex(options) provide bounded host file-index controls'],
@@ -905,7 +905,7 @@ function capabilities() {
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     desktop: {
       keyboard: ['typeText(text, options) types into the frontmost app without touching the clipboard when keyboard.type-text is available'],
-      clipboard: ['readText', 'writeText', 'readImage', 'writeImage', 'readFiles', 'read', 'write'],
+      clipboard: ['readText', 'writeText(options.concealed)', 'readHtml', 'writeHtml', 'readImage', 'writeImage', 'readFiles', 'writeFiles', 'read({formats})', 'write(text/html/image/files content)'],
       selection: ['text', 'files', 'read'],
       apps: ['frontmost', 'launch'],
       files: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl', 'thumbnail', 'metadata', 'indexedRoots', 'indexSnapshot', 'reindex', 'recent', 'searchIndex'],

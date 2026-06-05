@@ -146,6 +146,37 @@ function floatingWindowView(ctx: ExtensionContext) {
   })
 }
 
+function clipboardView(ctx: ExtensionContext) {
+  const clipboardApi = ctx.desktop.clipboard
+  const writeHtml = ctx.actions.run('Write HTML Clipboard', async (innerCtx) => {
+    innerCtx.desktop.clipboard?.write({ type: 'html', html: '<strong>Nevermind HTML Clipboard</strong>', text: 'Nevermind HTML Clipboard' }, { concealed: true })
+    return innerCtx.ui.toast({ message: 'Wrote concealed HTML clipboard content' })
+  })
+  const writeFiles = ctx.actions.run('Write Files Clipboard', async (innerCtx) => {
+    fs.mkdirSync(WATCH_FIXTURE_ROOT, { recursive: true })
+    const filePath = path.join(WATCH_FIXTURE_ROOT, 'clipboard-file.txt')
+    fs.writeFileSync(filePath, 'Nevermind clipboard file fixture\n')
+    innerCtx.desktop.clipboard?.writeFiles([filePath], { concealed: true })
+    return innerCtx.ui.toast({ message: `Wrote ${path.basename(filePath)} as clipboard file` })
+  })
+  const read = ctx.actions.run('Read Clipboard', async (innerCtx) => {
+    const value = await innerCtx.desktop.clipboard?.read({ formats: ['files', 'html', 'text', 'image'] })
+    return innerCtx.ui.preview({ title: 'Clipboard Read Result', content: `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`` })
+  })
+  const pasteHtml = ctx.actions.paste({ type: 'html', html: '<em>Nevermind pasted HTML</em>', text: 'Nevermind pasted HTML' }, 'Paste HTML + Restore', { restoreClipboard: true, concealed: true, dismissAfterRun: 'auto' })
+  return ctx.ui.list({
+    id: 'dev-ui-clipboard',
+    title: 'Dev UI · Clipboard',
+    subtitle: clipboardApi ? 'Read/write text, HTML, files, and generic paste content' : 'clipboard.history permission missing',
+    items: [
+      ctx.ui.item({ id: 'write-html', title: 'Write concealed HTML', subtitle: 'Writes HTML with a plain-text fallback', icon: 'clipboard', primaryAction: writeHtml, actions: [writeHtml] }),
+      ctx.ui.item({ id: 'write-files', title: 'Write files to clipboard', subtitle: WATCH_FIXTURE_ROOT, icon: 'files', primaryAction: writeFiles, actions: [writeFiles] }),
+      ctx.ui.item({ id: 'read', title: 'Read current clipboard', subtitle: 'Prefers files, image, HTML, then text', icon: 'clipboard-list', primaryAction: read, actions: [read] }),
+      ctx.ui.item({ id: 'paste-html', title: 'Paste HTML and restore clipboard', subtitle: 'Uses ctx.actions.paste(...) with concealed restore behavior', icon: 'clipboard-paste', primaryAction: pasteHtml, actions: [pasteHtml] }),
+    ],
+  })
+}
+
 function textInputView(ctx: ExtensionContext) {
   return ctx.ui.list({ 
     id: 'dev-ui-text-input',
@@ -448,7 +479,7 @@ const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
   title: 'Dev UI Fixtures',
   subtitle: 'Dev-only extension API fixtures',
-  permissions: ['camera', 'desktop.files', 'desktop.apps', 'ocr'],
+  permissions: ['camera', 'desktop.files', 'desktop.apps', 'clipboard.history', 'ocr'],
   actions(ctx) {
     return [floatingWindowToggleAction(ctx), backgroundJobFixtureAction(ctx), folderWatchFixtureAction(ctx)]
   },
@@ -459,6 +490,7 @@ const extension: NevermindExtension = {
     { id: 'preview', title: 'Dev UI: Preview', icon: 'file-text', run: (ctx) => previewView(ctx) },
     { id: 'form', title: 'Dev UI: Form', icon: 'list-checks', run: (ctx) => formView(ctx) },
     { id: 'text-input', title: 'Dev UI: Text Input', icon: 'keyboard', run: (ctx) => textInputView(ctx) },
+    { id: 'clipboard', title: 'Dev UI: Clipboard', icon: 'clipboard', run: (ctx) => clipboardView(ctx) },
     { id: 'folder-watch', title: 'Dev UI: Folder Watch', icon: 'folder-sync', run: (ctx) => folderWatchView(ctx) },
     { id: 'floating-window', title: 'Dev UI: Floating Window', icon: 'panel-top-open', run: (ctx) => floatingWindowView(ctx) },
     { id: 'prompt', title: 'Dev UI: Prompt', icon: 'text-cursor-input', run: (ctx) => promptView(ctx) },
