@@ -1,6 +1,6 @@
 ---
 name: backend-api-compatibility
-description: Use when changing or reviewing Nevermind desktop/backend contracts: Astro API routes used by desktop, Electron backend fetches, auth/device login, token revoke, active-model descriptors, AI proxy routes, billing/rate-limit/error shapes, compatibility manifests, feature flags, backend deploy policy, desktop release/update interactions, or any request about keeping frontend and backend in sync.
+description: Use when changing or reviewing Nevermind desktop/backend contracts - Astro API routes used by desktop, Electron backend fetches, auth/device login, token revoke, active-model descriptors, AI proxy routes, billing/rate-limit/error shapes, compatibility manifests, feature flags, backend deploy policy, desktop release/update interactions, or any request about keeping frontend and backend in sync.
 ---
 
 # Backend API Compatibility
