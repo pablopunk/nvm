@@ -61,8 +61,19 @@ type NevermindAiOptions = {
   onEvent?: (event: AiEvent) => void
 }
 
+type AiImageContent = { type: 'image'; data: string; mimeType: string }
+
+type AiPromptOptions = {
+  sessionId?: string
+  system?: string
+  context?: string
+  images?: AiImageContent[]
+  signal?: { aborted?: boolean; addEventListener?: (type: 'abort', listener: () => void, options?: { once?: boolean }) => void; removeEventListener?: (type: 'abort', listener: () => void) => void }
+  onEvent?: (event: AiEvent) => void
+}
+
 type AgentSession = {
-  prompt: (message: string) => Promise<unknown>
+  prompt: (message: string, options?: { images?: AiImageContent[] }) => Promise<unknown>
   abort?: () => Promise<unknown>
   dispose?: () => void
   subscribe: (callback: (event: AgentSessionEvent) => void) => () => void
@@ -164,18 +175,52 @@ function createNevermindAi(options: NevermindAiOptions) {
     sessions.delete(chatId)
   }
 
-  async function ask(message: string, askOptions: { sessionId?: string; system?: string } = {}) {
+  async function ask(message: string, askOptions: AiPromptOptions = {}) {
     const text: string[] = []
-    const session = await generalSession(askOptions)
-    const unsubscribe = session.subscribe((event) => {
-      if (isMessageUpdateEvent(event)) text.push(event.assistantMessageEvent.delta)
-    })
+    let session: Awaited<ReturnType<typeof generalSession>> | null = null
+    let unsubscribe = () => {}
+    let removeAbortListener = () => {}
+    askOptions.onEvent?.({ type: 'start' })
     try {
-      await session.prompt(message)
+      if (askOptions.signal?.aborted) throw aiAbortError()
+      session = await generalSession(askOptions)
+      unsubscribe = session.subscribe((event) => {
+        if (isMessageUpdateEvent(event)) {
+          const delta = event.assistantMessageEvent.delta
+          text.push(delta)
+          askOptions.onEvent?.({ type: 'delta', text: delta })
+        }
+        if (isToolExecutionStartEvent(event)) askOptions.onEvent?.({ type: 'tool_start', name: event.toolName })
+        if (isToolExecutionEndEvent(event)) askOptions.onEvent?.({ type: 'tool_end', name: event.toolName, isError: event.isError })
+        if (isAssistantErrorEndEvent(event)) askOptions.onEvent?.({ type: 'error', message: event.message.errorMessage || 'AI request failed', data: aiLimitNoticeFromError(event.message.errorMessage) })
+      })
+      removeAbortListener = bindAbortSignal(askOptions.signal, () => { void session?.abort?.() })
+      if (askOptions.signal?.aborted) throw aiAbortError()
+      await session.prompt(aiPromptWithContext(message, askOptions.context), { images: askOptions.images })
+      if (askOptions.signal?.aborted) throw aiAbortError()
+      askOptions.onEvent?.({ type: 'done' })
       return text.join('')
+    } catch (error) {
+      if (askOptions.signal?.aborted || isAbortError(error)) {
+        askOptions.onEvent?.({ type: 'aborted' })
+        throw aiAbortError()
+      }
+      askOptions.onEvent?.({ type: 'error', message: error instanceof Error ? error.message : String(error), data: aiLimitNoticeFromError(error) })
+      throw error
     } finally {
+      removeAbortListener()
       unsubscribe()
-      if (!askOptions.sessionId) session.dispose?.()
+      if (!askOptions.sessionId) session?.dispose?.()
+    }
+  }
+
+  function stream(message: string, streamOptions: AiPromptOptions = {}) {
+    const controller = new AbortController()
+    const removeExternalAbortListener = bindAbortSignal(streamOptions.signal, () => controller.abort())
+    const result = ask(message, { ...streamOptions, signal: controller.signal }).finally(removeExternalAbortListener)
+    return {
+      result,
+      abort: () => controller.abort(),
     }
   }
 
@@ -193,7 +238,8 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   function session(sessionId: string, sessionOptions: { system?: string } = {}) {
     return {
-      ask: (message: string) => ask(message, { ...sessionOptions, sessionId }),
+      ask: (message: string, options: AiPromptOptions = {}) => ask(message, { ...sessionOptions, ...options, sessionId }),
+      stream: (message: string, options: AiPromptOptions = {}) => stream(message, { ...sessionOptions, ...options, sessionId }),
       reset: async () => {
         const current = await generalSessions.get(sessionId)?.catch(() => null)
         current?.dispose?.()
@@ -213,7 +259,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     }
   }
 
-  return { send, abort, reset, ask, session, disposeAllSessions }
+  return { send, abort, reset, ask, stream, session, disposeAllSessions }
 
   async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getExtensionRuntimeState, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
@@ -299,6 +345,32 @@ function createNevermindAi(options: NevermindAiOptions) {
     onEvent?.({ type: 'ready' })
     return result.session
   }
+}
+
+function aiPromptWithContext(message: string, context?: string) {
+  const prompt = String(message || '')
+  const trimmedContext = String(context || '').trim()
+  if (!trimmedContext) return prompt
+  return `Use these attachments as context for the request.\n\n${trimmedContext}\n\nRequest:\n${prompt}`
+}
+
+function bindAbortSignal(signal: AiPromptOptions['signal'], abort: () => void) {
+  if (!signal?.addEventListener) return () => {}
+  if (signal.aborted) {
+    abort()
+    return () => {}
+  }
+  const listener = () => abort()
+  signal.addEventListener('abort', listener, { once: true })
+  return () => signal.removeEventListener?.('abort', listener)
+}
+
+function aiAbortError() {
+  return Object.assign(new Error('AI request aborted'), { name: 'AbortError', code: 'ai-request-aborted' })
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && (error.name === 'AbortError' || /aborted/i.test(error.message))
 }
 
 function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
@@ -795,6 +867,7 @@ async function importExtensionForValidation(filePath: string) {
   const extension = imported.default || imported
   if (!extension?.id || !extension?.title) throw new Error('Extension must export an object with id and title')
   if (extension.commands !== undefined && !Array.isArray(extension.commands)) throw new Error('Extension commands must be an array')
+  if (extension.actions !== undefined && typeof extension.actions !== 'function') throw new Error('Extension actions must be a function')
   return extension
 }
 
@@ -815,28 +888,35 @@ async function validateTypeScriptExtension(filePath: string, extensionTypesPath:
 
 function capabilities() {
   return {
-    extensionExports: ['export default { id, title, permissions, commands, rootItems, searchItems } satisfies NevermindExtension'],
-    rootContributions: ['rootItems(ctx) returns high-signal empty-query root palette items with stable ids, titles, optional subtitles/icons/scores, primaryAction, actions, and actionPanel'],
+    extensionExports: ['export default { id, title, permissions, actions, commands, rootItems, searchItems } satisfies NevermindExtension'],
+    rootContributions: ['actions(ctx) returns persistent shortcutable actions; commands are shorthand durable actions; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items'], 
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
-    views: ['list', 'grid', 'preview', 'chat', 'form', 'progress', 'camera', 'webview'],
-    viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
-    itemOptions: ['accessories', 'keywords', 'actionPanel', 'appearance.foreground: muted named color yellow, blue, purple, green, red, orange, or pink'],
+    views: ['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'camera', 'webview'],
+    formFields: ['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'checkbox', 'dropdown/select', 'multiselect', 'file', 'files', 'folder', 'description', 'separator'],
+    viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'detail side pane', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
+    itemOptions: ['accessories with tone/tooltip', 'keywords', 'detail markdown/metadata/actions', 'image descriptor', 'actionPanel', 'appearance.foreground: muted named color yellow, blue, purple, green, red, orange, or pink'],
     actionPanel: ['sections', 'submenus'],
-    shortcuts: ['local action shortcut', 'command globalShortcut', 'shortcutScope'],
+    shortcuts: ['local action shortcut', 'durable action globalShortcut', 'command globalShortcut as shorthand', 'shortcutScope'], 
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },
-    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)'],
-    namespaces: ['desktop', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai'],
-    ai: ['ask(prompt, options)', 'session(id, options).ask(prompt)', 'session(id).reset()'],
+    actions: ['openPath', 'revealPath', 'quickLook', 'openWith', 'openUrl', 'copyText', 'pasteText(options: keepPaletteOpen, restoreClipboard, plainText, concealed)', 'paste(text/html/image/files content with concealed/restore options)', 'typeText', 'copyImage', 'trash', 'push', 'replace', 'pop', 'run', 'shellExec (requires system permission)', 'shellScript (requires system permission)', 'durable actions/commands may declare mode and triggers for host-managed background jobs'],
+    namespaces: ['desktop', 'text', 'input', 'windows', 'storage', 'extension', 'navigation', 'cache', 'state', 'ai', 'ocr'],
+    backgroundJobs: ['commands and actions(ctx) contributions can declare mode: view|noView|background and triggers startup, interval, clipboard.changed, files.changed, app.frontmost.changed, wake, and login; Nevermind owns scheduling, no-overlap, timeouts, backoff, enable/disable persistence, and diagnostics in Background Tasks; triggered runs receive ctx.launch with reason, trigger, startedAt, and changed file context when applicable'], 
+    files: ['ctx.desktop.files.metadata(path) returns canonical metadata and host-safe URLs; thumbnail(path) returns a thumbnail URL; indexedRoots(), indexSnapshot(options), searchIndex(query, options), and reindex(options) provide bounded host file-index controls'],
+    ocr: ['requires ocr permission; ctx.ocr.image(pathOrFileOrDataUrl), ctx.ocr.screen(options), and ctx.ocr.region(rect, options) return recognized text plus blocks/confidence; check ctx.system.capabilities.has(\'ocr\') and render graceful unavailable states'], 
+    text: ['template(input, variablesOrOptions) expands {name}/{{name}} placeholders plus date, time, datetime, uuid, selectedText, clipboard, cursor, {argument:name}, and {calculator:1 + 2}; pass { variables, returnCursor/returnResult, includeClipboard, includeSelectedText, promptMissing } for cursor/missing-variable results'], 
+    input: ['prompt({ title, message, fields, action, submitTitle }) opens a host prompt form, then runs the wrapped action with submitted values in action.formValues'],
+    ai: ['ask(prompt, { system, attachments, signal })', 'stream(prompt, { onDelta, onEvent, attachments, signal }).result/abort()', 'session(id, options).ask/stream/reset()', 'attachments.text/image/file/selectedText/selectedFiles/clipboard/ocrImage'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     desktop: {
-      clipboard: ['readText', 'writeText', 'readImage', 'writeImage', 'readFiles', 'read', 'write'],
+      keyboard: ['typeText(text, options) types into the frontmost app without touching the clipboard when keyboard.type-text is available'],
+      clipboard: ['readText', 'writeText(options.concealed)', 'readHtml', 'writeHtml', 'readImage', 'writeImage', 'readFiles', 'writeFiles', 'read({formats})', 'write(text/html/image/files content)'],
       selection: ['text', 'files', 'read'],
       apps: ['frontmost', 'launch'],
-      files: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl'],
+      files: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl', 'thumbnail', 'metadata', 'indexedRoots', 'indexSnapshot', 'reindex', 'recent', 'searchIndex'],
       shell: ['requires system permission', 'openExternal', 'exec', 'script', 'appleScript', 'which'],
     },
-    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl'],
-    findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order'],
+    fileHelpers: ['find', 'findImages', 'findVideos', 'findMedia', 'openWithApps', 'open', 'reveal', 'preview', 'readText', 'toFileUrl', 'thumbnail', 'metadata', 'indexedRoots', 'indexSnapshot', 'reindex', 'recent', 'searchIndex'],
+    findOptions: ['limit', 'depth', 'extensions', 'kind', 'pattern', 'sortBy', 'order', 'roots', 'includeHidden', 'ignore'],
     fileKinds: ['image', 'video', 'media'],
     sortBy: ['recent', 'modified', 'added', 'created', 'name', 'size'],
     sortByDescriptions: {
@@ -845,8 +925,9 @@ function capabilities() {
       added: 'Finder/Spotlight Date Added (dateAddedMs) with creation-time fallback; prefer for newest Downloads, screenshots, and mixed media galleries',
       created: 'filesystem birth/creation time (birthtimeMs)',
     },
-    fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'dateAdded', 'dateAddedMs', 'size'],
+    fileFields: ['path', 'name', 'displayPath', 'url', 'fileUrl', 'videoUrl', 'thumbnailUrl', 'kind', 'extension', 'mimeType', 'width', 'height', 'mtime', 'mtimeMs', 'birthtime', 'birthtimeMs', 'dateAdded', 'dateAddedMs', 'size'],
     storage: ['get', 'set', 'delete', 'clear', 'memo', 'memoStale'],
+    triggerTypes: ['startup', 'interval', 'clipboard.changed requires clipboard.history', 'files.changed requires desktop.files and supports roots, debounceMs, includeHidden, extensions, kind, ignore, plus ctx.launch.changedPaths/files', 'app.frontmost.changed requires desktop.apps', 'wake', 'login'],
   }
 }
 
@@ -877,8 +958,8 @@ Nevermind catches thrown extension errors and shows a native error view, so thro
 Declare permissions explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls.
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
-Use rootItems(ctx) for high-signal empty-query root palette contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
-Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
+Use actions(ctx) for persistent shortcut-worthy variants such as “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippet actions; these are searchable, aliasable, and global-shortcutable without opening a view. When a view row should run one of those durable actions, set primaryAction: ctx.actions.ref('action-id') instead of duplicating inline logic. Use rootItems(ctx) for high-signal empty-query dynamic/status contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
+Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.input.prompt({ fields, action }) when an action needs lightweight arguments before it runs; the wrapped action receives submitted values in action.formValues. Use ctx.actions.pasteText(text, title, { restoreClipboard: true, concealed: true }) for snippets/transforms that should paste without polluting clipboard history, and use ctx.actions.typeText or ctx.desktop.keyboard.typeText when an extension must avoid touching the clipboard. Use ctx.ui.editor({ title, content, format: 'markdown', submitAction }) for host-owned editable text/markdown surfaces; submit actions receive action.editorContent. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
 When done, tell the user what command was installed and how to find it.`
 }
 

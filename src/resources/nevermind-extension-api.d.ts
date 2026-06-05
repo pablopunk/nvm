@@ -56,6 +56,8 @@ export type ExtensionPermission =
   | 'updates'
   | 'settings.write'
   | 'camera'
+  /** Required for `ctx.ocr` image/screen/region text recognition helpers. */
+  | 'ocr'
 
 /** Action panels can be visible, menu-only, or hidden while still allowing shortcuts. */
 export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden'
@@ -64,8 +66,130 @@ export type ViewPresentation = 'root' | 'stacked' | 'preview'
 export type PatchMode = 'patch' | 'replace' | 'prepend' | 'append'
 export type ForegroundColor = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'pink'
 export type ShortcutScope = 'local' | 'global'
+export type ExtensionEditorFormat = 'text' | 'markdown'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogSource = 'main' | 'renderer' | 'extension' | 'host'
+export type ExtensionFormValue = string | boolean | string[]
+export type ExtensionFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'file' | 'files' | 'folder' | 'description' | 'separator'
+export type ExtensionFormOption = { title: string; value: string }
+
+export type ExtensionActionPlacement = 'search' | 'root' | 'hidden'
+export type ExtensionBackgroundMode = 'view' | 'noView' | 'background'
+export type ExtensionBackgroundTrigger =
+  | { type: 'startup'; delayMs?: number }
+  | { type: 'interval'; every: string | number; delayMs?: number }
+  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. */
+  | { type: 'files.changed'; roots: string | string[]; debounceMs?: number; includeHidden?: boolean; extensions?: string[]; kind?: 'file' | 'image' | 'video' | 'media'; ignore?: string[] }
+  /** Requires `clipboard.history`; fires after Nevermind records a changed clipboard item. */
+  | { type: 'clipboard.changed'; debounceMs?: number }
+  /** Requires `desktop.apps`; backed by a host frontmost-app poller. */
+  | { type: 'app.frontmost.changed'; debounceMs?: number }
+  | { type: 'wake' | 'login' }
+
+export type ExtensionLaunchContext = {
+  /** Declarative trigger that started this run, when known. */
+  trigger?: ExtensionBackgroundTrigger
+  /** Host event name, primarily for diagnostics. File watcher events are scoped per job. */
+  event?: string
+  /** Changed file metadata for `files.changed` triggers. Bounded by the host. */
+  files?: ExtensionFile[]
+  /** Absolute changed paths for `files.changed` triggers. Bounded by the host. */
+  changedPaths?: string[]
+  /** Run reason such as `manual`, `startup`, `interval`, or `event:*`. */
+  reason?: string
+  /** Epoch milliseconds for when the host started this action/job. */
+  startedAt: number
+}
+
+export type ExtensionActionContribution = {
+  /** Stable local id. Global shortcuts, aliases, recents, and action refs depend on this. */
+  id: string
+  /** Optional stable global action id. Defaults to `extension-action:${extension.id}:${id}`. */
+  actionId?: string
+  title: string
+  subtitle?: string
+  aliases?: string[]
+  keywords?: string[]
+  icon?: string
+  image?: string
+  score?: number
+  shortcut?: string
+  shortcutScope?: ShortcutScope
+  globalShortcut?: string
+  dismissAfterRun?: 'auto'
+  background?: boolean
+  customizable?: boolean
+  /** Where this durable action should be discoverable. Defaults to `['search']`. */
+  placement?: ExtensionActionPlacement[]
+  /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
+  mode?: ExtensionBackgroundMode
+  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, no-overlap, backoff, and diagnostics. */
+  triggers?: ExtensionBackgroundTrigger[]
+  /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
+  action?: ExtensionAction
+  /** Handler to run when a simple declarative action is not enough. */
+  run?: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>
+}
+
+export type ExtensionPasteTextOptions = {
+  /** Keep the palette visible after dispatching paste. Defaults to false unless the action also overrides dismiss behavior. */
+  keepPaletteOpen?: boolean
+  /** Restore the previous clipboard contents shortly after paste is dispatched. */
+  restoreClipboard?: boolean
+  /** Write only plain text for paste, omitting HTML/RTF flavors. Defaults to true. */
+  plainText?: boolean
+  /** Prevent temporary paste contents from being added to Nevermind clipboard history. Implies history suppression for the paste write. */
+  concealed?: boolean
+  /** Delay before restoring clipboard contents, in milliseconds. Defaults to 250. */
+  restoreDelayMs?: number
+}
+
+export type ExtensionTypeTextOptions = {
+  /** Delay between typed characters in milliseconds where supported. */
+  delayMs?: number
+}
+
+export type ExtensionClipboardContent =
+  | { type: 'text'; text: string; html?: string; concealed?: boolean }
+  | { type: 'html'; html: string; text?: string; concealed?: boolean }
+  | { type: 'image'; imageDataUrl?: string; image?: string; path?: string; concealed?: boolean }
+  | { type: 'files'; paths: string[]; concealed?: boolean }
+
+export type ExtensionClipboardWriteOptions = {
+  /** Prevent this write from being retained by Nevermind clipboard history where possible. */
+  concealed?: boolean
+}
+
+export type ExtensionPasteOptions = ExtensionClipboardWriteOptions & {
+  /** Restore the previous clipboard contents shortly after paste is dispatched. */
+  restoreClipboard?: boolean
+  /** Delay before restoring clipboard contents, in milliseconds. Defaults to 250. */
+  restoreDelayMs?: number
+}
+
+export type ExtensionClipboardReadOptions = { formats?: Array<'text' | 'html' | 'image' | 'files'> }
+
+export type ExtensionClipboardReadResult =
+  | (ExtensionClipboardContent & { files?: ExtensionFile[] })
+  | { type: 'empty' }
+
+export type ExtensionWindowOptions = {
+  /** Stable id for reusing and controlling a window. Defaults to the view id/title. */
+  id?: string
+  title?: string
+  /** Native window title bar. Use `hidden` for title-less floating companion windows. */
+  titleBar?: 'default' | 'hidden'
+  /** Host chrome around the view. Use `none` for edge-to-edge companion tools. */
+  chrome?: 'default' | 'none'
+  width?: number
+  height?: number
+  size?: ViewSize
+  alwaysOnTop?: boolean
+  visibleOnAllSpaces?: boolean
+  hideOnBlur?: boolean
+  persistent?: boolean
+  remembersFrame?: boolean
+}
 
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
 export type ExtensionToastResult = { toast: { message: string; tone?: 'default' | 'error' } }
@@ -109,13 +233,19 @@ export type ExtensionAction = {
   /** Nested Cmd+K action panel. */
   submenu?: ExtensionActionPanel
   /** Field values injected by the host when a form's `submitAction` runs. */
-  formValues?: Record<string, string | boolean>
+  formValues?: Record<string, ExtensionFormValue>
+  /** Current text injected by the host when an editor view's `submitAction` runs. */
+  editorContent?: string
   /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
   selectedItemId?: string
   /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
   value?: string
   /** Legacy payload carrier for selection id / accessory value. Prefer `selectedItemId` or `value`. */
   text?: string
+  /** Prompt fields carried by `ctx.input.prompt(...)`. */
+  fields?: ExtensionFormField[]
+  promptMessage?: string
+  submitTitle?: string
   [key: string]: unknown
 }
 
@@ -132,13 +262,23 @@ export type ExtensionActionPanel = {
   sections: ExtensionActionSection[]
 }
 
-export type ExtensionItemAccessory = { text?: string; icon?: string }
+export type ExtensionAccessoryTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger'
+export type ExtensionItemAccessory = { text?: string; icon?: string; tone?: ExtensionAccessoryTone; tooltip?: string }
+export type ExtensionImage = string | { src?: string; light?: string; dark?: string; fallback?: string; alt?: string; fit?: 'cover' | 'contain'; shape?: 'square' | 'rounded' | 'circle'; tint?: ForegroundColor | string; mask?: 'none' | 'rounded' | 'circle' }
+export type ExtensionMetadataItem =
+  | { type?: 'text'; label: string; value: string; copyable?: boolean }
+  | { type: 'link'; label: string; value: string; url: string }
+  | { type: 'tag'; label?: string; value: string; tone?: ExtensionAccessoryTone }
+  | { type: 'separator' }
+export type ExtensionDetail = { title?: string; subtitle?: string; markdown?: string; metadata?: ExtensionMetadataItem[]; image?: ExtensionImage; actions?: ExtensionAction[] }
 export type ExtensionItemAppearance = { foreground?: ForegroundColor }
 
 /** Item displayed in root/search providers, list views, and grid views. */
 export type ExtensionItem = {
   /** Stable id used for ranking, recents, patching, and shortcut ownership. */
   id: string
+  /** Optional stable action id for shortcuts/aliases when promoted into a persistent action. */
+  actionId?: string
   title: string
   subtitle?: string
   accessories?: ExtensionItemAccessory[]
@@ -147,8 +287,8 @@ export type ExtensionItem = {
   text?: string
   /** Any Lucide icon name in camel/Pascal/kebab case, e.g. `camera`, `volume-2`, `audio-lines`. */
   icon?: string
-  /** Display image URL/data URL. For local files use `file.url` or `ctx.desktop.files.toFileUrl(path)`, not raw paths. */
-  image?: string
+  /** Display image URL/data URL or image descriptor. For local files use `file.url` or `ctx.desktop.files.toFileUrl(path)`, not raw paths. */
+  image?: ExtensionImage
   video?: string
   videoUrl?: string
   path?: string
@@ -161,6 +301,15 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel
   actionPanelVisibility?: ActionPanelVisibility
   appearance?: ExtensionItemAppearance
+  /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
+  detail?: ExtensionDetail
+  shortcut?: string
+  shortcutScope?: ShortcutScope
+  globalShortcut?: string
+  /** Set false when an item should be searchable but not user-customizable. */
+  customizable?: boolean
+  /** Dismiss immediately for fire-and-forget persistent actions. */
+  background?: boolean
   /** Ranking hint. The host caps provider scores and combines them with usage signals. */
   score?: number
   lastUsed?: number
@@ -187,14 +336,22 @@ export type ExtensionSearchAccessory = {
 /** Host-rendered view. Prefer helpers such as `ctx.ui.list(...)` so the `type` is set for you. */
 export type ExtensionView = {
   id?: string
-  type?: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview' | 'camera'
+  type?: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'editor' | 'progress' | 'webview' | 'camera'
   title: string
   size?: ViewSize
   presentation?: ViewPresentation
   subtitle?: string
   content?: string
+  /** Placeholder for editable text surfaces such as `ctx.ui.editor(...)`. */
+  placeholder?: string
+  /** Text format for editable text surfaces. Markdown editors get a host-rendered preview. */
+  format?: ExtensionEditorFormat
+  /** Optional language hint for text/code editors. */
+  language?: string
+  /** Render an editor as read-only while preserving selection/copy behavior. */
+  readOnly?: boolean
   html?: string
-  image?: string
+  image?: ExtensionImage
   video?: string
   videoUrl?: string
   deviceId?: string
@@ -205,6 +362,8 @@ export type ExtensionView = {
   sections?: ExtensionItemSection[]
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
+  /** Optional item detail pane for richer list views. */
+  detail?: { placement?: 'side' | 'bottom'; visible?: boolean }
   searchBarPlaceholder?: string
   /** Initial focused item for list/grid views. Must match a stable visible item id; sorting remains independent. */
   selectedItemId?: string
@@ -220,10 +379,39 @@ export type ExtensionView = {
   aspectRatio?: string | number
   columns?: number
   messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
-  fields?: Array<{ id: string; label: string; type?: string; value?: string; placeholder?: string; required?: boolean }>
+  fields?: ExtensionFormField[]
   submitAction?: ExtensionAction
   steps?: Array<{ title: string; status?: string }>
+  /** Current progress value for progress views. Pair with `total` for a determinate bar. */
+  value?: number
+  /** Total progress value for progress views. Pair with `value` for a determinate bar. */
+  total?: number
+  /** Human-readable progress summary, e.g. `Downloading assets…`. */
+  status?: string
   [key: string]: unknown
+}
+
+export type ExtensionFormField = {
+  id: string
+  label?: string
+  type?: ExtensionFormFieldType
+  value?: ExtensionFormValue
+  placeholder?: string
+  required?: boolean
+  options?: ExtensionFormOption[]
+  description?: string
+  error?: string
+  rows?: number
+  /** File extensions allowed by file/files fields, e.g. ['png', 'jpg'] or ['.md']. */
+  extensions?: string[]
+  /** Display name for extension filters in native file pickers. */
+  filterName?: string
+  /** Picker button label for file/files/folder fields. */
+  buttonLabel?: string
+  /** Optional starting path for file/files/folder fields. Supports ~ expansion. */
+  defaultPath?: string
+  /** Whether folder pickers should allow creating folders. Defaults to true. */
+  canCreateDirectories?: boolean
 }
 
 export type ExtensionFileKind = 'image' | 'video' | 'file' | string
@@ -240,6 +428,9 @@ export type ExtensionFile = {
   thumbnailUrl?: string
   kind?: ExtensionFileKind
   extension?: string
+  mimeType?: string
+  width?: number
+  height?: number
   mtime?: string
   mtimeMs?: number
   birthtime?: string
@@ -260,13 +451,29 @@ export type ExtensionFindFilesOptions = {
   order?: 'asc' | 'desc'
 }
 
+export type ExtensionFileIndexOptions = Omit<ExtensionFindFilesOptions, 'sortBy' | 'order'> & {
+  /** Roots to scan or filter, e.g. ['~/Downloads']. Defaults to Desktop/Documents/Downloads. */
+  roots?: string | string[]
+  /** Include hidden dotfiles during explicit reindex scans. Defaults to false. */
+  includeHidden?: boolean
+  /** Ignore basenames or simple wildcard patterns such as '*.tmp'. Defaults include node_modules, .git, Library, and Applications. */
+  ignore?: string | string[]
+  /** Filter an existing snapshot by query. `searchIndex(query)` sets this for you. */
+  query?: string
+}
+
+export type ExtensionOcrBlock = { text: string; confidence?: number; boundingBox?: { x: number; y: number; width: number; height: number } }
+export type ExtensionOcrResult = { text: string; confidence?: number | null; language?: string | null; blocks?: ExtensionOcrBlock[] }
+export type ExtensionOcrOptions = { language?: string; languages?: string[]; timeoutMs?: number }
+export type ExtensionOcrRegion = { x: number; y: number; width: number; height: number }
+
 export type ExtensionShellResult = { stdout: string; stderr: string; exitCode: number }
 export type ExtensionShellOptions = { cwd?: string; env?: Record<string, string>; timeout?: number; shell?: boolean; outputLimit?: number }
 export type ExtensionOpenWithApp = { name?: string; path?: string; [key: string]: unknown }
 /** An installed application from `ctx.desktop.apps.list/search`. */
 export type ExtensionApp = { id: string; name: string; path: string }
-/** A host-indexed file from `ctx.desktop.files.recent/searchIndex`. */
-export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string }
+/** A host-indexed file from `ctx.desktop.files.indexSnapshot/recent/searchIndex`. */
+export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string; extension?: string; kind?: ExtensionFileKind }
 
 export type RecentLogOptions = { limit?: number; level?: LogLevel; source?: LogSource; sinceMs?: number; query?: string; extensionId?: string }
 export type LogEntry = { timestamp: string; level: LogLevel; source: LogSource; scope?: string; extensionId?: string; commandId?: string; message: string; data?: unknown }
@@ -318,11 +525,56 @@ export type ExtensionLogs = Record<LogLevel, (message: string, data?: unknown) =
   recent(options?: RecentLogOptions): Promise<LogEntry[]>
 }
 
+export type ExtensionAiAttachment =
+  | string
+  | { type: 'text'; text: string; title?: string }
+  | { type: 'image'; path?: string; filePath?: string; dataUrl?: string; imageDataUrl?: string; data?: string; mimeType?: string; title?: string; ocr?: boolean }
+  | { type: 'file'; path?: string; filePath?: string; file?: ExtensionFile; title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }
+
+export type ExtensionAiResolvableAttachment = ExtensionAiAttachment | ExtensionAiAttachment[] | null | Promise<ExtensionAiAttachment | ExtensionAiAttachment[] | null>
+
+export type ExtensionAiStreamEvent =
+  | { type: 'start' }
+  | { type: 'delta'; text: string }
+  | { type: 'tool_start' | 'tool_end'; name?: string; isError?: boolean }
+  | { type: 'done' }
+  | { type: 'aborted' }
+  | { type: 'error'; message?: string; data?: unknown }
+
+export type ExtensionAiOptions = {
+  system?: string
+  /** Text, file, image, selected, clipboard, or OCR context. File/image attachments require `desktop.files`; clipboard helpers require `clipboard.history`; OCR requires `ocr`. */
+  attachments?: ExtensionAiResolvableAttachment | ExtensionAiResolvableAttachment[]
+  /** Abort the request with a standard AbortController. */
+  signal?: AbortSignal
+  onDelta?: (delta: string) => void
+  onEvent?: (event: ExtensionAiStreamEvent) => void
+}
+
+export type ExtensionAiStream = {
+  /** Resolves to the full assistant text after streaming completes. */
+  result: Promise<string>
+  /** Abort the in-flight request. */
+  abort(): void
+}
+
 export type ExtensionAi = {
-  /** One-shot AI call. Quota-limited per extension; declare `ai` permission. */
-  ask(prompt: string, options?: { system?: string }): Promise<string>
+  /** One-shot AI call. Quota-limited per extension; declare `ai` permission. Supports attachments and AbortController signals. */
+  ask(prompt: string, options?: ExtensionAiOptions): Promise<string>
+  /** Streaming AI call. Use `onDelta`/`onEvent` for incremental updates and await `result` for the final text. */
+  stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream
+  /** Attachment builders normalize host-owned context for AI prompts. */
+  attachments: {
+    text(text: string, title?: string): ExtensionAiAttachment
+    image(pathOrDataUrl: string, options?: { title?: string; ocr?: boolean }): ExtensionAiAttachment
+    file(pathOrFile: string | ExtensionFile, options?: { title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }): ExtensionAiAttachment
+    selectedText(title?: string): Promise<ExtensionAiAttachment>
+    selectedFiles(options?: { title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }): Promise<ExtensionAiAttachment[]>
+    clipboard(options?: { title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }): Promise<ExtensionAiAttachment | ExtensionAiAttachment[] | null>
+    ocrImage(pathOrDataUrlOrFile: string | ExtensionFile, options?: { title?: string }): Promise<ExtensionAiAttachment>
+  }
   /** Per-extension conversational session. Session ids are scoped to the extension. */
-  session(id?: string, options?: { system?: string }): { ask(prompt: string): Promise<string>; reset(): unknown }
+  session(id?: string, options?: { system?: string }): { ask(prompt: string, options?: ExtensionAiOptions): Promise<string>; stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream; reset(): unknown }
 }
 
 export type ExtensionOwnership = {
@@ -335,6 +587,36 @@ export type ExtensionOwnership = {
   remove?(extensionFile: string, chatId: string): Promise<boolean>
   /** Host-only mutator exposed to the built-in AI Builder extension. */
   reload?(): Promise<void>
+}
+
+export type ExtensionTemplateValue = string | number | boolean | string[] | null | undefined
+export type ExtensionTemplateResult = { text: string; cursor?: number; missingVariables?: string[] }
+export type ExtensionTemplateOptions = {
+  variables?: Record<string, ExtensionTemplateValue>
+  /** Return `{ text, cursor, missingVariables }` instead of a string. */
+  returnResult?: boolean
+  /** Return cursor position for `{cursor}` placeholders. Alias for `returnResult`. */
+  returnCursor?: boolean
+  /** Internal marker used while calculating cursor position. Defaults to a private sentinel. */
+  cursorToken?: string
+  /** Include `{clipboard}` when the extension has `clipboard.history`. Defaults to true when permitted. */
+  includeClipboard?: boolean
+  /** Include `{selectedText}`. Defaults to true. */
+  includeSelectedText?: boolean
+  /** Include missing variable names in the result; pair with `ctx.input.prompt(...)` for prompted arguments. */
+  promptMissing?: boolean
+}
+
+export type ExtensionText = {
+  /**
+   * Expand host-standard text templates. Variables use `{name}` or `{{name}}`.
+   * Built-ins include `{date}`, `{time}`, `{datetime}`, `{uuid}`, `{selectedText}`, `{clipboard}`,
+   * `{cursor}`, `{argument:name}`, and `{calculator:1 + 2}`. Explicit variables override built-ins.
+   */
+  template(input: string, variables?: Record<string, ExtensionTemplateValue>): Promise<string>
+  template(input: string, options: ExtensionTemplateOptions & { returnResult: true }): Promise<ExtensionTemplateResult>
+  template(input: string, options: ExtensionTemplateOptions & { returnCursor: true }): Promise<ExtensionTemplateResult>
+  template(input: string, options: ExtensionTemplateOptions): Promise<string | ExtensionTemplateResult>
 }
 
 export type ExtensionAiBuilder = {
@@ -361,10 +643,13 @@ export type ExtensionClipboardEntry = {
   createdAt?: number
 }
 
-/** Read-only clipboard history access. Requires the `clipboard.history` permission. */
+/** Clipboard history access. Requires the `clipboard.history` permission. Destructive helpers are host-managed and return counts. */
 export type ExtensionClipboardHistory = {
   list(options?: { limit?: number; query?: string; types?: string[] }): ExtensionClipboardEntry[]
   search(query: string, options?: { limit?: number; types?: string[] }): ExtensionClipboardEntry[]
+  get(id: string): ExtensionClipboardEntry | null
+  remove(idOrIds: string | string[]): Promise<{ removed: number }>
+  clear(options?: { types?: string[]; olderThanMs?: number }): Promise<{ removed: number }>
 }
 
 /**
@@ -400,6 +685,8 @@ export type ExtensionContext = {
   /** Runtime metadata for the current extension plus host helpers such as persistent rename. */
   extension: NevermindExtension & { rename(metadata: string | { title?: string; subtitle?: string; commandTitle?: string; commandSubtitle?: string }): Promise<unknown> }
   command?: ExtensionCommand
+  /** Host-owned launch context for background/triggered runs. Undefined for normal palette executions. */
+  launch?: ExtensionLaunchContext
 
   /** Declarative host-owned UI primitives. Nevermind owns rendering, navigation, filtering, actions, shortcuts, and errors. */
   ui: {
@@ -413,6 +700,8 @@ export type ExtensionContext = {
     preview(input: { kind?: 'clipboard' | 'image' | 'video' | 'file' | 'text'; title?: string; text?: string; imageDataUrl?: string; imagePath?: string; videoUrl?: string; filePath?: string; thumbnailUrl?: string; clipboardType?: string; shortcut?: string }): ExtensionAction
     chat(view: ExtensionView): ExtensionView
     form(view: ExtensionView): ExtensionView
+    /** Editable host-owned text/markdown surface. The host injects `editorContent` into `submitAction`. */
+    editor(view: ExtensionView): ExtensionView
     progress(input?: { title?: string; label?: string; steps?: Array<{ title: string; status?: string }>; id?: string; value?: number; total?: number; status?: string }): ExtensionView
     /** Wrap a declarative action in a host-rendered confirmation step. */
     confirm(input?: { title?: string; message?: string; confirmLabel?: string; cancelLabel?: string; destructive?: boolean; onConfirm?: ExtensionAction; action?: ExtensionAction }): ExtensionAction
@@ -436,7 +725,13 @@ export type ExtensionContext = {
     openWith(filePath: string, app: ExtensionOpenWithApp | string, title?: string, options?: Record<string, unknown>): ExtensionAction
     openUrl(url: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     copyText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
-    pasteText(text: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    pasteText(text: string, title?: string, options?: ExtensionPasteTextOptions & Record<string, unknown>): ExtensionAction
+    /** Paste text/html/image/files through the host while preserving concealed/restore behavior. */
+    paste(content: ExtensionClipboardContent, title?: string, options?: ExtensionPasteOptions & Record<string, unknown>): ExtensionAction
+    /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use inside views so rows share aliases/shortcuts with the durable action. */
+    ref(registeredActionId: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
+    typeText(text: string, title?: string, options?: ExtensionTypeTextOptions & Record<string, unknown>): ExtensionAction
     copyImage(image: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     /** Destructive by default and confirmation-gated by the host. */
     trash(paths: string | string[], title?: string, options?: Record<string, unknown>): ExtensionAction
@@ -465,8 +760,40 @@ export type ExtensionContext = {
   /** Read-only host OS metadata: capability checks and intent-named labels. */
   system: ExtensionSystem
 
+  /** Text and template helpers for snippets, quicklinks, prompts, and selected-text transforms. */
+  text: ExtensionText
+
+  /** Lightweight input helpers for command arguments. Prompted values are injected into the wrapped action as `formValues`. */
+  input: {
+    prompt(input: { title?: string; message?: string; fields: ExtensionFormField[]; action: ExtensionAction; submitTitle?: string }, options?: Record<string, unknown>): ExtensionAction
+  }
+
+  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. */
+  windows: {
+    /** Open or update an independent window rendering the given host-owned view. */
+    create(view: ExtensionView, options?: ExtensionWindowOptions): ExtensionAction
+    show(id: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    hide(id: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+    /** Toggle an existing window by id, or create it first when given a fallback view plus stable `options.id`. */
+    toggle(idOrView: string | ExtensionView, titleOrOptions?: string | ExtensionWindowOptions, options?: ExtensionWindowOptions): ExtensionAction
+    close(id: string, title?: string, options?: Record<string, unknown>): ExtensionAction
+  }
+
   /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
   clipboard: { history?: ExtensionClipboardHistory }
+
+  /** OCR helpers. Present only with the `ocr` permission; check `ctx.system.capabilities.has('ocr')` for OS support. */
+  ocr?: {
+    /** Recognize text in an image path, file URL, data URL, or `ExtensionFile`. */
+    image(input: string | ExtensionFile | { path?: string; filePath?: string; fileUrl?: string; url?: string }, options?: ExtensionOcrOptions): Promise<ExtensionOcrResult>
+    /** Capture the screen and recognize visible text when screen recording permission is available. */
+    screen(options?: ExtensionOcrOptions): Promise<ExtensionOcrResult>
+    /** Capture a screen region in physical screen coordinates and recognize text. */
+    region(rect: ExtensionOcrRegion, options?: ExtensionOcrOptions): Promise<ExtensionOcrResult>
+  }
+
+  /** Build a persistent action contribution for `actions(ctx)`. */
+  action(action: ExtensionActionContribution): ExtensionActionContribution
 
   /** Explicit return helpers from action handlers. Prefer these for imperative handler results. */
   navigation: {
@@ -478,14 +805,21 @@ export type ExtensionContext = {
 
   /** Desktop capabilities. Optional namespaces require matching top-level permissions. */
   desktop: {
+    keyboard: {
+      /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
+      typeText(text: string, options?: ExtensionTypeTextOptions): Promise<unknown> | unknown
+    }
     clipboard?: {
       readText(): string
-      writeText(text: string): void
-      readImage(): string
-      writeImage(image: unknown): unknown
-      readFiles(): string[]
-      read(): unknown
-      write(value: unknown): unknown
+      writeText(text: string, options?: ExtensionClipboardWriteOptions): void
+      readHtml(): string
+      writeHtml(html: string, text?: string, options?: ExtensionClipboardWriteOptions): void
+      readImage(): string | null
+      writeImage(image: unknown, options?: ExtensionClipboardWriteOptions): unknown
+      readFiles(): Promise<ExtensionFile[]>
+      writeFiles(paths: string[], options?: ExtensionClipboardWriteOptions): void
+      read(options?: ExtensionClipboardReadOptions): Promise<ExtensionClipboardReadResult>
+      write(value: ExtensionClipboardContent | string, options?: ExtensionClipboardWriteOptions): unknown
     }
     selection: {
       text(): Promise<string> | string
@@ -513,10 +847,20 @@ export type ExtensionContext = {
       preview(filePath: string): unknown
       readText(filePath: string): Promise<string>
       toFileUrl(filePath: string): string
-      /** Entries from the host file index, most recent first. */
-      recent(options?: { limit?: number }): ExtensionIndexedFile[]
+      /** Host-safe thumbnail URL for an image/video/file path when previewable. */
+      thumbnail(filePath: string): string | null
+      /** Canonical file metadata with host-safe URLs and image dimensions when available. */
+      metadata(filePath: string): Promise<ExtensionFile>
+      /** Configured default roots for the lightweight host file index. */
+      indexedRoots(): string[]
+      /** Snapshot of the host file index, filtered without rescanning. */
+      indexSnapshot(options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
+      /** Rebuild the lightweight host file index with bounded roots/depth/filter controls. */
+      reindex(options?: ExtensionFileIndexOptions): Promise<{ count: number; roots: string[] }>
+      /** Entries from the current host file index snapshot. */
+      recent(options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
       /** Host file index entries whose name or path matches the query. */
-      searchIndex(query: string, options?: { limit?: number }): ExtensionIndexedFile[]
+      searchIndex(query: string, options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
     }
     /** Shell and process helpers. Present only with the `system` permission. */
     shell?: {
@@ -550,7 +894,7 @@ export type ExtensionContext = {
 
 export type ExtensionCommand = {
   id: string
-  /** Stable action id for shortcuts/aliases. Defaults to the command id when omitted. */
+  /** Stable action id for shortcuts/aliases. Defaults to `extension:${extension.id}:${id}` for compatibility. */
   actionId?: string
   title: string
   subtitle?: string
@@ -560,22 +904,37 @@ export type ExtensionCommand = {
   shortcut?: string
   shortcutScope?: ShortcutScope
   globalShortcut?: string
-  /** Dismiss immediately for fire-and-forget commands. */
+  /** Dismiss immediately for fire-and-forget commands. Prefer `mode: 'background'` for durable scheduled work. */
   background?: boolean
+  /** Execution lifecycle. `background`/`noView` commands are eligible for host-managed jobs and diagnostics. */
+  mode?: ExtensionBackgroundMode
+  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, no-overlap, backoff, and diagnostics. */
+  triggers?: ExtensionBackgroundTrigger[]
   dismissAfterRun?: 'auto'
   run(ctx: ExtensionContext, action: ExtensionAction): ExtensionActionResult | Promise<ExtensionActionResult>
 }
 
 /**
- * Extension manifest. Commands appear in search automatically; provider methods
- * should contribute distinct child/status/query items, not duplicate command launchers.
+ * Extension manifest. `actions(ctx)` is the durable action registry. `commands` are
+ * ergonomic shorthand for durable actions that appear in search automatically; the
+ * host normalizes both into the same shortcut/alias/execution pipeline. Provider
+ * methods should contribute distinct child/status/query items, not duplicate command launchers.
  */
 export type NevermindExtension = {
   id: string
   title: string
   subtitle?: string
   permissions?: ExtensionPermission[]
+  /** Shorthand for search-visible durable actions with imperative `run(ctx)`. */
   commands?: ExtensionCommand[]
+  /**
+   * Persistent action registry. Use this for shortcut-worthy static variants such as
+   * “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippets.
+   * These actions are searchable, aliasable, global-shortcutable, and runnable without
+   * opening a view. Dynamic/state-driven rows such as calendar events, search results,
+   * and files belong in views, `rootItems`, or `searchItems` instead.
+   */
+  actions?(ctx: ExtensionContext): ExtensionActionContribution[] | { actions: ExtensionActionContribution[] }
   /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. */
   rootItems?(ctx: ExtensionContext): ExtensionItem[] | Promise<ExtensionItem[]> | { items: ExtensionItem[] } | Promise<{ items: ExtensionItem[] }>
   /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. */

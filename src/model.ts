@@ -34,6 +34,8 @@ export const ACTION_DEFINITIONS = {
   copyText: { description: 'Copy text to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
   copyImage: { description: 'Copy image to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
   pasteText: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  pasteClipboard: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  typeText: { description: 'Type into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   trash: { description: 'Move to Trash', dismiss: 'manual', loading: 'view', execute: 'main' },
   pushView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
   replaceView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
@@ -63,6 +65,13 @@ export const ACTION_DEFINITIONS = {
   removeCreatedAction: { description: 'Remove action', dismiss: 'manual', loading: 'view', execute: 'main' },
   clearActionOverride: { description: 'Restore original action', dismiss: 'manual', loading: 'none', execute: 'main', inline: true },
   nativeAction: { description: 'Run command', dismiss: 'manual', loading: 'none', execute: 'main' },
+  promptAction: { description: 'Prompt for input', dismiss: 'manual', loading: 'none', execute: 'main' },
+  createWindow: { description: 'Open extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  showWindow: { description: 'Show extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  hideWindow: { description: 'Hide extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  toggleWindow: { description: 'Toggle extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  closeWindow: { description: 'Close extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  runExtensionRegisteredAction: { description: 'Run persistent extension action', dismiss: 'immediate', loading: 'none', execute: 'main' },
 } as const satisfies Record<string, CommandActionDefinition>
 
 export type CommandActionType = keyof typeof ACTION_DEFINITIONS
@@ -80,6 +89,13 @@ export type CommandAction = {
   appPath?: string
   url?: string
   text?: string
+  html?: string
+  keepPaletteOpen?: boolean
+  restoreClipboard?: boolean
+  plainText?: boolean
+  concealed?: boolean
+  restoreDelayMs?: number
+  delayMs?: number
   imageDataUrl?: string
   imagePath?: string
   view?: CommandView
@@ -90,12 +106,19 @@ export type CommandAction = {
   settingId?: string
   action?: unknown
   actionId?: string
+  extensionId?: string
+  commandId?: string
+  registeredActionId?: string
   targetAction?: unknown
+  windowId?: string
+  windowOptions?: Record<string, unknown>
   alias?: string
   accelerator?: string
   clipboardType?: string
-  clipboardHistoryRange?: 'item' | 'last-hour' | 'last-day' | 'all'
+  clipboardHistoryRange?: 'item' | 'ids' | 'last-hour' | 'last-day' | 'older-than' | 'all'
   clipboardHistoryItemId?: string
+  clipboardHistoryItemIds?: string[]
+  content?: unknown
   videoUrl?: string
   filePath?: string
   thumbnailUrl?: string
@@ -106,7 +129,11 @@ export type CommandAction = {
   args?: string[]
   script?: string
   options?: Record<string, unknown>
-  formValues?: Record<string, string | boolean>
+  formValues?: Record<string, CommandFormValue>
+  editorContent?: string
+  fields?: CommandFormField[]
+  promptMessage?: string
+  submitTitle?: string
   selectedItemId?: string
   value?: string
   submenu?: CommandActionPanel
@@ -131,11 +158,23 @@ export type CommandActionPanel = {
   sections: CommandActionSection[]
 }
 
-export type CommandItemAccessory = { text?: string; icon?: string }
+export type CommandAccessoryTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger'
+export type CommandItemAccessory = { text?: string; icon?: string | ReactNode; tone?: CommandAccessoryTone; tooltip?: string }
+export type CommandImage = string | { src?: string; light?: string; dark?: string; fallback?: string; alt?: string; fit?: 'cover' | 'contain'; shape?: 'square' | 'rounded' | 'circle'; tint?: string; mask?: 'none' | 'rounded' | 'circle' }
+export type CommandMetadataItem =
+  | { type?: 'text'; label: string; value: string; copyable?: boolean }
+  | { type: 'link'; label: string; value: string; url: string }
+  | { type: 'tag'; label?: string; value: string; tone?: CommandAccessoryTone }
+  | { type: 'separator' }
+export type CommandDetail = { title?: string; subtitle?: string; markdown?: string; metadata?: CommandMetadataItem[]; image?: CommandImage; actions?: CommandAction[] }
 export type CommandItemForeground = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'pink'
 export type CommandItemAppearance = { foreground?: CommandItemForeground }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & { id: string }
+export type CommandFormValue = string | boolean | string[]
+export type CommandFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'file' | 'files' | 'folder' | 'description' | 'separator'
+export type CommandFormOption = { title: string; value: string }
+export type CommandFormField = { id: string; label?: string; type?: CommandFormFieldType; value?: CommandFormValue; placeholder?: string; required?: boolean; options?: CommandFormOption[]; description?: string; error?: string; rows?: number; extensions?: string[]; filterName?: string; buttonLabel?: string; defaultPath?: string; canCreateDirectories?: boolean }
 
 export type CommandItem = {
   id: string
@@ -146,17 +185,20 @@ export type CommandItem = {
   keywords?: string[]
   text?: string
   icon?: string
-  image?: string
+  image?: CommandImage
   video?: string
   videoUrl?: string
   path?: string
   filePath?: string
   fileUrl?: string
   primaryAction?: CommandAction
+  /** Persistent root/search action represented by this view item; enables aliases/shortcuts/options for durable actions shown inside views. */
+  persistentAction?: unknown
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
   appearance?: CommandItemAppearance
+  detail?: CommandDetail
 }
 
 export type CommandItemSection = {
@@ -175,10 +217,10 @@ export type CommandViewPatch = {
 
 export type CommandView = {
   id?: string
-  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'progress' | 'webview' | 'camera'
+  type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'editor' | 'progress' | 'webview' | 'camera'
   title: string
   size?: 'default' | 'large'
-  image?: string
+  image?: CommandImage
   video?: string
   videoUrl?: string
   deviceId?: string
@@ -190,11 +232,16 @@ export type CommandView = {
   initialPrompt?: string
   subtitle?: string
   content?: string
+  placeholder?: string
+  format?: 'text' | 'markdown'
+  language?: string
+  readOnly?: boolean
   html?: string
   items?: CommandItem[]
   sections?: CommandItemSection[]
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
+  detail?: { placement?: 'side' | 'bottom'; visible?: boolean }
   searchBarPlaceholder?: string
   presentation?: 'root' | 'stacked' | 'preview'
   selectedItemId?: string
@@ -203,9 +250,12 @@ export type CommandView = {
   searchAccessory?: { id?: string; tooltip?: string; value?: string; items: { title: string; value: string }[]; onChange?: CommandAction }
   refresh?: { intervalMs?: number; action?: CommandAction; mode?: CommandViewPatch['mode'] }
   messages?: { role: 'user' | 'assistant' | 'system'; content: string }[]
-  fields?: { id: string; label: string; type?: string; value?: string; placeholder?: string; required?: boolean }[]
+  fields?: CommandFormField[]
   submitAction?: CommandAction
   steps?: { title: string; status?: string }[]
+  value?: number
+  total?: number
+  status?: string
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
@@ -227,7 +277,7 @@ export type RowModel = {
 
 export type CustomizableCommandAction = { kind?: string; customizable?: boolean }
 
-const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-command'])
+const CUSTOMIZABLE_ACTION_KINDS = new Set(['app', 'builtin', 'clipboard-history', 'extension-action'])
 
 export function canCustomizeCommandAction(action: CustomizableCommandAction | null | undefined) {
   return Boolean(action?.customizable) || CUSTOMIZABLE_ACTION_KINDS.has(String(action?.kind || ''))

@@ -25,6 +25,8 @@
   --surface-5: rgba(255, 255, 255, 0.18);
   --surface-overlay: rgba(14, 15, 20, 0.78);
   --surface-sunken: rgba(14, 15, 20, 0.55);
+  --surface-extension-window: rgb(17, 18, 23);
+  --surface-extension-window-weak: rgba(255, 255, 255, 0.025);
 
   --border-1: rgba(255, 255, 255, 0.08);
   --border-2: rgba(255, 255, 255, 0.12);
@@ -533,7 +535,7 @@ kbd {
   overflow: auto;
   white-space: pre-wrap;
   color: var(--text-primary);
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font: inherit;
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
@@ -605,6 +607,21 @@ kbd {
   position: relative;
   display: block;
   min-width: 0;
+}
+
+.tileMedia[data-fit='contain'] img,
+.previewMedia[data-fit='contain'] {
+  object-fit: contain;
+}
+
+.tileMedia[data-shape='circle'] img,
+.previewMedia[data-shape='circle'] {
+  border-radius: var(--radius-pill);
+}
+
+.tileMedia[data-shape='rounded'] img,
+.previewMedia[data-shape='rounded'] {
+  border-radius: var(--radius-md);
 }
 
 .extensionGrid-wide {
@@ -694,9 +711,87 @@ kbd {
 
 .chatView,
 .formView,
-.progressView {
+.progressView,
+.editorView {
   display: grid;
   gap: 12px;
+}
+
+.formView,
+.progressView,
+.previewView,
+.editorView {
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - var(--search-row-height) - var(--palette-stack-gap));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.editorViewSplit {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.editorPane,
+.editorPreviewPane {
+  min-height: 260px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.editorPreviewPane {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.editorToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-1);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.editorToolbar small {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.editorTextarea {
+  min-height: 0;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.editorTextarea:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.editorPreviewPane .previewText {
+  overflow: auto;
+  padding: 12px;
+}
+
+.editorSubmitButton {
+  margin: 10px;
+}
+
+.editorActions {
+  display: grid;
+  gap: 4px;
+  grid-column: 1 / -1;
 }
 
 .chatView {
@@ -833,7 +928,9 @@ kbd {
 
 .chatBubble,
 .progressStep,
-.formView label {
+.progressOverview,
+.formField,
+.formStaticField {
   display: grid;
   gap: 4px;
   border-radius: var(--radius-md);
@@ -868,9 +965,132 @@ kbd {
 }
 
 .progressStep,
-.formView label {
+.progressOverview,
+.formField,
+.formStaticField {
   padding: 8px 10px;
   background: var(--surface-1);
+}
+
+.progressOverview {
+  gap: 8px;
+}
+
+.progressOverview > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progressOverview small,
+.progressStep small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.progressBar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.progressBar span {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
+.progressStep {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.progressStep > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.progressStep strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressStep small {
+  flex: none;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-pill);
+  padding: 1px 6px;
+  background: var(--surface-2);
+  line-height: 1.4;
+}
+
+.progressStepMarker {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.progressStep[data-status='done'] .progressStepMarker {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.progressStep[data-status='done'] .progressStepMarker::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid rgba(10, 11, 16, 0.9);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.progressStep[data-status='active'] .progressStepMarker {
+  border-color: var(--accent-strong);
+  background: transparent;
+  box-shadow: 0 0 0 3px var(--accent-faint);
+}
+
+.progressStep[data-status='active'] .progressStepMarker::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.progressStep[data-status='done'] small {
+  color: var(--accent);
+  background: var(--accent-faint);
+}
+
+.progressStep[data-status='active'] small {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+.progressStep[data-status='error'] .progressStepMarker {
+  border-color: var(--danger-text);
+  background: var(--danger-text);
+}
+
+.progressStep[data-status='error'] small {
+  color: var(--danger-text);
+  background: var(--danger-bg);
 }
 
 .markdownContent {
@@ -949,12 +1169,141 @@ kbd {
   padding-left: 4px;
 }
 
-.formView input {
+.formView input:not([type="checkbox"]),
+.formView textarea,
+.formView select {
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text-primary);
   background: var(--surface-sunken);
+  font: inherit;
+}
+
+.previewText {
+  min-width: 0;
+  white-space: pre-wrap;
+}
+
+.previewText .markdownContent {
+  white-space: normal;
+}
+
+.formView textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.formCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.formCheckbox input {
+  flex: none;
+  width: auto;
+  accent-color: var(--accent-strong);
+}
+
+.formView select[multiple] {
+  min-height: 88px;
+  padding: 6px;
+}
+
+.formView select[multiple] option {
+  border-radius: var(--radius-xs);
+  padding: 4px 6px;
+}
+
+.formPickerControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.formPickerControl pre {
+  min-width: 0;
+  max-height: 72px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--surface-sunken);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.formPickerControl button {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: var(--surface-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.formPickerControl button:hover {
+  background: var(--surface-4);
+}
+
+.formPickerControl button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.formPickerClear {
+  color: var(--text-tertiary) !important;
+  background: var(--surface-1) !important;
+}
+
+.formSubmitButton {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-strong);
+  background: var(--surface-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.formSubmitButton:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.formSubmitButton:hover {
+  background: var(--surface-4);
+}
+
+.formDescription,
+.formField small {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.formFieldError {
+  color: var(--danger-text) !important;
+}
+
+.formSeparator {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border-1);
+}
+
+.formStaticField-separator {
+  padding-block: 4px;
 }
 
 .resultText {
@@ -1022,6 +1371,12 @@ kbd {
   font-size: var(--fs-xs);
   white-space: nowrap;
 }
+
+.accessory[data-tone='accent'] { color: var(--accent); }
+.accessory[data-tone='success'] { color: var(--item-foreground-green); }
+.accessory[data-tone='warning'] { color: var(--item-foreground-orange); }
+.accessory[data-tone='danger'] { color: var(--danger-text); }
+.accessory[data-tone='muted'] { color: var(--text-muted); }
 
 .accessoryText {
   overflow: hidden;
@@ -1115,13 +1470,135 @@ kbd {
   margin-top: 8px;
 }
 
+.extensionListWithDetail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.extensionListPane {
+  min-width: 0;
+}
+
+.extensionDetailPane {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 116px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  -webkit-app-region: no-drag;
+}
+
+.extensionDetailHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.extensionDetailHeader img {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.extensionDetailHeader strong,
+.extensionDetailHeader small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extensionDetailHeader strong {
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+}
+
+.extensionDetailHeader small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.detailMarkdown {
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+
+.extensionMetadata {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.extensionMetadata > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.extensionMetadata dt {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.extensionMetadata dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.extensionMetadata a {
+  color: var(--link);
+  text-decoration: none;
+}
+
+.metadataSeparator {
+  height: 1px;
+  background: var(--border-1);
+}
+
+.metadataTag {
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .extensionListWithDetail {
+    grid-template-columns: 1fr;
+  }
+}
+
 .actionSectionHeader {
-  padding: 8px 12px 4px;
+  padding: 8px 12px 0;
   color: var(--text-dim);
   font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
+  line-height: 1.2;
   text-transform: uppercase;
+}
+
+.actionSectionSubtitle {
+  padding: 0 12px 8px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
 }
 
 .empty {
@@ -1269,5 +1746,124 @@ kbd {
 }
 
 .cameraError strong {
+  color: var(--danger-text);
+}
+
+.extensionWindowShell {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--surface-extension-window);
+  padding: 12px;
+}
+
+.extensionWindowBody {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.extensionWindowTitleBarHidden {
+  padding-top: 36px;
+  -webkit-app-region: drag;
+}
+
+.extensionWindowTitleBarHidden .extensionWindowBody,
+.extensionWindowTitleBarHidden textarea,
+.extensionWindowTitleBarHidden button,
+.extensionWindowTitleBarHidden [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+.extensionWindowShell .extensionView {
+  height: 100%;
+  padding: 0;
+}
+
+.extensionWindowShell .formView,
+.extensionWindowShell .progressView,
+.extensionWindowShell .previewView,
+.extensionWindowShell .editorView,
+.extensionWindowShell .chatView,
+.extensionWindowShell .cameraSurface,
+.extensionWindowShell .webviewSurface {
+  max-height: none;
+  height: 100%;
+  min-height: 0;
+}
+
+.extensionWindowShell .editorView {
+  gap: 8px;
+  overflow: hidden;
+}
+
+.extensionWindowShell .editorView:not(.editorViewSplit) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.extensionWindowShell .editorPane,
+.extensionWindowShell .editorPreviewPane {
+  border-color: var(--border-1);
+  border-radius: var(--radius-md);
+  background: var(--surface-extension-window-weak);
+}
+
+.extensionWindowChromeNone .editorPane,
+.extensionWindowChromeNone .editorPreviewPane {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.extensionWindowChromeNone .editorToolbar {
+  display: none;
+}
+
+.extensionWindowShell .editorTextarea {
+  padding: 14px;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.extensionWindowChromeNone .editorTextarea {
+  padding: 18px 14px 14px;
+}
+
+.extensionWindowShell .editorSubmitButton {
+  justify-self: end;
+  min-width: 96px;
+}
+
+.extensionWindowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.extensionWindowActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  font: inherit;
+  font-size: var(--fs-xs);
+}
+
+.extensionWindowActions button:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.extensionWindowActions small {
+  color: var(--text-muted);
+}
+
+.extensionWindowActions .dangerWindowAction {
   color: var(--danger-text);
 }

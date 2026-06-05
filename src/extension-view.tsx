@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { CornerDownLeft, CreditCard, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import type { AiLimitState } from './use-ai-chat'
-import { ChatView, CommandRow, CommandTile, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE } from './ui'
+import { ChatView, CommandRow, CommandTile, EditorView, EmptyState, FormView, GridView, ListView, PreviewView, ProgressView, shortcutLabel, EMPTY_ITEMS_TITLE, type FormValue } from './ui'
 import { RootCommandList } from './command-list'
 import { iconForItem } from './command-icons'
 
@@ -22,8 +22,8 @@ export type ExtensionViewRendererProps = {
   aiChat: AiChatState
   nevermindAuthed: boolean | null
   onSignInToNevermind: () => void
-  formValues: Record<string, string | boolean>
-  setFormValues: React.Dispatch<React.SetStateAction<Record<string, string | boolean>>>
+  formValues: Record<string, FormValue>
+  setFormValues: React.Dispatch<React.SetStateAction<Record<string, FormValue>>>
   filterItems: (items?: CommandItem[]) => CommandItem[]
   filterSections: (view: CommandView) => CommandView['sections']
   renderMarkdown: (content: string) => ReactNode
@@ -37,6 +37,7 @@ export type ExtensionViewRendererProps = {
   abortAiChat: (chatId?: string) => void
   dragPathForItem: (item: CommandItem) => string | null | undefined
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void
+  selectedItemId?: string
 }
 
 function tileActionHint(item: CommandItem) {
@@ -62,6 +63,30 @@ function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   return <EmptyState icon={<Search size={24} />} title={view.emptyView?.title || fallback} subtitle={view.emptyView?.subtitle} />
 }
 
+function imageSource(image: CommandItem['image']) {
+  if (!image) return ''
+  if (typeof image === 'string') return image
+  return image.dark || image.src || image.light || image.fallback || ''
+}
+
+function MetadataRows({ items = [] }: { items?: NonNullable<CommandItem['detail']>['metadata'] }) {
+  if (!items?.length) return null
+  return <dl className="extensionMetadata">{items.map((item, index) => {
+    if (item.type === 'separator') return <div key={index} className="metadataSeparator" />
+    if (item.type === 'tag') return <div key={index} className="metadataTagRow"><dt>{item.label || 'Tag'}</dt><dd><span className="accessory metadataTag" data-tone={item.tone || 'default'}>{item.value}</span></dd></div>
+    if (item.type === 'link') return <div key={index}><dt>{item.label}</dt><dd><a href={item.url}>{item.value}</a></dd></div>
+    return <div key={index}><dt>{item.label}</dt><dd>{item.value}</dd></div>
+  })}</dl>
+}
+
+function ExtensionItemDetail({ item, renderMarkdown, renderActionPanel, actionPanelRows }: { item?: CommandItem; renderMarkdown: (content: string) => ReactNode; renderActionPanel: (rows: unknown[], emptyMessage?: string) => ReactNode; actionPanelRows: ExtensionViewRendererProps['actionPanelRows'] }) {
+  const detail = item?.detail
+  if (!item || !detail) return null
+  const actions = detail.actions?.length ? renderActionPanel(actionPanelRows({ sections: [{ actions: detail.actions }] }, [], `detail-${item.id}`, false)) : null
+  const image = imageSource(detail.image || item.image)
+  return <aside className="extensionDetailPane"><div className="extensionDetailHeader">{image ? <img src={image} alt="" /> : null}<div><strong>{detail.title || item.title}</strong>{detail.subtitle || item.subtitle ? <small>{detail.subtitle || item.subtitle}</small> : null}</div></div>{detail.markdown ? <div className="previewText detailMarkdown">{renderMarkdown(detail.markdown)}</div> : null}<MetadataRows items={detail.metadata} />{actions}</aside>
+}
+
 function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
   const [busy, setBusy] = useState(false)
   async function handle() {
@@ -80,6 +105,25 @@ function NevermindLimitGate({ limit, runAction }: { limit: AiLimitState; runActi
     onSelect: () => runAction({ type: 'openUrl', title: limit.actionTitle || 'Open Dashboard', url: limit.dashboardUrl }),
   } : undefined
   return <EmptyState icon={<CreditCard size={24} />} title={limit.title} subtitle={limit.message} action={action} />
+}
+
+function EditorSurface({ view, actions, renderMarkdown, runAction }: { view: CommandView; actions: ReactNode; renderMarkdown: (content: string) => ReactNode; runAction: (action: CommandAction) => void }) {
+  const [value, setValue] = useState(view.content || '')
+  const viewKey = `${view.id || ''}:${view.title}`
+  useEffect(() => setValue(view.content || ''), [viewKey, view.content])
+  const preview = view.format === 'markdown' ? renderMarkdown(value) : undefined
+  return <EditorView
+    value={value}
+    format={view.format || 'text'}
+    language={view.language}
+    placeholder={view.placeholder}
+    readOnly={view.readOnly}
+    preview={preview}
+    actions={actions}
+    submitTitle={view.submitAction?.title}
+    onChange={setValue}
+    onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, editorContent: value }) : undefined}
+  />
 }
 
 function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }) {
@@ -176,7 +220,7 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
   return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={muted} controls={controls} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
 }
 
-export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInToNevermind, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {
+export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInToNevermind, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag, selectedItemId }: ExtensionViewRendererProps) {
   function pagination() {
     if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
     return <button className="loadMoreButton" type="button" onClick={() => runAction(view.pagination!.onLoadMore!)}>Load More</button>
@@ -199,7 +243,8 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
   if (view.type === 'list') {
     const items = filterItems(view.items)
     if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={renderRootIcon} onSelect={runDefaultAction} emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE} emptySubtitle={view.emptyView?.subtitle} />
-    return <ListView
+    const selected = items.find((item) => item.id === selectedItemId) || items[0]
+    const list = <ListView
       items={items}
       sections={filterSections(view)}
       empty={renderEmpty(view)}
@@ -207,6 +252,8 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
       pagination={pagination()}
       renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} appearance={item.appearance} onSelect={() => runDefaultAction(item)} />}
     />
+    if (view.detail?.visible && selected?.detail) return <div className={`extensionListWithDetail extensionListDetail-${view.detail.placement || 'side'}`}><div className="extensionListPane">{list}</div><ExtensionItemDetail item={selected} renderMarkdown={renderMarkdown} renderActionPanel={renderActionPanel} actionPanelRows={actionPanelRows} /></div>
+    return list
   }
 
   if (view.type === 'chat') {
@@ -223,7 +270,13 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
 
   if (view.type === 'form') return <FormView fields={view.fields || []} values={formValues} onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))} onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, formValues }) : undefined} submitTitle={view.submitAction?.title} />
 
-  if (view.type === 'progress') return <ProgressView steps={view.steps || []} />
+  if (view.type === 'editor') {
+    const editorActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-editor', false))
+    const editorActions = editorActionRows.length ? renderActionPanel(editorActionRows) : null
+    return <EditorSurface view={view} actions={editorActions} renderMarkdown={renderMarkdown} runAction={runAction} />
+  }
+
+  if (view.type === 'progress') return <ProgressView steps={view.steps || []} value={view.value} total={view.total} status={view.status} />
 
   if (view.type === 'webview') {
     const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
@@ -239,5 +292,6 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
 
   const previewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
   const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
-  return <div className={view.presentation === 'preview' || view.size === 'large' ? 'previewMode' : undefined}><PreviewView content={view.content || view.subtitle || ''} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
+  const previewContent = view.content ? renderMarkdown(view.content) : view.subtitle || ''
+  return <div className={view.presentation === 'preview' || view.size === 'large' ? 'previewMode' : undefined}><PreviewView content={previewContent} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
 }

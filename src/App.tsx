@@ -14,7 +14,7 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
-import { EmptyState, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow } from './ui'
+import { EmptyState, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow, type FormValue } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
@@ -47,8 +47,8 @@ type ActionKind =
   | 'remove-ai-chat'
   | 'builtin'
   | 'calculate'
-  | 'extension-command'
   | 'extension-root-item'
+  | 'extension-action'
 
 type ActionIcon = string
 
@@ -134,6 +134,168 @@ const SEARCH_PLACEHOLDERS = [
   'Make it happen.',
 ]
 
+function seedFormValuesFromView(view: ExtensionView | null) {
+  if (view?.type !== 'form') return {}
+  return Object.fromEntries((view.fields || []).map((field) => {
+    if (field.type === 'checkbox') return [field.id, Boolean(field.value)]
+    if (field.type === 'multiselect' || field.type === 'files') return [field.id, Array.isArray(field.value) ? field.value : []]
+    return [field.id, field.value || '']
+  }))
+}
+
+function selectedItemIdForView(view: ExtensionView | null, current = '') {
+  if (!view) return ''
+  const items = allViewItems(view)
+  const declaredSelection = view.selectedItemId && items.some((item) => item.id === view.selectedItemId) ? view.selectedItemId : ''
+  return declaredSelection || (current && items.some((item) => item.id === current) ? current : items[0]?.id || '')
+}
+
+export function ExtensionWindowApp({ windowId }: { windowId: string }) {
+  const [view, setView] = useState<ExtensionView | null>(null)
+  const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>({})
+  const [formValues, setFormValues] = useState<Record<string, FormValue>>({})
+  const [selectedValue, setSelectedValue] = useState('')
+  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
+  const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null)
+  const [toast, setToast] = useState<{ message: string; tone?: 'default' | 'error' } | null>(null)
+
+  useEffect(() => {
+    window.nvm.getNevermindAuthStatus().then((status) => setNevermindAuthed(Boolean(status.authed))).catch(() => setNevermindAuthed(false))
+    window.nvm.getExtensionWindowState(windowId).then((state) => {
+      if (state?.view) {
+        setView(state.view)
+        setFormValues(seedFormValuesFromView(state.view))
+        setSelectedValue(selectedItemIdForView(state.view))
+        setWindowOptions(state.options || {})
+      }
+    })
+    return window.nvm.onExtensionWindowView((payload) => {
+      if (payload.id === windowId) {
+        setView(payload.view)
+        setFormValues(seedFormValuesFromView(payload.view))
+        setSelectedValue(selectedItemIdForView(payload.view))
+        setWindowOptions(payload.options || {})
+      }
+    })
+  }, [windowId])
+
+  function applyPatch(patch: CommandViewPatch) {
+    setView((current) => {
+      if (!current) return current
+      const patchItems = patch.items || []
+      const removeIds = new Set(patch.removeItemIds || [])
+      const patchMap = new Map(patchItems.map((item) => [item.id, item]))
+      const applyItems = (items: ExtensionViewItem[] = []) => {
+        if (patch.mode === 'replace') return patchItems as ExtensionViewItem[]
+        if (patch.mode === 'prepend') return [...patchItems as ExtensionViewItem[], ...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id))]
+        if (patch.mode === 'append') return [...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id)), ...patchItems as ExtensionViewItem[]]
+        return items.filter((item) => !removeIds.has(item.id)).map((item) => patchMap.has(item.id) ? { ...item, ...patchMap.get(item.id) } : item)
+      }
+      const nextView = {
+        ...current,
+        ...(patch.isLoading !== undefined ? { isLoading: patch.isLoading } : {}),
+        ...(patch.selectedItemId !== undefined ? { selectedItemId: patch.selectedItemId } : {}),
+        items: current.items ? applyItems(current.items) : current.items,
+        sections: current.sections?.map((section) => ({ ...section, items: applyItems(section.items) })),
+      }
+      setSelectedValue(selectedItemIdForView(nextView, selectedValue))
+      return nextView
+    })
+  }
+
+  async function handleActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
+    if (!result) return
+    if (result.patch) applyPatch(result.patch)
+    if (result.navigation === 'pop') await window.nvm.closeExtensionWindow()
+    else if (result.view) {
+      setView(result.view)
+      setFormValues(seedFormValuesFromView(result.view))
+      setSelectedValue(selectedItemIdForView(result.view, selectedValue))
+    }
+    if (result.toast) {
+      setToast(result.toast)
+      window.setTimeout(() => setToast(null), 2_000)
+    }
+  }
+
+  async function runAction(action: ExtensionViewAction) {
+    if (String(action.type || '').startsWith('camera.')) {
+      window.dispatchEvent(new CustomEvent('nvm:camera-action', { detail: action }))
+      return
+    }
+    await handleActionResult(await window.nvm.runViewAction(action))
+  }
+
+  function actionPanelRows(panel?: CommandView['actionPanel'], fallbackActions: ExtensionViewAction[] = []): ActionPanelRow[] {
+    const sections = panel?.sections?.length ? panel.sections : [{ actions: fallbackActions }]
+    return sections.flatMap((section, sectionIndex) => {
+      const rows = (section.actions || []).map((action, index) => ({
+        value: `window-action:${sectionIndex}:${index}:${action.type}:${action.title}`,
+        icon: iconForAction(action),
+        title: action.title,
+        subtitle: actionDescription(action),
+        shortcut: action.shortcut,
+        onSelect: () => runAction(action),
+        className: action.style === 'destructive' ? 'result dangerResult' : 'result',
+      }))
+      return section.title ? [{ value: `window-section:${sectionIndex}`, title: section.title, subtitle: '', sectionHeader: true, onSelect: () => {}, className: 'actionSectionHeader' }, ...rows] : rows
+    })
+  }
+
+  function renderMarkdown(content: string) {
+    return <div className="markdownContent"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown></div>
+  }
+
+  function runDefaultAction(item: ExtensionViewItem) {
+    const action = item.primaryAction || actionsFromPanel(item.actionPanel, item.actions || [])[0]
+    if (action) runAction(action)
+  }
+
+  function dragPathForItem(item: ExtensionViewItem) {
+    return item.path || item.filePath || null
+  }
+
+  function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
+    const filePath = dragPathForItem(item)
+    if (!filePath) return
+    event.preventDefault()
+    window.nvm.startFileDrag(filePath)
+  }
+
+  if (!view) return <div className="extensionWindowShell"><EmptyState icon={<Search size={24} />} title="Loading window…" /></div>
+
+  function renderWindowActionPanel(rows: unknown[]) {
+    const actionRows = (rows as ActionPanelRow[]).filter((row) => !row.sectionHeader)
+    if (actionRows.length === 0) return null
+    return <div className="extensionWindowActions">{actionRows.map((row) => <button key={row.value} className={row.className?.includes('danger') ? 'dangerWindowAction' : undefined} type="button" onClick={row.onSelect}>{row.icon}<span>{row.title}</span>{row.shortcut ? <small>{shortcutLabel(row.shortcut)}</small> : null}</button>)}</div>
+  }
+
+  return <Command className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`} value={selectedValue} onValueChange={setSelectedValue}>
+    {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
+    <main className="extensionWindowBody"><ExtensionViewRenderer
+      view={view}
+      aiChat={aiChat}
+      nevermindAuthed={nevermindAuthed}
+      onSignInToNevermind={() => window.nvm.signInToNevermind().then((result) => setNevermindAuthed(Boolean(result.ok)))}
+      formValues={formValues}
+      setFormValues={setFormValues}
+      filterItems={(items) => items || []}
+      filterSections={(currentView) => currentView.sections}
+      renderMarkdown={renderMarkdown}
+      renderActionPanel={(rows) => renderWindowActionPanel(rows)}
+      actionPanelRows={(panel, fallbackActions) => actionPanelRows(panel, fallbackActions as ExtensionViewAction[])}
+      renderRootIcon={(item) => iconForItem(item)}
+      runDefaultAction={runDefaultAction}
+      runAction={runAction}
+      sendAiPrompt={(message) => aiChat.sendPrompt(message, view.chatId)}
+      abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+      dragPathForItem={dragPathForItem}
+      startItemDrag={startItemDrag}
+      selectedItemId={selectedValue}
+    /></main>
+  </Command>
+}
+
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsListRef = useRef<HTMLDivElement>(null)
@@ -171,7 +333,7 @@ export function App() {
   const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false)
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([])
   const [shortcutOptionsFor, setShortcutOptionsFor] = useState<ShortcutRecord | null>(null)
-  const [formValues, setFormValues] = useState<Record<string, string | boolean>>({})
+  const [formValues, setFormValues] = useState<Record<string, FormValue>>({})
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([])
   const extensionViewRef = useRef<ExtensionView | null>(null)
   const wasChildOpenRef = useRef(false)
@@ -398,8 +560,7 @@ export function App() {
   }, [actionSubmenuFor?.title, confirmRemoveFor?.id, confirmViewActionFor?.title, extensionItemOptionsFor?.id, extensionView?.title, extensionView?.type, optionsFor?.id, previewFor?.id])
 
   useEffect(() => {
-    if (extensionView?.type !== 'form') return
-    setFormValues(Object.fromEntries((extensionView.fields || []).map((field) => [field.id, field.type === 'checkbox' ? Boolean(field.value) : field.value || ''])))
+    setFormValues(seedFormValuesFromView(extensionView))
   }, [extensionView])
 
   useEffect(() => {
@@ -625,7 +786,7 @@ export function App() {
   }
 
   function actionCanDismissImmediately(action: ExtensionViewAction) {
-    return action.dismissAfterRun === 'auto' && actionDefinition(action)?.dismiss === 'immediate'
+    return !action.keepPaletteOpen && action.dismissAfterRun === 'auto' && actionDefinition(action)?.dismiss === 'immediate'
   }
 
   function rootNativeActionCanDismissImmediately(action: Action | { kind?: string }) {
@@ -633,7 +794,7 @@ export function App() {
   }
 
   function rootActionCanDismissImmediately(action: Action | { kind?: string; background?: boolean; dismissAfterRun?: 'auto' }) {
-    return rootNativeActionCanDismissImmediately(action) || (['extension-command', 'extension-root-item'].includes(String(action.kind)) && (action.background || action.dismissAfterRun === 'auto'))
+    return rootNativeActionCanDismissImmediately(action) || (['extension-action', 'extension-root-item'].includes(String(action.kind)) && (action.background || action.dismissAfterRun === 'auto'))
   }
 
   function rootActionRequestsQuit(action: unknown) {
@@ -677,7 +838,7 @@ export function App() {
       const result = await window.nvm.removeShortcut(String(nativeAction.actionId))
       showToast(result.message, result.ok ? 'default' : 'error')
       if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
-        const refreshed = await window.nvm.execute({ id: 'keyboard-shortcuts', kind: 'extension-command', extensionId: 'nevermind.shortcuts', commandId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16 } as Action)
+        const refreshed = await window.nvm.execute({ id: 'keyboard-shortcuts', kind: 'extension-action', extensionId: 'nevermind.shortcuts', registeredActionId: 'keyboard-shortcuts', title: 'Keyboard Shortcuts', subtitle: 'View, change, or remove global shortcuts', icon: 'keyboard', score: 16 } as Action)
         if (refreshed?.view) showExtensionView(refreshed.view, 'replace')
       }
       return
@@ -726,7 +887,7 @@ export function App() {
         extensionNavigation.setBackStack((stack) => stack.slice(0, -1))
       }
       await handleViewActionResult(result, showsLoading ? 'replace' : 'push')
-      if (!dismissedImmediately && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
+      if (!dismissedImmediately && !action.keepPaletteOpen && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
         else window.nvm.hide()
       } else if (showsLoading && !result?.view && !result?.navigation) {
@@ -916,7 +1077,7 @@ export function App() {
   function tabActionForRootAction(action: Action | null | undefined) {
     if (!action) return null
     if (action.kind === 'extension-root-item' && action.extensionId === 'nevermind.ai-builder' && action.id.startsWith('extension-root:nevermind.ai-builder:ai-chat:')) return () => run(action)
-    if (['extension-command', 'extension-root-item'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
+    if (['extension-root-item', 'extension-action'].includes(action.kind) && action.extensionFile) return () => tweakActionWithAi(action)
     return null
   }
 
@@ -951,9 +1112,9 @@ export function App() {
   }
 
   const canOverride = Boolean(optionsFor?.defaultActionId)
-  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-command', 'extension-root-item'].includes(optionsFor.kind))
+  const canTweakWithAi = Boolean(optionsFor?.extensionFile && ['extension-root-item', 'extension-action'].includes(optionsFor.kind))
   const canRemoveCreatedAction = Boolean(optionsFor?.kind === 'ai-chat' || optionsFor?.removable)
-  const canDuplicateCreatedAction = Boolean(['extension-command', 'extension-root-item'].includes(optionsFor?.kind || '') && optionsFor?.removable)
+  const canDuplicateCreatedAction = Boolean(['extension-root-item', 'extension-action'].includes(optionsFor?.kind || '') && optionsFor?.removable)
   const canCustomizeAction = canCustomizeCommandAction(optionsFor)
   const canRemoveOptionsShortcut = Boolean(optionsFor && shortcutRecords.some((record) => record.actionId === optionsFor.id))
   const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
@@ -1295,7 +1456,7 @@ export function App() {
       items={items}
       iconForItem={iconForCommandItem}
       onSelect={runCommandItem}
-      extraForItem={(item) => ['extension-command', 'extension-root-item'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
+      extraForItem={(item) => ['extension-root-item', 'extension-action'].includes(actionFromCommandItem(item)?.kind || '') && actionFromCommandItem(item)?.extensionFile ? ['Tab tweak'] : []}
     />
   }
 
@@ -1350,8 +1511,12 @@ export function App() {
     window.nvm.startFileDrag(filePath)
   }
 
+  function persistentActionForItem(item: ExtensionViewItem | null | undefined) {
+    return item?.persistentAction as Action | undefined
+  }
+
   function itemActionPanelIsVisible(item: ExtensionViewItem | null | undefined) {
-    return item?.actionPanelVisibility !== 'hidden'
+    return Boolean(persistentActionForItem(item)) || item?.actionPanelVisibility !== 'hidden'
   }
 
   function viewActionPanelIsVisible(view: ExtensionView | null | undefined) {
@@ -1400,6 +1565,7 @@ export function App() {
       abortAiChat={window.nvm.abortAiChat}
       dragPathForItem={dragPathForItem}
       startItemDrag={startItemDrag}
+      selectedItemId={selectedValue}
     />
   }
 
@@ -1520,7 +1686,9 @@ export function App() {
       }
       if (selectedExtensionItem && itemActionPanelIsVisible(selectedExtensionItem) && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         setChildQuery('')
-        setExtensionItemOptionsFor(selectedExtensionItem)
+        const persistentAction = persistentActionForItem(selectedExtensionItem)
+        if (persistentAction) setOptionsFor(persistentAction)
+        else setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
       if (!selectedExtensionItem && extensionView && viewActionPanelIsVisible(extensionView) && actionsFromPanel(extensionView.actionPanel, extensionView.actions || []).length > 0 && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
@@ -1566,7 +1734,9 @@ export function App() {
       if (selectedExtensionItem && itemActionPanelIsVisible(selectedExtensionItem) && extensionView && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !previewFor) {
         event.preventDefault()
         setChildQuery('')
-        setExtensionItemOptionsFor(selectedExtensionItem)
+        const persistentAction = persistentActionForItem(selectedExtensionItem)
+        if (persistentAction) setOptionsFor(persistentAction)
+        else setExtensionItemOptionsFor(selectedExtensionItem)
         return
       }
       if (activeAction && !shortcutManagerOpen && !confirmRemoveFor && !confirmViewActionFor && !extensionItemOptionsFor && !optionsFor && !extensionView) {
@@ -1656,6 +1826,8 @@ export function App() {
             renderActionPanel(actionPanelRows(actionSubmenuFor.panel, [], 'action-submenu', true))
           ) : extensionItemOptionsFor ? (
             renderActionPanel(getExtensionItemActionRows())
+          ) : optionsFor ? (
+            renderActionPanel(getOptionActionRows())
           ) : previewFor ? (
             <div className="previewPane">
               {previewFor.videoUrl ? (
@@ -1673,8 +1845,6 @@ export function App() {
             </div>
           ) : extensionView ? (
             renderExtensionView(extensionView)
-          ) : optionsFor ? (
-            renderActionPanel(getOptionActionRows())
           ) : (
             renderActionResults()
           )}

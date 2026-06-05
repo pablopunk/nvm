@@ -1,4 +1,4 @@
-import { app, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, nativeImage, nativeTheme, protocol, net, systemPreferences, screen, dialog, powerMonitor } from 'electron'
 import electronUpdater from 'electron-updater'
 import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
@@ -6,7 +6,7 @@ import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
@@ -18,8 +18,9 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
+import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
 import { LocalLearningStore, type LearningKind } from './learning-store'
@@ -30,11 +31,14 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
 configureLogger(isDev)
 
 const updateManager = createUpdateManager(autoUpdater as any)
+const rendererUrl = process.env.ELECTRON_RENDERER_URL
+const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs')
+const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html')
 const paletteWindow = createPaletteWindowController({
-  isDev: Boolean(process.env.ELECTRON_RENDERER_URL),
-  preloadPath: path.join(__dirname, '..', 'preload', 'preload.cjs'),
-  rendererUrl: process.env.ELECTRON_RENDERER_URL,
-  rendererIndexPath: path.join(__dirname, '..', 'renderer', 'index.html'),
+  isDev: Boolean(rendererUrl),
+  preloadPath,
+  rendererUrl,
+  rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
 })
 
@@ -83,6 +87,7 @@ function bundledResourcePath(...relativePath) {
 let appIndex: any[] = []
 let fileIndex: any[] = []
 let clipboardHistory: any[] = []
+const suppressedClipboardItemIds = new Map<string, number>()
 let statePath = ''
 let iconCacheDir = ''
 let clipboardImagesDir = ''
@@ -95,11 +100,17 @@ let learningTracesPath = ''
 let saveTimer: NodeJS.Timeout | undefined
 let appIndexTimer: NodeJS.Timeout | undefined
 let appWatchers: Array<{ close: () => unknown }> = []
+let extensionFileWatchers: Array<{ close: () => unknown }> = []
+let clipboardWatcherLastId = ''
+let frontmostWatcherLastId = ''
+const jobRegistry = new JobRegistry()
 let nevermindAi: any
 let learningStore: LocalLearningStore | null = null
 const learningReviewJobs = new Map<string, Promise<void>>()
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
+type ExtensionWindowRecord = { id: string; win: BrowserWindow; view: any; options: any }
+const extensionWindows = new Map<string, ExtensionWindowRecord>()
 let didRunQuitCleanup = false
 let userState: AnyRecord = {
   recents: {},
@@ -111,6 +122,7 @@ let userState: AnyRecord = {
   clipboardHistory: [],
   aiChats: {},
   settings: {},
+  jobSettings: {},
 }
 
 function osCacheRoot() {
@@ -183,6 +195,8 @@ Analyze the conversation and trace for friction patterns, including misunderstan
 
 Your job is to update the current learning set, not append blindly. Merge overlapping rules, rewrite weak rules into stronger generic ones, remove stale or redundant rules, and keep the final set small. Prefer a tiny set of generic durable rules over many specific ones.
 
+Generic means durable principles for future extension builds, not exact API/class workarounds, one extension's domain model, one bug's workaround, or transient host/client behavior. If a finding only applies to the current extension or technology, lift it to a broader principle or omit it.
+
 Do not include product feedback about improving the extension API or builder prompt. Do not include volatile facts like absolute file paths, specific chat titles, or one-off task details unless they are stable machine conventions.
 
 Return the full resulting rule set as strict JSON only with this shape:
@@ -195,26 +209,42 @@ ${JSON.stringify(snapshot, null, 2)}`
 }
 
 function recordLearningReview(chatId: string) {
-  if (!learningStore?.shouldReview(chatId) || learningReviewJobs.has(chatId) || !nevermindAi?.ask) return
+  const jobId = `ai.learning.review.${chatId}`
+  if (!learningStore?.shouldReview(chatId) || learningReviewJobs.has(chatId) || jobRegistry.snapshot().some((job) => job.id === jobId && job.running) || !nevermindAi?.ask) return
   const snapshot = learningStore.reviewSnapshot(chatId)
   if (!snapshot) return
-  const job = nevermindAi.ask(learningReviewPrompt(snapshot), {
-    system: 'You maintain a tiny canonical set of user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending. Return strict JSON and keep the final set minimal.',
-  }).then((response: string) => {
-    const learnings = normalizedLearningReview(response)
-    learningStore?.replaceLearningsFromReview(chatId, learnings as Array<{ kind: LearningKind; summary: string; appliesWhen?: string; keywords?: string[]; confidence?: "low" | "medium" | "high"; evidence?: string }>)
-  }).catch((error: unknown) => {
-    logWarn('ai.learning.review.failed', { chatId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'ai' })
-  }).finally(() => {
-    learningReviewJobs.delete(chatId)
+  jobRegistry.register({
+    id: jobId,
+    title: `AI Learning Review: ${chatId}`,
+    owner: 'host',
+    scope: 'ai',
+    timeoutMs: 60_000,
+    run: async () => {
+      try {
+        const response = await nevermindAi.ask(learningReviewPrompt(snapshot), {
+          system: 'You maintain a tiny canonical set of generic user learnings for future Nevermind extension-building chats. Merge and rewrite rules instead of appending; omit one-off implementation details. Return strict JSON and keep the final set minimal.',
+        })
+        const learnings = normalizedLearningReview(response)
+        learningStore?.replaceLearningsFromReview(chatId, learnings as Array<{ kind: LearningKind; summary: string; appliesWhen?: string; keywords?: string[]; confidence?: "low" | "medium" | "high"; evidence?: string }>)
+      } catch (error) {
+        logWarn('ai.learning.review.failed', { chatId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'ai' })
+        throw error
+      } finally {
+        learningReviewJobs.delete(chatId)
+      }
+    },
   })
+  const job = jobRegistry.run(jobId, 'ai-chat-exited').then(() => undefined).catch(() => undefined)
   learningReviewJobs.set(chatId, job)
 }
 
 const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
-const extensionRegistry = new Map<string, any>()
+const pendingAppIconPaths = new Set<string>()
+const pendingThumbnailPaths = new Map<string, string>()
+const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
+let fixtureExtensions: any[] = []
 const extensionRootItemsCache = new Map<string, { updatedAt: number; items: any[] }>()
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>()
 const extensionStorageRefreshes = new Map<string, Promise<any>>()
@@ -319,8 +349,8 @@ function createExtensionCache(extension) {
 const registeredActionAccelerators = new Set<string>()
 const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder'
 
-const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension, createAccountExtension]
-const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings', 'nevermind.account']
+const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [createSystemExtension, createPlacesExtension, createCalculatorExtension, createWebSearchExtension, createClipboardExtension, createAppsExtension, createFilesExtension, createAiBuilderExtension, createUpdatesExtension, createKeyboardShortcutsExtension, createSettingsExtension, createBackgroundTasksExtension, createAccountExtension]
+const REQUIRED_INTERNAL_EXTENSIONS = ['nevermind.system', 'nevermind.places', 'nevermind.calculator', 'nevermind.web', 'nevermind.clipboard', 'nevermind.apps', 'nevermind.files', AI_BUILDER_EXTENSION_ID, 'nevermind.updates', 'nevermind.shortcuts', 'nevermind.settings', 'nevermind.background-tasks', 'nevermind.account']
 const REQUIRED_INTERNAL_COMMANDS = [{ extensionId: AI_BUILDER_EXTENSION_ID, commandId: 'ai-chats' }]
 
 function actionAliases(actionId: any) {
@@ -446,62 +476,62 @@ function recordRecent(action: any) {
   scheduleSaveState()
 }
 
+async function loadAppIconDataUrl(appPath) {
+  try {
+    const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
+    const cached = await fs.readFile(cachePath).catch(() => null)
+    if (cached) return `data:image/png;base64,${cached.toString('base64')}`
+
+    const { fileIconToBuffer } = await import('file-icon')
+    const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
+    await fs.mkdir(iconCacheDir, { recursive: true })
+    await fs.writeFile(cachePath, png).catch(() => {})
+    return `data:image/png;base64,${png.toString('base64')}`
+  } catch (error) {
+    logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
+    return null
+  }
+}
+
+async function processPendingAppIcons() {
+  const paths = Array.from(pendingAppIconPaths).slice(0, 20)
+  pendingAppIconPaths.clear()
+  await Promise.all(paths.map(async (appPath) => {
+    const result = await loadAppIconDataUrl(appPath)
+    appIconCache.set(appPath, result)
+  }))
+}
+
 async function getAppIconDataUrl(appPath) {
   if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
   if (appIconCache.has(appPath)) return appIconCache.get(appPath)
   const inFlight = appIconLoadPromises.get(appPath)
   if (inFlight) return inFlight
 
-  const promise = (async () => {
-    try {
-      const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
-      const cached = await fs.readFile(cachePath).catch(() => null)
-      if (cached) return `data:image/png;base64,${cached.toString('base64')}`
-
-      const { fileIconToBuffer } = await import('file-icon')
-      const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
-      await fs.mkdir(iconCacheDir, { recursive: true })
-      await fs.writeFile(cachePath, png).catch(() => {})
-      return `data:image/png;base64,${png.toString('base64')}`
-    } catch (error) {
-      logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
-      return null
-    }
-  })()
-
+  pendingAppIconPaths.add(appPath)
+  const promise = jobRegistry.run('cache.app-icons', 'icon-request').then(() => appIconCache.get(appPath) ?? null)
   appIconLoadPromises.set(appPath, promise)
   const result = await promise.finally(() => appIconLoadPromises.delete(appPath))
-  if (result) appIconCache.set(appPath, result)
-  else appIconCache.set(appPath, null)
+  appIconCache.set(appPath, result)
   return result
+}
+
+function isFixtureExtension(extension) {
+  return Boolean(extension?.__fixture)
+}
+
+function visibleExtensions() {
+  return Array.from(extensionModules.values()).filter((extension) => !isFixtureExtension(extension))
+}
+
+function visibleExtensionActionEntries() {
+  return Array.from(extensionActionRegistry.values()).filter((entry) => !isFixtureExtension(entry.extension))
 }
 
 function extensionCommandActionId(extension, command) {
   return `extension:${extension.id}:${command.id}`
 }
 
-function extensionActionFromCommand(extension, command) {
-  const extensionFile = extension.__filePath ? path.basename(extension.__filePath) : undefined
-  const action = {
-    id: command.actionId || extensionCommandActionId(extension, command),
-    kind: 'extension-command',
-    extensionId: extension.id,
-    commandId: command.id,
-    extensionFile,
-    aiChatId: extensionFile ? aiChatIdForExtensionFile(extensionFile) : undefined,
-    removable: Boolean(extension.__generated),
-    title: command.title,
-    subtitle: command.subtitle || extension.title || 'Extension command',
-    aliases: command.aliases || [],
-    icon: command.icon || 'sparkles',
-    score: command.score || 12,
-    dismissAfterRun: command.dismissAfterRun,
-    background: command.background,
-  }
-  const declaredShortcut = userState.removedShortcuts?.[action.id] ? null : command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
-  const shortcut = shortcutForAction(action) || declaredShortcut
-  return shortcut ? { ...action, shortcut } : action
-}
 
 function getOrCreateAiChat(query, options: any = {}) {
   const trimmed = query.trim()
@@ -635,7 +665,7 @@ function patchOpenView(viewId: string, patch: any) {
 }
 
 function aiBuilderRegistryEntry() {
-  return extensionRegistry.get(`${AI_BUILDER_EXTENSION_ID}:ai-chats`) || { extension: createAiBuilderExtension(), command: { id: 'ai-chats', title: 'AI Chats' } }
+  return extensionActionRegistry.get(`${AI_BUILDER_EXTENSION_ID}:ai-chats`) || { extension: createAiBuilderExtension(), command: { id: 'ai-chats', title: 'AI Chats' } }
 }
 
 function normalizedAiChatListItem(chat: any) {
@@ -830,11 +860,33 @@ function clipboardHistorySnapshot(options: any = {}) {
 function clipboardHistoryRemovalEntries(action) {
   const range = action?.clipboardHistoryRange || 'item'
   const now = Date.now()
-  if (range === 'item') return clipboardHistory.filter((entry) => entry.id === action?.clipboardHistoryItemId)
-  if (range === 'last-hour') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_HOUR_MS)
-  if (range === 'last-day') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_DAY_MS)
-  if (range === 'all') return clipboardHistory
+  const types = new Set(Array.isArray(action?.types) ? action.types.map(String) : [])
+  const typeMatches = (entry) => !types.size || types.has(entry.type)
+  if (range === 'item') return clipboardHistory.filter((entry) => entry.id === action?.clipboardHistoryItemId && typeMatches(entry))
+  if (range === 'ids') {
+    const ids = new Set(Array.isArray(action?.clipboardHistoryItemIds) ? action.clipboardHistoryItemIds : [action?.clipboardHistoryItemId].filter(Boolean))
+    return clipboardHistory.filter((entry) => ids.has(entry.id) && typeMatches(entry))
+  }
+  if (range === 'last-hour') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_HOUR_MS && typeMatches(entry))
+  if (range === 'last-day') return clipboardHistory.filter((entry) => (entry.createdAt || 0) >= now - CLIPBOARD_LAST_DAY_MS && typeMatches(entry))
+  if (range === 'older-than') return clipboardHistory.filter((entry) => (entry.createdAt || 0) < now - Math.max(0, Number(action?.olderThanMs || 0)) && typeMatches(entry))
+  if (range === 'all') return clipboardHistory.filter(typeMatches)
   return []
+}
+
+function clipboardHistoryGet(id) {
+  return clipboardHistorySnapshot().find((entry) => entry.id === id) || null
+}
+
+function removeClipboardHistoryByAction(action) {
+  const removed = clipboardHistoryRemovalEntries(action)
+  if (removed.length === 0) return 0
+  const removedIds = new Set(removed.map((entry) => entry.id))
+  clipboardHistory = clipboardHistory.filter((entry) => !removedIds.has(entry.id))
+  scheduleSaveState()
+  invalidateExtensionRootItems()
+  paletteWindow.win?.webContents.send('clipboard:changed')
+  return removed.length
 }
 
 function clipboardHistoryRemovedMessage(count) {
@@ -842,14 +894,9 @@ function clipboardHistoryRemovedMessage(count) {
 }
 
 function removeClipboardHistoryEntries(action) {
-  const removed = clipboardHistoryRemovalEntries(action)
-  if (removed.length === 0) return { toast: { message: 'No matching clipboard items to remove' } }
-  const removedIds = new Set(removed.map((entry) => entry.id))
-  clipboardHistory = clipboardHistory.filter((entry) => !removedIds.has(entry.id))
-  scheduleSaveState()
-  invalidateExtensionRootItems()
-  paletteWindow.win?.webContents.send('clipboard:changed')
-  return { view: clipboardHistoryView(), navigation: 'replace', toast: { message: clipboardHistoryRemovedMessage(removed.length) } }
+  const removed = removeClipboardHistoryByAction(action)
+  if (removed === 0) return { toast: { message: 'No matching clipboard items to remove' } }
+  return { view: clipboardHistoryView(), navigation: 'replace', toast: { message: clipboardHistoryRemovedMessage(removed) } }
 }
 
 function viewRefreshAction(itemsBuilder) {
@@ -1100,16 +1147,19 @@ async function searchActions(query, options: any = {}) {
     if (ranked) results.push(ranked)
   }
 
-  for (const command of extensionRegistry.values()) {
-    const ranked = rankAction(withShortcutHint(extensionActionFromCommand(command.extension, command.command)), q)
+  for (const entry of visibleExtensionActionEntries()) {
+    const action = extensionActionFromContribution(entry)
+    const ranked = action ? rankAction(withShortcutHint(action), q) : null
     if (ranked) results.push(ranked)
   }
 
-  return results
+  const sorted = results
     .sort((a, b) => {
       return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
     })
     .slice(0, 30)
+  structuredClone(sorted)
+  return sorted
 }
 
 function invalidateExtensionRootItems() {
@@ -1139,17 +1189,15 @@ async function executeAction(action, options: any = {}) {
     case 'open-keyboard-settings':
       runInBackground(openSystemKeyboardSettings)
       break
-    case 'extension-root-item': {
+    case 'extension-root-item':
+    case 'extension-action': {
       const result = await executeExtensionRootItem(action)
       if (result) return result
       break
     }
     case 'extension-command': {
-      const dismissImmediately = action.background || action.dismissAfterRun === 'auto'
-      if (dismissImmediately && !options.keepPaletteOpen) paletteWindow.hidePalette()
-      const result = await executeExtensionCommand(action)
-      if (result?.type) return { view: result }
-      if (result) return result
+      const upgraded = currentActionForStoredShortcut(action)
+      if (upgraded !== action) return executeAction(upgraded, options)
       break
     }
   }
@@ -1157,52 +1205,47 @@ async function executeAction(action, options: any = {}) {
   if (!options.keepPaletteOpen) paletteWindow.hidePalette()
 }
 
-function extensionEntryForAction(action) {
-  const direct = extensionRegistry.get(`${action.extensionId}:${action.commandId}`)
+function extensionActionEntryForAction(action) {
+  const registeredActionId = action?.registeredActionId || action?.commandId
+  const direct = extensionActionRegistry.get(`${action.extensionId}:${registeredActionId}`)
   if (direct) return direct
 
-  if (action.extensionFile) {
-    const fileMatches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
+  if (action?.extensionFile) {
+    const fileMatches = Array.from(extensionActionRegistry.values()).filter((entry) => path.basename(entry.extension.__filePath || '') === action.extensionFile)
     if (fileMatches.length === 1) return fileMatches[0]
   }
 
-  if (action.aiChatId) {
+  if (action?.aiChatId) {
     const files = chatTouchedExtensionFiles(userState.aiChats[action.aiChatId])
-    const chatMatches = Array.from(extensionRegistry.values()).filter((entry) => files.includes(path.basename(entry.extension.__filePath || '')))
+    const chatMatches = Array.from(extensionActionRegistry.values()).filter((entry) => files.includes(path.basename(entry.extension.__filePath || '')))
     if (chatMatches.length === 1) return chatMatches[0]
   }
 
-  const matches = Array.from(extensionRegistry.values()).filter((entry) => entry.extension.id === action.extensionId)
+  const matches = Array.from(extensionActionRegistry.values()).filter((entry) => entry.extension.id === action?.extensionId)
   return matches.length === 1 ? matches[0] : null
 }
 
+function extensionEntryForAction(action) {
+  return extensionActionEntryForAction(action)
+}
+
 function extensionModuleForAction(action) {
-  const entry = extensionEntryForAction(action)
+  const entry = extensionActionEntryForAction(action)
   if (entry?.extension) return entry.extension
   if (!action?.extensionFile) return null
   return Array.from(extensionModules.values()).find((extension) => path.basename(extension.__filePath || '') === action.extensionFile) || null
 }
 
 function currentActionForStoredShortcut(action) {
-  if (action?.kind !== 'extension-command') return action
-  const entry = extensionEntryForAction(action)
-  return entry ? extensionActionFromCommand(entry.extension, entry.command) : action
-}
-
-async function executeExtensionCommand(action) {
-  const entry = extensionEntryForAction(action)
-  if (!entry) {
-    logWarn('extension.command.notFound', { extensionId: action.extensionId, commandId: action.commandId }, { source: 'host', scope: 'extension' })
-    return null
+  if (action?.kind === 'extension-command') {
+    const entry = extensionActionEntryForAction(action)
+    return entry ? extensionActionFromContribution(entry) : action
   }
-  try {
-    const ctx = createExtensionContext(entry.extension, entry.command)
-    const result = await entry.command.run(ctx)
-    return executeViewActionResult(result, entry)
-  } catch (error) {
-    logError('extension.command.failed', error, { source: 'host', scope: 'extension', extensionId: entry.extension.id, commandId: entry.command.id })
-    return extensionErrorView(entry, error)
+  if (action?.kind === 'extension-action') {
+    const entry = extensionActionEntryForAction(action)
+    return entry ? extensionActionFromContribution(entry) : action
   }
+  return action
 }
 
 async function executeExtensionRootItem(action) {
@@ -1211,7 +1254,7 @@ async function executeExtensionRootItem(action) {
   const record = extensionActionHandlers.get(action.rootAction.handlerId)
   if (!record) return { view: { type: 'preview', title: 'Action unavailable', content: 'This extension item is no longer available.' } }
   try {
-    const result = await record.handler(createExtensionContext(record.entry.extension, null), action)
+    const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command || null), action)
     return executeViewActionResult(result, record.entry)
   } catch (error) {
     logError('extension.rootItem.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id })
@@ -1220,12 +1263,12 @@ async function executeExtensionRootItem(action) {
 }
 
 async function extensionRootActions() {
-  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionRootActionsForExtension(extension)))
+  const actionGroups = await Promise.all(visibleExtensions().map((extension) => extensionRootActionsForExtension(extension)))
   return actionGroups.flat()
 }
 
 async function extensionSearchActions(query) {
-  const actionGroups = await Promise.all(Array.from(extensionModules.values()).map((extension) => extensionSearchActionsForExtension(extension, query)))
+  const actionGroups = await Promise.all(visibleExtensions().map((extension) => extensionSearchActionsForExtension(extension, query)))
   return actionGroups.flat()
 }
 
@@ -1321,6 +1364,39 @@ function extensionRootActionFromItem(entry, item) {
   }
 }
 
+function extensionActionFromContribution(entry) {
+  const item = entry.item
+  if (!item?.id || !item.title) return null
+  const extensionFile = entry.extension.__filePath ? path.basename(entry.extension.__filePath) : undefined
+  const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
+  const actionId = item.actionId || `extension-action:${entry.extension.id}:${item.id}`
+  const action = {
+    id: actionId,
+    kind: 'extension-action',
+    extensionId: entry.extension.id,
+    registeredActionId: item.id,
+    extensionFile,
+    aiChatId: extensionFile ? aiChatIdForExtensionFile(extensionFile) : undefined,
+    rootAction: primaryAction,
+    removable: Boolean(entry.extension.__generated),
+    customizable: item.customizable !== false,
+    title: item.title,
+    subtitle: item.subtitle || entry.extension.title || 'Extension action',
+    aliases: item.aliases || item.keywords || [],
+    icon: item.icon || 'sparkles',
+    iconUrl: item.image || item.iconUrl || null,
+    thumbnailUrl: item.thumbnailUrl || null,
+    score: item.score || 12,
+    dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
+    background: item.background,
+    actionPanel: normalizeActionPanel(item.actionPanel, item.actions || [], entry),
+    appearance: normalizeItemAppearance(item.appearance),
+  }
+  const declaredShortcut = userState.removedShortcuts?.[action.id] ? null : item.globalShortcut || (item.shortcutScope === 'global' ? item.shortcut : null)
+  const shortcut = shortcutForAction(action) || declaredShortcut
+  return shortcut ? { ...action, shortcut } : action
+}
+
 async function executeActionForIpc(action) {
   try {
     const result = await executeAction(action)
@@ -1329,6 +1405,10 @@ async function executeActionForIpc(action) {
   } catch (error) {
     if (action?.kind === 'extension-command') {
       const entry = extensionEntryForAction(action)
+      if (entry) return { view: extensionErrorView(entry, error) }
+    }
+    if (action?.kind === 'extension-action') {
+      const entry = extensionActionEntryForAction(action)
       if (entry) return { view: extensionErrorView(entry, error) }
     }
     return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` } }
@@ -1363,7 +1443,7 @@ function extensionErrorAiAction(entry, message) {
   }
 }
 
-const VIEW_TYPES = new Set(['list', 'grid', 'preview', 'chat', 'form', 'progress', 'webview', 'camera'])
+const VIEW_TYPES = new Set(['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'webview', 'camera'])
 
 function isView(value) {
   return Boolean(value?.type && VIEW_TYPES.has(value.type))
@@ -1390,14 +1470,27 @@ function normalizeView(view, entry) {
   }
 }
 
+function persistentActionForRef(action, entry) {
+  if (action?.type !== 'runExtensionRegisteredAction') return null
+  const extensionId = action.extensionId || entry?.extension?.id
+  const registeredActionId = action.registeredActionId || action.actionId
+  const registered = extensionActionRegistry.get(`${extensionId}:${registeredActionId}`)
+  return registered ? extensionActionFromContribution(registered) : null
+}
+
 function normalizeViewItems(items, entry) {
   return Array.isArray(items) ? items.map((item) => {
     const itemActions = normalizeViewActions(item.actions, entry)
+    const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
+    const { run, __handler, action, ...safeItem } = item
+    const detailActions = normalizeViewActions(item.detail?.actions, entry)
     return {
-      ...item,
+      ...safeItem,
+      ...(item.detail ? { detail: { ...item.detail, actions: detailActions } } : {}),
       actions: itemActions,
       actionPanel: normalizeActionPanel(item.actionPanel, itemActions, entry),
-      primaryAction: normalizeViewAction(item.primaryAction, entry),
+      primaryAction,
+      persistentAction: item.persistentAction || persistentActionForRef(primaryAction, entry),
       appearance: normalizeItemAppearance(item.appearance),
     }
   }) : items
@@ -1406,10 +1499,13 @@ function normalizeViewItems(items, entry) {
 function normalizeActionPanel(panel, fallbackActions, entry) {
   if (panel?.sections) return {
     ...panel,
-    sections: panel.sections.map((section) => ({
-      ...section,
-      actions: normalizeViewActions([...(section.actions || []), ...(section.lazyActions || [])], entry),
-    })),
+    sections: panel.sections.map((section) => {
+      const { lazyActions, ...safeSection } = section
+      return {
+        ...safeSection,
+        actions: normalizeViewActions([...(section.actions || []), ...(lazyActions || [])], entry),
+      }
+    }),
   }
   if (Array.isArray(fallbackActions) && fallbackActions.length) return { sections: [{ actions: normalizeViewActions(fallbackActions, entry) }] }
   return panel
@@ -1430,6 +1526,12 @@ function normalizeViewAction(action, entry) {
   }
   const normalized = action.submenu ? { ...action, submenu: normalizeActionPanel(action.submenu, [], entry) } : action
   if ((normalized.type === 'pushView' || normalized.type === 'replaceView') && normalized.view) {
+    return { ...normalized, view: normalizeView(normalized.view, entry) }
+  }
+  if (normalized.type === 'promptAction' && normalized.targetAction) {
+    return { ...normalized, targetAction: normalizeViewAction(normalized.targetAction, entry) }
+  }
+  if ((normalized.type === 'createWindow' || normalized.type === 'toggleWindow') && normalized.view) {
     return { ...normalized, view: normalizeView(normalized.view, entry) }
   }
   return normalized
@@ -1468,10 +1570,10 @@ function normalizeViewPatch(patch, entry) {
   }
 }
 
-async function executeViewActionResult(result, entry) {
+async function executeViewActionResult(result, entry, launchContext?: any) {
   if (!result) return result
-  if (isAction(result)) return executeViewAction(normalizeViewAction(result, entry))
-  if (isAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry))
+  if (isAction(result)) return executeViewAction(normalizeViewAction(result, entry), launchContext)
+  if (isAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry), launchContext)
   const view = normalizeExtensionView(result, entry)
   return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast, patch: normalizeViewPatch(result?.patch, entry) } : { ...result, patch: normalizeViewPatch(result?.patch, entry) }
 }
@@ -1488,6 +1590,152 @@ async function executeViewActionForIpc(action) {
   }
 }
 
+function clipboardSnapshot() {
+  const image = clipboard.readImage()
+  return {
+    text: clipboard.readText(),
+    html: clipboard.readHTML(),
+    rtf: clipboard.readRTF(),
+    bookmark: clipboard.readBookmark(),
+    image: image.isEmpty() ? null : image,
+  }
+}
+
+function restoreClipboardSnapshot(snapshot: ReturnType<typeof clipboardSnapshot>) {
+  if (!snapshot) return
+  const data: any = {}
+  if (snapshot.text) data.text = snapshot.text
+  if (snapshot.html) data.html = snapshot.html
+  if (snapshot.rtf) data.rtf = snapshot.rtf
+  if (snapshot.bookmark?.title || snapshot.bookmark?.url) data.bookmark = snapshot.bookmark
+  if (snapshot.image && !snapshot.image.isEmpty()) data.image = snapshot.image
+  if (Object.keys(data).length === 0) clipboard.clear()
+  else clipboard.write(data)
+}
+
+function clipboardHistoryIdForText(text: string) {
+  const value = String(text || '').trim()
+  return value ? `text:${hashValue(value)}` : ''
+}
+
+function suppressClipboardHistoryId(id: string, durationMs = 2_000) {
+  if (id) suppressedClipboardItemIds.set(id, Date.now() + durationMs)
+}
+
+function pasteTextAction(action: any) {
+  const text = String(action.text || '')
+  const restoreClipboard = Boolean(action.restoreClipboard)
+  const concealed = Boolean(action.concealed || restoreClipboard)
+  const snapshot = restoreClipboard ? clipboardSnapshot() : null
+  const suppressedId = clipboardHistoryIdForText(text)
+  if (concealed) suppressClipboardHistoryId(suppressedId)
+  if (action.plainText === false && action.html) clipboard.write({ text, html: String(action.html) })
+  else clipboard.writeText(text)
+  pasteIntoFrontmostApp()
+  if (restoreClipboard && snapshot) {
+    const delay = Math.max(50, Math.min(5_000, Number(action.restoreDelayMs || 250)))
+    setTimeout(() => {
+      suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text))
+      restoreClipboardSnapshot(snapshot)
+    }, delay).unref?.()
+  }
+}
+
+function extensionWindowSize(options: any = {}) {
+  const large = options.size === 'large'
+  return {
+    width: Math.max(320, Math.min(1600, Number(options.width || (large ? 900 : 560)))),
+    height: Math.max(240, Math.min(1200, Number(options.height || (large ? 680 : 420)))),
+  }
+}
+
+function extensionWindowId(view: any, options: any = {}) {
+  return String(options.id || view?.id || `window:${hashValue(`${view?.title || 'Extension Window'}:${JSON.stringify(view || {})}`)}`)
+}
+
+function loadExtensionWindow(win: BrowserWindow, id: string) {
+  if (isDev && rendererUrl) return win.loadURL(`${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}`)
+  return win.loadFile(rendererIndexPath, { query: { extensionWindowId: id } })
+}
+
+function centerExtensionWindow(win: BrowserWindow) {
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  const bounds = win.getBounds()
+  const { x, y, width, height } = display.workArea
+  win.setBounds({ x: Math.round(x + (width - bounds.width) / 2), y: Math.round(y + (height - bounds.height) / 2), width: bounds.width, height: bounds.height })
+}
+
+function applyExtensionWindowOptions(win: BrowserWindow, options: any = {}) {
+  const alwaysOnTop = options.alwaysOnTop !== false
+  win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal')
+  if (options.visibleOnAllSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+}
+
+function createOrUpdateExtensionWindow(view: any, options: any = {}) {
+  const normalizedView = view
+  const id = extensionWindowId(normalizedView, options)
+  const existing = extensionWindows.get(id)
+  if (existing && !existing.win.isDestroyed()) {
+    existing.view = normalizedView
+    existing.options = { ...existing.options, ...options, id }
+    existing.win.setTitle(String(options.title || normalizedView.title || 'Nevermind'))
+    existing.win.webContents.send('extension-window:view', { id, view: normalizedView, options: existing.options })
+    existing.win.show()
+    existing.win.focus()
+    return existing
+  }
+
+  const size = extensionWindowSize(options)
+  const hiddenTitleBar = options.titleBar === 'hidden'
+  const win = new BrowserWindow({
+    width: size.width,
+    height: size.height,
+    minWidth: 320,
+    minHeight: 240,
+    show: false,
+    frame: true,
+    ...(hiddenTitleBar ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } } : {}),
+    title: String(options.title || normalizedView.title || 'Nevermind'),
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f7f7',
+    webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
+  } satisfies Electron.BrowserWindowConstructorOptions)
+  const record = { id, win, view: normalizedView, options: { ...options, id } }
+  extensionWindows.set(id, record)
+  applyExtensionWindowOptions(win, options)
+  win.once('ready-to-show', () => { centerExtensionWindow(win); win.show() })
+  if (options.hideOnBlur) win.on('blur', () => win.hide())
+  win.on('closed', () => { if (extensionWindows.get(id)?.win === win) extensionWindows.delete(id) })
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => loggerDebug('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }, { source: 'host', scope: 'extensions' }))
+  loadExtensionWindow(win, id)
+  return record
+}
+
+function executeWindowAction(action: any) {
+  const id = String(action.windowId || action.id || '')
+  if (action.type === 'createWindow') {
+    createOrUpdateExtensionWindow(action.view, action.windowOptions || {})
+    return { toast: { message: 'Opened window' } }
+  }
+  const record = extensionWindows.get(id)
+  if (!record) {
+    if (action.type === 'toggleWindow' && action.view) {
+      createOrUpdateExtensionWindow(action.view, { ...(action.windowOptions || {}), id })
+      return { toast: { message: 'Opened window' } }
+    }
+    return { toast: { message: 'Window is not open', tone: 'error' } }
+  }
+  if (action.type === 'showWindow') { record.win.show(); record.win.focus(); return { toast: { message: 'Shown window' } } }
+  if (action.type === 'hideWindow') { record.win.hide(); return { toast: { message: 'Hidden window' } } }
+  if (action.type === 'toggleWindow') {
+    if (action.view || action.windowOptions) createOrUpdateExtensionWindow(action.view || record.view, { ...(record.options || {}), ...(action.windowOptions || {}), id })
+    if (record.win.isVisible()) record.win.hide(); else { record.win.show(); record.win.focus() }
+    return { toast: { message: 'Toggled window' } }
+  }
+  if (action.type === 'closeWindow') { record.win.close(); return { toast: { message: 'Closed window' } } }
+  return null
+}
+
 function shellResultView(title, result) {
   return {
     type: 'preview',
@@ -1501,7 +1749,11 @@ function runQuitCleanup() {
   didRunQuitCleanup = true
   if (app.isReady()) globalShortcut.unregisterAll()
   updateManager.clearTimers()
+  jobRegistry.clear()
+  for (const record of extensionWindows.values()) record.win.close()
+  extensionWindows.clear()
   for (const watcher of appWatchers) watcher.close()
+  for (const watcher of extensionFileWatchers) watcher.close()
 }
 
 function requestQuitApp(reason = 'action') {
@@ -1515,7 +1767,7 @@ function requestQuitApp(reason = 'action') {
   }, 250).unref?.()
 }
 
-async function executeViewAction(action) {
+async function executeViewAction(action, launchContext?: any) {
   switch (action?.type) {
     case 'nativeAction':
       return executeAction(action.nativeAction, { keepPaletteOpen: true })
@@ -1537,9 +1789,21 @@ async function executeViewAction(action) {
       clipboard.writeText(action.text || '')
       break
     case 'pasteText':
-      clipboard.writeText(action.text || '')
-      pasteIntoFrontmostApp()
+      pasteTextAction(action)
       return { toast: { message: 'Pasted' } }
+    case 'pasteClipboard':
+      pasteClipboardAction(action)
+      return { toast: { message: 'Pasted' } }
+    case 'typeText': {
+      const result = await typeTextIntoFrontmostApp(action.text || '', { delayMs: action.delayMs })
+      return result?.ok ? { toast: { message: 'Typed' } } : { toast: { message: result?.error || 'Unable to type text', tone: 'error' } }
+    }
+    case 'createWindow':
+    case 'showWindow':
+    case 'hideWindow':
+    case 'toggleWindow':
+    case 'closeWindow':
+      return executeWindowAction(action)
     case 'copyImage':
       if (action.path) clipboard.writeImage(nativeImage.createFromPath(expandUserPath(action.path)))
       else if (action.imagePath) clipboard.writeImage(nativeImage.createFromPath(action.imagePath))
@@ -1632,12 +1896,19 @@ async function executeViewAction(action) {
     }
     case 'recordShortcut':
       return { toast: { message: 'Shortcut recording is handled by the palette' } }
+    case 'runExtensionRegisteredAction': {
+      const resolved = resolveRegisteredActionRef(action)
+      if (resolved.error) return { toast: { message: resolved.error, tone: 'error' } }
+      return resolved.rootAction ? executeExtensionRootItem(resolved.rootAction) : { toast: { message: 'Action unavailable', tone: 'error' } }
+    }
+    case 'promptAction':
+      return { view: promptActionView(action), navigation: 'push' }
     case 'runExtensionAction': {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
       try {
-        const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command), action)
-        return executeViewActionResult(result, record.entry)
+        const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command, launchContext), action)
+        return executeViewActionResult(result, record.entry, launchContext)
       } catch (error) {
         logError('extension.action.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id, commandId: record.entry.command.id })
         return { view: extensionErrorView(record.entry, error), navigation: 'push' }
@@ -1648,31 +1919,65 @@ async function executeViewAction(action) {
   }
 }
 
+function resolveRegisteredActionRef(action) {
+  let current = action
+  const visited = new Set<string>()
+  while (current?.type === 'runExtensionRegisteredAction') {
+    const extensionId = current.extensionId
+    const registeredActionId = current.registeredActionId || current.actionId
+    const key = `${extensionId}:${registeredActionId}`
+    if (visited.has(key)) return { error: 'Action reference cycle detected' }
+    visited.add(key)
+    const entry = extensionActionRegistry.get(key)
+    const rootAction = entry ? extensionActionFromContribution(entry) : null
+    if (!rootAction) return { error: 'Action unavailable' }
+    if (rootAction.rootAction?.type !== 'runExtensionRegisteredAction') return { rootAction }
+    current = rootAction.rootAction
+  }
+  return { error: 'Action unavailable' }
+}
+
 async function executeBuiltin(action) {
   return executeSystemBuiltin(action, () => requestQuitApp('builtin'))
 }
 
-async function thumbnailResponseForPath(filePath) {
+async function thumbnailCachePath(filePath) {
   const stat = await fs.stat(filePath)
   const key = crypto.createHash('sha1').update(`${filePath}:${stat.mtimeMs}:${stat.size}:${THUMBNAIL_SIZE}`).digest('hex')
-  const cachedPath = path.join(iconCacheDir, 'thumbs', `${key}.png`)
+  return path.join(iconCacheDir, 'thumbs', `${key}.png`)
+}
 
-  try {
-    const cached = await fs.readFile(cachedPath)
-    return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
-  } catch {}
-
+async function generateThumbnail(filePath, cachedPath) {
   let image = null
   if (typeof nativeImage.createThumbnailFromPath === 'function') {
     image = await nativeImage.createThumbnailFromPath(filePath, { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE })
   }
   if (!image || image.isEmpty()) image = nativeImage.createFromPath(filePath).resize({ width: THUMBNAIL_SIZE, quality: 'good' })
-  if (!image || image.isEmpty()) return net.fetch(pathToFileURL(filePath).href)
-
+  if (!image || image.isEmpty()) return false
   const png = image.toPNG()
   await fs.mkdir(path.dirname(cachedPath), { recursive: true })
   await fs.writeFile(cachedPath, png).catch(() => {})
-  return new Response(png, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+  return true
+}
+
+async function processPendingThumbnails() {
+  const entries = Array.from(pendingThumbnailPaths.entries()).slice(0, 12)
+  for (const [filePath] of entries) pendingThumbnailPaths.delete(filePath)
+  await Promise.all(entries.map(([filePath, cachedPath]) => generateThumbnail(filePath, cachedPath).catch((error) => {
+    logWarn('thumbnail.generate.failed', { filePath, error }, { source: 'host', scope: 'cache' })
+  })))
+}
+
+async function thumbnailResponseForPath(filePath) {
+  const cachedPath = await thumbnailCachePath(filePath)
+  const cached = await fs.readFile(cachedPath).catch(() => null)
+  if (cached) return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+
+  pendingThumbnailPaths.set(filePath, cachedPath)
+  await jobRegistry.run('cache.thumbnails', 'thumbnail-request').catch(() => {})
+  const generated = await fs.readFile(cachedPath).catch(() => null)
+  if (generated) return new Response(generated, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+  return net.fetch(pathToFileURL(filePath).href)
 }
 
 function registerLocalFileProtocol() {
@@ -1696,18 +2001,95 @@ function registerLocalFileProtocol() {
   })
 }
 
+function mimeTypeForPath(filePath) {
+  const extension = extensionForPath(filePath)
+  const types = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic',
+    mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/x-m4v', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+    txt: 'text/plain', md: 'text/markdown', json: 'application/json', pdf: 'application/pdf', html: 'text/html', htm: 'text/html', csv: 'text/csv',
+  }
+  return types[extension] || 'application/octet-stream'
+}
+
+async function imageDimensionsForPath(filePath) {
+  if (!isImagePath(filePath)) return {}
+  const image = nativeImage.createFromPath(filePath)
+  if (!image || image.isEmpty()) return {}
+  const size = image.getSize()
+  return size.width && size.height ? { width: size.width, height: size.height } : {}
+}
+
+function thumbnailUrlForPreviewablePath(filePath) {
+  const expandedPath = expandUserPath(filePath)
+  return isImagePath(expandedPath) || isVideoPath(expandedPath) ? thumbnailUrlForPath(expandedPath) : null
+}
+
+function dataUrlExtension(dataUrl: string) {
+  const mime = dataUrl.match(/^data:([^;,]+)/)?.[1] || 'image/png'
+  if (mime.includes('jpeg')) return 'jpg'
+  if (mime.includes('webp')) return 'webp'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('tiff')) return 'tiff'
+  if (mime.includes('heic')) return 'heic'
+  return 'png'
+}
+
+async function writeOcrDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/)
+  if (!match) throw new Error('Invalid OCR data URL')
+  const outputPath = path.join(os.tmpdir(), `nevermind-ocr-input-${crypto.randomUUID()}.${dataUrlExtension(dataUrl)}`)
+  const body = decodeURIComponent(match[3] || '')
+  await fs.writeFile(outputPath, match[2] ? Buffer.from(match[3] || '', 'base64') : Buffer.from(body))
+  return outputPath
+}
+
+function filePathFromLocalUrl(value: string) {
+  if (value.startsWith(`${LOCAL_FILE_PROTOCOL}:`)) return fileURLToPath(`file:${value.slice(`${LOCAL_FILE_PROTOCOL}:`.length)}`)
+  if (value.startsWith('file:')) return fileURLToPath(value)
+  return null
+}
+
+async function ocrInputPath(input: any) {
+  const value = typeof input === 'string' ? input : input?.path || input?.filePath || input?.fileUrl || input?.url
+  if (!value) throw new Error('OCR requires an image path, file URL, data URL, or ExtensionFile')
+  const text = String(value)
+  if (text.startsWith('data:')) return { path: await writeOcrDataUrl(text), cleanup: true }
+  const urlPath = filePathFromLocalUrl(text)
+  return { path: expandUserPath(urlPath || text), cleanup: false }
+}
+
+async function ocrImage(input: any, options: any = {}) {
+  const resolved = await ocrInputPath(input)
+  try {
+    if (!isImagePath(resolved.path)) throw new Error('OCR currently supports image files only')
+    return await recognizeTextInImage(resolved.path, options)
+  } finally {
+    if (resolved.cleanup) await fs.rm(resolved.path, { force: true }).catch(() => {})
+  }
+}
+
+async function ocrScreen(options: any = {}) {
+  const imagePath = await captureScreenImage(options)
+  try { return await recognizeTextInImage(imagePath, options) }
+  finally { await fs.rm(imagePath, { force: true }).catch(() => {}) }
+}
+
 async function fileToExtensionFile(filePath) {
-  const stat = await fs.stat(filePath).catch(() => null)
+  const expandedPath = expandUserPath(filePath)
+  const stat = await fs.stat(expandedPath).catch(() => null)
+  const dimensions = await imageDimensionsForPath(expandedPath)
   return {
-    path: filePath,
-    name: path.basename(filePath),
-    displayPath: displayUserPath(filePath),
-    url: isImagePath(filePath) || isVideoPath(filePath) ? thumbnailUrlForPath(filePath) : fileUrlForPath(filePath),
-    fileUrl: fileUrlForPath(filePath),
-    videoUrl: isVideoPath(filePath) ? fileUrlForPath(filePath) : null,
-    thumbnailUrl: isImagePath(filePath) || isVideoPath(filePath) ? thumbnailUrlForPath(filePath) : null,
-    kind: isImagePath(filePath) ? 'image' : isVideoPath(filePath) ? 'video' : 'file',
-    extension: extensionForPath(filePath),
+    path: expandedPath,
+    name: path.basename(expandedPath),
+    displayPath: displayUserPath(expandedPath),
+    url: thumbnailUrlForPreviewablePath(expandedPath) || fileUrlForPath(expandedPath),
+    fileUrl: fileUrlForPath(expandedPath),
+    videoUrl: isVideoPath(expandedPath) ? fileUrlForPath(expandedPath) : null,
+    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath),
+    kind: isImagePath(expandedPath) ? 'image' : isVideoPath(expandedPath) ? 'video' : 'file',
+    extension: extensionForPath(expandedPath),
+    mimeType: mimeTypeForPath(expandedPath),
+    ...dimensions,
     mtime: stat ? new Date(stat.mtimeMs).toISOString() : null,
     mtimeMs: stat?.mtimeMs || 0,
     birthtime: stat ? new Date(stat.birthtimeMs).toISOString() : null,
@@ -1765,12 +2147,15 @@ async function enrichDateAdded(files) {
 }
 
 async function findFiles(roots, options: any = {}) {
-  const limit = options.limit || 100
+  const limit = Math.max(1, Math.min(Number(options.limit || 100), MAX_FILE_INDEX_LIMIT))
   const maxDepth = options.depth ?? 2
   const extensions = extensionsForFindOptions(options)
+  const ignored = normalizedIgnorePatterns(options.ignore)
+  const includeHidden = Boolean(options.includeHidden)
   let found = []
 
   async function walk(dir, depth) {
+    if (found.length >= limit) return
     let entries = []
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -1779,8 +2164,10 @@ async function findFiles(roots, options: any = {}) {
     }
 
     for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue
+      if (found.length >= limit) return
+      if (!includeHidden && entry.name.startsWith('.')) continue
       const fullPath = path.join(dir, entry.name)
+      if (ignoredByPattern(fullPath, entry.name, ignored)) continue
       if (entry.isFile()) {
         const ext = extensionForPath(entry.name)
         if (!extensions || extensions.has(ext)) found.push(await fileToExtensionFile(fullPath))
@@ -1790,7 +2177,8 @@ async function findFiles(roots, options: any = {}) {
     }
   }
 
-  await Promise.all(normalizeFindRoots(roots).map((root) => walk(expandUserPath(root), maxDepth)))
+  const findRoots = normalizeFindRoots(roots).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
+  await Promise.all(findRoots.map((root) => walk(root, maxDepth)))
   if ((options.sortBy || options.sort) === 'added') found = await enrichDateAdded(found)
   return sortFoundFiles(found, options).slice(0, limit)
 }
@@ -1889,21 +2277,75 @@ function clipboardImageDataUrl() {
   return image.isEmpty() ? null : image.toDataURL()
 }
 
-async function readDesktopClipboard() {
-  const files = await clipboardFiles()
-  if (files.length) return { type: 'files', files }
-  const image = clipboardImageDataUrl()
-  if (image) return { type: 'image', image }
-  const text = clipboard.readText()
-  return text ? { type: 'text', text } : { type: 'empty' }
+function clipboardFormats(options: any = {}) {
+  const formats = Array.isArray(options.formats) ? options.formats.map(String) : []
+  return formats.length ? new Set(formats) : null
 }
 
-function writeDesktopClipboard(item) {
-  if (typeof item === 'string') return clipboard.writeText(item)
-  if (item?.type === 'text' || item?.text != null) return clipboard.writeText(String(item.text || ''))
+async function readDesktopClipboard(options: any = {}) {
+  const formats = clipboardFormats(options)
+  if (!formats || formats.has('files')) {
+    const files = await clipboardFiles()
+    if (files.length) return { type: 'files', files, paths: files.map((file: any) => file.path) }
+  }
+  if (!formats || formats.has('image')) {
+    const image = clipboardImageDataUrl()
+    if (image) return { type: 'image', imageDataUrl: image, image }
+  }
+  if (!formats || formats.has('html')) {
+    const html = clipboard.readHTML()
+    if (html) return { type: 'html', html, text: clipboard.readText() }
+  }
+  if (!formats || formats.has('text')) {
+    const text = clipboard.readText()
+    if (text) return { type: 'text', text, html: clipboard.readHTML() || undefined }
+  }
+  return { type: 'empty' }
+}
+
+function clipboardImageForContent(item: any) {
   const image = item?.image || item?.imageDataUrl || item?.path
-  if (item?.type === 'image' || image) {
-    return String(image || '').startsWith('data:') ? clipboard.writeImage(nativeImage.createFromDataURL(image)) : clipboard.writeImage(nativeImage.createFromPath(expandUserPath(image)))
+  if (!image) return null
+  return String(image).startsWith('data:') ? nativeImage.createFromDataURL(String(image)) : nativeImage.createFromPath(expandUserPath(String(image)))
+}
+
+function suppressClipboardHistoryForContent(item: any) {
+  if (!item) return
+  if (typeof item === 'string') return suppressClipboardHistoryId(clipboardHistoryIdForText(item))
+  const text = item.text || (item.type === 'html' ? item.html : '')
+  if (text) suppressClipboardHistoryId(clipboardHistoryIdForText(String(text)))
+  const image = clipboardImageForContent(item)
+  if (image && !image.isEmpty()) suppressClipboardHistoryId(`image:${hashValue(image.toPNG())}`)
+  const paths = Array.isArray(item.paths) ? item.paths : Array.isArray(item.files) ? item.files.map((file) => file.path || file).filter(Boolean) : []
+  for (const filePath of paths) if (isVideoPath(String(filePath))) suppressClipboardHistoryId(`video:${hashValue(expandUserPath(String(filePath)))}`)
+}
+
+function writeDesktopClipboardFiles(paths) {
+  const resolvedPaths = (Array.isArray(paths) ? paths : [paths]).map((filePath) => expandUserPath(String(filePath))).filter(Boolean)
+  const fileUrls = resolvedPaths.map((filePath) => pathToFileURL(filePath).href).join('\n')
+  clipboard.write({ text: resolvedPaths.join('\n') })
+  if (fileUrls) clipboard.writeBuffer('public.file-url', Buffer.from(fileUrls, 'utf8'))
+}
+
+function writeDesktopClipboard(item, options: any = {}) {
+  const content = typeof item === 'string' ? { type: 'text', text: item } : item || {}
+  if (content.concealed || options.concealed) suppressClipboardHistoryForContent(content)
+  if (content.type === 'files' || Array.isArray(content.paths) || Array.isArray(content.files)) return writeDesktopClipboardFiles(content.paths || content.files)
+  if (content.type === 'html' || content.html != null) return clipboard.write({ text: String(content.text || ''), html: String(content.html || '') })
+  if (content.type === 'text' || content.text != null) return content.html ? clipboard.write({ text: String(content.text || ''), html: String(content.html) }) : clipboard.writeText(String(content.text || ''))
+  const image = clipboardImageForContent(content)
+  if (content.type === 'image' || image) return clipboard.writeImage(image || nativeImage.createEmpty())
+}
+
+function pasteClipboardAction(action: any) {
+  const restoreClipboard = Boolean(action.restoreClipboard)
+  const snapshot = restoreClipboard ? clipboardSnapshot() : null
+  const content = action.content || action.clipboard || action
+  writeDesktopClipboard(content, { concealed: action.concealed || restoreClipboard })
+  pasteIntoFrontmostApp()
+  if (restoreClipboard && snapshot) {
+    const delay = Math.max(50, Math.min(5_000, Number(action.restoreDelayMs || 250)))
+    setTimeout(() => restoreClipboardSnapshot(snapshot), delay).unref?.()
   }
 }
 
@@ -2022,25 +2464,185 @@ function createExtensionStorage(extension) {
   }
 }
 
+const EXTENSION_AI_ATTACHMENT_LIMIT = 8
+const EXTENSION_AI_TEXT_ATTACHMENT_LIMIT = 80_000
+const EXTENSION_AI_IMAGE_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024
+
+function extensionAiDataUrlImage(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;,]+);base64,(.*)$/s)
+  if (!match) throw new Error('AI image attachment must be a base64 data URL')
+  return { type: 'image' as const, mimeType: match[1], data: match[2] }
+}
+
+async function extensionAiPathImage(filePath) {
+  const resolvedPath = expandUserPath(filePath)
+  const stat = await fs.stat(resolvedPath)
+  if (stat.size > EXTENSION_AI_IMAGE_ATTACHMENT_MAX_BYTES) throw new Error(`AI image attachment is too large: ${displayUserPath(resolvedPath)}`)
+  return { type: 'image' as const, mimeType: mimeTypeForPath(resolvedPath) || 'image/png', data: (await fs.readFile(resolvedPath)).toString('base64') }
+}
+
+function isTextLikeAttachmentPath(filePath) {
+  const mime = mimeTypeForPath(filePath)
+  const ext = extensionForPath(filePath)
+  return mime.startsWith('text/') || ['md', 'markdown', 'txt', 'json', 'csv', 'tsv', 'xml', 'html', 'css', 'js', 'ts', 'tsx', 'jsx', 'yml', 'yaml', 'log'].includes(ext)
+}
+
+async function extensionAiFileContext(filePath, options: any = {}) {
+  const resolvedPath = expandUserPath(filePath)
+  const stat = await fs.stat(resolvedPath).catch(() => null)
+  const title = options.title || path.basename(resolvedPath)
+  if (!stat) return `### ${title}\nMissing file: ${displayUserPath(resolvedPath)}`
+  const metadata = await fileToExtensionFile(resolvedPath)
+  const header = `### ${title}\nPath: ${metadata.displayPath}\nMIME: ${metadata.mimeType || 'unknown'}\nSize: ${metadata.size} bytes`
+  if (options.as === 'metadata') return header
+  if (!isTextLikeAttachmentPath(resolvedPath)) return header
+  const text = await fs.readFile(resolvedPath, 'utf8')
+  return `${header}\n\n${limitedOutput(text, EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`
+}
+
+async function resolveExtensionAiAttachmentList(input) {
+  const output: any[] = []
+  async function visit(value) {
+    const resolved = await value
+    if (resolved == null || resolved === false) return
+    if (Array.isArray(resolved)) {
+      for (const item of resolved) await visit(item)
+      return
+    }
+    output.push(resolved)
+  }
+  await visit(input)
+  return output.slice(0, EXTENSION_AI_ATTACHMENT_LIMIT)
+}
+
+function extensionAiOcrText(result) {
+  if (typeof result === 'string') return result
+  if (Array.isArray(result?.blocks)) return result.blocks.map((block) => block.text).filter(Boolean).join('\n')
+  if (Array.isArray(result?.observations)) return result.observations.map((item) => item.text || item.transcript).filter(Boolean).join('\n')
+  return result?.text || result?.transcript || JSON.stringify(result)
+}
+
+async function normalizeExtensionAiAttachments(extension, attachments, capabilities) {
+  const textSections: string[] = []
+  const images: Array<{ type: 'image'; data: string; mimeType: string }> = []
+  for (const attachment of await resolveExtensionAiAttachmentList(attachments || [])) {
+    if (typeof attachment === 'string') {
+      textSections.push(limitedOutput(attachment, EXTENSION_AI_TEXT_ATTACHMENT_LIMIT))
+      continue
+    }
+    const type = attachment?.type || (attachment?.text != null ? 'text' : attachment?.path || attachment?.file ? 'file' : attachment?.dataUrl || attachment?.imageDataUrl ? 'image' : '')
+    if (type === 'text') {
+      textSections.push(`${attachment.title ? `### ${attachment.title}\n` : ''}${limitedOutput(attachment.text || '', EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`)
+      continue
+    }
+    if (type === 'image') {
+      const source = attachment.dataUrl || attachment.imageDataUrl || attachment.data || attachment.path || attachment.file?.path || attachment.filePath
+      if (attachment.data && attachment.mimeType && !String(source || '').startsWith('data:')) images.push({ type: 'image' as const, data: String(attachment.data), mimeType: String(attachment.mimeType) })
+      else if (String(source || '').startsWith('data:')) images.push(extensionAiDataUrlImage(source))
+      else {
+        if (!capabilities.files) throw permissionDeniedError('desktop.files')
+        images.push(await extensionAiPathImage(source))
+      }
+      if (attachment.ocr) {
+        if (!capabilities.ocr) throw permissionDeniedError('ocr')
+        textSections.push(`### ${attachment.title || 'OCR'}\n${limitedOutput(extensionAiOcrText(await ocrImage(source)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`)
+      }
+      continue
+    }
+    if (type === 'file') {
+      if (!capabilities.files) throw permissionDeniedError('desktop.files')
+      const filePath = attachment.path || attachment.file?.path || attachment.filePath
+      if (!filePath) continue
+      const resolvedPath = expandUserPath(filePath)
+      const shouldAttachImage = (attachment.as === 'image' || (!attachment.as && isImagePath(resolvedPath))) && attachment.as !== 'text'
+      if (shouldAttachImage) images.push(await extensionAiPathImage(resolvedPath))
+      if (!shouldAttachImage || attachment.as === 'text' || attachment.as === 'metadata') textSections.push(await extensionAiFileContext(resolvedPath, attachment))
+      if (attachment.ocr || attachment.as === 'ocr') {
+        if (!capabilities.ocr) throw permissionDeniedError('ocr')
+        textSections.push(`### ${attachment.title || `OCR ${path.basename(resolvedPath)}`}\n${limitedOutput(extensionAiOcrText(await ocrImage(resolvedPath)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`)
+      }
+    }
+  }
+  return { context: textSections.filter(Boolean).join('\n\n'), images }
+}
+
 function createExtensionAi(extension) {
   const extensionKey = path.basename(extension.__filePath || extension.id || 'extension').replace(/[^a-zA-Z0-9._-]/g, '-')
+  const capabilities = {
+    files: hasExtensionPermission(extension, 'desktop.files'),
+    clipboard: hasExtensionPermission(extension, 'clipboard.history'),
+    ocr: hasExtensionPermission(extension, 'ocr'),
+  }
   const enforceAiQuota = () => {
     if (!checkAiRateLimit(extension)) throw Object.assign(new Error('AI rate limit exceeded'), { code: 'ai-rate-limit-exceeded', extensionId: extension?.id })
   }
+  const normalizeOptions = async (options: any = {}) => {
+    const normalized = await normalizeExtensionAiAttachments(extension, options.attachments || [], capabilities)
+    return {
+      system: options.system,
+      signal: options.signal,
+      context: normalized.context,
+      images: normalized.images,
+      onEvent: (event) => {
+        if (event.type === 'delta' && event.text) options.onDelta?.(event.text)
+        options.onEvent?.(event)
+      },
+    }
+  }
+  const stream = (prompt, options: any = {}, session: any = nevermindAi) => {
+    enforceAiQuota()
+    const controller = new AbortController()
+    const removeExternalAbortListener = options.signal?.addEventListener ? (() => {
+      const listener = () => controller.abort()
+      options.signal.addEventListener('abort', listener, { once: true })
+      return () => options.signal.removeEventListener?.('abort', listener)
+    })() : () => {}
+    let inner: any = null
+    const result = (async () => {
+      const normalized = await normalizeOptions({ ...options, signal: controller.signal })
+      inner = session.stream(String(prompt || ''), normalized)
+      return inner.result
+    })().finally(removeExternalAbortListener)
+    return { result, abort: () => { controller.abort(); inner?.abort?.() } }
+  }
   return {
-    ask: (prompt, options: any = {}) => {
+    ask: async (prompt, options: any = {}) => {
       enforceAiQuota()
-      return nevermindAi.ask(String(prompt || ''), { system: options.system })
+      return nevermindAi.ask(String(prompt || ''), await normalizeOptions(options))
     },
+    stream,
     session: (id = 'default', options: any = {}) => {
       const session = nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: options.system })
       return {
         ...session,
-        ask: (prompt: any) => {
+        ask: async (prompt: any, askOptions: any = {}) => {
           enforceAiQuota()
-          return session.ask(prompt)
+          return session.ask(prompt, await normalizeOptions({ ...options, ...askOptions }))
         },
+        stream: (prompt: any, streamOptions: any = {}) => stream(prompt, { ...options, ...streamOptions }, session),
       }
+    },
+    attachments: {
+      text: (text, title) => ({ type: 'text', text: String(text || ''), title }),
+      image: (input, options: any = {}) => ({ ...options, type: 'image', ...(String(input || '').startsWith('data:') ? { dataUrl: input } : { path: input }) }),
+      file: (input, options: any = {}) => ({ ...options, type: 'file', path: typeof input === 'string' ? input : input?.path || input?.filePath }),
+      selectedText: async (title = 'Selected Text') => ({ type: 'text', title, text: await selectedText() }),
+      selectedFiles: async (options: any = {}) => {
+        if (!capabilities.files) throw permissionDeniedError('desktop.files')
+        return (await selectedExtensionFiles()).map((file) => ({ ...options, type: 'file', file }))
+      },
+      clipboard: async (options: any = {}) => {
+        if (!capabilities.clipboard) throw permissionDeniedError('clipboard.history')
+        const item: any = await readDesktopClipboard()
+        if (item.type === 'text') return { type: 'text', title: options.title || 'Clipboard', text: item.text }
+        if (item.type === 'image') return { ...options, type: 'image', title: options.title || 'Clipboard Image', dataUrl: item.image }
+        if (item.type === 'files') return item.files.map((file) => ({ ...options, type: 'file', file }))
+        return null
+      },
+      ocrImage: async (input, options: any = {}) => {
+        if (!capabilities.ocr) throw permissionDeniedError('ocr')
+        return { type: 'text', title: options.title || 'OCR Text', text: extensionAiOcrText(await ocrImage(input, options)) }
+      },
     },
   }
 }
@@ -2131,13 +2733,25 @@ function fileRootItem(item) {
 
 function fileIndexSnapshot(options: any = {}) {
   const { limit, query } = options
+  const roots = normalizeFindRoots(options.roots).map(expandUserPath).filter(Boolean)
+  const extensions = extensionsForFindOptions(options)
+  const ignored = normalizedIgnorePatterns(options.ignore)
   let entries = fileIndex
+  if (roots.length) entries = entries.filter((entry) => roots.some((root) => entry.path === root || entry.path.startsWith(`${root}${path.sep}`)))
+  if (extensions) entries = entries.filter((entry) => extensions.has(entry.extension || extensionForPath(entry.path)))
+  if (options.ignore) entries = entries.filter((entry) => !ignoredByPattern(entry.path, entry.name, ignored))
   if (query) {
     const needle = String(query).toLowerCase()
     entries = entries.filter((entry) => `${entry.name || ''} ${entry.displayPath || ''}`.toLowerCase().includes(needle))
   }
-  const max = typeof limit === 'number' ? limit : entries.length
-  return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath }))
+  const max = typeof limit === 'number' ? Math.max(0, Math.min(limit, entries.length)) : entries.length
+  return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath, extension: entry.extension, kind: entry.kind }))
+}
+
+async function reindexFiles(options: any = {}) {
+  fileIndex = await scanFiles(options)
+  paletteWindow.win?.webContents.send('root-items:changed')
+  return { count: fileIndex.length, roots: normalizedIndexRoots(options).map(displayUserPath) }
 }
 
 function createClipboardExtension() {
@@ -2301,6 +2915,107 @@ function createKeyboardShortcutsExtension() {
   }
 }
 
+function jobTime(value?: number) {
+  return value ? new Date(value).toLocaleTimeString() : 'Never'
+}
+
+function jobTriggerSummary(job: JobSnapshot) {
+  if (!job.triggers.length) return 'Manual'
+  return job.triggers.map((trigger: any) => {
+    if (trigger.type === 'startup') return 'Startup'
+    if (trigger.type === 'interval') return `Every ${Math.round(trigger.everyMs / 1000)}s`
+    if (trigger.type === 'event') return `On ${trigger.event}`
+    return 'Manual'
+  }).join(' · ')
+}
+
+function jobSubtitle(job: JobSnapshot) {
+  const status = job.status === 'running' ? 'Running' : job.status === 'failed' ? `Failed: ${job.lastError || 'unknown error'}` : job.status === 'backing-off' ? `Backing off until ${jobTime(job.backoffUntil)}` : job.status
+  return `${status} · ${jobTriggerSummary(job)} · Last: ${jobTime(job.lastFinishedAt)}`
+}
+
+function jobHistoryMarkdown(job: JobSnapshot) {
+  if (!job.history.length) return '_No runs recorded yet._'
+  return job.history.map((entry) => `- ${new Date(entry.finishedAt).toLocaleTimeString()} · ${entry.status} · ${entry.reason} · ${entry.durationMs}ms${entry.error ? ` · ${entry.error}` : ''}`).join('\n')
+}
+
+function jobDetailsMarkdown(job: JobSnapshot) {
+  return [
+    `# ${job.title}`,
+    '',
+    `- ID: ${job.id}`,
+    `- Owner: ${job.owner}`,
+    job.scope ? `- Scope: ${job.scope}` : '',
+    `- Status: ${job.status}`,
+    `- Enabled: ${job.enabled ? 'yes' : 'no'}`,
+    `- Running: ${job.running ? 'yes' : 'no'}`,
+    `- Triggers: ${jobTriggerSummary(job)}`,
+    `- Runs: ${job.runCount}`,
+    `- Failures: ${job.failureCount}`,
+    `- Last reason: ${job.lastReason || '—'}`,
+    `- Last started: ${jobTime(job.lastStartedAt)}`,
+    `- Last finished: ${jobTime(job.lastFinishedAt)}`,
+    job.lastDurationMs != null ? `- Last duration: ${job.lastDurationMs}ms` : '',
+    job.nextRunAt ? `- Next run: ${jobTime(job.nextRunAt)}` : '',
+    job.backoffUntil ? `- Backoff until: ${jobTime(job.backoffUntil)}` : '',
+    `- Consecutive failures: ${job.consecutiveFailures}`,
+    job.lastError ? `\n## Last error\n\n${job.lastError}` : '',
+    `\n## Recent runs\n\n${jobHistoryMarkdown(job)}`,
+  ].filter(Boolean).join('\n')
+}
+
+function jobItem(ctx, job: JobSnapshot) {
+  const runNow = ctx.actions.run('Run Now', async () => {
+    try {
+      await jobRegistry.run(job.id, 'manual')
+      return { toast: { message: `Ran ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
+    } catch (error) {
+      return { view: { type: 'preview', title: `${job.title} Failed`, content: `# ${job.title} Failed\n\n${error instanceof Error ? error.message : String(error)}` } }
+    }
+  })
+  const toggle = ctx.actions.run(job.enabled ? 'Disable Job' : 'Enable Job', async () => {
+    jobRegistry.setEnabled(job.id, !job.enabled)
+    await saveUserState()
+    return { toast: { message: `${job.enabled ? 'Disabled' : 'Enabled'} ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
+  })
+  const clearError = ctx.actions.run('Clear Error', () => {
+    jobRegistry.clearError(job.id)
+    return { toast: { message: `Cleared ${job.title}` }, view: backgroundTasksView(ctx), navigation: 'replace' }
+  })
+  const showDetails = ctx.actions.push('Show Details', { type: 'preview', title: job.title, content: jobDetailsMarkdown(job) })
+  return {
+    id: `job:${job.id}`,
+    title: job.title,
+    subtitle: jobSubtitle(job),
+    icon: job.status === 'failed' || job.status === 'backing-off' ? 'circle-alert' : job.running ? 'loader' : job.enabled ? 'activity' : 'circle-pause',
+    accessories: [{ text: job.owner }, { text: job.status }],
+    primaryAction: showDetails,
+    actionPanel: { sections: [{ actions: [showDetails, runNow, toggle, job.lastError ? clearError : null].filter(Boolean) }] },
+  }
+}
+
+function backgroundTasksView(ctx) {
+  const jobs = jobRegistry.snapshot()
+  return ctx.ui.list({
+    id: 'background-tasks',
+    title: 'Background Tasks',
+    subtitle: `${jobs.length} host-managed jobs`,
+    presentation: 'root',
+    searchBarPlaceholder: 'Search background tasks',
+    emptyView: { title: 'No background tasks registered.' },
+    items: jobs.map((job) => jobItem(ctx, job)),
+  })
+}
+
+function createBackgroundTasksExtension() {
+  return {
+    id: 'nevermind.background-tasks',
+    title: 'Background Tasks',
+    permissions: [] as const,
+    commands: [{ id: 'background-tasks', actionId: 'background-tasks', title: 'Background Tasks', subtitle: 'Inspect and run host-managed background jobs', icon: 'activity', score: 16, run: (ctx) => backgroundTasksView(ctx) }],
+  }
+}
+
 function createAccountExtension() {
   const extensionId = 'nevermind.account'
 
@@ -2416,6 +3131,35 @@ function wrapWithConfirmation(action: any, input: any) {
   }
 }
 
+function buildPromptAction(input: any = {}, options: any = {}) {
+  const targetAction = input?.action || input?.onSubmit
+  if (!targetAction) throw new Error('ctx.input.prompt requires action')
+  const title = String(input?.title || targetAction.title || 'Prompt')
+  return {
+    ...options,
+    type: 'promptAction',
+    title,
+    subtitle: input?.message !== undefined ? String(input.message) : options.subtitle,
+    promptMessage: input?.message !== undefined ? String(input.message) : undefined,
+    fields: Array.isArray(input?.fields) ? input.fields : [],
+    targetAction,
+    submitTitle: input?.submitTitle !== undefined ? String(input.submitTitle) : undefined,
+  }
+}
+
+function promptActionView(action: any = {}) {
+  const targetAction = action.targetAction || action.action
+  if (!targetAction) throw new Error('Prompt action is missing its target action')
+  const fields = Array.isArray(action.fields) ? action.fields : []
+  const promptMessage = action.promptMessage || action.subtitle
+  return {
+    type: 'form',
+    title: action.title || 'Prompt',
+    fields: promptMessage ? [{ id: '__prompt_message', type: 'description', description: String(promptMessage) }, ...fields] : fields,
+    submitAction: { ...targetAction, title: action.submitTitle || targetAction.title || 'Submit' },
+  }
+}
+
 function buildConfirmAction(input: any) {
   const inner = input?.onConfirm || input?.action
   if (!inner) throw new Error('ctx.ui.confirm requires onConfirm action')
@@ -2452,11 +3196,63 @@ function progressView(input: any = {}) {
   }
 }
 
-function createExtensionContext(extension, command) {
+async function safeSelectedText() {
+  try { return String(await selectedText()) } catch { return '' }
+}
+
+function templateDateParts(now = new Date()) {
+  return {
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    datetime: now.toLocaleString(),
+  }
+}
+
+function normalizeTemplateOptions(input: any = {}) {
+  const looksLikeOptions = input && typeof input === 'object' && !Array.isArray(input) && ['variables', 'cursorToken', 'returnCursor', 'returnResult', 'includeClipboard', 'includeSelectedText', 'promptMissing'].some((key) => key in input)
+  return looksLikeOptions ? { ...input, variables: input.variables || {} } : { variables: input || {} }
+}
+
+async function expandTextTemplate(input: string, variablesOrOptions: Record<string, unknown> = {}, hostOptions: { includeClipboard?: boolean } = {}) {
+  const options: any = normalizeTemplateOptions(variablesOrOptions)
+  const cursorToken = String(options.cursorToken || '\uE000NEVERMIND_CURSOR\uE000')
+  const missingVariables = new Set<string>()
+  const builtins = {
+    ...templateDateParts(),
+    uuid: crypto.randomUUID(),
+    clipboard: hostOptions.includeClipboard && options.includeClipboard !== false ? clipboard.readText() : '',
+    selectedText: options.includeSelectedText === false ? '' : await safeSelectedText(),
+    cursor: cursorToken,
+  }
+  const values = { ...builtins, ...(options.variables || {}) }
+  const textWithCursor = String(input || '').replace(/\{\{\s*([^{}]+?)\s*\}\}|\{\s*([^{}]+?)\s*\}/g, (_match, doubleName, singleName) => {
+    const rawName = String(doubleName || singleName || '').trim()
+    if (rawName.startsWith('calculator:')) {
+      const result = calculate(rawName.slice('calculator:'.length).trim())
+      return result == null ? '' : String(result)
+    }
+    if (rawName.startsWith('argument:')) {
+      const argumentName = rawName.slice('argument:'.length).trim()
+      const value = values[argumentName]
+      if (value == null) missingVariables.add(argumentName)
+      return value == null ? '' : String(value)
+    }
+    const value = values[rawName]
+    if (value == null) missingVariables.add(rawName)
+    return value == null ? '' : String(value)
+  })
+  const cursor = textWithCursor.indexOf(cursorToken)
+  const text = cursor >= 0 ? textWithCursor.replace(cursorToken, '') : textWithCursor
+  if (options.returnCursor || options.returnResult || options.promptMissing) return { text, cursor: cursor >= 0 ? cursor : undefined, missingVariables: Array.from(missingVariables) }
+  return text
+}
+
+function createExtensionContext(extension, command, launchContext?: any) {
   const canUseDesktopApps = hasExtensionPermission(extension, 'desktop.apps')
   const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
   const canUseClipboard = hasExtensionPermission(extension, 'clipboard.history')
   const canUseSystem = hasExtensionPermission(extension, 'system')
+  const canUseOcr = hasExtensionPermission(extension, 'ocr')
   const canUseUpdates = hasExtensionPermission(extension, 'updates')
   const canUseShortcuts = hasExtensionPermission(extension, 'shortcuts')
   const canUseAi = hasExtensionPermission(extension, 'ai')
@@ -2465,6 +3261,7 @@ function createExtensionContext(extension, command) {
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
     command,
+    launch: launchContext ? structuredClone(launchContext) : undefined,
     ui: {
       list: (view) => ({ ...view, type: 'list' }),
       grid: (view) => ({ ...view, type: 'grid' }),
@@ -2486,6 +3283,7 @@ function createExtensionContext(extension, command) {
       },
       chat: (view) => ({ ...view, type: 'chat' }),
       form: (view) => ({ ...view, type: 'form' }),
+      editor: (view) => ({ ...view, type: 'editor' }),
       progress: (input: any = {}) => progressView(input),
       confirm: (input: any = {}) => buildConfirmAction(input),
       toast: (input: any = {}) => ({ toast: { message: String(input?.message || ''), tone: input?.tone || 'default' } }),
@@ -2505,6 +3303,9 @@ function createExtensionContext(extension, command) {
       openUrl: (url, title = 'Open URL', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openUrl', title, url }),
       copyText: (text, title = 'Copy', options: any = {}) => ({ ...options, type: 'copyText', title, text }),
       pasteText: (text, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteText', title, text }),
+      paste: (content, title = 'Paste', options: any = {}) => ({ ...options, type: 'pasteClipboard', title, content }),
+      ref: (registeredActionId, title = 'Run Action', options: any = {}) => ({ ...options, type: 'runExtensionRegisteredAction', title, extensionId: extension.id, registeredActionId }),
+      typeText: (text, title = 'Type Text', options: any = {}) => ({ ...options, type: 'typeText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
       trash: (paths, title = 'Move to Trash', options: any = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
       push: (title, view, options: any = {}) => ({ ...options, type: 'pushView', title, view }),
@@ -2548,6 +3349,7 @@ function createExtensionContext(extension, command) {
         toggleControls: (title = 'Toggle Camera Controls', options: any = {}) => ({ ...options, type: 'nativeAction', title, nativeAction: { kind: 'camera.toggleControls' } }),
       },
     },
+    action: (input) => input,
     navigation: {
       push: (view) => ({ view, navigation: 'push' }),
       replace: (view) => ({ view, navigation: 'replace' }),
@@ -2564,19 +3366,45 @@ function createExtensionContext(extension, command) {
         keyboardSettings: keyboardSettingsSubtitle(),
       },
     },
+    text: {
+      template: (input, variables) => expandTextTemplate(input, variables, { includeClipboard: canUseClipboard }),
+    },
+    input: {
+      prompt: buildPromptAction,
+    },
+    windows: {
+      create: (view, options: any = {}) => ({ dismissAfterRun: 'auto', type: 'createWindow', title: options.title || view?.title || 'Open Window', view, windowOptions: options, windowId: options.id || view?.id }),
+      show: (id, title = 'Show Window', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'showWindow', title, windowId: id }),
+      hide: (id, title = 'Hide Window', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'hideWindow', title, windowId: id }),
+      toggle: (idOrView, titleOrOptions: any = 'Toggle Window', options: any = {}) => {
+        if (typeof idOrView === 'string') return { dismissAfterRun: 'auto', ...options, type: 'toggleWindow', title: typeof titleOrOptions === 'string' ? titleOrOptions : titleOrOptions.title || 'Toggle Window', windowId: idOrView, windowOptions: typeof titleOrOptions === 'string' ? options : titleOrOptions }
+        const windowOptions = typeof titleOrOptions === 'string' ? options : titleOrOptions || {}
+        return { dismissAfterRun: 'auto', type: 'toggleWindow', title: typeof titleOrOptions === 'string' ? titleOrOptions : windowOptions.title || idOrView?.title || 'Toggle Window', view: idOrView, windowOptions, windowId: windowOptions.id || idOrView?.id }
+      },
+      close: (id, title = 'Close Window', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'closeWindow', title, windowId: id }),
+    },
     clipboard: {
       history: canUseClipboard ? {
         list: (options: any = {}) => clipboardHistorySnapshot(options),
         search: (query, options: any = {}) => clipboardHistorySnapshot({ ...options, query }),
+        get: (id) => clipboardHistoryGet(String(id || '')),
+        remove: async (idOrIds) => ({ removed: removeClipboardHistoryByAction({ clipboardHistoryRange: 'ids', clipboardHistoryItemIds: Array.isArray(idOrIds) ? idOrIds : [idOrIds] }) }),
+        clear: async (options: any = {}) => ({ removed: removeClipboardHistoryByAction({ clipboardHistoryRange: options.olderThanMs ? 'older-than' : 'all', olderThanMs: options.olderThanMs, types: options.types }) }),
       } : undefined,
     },
     desktop: {
+      keyboard: {
+        typeText: (text, options: any = {}) => typeTextIntoFrontmostApp(String(text || ''), options),
+      },
       clipboard: canUseClipboard ? {
         readText: () => clipboard.readText(),
-        writeText: (text) => clipboard.writeText(String(text || '')),
+        writeText: (text, options: any = {}) => writeDesktopClipboard({ type: 'text', text }, options),
+        readHtml: () => clipboard.readHTML(),
+        writeHtml: (html, text = '', options: any = {}) => writeDesktopClipboard({ type: 'html', html, text }, options),
         readImage: clipboardImageDataUrl,
-        writeImage: (image) => writeDesktopClipboard({ type: 'image', image }),
+        writeImage: (image, options: any = {}) => writeDesktopClipboard({ type: 'image', image }, options),
         readFiles: clipboardFiles,
+        writeFiles: (paths, options: any = {}) => writeDesktopClipboard({ type: 'files', paths }, options),
         read: readDesktopClipboard,
         write: writeDesktopClipboard,
       } : undefined,
@@ -2608,6 +3436,11 @@ function createExtensionContext(extension, command) {
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
+        thumbnail: (filePath) => thumbnailUrlForPreviewablePath(filePath),
+        metadata: (filePath) => fileToExtensionFile(filePath),
+        indexedRoots: () => defaultFileIndexRoots().map(displayUserPath),
+        indexSnapshot: (options: any = {}) => fileIndexSnapshot(options),
+        reindex: (options: any = {}) => reindexFiles(options),
         recent: (options: any = {}) => fileIndexSnapshot(options),
         searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
@@ -2624,6 +3457,11 @@ function createExtensionContext(extension, command) {
         }),
       } : undefined,
     },
+    ocr: canUseOcr ? {
+      image: ocrImage,
+      screen: (options: any = {}) => ocrScreen(options),
+      region: (rect, options: any = {}) => ocrScreen({ ...options, region: rect }),
+    } : undefined,
     storage: createExtensionStorage(extension),
     settings: {
       definitions: () => SETTING_DEFINITIONS.map((definition) => ({ ...definition, value: getSetting(definition.id) })),
@@ -2834,7 +3672,7 @@ function initNevermindAi() {
 
 function extensionRuntimeStateForFile(filename) {
   const base = path.basename(filename || '')
-  const matches = Array.from(extensionRegistry.values()).filter((entry) => path.basename(entry.extension?.__filePath || '') === base)
+  const matches = Array.from(extensionActionRegistry.values()).filter((entry) => path.basename(entry.extension?.__filePath || '') === base)
   return {
     loaded: matches.length > 0,
     extensionId: matches[0]?.extension?.id,
@@ -2897,9 +3735,9 @@ function addAliasForGeneratedAction(chatId) {
   const chat = userState.aiChats[chatId]
   if (!chat?.query) return
   const files = chatTouchedExtensionFiles(chat)
-  const entry = Array.from(extensionRegistry.values()).find((e) => files.includes(path.basename(e.extension?.__filePath || '')))
+  const entry = Array.from(extensionActionRegistry.values()).find((e) => files.includes(path.basename(e.extension?.__filePath || '')))
   if (!entry) return
-  const action = extensionActionFromCommand(entry.extension, entry.command)
+  const action = extensionActionFromContribution(entry)
   if (!action?.id) return
   const aliases = new Set(actionAliases(action.id))
   aliases.add(chat.query.trim())
@@ -2950,11 +3788,16 @@ async function loadExtensionModule(fullPath) {
 }
 
 async function loadExtensions() {
-  extensionRegistry.clear()
+  extensionActionRegistry.clear()
   extensionModules.clear()
+  fixtureExtensions = []
   extensionRootItemsCache.clear()
   extensionRootItemsRefreshes.clear()
+  jobRegistry.unregisterWhere((job) => job.owner === 'extension')
+  for (const watcher of extensionFileWatchers) watcher.close()
+  extensionFileWatchers = []
   registerInternalExtensions()
+  if (isDev) await loadDevExtensions()
 
   await fs.mkdir(extensionsDir, { recursive: true })
   await ensureExtensionTypeDefinitions()
@@ -3022,14 +3865,233 @@ async function renameExtension(extension, command, metadata) {
   return { ok: true, title: extension.title, commandTitle: command?.title }
 }
 
+function fixturePersistentActionItems(fixture) {
+  const registeredEntries = Array.from(extensionActionRegistry.values()).filter((entry) => entry.extension.id === fixture.id)
+  return registeredEntries.map((entry) => {
+    const item = entry.item
+    const persistentAction = extensionActionFromContribution(entry)
+    return {
+      ...item,
+      id: `fixture-action:${fixture.id}:${item.id}`,
+      persistentAction,
+      primaryAction: persistentAction?.rootAction || item.primaryAction,
+      subtitle: item.subtitle || `Persistent action · ${fixture.title || fixture.id}`,
+      accessories: [...(item.accessories || []), { text: entry.source === 'command' ? 'command' : 'action' }],
+    }
+  })
+}
+
+function fixturesIndexView(ctx) {
+  return ctx.ui.list({
+    id: 'extension-api-fixtures',
+    title: 'Extension API Fixtures',
+    subtitle: 'Dev-only runnable fixtures for host-rendered extension UI',
+    searchBarPlaceholder: 'Search fixture commands and persistent actions',
+    emptyView: { title: 'No fixtures found', subtitle: 'Add fixture extensions under src/fixtures.' },
+    sections: fixtureExtensions.map((fixture) => ({
+      title: fixture.title || fixture.id,
+      subtitle: fixture.subtitle || 'Extension API fixture',
+      items: fixturePersistentActionItems(fixture),
+    })), 
+  })
+}
+
+function fixturesRootItem(ctx) {
+  const persistentItems = fixtureExtensions.flatMap((fixture) => fixturePersistentActionItems(fixture))
+  const runnableCount = persistentItems.length
+  return {
+    id: 'fixtures',
+    title: 'Fixtures',
+    subtitle: `${fixtureExtensions.length} dev-only extension API ${fixtureExtensions.length === 1 ? 'fixture' : 'fixtures'} · ${runnableCount} ${runnableCount === 1 ? 'item' : 'items'}`,
+    icon: 'wrench',
+    aliases: ['fixture', 'fixtures', 'dev fixtures', 'extension fixtures', ...fixtureExtensions.map((fixture) => fixture.title || fixture.id), ...persistentItems.map((item) => item.title)].filter(Boolean),
+    score: 100,
+    primaryAction: ctx.actions.push('Open Fixtures', fixturesIndexView(ctx)),
+  }
+}
+
+function createFixturesExtension() {
+  return {
+    id: 'dev.fixtures',
+    title: 'Fixtures',
+    subtitle: 'Dev-only extension API fixtures',
+    rootItems(ctx) {
+      return [fixturesRootItem(ctx)]
+    },
+    searchItems(ctx) {
+      return [fixturesRootItem(ctx)]
+    },
+  }
+}
+
+async function loadDevExtensions() {
+  const fixturesDir = path.join(app.getAppPath(), 'src', 'fixtures')
+  const entries = await fs.readdir(fixturesDir, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (!isExtensionSourceFile(entry.name)) continue
+    const fullPath = path.join(fixturesDir, entry.name)
+    try {
+      const extension = await loadExtensionModule(fullPath)
+      extension.__filePath = fullPath
+      extension.__dev = true
+      extension.__fixture = true
+      fixtureExtensions.push(extension)
+      registerExtension(extension)
+    } catch (error) {
+      logError('extension.dev.load.failed', error, { source: 'host', scope: 'extension', extensionId: path.basename(fullPath) })
+    }
+  }
+  if (fixtureExtensions.length) registerExtension(createFixturesExtension())
+}
+
 function registerInternalExtensions() {
   for (const createExtension of INTERNAL_EXTENSION_FACTORIES) registerExtension(createExtension())
   assertInternalExtensionsRegistered()
 }
 
+function durationMs(value: any) {
+  if (typeof value === 'number') return Math.max(1000, value)
+  const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?$/i)
+  if (!match) return 0
+  const amount = Number(match[1])
+  const unit = (match[2] || 'ms').toLowerCase()
+  const multiplier = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : unit === 's' ? 1000 : 1
+  return Math.max(1000, Math.round(amount * multiplier))
+}
+
+function triggerPermission(extension, trigger: any) {
+  if (trigger?.type === 'clipboard.changed') return hasExtensionPermission(extension, 'clipboard.history')
+  if (trigger?.type === 'files.changed') return hasExtensionPermission(extension, 'desktop.files')
+  if (trigger?.type === 'app.frontmost.changed') return hasExtensionPermission(extension, 'desktop.apps')
+  return true
+}
+
+function normalizedFileTrigger(trigger: any) {
+  const roots = normalizeFindRoots(trigger.roots).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
+  return {
+    ...trigger,
+    roots,
+    includeHidden: Boolean(trigger.includeHidden),
+    extensions: extensionsForFindOptions(trigger) || null,
+    ignored: normalizedIgnorePatterns(trigger.ignore),
+  }
+}
+
+function fileWatchChangedPath(root: string, filename: string | Buffer | null) {
+  if (!filename) return root
+  const value = String(filename)
+  return path.isAbsolute(value) ? value : path.join(root, value)
+}
+
+function fileWatchPathMatches(filePath: string, trigger: any) {
+  const name = path.basename(filePath)
+  if (!trigger.includeHidden && name.startsWith('.')) return false
+  if (ignoredByPattern(filePath, name, trigger.ignored || [])) return false
+  const ext = extensionForPath(filePath)
+  if (trigger.extensions && !trigger.extensions.has(ext)) return false
+  if (trigger.kind === 'image' && !isImagePath(filePath)) return false
+  if (trigger.kind === 'video' && !isVideoPath(filePath)) return false
+  if (trigger.kind === 'media' && !isImagePath(filePath) && !isVideoPath(filePath)) return false
+  return true
+}
+
+function watchExtensionFileTrigger(trigger: any, event: string) {
+  const normalized = normalizedFileTrigger(trigger)
+  for (const root of normalized.roots) {
+    if (!fsSync.existsSync(root)) continue
+    try {
+      const watcher = fsSync.watch(root, { recursive: process.platform === 'darwin' || process.platform === 'win32' }, (_eventType, filename) => {
+        const changedPath = fileWatchChangedPath(root, filename)
+        if (!fileWatchPathMatches(changedPath, normalized)) return
+        jobRegistry.emit(event, { trigger: normalizedFileTriggerForLaunch(trigger), root: displayUserPath(root), changedPaths: [changedPath] })
+      })
+      watcher.on('error', () => {})
+      extensionFileWatchers.push(watcher)
+    } catch {}
+  }
+}
+
+function normalizedFileTriggerForLaunch(trigger: any) {
+  return {
+    type: 'files.changed',
+    roots: normalizeFindRoots(trigger.roots).map(displayUserPath),
+    debounceMs: trigger.debounceMs || 0,
+    includeHidden: Boolean(trigger.includeHidden),
+    extensions: trigger.extensions,
+    kind: trigger.kind,
+    ignore: trigger.ignore,
+  }
+}
+
+function extensionTriggerForLaunch(trigger: any) {
+  if (!trigger) return undefined
+  if (trigger.type === 'files.changed') return normalizedFileTriggerForLaunch(trigger)
+  return structuredClone(trigger)
+}
+
+function jobTriggersFromExtensionTriggers(extension, triggers: any[] = [], jobId = '') {
+  return triggers.map((trigger, index) => {
+    if (!triggerPermission(extension, trigger)) {
+      logWarn('extension.jobTrigger.permissionDenied', { trigger: trigger?.type }, { source: 'host', scope: 'extension', extensionId: extension.id })
+      return null
+    }
+    if (trigger?.type === 'startup') return { type: 'startup' as const, delayMs: trigger.delayMs || 0, payload: { trigger: extensionTriggerForLaunch(trigger) } }
+    if (trigger?.type === 'login') return { type: 'event' as const, event: 'login', debounceMs: trigger.debounceMs || 0, payload: { trigger: extensionTriggerForLaunch(trigger) } }
+    if (trigger?.type === 'wake') return { type: 'event' as const, event: 'wake', debounceMs: trigger.debounceMs || 0, payload: { trigger: extensionTriggerForLaunch(trigger) } }
+    if (trigger?.type === 'interval') {
+      const everyMs = durationMs(trigger.every)
+      return everyMs ? { type: 'interval' as const, everyMs, delayMs: trigger.delayMs, payload: { trigger: extensionTriggerForLaunch(trigger) } } : null
+    }
+    if (trigger?.type === 'clipboard.changed') return { type: 'event' as const, event: 'clipboard.changed', debounceMs: trigger.debounceMs || 0, payload: { trigger: extensionTriggerForLaunch(trigger) } }
+    if (trigger?.type === 'app.frontmost.changed') return { type: 'event' as const, event: 'app.frontmost.changed', debounceMs: trigger.debounceMs || 0, payload: { trigger: extensionTriggerForLaunch(trigger) } }
+    if (trigger?.type === 'files.changed') {
+      const event = `files.changed:${jobId}:${index}`
+      watchExtensionFileTrigger(trigger, event)
+      return { type: 'event' as const, event, debounceMs: trigger.debounceMs || 0, payload: { trigger: extensionTriggerForLaunch(trigger) } }
+    }
+    return null
+  }).filter(Boolean)
+}
+
+async function extensionLaunchContextFromJob(context: any) {
+  const payload = context?.payload && typeof context.payload === 'object' ? context.payload : {}
+  const changedPaths = Array.isArray(payload.changedPaths) ? payload.changedPaths.map((value) => expandUserPath(String(value))).filter(Boolean).slice(-100) : []
+  const files = changedPaths.length ? await Promise.all(changedPaths.map((filePath) => fileToExtensionFile(filePath))) : []
+  return structuredClone({
+    trigger: payload.trigger,
+    files,
+    changedPaths,
+    reason: context?.reason || 'manual',
+    event: context?.event,
+    startedAt: context?.startedAt || Date.now(),
+  })
+}
+
+function registerExtensionBackgroundJob(entry, item) {
+  const mode = item.mode || (item.background ? 'background' : 'view')
+  const id = `extension.${entry.extension.id}.${item.id}`
+  const triggers = jobTriggersFromExtensionTriggers(entry.extension, item.triggers || [], id)
+  if (mode === 'view' && triggers.length === 0) return
+  jobRegistry.register({
+    id,
+    title: item.title,
+    owner: 'extension',
+    scope: entry.extension.id,
+    triggers,
+    timeoutMs: Number(item.timeoutMs || EXTENSION_ROOT_ITEMS_TIMEOUT_MS),
+    run: async (context) => {
+      const action = item.primaryAction || item.action
+      if (!action) return
+      const launchContext = await extensionLaunchContextFromJob(context)
+      const result = await executeViewAction(action, launchContext)
+      if (result?.view) logInfo('extension.background.viewIgnored', { jobId: id, title: item.title }, { source: 'host', scope: 'extension', extensionId: entry.extension.id, commandId: item.id })
+    },
+  })
+}
+
 function assertInternalExtensionsRegistered() {
   const missingExtensions = REQUIRED_INTERNAL_EXTENSIONS.filter((extensionId) => !extensionModules.has(extensionId))
-  const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(({ extensionId, commandId }) => !extensionRegistry.has(`${extensionId}:${commandId}`))
+  const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(({ extensionId, commandId }) => !extensionActionRegistry.has(`${extensionId}:${commandId}`))
   if (missingExtensions.length || missingCommands.length) {
     const details = [
       missingExtensions.length ? `extensions: ${missingExtensions.join(', ')}` : '',
@@ -3044,7 +4106,44 @@ function registerExtension(extension) {
   extensionModules.set(extension.id, extension)
   for (const command of extension.commands || []) {
     if (!command?.id || !command.title || typeof command.run !== 'function') continue
-    extensionRegistry.set(`${extension.id}:${command.id}`, { extension, command })
+    const entry = { extension, command, source: 'command' }
+    const action = { type: 'runExtensionAction', title: command.title, __handler: async (ctx, actionArg) => command.run(ctx, actionArg) }
+    const item = {
+      id: command.id,
+      actionId: command.actionId || extensionCommandActionId(extension, command),
+      title: command.title,
+      subtitle: command.subtitle || extension.title || 'Extension command',
+      aliases: command.aliases || [],
+      icon: command.icon || 'sparkles',
+      score: command.score || 12,
+      shortcut: command.shortcut,
+      shortcutScope: command.shortcutScope,
+      globalShortcut: command.globalShortcut,
+      dismissAfterRun: command.dismissAfterRun,
+      background: command.background || command.mode === 'background' || command.mode === 'noView',
+      mode: command.mode,
+      triggers: command.triggers,
+      primaryAction: action,
+    }
+    const normalizedItem = normalizeViewItems([item], entry)[0]
+    extensionActionRegistry.set(`${extension.id}:${command.id}`, { ...entry, item: normalizedItem })
+    registerExtensionBackgroundJob(entry, normalizedItem)
+  }
+  if (typeof extension.actions === 'function') {
+    try {
+      const result = extension.actions(createExtensionContext(extension, null))
+      const items = Array.isArray(result) ? result : Array.isArray(result?.actions) ? result.actions : []
+      const entry = { extension, command: { id: 'actions', title: extension.title || extension.id }, source: 'action' }
+      for (const item of items) {
+        if (!item?.id || !item.title) continue
+        const action = item.run ? { type: 'runExtensionAction', title: item.title, __handler: item.run } : item.action
+        const normalizedItem = normalizeViewItems([{ ...item, background: item.background || item.mode === 'background' || item.mode === 'noView', primaryAction: action }], entry)[0]
+        extensionActionRegistry.set(`${extension.id}:${item.id}`, { ...entry, item: normalizedItem })
+        registerExtensionBackgroundJob(entry, normalizedItem)
+      }
+    } catch (error) {
+      logError('extension.actions.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
+    }
   }
 }
 
@@ -3053,12 +4152,45 @@ function displayUserPath(filePath) {
   return filePath.startsWith(home) ? `~${filePath.slice(home.length)}` : filePath
 }
 
-async function scanFiles() {
-  const roots = ['Desktop', 'Documents', 'Downloads'].map((name) => path.join(os.homedir(), name))
-  const ignored = new Set(['node_modules', '.git', 'Library', 'Applications'])
+const DEFAULT_FILE_INDEX_IGNORES = ['node_modules', '.git', 'Library', 'Applications']
+const DEFAULT_FILE_INDEX_LIMIT = 5_000
+const MAX_FILE_INDEX_LIMIT = 20_000
+
+function defaultFileIndexRoots() {
+  return ['Desktop', 'Documents', 'Downloads'].map((name) => path.join(os.homedir(), name))
+}
+
+function normalizedIndexRoots(options: any = {}) {
+  const roots = normalizeFindRoots(options.roots)
+  return (roots.length ? roots : defaultFileIndexRoots()).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
+}
+
+function normalizedIgnorePatterns(ignore) {
+  const values = Array.isArray(ignore) ? ignore : ignore ? [ignore] : []
+  return [...DEFAULT_FILE_INDEX_IGNORES, ...values].map((value) => String(value).trim()).filter(Boolean)
+}
+
+function wildcardPatternMatches(pattern, value) {
+  if (!pattern.includes('*')) return false
+  const escaped = pattern.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')
+  return new RegExp(`^${escaped}$`, 'i').test(value)
+}
+
+function ignoredByPattern(fullPath, name, patterns) {
+  return patterns.some((pattern) => pattern === name || wildcardPatternMatches(pattern, name) || fullPath.includes(pattern))
+}
+
+async function scanFiles(options: any = {}) {
+  const roots = normalizedIndexRoots(options)
+  const ignored = normalizedIgnorePatterns(options.ignore)
+  const includeHidden = Boolean(options.includeHidden)
+  const maxDepth = options.depth ?? 2
+  const limit = Math.max(1, Math.min(Number(options.limit || DEFAULT_FILE_INDEX_LIMIT), MAX_FILE_INDEX_LIMIT))
+  const extensions = extensionsForFindOptions(options)
   const found = []
 
   async function walk(dir, depth) {
+    if (found.length >= limit) return
     let entries = []
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -3066,33 +4198,34 @@ async function scanFiles() {
       return
     }
 
-    await Promise.all(entries.map(async (entry) => {
-      if (entry.name.startsWith('.') || ignored.has(entry.name)) return
+    for (const entry of entries) {
+      if (found.length >= limit) return
+      if (!includeHidden && entry.name.startsWith('.')) continue
       const fullPath = path.join(dir, entry.name)
+      if (ignoredByPattern(fullPath, entry.name, ignored)) continue
       if (entry.isFile()) {
+        const ext = extensionForPath(entry.name)
+        if (extensions && !extensions.has(ext)) continue
         found.push({
           id: fullPath,
           name: entry.name,
           path: fullPath,
           displayPath: displayUserPath(fullPath),
+          extension: ext,
+          kind: isImagePath(fullPath) ? 'image' : isVideoPath(fullPath) ? 'video' : 'file',
         })
-        return
+        continue
       }
       if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
-    }))
+    }
   }
 
-  await Promise.all(roots.map((root) => walk(root, 2)))
-  return found.slice(0, 5000)
+  await Promise.all(roots.map((root) => walk(root, maxDepth)))
+  return found.slice(0, limit)
 }
 
 function scheduleIndexApplications() {
-  if (appIndexTimer) clearTimeout(appIndexTimer)
-  appIndexTimer = setTimeout(() => {
-    appIndexTimer = null
-    void indexApplications()
-  }, APP_REINDEX_DEBOUNCE_MS)
-  appIndexTimer.unref?.()
+  jobRegistry.emit('apps.changed')
 }
 
 async function startAppWatcher() {
@@ -3118,6 +4251,69 @@ async function indexFiles() {
   } catch (error) {
     logError('files.index.failed', error, { source: 'host', scope: 'files' })
   }
+}
+
+async function pollFrontmostAppChange() {
+  if (!hasCapability('frontmost-app')) return
+  const current: any = await frontmostApp()
+  const currentId = current?.bundleId || current?.path || current?.name || ''
+  if (!currentId || currentId === frontmostWatcherLastId) return
+  frontmostWatcherLastId = currentId
+  jobRegistry.emit('app.frontmost.changed')
+}
+
+function registerHostJobs() {
+  jobRegistry.register({
+    id: 'state.save',
+    title: 'Save User State',
+    owner: 'host',
+    scope: 'state',
+    timeoutMs: 5_000,
+    run: saveUserState,
+  })
+  jobRegistry.register({
+    id: 'apps.index',
+    title: 'Application Index',
+    owner: 'host',
+    scope: 'apps',
+    triggers: [{ type: 'startup', delayMs: 100 }, { type: 'event', event: 'apps.changed', debounceMs: APP_REINDEX_DEBOUNCE_MS }],
+    timeoutMs: 30_000,
+    run: indexApplications,
+  })
+  jobRegistry.register({
+    id: 'files.index',
+    title: 'File Index',
+    owner: 'host',
+    scope: 'files',
+    triggers: [{ type: 'startup', delayMs: 200 }],
+    timeoutMs: 30_000,
+    run: indexFiles,
+  })
+  jobRegistry.register({
+    id: 'frontmost-app.poll',
+    title: 'Frontmost App Poll',
+    owner: 'host',
+    scope: 'apps',
+    triggers: [{ type: 'interval', everyMs: 5_000, delayMs: 5_000 }],
+    timeoutMs: 3_000,
+    run: pollFrontmostAppChange,
+  })
+  jobRegistry.register({
+    id: 'cache.app-icons',
+    title: 'App Icon Cache',
+    owner: 'host',
+    scope: 'cache',
+    timeoutMs: 15_000,
+    run: processPendingAppIcons,
+  })
+  jobRegistry.register({
+    id: 'cache.thumbnails',
+    title: 'Thumbnail Cache',
+    owner: 'host',
+    scope: 'cache',
+    timeoutMs: 20_000,
+    run: processPendingThumbnails,
+  })
 }
 
 async function loadUserState() {
@@ -3147,6 +4343,7 @@ async function loadUserState() {
       clipboardHistory: loaded.clipboardHistory || [],
       aiChats: loaded.aiChats || {},
       settings: loaded.settings || {},
+      jobSettings: loaded.jobSettings || {},
     }
   } catch {
     // First run.
@@ -3154,6 +4351,7 @@ async function loadUserState() {
 
   migrateAiChats()
   clipboardHistory = normalizeClipboardHistory(userState.clipboardHistory, CLIPBOARD_LIMIT, persistClipboardImage)
+  jobRegistry.hydrateEnabled(userState.jobSettings?.enabled || {})
 }
 
 function migrateAiChats() {
@@ -3220,6 +4418,7 @@ function rememberClipboardItem(item) {
   ].slice(0, CLIPBOARD_LIMIT)
   scheduleSaveState()
   invalidateExtensionRootItems()
+  jobRegistry.emit('clipboard.changed')
   paletteWindow.win?.webContents.send('clipboard:changed')
   const currentIds = new Set(clipboardHistory.map((entry) => entry.id))
   const removeItemIds = [...previousIds].filter((id) => !currentIds.has(id)).map((id) => `clipboard:${id}`)
@@ -3231,6 +4430,10 @@ function rememberClipboardItem(item) {
 }
 
 function scheduleSaveState() {
+  if (jobRegistry.has('state.save')) {
+    jobRegistry.schedule('state.save', 'state.changed', 200)
+    return
+  }
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(saveUserState, 200)
   saveTimer.unref?.()
@@ -3238,20 +4441,37 @@ function scheduleSaveState() {
 
 async function saveUserState() {
   userState.clipboardHistory = clipboardHistory
+  userState.jobSettings = { ...(userState.jobSettings || {}), enabled: jobRegistry.enabledOverridesSnapshot() }
   await fs.mkdir(path.dirname(statePath), { recursive: true })
   await fs.writeFile(statePath, JSON.stringify(userState, null, 2)).catch((error) => {
     logError('state.save.failed', error, { source: 'host', scope: 'state' })
   })
 }
 
+function pollClipboardChange() {
+  const item = readClipboardItem()
+  if (!item || item.id === clipboardWatcherLastId) return
+  const suppressUntil = suppressedClipboardItemIds.get(item.id) || 0
+  if (suppressUntil > Date.now()) {
+    clipboardWatcherLastId = item.id
+    return
+  }
+  if (suppressUntil) suppressedClipboardItemIds.delete(item.id)
+  clipboardWatcherLastId = item.id
+  rememberClipboardItem(item)
+}
+
 function startClipboardWatcher() {
-  let lastId = readClipboardItem()?.id || ''
-  setInterval(() => {
-    const item = readClipboardItem()
-    if (!item || item.id === lastId) return
-    lastId = item.id
-    rememberClipboardItem(item)
-  }, CLIPBOARD_POLL_INTERVAL_MS).unref?.()
+  clipboardWatcherLastId = readClipboardItem()?.id || ''
+  jobRegistry.register({
+    id: 'clipboard.poll',
+    title: 'Clipboard Poll',
+    owner: 'host',
+    scope: 'clipboard',
+    triggers: [{ type: 'interval', everyMs: CLIPBOARD_POLL_INTERVAL_MS, delayMs: CLIPBOARD_POLL_INTERVAL_MS }],
+    timeoutMs: 2_000,
+    run: pollClipboardChange,
+  })
 }
 
 function unregisterShortcutForAction(actionId) {
@@ -3298,11 +4518,11 @@ function registerActionShortcut(actionId, accelerator, action) {
 }
 
 function declaredGlobalShortcuts() {
-  return Array.from(extensionRegistry.values()).map(({ extension, command }) => {
-    const accelerator = command.globalShortcut || (command.shortcutScope === 'global' ? command.shortcut : null)
+  return visibleExtensionActionEntries().map((entry) => {
+    const accelerator = entry.item.globalShortcut || (entry.item.shortcutScope === 'global' ? entry.item.shortcut : null)
     if (!accelerator) return null
-    const action = extensionActionFromCommand(extension, command)
-    return { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action }
+    const action = extensionActionFromContribution(entry)
+    return action ? { actionId: action.id, accelerator: normalizeAccelerator(accelerator), action } : null
   }).filter(Boolean)
 }
 
@@ -3381,7 +4601,7 @@ async function removeShortcut(actionId) {
 }
 
 async function setAlias(action, alias) {
-  if (!canCustomizeAction(action)) return { ok: false, message: 'Aliases are only available for persistent commands' }
+  if (!canCustomizeAction(action)) return { ok: false, message: 'Aliases are only available for persistent actions' }
   if (!action?.id || !alias.trim()) return { ok: false, message: 'Missing alias' }
   const aliases = new Set(actionAliases(action.id))
   aliases.add(alias.trim())
@@ -3400,7 +4620,7 @@ async function removeAlias(action, alias) {
 }
 
 async function setShortcut(action, shortcut) {
-  if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent commands' }
+  if (!canCustomizeAction(action)) return { ok: false, message: 'Shortcuts are only available for persistent actions' }
   if (!action?.id || !shortcut.trim()) return { ok: false, message: 'Missing shortcut' }
   const accelerator = normalizeAccelerator(shortcut)
   if (accelerator === getPaletteHotkey()) return { ok: false, message: `${accelerator} is reserved for opening Nevermind` }
@@ -3482,16 +4702,17 @@ async function clearOverride(action) {
 }
 
 async function duplicateCreatedAction(action) {
-  if (!['extension-command', 'extension-root-item'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
+  if (!['extension-root-item', 'extension-action'].includes(action?.kind) || !action.removable) return { ok: false, message: 'Only generated extensions can be duplicated' }
   const extension = extensionModuleForAction(action)
   const filePath = extension?.__filePath
   if (!filePath) return { ok: false, message: 'Generated extension not found' }
 
   const duplicateId = hashValue(`${filePath}:${Date.now()}`)
+  const duplicateExtensionId = `${extension.id}-copy-${duplicateId.slice(0, 8)}`
   const duplicateTitle = `Copy of ${extension.title || action.title}`
   const duplicateFile = `${extensionSourceBasename(filePath)}-copy-${duplicateId.slice(0, 8)}.ts`
   const sourceFile = path.basename(filePath)
-  const sourceCode = `import type { NevermindExtension } from './${EXTENSION_TYPES_FILENAME.replace(/\.d\.ts$/, '')}'\nimport source from './${sourceFile.replace(/'/g, "\\'")}'\n\nexport default {\n  ...source,\n  id: ${JSON.stringify(`${extension.id}-copy-${duplicateId.slice(0, 8)}`)},\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command })),\n} satisfies NevermindExtension\n`
+  const sourceCode = `import type { NevermindExtension } from './${EXTENSION_TYPES_FILENAME.replace(/\.d\.ts$/, '')}'\nimport source from './${sourceFile.replace(/'/g, "\\'")}'\n\nconst duplicateExtensionId = ${JSON.stringify(duplicateExtensionId)}\nconst namespacedActionId = (actionId: unknown) => typeof actionId === 'string' && actionId ? duplicateExtensionId + ':' + actionId : undefined\nconst duplicateContributions = (items: any[]) => items.map((item) => ({ ...item, ...(item.actionId ? { actionId: namespacedActionId(item.actionId) } : {}) }))\n\nexport default {\n  ...source,\n  id: duplicateExtensionId,\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command, ...(command.actionId ? { actionId: namespacedActionId(command.actionId) } : {}) })),\n  actions: source.actions ? (ctx) => {\n    const result = source.actions(ctx)\n    const items = Array.isArray(result) ? result : Array.isArray(result?.actions) ? result.actions : []\n    return duplicateContributions(items)\n  } : undefined,\n} satisfies NevermindExtension\n`
 
   await fs.writeFile(path.join(extensionsDir, duplicateFile), sourceCode)
   userState.aiChats[duplicateId] = {
@@ -3511,8 +4732,11 @@ async function duplicateCreatedAction(action) {
   invalidateExtensionRootItems()
   await loadExtensions()
   registerActionShortcuts()
-  const duplicateEntry = Array.from(extensionRegistry.values()).find((candidate) => path.basename(candidate.extension?.__filePath || '') === duplicateFile)
-  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromCommand(duplicateEntry.extension, duplicateEntry.command) : { id: `ai-tweak-extension:${duplicateFile}`, kind: 'ai-tweak-extension', extensionFile: duplicateFile, title: duplicateTitle, subtitle: 'Tweak extension with AI', icon: 'sparkles', score: 0 } }
+  const targetRegisteredActionId = action.registeredActionId || action.commandId
+  const duplicateEntry = targetRegisteredActionId
+    ? extensionActionRegistry.get(`${duplicateExtensionId}:${targetRegisteredActionId}`)
+    : Array.from(extensionActionRegistry.values()).find((candidate) => candidate.extension?.id === duplicateExtensionId)
+  return { ok: true, message: 'Action duplicated', action: duplicateEntry ? extensionActionFromContribution(duplicateEntry) : { id: `ai-tweak-extension:${duplicateFile}`, kind: 'ai-tweak-extension', extensionFile: duplicateFile, title: duplicateTitle, subtitle: 'Tweak extension with AI', icon: 'sparkles', score: 0 } }
 }
 
 async function removeAiChat(chatId) {
@@ -3567,7 +4791,7 @@ async function removeCreatedAction(action) {
     return { ok: true, message: 'AI chat removed' }
   }
 
-  if (['extension-command', 'extension-root-item'].includes(action?.kind) && action.removable) {
+  if (['extension-root-item', 'extension-action'].includes(action?.kind) && action.removable) {
     const extension = extensionModuleForAction(action)
     const filePath = extension?.__filePath
     if (!filePath) return { ok: false, message: 'This extension cannot be removed' }
@@ -3597,6 +4821,25 @@ async function runPaletteDebugCli() {
   console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
 }
 
+async function pickFormFieldPaths(event, input: any = {}) {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender) || paletteWindow.win || undefined
+  const type = input.type === 'folder' ? 'folder' : input.type === 'files' ? 'files' : 'file'
+  const properties: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'> = type === 'folder' ? ['openDirectory'] : ['openFile']
+  if (type === 'files') properties.push('multiSelections')
+  if (type === 'folder' && input.canCreateDirectories !== false) properties.push('createDirectory')
+  const filters = Array.isArray(input.extensions) && input.extensions.length
+    ? [{ name: input.filterName || 'Allowed files', extensions: input.extensions.map((value) => String(value).replace(/^\./, '')).filter(Boolean) }]
+    : undefined
+  const result = await dialog.showOpenDialog(senderWindow, {
+    title: input.title || (type === 'folder' ? 'Choose Folder' : type === 'files' ? 'Choose Files' : 'Choose File'),
+    buttonLabel: input.buttonLabel || 'Choose',
+    properties,
+    filters,
+    defaultPath: typeof input.defaultPath === 'string' ? expandUserPath(input.defaultPath) : undefined,
+  })
+  return result.canceled ? { canceled: true, paths: [] } : { canceled: false, paths: result.filePaths }
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   prepareAppWindowPolicy()
@@ -3606,6 +4849,7 @@ app.whenReady().then(async () => {
   updateManager.onStateChange(() => patchUpdatesView())
 
   await loadUserState()
+  registerHostJobs()
   await loadExtensions()
   if (process.env.NVM_PALETTE_DEBUG) {
     await runPaletteDebugCli()
@@ -3617,13 +4861,14 @@ app.whenReady().then(async () => {
   paletteWindow.registerHotkey()
   registerActionShortcuts()
   startClipboardWatcher()
-  setTimeout(indexApplications, 100)
-  setTimeout(indexFiles, 200)
   await startAppWatcher()
+  powerMonitor.on('resume', () => jobRegistry.emit('wake'))
+  jobRegistry.emit('login')
 
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))
   ipcMain.handle('view-action:execute', (_event, action) => executeViewActionForIpc(action))
+  ipcMain.handle('dialog:pick-form-field-paths', pickFormFieldPaths)
   ipcMain.on('drag:file', startFileDrag)
   ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
   ipcMain.handle('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))
@@ -3685,6 +4930,14 @@ app.whenReady().then(async () => {
     if (status === 'granted') return { ok: true, status }
     if (status === 'denied' || status === 'restricted') return { ok: false, status }
     return { ok: true, status }
+  })
+  ipcMain.handle('extension-window:get-state', (_event, id) => {
+    const record = extensionWindows.get(String(id || ''))
+    return record ? { id: record.id, view: record.view, options: record.options } : null
+  })
+  ipcMain.handle('extension-window:close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.close()
   })
   ipcMain.handle('logs:write', (_event, level, message, data) => {
     const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo
