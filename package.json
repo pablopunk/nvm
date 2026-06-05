@@ -11,7 +11,7 @@
     "dev": "node ./scripts/electron-dev.cjs",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.check.json",
-    "test": "pnpm build && node --check dist/main/main.js && node --check dist/preload/preload.cjs && node scripts/check-design-system.cjs && node scripts/check-internal-extensions.cjs && node scripts/check-clone-safe-actions.cjs && node scripts/check-packaged-resources.cjs && node scripts/check-backend-contract-fixtures.cjs && pnpm -C backend exec node --import tsx --test ../src/extension-view.test.tsx && pnpm typecheck && pnpm -C backend test",
+    "test": "pnpm build && node --check dist/main/main.js && node --check dist/preload/preload.cjs && node scripts/check-design-system.cjs && node scripts/check-internal-extensions.cjs && node scripts/check-clone-safe-actions.cjs && node scripts/check-packaged-resources.cjs && node scripts/check-backend-contract-fixtures.cjs && node scripts/check-backend-api-major.cjs && pnpm -C backend exec node --import tsx --test ../src/extension-view.test.tsx && pnpm typecheck && pnpm -C backend test",
     "palette:debug": "node .agents/skills/palette-debug/palette-debug.cjs",
     "learnings:export": "node scripts/learnings-export.cjs",
     "logs:tail": "node scripts/tail-log.cjs",

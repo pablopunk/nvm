@@ -51,7 +51,9 @@ Create a new API major, such as `/api/v2`, only when a backend change cannot be 
 
 A change is API-major breaking when it removes or renames a field used by a supported desktop release, changes an error type/status that desktop handles specially, changes auth or billing semantics, changes model descriptor/provider routing in a way old clients cannot understand, changes streaming framing or termination semantics, or requires desktop to send a new non-optional request field/header.
 
-Before retiring an API major, the backend owner must document the sunset date, verify active client counts are below the supported-client threshold, preserve user-visible update messaging, and keep compatibility errors available until the final sunset window closes.
+Before retiring an API major, the backend owner must document the sunset date, verify active client counts are below the supported-client threshold, preserve user-visible update messaging, and keep compatibility errors available until the final sunset window closes. Use `src/docs/backend-api-sunset-template.md` for this record.
+
+CI runs `scripts/check-backend-api-major.cjs`, which allows no `/api/v2` routes by default and requires a dedicated `src/docs/backend-api-v2.md` migration/sunset document if a real `/api/v2` route is introduced.
 
 ## Contract testing
 
@@ -72,6 +74,7 @@ For any PR touching `backend/src/pages/api`, `backend/src/lib/proxy.ts`, auth/to
 - Verify `mise exec -- pnpm test` locally.
 - If tagging a desktop release, note in the release commit whether contract fixtures changed.
 - If a supported client cannot be kept compatible, use the API-major or unsupported-client process below.
+- Before sunsetting an API major, query `desktop_client_seen` logs for active clients by `client_api_version` and `client_version`.
 
 ## Breaking-change checklist
 

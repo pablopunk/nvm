@@ -97,6 +97,7 @@ export function compatibilityManifestForRequest(request: Request, context: Featu
   const client = desktopClientFromRequest(request);
   const unsupportedReason = unsupportedClientReason(client);
   const features = compatibilityFeaturesForClient(client, context);
+  logDesktopClientSeen(client, context, !unsupportedReason);
   logFeatureEvaluations(features, client, context);
   return {
     backend: {
@@ -164,6 +165,8 @@ export function unsupportedClientReason(client: DesktopClient) {
 
 export function compatibilityError(request: Request, message = 'This version of Nevermind is no longer supported.') {
   const requestId = requestIdFromHeaders(request.headers);
+  const client = desktopClientFromRequest(request);
+  logDesktopClientSeen(client, { requestId, route: new URL(request.url).pathname }, false);
   return Response.json(
     {
       error: {
@@ -220,6 +223,19 @@ function rolloutBucket(name: string, client: DesktopClient, context: FeatureFlag
   const key = [name, context.userId, context.plan, client.name, client.version, client.platform, client.arch].filter(Boolean).join(':') || name;
   const hex = createHash('sha256').update(key).digest('hex').slice(0, 8);
   return Number.parseInt(hex, 16) % 100;
+}
+
+function logDesktopClientSeen(client: DesktopClient, context: FeatureFlagContext, compatible: boolean) {
+  log.info('desktop_client_seen', {
+    request_id: context.requestId || undefined,
+    route: context.route || 'compatibility',
+    client_name: client.name,
+    client_version: client.version,
+    client_api_version: client.apiVersion,
+    client_platform: client.platform,
+    client_arch: client.arch,
+    compatible,
+  });
 }
 
 function logFeatureEvaluations(features: Record<string, boolean>, client: DesktopClient, context: FeatureFlagContext) {
