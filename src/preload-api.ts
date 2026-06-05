@@ -73,6 +73,7 @@ export type ViewActionResult = {
   patch?: CommandViewPatch
   navigation?: 'push' | 'replace' | 'pop'
   toast?: { message: string; tone?: 'default' | 'error' }
+  skipped?: boolean
 }
 
 export type OpenActionViewPayload = {
@@ -95,6 +96,7 @@ export type NevermindApi = {
   search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<RootAction[]>
   execute: (action: RootAction) => Promise<{ view?: CommandView }>
   runViewAction: (action: CommandAction) => Promise<ViewActionResult>
+  refreshView: (input: { id: string; viewId?: string }) => Promise<ViewActionResult>
   pickFormFieldPaths: (input: { type?: 'file' | 'files' | 'folder'; title?: string; buttonLabel?: string; defaultPath?: string; extensions?: string[]; filterName?: string; canCreateDirectories?: boolean }) => Promise<{ canceled: boolean; paths: string[] }>
   startFileDrag: (filePath: string) => void
   sendAiMessage: (message: string, chatId?: string) => Promise<void>

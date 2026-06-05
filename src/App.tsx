@@ -350,27 +350,31 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (!extensionView?.refresh?.action || !extensionView.refresh.intervalMs) return
-    const viewId = extensionView.id
-    const action = extensionView.refresh.action
+    if (!extensionView?.refresh?.id || !extensionView.refresh.intervalMs) return
+    const viewKey = viewIdentity(extensionView)
+    const refreshId = extensionView.refresh.id
+    const intervalMs = extensionView.refresh.intervalMs
     let cancelled = false
     let running = false
     const refresh = async () => {
-      if (cancelled || running || extensionViewRef.current?.id !== viewId) return
+      const current = extensionViewRef.current
+      if (cancelled || running || viewIdentity(current) !== viewKey || current?.refresh?.id !== refreshId) return
       running = true
       try {
-        const result = await window.nvm.runViewAction(action)
-        if (!cancelled && extensionViewRef.current?.id === viewId) await handleViewActionResult(result, 'replace')
+        const result = await window.nvm.refreshView({ id: refreshId, viewId: current.id })
+        if (!result?.skipped && !cancelled && viewIdentity(extensionViewRef.current) === viewKey) await handleViewActionResult(result, 'replace')
+      } catch (error) {
+        await window.nvm.log('warn', 'Extension view refresh failed', { viewKey, error: error instanceof Error ? error.message : String(error) })
       } finally {
         running = false
       }
     }
-    const timer = window.setInterval(refresh, Math.max(1000, extensionView.refresh.intervalMs))
+    const timer = window.setInterval(refresh, Math.max(1000, intervalMs))
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [extensionView?.id, extensionView?.refresh?.intervalMs])
+  }, [extensionView?.id, extensionView?.type, extensionView?.title, extensionView?.refresh?.id, extensionView?.refresh?.intervalMs])
 
   useLayoutEffect(() => {
     const card = resultsListRef.current

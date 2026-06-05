@@ -370,8 +370,8 @@ export type ExtensionView = {
   onSelectionChange?: ExtensionAction
   pagination?: ExtensionPagination
   searchAccessory?: ExtensionSearchAccessory
-  /** Host polls only while visible; prefer targeted patches from explicit actions when possible. */
-  refresh?: { intervalMs?: number; action?: ExtensionAction; mode?: PatchMode }
+  /** Host polls only while visible. The renderer receives an opaque host refresh handle, never an executable action. */
+  refresh?: { intervalMs?: number; mode?: PatchMode; /** @deprecated Use `ctx.views.refresh()` only for existing extensions; new refreshes should be declarative and host-owned. */ action?: ExtensionAction }
   actions?: ExtensionAction[]
   actionPanel?: ExtensionActionPanel
   actionPanelVisibility?: ActionPanelVisibility
@@ -882,7 +882,7 @@ export type ExtensionContext = {
   }
   logs: ExtensionLogs
   cache: ExtensionRuntimeCache
-  /** Current-view helpers. `refresh()` re-runs the command and patches/replaces the active view. */
+  /** Current-view helpers. `refresh()` may be placed in `view.refresh.action`; the host converts it to an opaque refresh handle before IPC. */
   views: { refresh(): ExtensionAction; invalidate(): void }
   /** App update state. Present only with the `updates` permission. Pair with `ctx.actions.updates.*`. */
   updates?: { getState(): ExtensionUpdateState }

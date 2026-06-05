@@ -251,6 +251,7 @@ const extensionStorageRefreshes = new Map<string, Promise<any>>()
 const extensionActionHandlers = new Map<string, any>()
 const viewActionExecutionRecords = new Map<string, { action: any; createdAt: number }>()
 const rootActionExecutionRecords = new Map<string, { action: any; createdAt: number }>()
+const viewRefreshRecords = new Map<string, { entry: any; action: any | null; viewId?: string; mode?: any; createdAt: number; running?: Promise<any> | null; failureCount: number; backoffUntil?: number }>()
 const extensionCaches = new Map<string, Map<string, { value: any; expiresAt: number }>>()
 
 function extensionCacheFor(extensionId) {
@@ -355,6 +356,36 @@ function registerRootActionForRenderer(action) {
   const stored = clonePlain(withoutExecutionId(action))
   rootActionExecutionRecords.set(executionId, { action: stored, createdAt: Date.now() })
   return { ...action, executionId }
+}
+
+function pruneViewRefreshRecords() {
+  const now = Date.now()
+  for (const [id, record] of viewRefreshRecords) {
+    if (now - record.createdAt > ACTION_EXECUTION_TTL_MS) viewRefreshRecords.delete(id)
+  }
+  while (viewRefreshRecords.size > ACTION_EXECUTION_MAX_RECORDS) {
+    const oldest = viewRefreshRecords.keys().next().value
+    if (!oldest) break
+    viewRefreshRecords.delete(oldest)
+  }
+}
+
+function registerViewRefreshForRenderer(refresh, entry, view) {
+  if (!refresh || typeof refresh !== 'object') return refresh
+  pruneViewRefreshRecords()
+  const { action, ...safeRefresh } = refresh
+  const refreshId = crypto.randomUUID()
+  const normalizedAction = action ? normalizeViewAction(action, entry) : null
+  viewRefreshRecords.set(refreshId, {
+    entry,
+    action: normalizedAction ? withoutExecutionId(normalizedAction) : null,
+    viewId: view?.id,
+    mode: refresh.mode,
+    createdAt: Date.now(),
+    running: null,
+    failureCount: 0,
+  })
+  return { ...safeRefresh, id: refreshId }
 }
 
 function mergeRendererActionInput(storedAction, rendererAction) {
@@ -1591,7 +1622,7 @@ function normalizeView(view, entry) {
     onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
     submitAction: normalizeViewAction(view.submitAction, entry),
     searchAccessory: view.searchAccessory ? { ...view.searchAccessory, onChange: normalizeViewAction(view.searchAccessory.onChange, entry) } : view.searchAccessory,
-    refresh: view.refresh ? { ...view.refresh, action: normalizeViewAction(view.refresh.action, entry) } : view.refresh,
+    refresh: registerViewRefreshForRenderer(view.refresh, entry, view),
     items: normalizeViewItems(view.items, entry),
     sections: Array.isArray(view.sections) ? view.sections.map((section) => ({ ...section, items: normalizeViewItems(section.items, entry) })) : view.sections,
   }
@@ -1703,6 +1734,53 @@ async function executeViewActionResult(result, entry, launchContext?: any) {
   if (isAction(result.action)) return executeViewAction(normalizeViewAction(result.action, entry), launchContext)
   const view = normalizeExtensionView(result, entry)
   return view ? { view, navigation: result?.navigation || 'push', toast: result?.toast, patch: normalizeViewPatch(result?.patch, entry) } : { ...result, patch: normalizeViewPatch(result?.patch, entry) }
+}
+
+async function executeHostRefreshAction(record, launchContext?: any) {
+  if (record.action?.type === 'runExtensionAction') {
+    const handlerRecord = extensionActionHandlers.get(record.action.handlerId)
+    if (!handlerRecord) return { skipped: true }
+    const result = await handlerRecord.handler(createExtensionContext(handlerRecord.entry.extension, handlerRecord.entry.command, launchContext), record.action)
+    return executeViewActionResult(result, handlerRecord.entry, launchContext)
+  }
+  if (record.action) return executeViewAction(record.action, launchContext)
+  if (!record.entry?.command || typeof record.entry.command.run !== 'function') return { skipped: true }
+  const result = await record.entry.command.run(createExtensionContext(record.entry.extension, record.entry.command, launchContext))
+  const view = result?.type ? result : result?.view?.type ? result.view : null
+  if (view?.items) return { patch: { mode: record.mode || 'replace', items: normalizeViewItems(view.items, record.entry) } }
+  return executeViewActionResult(result, record.entry, launchContext)
+}
+
+function refreshBackoffDelay(failureCount: number) {
+  return Math.min(30_000, 1_000 * Math.max(1, 2 ** Math.max(0, failureCount - 1)))
+}
+
+async function refreshViewForIpc(input: any = {}) {
+  pruneViewRefreshRecords()
+  const refreshId = typeof input === 'string' ? input : String(input?.id || '')
+  const record = refreshId ? viewRefreshRecords.get(refreshId) : null
+  if (!record) return { skipped: true }
+  if (input?.viewId && record.viewId && input.viewId !== record.viewId) return { skipped: true }
+  const now = Date.now()
+  if (record.backoffUntil && record.backoffUntil > now) return { skipped: true }
+  if (record.running) return { skipped: true }
+  record.running = (async () => {
+    try {
+      const result = await executeHostRefreshAction(record, { refresh: true })
+      structuredClone(result)
+      record.failureCount = 0
+      record.backoffUntil = undefined
+      return result
+    } catch (error) {
+      record.failureCount += 1
+      record.backoffUntil = Date.now() + refreshBackoffDelay(record.failureCount)
+      logWarn('extension.viewRefresh.failed', { viewId: record.viewId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'extension', extensionId: record.entry?.extension?.id, commandId: record.entry?.command?.id })
+      return { skipped: true }
+    } finally {
+      record.running = null
+    }
+  })()
+  return record.running
 }
 
 async function executeViewActionForIpc(action) {
@@ -3932,6 +4010,7 @@ async function loadExtensions() {
   extensionActionHandlers.clear()
   viewActionExecutionRecords.clear()
   rootActionExecutionRecords.clear()
+  viewRefreshRecords.clear()
   jobRegistry.unregisterWhere((job) => job.owner === 'extension')
   for (const watcher of extensionFileWatchers) watcher.close()
   extensionFileWatchers = []
@@ -5007,6 +5086,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
   ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))
   ipcMain.handle('view-action:execute', (_event, action) => executeViewActionForIpc(action))
+  ipcMain.handle('view:refresh', (_event, input) => refreshViewForIpc(input))
   ipcMain.handle('dialog:pick-form-field-paths', pickFormFieldPaths)
   ipcMain.on('drag:file', startFileDrag)
   ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))

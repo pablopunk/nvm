@@ -249,7 +249,7 @@ export type CommandView = {
   onSelectionChange?: CommandAction
   pagination?: { hasMore?: boolean; pageSize?: number; onLoadMore?: CommandAction }
   searchAccessory?: { id?: string; tooltip?: string; value?: string; items: { title: string; value: string }[]; onChange?: CommandAction }
-  refresh?: { intervalMs?: number; action?: CommandAction; mode?: CommandViewPatch['mode'] }
+  refresh?: { id?: string; intervalMs?: number; mode?: CommandViewPatch['mode'] }
   messages?: { role: 'user' | 'assistant' | 'system'; content: string }[]
   fields?: CommandFormField[]
   submitAction?: CommandAction

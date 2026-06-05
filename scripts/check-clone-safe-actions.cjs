@@ -25,4 +25,16 @@ if (!/async\s+function\s+executeActionForIpc[\s\S]*structuredClone\(result\)/.te
   fail('executeActionForIpc must structuredClone-check action results before returning through IPC')
 }
 
+if (!/function\s+normalizeView[\s\S]*refresh:\s+registerViewRefreshForRenderer\(view\.refresh, entry, view\)/.test(source)) {
+  fail('normalizeView must turn refresh actions into opaque host-owned refresh handles')
+}
+
+if (!/function\s+registerViewRefreshForRenderer[\s\S]*const\s+\{\s*action,\s*\.\.\.safeRefresh\s*\}\s*=\s*refresh[\s\S]*return\s+\{\s*\.\.\.safeRefresh,\s*id:\s*refreshId\s*\}/.test(source)) {
+  fail('registerViewRefreshForRenderer must strip executable refresh actions from renderer IPC payloads')
+}
+
+if (!/ipcMain\.handle\('view:refresh',[\s\S]*refreshViewForIpc/.test(source)) {
+  fail('view refresh must execute through the host-owned view:refresh IPC handler')
+}
+
 console.log('Clone-safety checks passed')
