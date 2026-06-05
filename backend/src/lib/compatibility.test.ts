@@ -60,6 +60,7 @@ test('detects unsupported desktop versions and API versions', () => {
 
   assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.5.9', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), 'unsupported_desktop_version');
   assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.6.0', apiVersion: 2, platform: 'darwin', arch: 'arm64' }), 'unsupported_api_version');
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.6.0', apiVersion: 0, platform: 'darwin', arch: 'arm64' }), 'unsupported_api_version');
 });
 
 test('compares semver-like desktop versions', () => {

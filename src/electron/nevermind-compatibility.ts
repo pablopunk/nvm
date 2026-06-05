@@ -30,6 +30,7 @@ type CompatibilityCacheFile = {
 type CompatibilityListener = () => void
 
 const CACHE_FILENAME = 'nevermind-compatibility.json'
+const COMPATIBILITY_FETCH_TIMEOUT_MS = 5_000
 const cachedManifests = new Map<string, CachedCompatibilityManifest>()
 const listeners = new Set<CompatibilityListener>()
 let cacheLoadPromise: Promise<void> | null = null
@@ -105,7 +106,14 @@ export async function checkNevermindCompatibility(baseUrl: string) {
 
 async function fetchCompatibilityManifest(baseUrl: string) {
   const trimmed = normalizeBaseUrl(baseUrl)
-  const res = await fetch(`${trimmed}/api/compatibility`, { headers: nevermindDesktopHeaders() })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), COMPATIBILITY_FETCH_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`${trimmed}/api/compatibility`, { headers: nevermindDesktopHeaders(), signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
   if (res.status === 404) return null
   if (!res.ok) {
     logger.warn('nevermind.compatibility.unavailable', { status: res.status })

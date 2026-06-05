@@ -1225,17 +1225,31 @@ function patchUpdatesView() {
   })
 }
 
+let activeNevermindBaseUrl: string | null = null
+
+function safeExternalUpdateUrl(raw?: string) {
+  if (!raw) return null
+  try {
+    const parsed = new URL(raw)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null
+  } catch {
+    return null
+  }
+}
+
 function updateActionForCompatibilityPrompt(updateUrl?: string) {
+  const safeUrl = safeExternalUpdateUrl(updateUrl)
   const downloadedInfo = isNewerVersion(updateManager.state.downloadedInfo?.version) ? updateManager.state.downloadedInfo : null
   const availableInfo = isNewerVersion(updateManager.state.availableInfo?.version) ? updateManager.state.availableInfo : null
   if (downloadedInfo) return { type: 'installUpdate', title: `Install Nevermind ${downloadedInfo.version || ''}`.trim() }
   if (availableInfo) return { type: 'downloadUpdate', title: `Download Nevermind ${availableInfo.version || ''}`.trim() }
   if (updateManager.canUseAutoUpdates()) return { type: 'checkForUpdates', title: 'Check for Update' }
-  return updateUrl ? { type: 'openUrl', title: 'Download Update', url: updateUrl } : undefined
+  return safeUrl ? { type: 'openUrl', title: 'Download Update', url: safeUrl } : undefined
 }
 
 function compatibilityPromptAction() {
-  const manifest = currentNevermindCompatibilityManifest()
+  if (!activeNevermindBaseUrl) return null
+  const manifest = currentNevermindCompatibilityManifest(activeNevermindBaseUrl)
   if (manifest?.client?.compatible !== false) return null
   const version = manifest.desktop?.latestVersion || manifest.desktop?.minimumSupportedVersion || ''
   const primaryAction = updateActionForCompatibilityPrompt(manifest.desktop?.updateUrl)
@@ -3329,6 +3343,7 @@ function createAccountExtension() {
           title: 'Log out',
           __handler: async () => {
             const { revoked } = await signOutFromNevermind()
+            activeNevermindBaseUrl = null
             await nevermindAi?.disposeAllSessions?.()
             invalidateExtensionRootItems()
             broadcastAuthChanged({ authed: false })
@@ -5216,6 +5231,7 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('nevermind:auth-status', async () => {
     const auth = await getNevermindAuth()
+    activeNevermindBaseUrl = auth?.baseUrl || null
     if (auth?.baseUrl) warmNevermindCompatibilityCache(auth.baseUrl)
     logInfo('nevermind.auth-status.check', { authed: Boolean(auth), email: auth?.email, userData: app.getPath('userData') }, { source: 'host', scope: 'nevermind' })
     return auth ? { authed: true, email: auth.email } : { authed: false }
@@ -5223,6 +5239,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('nevermind:sign-in', async () => {
     const result = await signInToNevermind()
     if (result.ok) {
+      activeNevermindBaseUrl = result.auth.baseUrl
       warmNevermindCompatibilityCache(result.auth.baseUrl)
       invalidateExtensionRootItems()
       broadcastAuthChanged({ authed: true, email: result.auth.email })

@@ -87,7 +87,7 @@ export function desktopClientFromRequest(request: Request): DesktopClient {
   return {
     name: blankToNull(request.headers.get('x-nevermind-client')),
     version: blankToNull(request.headers.get('x-nevermind-client-version')),
-    apiVersion: parsePositiveInteger(request.headers.get('x-nevermind-api-version')),
+    apiVersion: parseInteger(request.headers.get('x-nevermind-api-version')),
     platform: blankToNull(request.headers.get('x-nevermind-platform')),
     arch: blankToNull(request.headers.get('x-nevermind-arch')),
   };
@@ -265,7 +265,7 @@ function blankToNull(value: string | null) {
   return trimmed ? trimmed : null;
 }
 
-function parsePositiveInteger(value: string | null) {
+function parseInteger(value: string | null) {
   const parsed = Number.parseInt(value || '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) ? parsed : null;
 }

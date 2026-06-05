@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
+import type { APIContext } from 'astro';
 import { setDbForTests, resetDbForTests } from '../../db/client';
 import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
@@ -8,6 +9,7 @@ import { GET as getActiveModel } from './v1/active-model';
 import { POST as postChatCompletion } from './v1/chat/completions';
 
 type FakeDb = ReturnType<typeof createFakeDb>;
+type MinimalAPIContext = Pick<APIContext, 'request' | 'url'>;
 
 const originalFetch = globalThis.fetch;
 
@@ -45,8 +47,8 @@ function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates
   return db;
 }
 
-function routeContext(request: Request, url = new URL(request.url)) {
-  return { request, url } as any;
+function routeContext(request: Request, url = new URL(request.url)): MinimalAPIContext {
+  return { request, url };
 }
 
 function installDb(db: FakeDb) {

@@ -415,15 +415,11 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       title: 'Update Nevermind',
       message: 'This version of Nevermind is no longer supported by the backend. Install the latest version to keep using AI features.',
       actionTitle: 'Check for Update',
-      dashboardUrl: updateUrlFromErrorText(text) || NEVERMIND_UPDATE_URL,
+      dashboardUrl: NEVERMIND_UPDATE_URL,
       action: { type: 'checkForUpdates', title: 'Check for Update' },
     }
   }
   return null
-}
-
-function updateUrlFromErrorText(text: string) {
-  return text.match(/https:\/\/[^\s"'}]+/i)?.[0]
 }
 
 function searchableErrorText(error: unknown) {
