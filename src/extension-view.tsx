@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import React, { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { CornerDownLeft, CreditCard, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import type { AiLimitState } from './use-ai-chat'
@@ -97,7 +97,7 @@ function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
   return <EmptyState icon={<LogIn size={24} />} title="Sign in to Nevermind" subtitle="Connect this device to your Nevermind account to use AI chats." action={{ value: 'sign-in', icon: <LogIn size={16} />, title: busy ? 'Opening browser…' : 'Sign in to Nevermind', onSelect: handle }} />
 }
 
-function NevermindLimitGate({ limit, runAction }: { limit: AiLimitState; runAction: (action: CommandAction) => void }) {
+export function NevermindLimitGate({ limit, runAction }: { limit: AiLimitState; runAction: (action: CommandAction) => void }) {
   const action = limit.action ? {
     value: 'run-limit-action',
     icon: <CreditCard size={16} />,
