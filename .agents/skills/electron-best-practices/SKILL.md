@@ -1,6 +1,6 @@
 ---
 name: electron-best-practices
-description: Use when changing or reviewing Nevermind Electron behavior: BrowserWindow/webPreferences, preload and IPC contracts, custom protocols, permissions, shell/file/URL actions, extension iframes, updater/packaging, platform integration, or any request mentioning Electron specs/best practices/hardening. Complements ui-design's desktop-electron UX notes.
+description: Use when changing or reviewing Nevermind Electron behavior - BrowserWindow/webPreferences, preload and IPC contracts, custom protocols, permissions, shell/file/URL actions, extension iframes, updater/packaging, platform integration, or any request mentioning Electron specs/best practices/hardening. Complements ui-design's desktop-electron UX notes.
 ---
 
 # Electron Best Practices
