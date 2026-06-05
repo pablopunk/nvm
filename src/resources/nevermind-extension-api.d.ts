@@ -262,7 +262,15 @@ export type ExtensionActionPanel = {
   sections: ExtensionActionSection[]
 }
 
-export type ExtensionItemAccessory = { text?: string; icon?: string }
+export type ExtensionAccessoryTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger'
+export type ExtensionItemAccessory = { text?: string; icon?: string; tone?: ExtensionAccessoryTone; tooltip?: string }
+export type ExtensionImage = string | { src?: string; light?: string; dark?: string; fallback?: string; alt?: string; fit?: 'cover' | 'contain'; shape?: 'square' | 'rounded' | 'circle'; tint?: ForegroundColor | string; mask?: 'none' | 'rounded' | 'circle' }
+export type ExtensionMetadataItem =
+  | { type?: 'text'; label: string; value: string; copyable?: boolean }
+  | { type: 'link'; label: string; value: string; url: string }
+  | { type: 'tag'; label?: string; value: string; tone?: ExtensionAccessoryTone }
+  | { type: 'separator' }
+export type ExtensionDetail = { title?: string; subtitle?: string; markdown?: string; metadata?: ExtensionMetadataItem[]; image?: ExtensionImage; actions?: ExtensionAction[] }
 export type ExtensionItemAppearance = { foreground?: ForegroundColor }
 
 /** Item displayed in root/search providers, list views, and grid views. */
@@ -279,8 +287,8 @@ export type ExtensionItem = {
   text?: string
   /** Any Lucide icon name in camel/Pascal/kebab case, e.g. `camera`, `volume-2`, `audio-lines`. */
   icon?: string
-  /** Display image URL/data URL. For local files use `file.url` or `ctx.desktop.files.toFileUrl(path)`, not raw paths. */
-  image?: string
+  /** Display image URL/data URL or image descriptor. For local files use `file.url` or `ctx.desktop.files.toFileUrl(path)`, not raw paths. */
+  image?: ExtensionImage
   video?: string
   videoUrl?: string
   path?: string
@@ -293,6 +301,8 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel
   actionPanelVisibility?: ActionPanelVisibility
   appearance?: ExtensionItemAppearance
+  /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
+  detail?: ExtensionDetail
   shortcut?: string
   shortcutScope?: ShortcutScope
   globalShortcut?: string
@@ -341,7 +351,7 @@ export type ExtensionView = {
   /** Render an editor as read-only while preserving selection/copy behavior. */
   readOnly?: boolean
   html?: string
-  image?: string
+  image?: ExtensionImage
   video?: string
   videoUrl?: string
   deviceId?: string
@@ -352,6 +362,8 @@ export type ExtensionView = {
   sections?: ExtensionItemSection[]
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
+  /** Optional item detail pane for richer list views. */
+  detail?: { placement?: 'side' | 'bottom'; visible?: boolean }
   searchBarPlaceholder?: string
   /** Initial focused item for list/grid views. Must match a stable visible item id; sorting remains independent. */
   selectedItemId?: string

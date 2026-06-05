@@ -285,6 +285,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
       dragPathForItem={dragPathForItem}
       startItemDrag={startItemDrag}
+      selectedItemId={selectedValue}
     /></main>
   </Command>
 }
@@ -1563,6 +1564,7 @@ export function App() {
       abortAiChat={window.nvm.abortAiChat}
       dragPathForItem={dragPathForItem}
       startItemDrag={startItemDrag}
+      selectedItemId={selectedValue}
     />
   }
 

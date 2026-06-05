@@ -58,7 +58,14 @@ export function iconForAction(action: CommandAction) {
   return <LucideIcons.Globe size={18} />
 }
 
+function imageSource(image: CommandItem['image']) {
+  if (!image) return ''
+  if (typeof image === 'string') return image
+  return image.dark || image.src || image.light || image.fallback || ''
+}
+
 export function iconForItem(item: CommandItem, fallback: CommandIconName = 'sparkles') {
   const Icon = lucideIcon(item.icon, fallback as keyof typeof curatedIconAliases)
-  return item.image ? <span className="thumbnailIcon"><img src={item.image} alt="" /></span> : <Icon size={18} />
+  const image = imageSource(item.image)
+  return image ? <span className="thumbnailIcon"><img src={image} alt="" /></span> : <Icon size={18} />
 }

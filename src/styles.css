@@ -609,6 +609,21 @@ kbd {
   min-width: 0;
 }
 
+.tileMedia[data-fit='contain'] img,
+.previewMedia[data-fit='contain'] {
+  object-fit: contain;
+}
+
+.tileMedia[data-shape='circle'] img,
+.previewMedia[data-shape='circle'] {
+  border-radius: var(--radius-pill);
+}
+
+.tileMedia[data-shape='rounded'] img,
+.previewMedia[data-shape='rounded'] {
+  border-radius: var(--radius-md);
+}
+
 .extensionGrid-wide {
   --grid-columns: 3;
   --tile-aspect-ratio: 16 / 9;
@@ -1357,6 +1372,12 @@ kbd {
   white-space: nowrap;
 }
 
+.accessory[data-tone='accent'] { color: var(--accent); }
+.accessory[data-tone='success'] { color: var(--item-foreground-green); }
+.accessory[data-tone='warning'] { color: var(--item-foreground-orange); }
+.accessory[data-tone='danger'] { color: var(--danger-text); }
+.accessory[data-tone='muted'] { color: var(--text-muted); }
+
 .accessoryText {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1447,6 +1468,120 @@ kbd {
 
 .itemSection + .itemSection {
   margin-top: 8px;
+}
+
+.extensionListWithDetail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.extensionListPane {
+  min-width: 0;
+}
+
+.extensionDetailPane {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 116px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  -webkit-app-region: no-drag;
+}
+
+.extensionDetailHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.extensionDetailHeader img {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.extensionDetailHeader strong,
+.extensionDetailHeader small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extensionDetailHeader strong {
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+}
+
+.extensionDetailHeader small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.detailMarkdown {
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+
+.extensionMetadata {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.extensionMetadata > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.extensionMetadata dt {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.extensionMetadata dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.extensionMetadata a {
+  color: var(--link);
+  text-decoration: none;
+}
+
+.metadataSeparator {
+  height: 1px;
+  background: var(--border-1);
+}
+
+.metadataTag {
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .extensionListWithDetail {
+    grid-template-columns: 1fr;
+  }
 }
 
 .actionSectionHeader {

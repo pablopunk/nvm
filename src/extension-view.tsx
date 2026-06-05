@@ -37,6 +37,7 @@ export type ExtensionViewRendererProps = {
   abortAiChat: (chatId?: string) => void
   dragPathForItem: (item: CommandItem) => string | null | undefined
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void
+  selectedItemId?: string
 }
 
 function tileActionHint(item: CommandItem) {
@@ -60,6 +61,30 @@ function gridStyle(view: CommandView) {
 
 function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   return <EmptyState icon={<Search size={24} />} title={view.emptyView?.title || fallback} subtitle={view.emptyView?.subtitle} />
+}
+
+function imageSource(image: CommandItem['image']) {
+  if (!image) return ''
+  if (typeof image === 'string') return image
+  return image.dark || image.src || image.light || image.fallback || ''
+}
+
+function MetadataRows({ items = [] }: { items?: NonNullable<CommandItem['detail']>['metadata'] }) {
+  if (!items?.length) return null
+  return <dl className="extensionMetadata">{items.map((item, index) => {
+    if (item.type === 'separator') return <div key={index} className="metadataSeparator" />
+    if (item.type === 'tag') return <div key={index} className="metadataTagRow"><dt>{item.label || 'Tag'}</dt><dd><span className="accessory metadataTag" data-tone={item.tone || 'default'}>{item.value}</span></dd></div>
+    if (item.type === 'link') return <div key={index}><dt>{item.label}</dt><dd><a href={item.url}>{item.value}</a></dd></div>
+    return <div key={index}><dt>{item.label}</dt><dd>{item.value}</dd></div>
+  })}</dl>
+}
+
+function ExtensionItemDetail({ item, renderMarkdown, renderActionPanel, actionPanelRows }: { item?: CommandItem; renderMarkdown: (content: string) => ReactNode; renderActionPanel: (rows: unknown[], emptyMessage?: string) => ReactNode; actionPanelRows: ExtensionViewRendererProps['actionPanelRows'] }) {
+  const detail = item?.detail
+  if (!item || !detail) return null
+  const actions = detail.actions?.length ? renderActionPanel(actionPanelRows({ sections: [{ actions: detail.actions }] }, [], `detail-${item.id}`, false)) : null
+  const image = imageSource(detail.image || item.image)
+  return <aside className="extensionDetailPane"><div className="extensionDetailHeader">{image ? <img src={image} alt="" /> : null}<div><strong>{detail.title || item.title}</strong>{detail.subtitle || item.subtitle ? <small>{detail.subtitle || item.subtitle}</small> : null}</div></div>{detail.markdown ? <div className="previewText detailMarkdown">{renderMarkdown(detail.markdown)}</div> : null}<MetadataRows items={detail.metadata} />{actions}</aside>
 }
 
 function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
@@ -195,7 +220,7 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
   return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={muted} controls={controls} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
 }
 
-export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInToNevermind, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag }: ExtensionViewRendererProps) {
+export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInToNevermind, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag, selectedItemId }: ExtensionViewRendererProps) {
   function pagination() {
     if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
     return <button className="loadMoreButton" type="button" onClick={() => runAction(view.pagination!.onLoadMore!)}>Load More</button>
@@ -218,7 +243,8 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
   if (view.type === 'list') {
     const items = filterItems(view.items)
     if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={renderRootIcon} onSelect={runDefaultAction} emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE} emptySubtitle={view.emptyView?.subtitle} />
-    return <ListView
+    const selected = items.find((item) => item.id === selectedItemId) || items[0]
+    const list = <ListView
       items={items}
       sections={filterSections(view)}
       empty={renderEmpty(view)}
@@ -226,6 +252,8 @@ export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInT
       pagination={pagination()}
       renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} appearance={item.appearance} onSelect={() => runDefaultAction(item)} />}
     />
+    if (view.detail?.visible && selected?.detail) return <div className={`extensionListWithDetail extensionListDetail-${view.detail.placement || 'side'}`}><div className="extensionListPane">{list}</div><ExtensionItemDetail item={selected} renderMarkdown={renderMarkdown} renderActionPanel={renderActionPanel} actionPanelRows={actionPanelRows} /></div>
+    return list
   }
 
   if (view.type === 'chat') {

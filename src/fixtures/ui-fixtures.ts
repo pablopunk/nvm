@@ -146,6 +146,58 @@ function floatingWindowView(ctx: ExtensionContext) {
   })
 }
 
+function renderingPolishView(ctx: ExtensionContext) {
+  const openAction = ctx.actions.openUrl('https://nvm.fyi', 'Open Link')
+  return ctx.ui.list({
+    id: 'dev-ui-rendering-polish',
+    title: 'Dev UI · Rendering Polish',
+    subtitle: 'Accessories, metadata details, image descriptors, and side inspector panes',
+    selectedItemId: 'details',
+    detail: { visible: true, placement: 'side' },
+    items: [
+      ctx.ui.item({
+        id: 'details',
+        title: 'Detailed Result',
+        subtitle: 'Selected row renders an inspector pane',
+        icon: 'sparkles',
+        accessories: [{ text: 'Ready', tone: 'success' }, { text: 'AI', tone: 'accent', tooltip: 'Generated-friendly host UI' }],
+        image: { src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="16" fill="%23202232"/%3E%3Cpath d="M18 40L29 18l6 16 11-10-10 24-7-16z" fill="%23ffd84d"/%3E%3C/svg%3E', shape: 'rounded', alt: 'Nevermind fixture mark' },
+        detail: {
+          title: 'Detailed Result',
+          subtitle: 'Host-rendered metadata and markdown',
+          markdown: 'Use `detail.markdown`, `detail.metadata`, toned accessories, and detail actions instead of jumping to a webview for common inspector layouts.',
+          metadata: [
+            { label: 'Status', value: 'Ready', type: 'tag', tone: 'success' },
+            { label: 'Kind', value: 'Fixture' },
+            { type: 'link', label: 'Docs', value: 'nvm.fyi', url: 'https://nvm.fyi' },
+            { type: 'separator' },
+            { label: 'Updated', value: new Date().toLocaleString() },
+          ],
+          actions: [openAction],
+        },
+        primaryAction: openAction,
+        actions: [openAction],
+      }),
+      ctx.ui.item({
+        id: 'warning',
+        title: 'Warning Accessory',
+        subtitle: 'Tone variants stay compact in rows',
+        icon: 'alert-triangle',
+        accessories: [{ text: 'Warning', tone: 'warning' }, { text: 'Muted', tone: 'muted' }],
+        detail: { title: 'Warning Accessory', markdown: 'Accessory tones should communicate status without becoming the only signal.', metadata: [{ type: 'tag', label: 'Tone', value: 'warning', tone: 'warning' }] },
+      }),
+      ctx.ui.item({
+        id: 'danger',
+        title: 'Danger Accessory',
+        subtitle: 'Danger tone uses semantic tokens',
+        icon: 'shield-alert',
+        accessories: [{ text: 'Danger', tone: 'danger' }],
+        detail: { title: 'Danger Accessory', markdown: 'Danger styling uses existing semantic color tokens and remains compact.' },
+      }),
+    ],
+  })
+}
+
 function clipboardView(ctx: ExtensionContext) {
   const clipboardApi = ctx.desktop.clipboard
   const writeHtml = ctx.actions.run('Write HTML Clipboard', async (innerCtx) => {
@@ -487,6 +539,7 @@ const extension: NevermindExtension = {
   },
   commands: [
     { id: 'list', title: 'Dev UI: List', icon: 'list', run: (ctx) => listView(ctx) },
+    { id: 'rendering-polish', title: 'Dev UI: Rendering Polish', icon: 'sparkles', run: (ctx) => renderingPolishView(ctx) },
     { id: 'grid', title: 'Dev UI: Grid', icon: 'grid', run: (ctx) => gridView(ctx) },
     { id: 'ocr', title: 'Dev UI: OCR', icon: 'scan-text', run: (ctx) => ocrFixtureView(ctx) },
     { id: 'preview', title: 'Dev UI: Preview', icon: 'file-text', run: (ctx) => previewView(ctx) },

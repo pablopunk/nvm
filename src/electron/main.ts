@@ -1483,8 +1483,10 @@ function normalizeViewItems(items, entry) {
     const itemActions = normalizeViewActions(item.actions, entry)
     const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
     const { run, __handler, action, ...safeItem } = item
+    const detailActions = normalizeViewActions(item.detail?.actions, entry)
     return {
       ...safeItem,
+      ...(item.detail ? { detail: { ...item.detail, actions: detailActions } } : {}),
       actions: itemActions,
       actionPanel: normalizeActionPanel(item.actionPanel, itemActions, entry),
       primaryAction,

@@ -34,6 +34,7 @@ export const ACTION_DEFINITIONS = {
   copyText: { description: 'Copy text to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
   copyImage: { description: 'Copy image to the clipboard', dismiss: 'immediate', loading: 'none', execute: 'main' },
   pasteText: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  pasteClipboard: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   typeText: { description: 'Type into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   trash: { description: 'Move to Trash', dismiss: 'manual', loading: 'view', execute: 'main' },
   pushView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
@@ -114,8 +115,10 @@ export type CommandAction = {
   alias?: string
   accelerator?: string
   clipboardType?: string
-  clipboardHistoryRange?: 'item' | 'last-hour' | 'last-day' | 'all'
+  clipboardHistoryRange?: 'item' | 'ids' | 'last-hour' | 'last-day' | 'older-than' | 'all'
   clipboardHistoryItemId?: string
+  clipboardHistoryItemIds?: string[]
+  content?: unknown
   videoUrl?: string
   filePath?: string
   thumbnailUrl?: string
@@ -155,7 +158,15 @@ export type CommandActionPanel = {
   sections: CommandActionSection[]
 }
 
-export type CommandItemAccessory = { text?: string; icon?: string }
+export type CommandAccessoryTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger'
+export type CommandItemAccessory = { text?: string; icon?: string | ReactNode; tone?: CommandAccessoryTone; tooltip?: string }
+export type CommandImage = string | { src?: string; light?: string; dark?: string; fallback?: string; alt?: string; fit?: 'cover' | 'contain'; shape?: 'square' | 'rounded' | 'circle'; tint?: string; mask?: 'none' | 'rounded' | 'circle' }
+export type CommandMetadataItem =
+  | { type?: 'text'; label: string; value: string; copyable?: boolean }
+  | { type: 'link'; label: string; value: string; url: string }
+  | { type: 'tag'; label?: string; value: string; tone?: CommandAccessoryTone }
+  | { type: 'separator' }
+export type CommandDetail = { title?: string; subtitle?: string; markdown?: string; metadata?: CommandMetadataItem[]; image?: CommandImage; actions?: CommandAction[] }
 export type CommandItemForeground = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'pink'
 export type CommandItemAppearance = { foreground?: CommandItemForeground }
 
@@ -174,7 +185,7 @@ export type CommandItem = {
   keywords?: string[]
   text?: string
   icon?: string
-  image?: string
+  image?: CommandImage
   video?: string
   videoUrl?: string
   path?: string
@@ -187,6 +198,7 @@ export type CommandItem = {
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
   appearance?: CommandItemAppearance
+  detail?: CommandDetail
 }
 
 export type CommandItemSection = {
@@ -208,7 +220,7 @@ export type CommandView = {
   type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'editor' | 'progress' | 'webview' | 'camera'
   title: string
   size?: 'default' | 'large'
-  image?: string
+  image?: CommandImage
   video?: string
   videoUrl?: string
   deviceId?: string
@@ -229,6 +241,7 @@ export type CommandView = {
   sections?: CommandItemSection[]
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
+  detail?: { placement?: 'side' | 'bottom'; visible?: boolean }
   searchBarPlaceholder?: string
   presentation?: 'root' | 'stacked' | 'preview'
   selectedItemId?: string

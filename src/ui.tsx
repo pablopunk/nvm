@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import { Command } from 'cmdk'
 import { Folder } from 'lucide-react'
+import type { CommandImage } from './model'
 
 export const EMPTY_ROOT_TITLE = 'Type anything'
 export const EMPTY_ROOT_SUBTITLE = 'Nevermind starts with local actions; AI planning comes next.'
@@ -11,11 +12,11 @@ export const EMPTY_SHORTCUTS_TITLE = 'No keyboard shortcuts'
 
 export type KeyHintsProps = { shortcut?: string; extras?: string[]; showEnter?: boolean }
 export type ItemAppearance = { foreground?: string }
-export type CommandRowProps = { value: string; icon: ReactNode; title: string; subtitle?: string; accessories?: { text?: string; icon?: ReactNode }[]; shortcut?: string; extras?: string[]; className?: string; appearance?: ItemAppearance; selectedOnlyShortcut?: boolean; onSelect: () => void }
-export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: string; video?: string; actionHint?: ReactNode; appearance?: ItemAppearance; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
+export type CommandRowProps = { value: string; icon: ReactNode; title: string; subtitle?: string; accessories?: { text?: string; icon?: ReactNode; tone?: string; tooltip?: string }[]; shortcut?: string; extras?: string[]; className?: string; appearance?: ItemAppearance; selectedOnlyShortcut?: boolean; onSelect: () => void }
+export type CommandTileProps = { value: string; title: string; subtitle?: string; image?: CommandImage; video?: string; actionHint?: ReactNode; appearance?: ItemAppearance; draggable?: boolean; onDragStart?: (event: React.DragEvent) => void; onSelect: () => void }
 export type EmptyStateProps = { icon: ReactNode; title: string; subtitle?: string; action?: ActionPanelRow }
 export type ToastProps = { message: string; tone?: 'default' | 'error' }
-export type PreviewViewProps = { content?: ReactNode; image?: string; video?: string; poster?: string; actions?: ReactNode }
+export type PreviewViewProps = { content?: ReactNode; image?: CommandImage; video?: string; poster?: string; actions?: ReactNode }
 export type ProgressViewProps = { steps: { title: string; status?: string }[]; value?: number; total?: number; status?: string }
 export type FormValue = string | boolean | string[]
 export type FormField = { id: string; label?: string; type?: string; value?: FormValue; placeholder?: string; required?: boolean; options?: { title: string; value: string }[]; description?: string; error?: string; rows?: number; extensions?: string[]; filterName?: string; buttonLabel?: string; defaultPath?: string; canCreateDirectories?: boolean }
@@ -52,6 +53,12 @@ export function KeyHints({ shortcut, extras = [], showEnter = true }: KeyHintsPr
 
 const MAX_VISIBLE_ACCESSORIES = 3
 
+function imageProps(image?: CommandImage) {
+  if (!image) return null
+  if (typeof image === 'string') return { src: image, alt: '', fit: undefined, shape: undefined }
+  return { src: image.dark || image.src || image.light || image.fallback || '', alt: image.alt || '', fit: image.fit, shape: image.shape || image.mask }
+}
+
 export function CommandRow({ value, icon, title, subtitle, accessories = [], shortcut, extras, className, appearance, selectedOnlyShortcut = false, onSelect }: CommandRowProps) {
   const keyHints = selectedOnlyShortcut
     ? (shortcut ? <span className="keyHints selectedOnlyEnter"><span className="shortcutHint">{shortcutLabel(shortcut)}</span><span className="enterHint" aria-label="Enter"><span aria-hidden="true">↵</span></span></span> : null)
@@ -60,11 +67,12 @@ export function CommandRow({ value, icon, title, subtitle, accessories = [], sho
   const visibleAccessories = accessories.slice(0, MAX_VISIBLE_ACCESSORIES)
   const overflowAccessories = accessories.slice(MAX_VISIBLE_ACCESSORIES)
   const overflowTitle = overflowAccessories.map((accessory) => accessory.text).filter(Boolean).join(', ')
-  return <Command.Item value={value} className={itemClassName} data-foreground={appearance?.foreground} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{visibleAccessories.map((accessory, index) => <span key={index} className="accessory" title={accessory.text}>{accessory.icon}{accessory.text ? <span className="accessoryText">{accessory.text}</span> : null}</span>)}{overflowAccessories.length ? <span className="accessoryOverflow" title={overflowTitle}>+{overflowAccessories.length}</span> : null}</span> : null}{keyHints}</span></Command.Item>
+  return <Command.Item value={value} className={itemClassName} data-foreground={appearance?.foreground} onSelect={onSelect}><span className="resultIcon">{icon}</span><span className="resultText"><strong>{title}</strong><small>{subtitle}</small></span><span className="resultTrailing">{accessories.length ? <span className="accessories">{visibleAccessories.map((accessory, index) => <span key={index} className="accessory" data-tone={accessory.tone || 'default'} title={accessory.tooltip || accessory.text}>{accessory.icon}{accessory.text ? <span className="accessoryText">{accessory.text}</span> : null}</span>)}{overflowAccessories.length ? <span className="accessoryOverflow" title={overflowTitle}>+{overflowAccessories.length}</span> : null}</span> : null}{keyHints}</span></Command.Item>
 }
 
 export function CommandTile({ value, title, subtitle, image, video, actionHint, appearance, draggable, onDragStart, onSelect }: CommandTileProps) {
-  return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} data-foreground={appearance?.foreground} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia">{video ? <video src={video} poster={image} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : image ? <img src={image} alt="" draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
+  const media = imageProps(image)
+  return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} data-foreground={appearance?.foreground} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia" data-fit={media?.fit} data-shape={media?.shape}>{video ? <video src={video} poster={media?.src} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : media?.src ? <img src={media.src} alt={media.alt} draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
 }
 
 export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
@@ -80,7 +88,8 @@ export function SearchAccessory({ tooltip, value, items, onChange }: SearchAcces
 }
 
 export function PreviewView({ content, image, video, poster, actions }: PreviewViewProps) {
-  return <div className="extensionView previewView">{video ? <video className="previewMedia" src={video} poster={poster || image} controls autoPlay muted loop playsInline /> : null}{!video && image ? <img className="previewMedia" src={image} alt="" /> : null}<div className="previewText">{content}</div>{actions}</div>
+  const media = imageProps(image)
+  return <div className="extensionView previewView">{video ? <video className="previewMedia" src={video} poster={poster || media?.src} controls autoPlay muted loop playsInline /> : null}{!video && media?.src ? <img className="previewMedia" src={media.src} alt={media.alt} data-fit={media.fit} data-shape={media.shape} /> : null}<div className="previewText">{content}</div>{actions}</div>
 }
 
 function normalizedProgressStatus(status?: string) {
