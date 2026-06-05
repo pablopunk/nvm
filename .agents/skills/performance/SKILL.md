@@ -36,6 +36,7 @@ Performance is UX. In Nevermind, every millisecond affects trust because the pro
 - **Drop stale work.** Search, selection previews, and chat/UI patches must ignore old results when the active query/view/selection changed.
 - **Batch streams.** Token-by-token AI updates should be coalesced to animation frames or similarly bounded render cadence.
 - **No broad invalidation by default.** Invalidate the smallest provider/cache/view possible; broad root invalidation is a smell unless the data truly affects all roots.
+- **Treat polling and refresh as lifecycle ownership problems.** For laggy extension views, audit renderer-held action tokens, IPC clone-safety, staleness, in-flight dedupe, and host-owned refresh primitives before suppressing repeated errors.
 - **Avoid render-time derivation loops.** Memoize filtered sections/items, flattened view items, markdown nodes, and action rows when they depend on stable inputs.
 - **Prevent avoidable re-renders.** Keep state as local as possible, split components around independent update frequencies, stabilize callbacks/props passed to large lists, and avoid rebuilding arrays/objects/React nodes in parent render paths unless their inputs changed.
 - **Do not let selection/input churn redraw everything.** Typing, arrow-key movement, chat token deltas, and hover/preview changes should update only the affected surface or row; use refs for mutable bookkeeping that does not affect paint.
