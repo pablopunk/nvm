@@ -2,7 +2,7 @@
 
 ## Workflow
 
-* Always use `mise exec pnpm` for all package management. Do not use npm, yarn, or bun directly.
+* Run pnpm through mise as `mise exec -- pnpm <command>`. Do not use npm, yarn, bun, or bare pnpm directly.
 * Leverage existing primitives, formatters, and OS capabilities instead of creating one-off helpers.
 * Respect manual file changes and stop the app before editing `userState` to prevent overwrites.
 * Commit frequently and use history to guide changes.
@@ -38,5 +38,5 @@
 
 * Run tests and verify core flows before committing API or palette changes.
 * Ensure new dependencies resolve correctly within the Electron `app.asar`.
-* Use `mise exec pnpm -- pnpm palette:debug` to trace provider output and ranking.
+* Use `mise exec -- pnpm palette:debug` to trace provider output and ranking.
 * Verify navigation, action panels, shortcuts, and dismissal behavior for all changes.

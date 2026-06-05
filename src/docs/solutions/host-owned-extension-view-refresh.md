@@ -44,7 +44,7 @@ Refresh is now an opaque host-owned handle:
 Run:
 
 ```bash
-mise exec pnpm -- pnpm test
+mise exec -- pnpm test
 ```
 
 Dogfood the Screenshots extension and confirm:

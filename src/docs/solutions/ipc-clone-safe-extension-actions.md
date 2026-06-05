@@ -39,14 +39,14 @@ The extension normalization path registered executable handlers but did not cons
 Run:
 
 ```bash
-mise exec pnpm -- pnpm test
-mise exec pnpm -- pnpm palette:debug
+mise exec -- pnpm test
+mise exec -- pnpm palette:debug
 ```
 
 Then dogfood live search with the dev app and CDP:
 
 ```bash
-mise exec pnpm -- pnpm dev
+mise exec -- pnpm dev
 agent-browser --cdp 9222 eval "window.nvm.hide(); window.nvm.shortcutReady()"
 agent-browser --cdp 9222 eval "Promise.all(['', 'background', 'fixtures'].map(q => window.nvm.search(q).then(r => ({ q, count: r.length, first: r[0]?.title }))))"
 ```
