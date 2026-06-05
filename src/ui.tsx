@@ -72,7 +72,12 @@ export function CommandRow({ value, icon, title, subtitle, accessories = [], sho
 
 export function CommandTile({ value, title, subtitle, image, video, actionHint, appearance, draggable, onDragStart, onSelect }: CommandTileProps) {
   const media = imageProps(image)
-  return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} data-foreground={appearance?.foreground} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia" data-fit={media?.fit} data-shape={media?.shape}>{video ? <video src={video} poster={media?.src} draggable={false} muted loop playsInline preload="metadata" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} /> : media?.src ? <img src={media.src} alt={media.alt} draggable={false} loading="lazy" decoding="async" /> : <span className="tileIcon"><Folder size={20} /></span>}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
+  const visual = media?.src
+    ? <img src={media.src} alt={media.alt} draggable={false} loading="lazy" decoding="async" />
+    : video
+      ? <video src={video} draggable={false} muted loop playsInline preload="none" onMouseEnter={(event) => event.currentTarget.play().catch(() => {})} onMouseLeave={(event) => event.currentTarget.pause()} />
+      : <span className="tileIcon"><Folder size={20} /></span>
+  return <Command.Item value={value} className="extensionTile" data-extension-item-id={value} data-foreground={appearance?.foreground} draggable={draggable} onDragStart={onDragStart} onSelect={onSelect}><span className="tileMedia" data-fit={media?.fit} data-shape={media?.shape}>{visual}{actionHint}</span><strong>{title}</strong>{subtitle ? <small>{subtitle}</small> : null}</Command.Item>
 }
 
 export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {

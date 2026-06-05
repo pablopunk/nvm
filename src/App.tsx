@@ -369,7 +369,8 @@ export function App() {
         running = false
       }
     }
-    const timer = window.setInterval(refresh, Math.max(1000, intervalMs))
+    const minimumIntervalMs = extensionView.type === 'grid' ? 5000 : 1000
+    const timer = window.setInterval(refresh, Math.max(minimumIntervalMs, intervalMs))
     return () => {
       cancelled = true
       window.clearInterval(timer)

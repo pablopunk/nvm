@@ -8,7 +8,12 @@ export const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'wm
 export const LOCAL_FILE_PROTOCOL = 'nvm-file'
 export const LOCAL_THUMB_PROTOCOL = 'nvm-thumb'
 
-const localFileUrlSecret = crypto.randomBytes(32)
+let localFileUrlSecret: Buffer = crypto.randomBytes(32)
+
+export function configureLocalFileUrlSecret(secret: string | Buffer) {
+  const value = Buffer.isBuffer(secret) ? secret : Buffer.from(String(secret), 'base64url')
+  if (value.length >= 32) localFileUrlSecret = value
+}
 
 export function expandUserPath(value: string) {
   if (!value) return value

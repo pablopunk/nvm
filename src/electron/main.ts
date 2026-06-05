@@ -9,7 +9,7 @@ import { spawn, execFile } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Readable } from 'node:stream'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
-import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, verifyLocalFileToken, VIDEO_EXTENSIONS } from './file-utils'
+import { configureLocalFileUrlSecret, expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, verifyLocalFileToken, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
 import { signInToNevermind, getNevermindAuth, signOutFromNevermind } from './nevermind-auth'
 import { initSentry } from './sentry'
@@ -2185,11 +2185,14 @@ async function generateThumbnail(filePath, cachedPath) {
 }
 
 async function processPendingThumbnails() {
-  const entries = Array.from(pendingThumbnailPaths.entries()).slice(0, 12)
+  const entries = Array.from(pendingThumbnailPaths.entries()).slice(0, 4)
   for (const [filePath] of entries) pendingThumbnailPaths.delete(filePath)
-  await Promise.all(entries.map(([filePath, cachedPath]) => generateThumbnail(filePath, cachedPath).catch((error) => {
-    logWarn('thumbnail.generate.failed', { filePath, error }, { source: 'host', scope: 'cache' })
-  })))
+  for (const [filePath, cachedPath] of entries) {
+    await generateThumbnail(filePath, cachedPath).catch((error) => {
+      logWarn('thumbnail.generate.failed', { filePath, error }, { source: 'host', scope: 'cache' })
+    })
+  }
+  if (pendingThumbnailPaths.size) jobRegistry.schedule('cache.thumbnails', 'thumbnail-backlog', 250)
 }
 
 async function thumbnailResponseForPath(filePath) {
@@ -4589,8 +4592,20 @@ function registerHostJobs() {
   })
 }
 
+async function ensureLocalFileUrlSecret() {
+  const secretPath = path.join(app.getPath('userData'), 'local-file-url-secret')
+  const existing = await fs.readFile(secretPath, 'utf8').catch(() => '')
+  const secret = existing.trim() || crypto.randomBytes(32).toString('base64url')
+  if (!existing.trim()) {
+    await fs.mkdir(path.dirname(secretPath), { recursive: true })
+    await fs.writeFile(secretPath, secret, { mode: 0o600 })
+  }
+  configureLocalFileUrlSecret(secret)
+}
+
 async function loadUserState() {
   const cacheRoot = osCacheRoot()
+  await ensureLocalFileUrlSecret()
   statePath = path.join(app.getPath('userData'), 'state.json')
   learningRulesPath = path.join(app.getPath('userData'), LEARNING_RULES_FILENAME)
   legacyLearningRulesPath = path.join(app.getPath('userData'), LEGACY_LEARNING_RULES_FILENAME)
