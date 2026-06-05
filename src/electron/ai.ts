@@ -61,8 +61,19 @@ type NevermindAiOptions = {
   onEvent?: (event: AiEvent) => void
 }
 
+type AiImageContent = { type: 'image'; data: string; mimeType: string }
+
+type AiPromptOptions = {
+  sessionId?: string
+  system?: string
+  context?: string
+  images?: AiImageContent[]
+  signal?: { aborted?: boolean; addEventListener?: (type: 'abort', listener: () => void, options?: { once?: boolean }) => void; removeEventListener?: (type: 'abort', listener: () => void) => void }
+  onEvent?: (event: AiEvent) => void
+}
+
 type AgentSession = {
-  prompt: (message: string) => Promise<unknown>
+  prompt: (message: string, options?: { images?: AiImageContent[] }) => Promise<unknown>
   abort?: () => Promise<unknown>
   dispose?: () => void
   subscribe: (callback: (event: AgentSessionEvent) => void) => () => void
@@ -164,18 +175,48 @@ function createNevermindAi(options: NevermindAiOptions) {
     sessions.delete(chatId)
   }
 
-  async function ask(message: string, askOptions: { sessionId?: string; system?: string } = {}) {
+  async function ask(message: string, askOptions: AiPromptOptions = {}) {
     const text: string[] = []
     const session = await generalSession(askOptions)
     const unsubscribe = session.subscribe((event) => {
-      if (isMessageUpdateEvent(event)) text.push(event.assistantMessageEvent.delta)
+      if (isMessageUpdateEvent(event)) {
+        const delta = event.assistantMessageEvent.delta
+        text.push(delta)
+        askOptions.onEvent?.({ type: 'delta', text: delta })
+      }
+      if (isToolExecutionStartEvent(event)) askOptions.onEvent?.({ type: 'tool_start', name: event.toolName })
+      if (isToolExecutionEndEvent(event)) askOptions.onEvent?.({ type: 'tool_end', name: event.toolName, isError: event.isError })
+      if (isAssistantErrorEndEvent(event)) askOptions.onEvent?.({ type: 'error', message: event.message.errorMessage || 'AI request failed', data: aiLimitNoticeFromError(event.message.errorMessage) })
     })
+    const removeAbortListener = bindAbortSignal(askOptions.signal, () => { void session.abort?.() })
+    askOptions.onEvent?.({ type: 'start' })
     try {
-      await session.prompt(message)
+      if (askOptions.signal?.aborted) throw aiAbortError()
+      await session.prompt(aiPromptWithContext(message, askOptions.context), { images: askOptions.images })
+      if (askOptions.signal?.aborted) throw aiAbortError()
+      askOptions.onEvent?.({ type: 'done' })
       return text.join('')
+    } catch (error) {
+      if (askOptions.signal?.aborted || isAbortError(error)) {
+        askOptions.onEvent?.({ type: 'aborted' })
+        throw aiAbortError()
+      }
+      askOptions.onEvent?.({ type: 'error', message: error instanceof Error ? error.message : String(error), data: aiLimitNoticeFromError(error) })
+      throw error
     } finally {
+      removeAbortListener()
       unsubscribe()
       if (!askOptions.sessionId) session.dispose?.()
+    }
+  }
+
+  function stream(message: string, streamOptions: AiPromptOptions = {}) {
+    const controller = new AbortController()
+    const removeExternalAbortListener = bindAbortSignal(streamOptions.signal, () => controller.abort())
+    const result = ask(message, { ...streamOptions, signal: controller.signal }).finally(removeExternalAbortListener)
+    return {
+      result,
+      abort: () => controller.abort(),
     }
   }
 
@@ -193,7 +234,8 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   function session(sessionId: string, sessionOptions: { system?: string } = {}) {
     return {
-      ask: (message: string) => ask(message, { ...sessionOptions, sessionId }),
+      ask: (message: string, options: AiPromptOptions = {}) => ask(message, { ...sessionOptions, ...options, sessionId }),
+      stream: (message: string, options: AiPromptOptions = {}) => stream(message, { ...sessionOptions, ...options, sessionId }),
       reset: async () => {
         const current = await generalSessions.get(sessionId)?.catch(() => null)
         current?.dispose?.()
@@ -213,7 +255,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     }
   }
 
-  return { send, abort, reset, ask, session, disposeAllSessions }
+  return { send, abort, reset, ask, stream, session, disposeAllSessions }
 
   async function createSession({ agentDir, workspaceDir, extensionsDir, extensionApiPath, extensionTypesPath, skillPath, chatId = 'default', reloadExtensions, getExtensionRuntimeState, getActiveChat, getChat, markGeneratedExtension, canWriteExtension, removeExtension, addAliasForChat, onEvent }: NevermindAiOptions & { chatId?: string }, emit: (event: AiEvent) => void) {
     await fs.mkdir(agentDir, { recursive: true })
@@ -299,6 +341,28 @@ function createNevermindAi(options: NevermindAiOptions) {
     onEvent?.({ type: 'ready' })
     return result.session
   }
+}
+
+function aiPromptWithContext(message: string, context?: string) {
+  const prompt = String(message || '')
+  const trimmedContext = String(context || '').trim()
+  if (!trimmedContext) return prompt
+  return `Use these attachments as context for the request.\n\n${trimmedContext}\n\nRequest:\n${prompt}`
+}
+
+function bindAbortSignal(signal: AiPromptOptions['signal'], abort: () => void) {
+  if (!signal?.addEventListener) return () => {}
+  const listener = () => abort()
+  signal.addEventListener('abort', listener, { once: true })
+  return () => signal.removeEventListener?.('abort', listener)
+}
+
+function aiAbortError() {
+  return Object.assign(new Error('AI request aborted'), { name: 'AbortError', code: 'ai-request-aborted' })
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && (error.name === 'AbortError' || /aborted/i.test(error.message))
 }
 
 function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
@@ -833,7 +897,7 @@ function capabilities() {
     ocr: ['requires ocr permission; ctx.ocr.image(pathOrFileOrDataUrl), ctx.ocr.screen(options), and ctx.ocr.region(rect, options) return recognized text plus blocks/confidence; check ctx.system.capabilities.has(\'ocr\') and render graceful unavailable states'], 
     text: ['template(input, variables) expands {name}/{{name}} placeholders plus date, time, datetime, uuid, selectedText, cursor, {calculator:1 + 2}, and clipboard when clipboard.history is declared'],
     input: ['prompt({ title, message, fields, action, submitTitle }) opens a host prompt form, then runs the wrapped action with submitted values in action.formValues'],
-    ai: ['ask(prompt, options)', 'session(id, options).ask(prompt)', 'session(id).reset()'],
+    ai: ['ask(prompt, { system, attachments, signal })', 'stream(prompt, { onDelta, onEvent, attachments, signal }).result/abort()', 'session(id, options).ask/stream/reset()', 'attachments.text/image/file/selectedText/selectedFiles/clipboard/ocrImage'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     desktop: {
       keyboard: ['typeText(text, options) types into the frontmost app without touching the clipboard when keyboard.type-text is available'],

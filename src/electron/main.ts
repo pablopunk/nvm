@@ -2388,25 +2388,185 @@ function createExtensionStorage(extension) {
   }
 }
 
+const EXTENSION_AI_ATTACHMENT_LIMIT = 8
+const EXTENSION_AI_TEXT_ATTACHMENT_LIMIT = 80_000
+const EXTENSION_AI_IMAGE_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024
+
+function extensionAiDataUrlImage(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;,]+);base64,(.*)$/s)
+  if (!match) throw new Error('AI image attachment must be a base64 data URL')
+  return { type: 'image' as const, mimeType: match[1], data: match[2] }
+}
+
+async function extensionAiPathImage(filePath) {
+  const resolvedPath = expandUserPath(filePath)
+  const stat = await fs.stat(resolvedPath)
+  if (stat.size > EXTENSION_AI_IMAGE_ATTACHMENT_MAX_BYTES) throw new Error(`AI image attachment is too large: ${displayUserPath(resolvedPath)}`)
+  return { type: 'image' as const, mimeType: mimeTypeForPath(resolvedPath) || 'image/png', data: (await fs.readFile(resolvedPath)).toString('base64') }
+}
+
+function isTextLikeAttachmentPath(filePath) {
+  const mime = mimeTypeForPath(filePath)
+  const ext = extensionForPath(filePath)
+  return mime.startsWith('text/') || ['md', 'markdown', 'txt', 'json', 'csv', 'tsv', 'xml', 'html', 'css', 'js', 'ts', 'tsx', 'jsx', 'yml', 'yaml', 'log'].includes(ext)
+}
+
+async function extensionAiFileContext(filePath, options: any = {}) {
+  const resolvedPath = expandUserPath(filePath)
+  const stat = await fs.stat(resolvedPath).catch(() => null)
+  const title = options.title || path.basename(resolvedPath)
+  if (!stat) return `### ${title}\nMissing file: ${displayUserPath(resolvedPath)}`
+  const metadata = await fileToExtensionFile(resolvedPath)
+  const header = `### ${title}\nPath: ${metadata.displayPath}\nMIME: ${metadata.mimeType || 'unknown'}\nSize: ${metadata.size} bytes`
+  if (options.as === 'metadata') return header
+  if (!isTextLikeAttachmentPath(resolvedPath)) return header
+  const text = await fs.readFile(resolvedPath, 'utf8')
+  return `${header}\n\n${limitedOutput(text, EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`
+}
+
+async function resolveExtensionAiAttachmentList(input) {
+  const output: any[] = []
+  async function visit(value) {
+    const resolved = await value
+    if (resolved == null || resolved === false) return
+    if (Array.isArray(resolved)) {
+      for (const item of resolved) await visit(item)
+      return
+    }
+    output.push(resolved)
+  }
+  await visit(input)
+  return output.slice(0, EXTENSION_AI_ATTACHMENT_LIMIT)
+}
+
+function extensionAiOcrText(result) {
+  if (typeof result === 'string') return result
+  if (Array.isArray(result?.blocks)) return result.blocks.map((block) => block.text).filter(Boolean).join('\n')
+  if (Array.isArray(result?.observations)) return result.observations.map((item) => item.text || item.transcript).filter(Boolean).join('\n')
+  return result?.text || result?.transcript || JSON.stringify(result)
+}
+
+async function normalizeExtensionAiAttachments(extension, attachments, capabilities) {
+  const textSections: string[] = []
+  const images: Array<{ type: 'image'; data: string; mimeType: string }> = []
+  for (const attachment of await resolveExtensionAiAttachmentList(attachments || [])) {
+    if (typeof attachment === 'string') {
+      textSections.push(limitedOutput(attachment, EXTENSION_AI_TEXT_ATTACHMENT_LIMIT))
+      continue
+    }
+    const type = attachment?.type || (attachment?.text != null ? 'text' : attachment?.path || attachment?.file ? 'file' : attachment?.dataUrl || attachment?.imageDataUrl ? 'image' : '')
+    if (type === 'text') {
+      textSections.push(`${attachment.title ? `### ${attachment.title}\n` : ''}${limitedOutput(attachment.text || '', EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`)
+      continue
+    }
+    if (type === 'image') {
+      const source = attachment.dataUrl || attachment.imageDataUrl || attachment.data || attachment.path || attachment.file?.path || attachment.filePath
+      if (attachment.data && attachment.mimeType && !String(source || '').startsWith('data:')) images.push({ type: 'image' as const, data: String(attachment.data), mimeType: String(attachment.mimeType) })
+      else if (String(source || '').startsWith('data:')) images.push(extensionAiDataUrlImage(source))
+      else {
+        if (!capabilities.files) throw permissionDeniedError('desktop.files')
+        images.push(await extensionAiPathImage(source))
+      }
+      if (attachment.ocr) {
+        if (!capabilities.ocr) throw permissionDeniedError('ocr')
+        textSections.push(`### ${attachment.title || 'OCR'}\n${limitedOutput(extensionAiOcrText(await ocrImage(source)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`)
+      }
+      continue
+    }
+    if (type === 'file') {
+      if (!capabilities.files) throw permissionDeniedError('desktop.files')
+      const filePath = attachment.path || attachment.file?.path || attachment.filePath
+      if (!filePath) continue
+      const resolvedPath = expandUserPath(filePath)
+      const shouldAttachImage = (attachment.as === 'image' || (!attachment.as && isImagePath(resolvedPath))) && attachment.as !== 'text'
+      if (shouldAttachImage) images.push(await extensionAiPathImage(resolvedPath))
+      if (!shouldAttachImage || attachment.as === 'text' || attachment.as === 'metadata') textSections.push(await extensionAiFileContext(resolvedPath, attachment))
+      if (attachment.ocr || attachment.as === 'ocr') {
+        if (!capabilities.ocr) throw permissionDeniedError('ocr')
+        textSections.push(`### ${attachment.title || `OCR ${path.basename(resolvedPath)}`}\n${limitedOutput(extensionAiOcrText(await ocrImage(resolvedPath)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`)
+      }
+    }
+  }
+  return { context: textSections.filter(Boolean).join('\n\n'), images }
+}
+
 function createExtensionAi(extension) {
   const extensionKey = path.basename(extension.__filePath || extension.id || 'extension').replace(/[^a-zA-Z0-9._-]/g, '-')
+  const capabilities = {
+    files: hasExtensionPermission(extension, 'desktop.files'),
+    clipboard: hasExtensionPermission(extension, 'clipboard.history'),
+    ocr: hasExtensionPermission(extension, 'ocr'),
+  }
   const enforceAiQuota = () => {
     if (!checkAiRateLimit(extension)) throw Object.assign(new Error('AI rate limit exceeded'), { code: 'ai-rate-limit-exceeded', extensionId: extension?.id })
   }
+  const normalizeOptions = async (options: any = {}) => {
+    const normalized = await normalizeExtensionAiAttachments(extension, options.attachments || [], capabilities)
+    return {
+      system: options.system,
+      signal: options.signal,
+      context: normalized.context,
+      images: normalized.images,
+      onEvent: (event) => {
+        if (event.type === 'delta' && event.text) options.onDelta?.(event.text)
+        options.onEvent?.(event)
+      },
+    }
+  }
+  const stream = (prompt, options: any = {}, session: any = nevermindAi) => {
+    enforceAiQuota()
+    const controller = new AbortController()
+    const removeExternalAbortListener = options.signal?.addEventListener ? (() => {
+      const listener = () => controller.abort()
+      options.signal.addEventListener('abort', listener, { once: true })
+      return () => options.signal.removeEventListener?.('abort', listener)
+    })() : () => {}
+    let inner: any = null
+    const result = (async () => {
+      const normalized = await normalizeOptions({ ...options, signal: controller.signal })
+      inner = session.stream(String(prompt || ''), normalized)
+      return inner.result
+    })().finally(removeExternalAbortListener)
+    return { result, abort: () => { controller.abort(); inner?.abort?.() } }
+  }
   return {
-    ask: (prompt, options: any = {}) => {
+    ask: async (prompt, options: any = {}) => {
       enforceAiQuota()
-      return nevermindAi.ask(String(prompt || ''), { system: options.system })
+      return nevermindAi.ask(String(prompt || ''), await normalizeOptions(options))
     },
+    stream,
     session: (id = 'default', options: any = {}) => {
       const session = nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: options.system })
       return {
         ...session,
-        ask: (prompt: any) => {
+        ask: async (prompt: any, askOptions: any = {}) => {
           enforceAiQuota()
-          return session.ask(prompt)
+          return session.ask(prompt, await normalizeOptions({ ...options, ...askOptions }))
         },
+        stream: (prompt: any, streamOptions: any = {}) => stream(prompt, { ...options, ...streamOptions }, session),
       }
+    },
+    attachments: {
+      text: (text, title) => ({ type: 'text', text: String(text || ''), title }),
+      image: (input, options: any = {}) => ({ ...options, type: 'image', ...(String(input || '').startsWith('data:') ? { dataUrl: input } : { path: input }) }),
+      file: (input, options: any = {}) => ({ ...options, type: 'file', path: typeof input === 'string' ? input : input?.path || input?.filePath }),
+      selectedText: async (title = 'Selected Text') => ({ type: 'text', title, text: await selectedText() }),
+      selectedFiles: async (options: any = {}) => {
+        if (!capabilities.files) throw permissionDeniedError('desktop.files')
+        return (await selectedExtensionFiles()).map((file) => ({ ...options, type: 'file', file }))
+      },
+      clipboard: async (options: any = {}) => {
+        if (!capabilities.clipboard) throw permissionDeniedError('clipboard.history')
+        const item: any = await readDesktopClipboard()
+        if (item.type === 'text') return { type: 'text', title: options.title || 'Clipboard', text: item.text }
+        if (item.type === 'image') return { ...options, type: 'image', title: options.title || 'Clipboard Image', dataUrl: item.image }
+        if (item.type === 'files') return item.files.map((file) => ({ ...options, type: 'file', file }))
+        return null
+      },
+      ocrImage: async (input, options: any = {}) => {
+        if (!capabilities.ocr) throw permissionDeniedError('ocr')
+        return { type: 'text', title: options.title || 'OCR Text', text: extensionAiOcrText(await ocrImage(input, options)) }
+      },
     },
   }
 }

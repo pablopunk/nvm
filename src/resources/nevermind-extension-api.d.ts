@@ -474,11 +474,54 @@ export type ExtensionLogs = Record<LogLevel, (message: string, data?: unknown) =
   recent(options?: RecentLogOptions): Promise<LogEntry[]>
 }
 
+export type ExtensionAiAttachment =
+  | string
+  | { type: 'text'; text: string; title?: string }
+  | { type: 'image'; path?: string; filePath?: string; dataUrl?: string; imageDataUrl?: string; data?: string; title?: string; ocr?: boolean }
+  | { type: 'file'; path?: string; filePath?: string; file?: ExtensionFile; title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }
+
+export type ExtensionAiStreamEvent =
+  | { type: 'start' }
+  | { type: 'delta'; text: string }
+  | { type: 'tool_start' | 'tool_end'; name?: string; isError?: boolean }
+  | { type: 'done' }
+  | { type: 'aborted' }
+  | { type: 'error'; message?: string; data?: unknown }
+
+export type ExtensionAiOptions = {
+  system?: string
+  /** Text, file, image, selected, clipboard, or OCR context. File/image attachments require `desktop.files`; clipboard helpers require `clipboard.history`; OCR requires `ocr`. */
+  attachments?: ExtensionAiAttachment | Promise<ExtensionAiAttachment> | Array<ExtensionAiAttachment | Promise<ExtensionAiAttachment> | ExtensionAiAttachment[]>
+  /** Abort the request with a standard AbortController. */
+  signal?: AbortSignal
+  onDelta?: (delta: string) => void
+  onEvent?: (event: ExtensionAiStreamEvent) => void
+}
+
+export type ExtensionAiStream = {
+  /** Resolves to the full assistant text after streaming completes. */
+  result: Promise<string>
+  /** Abort the in-flight request. */
+  abort(): void
+}
+
 export type ExtensionAi = {
-  /** One-shot AI call. Quota-limited per extension; declare `ai` permission. */
-  ask(prompt: string, options?: { system?: string }): Promise<string>
+  /** One-shot AI call. Quota-limited per extension; declare `ai` permission. Supports attachments and AbortController signals. */
+  ask(prompt: string, options?: ExtensionAiOptions): Promise<string>
+  /** Streaming AI call. Use `onDelta`/`onEvent` for incremental updates and await `result` for the final text. */
+  stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream
+  /** Attachment builders normalize host-owned context for AI prompts. */
+  attachments: {
+    text(text: string, title?: string): ExtensionAiAttachment
+    image(pathOrDataUrl: string, options?: { title?: string; ocr?: boolean }): ExtensionAiAttachment
+    file(pathOrFile: string | ExtensionFile, options?: { title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }): ExtensionAiAttachment
+    selectedText(title?: string): Promise<ExtensionAiAttachment>
+    selectedFiles(options?: { title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }): Promise<ExtensionAiAttachment[]>
+    clipboard(options?: { title?: string; as?: 'text' | 'image' | 'metadata' | 'ocr'; ocr?: boolean }): Promise<ExtensionAiAttachment | ExtensionAiAttachment[] | null>
+    ocrImage(pathOrDataUrlOrFile: string | ExtensionFile, options?: { title?: string }): Promise<ExtensionAiAttachment>
+  }
   /** Per-extension conversational session. Session ids are scoped to the extension. */
-  session(id?: string, options?: { system?: string }): { ask(prompt: string): Promise<string>; reset(): unknown }
+  session(id?: string, options?: { system?: string }): { ask(prompt: string, options?: ExtensionAiOptions): Promise<string>; stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream; reset(): unknown }
 }
 
 export type ExtensionOwnership = {
