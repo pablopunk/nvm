@@ -78,13 +78,28 @@ export type ExtensionBackgroundMode = 'view' | 'noView' | 'background'
 export type ExtensionBackgroundTrigger =
   | { type: 'startup'; delayMs?: number }
   | { type: 'interval'; every: string | number; delayMs?: number }
-  /** Requires `desktop.files`; roots are watched by the host with debouncing and quotas. */
-  | { type: 'files.changed'; roots: string | string[]; debounceMs?: number }
+  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. */
+  | { type: 'files.changed'; roots: string | string[]; debounceMs?: number; includeHidden?: boolean; extensions?: string[]; kind?: 'file' | 'image' | 'video' | 'media'; ignore?: string[] }
   /** Requires `clipboard.history`; fires after Nevermind records a changed clipboard item. */
   | { type: 'clipboard.changed'; debounceMs?: number }
   /** Requires `desktop.apps`; backed by a host frontmost-app poller. */
   | { type: 'app.frontmost.changed'; debounceMs?: number }
   | { type: 'wake' | 'login' }
+
+export type ExtensionLaunchContext = {
+  /** Declarative trigger that started this run, when known. */
+  trigger?: ExtensionBackgroundTrigger
+  /** Host event name, primarily for diagnostics. File watcher events are scoped per job. */
+  event?: string
+  /** Changed file metadata for `files.changed` triggers. Bounded by the host. */
+  files?: ExtensionFile[]
+  /** Absolute changed paths for `files.changed` triggers. Bounded by the host. */
+  changedPaths?: string[]
+  /** Run reason such as `manual`, `startup`, `interval`, or `event:*`. */
+  reason?: string
+  /** Epoch milliseconds for when the host started this action/job. */
+  startedAt: number
+}
 
 export type ExtensionActionContribution = {
   /** Stable local id. Global shortcuts, aliases, recents, and action refs depend on this. */
@@ -609,6 +624,8 @@ export type ExtensionContext = {
   /** Runtime metadata for the current extension plus host helpers such as persistent rename. */
   extension: NevermindExtension & { rename(metadata: string | { title?: string; subtitle?: string; commandTitle?: string; commandSubtitle?: string }): Promise<unknown> }
   command?: ExtensionCommand
+  /** Host-owned launch context for background/triggered runs. Undefined for normal palette executions. */
+  launch?: ExtensionLaunchContext
 
   /** Declarative host-owned UI primitives. Nevermind owns rendering, navigation, filtering, actions, shortcuts, and errors. */
   ui: {

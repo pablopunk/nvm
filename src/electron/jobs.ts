@@ -2,9 +2,11 @@ export type JobOwner = 'host' | 'extension'
 export type JobStatus = 'idle' | 'running' | 'succeeded' | 'failed' | 'disabled' | 'backing-off'
 export type JobTrigger =
   | { type: 'manual' }
-  | { type: 'startup'; delayMs?: number }
-  | { type: 'interval'; everyMs: number; delayMs?: number }
-  | { type: 'event'; event: string; debounceMs?: number }
+  | { type: 'startup'; delayMs?: number; payload?: unknown }
+  | { type: 'interval'; everyMs: number; delayMs?: number; payload?: unknown }
+  | { type: 'event'; event: string; debounceMs?: number; payload?: unknown }
+
+export type JobRunContext = { id: string; reason: string; event?: string; payload?: unknown; startedAt: number }
 
 export type JobHistoryEntry = {
   startedAt: number
@@ -25,7 +27,7 @@ export type JobDefinition = {
   timeoutMs?: number
   maxConcurrency?: 1
   backoff?: { initialMs?: number; maxMs?: number }
-  run: (context: { id: string; reason: string }) => unknown | Promise<unknown>
+  run: (context: JobRunContext) => unknown | Promise<unknown>
 }
 
 export type JobSnapshot = {
@@ -69,6 +71,7 @@ type JobRecord = {
   history: JobHistoryEntry[]
   timers: NodeJS.Timeout[]
   scheduledTimers: Map<string, NodeJS.Timeout>
+  scheduledPayloads: Map<string, { event?: string; payload?: unknown }>
 }
 
 const HISTORY_LIMIT = 10
@@ -93,6 +96,18 @@ function backoffDelay(record: JobRecord) {
   const initial = record.definition.backoff?.initialMs ?? DEFAULT_EXTENSION_BACKOFF_MS
   const max = record.definition.backoff?.maxMs ?? DEFAULT_EXTENSION_MAX_BACKOFF_MS
   return Math.min(max, initial * Math.max(1, 2 ** Math.max(0, record.consecutiveFailures - 1)))
+}
+
+function mergeEventPayloads(previous?: { event?: string; payload?: unknown }, next?: { event?: string; payload?: unknown }) {
+  if (!previous) return next || {}
+  if (!next) return previous
+  const previousPayload: any = previous.payload
+  const nextPayload: any = next.payload
+  if (Array.isArray(previousPayload?.changedPaths) || Array.isArray(nextPayload?.changedPaths)) {
+    const changedPaths = [...new Set([...(previousPayload?.changedPaths || []), ...(nextPayload?.changedPaths || [])])].slice(-100)
+    return { event: next.event || previous.event, payload: { ...(previousPayload || {}), ...(nextPayload || {}), changedPaths } }
+  }
+  return next
 }
 
 export class JobRegistry {
@@ -125,12 +140,14 @@ export class JobRegistry {
       history: [],
       timers: [],
       scheduledTimers: new Map(),
+      scheduledPayloads: new Map(),
     }
     record.definition = definition
     record.enabled = enabled
     record.status = record.enabled ? (record.running ? 'running' : record.status === 'disabled' ? 'idle' : record.status) : 'disabled'
     record.timers = []
     record.scheduledTimers ||= new Map()
+    record.scheduledPayloads ||= new Map()
     record.history ||= []
     this.records.set(definition.id, record)
     this.installTriggers(record)
@@ -156,7 +173,7 @@ export class JobRegistry {
     return this.records.has(id)
   }
 
-  async run(id: string, reason = 'manual') {
+  async run(id: string, reason = 'manual', eventPayload?: { event?: string; payload?: unknown }) {
     const record = this.records.get(id)
     if (!record) throw new Error(`Unknown background job: ${id}`)
     if (!record.enabled) return null
@@ -179,7 +196,7 @@ export class JobRegistry {
     record.lastError = undefined
     this.notify()
     try {
-      const promise = Promise.resolve(record.definition.run({ id, reason }))
+      const promise = Promise.resolve(record.definition.run({ id, reason, event: eventPayload?.event, payload: eventPayload?.payload, startedAt: record.lastStartedAt }))
       const result = record.definition.timeoutMs ? await timeout(promise, record.definition.timeoutMs, record.definition.title) : await promise
       record.status = 'succeeded'
       record.runCount += 1
@@ -206,27 +223,30 @@ export class JobRegistry {
     }
   }
 
-  schedule(id: string, reason = 'scheduled', delayMs = 0) {
+  schedule(id: string, reason = 'scheduled', delayMs = 0, eventPayload?: { event?: string; payload?: unknown }) {
     const record = this.records.get(id)
     if (!record || !record.enabled) return
     const previous = record.scheduledTimers.get(reason)
     if (previous) clearTimeout(previous)
     record.nextRunAt = Date.now() + Math.max(0, delayMs)
+    record.scheduledPayloads.set(reason, mergeEventPayloads(record.scheduledPayloads.get(reason), eventPayload))
     const timer = setTimeout(() => {
+      const payload = record.scheduledPayloads.get(reason)
       record.scheduledTimers.delete(reason)
+      record.scheduledPayloads.delete(reason)
       record.nextRunAt = undefined
-      void this.run(id, reason).catch(() => {})
+      void this.run(id, reason, payload).catch(() => {})
     }, Math.max(0, delayMs))
     timer.unref?.()
     record.scheduledTimers.set(reason, timer)
     this.notify()
   }
 
-  emit(event: string) {
+  emit(event: string, payload?: unknown) {
     for (const record of this.records.values()) {
       for (const trigger of record.definition.triggers || []) {
         if (trigger.type !== 'event' || trigger.event !== event) continue
-        this.schedule(record.definition.id, `event:${event}`, trigger.debounceMs || 0)
+        this.schedule(record.definition.id, `event:${event}`, trigger.debounceMs || 0, { event, payload: payload ?? trigger.payload })
       }
     }
   }
@@ -305,10 +325,10 @@ export class JobRegistry {
   private installTriggers(record: JobRecord) {
     if (!record.enabled) return
     for (const trigger of record.definition.triggers || []) {
-      if (trigger.type === 'startup') this.schedule(record.definition.id, 'startup', trigger.delayMs || 0)
+      if (trigger.type === 'startup') this.schedule(record.definition.id, 'startup', trigger.delayMs || 0, { payload: trigger.payload })
       if (trigger.type === 'interval') {
-        this.schedule(record.definition.id, 'interval', trigger.delayMs ?? trigger.everyMs)
-        const timer = setInterval(() => void this.run(record.definition.id, 'interval').catch(() => {}), Math.max(1000, trigger.everyMs))
+        this.schedule(record.definition.id, 'interval', trigger.delayMs ?? trigger.everyMs, { payload: trigger.payload })
+        const timer = setInterval(() => void this.run(record.definition.id, 'interval', { payload: trigger.payload }).catch(() => {}), Math.max(1000, trigger.everyMs))
         timer.unref?.()
         record.timers.push(timer)
       }
@@ -320,6 +340,7 @@ export class JobRegistry {
     for (const timer of record.scheduledTimers.values()) clearTimeout(timer)
     record.timers = []
     record.scheduledTimers.clear()
+    record.scheduledPayloads.clear()
     record.nextRunAt = undefined
   }
 

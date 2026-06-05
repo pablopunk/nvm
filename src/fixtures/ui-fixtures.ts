@@ -1,4 +1,9 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 import type { NevermindExtension, ExtensionAction, ExtensionContext, ExtensionFile, ExtensionFormValue, ExtensionOcrResult } from '../resources/nevermind-extension-api'
+
+const WATCH_FIXTURE_ROOT = path.join(os.tmpdir(), 'nvm-extension-watch-fixture')
 
 function valuesMarkdown(values: Record<string, ExtensionFormValue> = {}) {
   const rows = Object.entries(values).map(([key, value]) => `- **${key}**: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
@@ -68,7 +73,6 @@ function backgroundJobFixtureAction(ctx: ExtensionContext) {
     mode: 'background',
     triggers: [
       { type: 'startup', delayMs: 750 },
-      { type: 'files.changed', roots: ['~/Downloads'], debounceMs: 2000 },
       { type: 'app.frontmost.changed', debounceMs: 1000 },
       { type: 'wake' },
       { type: 'login' },
@@ -78,6 +82,44 @@ function backgroundJobFixtureAction(ctx: ExtensionContext) {
       await innerCtx.storage.set('backgroundJobRuns', count + 1)
       return innerCtx.ui.toast({ message: `Background fixture run #${count + 1}` })
     },
+  })
+}
+
+function folderWatchFixtureAction(ctx: ExtensionContext) {
+  fs.mkdirSync(WATCH_FIXTURE_ROOT, { recursive: true })
+  return ctx.action({
+    id: 'folder-watch-fixture',
+    title: 'Folder Watch Fixture Job',
+    subtitle: 'Watches a temp folder and records ctx.launch.changedPaths/files',
+    icon: 'folder-sync',
+    mode: 'background',
+    triggers: [{ type: 'files.changed', roots: [WATCH_FIXTURE_ROOT], debounceMs: 250, extensions: ['txt', 'png'], ignore: ['ignored*'] }],
+    async run(innerCtx) {
+      const count = await innerCtx.storage.get<number>('folderWatchRuns', 0) || 0
+      await innerCtx.storage.set('folderWatchRuns', count + 1)
+      await innerCtx.storage.set('folderWatchLaunch', innerCtx.launch || null)
+      return innerCtx.ui.toast({ message: `Folder watch fixture run #${count + 1}` })
+    },
+  })
+}
+
+async function folderWatchView(ctx: ExtensionContext) {
+  fs.mkdirSync(WATCH_FIXTURE_ROOT, { recursive: true })
+  const count = await ctx.storage.get<number>('folderWatchRuns', 0) || 0
+  const launch = await ctx.storage.get<any>('folderWatchLaunch', null)
+  const touchAction = ctx.actions.run('Touch Watched File', async (innerCtx) => {
+    fs.mkdirSync(WATCH_FIXTURE_ROOT, { recursive: true })
+    const filePath = path.join(WATCH_FIXTURE_ROOT, `changed-${Date.now()}.txt`)
+    fs.writeFileSync(filePath, `Nevermind folder watch fixture ${new Date().toISOString()}\n`)
+    return innerCtx.ui.toast({ message: `Touched ${path.basename(filePath)}` })
+  })
+  return ctx.ui.preview({
+    id: 'dev-ui-folder-watch',
+    title: 'Dev UI · Folder Watch',
+    subtitle: WATCH_FIXTURE_ROOT,
+    content: `# Folder Watch Fixture\n\nRoot: \`${WATCH_FIXTURE_ROOT}\`\n\nRuns: **${count}**\n\nLast launch context:\n\n\`\`\`json\n${JSON.stringify(launch, null, 2) || 'null'}\n\`\`\`\n\nUse the action panel to touch a watched .txt file, then reopen this view or check Background Tasks.`,
+    actions: [touchAction],
+    actionPanel: { sections: [{ actions: [touchAction] }] },
   })
 }
 
@@ -408,7 +450,7 @@ const extension: NevermindExtension = {
   subtitle: 'Dev-only extension API fixtures',
   permissions: ['camera', 'desktop.files', 'desktop.apps', 'ocr'],
   actions(ctx) {
-    return [floatingWindowToggleAction(ctx), backgroundJobFixtureAction(ctx)]
+    return [floatingWindowToggleAction(ctx), backgroundJobFixtureAction(ctx), folderWatchFixtureAction(ctx)]
   },
   commands: [
     { id: 'list', title: 'Dev UI: List', icon: 'list', run: (ctx) => listView(ctx) },
@@ -417,6 +459,7 @@ const extension: NevermindExtension = {
     { id: 'preview', title: 'Dev UI: Preview', icon: 'file-text', run: (ctx) => previewView(ctx) },
     { id: 'form', title: 'Dev UI: Form', icon: 'list-checks', run: (ctx) => formView(ctx) },
     { id: 'text-input', title: 'Dev UI: Text Input', icon: 'keyboard', run: (ctx) => textInputView(ctx) },
+    { id: 'folder-watch', title: 'Dev UI: Folder Watch', icon: 'folder-sync', run: (ctx) => folderWatchView(ctx) },
     { id: 'floating-window', title: 'Dev UI: Floating Window', icon: 'panel-top-open', run: (ctx) => floatingWindowView(ctx) },
     { id: 'prompt', title: 'Dev UI: Prompt', icon: 'text-cursor-input', run: (ctx) => promptView(ctx) },
     { id: 'editor', title: 'Dev UI: Editor', icon: 'file-pen-line', run: (ctx) => editorView(ctx) },
