@@ -7,6 +7,7 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { Readable } from 'node:stream'
 import { clipboardFilePath as readClipboardFilePath, clipboardFilePaths, clipboardItemSubtitle, clipboardItemTitle, normalizeClipboardHistory } from './clipboard-utils'
 import { expandUserPath, extensionForPath, fileUrlForPath, IMAGE_EXTENSIONS, isImagePath, isVideoPath, LOCAL_FILE_PROTOCOL, LOCAL_THUMB_PROTOCOL, thumbnailUrlForPath, verifyLocalFileToken, VIDEO_EXTENSIONS } from './file-utils'
 import { createNevermindAi } from './ai'
@@ -2187,6 +2188,40 @@ async function thumbnailResponseForPath(filePath) {
   return net.fetch(pathToFileURL(filePath).href)
 }
 
+async function localFileResponse(requestPath: string, request: Request) {
+  const stat = await fs.stat(requestPath).catch(() => null)
+  if (!stat?.isFile()) return new Response('File not found', { status: 404 })
+
+  const headers = new Headers({
+    'accept-ranges': 'bytes',
+    'cache-control': 'private, max-age=3600',
+    'content-type': mimeTypeForPath(requestPath),
+  })
+  const range = request.headers.get('range')
+  let start = 0
+  let end = stat.size - 1
+  let status = 200
+
+  if (range) {
+    const match = range.match(/^bytes=(\d*)-(\d*)$/)
+    if (!match || (!match[1] && !match[2])) return new Response('Invalid range', { status: 416, headers: { 'content-range': `bytes */${stat.size}` } })
+    if (!match[1]) {
+      start = Math.max(0, stat.size - Number(match[2]))
+      end = stat.size - 1
+    } else {
+      start = Number(match[1])
+      end = match[2] ? Number(match[2]) : stat.size - 1
+    }
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) return new Response('Invalid range', { status: 416, headers: { 'content-range': `bytes */${stat.size}` } })
+    end = Math.min(end, stat.size - 1)
+    status = 206
+    headers.set('content-range', `bytes ${start}-${end}/${stat.size}`)
+  }
+
+  headers.set('content-length', String(Math.max(0, end - start + 1)))
+  return new Response(Readable.toWeb(fsSync.createReadStream(requestPath, { start, end })) as BodyInit, { status, headers })
+}
+
 function registerLocalFileProtocol() {
   protocol.handle(LOCAL_FILE_PROTOCOL, (request) => {
     const url = new URL(request.url)
@@ -2194,7 +2229,7 @@ function registerLocalFileProtocol() {
     const requestPath = path.resolve(decodeURIComponent(encodedPath))
     if (!path.isAbsolute(requestPath)) return new Response('Invalid file path', { status: 400 })
     if (!verifyLocalFileToken('file', requestPath, url.searchParams.get('token'))) return new Response('Forbidden', { status: 403 })
-    return net.fetch(pathToFileURL(requestPath).href)
+    return localFileResponse(requestPath, request)
   })
 
   protocol.handle(LOCAL_THUMB_PROTOCOL, async (request) => {
