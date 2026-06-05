@@ -1,10 +1,11 @@
 import { WorkOS } from '@workos-inc/node';
+import { env } from './env';
 
-export const WORKOS_CLIENT_ID = import.meta.env.WORKOS_CLIENT_ID as string;
-export const workos = new WorkOS(import.meta.env.WORKOS_API_KEY, {
+export const WORKOS_CLIENT_ID = env('WORKOS_CLIENT_ID') as string;
+export const workos = new WorkOS(env('WORKOS_API_KEY'), {
   clientId: WORKOS_CLIENT_ID,
 });
-export const COOKIE_PASSWORD = import.meta.env.WORKOS_COOKIE_PASSWORD as string;
+export const COOKIE_PASSWORD = env('WORKOS_COOKIE_PASSWORD') as string;
 export const SESSION_COOKIE = 'nvm_session';
 
 export async function getSessionFromCookies(cookieHeader: string | null) {

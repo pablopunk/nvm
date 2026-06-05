@@ -55,7 +55,21 @@ Before retiring an API major, the backend owner must document the sunset date, v
 
 Every backend route used by desktop is part of the product contract. Contract tests should cover successful responses, error shapes, auth/device flows, active-model descriptors, proxy routes, streaming semantics, rate limits, and unsupported-client responses.
 
-When a desktop release is tagged, preserve the request/response expectations needed to keep that release supported through the support window.
+Store stable JSON fixtures under `backend/src/fixtures/contracts/<desktop-api-major>/`. Fixtures should represent full response contracts that a supported desktop release depends on, including compatibility manifests and machine-readable error envelopes. Route-level tests may use builders/mocks for volatile fields such as request IDs, random device codes, and streaming bodies, but the response shape must stay stable.
+
+CI runs `scripts/check-backend-contract-fixtures.cjs` and `pnpm -C backend test` as part of the root `pnpm test` command. Backend route changes are not ready until fixture validation and route contract tests pass.
+
+When a desktop release is tagged, review the current desktop-used backend routes and add or refresh fixtures for any newly depended-on shape before the tag is pushed. The release commit should state whether contract fixtures changed or why no fixture update was needed.
+
+## Backend contract PR/release checklist
+
+For any PR touching `backend/src/pages/api`, `backend/src/lib/proxy.ts`, auth/token/device flows, model descriptors, billing/rate-limit responses, or desktop compatibility headers:
+
+- Add or update route-level contract tests for changed success and error shapes.
+- Add or update JSON fixtures under `backend/src/fixtures/contracts/` when a supported desktop release depends on the shape.
+- Verify `mise exec -- pnpm test` locally.
+- If tagging a desktop release, note in the release commit whether contract fixtures changed.
+- If a supported client cannot be kept compatible, use the API-major or unsupported-client process below.
 
 ## Breaking-change checklist
 

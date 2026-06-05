@@ -29,6 +29,21 @@ const chatPerDayPaid = makeLimiter('chat:day:paid', 5000, '1 d');
 
 export type RateLimitDecision = { ok: true } | { ok: false; retryAfterSec: number; scope: string };
 
+type RateLimitOverrides = {
+  chat?: typeof rateLimitChat;
+  ip?: typeof rateLimitIp;
+};
+
+let testOverrides: RateLimitOverrides = {};
+
+export function setRateLimitOverridesForTests(overrides: RateLimitOverrides) {
+  testOverrides = overrides;
+}
+
+export function resetRateLimitOverridesForTests() {
+  testOverrides = {};
+}
+
 async function checkPair(
   key: string,
   scope: string,
@@ -48,6 +63,7 @@ async function checkPair(
 }
 
 export async function rateLimitChat(userId: string, kind: 'free' | 'paid'): Promise<RateLimitDecision> {
+  if (testOverrides.chat) return testOverrides.chat(userId, kind);
   const [perMin, perDay] = kind === 'free' ? [chatPerMinFree, chatPerDayFree] : [chatPerMinPaid, chatPerDayPaid];
   return checkPair(userId, `chat:${kind}`, perMin, perDay);
 }
@@ -65,6 +81,7 @@ export async function rateLimitIp(
   limit = 30,
   window: `${number} ${'s' | 'm' | 'h' | 'd'}` = '1 m',
 ): Promise<RateLimitDecision> {
+  if (testOverrides.ip) return testOverrides.ip(scope, ip, limit, window);
   if (!ip) return { ok: true };
   const limiter = ipLimiter(scope, limit, window);
   if (!limiter) return { ok: true };

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { workos, WORKOS_CLIENT_ID } from '../../../lib/workos';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
+import { env } from '../../../lib/env';
 
 export const GET: APIRoute = async ({ url, request, redirect }) => {
   const decision = await rateLimitIp('auth', clientIp(request), 30, '1 m');
@@ -9,7 +10,7 @@ export const GET: APIRoute = async ({ url, request, redirect }) => {
   const authorizationUrl = workos.userManagement.getAuthorizationUrl({
     provider: 'authkit',
     clientId: WORKOS_CLIENT_ID,
-    redirectUri: import.meta.env.WORKOS_REDIRECT_URI,
+    redirectUri: env('WORKOS_REDIRECT_URI'),
     state: returnTo,
   });
   return redirect(authorizationUrl);
