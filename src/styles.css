@@ -420,37 +420,51 @@ kbd {
 }
 
 .result[data-foreground='yellow'] strong,
-.extensionTile[data-foreground='yellow'] strong {
+.result[data-foreground='yellow'] .resultIcon,
+.extensionTile[data-foreground='yellow'] strong,
+.extensionTile[data-foreground='yellow'] .tileIcon {
   color: var(--item-foreground-yellow);
 }
 
 .result[data-foreground='blue'] strong,
-.extensionTile[data-foreground='blue'] strong {
+.result[data-foreground='blue'] .resultIcon,
+.extensionTile[data-foreground='blue'] strong,
+.extensionTile[data-foreground='blue'] .tileIcon {
   color: var(--item-foreground-blue);
 }
 
 .result[data-foreground='purple'] strong,
-.extensionTile[data-foreground='purple'] strong {
+.result[data-foreground='purple'] .resultIcon,
+.extensionTile[data-foreground='purple'] strong,
+.extensionTile[data-foreground='purple'] .tileIcon {
   color: var(--item-foreground-purple);
 }
 
 .result[data-foreground='green'] strong,
-.extensionTile[data-foreground='green'] strong {
+.result[data-foreground='green'] .resultIcon,
+.extensionTile[data-foreground='green'] strong,
+.extensionTile[data-foreground='green'] .tileIcon {
   color: var(--item-foreground-green);
 }
 
 .result[data-foreground='red'] strong,
-.extensionTile[data-foreground='red'] strong {
+.result[data-foreground='red'] .resultIcon,
+.extensionTile[data-foreground='red'] strong,
+.extensionTile[data-foreground='red'] .tileIcon {
   color: var(--item-foreground-red);
 }
 
 .result[data-foreground='orange'] strong,
-.extensionTile[data-foreground='orange'] strong {
+.result[data-foreground='orange'] .resultIcon,
+.extensionTile[data-foreground='orange'] strong,
+.extensionTile[data-foreground='orange'] .tileIcon {
   color: var(--item-foreground-orange);
 }
 
 .result[data-foreground='pink'] strong,
-.extensionTile[data-foreground='pink'] strong {
+.result[data-foreground='pink'] .resultIcon,
+.extensionTile[data-foreground='pink'] strong,
+.extensionTile[data-foreground='pink'] .tileIcon {
   color: var(--item-foreground-pink);
 }
 

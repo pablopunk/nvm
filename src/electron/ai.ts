@@ -918,7 +918,7 @@ function capabilities() {
     views: ['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'camera', 'webview'],
     formFields: ['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'checkbox', 'dropdown/select', 'multiselect', 'file', 'files', 'folder', 'description', 'separator'],
     viewOptions: ['sections', 'selectedItemId', 'onSelectionChange', 'isLoading', 'emptyView', 'detail side pane', 'searchBarPlaceholder', 'searchAccessory', 'pagination', 'refresh'],
-    itemOptions: ['accessories with tone/tooltip', 'keywords', 'detail markdown/metadata/actions', 'image descriptor', 'actionPanel', 'appearance.foreground: muted named color yellow, blue, purple, green, red, orange, or pink'],
+    itemOptions: ['accessories with tone/tooltip', 'keywords', 'detail markdown/metadata/actions', 'image descriptor', 'actionPanel', 'appearance.foreground: muted named color yellow, blue, purple, green, red, orange, or pink applied to item/action/command title and Lucide/fallback icon'],
     actionPanel: ['sections', 'submenus'],
     shortcuts: ['local action shortcut', 'durable action globalShortcut', 'command globalShortcut as shorthand', 'shortcutScope'], 
     gridOptions: { layout: ['square', 'wide', 'compact'], aspectRatio: ['1', '16 / 9', '4 / 3'], columns: 'number' },

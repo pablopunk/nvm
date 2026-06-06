@@ -24,6 +24,7 @@ Good capability framing:
 - Lock the computer.
 - Open system settings.
 - Configure a global shortcut.
+- Start the app after sign-in.
 - Change an OS appearance setting.
 
 Bad capability framing:
@@ -65,6 +66,7 @@ All desktop integrations are owned by OS capabilities. The rest of the app descr
 - Camera access for host-owned extension views is capability-gated, uses OS privacy prompts where required, and must include platform packaging metadata such as macOS camera usage descriptions.
 - Palette window behavior such as focus, taskbar/dock visibility, all-workspaces behavior, and desktop-window-manager quirks is not spread through generic window lifecycle code.
 - Shortcut behavior such as default accelerators, conflicts, formatting, and keyboard-settings guidance reflects the current OS.
+- Login startup behavior appears only on platforms that can own it and should keep the palette hidden until the user invokes it.
 - Update availability and packaging-dependent messaging are presented as platform capabilities, not as generic promises.
 - Extensions that invoke unavailable OS-dependent actions fail safely inside the palette.
 - Shared UI contains no hard-coded OS wording for behavior owned by a capability.

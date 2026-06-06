@@ -20,7 +20,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -139,16 +139,35 @@ function getPaletteHotkey() {
   return getSetting('paletteHotkey') || 'Alt+Space'
 }
 
+function settingIsAvailable(definition: any) {
+  return !definition?.capability || hasCapability(definition.capability)
+}
+
+function availableSettingDefinitions() {
+  return SETTING_DEFINITIONS.filter(settingIsAvailable)
+}
+
 function getSetting(id: any) {
-  return settingValue(userState.settings, id)
+  const definition = settingDefinition(String(id))
+  if (!definition || !settingIsAvailable(definition)) return undefined
+  if (definition.id === 'startAtLogin') return getLaunchAtLoginEnabled()
+  return settingValue(userState.settings, definition.id)
 }
 
 function setSetting(id: any, value: any) {
+  const definition = settingDefinition(String(id))
+  if (!definition) return { ok: false, message: 'Setting not found' }
+  if (!settingIsAvailable(definition)) return { ok: false, message: `${definition.title} is not available on ${osLabel()}` }
+  if (definition.id === 'startAtLogin') {
+    const result = setLaunchAtLoginEnabled(Boolean(value))
+    if (!result.ok) return result
+  }
   if (!userState.settings) userState.settings = {}
-  userState.settings[id] = value
+  userState.settings[definition.id] = value
   scheduleSaveState()
   invalidateExtensionRootItems()
-  patchSettingsView(id)
+  patchSettingsView(definition.id)
+  return { ok: true, message: `${definition.title} updated` }
 }
 
 function aiLearningMetadata(chatId: string) {
@@ -1213,11 +1232,11 @@ function settingItemPatch(definition) {
 }
 
 function settingsItems() {
-  return SETTING_DEFINITIONS.map((definition) => ({
+  return availableSettingDefinitions().map((definition) => ({
     id: `setting:${definition.id}`,
     title: definition.title,
     subtitle: definition.description,
-    icon: 'settings',
+    icon: definition.icon || 'settings',
     ...settingItemPatch(definition),
   }))
 }
@@ -1236,7 +1255,7 @@ function settingsView(selectedItemId = '') {
 
 function patchSettingsView(settingId: string, options: any = {}) {
   const definition = SETTING_DEFINITIONS.find((item) => item.id === settingId)
-  if (!definition) return
+  if (!definition || !settingIsAvailable(definition)) return
   patchOpenView('app-settings', {
     mode: 'patch',
     items: [{ id: `setting:${definition.id}`, ...settingItemPatch(definition) }],
@@ -2166,7 +2185,8 @@ async function executeViewAction(action, launchContext?: any) {
     case 'toggleSetting': {
       const definition = settingDefinition(action.settingId)
       if (!definition || definition.type !== 'boolean') return { toast: { message: 'Setting not found', tone: 'error' } }
-      setSetting(definition.id, toggledSettingValue(definition, getSetting(definition.id)))
+      const result = setSetting(definition.id, toggledSettingValue(definition, getSetting(definition.id)))
+      if (!result.ok) return { toast: { message: result.message, tone: 'error' } }
       return { patch: { items: [settingItemPatch(definition)] } }
     }
     case 'setActionShortcut': {
@@ -3851,17 +3871,22 @@ function createExtensionContext(extension, command, launchContext?: any) {
     } : undefined,
     storage: createExtensionStorage(extension),
     settings: {
-      definitions: () => SETTING_DEFINITIONS.map((definition) => ({ ...definition, value: getSetting(definition.id) })),
+      definitions: () => availableSettingDefinitions().map((definition) => ({ ...definition, value: getSetting(definition.id) })),
       get: (id) => getSetting(id),
       set: canWriteSettings
-        ? (id, value) => setSetting(id, value)
+        ? (id, value) => {
+            const result = setSetting(id, value)
+            if (!result.ok) throw new Error(result.message)
+            return value
+          }
         : () => { throw permissionDeniedError('settings.write') },
       toggle: canWriteSettings
         ? (id) => {
             const definition = settingDefinition(id)
             if (!definition) throw new Error(`Unknown setting: ${id}`)
             const next = toggledSettingValue(definition, getSetting(id))
-            setSetting(id, next)
+            const result = setSetting(id, next)
+            if (!result.ok) throw new Error(result.message)
             return next
           }
         : () => { throw permissionDeniedError('settings.write') },
@@ -4517,6 +4542,7 @@ function registerExtension(extension) {
       shortcutScope: command.shortcutScope,
       globalShortcut: command.globalShortcut,
       dismissAfterRun: command.dismissAfterRun,
+      appearance: normalizeItemAppearance(command.appearance),
       background: command.background || command.mode === 'background' || command.mode === 'noView',
       mode: command.mode,
       triggers: command.triggers,

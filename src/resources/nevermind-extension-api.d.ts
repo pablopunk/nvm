@@ -119,6 +119,8 @@ export type ExtensionActionContribution = {
   dismissAfterRun?: 'auto'
   background?: boolean
   customizable?: boolean
+  /** Muted semantic color applied to the action result title and Lucide/fallback icon. Images keep their original colors. */
+  appearance?: ExtensionItemAppearance
   /** Where this durable action should be discoverable. Defaults to `['search']`. */
   placement?: ExtensionActionPlacement[]
   /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
@@ -273,7 +275,10 @@ export type ExtensionMetadataItem =
   | { type: 'tag'; label?: string; value: string; tone?: ExtensionAccessoryTone }
   | { type: 'separator' }
 export type ExtensionDetail = { title?: string; subtitle?: string; markdown?: string; metadata?: ExtensionMetadataItem[]; image?: ExtensionImage; actions?: ExtensionAction[] }
-export type ExtensionItemAppearance = { foreground?: ForegroundColor }
+export type ExtensionItemAppearance = {
+  /** Muted semantic color applied to the item title and Lucide/fallback icon. Images keep their original colors. */
+  foreground?: ForegroundColor
+}
 
 /** Item displayed in root/search providers, list views, and grid views. */
 export type ExtensionItem = {
@@ -916,6 +921,8 @@ export type ExtensionCommand = {
   shortcut?: string
   shortcutScope?: ShortcutScope
   globalShortcut?: string
+  /** Muted semantic color applied to the command result title and Lucide/fallback icon. Images keep their original colors. */
+  appearance?: ExtensionItemAppearance
   /** Dismiss immediately for fire-and-forget commands. Prefer `mode: 'background'` for durable scheduled work. */
   background?: boolean
   /** Execution lifecycle. `background`/`noView` commands are eligible for host-managed jobs and diagnostics. */

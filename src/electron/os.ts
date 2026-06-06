@@ -30,6 +30,7 @@ export function hasCapability(capability: string) {
   if (macOnlyCapabilities.has(capability)) return osDependent({ darwin: true }, false)
   if (capability === 'auto-updates') return osDependent({ darwin: true, linux: Boolean(process.env.APPIMAGE) }, false)
   if (capability === 'camera') return osDependent({ darwin: true, win32: true, linux: true }, false)
+  if (capability === 'launch-at-login') return osDependent({ darwin: true, win32: true }, false)
   return true
 }
 
@@ -100,6 +101,26 @@ export function prepareAppWindowPolicy() {
       app.dock?.hide()
     },
   })()
+}
+
+export function getLaunchAtLoginEnabled() {
+  if (!hasCapability('launch-at-login') || !app.isPackaged) return false
+  return app.getLoginItemSettings().openAtLogin
+}
+
+export function setLaunchAtLoginEnabled(enabled: boolean) {
+  if (!hasCapability('launch-at-login')) return { ok: false, message: `Start at login is not available on ${osLabel()}` }
+  if (!app.isPackaged) return { ok: false, message: 'Start at login is only available in packaged builds' }
+  try {
+    app.setLoginItemSettings(process.platform === 'darwin'
+      ? { openAtLogin: enabled, openAsHidden: true }
+      : { openAtLogin: enabled })
+    const current = app.getLoginItemSettings().openAtLogin
+    if (current !== enabled) return { ok: false, message: `Could not ${enabled ? 'enable' : 'disable'} start at login` }
+    return { ok: true, message: enabled ? 'Nevermind will start at login' : 'Nevermind will not start at login' }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : `Could not ${enabled ? 'enable' : 'disable'} start at login` }
+  }
 }
 
 export function supportsAutoUpdates() {
