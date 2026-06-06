@@ -10,6 +10,7 @@ Serves the dashboard at `nvm.fyi` and the API the desktop app talks to.
    - Neon `DATABASE_URL`
    - WorkOS `API_KEY`, `CLIENT_ID`, `REDIRECT_URI`
    - `WORKOS_COOKIE_PASSWORD` — `openssl rand -base64 32`
+   - Stripe `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, subscription/top-up price IDs and credit grants
 2. `pnpm install`
 3. `pnpm db:migrate` to apply migrations on Neon (idempotent; auto-bootstraps an existing DB)
 4. `pnpm dev` → http://localhost:4321
@@ -30,6 +31,9 @@ Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
 - `GET  /api/auth/callback` — exchanges code → session cookie, upserts user + free grant
 - `POST /api/auth/signout`
 - `GET  /api/me` — `{ email, plan, balance, recentUsage }`
+- `POST /api/billing/checkout` — create a Stripe Checkout session for subscription or top-up
+- `POST /api/billing/portal` — create a Stripe Billing Portal session
+- `POST /api/billing/webhook` — Stripe webhook receiver with idempotent credit grants
 
 ## Deploy
 

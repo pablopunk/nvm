@@ -3,7 +3,8 @@ import Layout from '../layouts/Layout.astro';
 import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
-import { users } from '../db/schema';
+import { users, subscriptions } from '../db/schema';
+import { billingCatalog } from '../lib/billing';
 import { getBalances } from '../lib/users';
 import { listApiTokens } from '../lib/tokens';
 
@@ -13,7 +14,12 @@ if (!session) return Astro.redirect('/api/auth/signin?return_to=/profile');
 const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
 const balances = user ? await getBalances(user.id) : { free: 0, paid: 0, total: 0 };
 const tokens = user ? await listApiTokens(user.id) : [];
+const [subscription] = user ? await db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)).limit(1) : [];
+const catalog = (() => {
+  try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
+})();
 const isAdmin = user?.role === 'admin';
+const billingState = Astro.url.searchParams.get('billing');
 ---
 <Layout title="Nevermind · Profile">
   <nav class="nav">
@@ -36,6 +42,32 @@ const isAdmin = user?.role === 'admin';
   <div class="section card">
     <h3>Account</h3>
     <p style="margin:0"><code>{user?.email}</code> · {user?.role}</p>
+  </div>
+
+  <div class="section card stack">
+    <div>
+      <h3>Billing</h3>
+      <p class="muted" style="margin:0">
+        {subscription ? `${subscription.status} · renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}` : 'No active subscription.'}
+      </p>
+    </div>
+    {billingState === 'success' && <p class="status status--ok">Billing updated. Credits may take a moment to appear.</p>}
+    {billingState === 'canceled' && <p class="status">Checkout canceled.</p>}
+    <div class="row">
+      {catalog.subscriptions.map((item) => (
+        <button class="button button--primary billing-checkout" data-kind="subscription" data-price-id={item.priceId}>
+          Subscribe {item.tier} · {item.credits} credits/mo
+        </button>
+      ))}
+      {catalog.topUps.map((item) => (
+        <button class="button billing-checkout" data-kind="top_up" data-price-id={item.priceId}>
+          Top up · {item.credits} credits
+        </button>
+      ))}
+      {user?.stripeCustomerId && <button class="button" id="manage-billing" type="button">Manage billing</button>}
+      {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span class="muted">Billing is not configured yet.</span>}
+    </div>
+    <p id="billing-status" class="status" style="margin:0"></p>
   </div>
 
   <div class="section">
@@ -77,6 +109,30 @@ const isAdmin = user?.role === 'admin';
       el.textContent = `Save this token now — it will not be shown again:\n${data.token}`;
       setTimeout(() => location.reload(), 100);
     });
+    const billingStatus = document.getElementById('billing-status');
+    async function redirectFromBillingEndpoint(path, body) {
+      billingStatus.textContent = 'Opening Stripe…';
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        billingStatus.textContent = data.error?.message || 'Unable to open billing right now.';
+        billingStatus.className = 'status status--err';
+        return;
+      }
+      location.href = data.url;
+    }
+    document.querySelectorAll('.billing-checkout').forEach((btn) => {
+      btn.addEventListener('click', () => redirectFromBillingEndpoint('/api/billing/checkout', {
+        kind: btn.dataset.kind,
+        priceId: btn.dataset.priceId,
+      }));
+    });
+    document.getElementById('manage-billing')?.addEventListener('click', () => redirectFromBillingEndpoint('/api/billing/portal'));
+
     document.querySelectorAll('.revoke').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirm('Revoke this token?')) return;
