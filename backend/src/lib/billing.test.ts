@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
-import { processStripeEvent, setStripeForTests } from './billing';
+import { processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
 const user = {
@@ -155,7 +155,7 @@ afterEach(() => {
 test('checkout completion upserts subscription and grants initial paid credits once', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user]], existingEvents: ['evt_duplicate'] }));
+  const db = installDb(createFakeBillingDb({ selects: [[user], []], existingEvents: ['evt_duplicate'] }));
 
   const event = stripeEvent('checkout.session.completed', {
     id: 'cs_123',
@@ -174,6 +174,7 @@ test('checkout completion upserts subscription and grants initial paid credits o
   assert.equal(creditInserts[0].values.delta, 1000);
   assert.equal(creditInserts[0].values.kind, 'paid');
   assert.equal(creditInserts[0].values.reason, 'stripe_checkout_subscription');
+  assert.equal(creditInserts[0].values.refId, 'cs_123');
   assert.equal(db.inserts.some((call) => call.table === subscriptions && call.values.status === 'active' && call.values.tier === 'pro'), true);
   assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), true);
 });
@@ -181,7 +182,7 @@ test('checkout completion upserts subscription and grants initial paid credits o
 test('invoice.paid grants renewal credits only for subscription cycle invoices', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user]] }));
+  const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
   await processStripeEvent(stripeEvent('invoice.paid', {
     id: 'in_renewal',
@@ -194,6 +195,7 @@ test('invoice.paid grants renewal credits only for subscription cycle invoices',
   const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
   assert.equal(creditInserts.length, 1);
   assert.equal(creditInserts[0].values.reason, 'stripe_subscription_renewal');
+  assert.equal(creditInserts[0].values.refId, 'in_renewal');
   assert.equal(creditInserts[0].values.delta, 1000);
 });
 
@@ -218,7 +220,7 @@ test('subscription deletion updates status and plan without revoking paid credit
 test('payment intent succeeded grants one-time top-up credits from metadata', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user]] }));
+  const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
   await processStripeEvent(stripeEvent('payment_intent.succeeded', {
     id: 'pi_123',
@@ -229,7 +231,35 @@ test('payment intent succeeded grants one-time top-up credits from metadata', as
   const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
   assert.equal(creditInserts.length, 1);
   assert.equal(creditInserts[0].values.reason, 'stripe_top_up');
+  assert.equal(creditInserts[0].values.refId, 'pi_123');
   assert.equal(creditInserts[0].values.delta, 500);
+});
+
+test('distinct Stripe events do not double-grant an already credited payment object', async () => {
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
+  installStripe();
+  const db = installDb(createFakeBillingDb({ selects: [[user], [{ id: 1 }]] }));
+
+  await processStripeEvent(stripeEvent('payment_intent.succeeded', {
+    id: 'pi_123',
+    customer: 'cus_123',
+    metadata: { billing_kind: 'top_up', user_id: user.id, price_id: 'price_topup' },
+  }, 'evt_topup_retry_shape'));
+
+  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+});
+
+test('billing POST guard rejects cross-origin cookie-auth posts', async () => {
+  const response = rejectCrossOriginBillingPost(new Request('https://api.nvm.fyi/api/billing/checkout', {
+    method: 'POST',
+    headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+    body: '{}',
+  }));
+
+  assert.equal(response?.status, 403);
+  assert.deepEqual(await response?.json(), {
+    error: { type: 'forbidden', message: 'Cross-origin billing request rejected' },
+  });
 });
 
 test('webhook route rejects malformed or signature-invalid payloads', async () => {

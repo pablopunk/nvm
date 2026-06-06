@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { env } from './env';
@@ -115,6 +115,13 @@ function publicUrl(path: string): string {
   return new URL(path, base).toString();
 }
 
+export function rejectCrossOriginBillingPost(request: Request): Response | null {
+  const origin = request.headers.get('origin');
+  if (!origin) return null;
+  if (origin === new URL(request.url).origin) return null;
+  return Response.json({ error: { type: 'forbidden', message: 'Cross-origin billing request rejected' } }, { status: 403 });
+}
+
 export async function getOrCreateStripeCustomer(user: typeof users.$inferSelect): Promise<string> {
   if (user.stripeCustomerId) return user.stripeCustomerId;
   const stripe = stripeClient();
@@ -206,6 +213,13 @@ async function userForStripeObject(database: BillingDb, object: { customer?: unk
 
 async function grantPaidCredits(database: BillingDb, userId: string, credits: number, reason: string, refId: string) {
   if (credits <= 0) return;
+  const existingGrant = await database
+    .select({ id: creditLedger.id })
+    .from(creditLedger)
+    .where(and(eq(creditLedger.userId, userId), eq(creditLedger.reason, reason), eq(creditLedger.refId, refId)))
+    .limit(1);
+  if (existingGrant.length > 0) return;
+
   await database.insert(creditLedger).values({
     userId,
     delta: credits,
@@ -246,14 +260,13 @@ async function retrieveSubscription(subscriptionId: string): Promise<Stripe.Subs
   return stripeClient().subscriptions.retrieve(subscriptionId);
 }
 
-async function handleCheckoutCompleted(database: BillingDb, session: Stripe.Checkout.Session, eventId: string) {
+async function handleCheckoutCompleted(database: BillingDb, session: Stripe.Checkout.Session, subscription: Stripe.Subscription | null) {
   if (session.mode !== 'subscription') return;
   const user = await userForStripeObject(database, session as any);
   const subscriptionId = objectId(session.subscription);
-  if (!user || !subscriptionId) return;
+  if (!user || !subscriptionId || !subscription) return;
   const item = findItemByPriceId(session.metadata?.price_id) as SubscriptionTier | null;
   if (!item || item.kind !== 'subscription') return;
-  const subscription = await retrieveSubscription(subscriptionId);
   await upsertSubscription(database, {
     userId: user.id,
     stripeSubId: subscription.id,
@@ -261,19 +274,17 @@ async function handleCheckoutCompleted(database: BillingDb, session: Stripe.Chec
     status: subscription.status,
     currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
   });
-  await grantPaidCredits(database, user.id, item.credits, 'stripe_checkout_subscription', eventId);
+  await grantPaidCredits(database, user.id, item.credits, 'stripe_checkout_subscription', session.id);
 }
 
-async function handleInvoicePaid(database: BillingDb, invoice: Stripe.Invoice, eventId: string) {
+async function handleInvoicePaid(database: BillingDb, invoice: Stripe.Invoice, subscription: Stripe.Subscription | null) {
   if ((invoice as any).billing_reason !== 'subscription_cycle') return;
   const customerId = objectId((invoice as any).customer);
   const user = await userByStripeCustomer(database, customerId);
   if (!user) return;
   const item = findItemByPriceId(firstInvoicePriceId(invoice));
   if (!item || item.kind !== 'subscription') return;
-  const subscriptionId = objectId((invoice as any).subscription) ?? objectId((invoice as any).parent?.subscription_details?.subscription);
-  if (subscriptionId) {
-    const subscription = await retrieveSubscription(subscriptionId);
+  if (subscription) {
     await upsertSubscription(database, {
       userId: user.id,
       stripeSubId: subscription.id,
@@ -282,17 +293,17 @@ async function handleInvoicePaid(database: BillingDb, invoice: Stripe.Invoice, e
       currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
     });
   }
-  await grantPaidCredits(database, user.id, item.credits, 'stripe_subscription_renewal', eventId);
+  await grantPaidCredits(database, user.id, item.credits, 'stripe_subscription_renewal', invoice.id);
 }
 
-async function handlePaymentIntentSucceeded(database: BillingDb, intent: Stripe.PaymentIntent, eventId: string) {
+async function handlePaymentIntentSucceeded(database: BillingDb, intent: Stripe.PaymentIntent) {
   const metadata = metadataOf(intent);
   if (metadata.billing_kind !== 'top_up') return;
   const user = await userForStripeObject(database, { customer: intent.customer, metadata });
   if (!user) return;
   const item = findItemByPriceId(metadata.price_id);
   if (!item || item.kind !== 'top_up') return;
-  await grantPaidCredits(database, user.id, item.credits, 'stripe_top_up', eventId);
+  await grantPaidCredits(database, user.id, item.credits, 'stripe_top_up', intent.id);
 }
 
 async function handleSubscriptionStatus(database: BillingDb, subscription: Stripe.Subscription) {
@@ -311,37 +322,61 @@ async function handleSubscriptionStatus(database: BillingDb, subscription: Strip
   });
 }
 
-async function handleStripeEvent(database: BillingDb, event: Stripe.Event) {
-  switch (event.type) {
+type PreparedStripeEvent = {
+  event: Stripe.Event;
+  subscription: Stripe.Subscription | null;
+};
+
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  return objectId((invoice as any).subscription) ?? objectId((invoice as any).parent?.subscription_details?.subscription);
+}
+
+async function prepareStripeEvent(event: Stripe.Event): Promise<PreparedStripeEvent> {
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const subscriptionId = objectId(session.subscription);
+    return { event, subscription: subscriptionId ? await retrieveSubscription(subscriptionId) : null };
+  }
+  if (event.type === 'invoice.paid') {
+    const invoice = event.data.object as Stripe.Invoice;
+    const subscriptionId = invoiceSubscriptionId(invoice);
+    return { event, subscription: subscriptionId ? await retrieveSubscription(subscriptionId) : null };
+  }
+  return { event, subscription: null };
+}
+
+async function handleStripeEvent(database: BillingDb, prepared: PreparedStripeEvent) {
+  switch (prepared.event.type) {
     case 'checkout.session.completed':
-      await handleCheckoutCompleted(database, event.data.object as Stripe.Checkout.Session, event.id);
+      await handleCheckoutCompleted(database, prepared.event.data.object as Stripe.Checkout.Session, prepared.subscription);
       break;
     case 'invoice.paid':
-      await handleInvoicePaid(database, event.data.object as Stripe.Invoice, event.id);
+      await handleInvoicePaid(database, prepared.event.data.object as Stripe.Invoice, prepared.subscription);
       break;
     case 'payment_intent.succeeded':
-      await handlePaymentIntentSucceeded(database, event.data.object as Stripe.PaymentIntent, event.id);
+      await handlePaymentIntentSucceeded(database, prepared.event.data.object as Stripe.PaymentIntent);
       break;
     case 'customer.subscription.deleted':
     case 'customer.subscription.updated':
-      await handleSubscriptionStatus(database, event.data.object as Stripe.Subscription);
+      await handleSubscriptionStatus(database, prepared.event.data.object as Stripe.Subscription);
       break;
   }
 }
 
 export async function processStripeEvent(event: Stripe.Event): Promise<{ processed: boolean }> {
+  const prepared = await prepareStripeEvent(event);
   return db.transaction(async (tx) => {
     const database = tx as unknown as BillingDb;
     const inserted = await database.insert(stripeEvents).values({
-      eventId: event.id,
-      type: event.type,
-      apiVersion: event.api_version ?? null,
-      payload: event as any,
+      eventId: prepared.event.id,
+      type: prepared.event.type,
+      apiVersion: prepared.event.api_version ?? null,
+      payload: prepared.event as any,
     }).onConflictDoNothing({ target: stripeEvents.eventId }).returning({ eventId: stripeEvents.eventId });
 
     if (inserted.length === 0) return { processed: false };
-    await handleStripeEvent(database, event);
-    log.info('stripe_event_processed', { stripe_event_id: event.id, stripe_event_type: event.type });
+    await handleStripeEvent(database, prepared);
+    log.info('stripe_event_processed', { stripe_event_id: prepared.event.id, stripe_event_type: prepared.event.type });
     return { processed: true };
   });
 }

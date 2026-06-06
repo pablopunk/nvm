@@ -2,10 +2,13 @@ import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
-import { BillingConfigError, createBillingPortal } from '../../../lib/billing';
+import { BillingConfigError, createBillingPortal, rejectCrossOriginBillingPost } from '../../../lib/billing';
 import { getSessionFromCookies } from '../../../lib/workos';
 
 export const POST: APIRoute = async ({ request }) => {
+  const crossOriginResponse = rejectCrossOriginBillingPost(request);
+  if (crossOriginResponse) return crossOriginResponse;
+
   const session = await getSessionFromCookies(request.headers.get('cookie'));
   if (!session) return new Response('Unauthorized', { status: 401 });
 
