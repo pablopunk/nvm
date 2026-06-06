@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CommandAction, CommandView } from './model'
+import { markDebugPerformance, measureDebugPerformance, measureDebugPerformanceSync } from './debug-performance'
 
 export type AiLimitState = { kind?: string; title: string; message: string; actionTitle?: string; dashboardUrl?: string; action?: CommandAction }
 export type AiChatEvent = { type: string; text?: string; message?: string; name?: string; chatId?: string; label?: string; data?: unknown }
@@ -44,7 +45,10 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
     deltaFrameRef.current = null
     const text = pendingDeltaRef.current
     pendingDeltaRef.current = ''
-    if (text) setMessages((current) => appendDeltaToMessages(current, text))
+    if (text) {
+      markDebugPerformance('ai.delta.flush', { textLength: text.length })
+      setMessages((current) => measureDebugPerformanceSync('ai.delta.apply', { textLength: text.length, messageCount: current.length }, () => appendDeltaToMessages(current, text)))
+    }
   }
 
   function appendPendingDelta(current: NonNullable<CommandView['messages']>) {
@@ -55,19 +59,23 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   }
 
   function appendMessage(role: 'user' | 'assistant' | 'system', content: string) {
+    markDebugPerformance('ai.message.append', { role, contentLength: content.length })
     setMessages((current) => [...appendPendingDelta(current), { role, content }])
   }
 
   function appendDelta(text: string) {
     pendingDeltaRef.current += text
+    markDebugPerformance('ai.delta.queued', { textLength: text.length, pendingLength: pendingDeltaRef.current.length })
     if (deltaFrameRef.current == null) deltaFrameRef.current = requestAnimationFrame(flushDelta)
   }
 
   function resizeInput(textarea = inputRef.current) {
-    if (!textarea) return
-    textarea.style.height = 'auto'
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
-    textarea.style.overflowY = textarea.scrollHeight > 120 ? 'auto' : 'hidden'
+    measureDebugPerformanceSync('ai.input.resize', { inputLength: textarea?.value.length || 0 }, () => {
+      if (!textarea) return
+      textarea.style.height = 'auto'
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
+      textarea.style.overflowY = textarea.scrollHeight > 120 ? 'auto' : 'hidden'
+    })
   }
 
   function focusInput() {
@@ -84,7 +92,7 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
     appendMessage('user', trimmed)
     setInput('')
     try {
-      await sendMessage(trimmed, chatId)
+      await measureDebugPerformance('ai.send-message', { chatId, messageLength: trimmed.length, alwaysLog: true }, () => sendMessage(trimmed, chatId))
     } catch (error) {
       appendMessage('system', error instanceof Error ? error.message : String(error))
       setBusy(false)
@@ -92,14 +100,16 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   }
 
   async function openChat(view: CommandView) {
-    pendingDeltaRef.current = ''
-    cancelDeltaFlush()
-    setMessages(view.messages || [])
-    setLimit(null)
-    setInput('')
-    focusInput()
-    if (view.initialPrompt) await sendPrompt(view.initialPrompt, view.chatId)
-    focusInput()
+    await measureDebugPerformance('ai.chat-state.open', { chatId: view.chatId, messageCount: view.messages?.length || 0, hasInitialPrompt: Boolean(view.initialPrompt) }, async () => {
+      pendingDeltaRef.current = ''
+      cancelDeltaFlush()
+      setMessages(view.messages || [])
+      setLimit(null)
+      setInput('')
+      focusInput()
+      if (view.initialPrompt) await sendPrompt(view.initialPrompt, view.chatId)
+      focusInput()
+    })
   }
 
   function handleEvent(event: AiChatEvent, activeChatId?: string) {

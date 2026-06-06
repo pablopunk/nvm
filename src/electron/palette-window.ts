@@ -1,6 +1,7 @@
 import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
 import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, canRequestMediaPermission, paletteBrowserWindowOptions } from './os'
 import * as logger from './logger'
+import { markDebugPerformance, measureDebugPerformanceSync } from './debug-performance'
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
 
@@ -131,24 +132,28 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   function setPaletteSizeForMode(mode: PaletteMode = 'default') {
-    if (!win || mode === currentPaletteMode) return
-    currentPaletteMode = mode
-    const size = mode === 'preview' ? PREVIEW_WINDOW_SIZE : mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
-    win.setSize(size.width, size.height, false)
-    if (win.isVisible()) centerWindow()
+    measureDebugPerformanceSync('palette-window.set-mode', { mode, currentPaletteMode }, () => {
+      if (!win || mode === currentPaletteMode) return
+      currentPaletteMode = mode
+      const size = mode === 'preview' ? PREVIEW_WINDOW_SIZE : mode === 'stacked' ? STACKED_WINDOW_SIZE : mode === 'ai-chat' ? AI_CHAT_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
+      win.setSize(size.width, size.height, false)
+      if (win.isVisible()) centerWindow()
+    })
   }
 
   function centerWindow() {
-    if (!win) return
-    const cursor = screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint(cursor)
-    const { width, height } = win.getBounds()
-    const { x, y, width: sw, height: sh } = display.workArea
-    win.setBounds({
-      x: Math.round(x + (sw - width) / 2),
-      y: Math.round(y + Math.min(sh * 0.18, 180)),
-      width,
-      height,
+    measureDebugPerformanceSync('palette-window.center', undefined, () => {
+      if (!win) return
+      const cursor = screen.getCursorScreenPoint()
+      const display = screen.getDisplayNearestPoint(cursor)
+      const { width, height } = win.getBounds()
+      const { x, y, width: sw, height: sh } = display.workArea
+      win.setBounds({
+        x: Math.round(x + (sw - width) / 2),
+        y: Math.round(y + Math.min(sh * 0.18, 180)),
+        width,
+        height,
+      })
     })
   }
 
@@ -157,25 +162,29 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   function showPalette(showOptions: { deferReveal?: boolean; skipShownEvent?: boolean } = {}) {
-    if (!win) return
-    ignorePaletteBlurUntil = Date.now() + 500
-    applyPaletteWindowPolicy()
-    debugLog('showPalette', { options: showOptions, visible: win.isVisible(), bounds: win.getBounds() })
-    centerWindow()
-    if (showOptions.deferReveal) {
-      win.setOpacity(0)
-      setTimeout(() => win?.setOpacity(1), 250)
-    } else {
-      win.setOpacity(1)
-    }
-    if (showOptions.skipShownEvent) win.webContents.send('palette:shortcut-show')
-    else win.webContents.send('palette:shown')
-    win.show()
-    win.moveTop()
-    win.focus()
-    win.webContents.focus()
-    debugLog('showPalette.after', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
-    setTimeout(() => debugLog('showPalette.later', { visible: win?.isVisible(), focused: win?.isFocused(), bounds: win?.getBounds(), opacity: win?.getOpacity() }), 300)
+    measureDebugPerformanceSync('palette-window.show', { options: showOptions }, () => {
+      if (!win) return
+      markDebugPerformance('palette-window.show.start', { visible: win.isVisible(), bounds: win.getBounds() })
+      ignorePaletteBlurUntil = Date.now() + 500
+      applyPaletteWindowPolicy()
+      debugLog('showPalette', { options: showOptions, visible: win.isVisible(), bounds: win.getBounds() })
+      centerWindow()
+      if (showOptions.deferReveal) {
+        win.setOpacity(0)
+        setTimeout(() => win?.setOpacity(1), 250)
+      } else {
+        win.setOpacity(1)
+      }
+      if (showOptions.skipShownEvent) win.webContents.send('palette:shortcut-show')
+      else win.webContents.send('palette:shown')
+      win.show()
+      win.moveTop()
+      win.focus()
+      win.webContents.focus()
+      debugLog('showPalette.after', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
+      markDebugPerformance('palette-window.show.after', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
+      setTimeout(() => debugLog('showPalette.later', { visible: win?.isVisible(), focused: win?.isFocused(), bounds: win?.getBounds(), opacity: win?.getOpacity() }), 300)
+    })
   }
 
   function revealPalette() {
@@ -183,10 +192,12 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   function hidePalette() {
-    if (!win) return
-    debugLog('hidePalette', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
-    win.webContents.send('palette:hidden')
-    win.hide()
+    measureDebugPerformanceSync('palette-window.hide', undefined, () => {
+      if (!win) return
+      debugLog('hidePalette', { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), opacity: win.getOpacity() })
+      win.webContents.send('palette:hidden')
+      win.hide()
+    })
   }
 
   function showPaletteWhenReady() {

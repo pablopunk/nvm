@@ -16,10 +16,12 @@ Performance is UX. In Nevermind, every millisecond affects trust because the pro
 ## How to use this skill
 
 1. **Explore before assuming.** Identify the exact interaction path: renderer input → IPC → main/provider work → cache/revalidation → render/update.
-2. **Separate perceived and actual latency.** Prefer showing cached/snapshot data immediately, hydrating expensive details later, and refreshing in place.
-3. **Find the blocking edge.** Look for synchronous CPU, awaited fanout, repeated IPC, re-render storms, layout reads/writes, heavy serialization, filesystem/native calls, and broad cache invalidation.
-4. **Prefer harmless improvements first.** No-op guards, in-flight dedupe, request coalescing, stale-result drops, memoization, and lazy hydration before architectural rewrites.
-5. **Verify with the closest real flow.** Use `mise exec pnpm -- pnpm test` for safety and `mise exec pnpm -- pnpm palette:debug` for provider/search behavior; manually dogfood UI changes when render/input feel matters.
+2. **Turn on local traces.** Debug performance marks are dev-gated by default. In the renderer, use `localStorage.setItem('nvm.debugPerformance', 'true')` if needed and tune noisy logs with `localStorage.setItem('nvm.debugPerformance.slowMs', '16')`. In main/CLI runs, use `NVM_DEBUG_PERFORMANCE=1` and optionally `NVM_DEBUG_PERFORMANCE_SLOW_MS=16`.
+3. **Read the logs before fixing.** Use `mise exec -- pnpm logs:tail` or inspect the app log for `performance.measure` entries. Compare paired layers such as `search.renderer-to-results`, `ipc.actions:search`, `search.actions`, `extension.search.provider`, `root-actions.to-command-items`, `app.commit`, `view-action.ipc`, `ipc.palette:hide`, and `palette-window.show` to locate where time is spent.
+4. **Separate perceived and actual latency.** Prefer showing cached/snapshot data immediately, hydrating expensive details later, and refreshing in place.
+5. **Find the blocking edge.** Look for synchronous CPU, awaited fanout, repeated IPC, re-render storms, layout reads/writes, heavy serialization, filesystem/native calls, and broad cache invalidation.
+6. **Fix the disease, then re-measure.** Prefer no-op guards, in-flight dedupe, request coalescing, stale-result drops, memoization, and lazy hydration before architectural rewrites. Confirm the same `performance.measure` names improve instead of adding unrelated patches.
+7. **Verify with the closest real flow.** Use `mise exec -- pnpm typecheck`, `mise exec -- pnpm test` for safety, and `mise exec -- pnpm palette:debug` for provider/search behavior; manually dogfood UI changes when render/input feel matters.
 
 ## Hot paths to inspect first
 
@@ -42,6 +44,7 @@ Performance is UX. In Nevermind, every millisecond affects trust because the pro
 - **Do not let selection/input churn redraw everything.** Typing, arrow-key movement, chat token deltas, and hover/preview changes should update only the affected surface or row; use refs for mutable bookkeeping that does not affect paint.
 - **Memoize expensive presentation.** Markdown, icons, accessories, action panels, filtered sections, and large list rows should be memoized or moved into memoized child components before adding more state to `App.tsx`.
 - **Guard Electron window operations.** Resizing, centering, opacity changes, and IPC mode updates should no-op when state is unchanged.
+- **Preserve immediate dismissal.** For `dismissAfterRun: 'auto'` native/app actions, verify `ipc.palette:hide` and `palette-window.hide` happen before slow execute/open work; enqueue hide before execute IPC and defer native launch work out of the current IPC turn when needed.
 - **Treat native calls as expensive.** `nativeImage`, `file-icon`, clipboard image conversion, filesystem scans, and log reads need caching, limits, and in-flight dedupe.
 - **Measure or bound.** If exact measurement is hard, add conservative caps/timeouts and document the remaining risk.
 
@@ -57,4 +60,5 @@ Performance is UX. In Nevermind, every millisecond affects trust because the pro
 - Does this state change force unrelated rows, sibling panes, markdown, or action panels to re-render?
 - Are callback/array/object props stable enough for memoized children to help?
 - Are window/layout operations guarded against no-op repeats?
+- Do immediate-dismiss actions hide the palette before slow native/app work starts?
 - Did verification cover both tests and the real UX path?

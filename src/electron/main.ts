@@ -26,6 +26,7 @@ import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
 import { LocalLearningStore, type LearningKind } from './learning-store'
+import { measureDebugPerformance, measureDebugPerformanceSync, markDebugPerformance, summarizeDebugValue } from './debug-performance'
 import { canCustomizeCommandAction } from '../model'
 
 const { autoUpdater } = electronUpdater
@@ -243,6 +244,7 @@ function recordLearningReview(chatId: string) {
 const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
 const pendingAppIconPaths = new Set<string>()
+const appIconWaiters = new Map<string, Array<(result: string | null) => void>>()
 const pendingThumbnailPaths = new Map<string, string>()
 const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
@@ -610,43 +612,63 @@ function recordRecent(action: any) {
 }
 
 async function loadAppIconDataUrl(appPath) {
-  try {
-    const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
-    const cached = await fs.readFile(cachePath).catch(() => null)
-    if (cached) return `data:image/png;base64,${cached.toString('base64')}`
+  return measureDebugPerformance('apps.icon.load', { appPath }, async () => {
+    try {
+      const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
+      const cached = await fs.readFile(cachePath).catch(() => null)
+      if (cached) {
+        markDebugPerformance('apps.icon.cache-hit', { appPath })
+        return `data:image/png;base64,${cached.toString('base64')}`
+      }
 
-    const { fileIconToBuffer } = await import('file-icon')
-    const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
-    await fs.mkdir(iconCacheDir, { recursive: true })
-    await fs.writeFile(cachePath, png).catch(() => {})
-    return `data:image/png;base64,${png.toString('base64')}`
-  } catch (error) {
-    logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
-    return null
-  }
+      const { fileIconToBuffer } = await import('file-icon')
+      const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
+      await fs.mkdir(iconCacheDir, { recursive: true })
+      await fs.writeFile(cachePath, png).catch(() => {})
+      return `data:image/png;base64,${png.toString('base64')}`
+    } catch (error) {
+      logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
+      return null
+    }
+  })
 }
 
 async function processPendingAppIcons() {
   const paths = Array.from(pendingAppIconPaths).slice(0, 20)
-  pendingAppIconPaths.clear()
+  for (const appPath of paths) pendingAppIconPaths.delete(appPath)
   await Promise.all(paths.map(async (appPath) => {
     const result = await loadAppIconDataUrl(appPath)
     appIconCache.set(appPath, result)
+    for (const resolve of appIconWaiters.get(appPath) || []) resolve(result)
+    appIconWaiters.delete(appPath)
+    appIconLoadPromises.delete(appPath)
   }))
+  if (pendingAppIconPaths.size) jobRegistry.schedule('cache.app-icons', 'icon-backlog', 50)
 }
 
 async function getAppIconDataUrl(appPath) {
-  if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
-  if (appIconCache.has(appPath)) return appIconCache.get(appPath)
-  const inFlight = appIconLoadPromises.get(appPath)
-  if (inFlight) return inFlight
+  return measureDebugPerformance('apps.icon.get', { appPath, alwaysLog: true }, async () => {
+    if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
+    if (appIconCache.has(appPath)) {
+      markDebugPerformance('apps.icon.memory-cache-hit', { appPath })
+      return appIconCache.get(appPath)
+    }
+    const inFlight = appIconLoadPromises.get(appPath)
+    if (inFlight) {
+      markDebugPerformance('apps.icon.in-flight-hit', { appPath })
+      return inFlight
+    }
 
-  pendingAppIconPaths.add(appPath)
-  const promise = jobRegistry.run('cache.app-icons', 'icon-request').then(() => appIconCache.get(appPath) ?? null)
-  appIconLoadPromises.set(appPath, promise)
-  const result = await promise.finally(() => appIconLoadPromises.delete(appPath))
-  appIconCache.set(appPath, result)
-  return result
+    pendingAppIconPaths.add(appPath)
+    const promise = new Promise<string | null>((resolve) => {
+      const waiters = appIconWaiters.get(appPath) || []
+      waiters.push(resolve)
+      appIconWaiters.set(appPath, waiters)
+    })
+    appIconLoadPromises.set(appPath, promise)
+    jobRegistry.schedule('cache.app-icons', 'icon-request', 0)
+    return promise
+  })
 }
 
 function isFixtureExtension(extension) {
@@ -971,25 +993,27 @@ function clipboardHistoryItems() {
 }
 
 function clipboardHistorySnapshot(options: any = {}) {
-  const { limit, query, types } = options
-  let entries = clipboardHistory
-  if (Array.isArray(types) && types.length) entries = entries.filter((entry) => types.includes(entry.type))
-  if (query) {
-    const needle = String(query).toLowerCase()
-    entries = entries.filter((entry) => `${entry.text || ''} ${entry.type || ''} ${entry.filePath || ''}`.toLowerCase().includes(needle))
-  }
-  const max = typeof limit === 'number' ? limit : CLIPBOARD_LIMIT
-  return entries.slice(0, max).map((entry) => ({
-    id: entry.id,
-    type: entry.type,
-    text: entry.text,
-    imageDataUrl: entry.imageDataUrl,
-    imagePath: entry.imagePath,
-    videoUrl: entry.videoUrl,
-    filePath: entry.filePath,
-    thumbnailUrl: entry.thumbnailUrl,
-    createdAt: entry.createdAt,
-  }))
+  return measureDebugPerformanceSync('clipboard.snapshot', { queryLength: String(options.query || '').length, clipboardCount: clipboardHistory.length, limit: options.limit }, () => {
+    const { limit, query, types } = options
+    let entries = clipboardHistory
+    if (Array.isArray(types) && types.length) entries = entries.filter((entry) => types.includes(entry.type))
+    if (query) {
+      const needle = String(query).toLowerCase()
+      entries = entries.filter((entry) => `${entry.text || ''} ${entry.type || ''} ${entry.filePath || ''}`.toLowerCase().includes(needle))
+    }
+    const max = typeof limit === 'number' ? limit : CLIPBOARD_LIMIT
+    return entries.slice(0, max).map((entry) => ({
+      id: entry.id,
+      type: entry.type,
+      text: entry.text,
+      imageDataUrl: entry.imageDataUrl,
+      imagePath: entry.imagePath,
+      videoUrl: entry.videoUrl,
+      filePath: entry.filePath,
+      thumbnailUrl: entry.thumbnailUrl,
+      createdAt: entry.createdAt,
+    }))
+  })
 }
 
 function clipboardHistoryRemovalEntries(action) {
@@ -1304,38 +1328,44 @@ function updatePromptAction() {
 }
 
 async function searchActions(query, options: any = {}) {
-  const q = query.trim()
+  return measureDebugPerformance('search.actions', { queryLength: String(query || '').length, clipboardOnly: Boolean(options.clipboardOnly), alwaysLog: true }, async () => {
+    const q = query.trim()
 
-  if (options.clipboardOnly) {
-    return clipboardHistory
-      .map(clipboardRootItem)
-      .filter((item) => q ? rankAction(item, q) : true)
-      .sort((a, b) => q ? b.score - a.score || b.lastUsed - a.lastUsed : b.lastUsed - a.lastUsed)
-      .slice(0, CLIPBOARD_LIMIT)
-      .map(prepareRootActionForRenderer)
-  }
+    if (options.clipboardOnly) {
+      return measureDebugPerformanceSync('search.clipboard-only', { queryLength: q.length, clipboardCount: clipboardHistory.length }, () => clipboardHistory
+        .map(clipboardRootItem)
+        .filter((item) => q ? rankAction(item, q) : true)
+        .sort((a, b) => q ? b.score - a.score || b.lastUsed - a.lastUsed : b.lastUsed - a.lastUsed)
+        .slice(0, CLIPBOARD_LIMIT)
+        .map(prepareRootActionForRenderer))
+    }
 
-  const results = []
-  const contributedItems = q ? await extensionSearchActions(q) : await extensionRootActions()
-  for (const item of contributedItems) {
-    const ranked = item.__ranked ? withShortcutHint(item) : rankAction(withShortcutHint(item), q)
-    if (ranked) results.push(ranked)
-  }
+    const results = []
+    const contributedItems = await measureDebugPerformance(q ? 'search.extensions.query' : 'search.extensions.root', { queryLength: q.length, extensionCount: visibleExtensions().length, alwaysLog: true }, () => q ? extensionSearchActions(q) : extensionRootActions())
+    for (const item of contributedItems) {
+      const ranked = item.__ranked ? withShortcutHint(item) : rankAction(withShortcutHint(item), q)
+      if (ranked) results.push(ranked)
+    }
 
-  for (const entry of visibleExtensionActionEntries()) {
-    const action = extensionActionFromContribution(entry)
-    const ranked = action ? rankAction(withShortcutHint(action), q) : null
-    if (ranked) results.push(ranked)
-  }
-
-  const sorted = results
-    .sort((a, b) => {
-      return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
+    const entries = visibleExtensionActionEntries()
+    measureDebugPerformanceSync('search.rank-registered-actions', { queryLength: q.length, actionCount: entries.length }, () => {
+      for (const entry of entries) {
+        const action = extensionActionFromContribution(entry)
+        const ranked = action ? rankAction(withShortcutHint(action), q) : null
+        if (ranked) results.push(ranked)
+      }
     })
-    .slice(0, 30)
-    .map(prepareRootActionForRenderer)
-  structuredClone(sorted)
-  return sorted
+
+    const sorted = measureDebugPerformanceSync('search.sort-prepare-clone', { queryLength: q.length, resultCount: results.length }, () => results
+      .sort((a, b) => {
+        return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
+      })
+      .slice(0, 30)
+      .map(prepareRootActionForRenderer))
+    structuredClone(sorted)
+    markDebugPerformance('search.actions.result', { queryLength: q.length, contributedCount: contributedItems.length, rankedCount: results.length, resultCount: sorted.length })
+    return sorted
+  })
 }
 
 function invalidateExtensionRootItems() {
@@ -1378,7 +1408,9 @@ function invalidateExtensionRootItemsForExtension(extension) {
 }
 
 function runInBackground(task) {
-  Promise.resolve().then(task).catch((error) => logError('backgroundAction.failed', error, { source: 'host' }))
+  setImmediate(() => {
+    Promise.resolve().then(task).catch((error) => logError('backgroundAction.failed', error, { source: 'host' }))
+  })
 }
 
 async function executeAction(action, options: any = {}) {
@@ -1449,17 +1481,19 @@ function currentActionForStoredShortcut(action) {
 }
 
 async function executeExtensionRootItem(action) {
-  if (!action.rootAction) return { view: { type: 'preview', title: action.title || 'Extension item', content: action.subtitle || '' } }
-  if (action.rootAction.type !== 'runExtensionAction') return executeViewAction(action.rootAction)
-  const record = extensionActionHandlers.get(action.rootAction.handlerId)
-  if (!record) return { view: { type: 'preview', title: 'Action unavailable', content: 'This extension item is no longer available.' } }
-  try {
-    const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command || null), action)
-    return executeViewActionResult(result, record.entry)
-  } catch (error) {
-    logError('extension.rootItem.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id })
-    return { view: extensionErrorView(record.entry, error) }
-  }
+  return measureDebugPerformance('extension.root-item.execute', { action: summarizeDebugValue(action), alwaysLog: true }, async () => {
+    if (!action.rootAction) return { view: { type: 'preview', title: action.title || 'Extension item', content: action.subtitle || '' } }
+    if (action.rootAction.type !== 'runExtensionAction') return executeViewAction(action.rootAction)
+    const record = extensionActionHandlers.get(action.rootAction.handlerId)
+    if (!record) return { view: { type: 'preview', title: 'Action unavailable', content: 'This extension item is no longer available.' } }
+    try {
+      const result = await measureDebugPerformance('extension.root-item.handler', { extensionId: record.entry.extension.id, commandId: record.entry.command?.id, alwaysLog: true }, () => record.handler(createExtensionContext(record.entry.extension, record.entry.command || null), action))
+      return executeViewActionResult(result, record.entry)
+    } catch (error) {
+      logError('extension.rootItem.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id })
+      return { view: extensionErrorView(record.entry, error) }
+    }
+  })
 }
 
 async function extensionRootActions() {
@@ -1468,7 +1502,8 @@ async function extensionRootActions() {
 }
 
 async function extensionSearchActions(query) {
-  const actionGroups = await Promise.all(visibleExtensions().map((extension) => extensionSearchActionsForExtension(extension, query)))
+  const extensions = visibleExtensions()
+  const actionGroups = await measureDebugPerformance('extension.search.all', { extensionCount: extensions.length, queryLength: String(query || '').length }, () => Promise.all(extensions.map((extension) => extensionSearchActionsForExtension(extension, query))))
   return actionGroups.flat()
 }
 
@@ -1485,22 +1520,27 @@ function rankContributionActions(actions, query) {
 
 async function extensionSearchActionsForExtension(extension, query) {
   if (typeof extension.searchItems !== 'function') return []
-  try {
-    const entry = { extension, command: { id: 'search', title: extension.title || extension.id } }
-    const items = await withTimeout(extension.searchItems(createExtensionContext(extension, null), query), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
-    const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
-    return rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), query)
-  } catch (error) {
-    if (!String(error?.message || error).includes('Timed out')) logError('extension.searchItems.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
-    return []
-  }
+  return measureDebugPerformance('extension.search.provider', { extensionId: extension.id, queryLength: String(query || '').length }, async () => {
+    try {
+      const entry = { extension, command: { id: 'search', title: extension.title || extension.id } }
+      const items = await withTimeout(extension.searchItems(createExtensionContext(extension, null), query), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
+      const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
+      return measureDebugPerformanceSync('extension.search.provider.rank', { extensionId: extension.id, itemCount: list.length, queryLength: String(query || '').length }, () => rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), query))
+    } catch (error) {
+      if (!String(error?.message || error).includes('Timed out')) logError('extension.searchItems.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
+      return []
+    }
+  })
 }
 
 async function extensionRootActionsForExtension(extension) {
   if (typeof extension.rootItems !== 'function') return []
   const cacheKey = extension.__filePath || extension.id
   const cached = extensionRootItemsCache.get(cacheKey)
-  if (cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS) return cached.items
+  if (cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS) {
+    markDebugPerformance('extension.root.cache-hit', { extensionId: extension.id, itemCount: cached.items.length })
+    return cached.items
+  }
   const refresh = refreshExtensionRootActions(extension, cacheKey)
   return cached?.items || await refresh
 }
@@ -1508,14 +1548,14 @@ async function extensionRootActionsForExtension(extension) {
 function refreshExtensionRootActions(extension, cacheKey) {
   const current = extensionRootItemsRefreshes.get(cacheKey)
   if (current) return current
-  const promise = (async () => {
+  const promise = measureDebugPerformance('extension.root.provider', { extensionId: extension.id }, async () => {
     const entry = { extension, command: { id: 'root', title: extension.title || extension.id } }
     const items = await withTimeout(extension.rootItems(createExtensionContext(extension, null)), EXTENSION_ROOT_ITEMS_TIMEOUT_MS)
     const list = Array.isArray(items) ? items : Array.isArray(items?.items) ? items.items : []
-    const actions = rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), '')
+    const actions = measureDebugPerformanceSync('extension.root.provider.rank', { extensionId: extension.id, itemCount: list.length }, () => rankContributionActions(list.map((item) => extensionRootActionFromItem(entry, item)).filter(Boolean), ''))
     extensionRootItemsCache.set(cacheKey, { updatedAt: Date.now(), items: actions })
     return actions
-  })().catch((error) => {
+  }).catch((error) => {
     if (!String(error?.message || error).includes('Timed out')) logError('extension.rootItems.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
     return extensionRootItemsCache.get(cacheKey)?.items || []
   }).finally(() => {
@@ -1598,23 +1638,25 @@ function extensionActionFromContribution(entry) {
 }
 
 async function executeActionForIpc(action) {
-  let trustedAction: any = null
-  try {
-    trustedAction = resolveRootActionForIpc(action)
-    const result = normalizeHostViewResult(await executeAction(trustedAction))
-    structuredClone(result)
-    return result
-  } catch (error) {
-    if (trustedAction?.kind === 'extension-command') {
-      const entry = extensionEntryForAction(trustedAction)
-      if (entry) return { view: extensionErrorView(entry, error) }
+  return measureDebugPerformance('ipc.actions.execute', { action: summarizeDebugValue(action), alwaysLog: true }, async () => {
+    let trustedAction: any = null
+    try {
+      trustedAction = resolveRootActionForIpc(action)
+      const result = normalizeHostViewResult(await measureDebugPerformance('action.execute', { action: summarizeDebugValue(trustedAction), alwaysLog: true }, () => executeAction(trustedAction)))
+      structuredClone(result)
+      return result
+    } catch (error) {
+      if (trustedAction?.kind === 'extension-command') {
+        const entry = extensionEntryForAction(trustedAction)
+        if (entry) return { view: extensionErrorView(entry, error) }
+      }
+      if (action?.kind === 'extension-action') {
+        const entry = extensionActionEntryForAction(action)
+        if (entry) return { view: extensionErrorView(entry, error) }
+      }
+      return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` } }
     }
-    if (action?.kind === 'extension-action') {
-      const entry = extensionActionEntryForAction(action)
-      if (entry) return { view: extensionErrorView(entry, error) }
-    }
-    return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` } }
-  }
+  })
 }
 
 function extensionErrorMessage(error) {
@@ -1809,45 +1851,49 @@ function refreshBackoffDelay(failureCount: number) {
 }
 
 async function refreshViewForIpc(input: any = {}) {
-  pruneViewRefreshRecords()
-  const refreshId = typeof input === 'string' ? input : String(input?.id || '')
-  const record = refreshId ? viewRefreshRecords.get(refreshId) : null
-  if (!record) return { skipped: true }
-  if (input?.viewId && record.viewId && input.viewId !== record.viewId) return { skipped: true }
-  const now = Date.now()
-  if (record.backoffUntil && record.backoffUntil > now) return { skipped: true }
-  if (record.running) return { skipped: true }
-  record.running = (async () => {
-    try {
-      const result = normalizeHostViewResult(await executeHostRefreshAction(record, { refresh: true }))
-      structuredClone(result)
-      record.failureCount = 0
-      record.backoffUntil = undefined
-      return result
-    } catch (error) {
-      record.failureCount += 1
-      record.backoffUntil = Date.now() + refreshBackoffDelay(record.failureCount)
-      logWarn('extension.viewRefresh.failed', { viewId: record.viewId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'extension', extensionId: record.entry?.extension?.id, commandId: record.entry?.command?.id })
-      return { skipped: true }
-    } finally {
-      record.running = null
-    }
-  })()
-  return record.running
+  return measureDebugPerformance('ipc.view.refresh', { input: summarizeDebugValue(input), alwaysLog: true }, async () => {
+    pruneViewRefreshRecords()
+    const refreshId = typeof input === 'string' ? input : String(input?.id || '')
+    const record = refreshId ? viewRefreshRecords.get(refreshId) : null
+    if (!record) return { skipped: true }
+    if (input?.viewId && record.viewId && input.viewId !== record.viewId) return { skipped: true }
+    const now = Date.now()
+    if (record.backoffUntil && record.backoffUntil > now) return { skipped: true }
+    if (record.running) return { skipped: true }
+    record.running = measureDebugPerformance('view.refresh.host-action', { refreshId, viewId: record.viewId, extensionId: record.entry?.extension?.id, commandId: record.entry?.command?.id, alwaysLog: true }, async () => {
+      try {
+        const result = normalizeHostViewResult(await executeHostRefreshAction(record, { refresh: true }))
+        structuredClone(result)
+        record.failureCount = 0
+        record.backoffUntil = undefined
+        return result
+      } catch (error) {
+        record.failureCount += 1
+        record.backoffUntil = Date.now() + refreshBackoffDelay(record.failureCount)
+        logWarn('extension.viewRefresh.failed', { viewId: record.viewId, error: error instanceof Error ? error.message : String(error) }, { source: 'host', scope: 'extension', extensionId: record.entry?.extension?.id, commandId: record.entry?.command?.id })
+        return { skipped: true }
+      } finally {
+        record.running = null
+      }
+    })
+    return record.running
+  })
 }
 
 async function executeViewActionForIpc(action) {
-  let trustedAction: any = null
-  try {
-    trustedAction = resolveViewActionForIpc(action)
-    const result = normalizeHostViewResult(await executeViewAction(trustedAction))
-    structuredClone(result)
-    return result
-  } catch (error) {
-    const record = trustedAction?.type === 'runExtensionAction' ? extensionActionHandlers.get(trustedAction.handlerId) : null
-    if (record) return { view: extensionErrorView(record.entry, error), navigation: 'push' }
-    return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` }, navigation: 'push' }
-  }
+  return measureDebugPerformance('ipc.view-action.execute', { action: summarizeDebugValue(action), alwaysLog: true }, async () => {
+    let trustedAction: any = null
+    try {
+      trustedAction = resolveViewActionForIpc(action)
+      const result = normalizeHostViewResult(await measureDebugPerformance('view-action.execute', { action: summarizeDebugValue(trustedAction), alwaysLog: true }, () => executeViewAction(trustedAction)))
+      structuredClone(result)
+      return result
+    } catch (error) {
+      const record = trustedAction?.type === 'runExtensionAction' ? extensionActionHandlers.get(trustedAction.handlerId) : null
+      if (record) return { view: extensionErrorView(record.entry, error), navigation: 'push' }
+      return { view: { type: 'preview', title: 'Action failed', content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\`` }, navigation: 'push' }
+    }
+  })
 }
 
 function clipboardSnapshot() {
@@ -2170,7 +2216,7 @@ async function executeViewAction(action, launchContext?: any) {
       const record = extensionActionHandlers.get(action.handlerId)
       if (!record) return { toast: { message: 'Action is no longer available', tone: 'error' } }
       try {
-        const result = await record.handler(createExtensionContext(record.entry.extension, record.entry.command, launchContext), action)
+        const result = await measureDebugPerformance('extension.action.handler', { extensionId: record.entry.extension.id, commandId: record.entry.command.id, actionTitle: action.title, alwaysLog: true }, () => record.handler(createExtensionContext(record.entry.extension, record.entry.command, launchContext), action))
         return executeViewActionResult(result, record.entry, launchContext)
       } catch (error) {
         logError('extension.action.failed', error, { source: 'host', scope: 'extension', extensionId: record.entry.extension.id, commandId: record.entry.command.id })
@@ -2227,16 +2273,18 @@ async function generateQuickLookThumbnail(filePath, cachedPath) {
 }
 
 async function generateThumbnail(filePath, cachedPath) {
-  let image = null
-  if (typeof nativeImage.createThumbnailFromPath === 'function') {
-    image = await nativeImage.createThumbnailFromPath(filePath, { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE })
-  }
-  if (!image || image.isEmpty()) image = nativeImage.createFromPath(filePath).resize({ width: THUMBNAIL_SIZE, quality: 'good' })
-  if (!image || image.isEmpty()) return generateQuickLookThumbnail(filePath, cachedPath)
-  const png = image.toPNG()
-  await fs.mkdir(path.dirname(cachedPath), { recursive: true })
-  await fs.writeFile(cachedPath, png).catch(() => {})
-  return true
+  return measureDebugPerformance('thumbnail.generate', { filePath, alwaysLog: true }, async () => {
+    let image = null
+    if (typeof nativeImage.createThumbnailFromPath === 'function') {
+      image = await nativeImage.createThumbnailFromPath(filePath, { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE })
+    }
+    if (!image || image.isEmpty()) image = nativeImage.createFromPath(filePath).resize({ width: THUMBNAIL_SIZE, quality: 'good' })
+    if (!image || image.isEmpty()) return generateQuickLookThumbnail(filePath, cachedPath)
+    const png = image.toPNG()
+    await fs.mkdir(path.dirname(cachedPath), { recursive: true })
+    await fs.writeFile(cachedPath, png).catch(() => {})
+    return true
+  })
 }
 
 async function processPendingThumbnails() {
@@ -2251,15 +2299,20 @@ async function processPendingThumbnails() {
 }
 
 async function thumbnailResponseForPath(filePath) {
-  const cachedPath = await thumbnailCachePath(filePath)
-  const cached = await fs.readFile(cachedPath).catch(() => null)
-  if (cached) return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+  return measureDebugPerformance('thumbnail.response', { filePath, alwaysLog: true }, async () => {
+    const cachedPath = await thumbnailCachePath(filePath)
+    const cached = await fs.readFile(cachedPath).catch(() => null)
+    if (cached) {
+      markDebugPerformance('thumbnail.cache-hit', { filePath })
+      return new Response(cached, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+    }
 
-  pendingThumbnailPaths.set(filePath, cachedPath)
-  await jobRegistry.run('cache.thumbnails', 'thumbnail-request').catch(() => {})
-  const generated = await fs.readFile(cachedPath).catch(() => null)
-  if (generated) return new Response(generated, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
-  return net.fetch(pathToFileURL(filePath).href)
+    pendingThumbnailPaths.set(filePath, cachedPath)
+    await jobRegistry.run('cache.thumbnails', 'thumbnail-request').catch(() => {})
+    const generated = await fs.readFile(cachedPath).catch(() => null)
+    if (generated) return new Response(generated, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' } })
+    return net.fetch(pathToFileURL(filePath).href)
+  })
 }
 
 async function localFileResponse(requestPath: string, request: Request) {
@@ -3055,26 +3108,30 @@ function fileRootItem(item) {
 }
 
 function fileIndexSnapshot(options: any = {}) {
-  const { limit, query } = options
-  const roots = normalizeFindRoots(options.roots).map(expandUserPath).filter(Boolean)
-  const extensions = extensionsForFindOptions(options)
-  const ignored = normalizedIgnorePatterns(options.ignore)
-  let entries = fileIndex
-  if (roots.length) entries = entries.filter((entry) => roots.some((root) => entry.path === root || entry.path.startsWith(`${root}${path.sep}`)))
-  if (extensions) entries = entries.filter((entry) => extensions.has(entry.extension || extensionForPath(entry.path)))
-  if (options.ignore) entries = entries.filter((entry) => !ignoredByPattern(entry.path, entry.name, ignored))
-  if (query) {
-    const needle = String(query).toLowerCase()
-    entries = entries.filter((entry) => `${entry.name || ''} ${entry.displayPath || ''}`.toLowerCase().includes(needle))
-  }
-  const max = typeof limit === 'number' ? Math.max(0, Math.min(limit, entries.length)) : entries.length
-  return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath, extension: entry.extension, kind: entry.kind }))
+  return measureDebugPerformanceSync('files.index-snapshot', { queryLength: String(options.query || '').length, indexedCount: fileIndex.length, limit: options.limit }, () => {
+    const { limit, query } = options
+    const roots = normalizeFindRoots(options.roots).map(expandUserPath).filter(Boolean)
+    const extensions = extensionsForFindOptions(options)
+    const ignored = normalizedIgnorePatterns(options.ignore)
+    let entries = fileIndex
+    if (roots.length) entries = entries.filter((entry) => roots.some((root) => entry.path === root || entry.path.startsWith(`${root}${path.sep}`)))
+    if (extensions) entries = entries.filter((entry) => extensions.has(entry.extension || extensionForPath(entry.path)))
+    if (options.ignore) entries = entries.filter((entry) => !ignoredByPattern(entry.path, entry.name, ignored))
+    if (query) {
+      const needle = String(query).toLowerCase()
+      entries = entries.filter((entry) => `${entry.name || ''} ${entry.displayPath || ''}`.toLowerCase().includes(needle))
+    }
+    const max = typeof limit === 'number' ? Math.max(0, Math.min(limit, entries.length)) : entries.length
+    return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath, extension: entry.extension, kind: entry.kind }))
+  })
 }
 
 async function reindexFiles(options: any = {}) {
-  fileIndex = await scanFiles(options)
-  paletteWindow.win?.webContents.send('root-items:changed')
-  return { count: fileIndex.length, roots: normalizedIndexRoots(options).map(displayUserPath) }
+  return measureDebugPerformance('files.reindex', { roots: normalizedIndexRoots(options).map(displayUserPath), alwaysLog: true }, async () => {
+    fileIndex = await scanFiles(options)
+    paletteWindow.win?.webContents.send('root-items:changed')
+    return { count: fileIndex.length, roots: normalizedIndexRoots(options).map(displayUserPath) }
+  })
 }
 
 function createClipboardExtension() {
@@ -4118,37 +4175,42 @@ async function loadExtensionModule(fullPath) {
 }
 
 async function loadExtensions() {
-  extensionActionRegistry.clear()
-  extensionModules.clear()
-  fixtureExtensions = []
-  extensionRootItemsCache.clear()
-  extensionRootItemsRefreshes.clear()
-  extensionActionHandlers.clear()
-  viewActionExecutionRecords.clear()
-  rootActionExecutionRecords.clear()
-  viewRefreshRecords.clear()
-  jobRegistry.unregisterWhere((job) => job.owner === 'extension')
-  for (const watcher of extensionFileWatchers) watcher.close()
-  extensionFileWatchers = []
-  registerInternalExtensions()
-  if (isDev) await loadDevExtensions()
+  await measureDebugPerformance('extensions.load-all', { alwaysLog: true }, async () => {
+    extensionActionRegistry.clear()
+    extensionModules.clear()
+    fixtureExtensions = []
+    extensionRootItemsCache.clear()
+    extensionRootItemsRefreshes.clear()
+    extensionActionHandlers.clear()
+    viewActionExecutionRecords.clear()
+    rootActionExecutionRecords.clear()
+    viewRefreshRecords.clear()
+    jobRegistry.unregisterWhere((job) => job.owner === 'extension')
+    for (const watcher of extensionFileWatchers) watcher.close()
+    extensionFileWatchers = []
+    registerInternalExtensions()
+    if (isDev) await measureDebugPerformance('extensions.load-dev', undefined, () => loadDevExtensions())
 
-  await fs.mkdir(extensionsDir, { recursive: true })
-  await ensureExtensionTypeDefinitions()
-  const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
-  for (const entry of entries) {
-    if (!isExtensionSourceFile(entry.name)) continue
-    const fullPath = path.join(extensionsDir, entry.name)
-    try {
-      const extension = await loadExtensionModule(fullPath)
-      extension.__filePath = fullPath
-      extension.__generated = true
-      await applyExtensionMetadataOverrides(extension)
-      registerExtension(extension)
-    } catch (error) {
-      logError('extension.load.failed', error, { source: 'host', scope: 'extension', extensionId: path.basename(fullPath) })
+    await fs.mkdir(extensionsDir, { recursive: true })
+    await ensureExtensionTypeDefinitions()
+    const entries = await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      if (!isExtensionSourceFile(entry.name)) continue
+      const fullPath = path.join(extensionsDir, entry.name)
+      try {
+        await measureDebugPerformance('extension.load-file', { file: entry.name }, async () => {
+          const extension = await loadExtensionModule(fullPath)
+          extension.__filePath = fullPath
+          extension.__generated = true
+          await applyExtensionMetadataOverrides(extension)
+          registerExtension(extension)
+        })
+      } catch (error) {
+        logError('extension.load.failed', error, { source: 'host', scope: 'extension', extensionId: path.basename(fullPath) })
+      }
     }
-  }
+    markDebugPerformance('extensions.load-all.result', { extensionCount: extensionModules.size, actionCount: extensionActionRegistry.size })
+  })
 }
 
 function createExtensionRuntimeMetadata(extension, command) {
@@ -4436,6 +4498,7 @@ function assertInternalExtensionsRegistered() {
 }
 
 function registerExtension(extension) {
+  measureDebugPerformanceSync('extension.register', { extensionId: extension?.id, commandCount: extension?.commands?.length || 0 }, () => {
   if (!extension?.id) return
   extensionModules.set(extension.id, extension)
   for (const command of extension.commands || []) {
@@ -4479,6 +4542,7 @@ function registerExtension(extension) {
       logError('extension.actions.failed', error, { source: 'host', scope: 'extension', extensionId: extension.id })
     }
   }
+  })
 }
 
 function displayUserPath(filePath) {
@@ -4515,6 +4579,7 @@ function ignoredByPattern(fullPath, name, patterns) {
 }
 
 async function scanFiles(options: any = {}) {
+  return measureDebugPerformance('files.scan', { roots: normalizedIndexRoots(options).map(displayUserPath), depth: options.depth ?? 2, limit: options.limit || DEFAULT_FILE_INDEX_LIMIT, alwaysLog: true }, async () => {
   const roots = normalizedIndexRoots(options)
   const ignored = normalizedIgnorePatterns(options.ignore)
   const includeHidden = Boolean(options.includeHidden)
@@ -4555,7 +4620,9 @@ async function scanFiles(options: any = {}) {
   }
 
   await Promise.all(roots.map((root) => walk(root, maxDepth)))
+  markDebugPerformance('files.scan.result', { foundCount: found.length, limit })
   return found.slice(0, limit)
+  })
 }
 
 function scheduleIndexApplications() {
@@ -4568,23 +4635,29 @@ async function startAppWatcher() {
 }
 
 async function indexApplications() {
-  try {
-    const apps = await scanApps()
-    const deduped = new Map()
-    for (const item of apps) deduped.set(normalize(item.name), item)
-    appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
-    paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
-  } catch (error) {
-    logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
-  }
+  await measureDebugPerformance('apps.index', { alwaysLog: true }, async () => {
+    try {
+      const apps = await scanApps()
+      const deduped = new Map()
+      for (const item of apps) deduped.set(normalize(item.name), item)
+      appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
+      markDebugPerformance('apps.index.result', { scannedCount: apps.length, indexedCount: appIndex.length })
+      paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
+    } catch (error) {
+      logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
+    }
+  })
 }
 
 async function indexFiles() {
-  try {
-    fileIndex = await scanFiles()
-  } catch (error) {
-    logError('files.index.failed', error, { source: 'host', scope: 'files' })
-  }
+  await measureDebugPerformance('files.index', { alwaysLog: true }, async () => {
+    try {
+      fileIndex = await scanFiles()
+      markDebugPerformance('files.index.result', { indexedCount: fileIndex.length })
+    } catch (error) {
+      logError('files.index.failed', error, { source: 'host', scope: 'files' })
+    }
+  })
 }
 
 async function pollFrontmostAppChange() {
@@ -5167,6 +5240,10 @@ async function runPaletteDebugCli() {
   console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
 }
 
+function ipcHandleMeasured(channel: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown) {
+  ipcMain.handle(channel, (event, ...args) => measureDebugPerformance(`ipc.${channel}.handler`, { args: args.map(summarizeDebugValue), alwaysLog: true }, () => handler(event, ...args)))
+}
+
 async function pickFormFieldPaths(event, input: any = {}) {
   const senderWindow = BrowserWindow.fromWebContents(event.sender) || paletteWindow.win || undefined
   const type = input.type === 'folder' ? 'folder' : input.type === 'files' ? 'files' : 'file'
@@ -5212,48 +5289,48 @@ app.whenReady().then(async () => {
   powerMonitor.on('resume', () => jobRegistry.emit('wake'))
   jobRegistry.emit('login')
 
-  ipcMain.handle('actions:search', (_event, query, options) => searchActions(query, options))
-  ipcMain.handle('actions:execute', (_event, action) => executeActionForIpc(action))
-  ipcMain.handle('view-action:execute', (_event, action) => executeViewActionForIpc(action))
-  ipcMain.handle('view:refresh', (_event, input) => refreshViewForIpc(input))
-  ipcMain.handle('dialog:pick-form-field-paths', pickFormFieldPaths)
+  ipcHandleMeasured('actions:search', (_event, query, options) => searchActions(query, options))
+  ipcHandleMeasured('actions:execute', (_event, action) => executeActionForIpc(action))
+  ipcHandleMeasured('view-action:execute', (_event, action) => executeViewActionForIpc(action))
+  ipcMain.handle('view:refresh', (event, input) => measureDebugPerformance('ipc.view:refresh.handler', { args: [summarizeDebugValue(input)], alwaysLog: true }, () => refreshViewForIpc(input)))
+  ipcHandleMeasured('dialog:pick-form-field-paths', pickFormFieldPaths)
   ipcMain.on('drag:file', startFileDrag)
-  ipcMain.handle('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
-  ipcMain.handle('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))
-  ipcMain.handle('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
-  ipcMain.handle('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
-  ipcMain.handle('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
-  ipcMain.handle('actions:remove-alias', (_event, action, alias) => removeAlias(action, alias))
-  ipcMain.handle('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
-  ipcMain.handle('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
-  ipcMain.handle('settings:get', (_event, id) => getSetting(id))
-  ipcMain.handle('system:open-keyboard-settings', () => openSystemKeyboardSettings())
-  ipcMain.handle('actions:get-shortcuts', () => getShortcuts())
-  ipcMain.handle('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))
-  ipcMain.handle('actions:suspend-shortcuts', () => unregisterActionShortcuts())
-  ipcMain.handle('actions:resume-shortcuts', () => registerActionShortcuts())
-  ipcMain.handle('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
-  ipcMain.handle('actions:clear-override', (_event, action) => clearOverride(action))
-  ipcMain.handle('actions:duplicate-created', (_event, action) => duplicateCreatedAction(action))
-  ipcMain.handle('actions:remove-created', (_event, action) => removeCreatedAction(action))
-  ipcMain.handle('ai-builder:tweak-extension', (_event, input: any = {}) => {
+  ipcHandleMeasured('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
+  ipcHandleMeasured('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))
+  ipcHandleMeasured('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
+  ipcHandleMeasured('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
+  ipcHandleMeasured('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
+  ipcHandleMeasured('actions:remove-alias', (_event, action, alias) => removeAlias(action, alias))
+  ipcHandleMeasured('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
+  ipcHandleMeasured('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
+  ipcHandleMeasured('settings:get', (_event, id) => getSetting(id))
+  ipcHandleMeasured('system:open-keyboard-settings', () => openSystemKeyboardSettings())
+  ipcHandleMeasured('actions:get-shortcuts', () => getShortcuts())
+  ipcHandleMeasured('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))
+  ipcHandleMeasured('actions:suspend-shortcuts', () => unregisterActionShortcuts())
+  ipcHandleMeasured('actions:resume-shortcuts', () => registerActionShortcuts())
+  ipcHandleMeasured('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
+  ipcHandleMeasured('actions:clear-override', (_event, action) => clearOverride(action))
+  ipcHandleMeasured('actions:duplicate-created', (_event, action) => duplicateCreatedAction(action))
+  ipcHandleMeasured('actions:remove-created', (_event, action) => removeCreatedAction(action))
+  ipcHandleMeasured('ai-builder:tweak-extension', (_event, input: any = {}) => {
     const file = input?.extensionFile || input?.extensionId
     if (!file) return { toast: { message: 'No extension specified', tone: 'error' } }
     const item = getOrCreateExtensionChat(file, input.title || file)
     return normalizeHostViewResult({ view: aiChatView(item, { initialPrompt: input.prompt }) })
   })
-  ipcMain.handle('ai-builder:start-chat', (_event, input: any = {}) => {
+  ipcHandleMeasured('ai-builder:start-chat', (_event, input: any = {}) => {
     const item = createDraftAiChat(String(input?.prompt || input?.query || ''))
     return normalizeHostViewResult({ view: aiChatView(item, { start: item.messages.length <= 1 }) })
   })
-  ipcMain.handle('nevermind:auth-status', async () => {
+  ipcHandleMeasured('nevermind:auth-status', async () => {
     const auth = await getNevermindAuth()
     activeNevermindBaseUrl = auth?.baseUrl || null
     if (auth?.baseUrl) warmNevermindCompatibilityCache(auth.baseUrl)
     logInfo('nevermind.auth-status.check', { authed: Boolean(auth), email: auth?.email, userData: app.getPath('userData') }, { source: 'host', scope: 'nevermind' })
     return auth ? { authed: true, email: auth.email } : { authed: false }
   })
-  ipcMain.handle('nevermind:sign-in', async () => {
+  ipcHandleMeasured('nevermind:sign-in', async () => {
     const result = await signInToNevermind()
     if (result.ok) {
       activeNevermindBaseUrl = result.auth.baseUrl
@@ -5264,18 +5341,18 @@ app.whenReady().then(async () => {
     }
     return { ok: false, error: 'error' in result ? result.error : 'unknown' }
   })
-  ipcMain.handle('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
-  ipcMain.handle('palette:set-mode', (_event, mode) => {
+  ipcHandleMeasured('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
+  ipcHandleMeasured('palette:set-mode', (_event, mode) => {
     paletteWindow.setPaletteSizeForMode(mode)
     paletteWindow.centerWindow()
   })
-  ipcMain.handle('palette:hide', () => paletteWindow.hidePalette())
-  ipcMain.handle('app:quit', () => {
+  ipcHandleMeasured('palette:hide', () => paletteWindow.hidePalette())
+  ipcHandleMeasured('app:quit', () => {
     requestQuitApp('ipc')
     return { ok: true }
   })
-  ipcMain.handle('palette:shortcut-ready', () => paletteWindow.revealPalette())
-  ipcMain.handle('camera:request-access', async () => {
+  ipcHandleMeasured('palette:shortcut-ready', () => paletteWindow.revealPalette())
+  ipcHandleMeasured('camera:request-access', async () => {
     if (!hasCapability('camera')) return { ok: false, status: 'unsupported' }
     if (process.platform !== 'darwin') return { ok: true, status: 'unknown' }
     const status = systemPreferences.getMediaAccessStatus('camera')
@@ -5283,15 +5360,15 @@ app.whenReady().then(async () => {
     if (status === 'denied' || status === 'restricted') return { ok: false, status }
     return { ok: true, status }
   })
-  ipcMain.handle('extension-window:get-state', (_event, id) => {
+  ipcHandleMeasured('extension-window:get-state', (_event, id) => {
     const record = extensionWindows.get(String(id || ''))
     return record ? { id: record.id, view: record.view, options: record.options } : null
   })
-  ipcMain.handle('extension-window:close', (event) => {
+  ipcHandleMeasured('extension-window:close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     win?.close()
   })
-  ipcMain.handle('logs:write', (_event, level, message, data) => {
+  ipcHandleMeasured('logs:write', (_event, level, message, data) => {
     const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo
     method(String(message || ''), data, { source: 'renderer', scope: 'renderer' })
   })
