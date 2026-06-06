@@ -954,9 +954,9 @@ export type NevermindExtension = {
    * and files belong in views, `rootItems`, or `searchItems` instead.
    */
   actions?(ctx: ExtensionContext): ExtensionActionContribution[] | { actions: ExtensionActionContribution[] }
-  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. */
+  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
   rootItems?(ctx: ExtensionContext): ExtensionItem[] | Promise<ExtensionItem[]> | { items: ExtensionItem[] } | Promise<{ items: ExtensionItem[] }>
-  /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. */
+  /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. Use for dynamic/query-specific items, not duplicate launchers for durable actions. */
   searchItems?(ctx: ExtensionContext, query: string): ExtensionItem[] | Promise<ExtensionItem[]> | { items: ExtensionItem[] } | Promise<{ items: ExtensionItem[] }>
 }
 

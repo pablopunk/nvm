@@ -913,7 +913,7 @@ async function validateTypeScriptExtension(filePath: string, extensionTypesPath:
 function capabilities() {
   return {
     extensionExports: ['export default { id, title, permissions, actions, commands, rootItems, searchItems } satisfies NevermindExtension'],
-    rootContributions: ['actions(ctx) returns persistent shortcutable actions; commands are shorthand durable actions; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items'], 
+    rootContributions: ['actions(ctx) returns persistent shortcutable actions; commands are shorthand durable actions; put appearance on the durable action/command instead of duplicating it in rootItems/searchItems for styling; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items'], 
     icons: ['Any Lucide icon name in camel/Pascal case or kebab case, for example mic, volume-2, audio-lines, camera, calendar, image, folder. Legacy aliases include restart, grid, sparkles.'],
     views: ['list', 'grid', 'preview', 'chat', 'form', 'editor', 'progress', 'camera', 'webview'],
     formFields: ['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'checkbox', 'dropdown/select', 'multiselect', 'file', 'files', 'folder', 'description', 'separator'],

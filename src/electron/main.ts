@@ -3050,7 +3050,7 @@ function systemItems(ctx) {
     { id: 'builtin:sleep', title: 'Sleep', subtitle: 'Put this computer to sleep', icon: 'moon', score: 21, dismissAfterRun: 'auto', primaryAction: system.sleep('Sleep') },
     { id: 'builtin:restart', title: 'Restart Computer', subtitle: 'Restart this computer', icon: 'restart', score: 20, dismissAfterRun: 'auto', primaryAction: system.restart('Restart Computer') },
     { id: 'builtin:settings', title: settingsTitle(), subtitle: 'Open system preferences', icon: 'settings', score: 19, dismissAfterRun: 'auto', primaryAction: system.openSystemSettings(settingsTitle()) },
-    { id: 'builtin:quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15, dismissAfterRun: 'auto', primaryAction: system.quit('Quit Nevermind') },
+    { id: 'builtin:quit', title: 'Quit Nevermind', subtitle: 'Close the app', icon: 'power', score: 15, dismissAfterRun: 'auto', appearance: { foreground: 'red' }, primaryAction: system.quit('Quit Nevermind') },
   ]
 }
 
