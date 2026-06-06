@@ -3,8 +3,8 @@ export { lookupModelCost } from './pricing';
 import { env } from './env';
 import type { ModelCost } from './pricing';
 
-export const CREDIT_USD = Number(env('CREDIT_USD') ?? 0.0001);
-export const MARKUP = Number(env('CREDIT_MARKUP') ?? 1.2);
+export const CREDIT_USD = Number(env('CREDIT_USD') ?? 0.01);
+export const MARKUP = Number(env('CREDIT_MARKUP') ?? 5);
 
 export function computeUsdCost(cost: ModelCost, inputTokens: number, outputTokens: number): number {
   return (inputTokens * cost.inputUsdPerMtok + outputTokens * cost.outputUsdPerMtok) / 1_000_000;

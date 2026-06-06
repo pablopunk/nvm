@@ -7,7 +7,7 @@ import {
   getActiveProvider,
   ModelNotConfiguredError,
 } from './settings';
-import { getBalances } from './users';
+import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
   computeUsdCost,
@@ -120,6 +120,7 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
   }
   const user = await getUserFromHeaders(request, headerName);
   if (!user) return new Response('Unauthorized', { status: 401 });
+  await ensureMonthlyFreeCredits(user.id);
 
   const balances = await getBalances(user.id);
   if (balances.total <= 0) {

@@ -23,6 +23,16 @@ Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
 - `pnpm db:generate` → produces a new `drizzle/NNNN_*.sql`
 - `pnpm db:migrate` → applies pending migrations (also runs automatically on `pnpm build` / Vercel deploy)
 
+## Credits and billing
+
+Credits are user-facing retail units, not raw provider dollars. By default `CREDIT_USD=0.01` and `CREDIT_MARKUP=5`, so 1 credit represents about one cent of retail usage while covering roughly $0.002 of raw model cost. New and returning users receive a monthly free allowance up to `MONTHLY_FREE_CREDITS` free credits; paid Stripe prices map to monthly subscription or one-time top-up credit grants through `STRIPE_SUBSCRIPTION_TIERS` and `STRIPE_TOP_UP_PACKS`.
+
+Suggested launch packages:
+
+- Free: 500 credits/month, free-model pool only.
+- Pro: $10/month for 1,000 paid credits/month.
+- Top-up: $10 one-time for 1,000 paid credits when a user is low or out.
+
 ## Routes
 
 - `GET  /` — landing, sign-in link

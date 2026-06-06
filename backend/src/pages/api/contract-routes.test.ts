@@ -82,6 +82,7 @@ function installModelsDevFetch() {
 function proxySelects(options: { free?: number; paid?: number; model?: string | null } = {}) {
   return [
     [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+    [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     [],
     options.model === null ? [] : [{ value: options.model ?? 'gemini-3-flash' }],

@@ -5,13 +5,14 @@ import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
 import { users, subscriptions } from '../db/schema';
 import { billingCatalog } from '../lib/billing';
-import { getBalances } from '../lib/users';
+import { ensureMonthlyFreeCredits, getBalances } from '../lib/users';
 import { listApiTokens } from '../lib/tokens';
 
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 if (!session) return Astro.redirect('/api/auth/signin?return_to=/profile');
 
 const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
+if (user) await ensureMonthlyFreeCredits(user.id);
 const balances = user ? await getBalances(user.id) : { free: 0, paid: 0, total: 0 };
 const tokens = user ? await listApiTokens(user.id) : [];
 const [subscription] = user ? await db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)).limit(1) : [];

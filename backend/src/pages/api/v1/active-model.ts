@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getUserFromBearer } from '../../../lib/tokens';
 import { getActiveModelId, getFreeModelId, getActiveProvider, ModelNotConfiguredError } from '../../../lib/settings';
-import { getBalances } from '../../../lib/users';
+import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
 import { lookupModelDescriptor } from '../../../lib/pricing';
 import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
 import { selectApiForModel, type UpstreamApi } from '../../../lib/upstream';
@@ -16,6 +16,7 @@ function backendBaseUrlForApi(requestUrl: URL, api: UpstreamApi): string {
 export const GET: APIRoute = async ({ request }) => {
   const user = await getUserFromBearer(request.headers.get('authorization'));
   if (!user) return new Response('Unauthorized', { status: 401 });
+  await ensureMonthlyFreeCredits(user.id);
 
   const balances = await getBalances(user.id);
   const usingFreeTier = balances.free > 0;
