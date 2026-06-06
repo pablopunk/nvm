@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import * as logger from './logger'
 import { readRecentLogs, type LogLevel, type LogSource } from './logger'
+import { markDebugPerformance, measureDebugPerformance } from './debug-performance'
 import { checkNevermindCompatibility, requireNevermindCompatibilityFeature } from './nevermind-compatibility'
 import type { CommandAction } from '../model'
 import { nevermindDesktopHeaders } from './nevermind-api'
@@ -141,11 +142,14 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   async function getSession(chatId = 'default') {
     const current = sessions.get(chatId)
-    if (current) return current.promise
+    if (current) {
+      markDebugPerformance('ai.session.cache-hit', { chatId })
+      return current.promise
+    }
 
     const entry: SessionEntry = {
       unsubscribe: null,
-      promise: createSession({ ...options, chatId }, (event) => options.onEvent?.({ ...event, chatId })),
+      promise: measureDebugPerformance('ai.session.create', { chatId, alwaysLog: true }, () => createSession({ ...options, chatId }, (event) => options.onEvent?.({ ...event, chatId }))),
     }
     sessions.set(chatId, entry)
     entry.promise.catch(() => { if (sessions.get(chatId) === entry) sessions.delete(chatId) })
@@ -154,15 +158,17 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   async function send(message: string, chatId = 'default') {
     options.onEvent?.({ type: 'start', chatId })
-    try {
-      const session = await getSession(chatId)
-      await session.prompt(message)
-      options.onEvent?.({ type: 'done', chatId })
-    } catch (error) {
-      logger.error('ai.chat.send.failed', error, { source: 'host', scope: 'ai' })
-      const limit = aiLimitNoticeFromError(error)
-      options.onEvent?.({ type: 'error', chatId, message: limit?.message || (error instanceof Error ? error.message : String(error)), data: limit })
-    }
+    await measureDebugPerformance('ai.chat.send', { chatId, messageLength: message.length, alwaysLog: true }, async () => {
+      try {
+        const session = await getSession(chatId)
+        await measureDebugPerformance('ai.chat.prompt', { chatId, messageLength: message.length, alwaysLog: true }, () => session.prompt(message))
+        options.onEvent?.({ type: 'done', chatId })
+      } catch (error) {
+        logger.error('ai.chat.send.failed', error, { source: 'host', scope: 'ai' })
+        const limit = aiLimitNoticeFromError(error)
+        options.onEvent?.({ type: 'error', chatId, message: limit?.message || (error instanceof Error ? error.message : String(error)), data: limit })
+      }
+    })
   }
 
   async function abort(chatId = 'default') {
@@ -201,7 +207,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       })
       removeAbortListener = bindAbortSignal(askOptions.signal, () => { void session?.abort?.() })
       if (askOptions.signal?.aborted) throw aiAbortError()
-      await session.prompt(aiPromptWithContext(message, askOptions.context), { images: askOptions.images })
+      await measureDebugPerformance('ai.ask.prompt', { sessionId: askOptions.sessionId, messageLength: message.length, contextLength: askOptions.context?.length || 0, imageCount: askOptions.images?.length || 0, alwaysLog: true }, () => session.prompt(aiPromptWithContext(message, askOptions.context), { images: askOptions.images }))
       if (askOptions.signal?.aborted) throw aiAbortError()
       askOptions.onEvent?.({ type: 'done' })
       return text.join('')
@@ -234,7 +240,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     const key = sessionOptions.sessionId
     let promise = generalSessions.get(key)
     if (!promise) {
-      promise = createGeneralSession(options, sessionOptions)
+      promise = measureDebugPerformance('ai.general-session.create', { sessionId: key, alwaysLog: true }, () => createGeneralSession(options, sessionOptions))
       generalSessions.set(key, promise)
       promise.catch(() => { if (generalSessions.get(key) === promise) generalSessions.delete(key) })
     }

@@ -24,6 +24,7 @@ import { useAiChat, type AiLimitState } from './use-ai-chat'
 import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
+import { markDebugPerformance, measureDebugPerformance, measureDebugPerformanceSync } from './debug-performance'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
 import { actionDefinition, actionDescription, actionsFromPanel, actionPanelFromActions, canCustomizeCommandAction, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
 import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api'
@@ -344,6 +345,17 @@ export function App() {
   }
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
   useEffect(() => { selectedValueRef.current = selectedValue }, [selectedValue])
+  useEffect(() => {
+    markDebugPerformance('app.commit', {
+      queryLength: query.length,
+      childQueryLength: childQuery.length,
+      actionCount: actions.length,
+      selectedValue,
+      extensionViewType: extensionView?.type,
+      extensionViewId: extensionView?.id,
+      siblingViewCount: siblingViews.length,
+    })
+  })
 
   useEffect(() => {
     window.nvm.getSetting('hyperKey').then(setShortcutLabelHyperKey).catch(() => {})
@@ -361,7 +373,7 @@ export function App() {
       if (cancelled || running || viewIdentity(current) !== viewKey || current?.refresh?.id !== refreshId) return
       running = true
       try {
-        const result = await window.nvm.refreshView({ id: refreshId, viewId: current.id })
+        const result = await measureDebugPerformance('view.refresh', { refreshId, viewId: current.id, viewKey, alwaysLog: true }, () => window.nvm.refreshView({ id: refreshId, viewId: current.id }))
         if (!result?.skipped && !cancelled && viewIdentity(extensionViewRef.current) === viewKey) await handleViewActionResult(result, 'replace')
       } catch (error) {
         await window.nvm.log('warn', 'Extension view refresh failed', { viewKey, error: error instanceof Error ? error.message : String(error) })
@@ -435,6 +447,7 @@ export function App() {
     }
 
     const stopShown = window.nvm.onShown(() => {
+      markDebugPerformance('palette.shown', { queryLength: query.length })
       setOptionsFor(null)
       setExtensionItemOptionsFor(null)
       setConfirmRemoveFor(null)
@@ -458,10 +471,12 @@ export function App() {
       window.setTimeout(focusInput, 50)
     })
     const stopShortcutShown = window.nvm.onShortcutShown(() => {
+      markDebugPerformance('palette.shortcut-shown')
       requestAnimationFrame(focusInput)
       window.setTimeout(focusInput, 50)
     })
     const stopHidden = window.nvm.onHidden(() => {
+      markDebugPerformance('palette.hidden', { aiChatOpen: aiChatOpenRef.current })
       const closedAiChatId = aiChatOpenRef.current ? aiChatIdRef.current : undefined
       setQuery('')
       setOptionsFor(null)
@@ -485,6 +500,7 @@ export function App() {
     const stopClipboard = window.nvm.onClipboardChanged(() => setRefreshNonce((nonce) => nonce + 1))
     const stopRootItems = window.nvm.onRootItemsChanged(() => setRefreshNonce((nonce) => nonce + 1))
     const stopOpenActionView = window.nvm.onOpenActionView(async (payload) => {
+      markDebugPerformance('view.open-event', { hasView: Boolean(payload?.view), asSibling: Boolean(payload?.asSibling), revealWhenReady: Boolean(payload?.revealWhenReady), viewType: payload?.view?.type, viewId: payload?.view?.id })
       if (!payload?.view) return
       setOptionsFor(null)
       setPreviewFor(null)
@@ -499,6 +515,7 @@ export function App() {
       markShortcutReady(Boolean(payload?.revealWhenReady))
     })
     const stopViewPatch = window.nvm.onViewPatch((payload) => {
+      markDebugPerformance('view.patch-event', { viewId: payload?.viewId, itemPatchCount: payload?.patch?.items?.length || 0, removeCount: payload?.patch?.removeItemIds?.length || 0, mode: payload?.patch?.mode })
       if (!payload) return
       const current = extensionViewRef.current
       if (payload.viewId && current?.id !== payload.viewId) return
@@ -506,6 +523,7 @@ export function App() {
       applyViewPatch(payload.patch)
     })
     const stopAi = window.nvm.onAiChatEvent((event) => {
+      markDebugPerformance(`ai.event.${event.type}`, { chatId: event.chatId, textLength: event.text?.length || 0, label: event.label })
       if (event.type === 'debug') window.nvm.log('debug', `Nevermind AI: ${event.label || ''}`, event.data)
       if (event.chatId && event.chatId !== aiChatIdRef.current) return
       if (event.type === 'start') {
@@ -771,25 +789,29 @@ export function App() {
 
   function applyViewPatch(patch?: CommandViewPatch) {
     if (!patch) return
-    const current = extensionViewRef.current
-    if (!current) return
-    const scrollTop = resultsListRef.current?.scrollTop
-    const next = patchedView(current, patch)
-    const nextSelected = selectionAfterPatch(current, next, patch)
-    extensionViewRef.current = next
-    extensionNavigation.setView(next)
-    selectValue(nextSelected)
-    restorePatchViewport(viewIdentity(current), scrollTop, nextSelected)
+    measureDebugPerformanceSync('view.apply-patch', { itemPatchCount: patch.items?.length || 0, removeCount: patch.removeItemIds?.length || 0, mode: patch.mode, currentViewId: extensionViewRef.current?.id }, () => {
+      const current = extensionViewRef.current
+      if (!current) return
+      const scrollTop = resultsListRef.current?.scrollTop
+      const next = patchedView(current, patch)
+      const nextSelected = selectionAfterPatch(current, next, patch)
+      extensionViewRef.current = next
+      extensionNavigation.setView(next)
+      selectValue(nextSelected)
+      restorePatchViewport(viewIdentity(current), scrollTop, nextSelected)
+    })
   }
 
 
   async function handleViewActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'root' | 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
     if (!result) return
-    if (result.toast) showToast(result.toast.message, result.toast.tone || 'default')
-    if (result.patch) applyViewPatch(result.patch)
-    if (result.navigation === 'pop') popExtensionView()
-    else if (result.view?.aiChat) await openAiChat(result.view, result.navigation || fallbackNavigation)
-    else if (result.view) showExtensionView(result.view, result.navigation || fallbackNavigation)
+    return measureDebugPerformance('view.handle-action-result', { hasView: Boolean(result.view), viewType: result.view?.type, hasPatch: Boolean(result.patch), navigation: result.navigation, fallbackNavigation }, async () => {
+      if (result.toast) showToast(result.toast.message, result.toast.tone || 'default')
+      if (result.patch) applyViewPatch(result.patch)
+      if (result.navigation === 'pop') popExtensionView()
+      else if (result.view?.aiChat) await openAiChat(result.view, result.navigation || fallbackNavigation)
+      else if (result.view) showExtensionView(result.view, result.navigation || fallbackNavigation)
+    })
   }
 
   function actionCanDismissImmediately(action: ExtensionViewAction) {
@@ -886,9 +908,13 @@ export function App() {
     const definition = actionDefinition(action)
     const showsLoading = !dismissedImmediately && !nativeAction && definition?.loading === 'view'
     try {
-      const resultPromise = window.nvm.runViewAction(action)
-      if (dismissedImmediately) window.nvm.hide()
-      else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
+      markDebugPerformance('view-action.start', { actionType: action.type, title: action.title, dismissedImmediately, showsLoading })
+      if (dismissedImmediately) {
+        markDebugPerformance('view-action.hide-before-ipc', { actionType: action.type, title: action.title })
+        void window.nvm.hide()
+      }
+      const resultPromise = measureDebugPerformance('view-action.ipc', { actionType: action.type, title: action.title, dismissedImmediately, showsLoading, alwaysLog: true }, () => window.nvm.runViewAction(action))
+      if (!dismissedImmediately && showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
       const result = await resultPromise
       const resultAfterLoading = showsLoading && loadingNavigation === 'push' && result?.navigation === 'push' && result.view
         ? { ...result, navigation: 'replace' as const }
@@ -911,12 +937,14 @@ export function App() {
   }
 
   async function openAiChat(view: ExtensionView, navigation: 'root' | 'push' | 'replace' = 'root') {
-    showExtensionView(view, navigation)
-    await aiChat.openChat(view)
+    await measureDebugPerformance('ai.open-chat', { chatId: view.chatId, messageCount: view.messages?.length || 0, navigation }, async () => {
+      showExtensionView(view, navigation)
+      await aiChat.openChat(view)
+    })
   }
 
   async function startBuilderChatFromQuery(prompt: string) {
-    const result = await window.nvm.startBuilderChat({ prompt, title: `Automate "${prompt}"` })
+    const result = await measureDebugPerformance('ai-builder.start-chat', { promptLength: prompt.length, alwaysLog: true }, () => window.nvm.startBuilderChat({ prompt, title: `Automate "${prompt}"` }))
     if (result?.view?.aiChat) await openAiChat(result.view, 'root')
     else if (result?.view) showExtensionView(result.view, 'root')
   }
@@ -927,9 +955,13 @@ export function App() {
       return
     }
     const dismissedImmediately = rootActionCanDismissImmediately(action)
-    const resultPromise = window.nvm.execute(action)
-    if (dismissedImmediately) window.nvm.hide()
-    else showActionLoadingView(action.title || 'Running…', action.subtitle || 'Waiting for the action to finish', 'root')
+    markDebugPerformance('root-action.start', { id: action.id, kind: action.kind, title: action.title, dismissedImmediately })
+    if (dismissedImmediately) {
+      markDebugPerformance('root-action.hide-before-ipc', { id: action.id, kind: action.kind, title: action.title })
+      void window.nvm.hide()
+    }
+    const resultPromise = measureDebugPerformance('root-action.ipc', { id: action.id, kind: action.kind, title: action.title, dismissedImmediately, alwaysLog: true }, () => window.nvm.execute(action))
+    if (!dismissedImmediately) showActionLoadingView(action.title || 'Running…', action.subtitle || 'Waiting for the action to finish', 'root')
     const result = await resultPromise
     if (result?.view) {
       setOptionsFor(null)
@@ -955,7 +987,7 @@ export function App() {
   }
 
   async function refreshShortcuts() {
-    setShortcutRecords(await window.nvm.getShortcuts())
+    setShortcutRecords(await measureDebugPerformance('shortcuts.refresh', { alwaysLog: true }, () => window.nvm.getShortcuts()))
   }
 
   async function openShortcutManager() {
@@ -1149,11 +1181,11 @@ export function App() {
   }
 
   function filterViewSections(view: ExtensionView) {
-    return filterCommandSections(view, childQuery)
+    return measureDebugPerformanceSync('view.filter-sections', { childQueryLength: childQuery.length, sectionCount: view.sections?.length || 0 }, () => filterCommandSections(view, childQuery))
   }
 
   function filterExtensionItems(items: ExtensionViewItem[] = []) {
-    return filterCommandItems(items, childQuery)
+    return measureDebugPerformanceSync('view.filter-items', { childQueryLength: childQuery.length, itemCount: items.length }, () => filterCommandItems(items, childQuery))
   }
 
   function getAliasActionRows() {
@@ -1461,7 +1493,7 @@ export function App() {
   }
 
   function renderActionResults() {
-    const items = actions.map(commandItemFromAction)
+    const items = measureDebugPerformanceSync('root-actions.to-command-items', { actionCount: actions.length }, () => actions.map(commandItemFromAction))
     return <RootCommandList
       items={items}
       iconForItem={iconForCommandItem}
@@ -1475,6 +1507,7 @@ export function App() {
   }
 
   function renderMarkdown(content: string) {
+    markDebugPerformance('markdown.render', { contentLength: content.length })
     return (
       <div className="markdownContent">
         <ReactMarkdown
