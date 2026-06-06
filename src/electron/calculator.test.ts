@@ -78,6 +78,15 @@ test('keeps conversion dimensions strict', () => {
   assert.equal(raw('10kg to timespan'), null)
 })
 
+test('handles local date and timezone questions', () => {
+  const now = new Date('2026-06-06T12:00:00Z')
+  assert.equal(calculateDetailed('days until 25 Dec', { now })?.raw, '202 days')
+  assert.equal(calculateDetailed('35 days ago', { now })?.raw, '2026-05-02')
+  assert.equal(calculateDetailed('Monday in 3 weeks', { now })?.raw, '2026-06-29')
+  assert.equal(calculateDetailed('time in Tokyo', { now })?.raw, '21:00')
+  assert.equal(calculateDetailed('5pm ldn in sf', { now })?.raw, '09:00')
+})
+
 test('parses and formats cached fiat rates', () => {
   const quote = { rate: 0.8, provider: 'Frankfurter', updatedAt: Date.now(), fetchedAt: Date.now() }
   const usdToGbp = parseRateExpression('10 usd in gbp')

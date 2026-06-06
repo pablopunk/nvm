@@ -81,8 +81,15 @@ export type RateQuote = {
   fetchedAt: number
 }
 
+type CalculatorOptions = { now?: Date | number | string }
+
+type ZonedParts = { year: number; month: number; day: number; hour: number; minute: number }
+
 const UNIT_BY_ALIAS = createUnitMap()
 const CURRENCY_BY_ALIAS = createCurrencyMap()
+const TIMEZONE_BY_ALIAS = createTimezoneMap()
+const WEEKDAY_INDEX: Record<string, number> = { sunday: 0, sun: 0, monday: 1, mon: 1, tuesday: 2, tue: 2, wednesday: 3, wed: 3, thursday: 4, thu: 4, friday: 5, fri: 5, saturday: 6, sat: 6 }
+const MONTH_INDEX: Record<string, number> = { jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11 }
 
 function createUnitMap() {
   const units = new Map<string, UnitDefinition>()
@@ -166,13 +173,34 @@ function createCurrencyMap() {
   return currencies
 }
 
-export function calculate(query: string) {
-  return calculateDetailed(query)?.raw ?? null
+function createTimezoneMap() {
+  const zones = new Map<string, string>()
+  const add = (zone: string, aliases: string[]) => {
+    zones.set(normalizeTimezoneAlias(zone), zone)
+    for (const alias of aliases) zones.set(normalizeTimezoneAlias(alias), zone)
+  }
+  add('Europe/London', ['ldn', 'london', 'uk', 'gmt', 'bst'])
+  add('America/Los_Angeles', ['sf', 'sfo', 'san francisco', 'la', 'los angeles', 'pt', 'pst', 'pdt'])
+  add('America/New_York', ['nyc', 'new york', 'ny', 'et', 'est', 'edt'])
+  add('Asia/Tokyo', ['tokyo', 'jst', 'jp'])
+  add('Asia/Dubai', ['dubai', 'uae'])
+  add('Europe/Madrid', ['madrid', 'spain', 'cet', 'cest'])
+  add('Europe/Paris', ['paris', 'france'])
+  add('Europe/Berlin', ['berlin', 'germany'])
+  add('UTC', ['utc', 'z'])
+  return zones
 }
 
-export function calculateDetailed(query: string): CalculatorResult | null {
+export function calculate(query: string, options: CalculatorOptions = {}) {
+  return calculateDetailed(query, options)?.raw ?? null
+}
+
+export function calculateDetailed(query: string, options: CalculatorOptions = {}): CalculatorResult | null {
   const normalized = normalizeCalculationQuery(query)
   if (!normalized || !isLikelyCalculation(normalized.expression, normalized.explicit)) return null
+
+  const dateTimeResult = calculateDateTimeExpression(normalized.expression, query, options)
+  if (dateTimeResult) return dateTimeResult
 
   const conversionResult = calculateConversionExpression(normalized.expression, query)
   if (conversionResult) return conversionResult
@@ -211,6 +239,7 @@ function isLikelyCalculation(expression: string, explicit: boolean) {
   if (/[+*/%^()]/.test(expression)) return true
   if (/\d\s-\s\d/.test(expression)) return true
   if (/\b(sqrt|square root|power|squared|cubed|sin|cos|tan|log|ln|abs|round|floor|ceil|min|max|percent)\b/i.test(expression)) return true
+  if (looksLikeDateTimeExpression(expression)) return true
   if (looksLikeConversionExpression(expression)) return true
   return /\d(?:\.\d+)?\s*[kmb]\b.*[+\-*/^]/i.test(expression)
 }
@@ -230,6 +259,75 @@ function normalizeNaturalMath(expression: string) {
 
 function looksLikeConversionExpression(expression: string) {
   return conversionExpressionMatch(expression) !== null || parseRateExpression(expression) !== null
+}
+
+function looksLikeDateTimeExpression(expression: string) {
+  return /^(?:days?\s+until\s+\d{1,2}\s+[a-z]+|\d+\s+days?\s+ago|(?:sun|mon|tue|wed|thu|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\s+in\s+\d+\s+weeks?|time\s+in\s+.+|\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s+.+\s+in\s+.+)$/i.test(expression.trim())
+}
+
+function calculateDateTimeExpression(expression: string, query: string, options: CalculatorOptions): CalculatorResult | null {
+  return calculateDateExpression(expression, query, options) || calculateTimezoneExpression(expression, query, options)
+}
+
+function calculateDateExpression(expression: string, query: string, options: CalculatorOptions): CalculatorResult | null {
+  const now = optionDate(options)
+  const today = startOfLocalDay(now)
+  const daysUntil = expression.trim().match(/^days?\s+until\s+(\d{1,2})\s+([a-z]+)$/i)
+  if (daysUntil) {
+    const target = nextMonthDay(Number(daysUntil[1]), daysUntil[2], today)
+    if (!target) return null
+    const days = Math.round((target.getTime() - today.getTime()) / 86400000)
+    const text = `${days} ${days === 1 ? 'day' : 'days'}`
+    return dateResult('date', query, expression, days, text, text, `Until ${formatDateDisplay(target)}`)
+  }
+
+  const daysAgo = expression.trim().match(/^(\d+)\s+days?\s+ago$/i)
+  if (daysAgo) {
+    const date = addLocalDays(today, -Number(daysAgo[1]))
+    return dateResult('date', query, expression, date.getTime(), isoLocalDate(date), formatDateDisplay(date), 'Date')
+  }
+
+  const weekdayInWeeks = expression.trim().match(/^([a-z]+)\s+in\s+(\d+)\s+weeks?$/i)
+  if (weekdayInWeeks) {
+    const weekday = WEEKDAY_INDEX[weekdayInWeeks[1].toLowerCase()]
+    if (weekday === undefined) return null
+    const date = addLocalDays(nextWeekday(today, weekday), Number(weekdayInWeeks[2]) * 7)
+    return dateResult('date', query, expression, date.getTime(), isoLocalDate(date), formatDateDisplay(date), 'Date')
+  }
+  return null
+}
+
+function calculateTimezoneExpression(expression: string, query: string, options: CalculatorOptions): CalculatorResult | null {
+  const now = optionDate(options)
+  const currentTime = expression.trim().match(/^time\s+in\s+(.+)$/i)
+  if (currentTime) {
+    const zone = timezoneForAlias(currentTime[1])
+    if (!zone) return null
+    const formatted = formatTimeInZone(now, zone)
+    return timezoneResult(query, expression, now.getTime(), formatted, zone)
+  }
+
+  const conversion = expression.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s+(.+?)\s+in\s+(.+)$/i)
+  if (!conversion) return null
+  const sourceZone = timezoneForAlias(conversion[4])
+  const targetZone = timezoneForAlias(conversion[5])
+  if (!sourceZone || !targetZone) return null
+  const hour = parseClockHour(Number(conversion[1]), conversion[3])
+  const minute = conversion[2] ? Number(conversion[2]) : 0
+  if (hour === null || minute < 0 || minute > 59) return null
+  const sourceParts = zonedParts(now, sourceZone)
+  const instant = instantForZonedTime(sourceZone, { year: sourceParts.year, month: sourceParts.month, day: sourceParts.day, hour, minute })
+  if (!instant) return null
+  const formatted = formatTimeInZone(instant, targetZone)
+  return timezoneResult(query, expression, instant.getTime(), formatted, targetZone)
+}
+
+function dateResult(kind: 'date', query: string, expression: string, value: number, raw: string, formatted: string, subtitle = 'Copy result to clipboard'): CalculatorResult {
+  return { kind, query: query.trim(), expression: expression.trim(), value, raw, formatted, date: raw, title: `${expression.trim()} = ${formatted}`, subtitle, alternate: raw === formatted ? undefined : { raw, formatted } }
+}
+
+function timezoneResult(query: string, expression: string, value: number, formatted: string, zone: string): CalculatorResult {
+  return { kind: 'timezone', query: query.trim(), expression: expression.trim(), value, raw: formatted, formatted, timezone: zone, title: `${expression.trim()} = ${formatted}`, subtitle: `Time in ${zone}` }
 }
 
 export function calculateRateResult(query: string, parsed: RateExpression, quote: RateQuote): CalculatorResult | null {
@@ -336,6 +434,99 @@ function unitForAlias(alias: string) {
 
 function normalizeUnitAlias(alias: string) {
   return String(alias || '').trim().toLowerCase().replace(/\./g, '')
+}
+
+function optionDate(options: CalculatorOptions) {
+  const date = options.now === undefined ? new Date() : new Date(options.now)
+  return Number.isFinite(date.getTime()) ? date : new Date()
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function addLocalDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return startOfLocalDay(next)
+}
+
+function nextMonthDay(day: number, monthName: string, today: Date) {
+  const month = MONTH_INDEX[monthName.toLowerCase()]
+  if (month === undefined || day < 1 || day > 31) return null
+  let date = new Date(today.getFullYear(), month, day)
+  if (date.getMonth() !== month) return null
+  if (date.getTime() < today.getTime()) date = new Date(today.getFullYear() + 1, month, day)
+  return date
+}
+
+function nextWeekday(today: Date, weekday: number) {
+  const delta = (weekday - today.getDay() + 7) % 7 || 7
+  return addLocalDays(today, delta)
+}
+
+function isoLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDateDisplay(date: Date) {
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+}
+
+function timezoneForAlias(alias: string) {
+  const trimmed = String(alias || '').trim()
+  const known = TIMEZONE_BY_ALIAS.get(normalizeTimezoneAlias(trimmed))
+  if (known) return known
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: trimmed }).format(new Date())
+    return trimmed
+  } catch {
+    return null
+  }
+}
+
+function normalizeTimezoneAlias(alias: string) {
+  return String(alias || '').trim().toLowerCase().replace(/[._-]+/g, ' ').replace(/\s+/g, ' ')
+}
+
+function parseClockHour(hour: number, meridiem?: string) {
+  if (hour < 0 || hour > 23) return null
+  if (!meridiem) return hour
+  if (hour < 1 || hour > 12) return null
+  const lower = meridiem.toLowerCase()
+  if (lower === 'am') return hour === 12 ? 0 : hour
+  return hour === 12 ? 12 : hour + 12
+}
+
+function zonedParts(date: Date, timeZone: string): ZonedParts {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(date)
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value || 0)
+  const hour = value('hour')
+  return { year: value('year'), month: value('month'), day: value('day'), hour: hour === 24 ? 0 : hour, minute: value('minute') }
+}
+
+function instantForZonedTime(timeZone: string, target: ZonedParts) {
+  const localTimestamp = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute)
+  let candidate = new Date(localTimestamp - timezoneOffsetMs(new Date(localTimestamp), timeZone))
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = zonedParts(candidate, timeZone)
+    if (parts.year === target.year && parts.month === target.month && parts.day === target.day && parts.hour === target.hour && parts.minute === target.minute) return candidate
+    const represented = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute)
+    candidate = new Date(candidate.getTime() + localTimestamp - represented)
+  }
+  return null
+}
+
+function timezoneOffsetMs(date: Date, timeZone: string) {
+  const parts = zonedParts(date, timeZone)
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute) - Math.floor(date.getTime() / 60000) * 60000
+}
+
+function formatTimeInZone(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat(undefined, { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
 function currencyForAlias(alias: string) {
