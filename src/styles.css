@@ -142,7 +142,7 @@ input,
   height: 100%;
   padding: var(--window-blur-margin);
   background: transparent;
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
 }
 
 .shell .palette {

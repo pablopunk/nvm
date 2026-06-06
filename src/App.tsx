@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Command } from 'cmdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -1651,6 +1651,14 @@ export function App() {
     await runViewAction({ type: 'revealPath', title: 'Reveal in File Manager', path })
   }
 
+  function dismissFromEmptyWindowSpace(event: MouseEvent<HTMLElement>) {
+    if (event.button !== 0) return
+    const target = event.target instanceof Element ? event.target : null
+    if (target?.closest('.card, .toast')) return
+    event.preventDefault()
+    void window.nvm.hide()
+  }
+
   function onCommandKeyDown(event: React.KeyboardEvent) {
     if (shortcutFor) {
       event.preventDefault()
@@ -1810,7 +1818,7 @@ export function App() {
   }
 
   return (
-    <main className="shell">
+    <main className="shell" onMouseDown={dismissFromEmptyWindowSpace}>
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
       <Command
         ref={paletteRef}
