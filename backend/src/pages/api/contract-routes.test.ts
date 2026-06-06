@@ -7,6 +7,7 @@ import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
 import { POST as postChatCompletion } from './v1/chat/completions';
+import { POST as postGoogleModel } from './v1/models/[...path]';
 
 type FakeDb = ReturnType<typeof createFakeDb>;
 type MinimalAPIContext = Pick<APIContext, 'request' | 'url'>;
@@ -98,6 +99,30 @@ function authorizedChatRequest(body: unknown = { model: 'placeholder', messages:
       'x-nevermind-api-version': '1',
     },
     body: JSON.stringify(body),
+  });
+}
+
+function authorizedGoogleRequest(body: unknown = { contents: [{ parts: [{ text: 'hello' }] }] }) {
+  return new Request('https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent?alt=sse', {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': 'nvm_pat_test',
+      'content-type': 'application/json',
+      'x-nevermind-client': 'desktop',
+      'x-nevermind-client-version': '0.7.0',
+      'x-nevermind-api-version': '1',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function streamFromTextChunks(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
   });
 }
 
@@ -261,4 +286,39 @@ test('proxy route preserves streaming responses and records stream usage', async
   assert.equal(db.insertedValues.length, 2);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 2);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
+});
+
+const splitGoogleUsageStream = [
+  'data: {"candidates":[{"content":{"parts":[{"text":"hi"}]}}],"usageMetadata":{"promptTokenCount":12,',
+  '"candidatesTokenCount":4,"thoughtsTokenCount":2}}',
+];
+
+test('google proxy records split streaming usage metadata', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 0 }) }));
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    assert.equal(url, 'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse');
+    assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'upstream-key');
+    return new Response(streamFromTextChunks(splitGoogleUsageStream), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const request = authorizedGoogleRequest();
+  const response = await postGoogleModel({ ...routeContext(request), params: { path: 'placeholder:streamGenerateContent' } } as any);
+  const text = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.equal(text, splitGoogleUsageStream.join(''));
+  assert.equal(db.insertedValues.length, 2);
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
+  assert.equal((db.insertedValues.at(-1) as any).costCredits, 1);
 });

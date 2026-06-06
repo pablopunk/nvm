@@ -42,6 +42,7 @@ export type StreamUsageAccumulator = {
   inputTokens: number;
   outputTokens: number;
   finalized: boolean;
+  pendingText?: string;
 };
 
 type BillContext = {
@@ -361,6 +362,7 @@ function teeStreamAndBill(
       try {
         const tail = decoder.decode();
         if (tail) cfg.parseUsageFromStreamChunk(tail, acc);
+        if (acc.pendingText) cfg.parseUsageFromStreamChunk('\n', acc);
       } catch {}
       const latencyMs = Date.now() - startedAt;
       await recordUsage(

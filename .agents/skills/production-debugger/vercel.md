@@ -6,6 +6,8 @@ Skill search for `vercel` did not reveal a production-ops Vercel connector; resu
 
 Read `axiom.md` first: Vercel production runtime logs drain to Axiom.
 
+`vercel logs <deployment> --json` is live-only and does not search backward. If Axiom has no rows for the project, start `vercel logs` before asking for a reproduction request, then capture the pane/log output for request IDs and runtime messages.
+
 ## Deployment/build fallback
 
 Use Vercel API events when you need deployment/build metadata or Axiom is unavailable. If `backend/.vercel/project.json` exists, read project/org ids from it but never commit it.
