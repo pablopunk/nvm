@@ -3141,6 +3141,8 @@ async function refreshRate(base: string, quote: string) {
 function calculatorResultItem(query: string, result: any) {
   const actions = [
     { type: 'copyText', title: 'Copy Result', text: result.formatted, dismissAfterRun: 'auto' },
+    { type: 'setSearchQuery', title: 'Continue Calculation', subtitle: 'Replace search with the result', query: result.raw, shortcut: 'Command+Enter', keepPaletteOpen: true },
+    result.swapQuery ? { type: 'setSearchQuery', title: 'Swap Units', subtitle: 'Swap source and target', query: result.swapQuery, shortcut: 'Command+Shift+Enter', keepPaletteOpen: true } : null,
     result.raw !== result.formatted ? { type: 'copyText', title: 'Copy Unformatted Result', text: result.raw, dismissAfterRun: 'auto' } : null,
     { type: 'pasteText', title: 'Paste Result', text: result.formatted, dismissAfterRun: 'auto' },
   ].filter(Boolean)

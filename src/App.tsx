@@ -849,6 +849,24 @@ export function App() {
       return
     }
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string; action?: Action; actionId?: string } | undefined : undefined
+    if (action.type === 'setSearchQuery') {
+      const nextQuery = String(action.query ?? action.text ?? '')
+      setQuery(nextQuery)
+      setChildQuery('')
+      setOptionsFor(null)
+      setExtensionItemOptionsFor(null)
+      setActionSubmenuFor(null)
+      setPreviewFor(null)
+      if (extensionView) extensionNavigation.clearView()
+      setSiblingViews([])
+      requestAnimationFrame(() => {
+        const input = inputRef.current
+        input?.focus()
+        if (action.select !== false) input?.select()
+        else input?.setSelectionRange(nextQuery.length, nextQuery.length)
+      })
+      return
+    }
     if (action.type === 'recordShortcut') {
       const targetAction = action.action as Action | undefined
       const target = targetAction?.id === PALETTE_HOTKEY_ACTION_ID ? PALETTE_HOTKEY_PSEUDO_ACTION : targetAction?.id === HYPER_KEY_ACTION_ID ? HYPER_KEY_PSEUDO_ACTION : targetAction
@@ -1625,6 +1643,10 @@ export function App() {
     return true
   }
 
+  function rootSearchQueryAction(action: Action | null | undefined, title: 'Continue Calculation' | 'Swap Units') {
+    return actionsFromPanel(action?.actionPanel, []).find((candidate) => candidate.type === 'setSearchQuery' && candidate.title === title)
+  }
+
   function moveGridSelection(key: string) {
     if (extensionView?.type !== 'grid' || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
     const items = filterExtensionItems(allViewItems(extensionView))
@@ -1695,6 +1717,22 @@ export function App() {
     if (localAccelerator && runLocalShortcut(localAccelerator)) {
       event.preventDefault()
       return
+    }
+    if (!isChildOpen && selectedAction && normalizedShortcut(localAccelerator) === 'command+enter') {
+      const action = rootSearchQueryAction(selectedAction, 'Continue Calculation')
+      if (action) {
+        event.preventDefault()
+        runViewAction(action)
+        return
+      }
+    }
+    if (!isChildOpen && selectedAction && normalizedShortcut(localAccelerator) === 'command+shift+enter') {
+      const action = rootSearchQueryAction(selectedAction, 'Swap Units') || rootSearchQueryAction(selectedAction, 'Continue Calculation')
+      if (action) {
+        event.preventDefault()
+        runViewAction(action)
+        return
+      }
     }
     if (!isChildOpen && normalizedShortcut(localAccelerator) === 'command+y' && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.text)) {
       event.preventDefault()

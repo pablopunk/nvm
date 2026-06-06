@@ -73,6 +73,7 @@ export const ACTION_DEFINITIONS = {
   toggleWindow: { description: 'Toggle extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
   closeWindow: { description: 'Close extension window', dismiss: 'immediate', loading: 'none', execute: 'main' },
   runExtensionRegisteredAction: { description: 'Run persistent extension action', dismiss: 'immediate', loading: 'none', execute: 'main' },
+  setSearchQuery: { description: 'Replace the root search query', dismiss: 'manual', loading: 'none', execute: 'renderer' },
 } as const satisfies Record<string, CommandActionDefinition>
 
 export type CommandActionType = keyof typeof ACTION_DEFINITIONS
@@ -125,6 +126,7 @@ export type CommandAction = {
   thumbnailUrl?: string
   aiChatId?: string
   query?: string
+  select?: boolean
   extensionFile?: string
   command?: string
   args?: string[]
