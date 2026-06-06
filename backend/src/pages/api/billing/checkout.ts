@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
-import { BillingConfigError, BillingEligibilityError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
+import { BillingConfigError, BillingEligibilityError, BillingRequestError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
 import { getSessionFromCookies } from '../../../lib/workos';
 
 export const POST: APIRoute = async ({ request }) => {
@@ -16,7 +16,10 @@ export const POST: APIRoute = async ({ request }) => {
   if (!user) return new Response('Unknown user', { status: 404 });
 
   const body = (await request.json().catch(() => ({}))) as { kind?: BillingKind; priceId?: string; tier?: string };
-  const kind = body.kind === 'top_up' ? 'top_up' : 'subscription';
+  if (body.kind !== 'top_up' && body.kind !== 'subscription') {
+    return Response.json({ error: { type: 'invalid_request', message: 'Invalid billing kind' } }, { status: 400 });
+  }
+  const kind = body.kind;
 
   try {
     const checkout = await createBillingCheckout({ user, kind, priceId: body.priceId, tier: body.tier });
@@ -24,6 +27,9 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     if (error instanceof BillingConfigError) {
       return Response.json({ error: { type: 'billing_not_configured', message: error.message } }, { status: 503 });
+    }
+    if (error instanceof BillingRequestError) {
+      return Response.json({ error: { type: error.type, message: error.message } }, { status: 400 });
     }
     if (error instanceof BillingEligibilityError) {
       return Response.json(

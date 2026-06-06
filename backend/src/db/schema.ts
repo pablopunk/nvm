@@ -7,6 +7,7 @@ import {
   bigserial,
   uuid,
   index,
+  uniqueIndex,
   jsonb,
 } from 'drizzle-orm/pg-core';
 
@@ -39,6 +40,7 @@ export const creditLedger = pgTable(
   },
   (t) => ({
     userIdx: index('credit_ledger_user_idx').on(t.userId),
+    userReasonRefIdx: uniqueIndex('credit_ledger_user_reason_ref_idx').on(t.userId, t.reason, t.refId),
   }),
 );
 

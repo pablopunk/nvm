@@ -20,9 +20,10 @@ type FakeDb = ReturnType<typeof createFakeBillingDb>;
 type InsertCall = { table: unknown; values: any; conflict?: 'nothing' | 'update' };
 type UpdateCall = { table: unknown; values: any };
 
-function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[] } = {}) {
+function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[]; existingLedgerRefs?: string[] } = {}) {
   const selects = [...(input.selects ?? [])];
   const eventIds = new Set(input.existingEvents ?? []);
+  const ledgerRefs = new Set(input.existingLedgerRefs ?? []);
   const inserts: InsertCall[] = [];
   const updates: UpdateCall[] = [];
 
@@ -53,7 +54,13 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
         return Promise.resolve([{ eventId: values.eventId }]);
       },
       then(resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) {
-        if (table !== stripeEvents && conflict !== 'update') inserts.push({ table, values, conflict });
+        if (table !== stripeEvents && conflict !== 'update') {
+          const ledgerRef = table === creditLedger && values?.refId ? `${values.userId}:${values.reason}:${values.refId}` : null;
+          if (!ledgerRef || !ledgerRefs.has(ledgerRef)) {
+            if (ledgerRef) ledgerRefs.add(ledgerRef);
+            inserts.push({ table, values, conflict });
+          }
+        }
         return resolve().then(resolveThen, rejectThen);
       },
       catch(rejectThen: Parameters<Promise<unknown>['catch']>[0]) {
@@ -86,6 +93,9 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
       where() {
         updates.push({ table, values });
         return chain;
+      },
+      returning() {
+        return Promise.resolve([{ stripeCustomerId: values?.stripeCustomerId }]);
       },
       then(resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) {
         return promise().then(resolveThen, rejectThen);
@@ -162,6 +172,7 @@ test('checkout completion upserts subscription and grants initial paid credits o
     mode: 'subscription',
     customer: 'cus_123',
     subscription: 'sub_123',
+    payment_status: 'paid',
     client_reference_id: user.id,
     metadata: { price_id: 'price_pro', user_id: user.id },
   }, 'evt_checkout');
@@ -272,7 +283,10 @@ test('top-up webhook does not grant credits without an active subscription', asy
 test('distinct Stripe events do not double-grant an already credited payment object', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user], [{ status: 'active' }], [{ id: 1 }]] }));
+  const db = installDb(createFakeBillingDb({
+    selects: [[user], [{ status: 'active' }]],
+    existingLedgerRefs: [`${user.id}:stripe_top_up:pi_123`],
+  }));
 
   await processStripeEvent(stripeEvent('payment_intent.succeeded', {
     id: 'pi_123',

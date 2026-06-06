@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { env } from './env';
@@ -42,6 +42,13 @@ export class BillingEligibilityError extends Error {
   constructor(public type: 'top_up_requires_subscription' | 'already_subscribed', message: string) {
     super(message);
     this.name = 'BillingEligibilityError';
+  }
+}
+
+export class BillingRequestError extends Error {
+  constructor(public type: 'unknown_price', message: string) {
+    super(message);
+    this.name = 'BillingRequestError';
   }
 }
 
@@ -106,9 +113,12 @@ export function billingCatalog(): BillingCatalog {
 export function findCatalogItem(input: { kind: BillingKind; priceId?: string; tier?: string }): BillingCatalogItem | null {
   const catalog = billingCatalog();
   if (input.kind === 'subscription') {
-    return catalog.subscriptions.find((item) => item.priceId === input.priceId || item.tier === input.tier) ?? catalog.subscriptions[0] ?? null;
+    if (input.priceId) return catalog.subscriptions.find((item) => item.priceId === input.priceId) ?? null;
+    if (input.tier) return catalog.subscriptions.find((item) => item.tier === input.tier) ?? null;
+    return catalog.subscriptions[0] ?? null;
   }
-  return catalog.topUps.find((item) => item.priceId === input.priceId) ?? catalog.topUps[0] ?? null;
+  if (input.priceId) return catalog.topUps.find((item) => item.priceId === input.priceId) ?? null;
+  return catalog.topUps[0] ?? null;
 }
 
 function findItemByPriceId(priceId: string | null | undefined): BillingCatalogItem | null {
@@ -136,8 +146,15 @@ export async function getOrCreateStripeCustomer(user: typeof users.$inferSelect)
     email: user.email,
     metadata: { user_id: user.id },
   });
-  await db.update(users).set({ stripeCustomerId: customer.id }).where(eq(users.id, user.id));
-  return customer.id;
+  const [updated] = await db
+    .update(users)
+    .set({ stripeCustomerId: customer.id })
+    .where(and(eq(users.id, user.id), isNull(users.stripeCustomerId)))
+    .returning({ stripeCustomerId: users.stripeCustomerId });
+  if (updated?.stripeCustomerId) return updated.stripeCustomerId;
+
+  const [current] = await db.select({ stripeCustomerId: users.stripeCustomerId }).from(users).where(eq(users.id, user.id)).limit(1);
+  return current?.stripeCustomerId ?? customer.id;
 }
 
 async function userHasActiveSubscription(database: BillingDb, userId: string): Promise<boolean> {
@@ -151,7 +168,10 @@ async function userHasActiveSubscription(database: BillingDb, userId: string): P
 
 export async function createBillingCheckout(input: { user: typeof users.$inferSelect; kind: BillingKind; priceId?: string; tier?: string }) {
   const item = findCatalogItem(input);
-  if (!item) throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
+  if (!item) {
+    if (input.priceId || input.tier) throw new BillingRequestError('unknown_price', 'Unknown Stripe billing price.');
+    throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
+  }
   const hasActiveSubscription = await userHasActiveSubscription(db, input.user.id);
   if (item.kind === 'subscription' && hasActiveSubscription) {
     throw new BillingEligibilityError('already_subscribed', 'You already have an active Pro subscription. Manage it from billing settings.');
@@ -236,20 +256,13 @@ async function userForStripeObject(database: BillingDb, object: { customer?: unk
 
 async function grantPaidCredits(database: BillingDb, userId: string, credits: number, reason: string, refId: string) {
   if (credits <= 0) return;
-  const existingGrant = await database
-    .select({ id: creditLedger.id })
-    .from(creditLedger)
-    .where(and(eq(creditLedger.userId, userId), eq(creditLedger.reason, reason), eq(creditLedger.refId, refId)))
-    .limit(1);
-  if (existingGrant.length > 0) return;
-
   await database.insert(creditLedger).values({
     userId,
     delta: credits,
     kind: 'paid',
     reason,
     refId,
-  });
+  }).onConflictDoNothing({ target: [creditLedger.userId, creditLedger.reason, creditLedger.refId] });
 }
 
 async function updateUserPlan(database: BillingDb, userId: string, plan: string) {
@@ -297,7 +310,9 @@ async function handleCheckoutCompleted(database: BillingDb, session: Stripe.Chec
     status: subscription.status,
     currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
   });
-  await grantPaidCredits(database, user.id, item.credits, 'stripe_checkout_subscription', session.id);
+  if (session.payment_status === 'paid') {
+    await grantPaidCredits(database, user.id, item.credits, 'stripe_checkout_subscription', session.id);
+  }
 }
 
 async function handleInvoicePaid(database: BillingDb, invoice: Stripe.Invoice, subscription: Stripe.Subscription | null) {
@@ -337,13 +352,20 @@ async function handleSubscriptionStatus(database: BillingDb, subscription: Strip
   const customerId = objectId(subscription.customer);
   const user = await userByStripeCustomer(database, customerId);
   if (!user) return;
+  const [existing] = await database
+    .select({ stripeSubId: subscriptions.stripeSubId, tier: subscriptions.tier, status: subscriptions.status })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, user.id))
+    .limit(1);
+  if (existing && existing.stripeSubId !== subscription.id && isActiveBillingSubscriptionStatus(existing.status)) return;
+
   const priceId = subscriptionPriceId(subscription);
   const item = findItemByPriceId(priceId);
-  if (!item || item.kind !== 'subscription') return;
+  const tier = item?.kind === 'subscription' ? item.tier : existing?.tier ?? (user.plan !== 'free' ? user.plan : 'pro');
   await upsertSubscription(database, {
     userId: user.id,
     stripeSubId: subscription.id,
-    tier: item.tier,
+    tier,
     status: subscription.status,
     currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
   });
@@ -359,7 +381,7 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 }
 
 async function prepareStripeEvent(event: Stripe.Event): Promise<PreparedStripeEvent> {
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object as Stripe.Checkout.Session;
     const subscriptionId = objectId(session.subscription);
     return { event, subscription: subscriptionId ? await retrieveSubscription(subscriptionId) : null };
@@ -375,6 +397,7 @@ async function prepareStripeEvent(event: Stripe.Event): Promise<PreparedStripeEv
 async function handleStripeEvent(database: BillingDb, prepared: PreparedStripeEvent) {
   switch (prepared.event.type) {
     case 'checkout.session.completed':
+    case 'checkout.session.async_payment_succeeded':
       await handleCheckoutCompleted(database, prepared.event.data.object as Stripe.Checkout.Session, prepared.subscription);
       break;
     case 'invoice.paid':
@@ -391,17 +414,17 @@ async function handleStripeEvent(database: BillingDb, prepared: PreparedStripeEv
 }
 
 export async function processStripeEvent(event: Stripe.Event): Promise<{ processed: boolean }> {
-  const prepared = await prepareStripeEvent(event);
   return db.transaction(async (tx) => {
     const database = tx as unknown as BillingDb;
     const inserted = await database.insert(stripeEvents).values({
-      eventId: prepared.event.id,
-      type: prepared.event.type,
-      apiVersion: prepared.event.api_version ?? null,
-      payload: prepared.event as any,
+      eventId: event.id,
+      type: event.type,
+      apiVersion: event.api_version ?? null,
+      payload: event as any,
     }).onConflictDoNothing({ target: stripeEvents.eventId }).returning({ eventId: stripeEvents.eventId });
 
     if (inserted.length === 0) return { processed: false };
+    const prepared = await prepareStripeEvent(event);
     await handleStripeEvent(database, prepared);
     log.info('stripe_event_processed', { stripe_event_id: prepared.event.id, stripe_event_type: prepared.event.type });
     return { processed: true };

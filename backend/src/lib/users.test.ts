@@ -16,6 +16,7 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
       onValues?.(values);
       return chain;
     },
+    onConflictDoNothing: () => chain,
     then: (resolve: Parameters<Promise<unknown>['then']>[0], reject: Parameters<Promise<unknown>['then']>[1]) => promise().then(resolve, reject),
     catch: (reject: Parameters<Promise<unknown>['catch']>[0]) => promise().catch(reject),
   };

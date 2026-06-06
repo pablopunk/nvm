@@ -4,7 +4,13 @@ import { users, creditLedger } from '../db/schema';
 import { isDisposableEmail } from './disposable';
 import { env } from './env';
 
-export const MONTHLY_FREE_CREDITS = Number(env('MONTHLY_FREE_CREDITS') ?? 500);
+function readNonNegativeIntEnv(key: string, fallback: number): number {
+  const raw = env(key);
+  const parsed = raw && raw.trim() ? Number(raw) : fallback;
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export const MONTHLY_FREE_CREDITS = readNonNegativeIntEnv('MONTHLY_FREE_CREDITS', 500);
 
 function currentFreeCreditPeriod(now = new Date()): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -71,7 +77,7 @@ export async function ensureMonthlyFreeCredits(userId: string, now = new Date())
       kind: 'free',
       reason: 'grant_free_monthly',
       refId: period,
-    });
+    }).onConflictDoNothing({ target: [creditLedger.userId, creditLedger.reason, creditLedger.refId] });
   });
 }
 
