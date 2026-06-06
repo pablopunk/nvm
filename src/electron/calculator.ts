@@ -377,14 +377,15 @@ export function parseRateExpression(query: string): RateExpression | null {
   const rateUnit = '(?:\\s*/\\s*([a-zA-Z]+))?'
   const suffixMatch = expression.trim().match(new RegExp(`^${amount}\\s*${currency}${rateUnit}\\s+(?:in|to|as)\\s+${currency}$`, 'i'))
   const prefixMatch = expression.trim().match(new RegExp(`^${currency}\\s*${amount}${rateUnit}\\s+(?:in|to|as)\\s+${currency}$`, 'i'))
-  const sourceAlias = suffixMatch?.[2] || prefixMatch?.[1]
-  const amountValue = suffixMatch?.[1] || prefixMatch?.[2]
+  const defaultSuffixMatch = expression.trim().match(new RegExp(`^${amount}\\s*([$€])$`, 'i'))
+  const defaultPrefixMatch = expression.trim().match(new RegExp(`^([$€])\\s*${amount}$`, 'i'))
+  const sourceAlias = suffixMatch?.[2] || prefixMatch?.[1] || defaultSuffixMatch?.[2] || defaultPrefixMatch?.[1]
+  const amountValue = suffixMatch?.[1] || prefixMatch?.[2] || defaultSuffixMatch?.[1] || defaultPrefixMatch?.[2]
   const rateUnitValue = suffixMatch?.[3] || prefixMatch?.[3]
+  const sourceCurrency = sourceAlias ? currencyForAlias(sourceAlias) : null
   const targetAlias = suffixMatch?.[4] || prefixMatch?.[4]
-  if (!sourceAlias || !amountValue || !targetAlias) return null
-  const sourceCurrency = currencyForAlias(sourceAlias)
-  const targetCurrency = currencyForAlias(targetAlias)
-  if (!sourceCurrency || !targetCurrency || sourceCurrency === targetCurrency) return null
+  const targetCurrency = targetAlias ? currencyForAlias(targetAlias) : defaultTargetCurrencyFor(sourceCurrency)
+  if (!sourceCurrency || !targetCurrency || sourceCurrency === targetCurrency || !amountValue) return null
   const parsedAmount = parseAmountWithSuffix(amountValue)
   if (parsedAmount === null) return null
   return {
@@ -555,6 +556,12 @@ function currencyForAlias(alias: string) {
   const normalized = normalizeCurrencyAlias(alias)
   if (/^[a-z]{3}$/.test(normalized)) return normalized.toUpperCase()
   return CURRENCY_BY_ALIAS.get(normalized) || null
+}
+
+function defaultTargetCurrencyFor(sourceCurrency: string | null) {
+  if (sourceCurrency === 'USD') return 'EUR'
+  if (sourceCurrency === 'EUR') return 'USD'
+  return null
 }
 
 function normalizeCurrencyAlias(alias: string) {

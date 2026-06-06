@@ -105,6 +105,11 @@ test('parses and formats cached fiat rates', () => {
   const hourly = parseRateExpression('8 dollars/hour in gbp')
   assert.deepEqual(hourly && { amount: hourly.amount, sourceCurrency: hourly.sourceCurrency, targetCurrency: hourly.targetCurrency, rateUnit: hourly.rateUnit }, { amount: 8, sourceCurrency: 'USD', targetCurrency: 'GBP', rateUnit: 'hour' })
   assert.equal(calculateRateResult('8 dollars/hour in gbp', hourly!, quote)?.raw, '6.4 GBP/hour')
+
+  assert.deepEqual(parseRateExpression('10 $') && { amount: parseRateExpression('10 $')!.amount, sourceCurrency: parseRateExpression('10 $')!.sourceCurrency, targetCurrency: parseRateExpression('10 $')!.targetCurrency }, { amount: 10, sourceCurrency: 'USD', targetCurrency: 'EUR' })
+  assert.deepEqual(parseRateExpression('$10') && { amount: parseRateExpression('$10')!.amount, sourceCurrency: parseRateExpression('$10')!.sourceCurrency, targetCurrency: parseRateExpression('$10')!.targetCurrency }, { amount: 10, sourceCurrency: 'USD', targetCurrency: 'EUR' })
+  assert.deepEqual(parseRateExpression('10 €') && { amount: parseRateExpression('10 €')!.amount, sourceCurrency: parseRateExpression('10 €')!.sourceCurrency, targetCurrency: parseRateExpression('10 €')!.targetCurrency }, { amount: 10, sourceCurrency: 'EUR', targetCurrency: 'USD' })
+  assert.deepEqual(parseRateExpression('€10') && { amount: parseRateExpression('€10')!.amount, sourceCurrency: parseRateExpression('€10')!.sourceCurrency, targetCurrency: parseRateExpression('€10')!.targetCurrency }, { amount: 10, sourceCurrency: 'EUR', targetCurrency: 'USD' })
 })
 
 test('keeps compatibility wrapper raw and ungrouped', () => {
