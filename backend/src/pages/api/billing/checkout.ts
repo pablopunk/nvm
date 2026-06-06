@@ -26,7 +26,10 @@ export const POST: APIRoute = async ({ request }) => {
       return Response.json({ error: { type: 'billing_not_configured', message: error.message } }, { status: 503 });
     }
     if (error instanceof BillingEligibilityError) {
-      return Response.json({ error: { type: error.type, message: error.message } }, { status: 403 });
+      return Response.json(
+        { error: { type: error.type, message: error.message } },
+        { status: error.type === 'already_subscribed' ? 409 : 403 },
+      );
     }
     throw error;
   }

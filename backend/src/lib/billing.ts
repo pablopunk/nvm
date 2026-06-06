@@ -39,7 +39,7 @@ export class BillingConfigError extends Error {
 }
 
 export class BillingEligibilityError extends Error {
-  constructor(public type: 'top_up_requires_subscription', message: string) {
+  constructor(public type: 'top_up_requires_subscription' | 'already_subscribed', message: string) {
     super(message);
     this.name = 'BillingEligibilityError';
   }
@@ -152,7 +152,11 @@ async function userHasActiveSubscription(database: BillingDb, userId: string): P
 export async function createBillingCheckout(input: { user: typeof users.$inferSelect; kind: BillingKind; priceId?: string; tier?: string }) {
   const item = findCatalogItem(input);
   if (!item) throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
-  if (item.kind === 'top_up' && !(await userHasActiveSubscription(db, input.user.id))) {
+  const hasActiveSubscription = await userHasActiveSubscription(db, input.user.id);
+  if (item.kind === 'subscription' && hasActiveSubscription) {
+    throw new BillingEligibilityError('already_subscribed', 'You already have an active Pro subscription. Manage it from billing settings.');
+  }
+  if (item.kind === 'top_up' && !hasActiveSubscription) {
     throw new BillingEligibilityError('top_up_requires_subscription', 'Top-ups are available after subscribing to Pro.');
   }
   const customer = await getOrCreateStripeCustomer(input.user);

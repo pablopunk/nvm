@@ -20,7 +20,8 @@ const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
 const isAdmin = user?.role === 'admin';
-const canBuyTopUps = subscription ? isActiveBillingSubscriptionStatus(subscription.status) : false;
+const hasActiveSubscription = subscription ? isActiveBillingSubscriptionStatus(subscription.status) : false;
+const canBuyTopUps = hasActiveSubscription;
 const billingState = Astro.url.searchParams.get('billing');
 ---
 <Layout title="Nevermind · Profile">
@@ -56,7 +57,7 @@ const billingState = Astro.url.searchParams.get('billing');
     {billingState === 'success' && <p class="status status--ok">Billing updated. Credits may take a moment to appear.</p>}
     {billingState === 'canceled' && <p class="status">Checkout canceled.</p>}
     <div class="row">
-      {catalog.subscriptions.map((item) => (
+      {!hasActiveSubscription && catalog.subscriptions.map((item) => (
         <button class="button button--primary billing-checkout" data-kind="subscription" data-price-id={item.priceId}>
           Subscribe {item.tier} · {item.credits} credits/mo
         </button>
@@ -67,7 +68,11 @@ const billingState = Astro.url.searchParams.get('billing');
         </button>
       ))}
       {!canBuyTopUps && catalog.topUps.length > 0 && <span class="muted">Top-ups unlock after subscribing to Pro.</span>}
-      {user?.stripeCustomerId && <button class="button" id="manage-billing" type="button">Manage billing</button>}
+      {user?.stripeCustomerId && (
+        <button class={hasActiveSubscription ? 'button button--primary' : 'button'} id="manage-billing" type="button">
+          {hasActiveSubscription ? 'Manage subscription' : 'Manage billing'}
+        </button>
+      )}
       {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span class="muted">Billing is not configured yet.</span>}
     </div>
     <p id="billing-status" class="status" style="margin:0"></p>

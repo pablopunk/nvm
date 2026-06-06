@@ -217,6 +217,16 @@ test('subscription deletion updates status and plan without revoking paid credit
   assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'free'), true);
 });
 
+test('subscription checkout rejects already active subscribers', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  installDb(createFakeBillingDb({ selects: [[{ status: 'active' }]] }));
+
+  await assert.rejects(
+    () => createBillingCheckout({ user, kind: 'subscription', priceId: 'price_pro' }),
+    (error) => error instanceof BillingEligibilityError && error.type === 'already_subscribed',
+  );
+});
+
 test('top-up checkout requires an active subscription', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installDb(createFakeBillingDb({ selects: [[]] }));
