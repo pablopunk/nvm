@@ -580,26 +580,28 @@ export function App() {
   }, [pendingShortcutReveal, extensionView])
 
   useEffect(() => {
-    const isAiChat = Boolean(extensionView?.aiChat)
+    const visibleAiChat = extensionView?.aiChat ? extensionView : [...siblingViews].reverse().find((view) => view.aiChat)
+    const isAiChat = Boolean(visibleAiChat)
     const isLarge = extensionView?.size === 'large' || extensionView?.presentation === 'preview'
     const isActionPanelOpen = Boolean(actionSubmenuFor || extensionItemOptionsFor)
     aiChatOpenRef.current = isAiChat
-    aiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
+    aiChatIdRef.current = visibleAiChat?.chatId
     const previousAiChatId = lastVisibleAiChatIdRef.current
-    if (previousAiChatId && (!isAiChat || previousAiChatId !== extensionView?.chatId)) void window.nvm.aiChatExited(previousAiChatId)
-    lastVisibleAiChatIdRef.current = extensionView?.aiChat ? extensionView.chatId : undefined
+    if (previousAiChatId && (!visibleAiChat || previousAiChatId !== visibleAiChat.chatId)) void window.nvm.aiChatExited(previousAiChatId)
+    lastVisibleAiChatIdRef.current = visibleAiChat?.chatId
     const mode: PaletteMode = previewFor || (isLarge && !isActionPanelOpen) ? 'preview' : siblingViews.length > 0 ? 'stacked' : isAiChat ? 'ai-chat' : 'default'
     if (paletteModeRef.current !== mode) {
       paletteModeRef.current = mode
       window.nvm.setPaletteMode(mode)
     }
-  }, [actionSubmenuFor, extensionItemOptionsFor, extensionView, previewFor, siblingViews.length])
+  }, [actionSubmenuFor, extensionItemOptionsFor, extensionView, previewFor, siblingViews])
 
   useEffect(() => {
-    if (extensionView?.aiChat) {
+    if (!extensionView?.aiChat && !siblingViews.some((view) => view.aiChat)) return
+    requestAnimationFrame(() => {
       aiChat.messagesRef.current?.scrollTo({ top: aiChat.messagesRef.current.scrollHeight })
-    }
-  }, [aiChat.messages, aiChat.busy, extensionView])
+    })
+  }, [aiChat.messages, aiChat.busy, extensionView, siblingViews])
 
   useEffect(() => {
     if (!shortcutFor) return
@@ -1566,7 +1568,7 @@ export function App() {
       renderEmpty={renderViewEmpty}
       runDefaultAction={runDefaultViewAction}
       runAction={runViewAction}
-      sendAiPrompt={sendAiPrompt}
+      sendAiPrompt={(message) => sendAiPrompt(message, view.chatId)}
       abortAiChat={window.nvm.abortAiChat}
       dragPathForItem={dragPathForItem}
       startItemDrag={startItemDrag}
@@ -1803,7 +1805,7 @@ export function App() {
         </div>
 
         {siblingViews.map((sib, index) => (
-          <div key={`sibling-${index}-${sib.id || sib.title}`} className="siblingPane card inertSibling" aria-hidden="true">
+          <div key={`sibling-${index}-${sib.id || sib.title}`} className={`siblingPane card inertSibling siblingPane-${sib.type} ${sib.aiChat ? 'interactiveSibling siblingPane-aiChat' : ''}`} aria-hidden={sib.aiChat ? undefined : true}>
             <div className="siblingHeader">{sib.title}</div>
             <div className="siblingBody">{renderExtensionView(sib)}</div>
           </div>
