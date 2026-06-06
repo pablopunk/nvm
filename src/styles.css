@@ -1625,6 +1625,10 @@ kbd {
   overflow: visible;
 }
 
+.siblingPane.interactiveSibling {
+  pointer-events: auto;
+}
+
 .siblingPane.inertSibling .siblingHeader,
 .siblingPane.inertSibling .siblingBody {
   opacity: 0.82;
@@ -1653,6 +1657,20 @@ kbd {
 .siblingPane .siblingBody {
   max-height: 200px;
   overflow: hidden;
+}
+
+.siblingPane-aiChat .siblingBody {
+  max-height: none;
+  overflow: visible;
+}
+
+.siblingPane-aiChat .chatView {
+  height: clamp(260px, 34vh, 340px);
+  padding: 16px;
+}
+
+.siblingPane-aiChat .chatMessages {
+  overflow: auto;
 }
 
 .webviewSurface,
