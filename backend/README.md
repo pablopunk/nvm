@@ -38,3 +38,5 @@ Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
 ## Deploy
 
 Push to GitHub, import in Vercel, set env vars, point `nvm.fyi` + `api.nvm.fyi` at it.
+
+When working from a git worktree, Vercel CLI project links are not inherited because `.vercel/` is untracked. Copy or symlink `.vercel/` from the canonical checkout, or run `vercel link`, before Vercel env/deploy commands; never commit `.vercel/`.
