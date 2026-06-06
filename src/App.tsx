@@ -135,6 +135,22 @@ const SEARCH_PLACEHOLDERS = [
   'Make it happen.',
 ]
 
+const QUERY_HISTORY_STORAGE_KEY = 'nevermind.queryHistory'
+const QUERY_HISTORY_LIMIT = 100
+
+function storedQueryHistory() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(QUERY_HISTORY_STORAGE_KEY) || '[]')
+    return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean).slice(-QUERY_HISTORY_LIMIT) : []
+  } catch {
+    return []
+  }
+}
+
+function saveQueryHistory(history: string[]) {
+  window.localStorage.setItem(QUERY_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(-QUERY_HISTORY_LIMIT)))
+}
+
 function seedFormValuesFromView(view: ExtensionView | null) {
   if (view?.type !== 'form') return {}
   return Object.fromEntries((view.fields || []).map((field) => {
@@ -307,6 +323,10 @@ export function App() {
   const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined)
   const runningViewActionsRef = useRef(new Set<string>())
   const paletteModeRef = useRef<PaletteMode | null>(null)
+  const queryRef = useRef('')
+  const queryHistoryRef = useRef<string[]>([])
+  const queryHistoryIndexRef = useRef<number | null>(null)
+  const queryHistoryDraftRef = useRef('')
   const [query, setQuery] = useState('')
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
@@ -345,6 +365,8 @@ export function App() {
   }
   useEffect(() => { extensionViewRef.current = extensionView }, [extensionView])
   useEffect(() => { selectedValueRef.current = selectedValue }, [selectedValue])
+  useEffect(() => { queryRef.current = query }, [query])
+  useEffect(() => { queryHistoryRef.current = storedQueryHistory() }, [])
   useEffect(() => {
     markDebugPerformance('app.commit', {
       queryLength: query.length,
@@ -478,7 +500,7 @@ export function App() {
     const stopHidden = window.nvm.onHidden(() => {
       markDebugPerformance('palette.hidden', { aiChatOpen: aiChatOpenRef.current })
       const closedAiChatId = aiChatOpenRef.current ? aiChatIdRef.current : undefined
-      setQuery('')
+      setRootQuery('')
       setOptionsFor(null)
       setExtensionItemOptionsFor(null)
       setConfirmRemoveFor(null)
@@ -662,6 +684,54 @@ export function App() {
   const activeSearchScope = !shortcutFor && isFilterableChildOpen
     ? `child:${actionSubmenuFor?.title || confirmRemoveFor?.id || confirmViewActionFor?.title || extensionItemOptionsFor?.id || optionsFor?.id || aliasFor?.id || extensionView?.id || extensionView?.title || shortcutManagerOpen}`
     : !isChildOpen ? 'root' : ''
+
+  function setRootQuery(value: string) {
+    queryHistoryIndexRef.current = null
+    queryHistoryDraftRef.current = ''
+    setQuery(value)
+  }
+
+  function rememberRootQuery(value = queryRef.current) {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    const history = [...queryHistoryRef.current.filter((item) => item !== trimmed), trimmed].slice(-QUERY_HISTORY_LIMIT)
+    queryHistoryRef.current = history
+    saveQueryHistory(history)
+    queryHistoryIndexRef.current = null
+    queryHistoryDraftRef.current = ''
+  }
+
+  function rootSelectionIsAtTop() {
+    return !actions.length || selectedValueRef.current === actions[0]?.id
+  }
+
+  function navigateRootQueryHistory(direction: -1 | 1) {
+    const history = queryHistoryRef.current
+    if (!history.length) return direction < 0 && rootSelectionIsAtTop()
+    if (direction < 0 && !rootSelectionIsAtTop()) return false
+    let index = queryHistoryIndexRef.current
+    if (index === null) {
+      if (direction > 0) return false
+      queryHistoryDraftRef.current = queryRef.current
+      index = history.length - 1
+    } else {
+      index += direction
+    }
+    if (index < 0) index = 0
+    if (index >= history.length) {
+      queryHistoryIndexRef.current = null
+      setQuery(queryHistoryDraftRef.current)
+      return true
+    }
+    queryHistoryIndexRef.current = index
+    setQuery(history[index])
+    requestAnimationFrame(() => {
+      const input = inputRef.current
+      input?.focus()
+      input?.setSelectionRange(input.value.length, input.value.length)
+    })
+    return true
+  }
 
   useEffect(() => {
     if (!isFilterableChildOpen && !shortcutFor) return
@@ -849,6 +919,24 @@ export function App() {
       return
     }
     const nativeAction = action.type === 'nativeAction' ? action.nativeAction as Action | { kind?: string; action?: Action; actionId?: string } | undefined : undefined
+    if (action.type === 'setSearchQuery') {
+      const nextQuery = String(action.query ?? action.text ?? '')
+      setRootQuery(nextQuery)
+      setChildQuery('')
+      setOptionsFor(null)
+      setExtensionItemOptionsFor(null)
+      setActionSubmenuFor(null)
+      setPreviewFor(null)
+      if (extensionView) extensionNavigation.clearView()
+      setSiblingViews([])
+      requestAnimationFrame(() => {
+        const input = inputRef.current
+        input?.focus()
+        if (action.select !== false) input?.select()
+        else input?.setSelectionRange(nextQuery.length, nextQuery.length)
+      })
+      return
+    }
     if (action.type === 'recordShortcut') {
       const targetAction = action.action as Action | undefined
       const target = targetAction?.id === PALETTE_HOTKEY_ACTION_ID ? PALETTE_HOTKEY_PSEUDO_ACTION : targetAction?.id === HYPER_KEY_ACTION_ID ? HYPER_KEY_PSEUDO_ACTION : targetAction
@@ -1484,6 +1572,7 @@ export function App() {
   async function runCommandItem(item: CommandItem) {
     const action = primaryCommandAction(item)
     if (!action) return
+    if (!isChildOpen) rememberRootQuery()
     await runViewAction(action)
   }
 
@@ -1625,6 +1714,10 @@ export function App() {
     return true
   }
 
+  function rootSearchQueryAction(action: Action | null | undefined, title: 'Continue Calculation' | 'Swap Units') {
+    return actionsFromPanel(action?.actionPanel, []).find((candidate) => candidate.type === 'setSearchQuery' && candidate.title === title)
+  }
+
   function moveGridSelection(key: string) {
     if (extensionView?.type !== 'grid' || confirmRemoveFor || extensionItemOptionsFor || optionsFor || previewFor) return false
     const items = filterExtensionItems(allViewItems(extensionView))
@@ -1696,6 +1789,22 @@ export function App() {
       event.preventDefault()
       return
     }
+    if (!isChildOpen && selectedAction && normalizedShortcut(localAccelerator) === 'command+enter') {
+      const action = rootSearchQueryAction(selectedAction, 'Continue Calculation')
+      if (action) {
+        event.preventDefault()
+        runViewAction(action)
+        return
+      }
+    }
+    if (!isChildOpen && selectedAction && normalizedShortcut(localAccelerator) === 'command+shift+enter') {
+      const action = rootSearchQueryAction(selectedAction, 'Swap Units') || rootSearchQueryAction(selectedAction, 'Continue Calculation')
+      if (action) {
+        event.preventDefault()
+        runViewAction(action)
+        return
+      }
+    }
     if (!isChildOpen && normalizedShortcut(localAccelerator) === 'command+y' && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.text)) {
       event.preventDefault()
       setPreviewFor(selectedAction)
@@ -1705,6 +1814,15 @@ export function App() {
     if (!isChildOpen && normalizedShortcut(localAccelerator) === 'command+y' && selectedAction?.filePath) {
       event.preventDefault()
       runViewAction({ type: 'quickLook', title: 'Preview File', path: selectedAction.filePath })
+      return
+    }
+
+    if (!isChildOpen && event.key === 'ArrowUp' && navigateRootQueryHistory(-1)) {
+      event.preventDefault()
+      return
+    }
+    if (!isChildOpen && event.key === 'ArrowDown' && queryHistoryIndexRef.current !== null && navigateRootQueryHistory(1)) {
+      event.preventDefault()
       return
     }
 
@@ -1809,6 +1927,7 @@ export function App() {
 
     if (!isChildOpen && event.key === 'Tab' && query) {
       event.preventDefault()
+      rememberRootQuery(query)
       if (createAction) {
         run(createAction)
       } else {
@@ -1838,7 +1957,7 @@ export function App() {
             onValueChange={(value) => {
               if (shortcutFor) return
               if (isFilterableChildOpen) setChildQuery(value)
-              else if (!isChildOpen) setQuery(value)
+              else if (!isChildOpen) setRootQuery(value)
             }}
             placeholder={placeholder}
             readOnly={!shortcutFor && !isFilterableChildOpen && isChildOpen}
