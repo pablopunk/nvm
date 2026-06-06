@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/client';
 import { creditLedger, usage } from '../db/schema';
-import {
-  getActiveModelId,
-  getFreeModelId,
-  getActiveProvider,
-  ModelNotConfiguredError,
-} from './settings';
+import { getModelRoute, ModelNotConfiguredError } from './settings';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
@@ -109,7 +104,7 @@ type ResolvedRouting = {
   activeModelId: string;
   costRow: ModelCost;
   kind: 'free' | 'paid';
-  balanceTotal: number;
+  balanceAvailable: number;
   upstreamBaseUrl: string;
   upstreamApiKey: string;
 };
@@ -130,11 +125,13 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     );
   }
 
-  const kind: 'free' | 'paid' = balances.free > 0 ? 'free' : 'paid';
-  const provider = await getActiveProvider();
+  const kind: 'free' | 'paid' = balances.paid > 0 ? 'paid' : 'free';
+  let provider: string;
   let activeModelId: string;
   try {
-    activeModelId = kind === 'free' ? await getFreeModelId() : await getActiveModelId();
+    const route = await getModelRoute(kind);
+    provider = route.provider;
+    activeModelId = route.modelId;
   } catch (err) {
     if (err instanceof ModelNotConfiguredError) {
       return Response.json(
@@ -173,7 +170,7 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     activeModelId,
     costRow,
     kind,
-    balanceTotal: balances.total,
+    balanceAvailable: kind === 'paid' ? balances.paid : balances.free,
     upstreamBaseUrl: upstream.baseUrl,
     upstreamApiKey: upstream.apiKey,
   };
@@ -256,9 +253,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       ), requestId);
     }
     const estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
-    if (estimatedCredits > routing.balanceTotal) {
+    if (estimatedCredits > routing.balanceAvailable) {
       return withRequestId(Response.json(
-        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceTotal, dashboard_url: DASHBOARD_URL } },
+        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceAvailable, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
       ), requestId);
     }
