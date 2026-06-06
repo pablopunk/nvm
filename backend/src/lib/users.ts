@@ -1,9 +1,20 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { users, creditLedger } from '../db/schema';
 import { isDisposableEmail } from './disposable';
+import { env } from './env';
 
-const FREE_SIGNUP_GRANT = 100;
+function readNonNegativeIntEnv(key: string, fallback: number): number {
+  const raw = env(key);
+  const parsed = raw && raw.trim() ? Number(raw) : fallback;
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export const MONTHLY_FREE_CREDITS = readNonNegativeIntEnv('MONTHLY_FREE_CREDITS', 500);
+
+function currentFreeCreditPeriod(now = new Date()): string {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
 
 export class DisposableEmailError extends Error {
   constructor(email: string) {
@@ -33,12 +44,40 @@ export async function upsertUserWithFreeGrant(input: {
 
     await tx.insert(creditLedger).values({
       userId: created.id,
-      delta: FREE_SIGNUP_GRANT,
+      delta: MONTHLY_FREE_CREDITS,
       kind: 'free',
-      reason: 'grant_signup',
+      reason: 'grant_free_monthly',
+      refId: currentFreeCreditPeriod(),
     });
 
     return created;
+  });
+}
+
+export async function ensureMonthlyFreeCredits(userId: string, now = new Date()): Promise<void> {
+  const period = currentFreeCreditPeriod(now);
+  await db.transaction(async (tx) => {
+    const existingGrant = await tx
+      .select({ id: creditLedger.id })
+      .from(creditLedger)
+      .where(and(eq(creditLedger.userId, userId), eq(creditLedger.reason, 'grant_free_monthly'), eq(creditLedger.refId, period)))
+      .limit(1);
+    if (existingGrant.length > 0) return;
+
+    const [row] = await tx
+      .select({
+        free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
+      })
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, userId));
+    const delta = Math.max(0, MONTHLY_FREE_CREDITS - (row?.free ?? 0));
+    await tx.insert(creditLedger).values({
+      userId,
+      delta,
+      kind: 'free',
+      reason: 'grant_free_monthly',
+      refId: period,
+    }).onConflictDoNothing({ target: [creditLedger.userId, creditLedger.reason, creditLedger.refId] });
   });
 }
 

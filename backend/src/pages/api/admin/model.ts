@@ -1,46 +1,63 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/admin';
 import {
-  getActiveModelId,
-  getActiveProvider,
-  getFreeModelId,
-  setActiveModelId,
-  setFreeModelId,
+  getModelRoute,
+  listKnownProviders,
+  modelRouteToRef,
+  parseModelRouteRef,
+  setModelRoute,
   ModelNotConfiguredError,
+  type ModelTier,
 } from '../../../lib/settings';
 import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
 import { recordAudit } from '../../../lib/audit';
 
+async function listModelRefs() {
+  const providers = listKnownProviders();
+  const groups = await Promise.all(providers.map(async (provider) => {
+    const models = await listModelsForProvider(provider);
+    return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
+  }));
+  return groups.flat();
+}
+
+async function safeRoute(tier: ModelTier) {
+  try {
+    const route = await getModelRoute(tier);
+    return { ...route, ref: modelRouteToRef(route) };
+  } catch (err) {
+    if (err instanceof ModelNotConfiguredError) return null;
+    throw err;
+  }
+}
+
 export const GET: APIRoute = async ({ request }) => {
   if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
-  const provider = await getActiveProvider();
-  const safe = async (fn: () => Promise<string>) => {
-    try { return await fn(); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
-  };
   return Response.json({
-    active: await safe(getActiveModelId),
-    free: await safe(getFreeModelId),
-    models: await listModelsForProvider(provider),
+    paid: await safeRoute('paid'),
+    free: await safeRoute('free'),
+    models: await listModelRefs(),
   });
 };
 
 export const PUT: APIRoute = async ({ request }) => {
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as { tier?: 'paid' | 'free'; model?: string };
-  if (!body.model) return new Response('Missing model', { status: 400 });
-  const provider = await getActiveProvider();
-  const cost = await lookupModelCost(provider, body.model);
-  if (!cost) return new Response(`No pricing for ${provider}/${body.model}`, { status: 400 });
-  const tier: 'free' | 'paid' = body.tier === 'free' ? 'free' : 'paid';
-  if (tier === 'free') await setFreeModelId(body.model);
-  else await setActiveModelId(body.model);
+  const body = (await request.json().catch(() => ({}))) as { tier?: ModelTier; model?: string; modelRef?: string };
+  const tier: ModelTier = body.tier === 'free' ? 'free' : 'paid';
+  const route = parseModelRouteRef(body.modelRef ?? body.model ?? '');
+  if (!route) return new Response('Missing or invalid modelRef', { status: 400 });
+
+  const cost = await lookupModelCost(route.provider, route.modelId);
+  if (!cost) return new Response(`No pricing for ${route.provider}/${route.modelId}`, { status: 400 });
+
+  await setModelRoute(tier, route);
   await recordAudit({
     actorUserId: actor.id,
     action: 'model.changed',
     targetType: 'model',
-    targetId: body.model,
-    meta: { tier, provider },
+    targetId: modelRouteToRef(route),
+    meta: { tier, provider: route.provider },
   });
   return Response.json({ ok: true });
 };

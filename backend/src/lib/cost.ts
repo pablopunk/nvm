@@ -3,8 +3,14 @@ export { lookupModelCost } from './pricing';
 import { env } from './env';
 import type { ModelCost } from './pricing';
 
-export const CREDIT_USD = Number(env('CREDIT_USD') ?? 0.0001);
-export const MARKUP = Number(env('CREDIT_MARKUP') ?? 1.2);
+function readPositiveNumberEnv(key: string, fallback: number): number {
+  const raw = env(key);
+  const parsed = raw && raw.trim() ? Number(raw) : fallback;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export const CREDIT_USD = readPositiveNumberEnv('CREDIT_USD', 0.01);
+export const MARKUP = readPositiveNumberEnv('CREDIT_MARKUP', 5);
 
 export function computeUsdCost(cost: ModelCost, inputTokens: number, outputTokens: number): number {
   return (inputTokens * cost.inputUsdPerMtok + outputTokens * cost.outputUsdPerMtok) / 1_000_000;

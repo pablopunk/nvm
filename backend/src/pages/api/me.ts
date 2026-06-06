@@ -3,7 +3,7 @@ import { eq, desc } from 'drizzle-orm';
 import { getSessionFromCookies } from '../../lib/workos';
 import { db } from '../../db/client';
 import { users, usage } from '../../db/schema';
-import { getBalance } from '../../lib/users';
+import { ensureMonthlyFreeCredits, getBalance } from '../../lib/users';
 
 export const GET: APIRoute = async ({ request }) => {
   const session = await getSessionFromCookies(request.headers.get('cookie'));
@@ -15,6 +15,7 @@ export const GET: APIRoute = async ({ request }) => {
     .where(eq(users.workosUserId, session.user.id))
     .limit(1);
   if (!user) return new Response('Unknown user', { status: 404 });
+  await ensureMonthlyFreeCredits(user.id);
 
   const [balance, recentUsage] = await Promise.all([
     getBalance(user.id),

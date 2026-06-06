@@ -2,21 +2,23 @@
 import Layout from '../layouts/Layout.astro';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { getActiveModelId, getFreeModelId, getActiveProvider, listKnownProviders, ModelNotConfiguredError } from '../lib/settings';
+import { getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError } from '../lib/settings';
 import { listModelsForProvider } from '../lib/pricing';
+import { CREDIT_USD } from '../lib/cost';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-const safeModel = async (fn: () => Promise<string>) => {
-  try { return await fn(); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
+const safeModelRef = async (tier: 'free' | 'paid') => {
+  try { return modelRouteToRef(await getModelRoute(tier)); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
 };
-const activeModel = await safeModel(getActiveModelId);
-const freeModel = await safeModel(getFreeModelId);
-const activeProvider = await getActiveProvider();
-const providers = listKnownProviders();
-const models = await listModelsForProvider(activeProvider);
+const activeModelRef = await safeModelRef('paid');
+const freeModelRef = await safeModelRef('free');
+const modelOptions = (await Promise.all(listKnownProviders().map(async (provider) => {
+  const models = await listModelsForProvider(provider);
+  return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
+}))).flat();
 ---
 <Layout title="Nevermind · Admin" width="wide">
   <Combobox />
@@ -29,15 +31,16 @@ const models = await listModelsForProvider(activeProvider);
 
   <h1>Admin</h1>
   <p class="muted">Provider routing, models, and usage.</p>
+  <span id="admin-config" data-credit-usd={CREDIT_USD} hidden></span>
 
   <div class="section card">
     <h3>Models</h3>
-    <p class="muted">The gateway routes by which credit pool the user is drawing from.</p>
+    <p class="muted">Each selector includes provider and model. Free users use the free route; users with paid credits use the pro route immediately.</p>
     <div class="stack">
       <div class="row">
-        <label class="field field--inline">Paid →
+        <label class="field field--inline">Pro →
           <select id="model-select-paid" class="input combo autosave" data-tier="paid">
-            {models.map((id) => <option value={id} selected={id === activeModel}>{id}</option>)}
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === activeModelRef}>{m.ref}</option>)}
           </select>
         </label>
         <span class="status" data-status-for="model-select-paid"></span>
@@ -45,24 +48,11 @@ const models = await listModelsForProvider(activeProvider);
       <div class="row">
         <label class="field field--inline">Free →
           <select id="model-select-free" class="input combo autosave" data-tier="free">
-            {models.map((id) => <option value={id} selected={id === freeModel}>{id}</option>)}
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeModelRef}>{m.ref}</option>)}
           </select>
         </label>
         <span class="status" data-status-for="model-select-free"></span>
       </div>
-    </div>
-  </div>
-
-  <div class="section card">
-    <h3>Upstream provider</h3>
-    <p class="muted">Pricing is fetched from <a href="https://models.dev" target="_blank">models.dev</a> for the active provider and multiplied by the markup.</p>
-    <div class="row">
-      <label class="field field--inline">Provider
-        <select id="provider-select" class="input combo autosave-provider">
-          {providers.map((p) => <option value={p} selected={p === activeProvider}>{p}</option>)}
-        </select>
-      </label>
-      <span class="status" data-status-for="provider-select"></span>
     </div>
   </div>
 
@@ -82,7 +72,7 @@ const models = await listModelsForProvider(activeProvider);
     <div style="margin-top:16px;" class="card">
       <h3>Usage by model</h3>
       <table class="table" id="by-model">
-        <thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Input tok</th><th>Output tok</th><th>Credits</th><th>Real USD</th><th>Margin $</th></tr></thead>
+        <thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Input tok</th><th>Output tok</th><th>Credits</th><th>Raw cost</th><th>Retail value</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -118,12 +108,11 @@ const models = await listModelsForProvider(activeProvider);
         <div class="stat"><div class="v">${s.credits.spent} / ${s.credits.granted}</div><div class="l">Credits spent / granted</div></div>
       `;
       const tbody = document.querySelector('#by-model tbody');
-      const creditUsd = 0.0001;
+      const creditUsd = Number(document.getElementById('admin-config')?.dataset.creditUsd || '0.01');
       tbody.innerHTML = s.byModel.map((r) => {
         const usd = Number(r.upstreamCostMicrocents || 0) / 1e8;
         const collectedUsd = (r.costCredits || 0) * creditUsd;
-        const margin = collectedUsd - usd;
-        return `<tr><td>${r.provider || '—'}</td><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${margin.toFixed(4)}</td></tr>`;
+        return `<tr><td>${r.provider || '—'}</td><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
       }).join('') || '<tr><td colspan="8" class="muted">No usage yet</td></tr>';
     }
     function statusEl(selectId) {
@@ -159,13 +148,7 @@ const models = await listModelsForProvider(activeProvider);
       document.querySelectorAll('.autosave').forEach((el) => {
         el.addEventListener('change', () => autosave(el, (model) => fetch('/api/admin/model', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, tier: el.dataset.tier }),
-        })));
-      });
-      document.querySelectorAll('.autosave-provider').forEach((el) => {
-        el.addEventListener('change', () => autosave(el, (provider) => fetch('/api/admin/provider', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider }),
+          body: JSON.stringify({ modelRef: model, tier: el.dataset.tier }),
         })));
       });
     }

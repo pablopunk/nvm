@@ -10,7 +10,7 @@ Read `axiom.md` first: Vercel production runtime logs drain to Axiom.
 
 ## Deployment/build fallback
 
-Use Vercel API events when you need deployment/build metadata or Axiom is unavailable. If `backend/.vercel/project.json` exists, read project/org ids from it but never commit it.
+Use Vercel API events when you need deployment/build metadata or Axiom is unavailable. If `backend/.vercel/project.json` exists, read project/org ids from it but never commit it. If the installed global `vercel` CLI is rejected as outdated, run the latest CLI ephemerally with `mise exec -- pnpm dlx vercel@latest ...` instead of changing the global install.
 
 ```bash
 TOKEN=$(node -e 'const fs=require("fs"),os=require("os"),path=require("path"); const ps=[path.join(os.homedir(),"Library/Application Support/com.vercel.cli/auth.json"),path.join(os.homedir(),".local/share/com.vercel.cli/auth.json")]; for (const p of ps) if (fs.existsSync(p)) { console.log(JSON.parse(fs.readFileSync(p,"utf8")).token); process.exit(0) } process.exit(1)')

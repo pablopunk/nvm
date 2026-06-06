@@ -79,12 +79,15 @@ function installModelsDevFetch() {
   };
 }
 
-function proxySelects(options: { free?: number; paid?: number; model?: string | null } = {}) {
+function proxySelects(options: { free?: number; paid?: number; model?: string | null; routeProvider?: string } = {}) {
+  const modelRoute = options.model === null ? [] : [{ value: JSON.stringify({ provider: options.routeProvider ?? 'opencode_zen', modelId: options.model ?? 'gemini-3-flash' }) }];
   return [
     [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+    [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
+    modelRoute,
     [],
-    options.model === null ? [] : [{ value: options.model ?? 'gemini-3-flash' }],
+    [],
   ];
 }
 
@@ -297,7 +300,7 @@ test('google proxy records split streaming usage metadata', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 0 }) }));
+  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
@@ -318,6 +321,7 @@ test('google proxy records split streaming usage metadata', async () => {
   assert.equal(response.status, 200);
   assert.equal(text, splitGoogleUsageStream.join(''));
   assert.equal(db.insertedValues.length, 2);
+  assert.equal((db.insertedValues[0] as any).kind, 'paid');
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
   assert.equal((db.insertedValues.at(-1) as any).costCredits, 1);

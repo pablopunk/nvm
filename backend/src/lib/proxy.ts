@@ -1,13 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/client';
 import { creditLedger, usage } from '../db/schema';
-import {
-  getActiveModelId,
-  getFreeModelId,
-  getActiveProvider,
-  ModelNotConfiguredError,
-} from './settings';
-import { getBalances } from './users';
+import { getModelRoute, ModelNotConfiguredError } from './settings';
+import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
   computeUsdCost,
@@ -109,31 +104,21 @@ type ResolvedRouting = {
   activeModelId: string;
   costRow: ModelCost;
   kind: 'free' | 'paid';
-  balanceTotal: number;
+  balanceAvailable: number;
+  freeBalanceAvailable: number;
   upstreamBaseUrl: string;
   upstreamApiKey: string;
 };
 
-async function resolveRouting(request: Request, headerName: PatHeaderName): Promise<Response | ResolvedRouting> {
-  if (!extractPatFromHeaders(request, headerName)) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-  const user = await getUserFromHeaders(request, headerName);
-  if (!user) return new Response('Unauthorized', { status: 401 });
+type ModelRouting = Pick<ResolvedRouting, 'provider' | 'activeModelId' | 'costRow' | 'upstreamBaseUrl' | 'upstreamApiKey'>;
 
-  const balances = await getBalances(user.id);
-  if (balances.total <= 0) {
-    return Response.json(
-      { error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: DASHBOARD_URL } },
-      { status: 402 },
-    );
-  }
-
-  const kind: 'free' | 'paid' = balances.free > 0 ? 'free' : 'paid';
-  const provider = await getActiveProvider();
+async function resolveModelRouting(kind: 'free' | 'paid'): Promise<Response | ModelRouting> {
+  let provider: string;
   let activeModelId: string;
   try {
-    activeModelId = kind === 'free' ? await getFreeModelId() : await getActiveModelId();
+    const route = await getModelRoute(kind);
+    provider = route.provider;
+    activeModelId = route.modelId;
   } catch (err) {
     if (err instanceof ModelNotConfiguredError) {
       return Response.json(
@@ -153,9 +138,9 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     );
   }
 
-  let upstream;
   try {
-    upstream = getUpstreamConfig(provider);
+    const upstream = getUpstreamConfig(provider);
+    return { provider, activeModelId, costRow, upstreamBaseUrl: upstream.baseUrl, upstreamApiKey: upstream.apiKey };
   } catch (err) {
     if (err instanceof UpstreamConfigError) {
       return Response.json(
@@ -165,16 +150,34 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     }
     throw err;
   }
+}
+
+async function resolveRouting(request: Request, headerName: PatHeaderName): Promise<Response | ResolvedRouting> {
+  if (!extractPatFromHeaders(request, headerName)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+  const user = await getUserFromHeaders(request, headerName);
+  if (!user) return new Response('Unauthorized', { status: 401 });
+  await ensureMonthlyFreeCredits(user.id);
+
+  const balances = await getBalances(user.id);
+  if (balances.total <= 0) {
+    return Response.json(
+      { error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: DASHBOARD_URL } },
+      { status: 402 },
+    );
+  }
+
+  const kind: 'free' | 'paid' = balances.paid > 0 ? 'paid' : 'free';
+  const modelRouting = await resolveModelRouting(kind);
+  if (modelRouting instanceof Response) return modelRouting;
 
   return {
     user,
-    provider,
-    activeModelId,
-    costRow,
+    ...modelRouting,
     kind,
-    balanceTotal: balances.total,
-    upstreamBaseUrl: upstream.baseUrl,
-    upstreamApiKey: upstream.apiKey,
+    balanceAvailable: kind === 'paid' ? balances.paid : balances.free,
+    freeBalanceAvailable: balances.free,
   };
 }
 
@@ -229,7 +232,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   Sentry.getCurrentScope().setTag('request_id', requestId);
   if (client.version) Sentry.getCurrentScope().setTag('client_version', client.version);
   if (client.apiVersion) Sentry.getCurrentScope().setTag('client_api_version', String(client.apiVersion));
-  const routing = await resolveRouting(cfg.request, cfg.authHeaderName);
+  let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
 
   Sentry.getCurrentScope().setUser({ id: routing.user.id });
@@ -238,11 +241,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope, client_version: client.version, client_api_version: client.apiVersion });
     return withRequestId(tooManyRequests(rateDecision), requestId);
   }
-
-  const upstreamUrl = cfg.buildUpstreamUrl({
-    upstreamBaseUrl: routing.upstreamBaseUrl,
-    activeModelId: routing.activeModelId,
-  });
 
   let forwardBody: BodyInit | undefined;
   if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
@@ -254,15 +252,35 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         { status: 413 },
       ), requestId);
     }
-    const estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
-    if (estimatedCredits > routing.balanceTotal) {
+    let estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
+    if (estimatedCredits > routing.balanceAvailable && routing.kind === 'paid' && routing.freeBalanceAvailable > 0) {
+      const freeRouting = await resolveModelRouting('free');
+      if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
+      const freeEstimatedCredits = estimatePromptCredits(inputTokens, freeRouting.costRow);
+      if (freeEstimatedCredits <= routing.freeBalanceAvailable) {
+        routing = {
+          user: routing.user,
+          ...freeRouting,
+          kind: 'free',
+          balanceAvailable: routing.freeBalanceAvailable,
+          freeBalanceAvailable: routing.freeBalanceAvailable,
+        };
+        estimatedCredits = freeEstimatedCredits;
+      }
+    }
+    if (estimatedCredits > routing.balanceAvailable) {
       return withRequestId(Response.json(
-        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceTotal, dashboard_url: DASHBOARD_URL } },
+        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceAvailable, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
       ), requestId);
     }
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
   }
+
+  const upstreamUrl = cfg.buildUpstreamUrl({
+    upstreamBaseUrl: routing.upstreamBaseUrl,
+    activeModelId: routing.activeModelId,
+  });
 
   const headers = buildForwardHeaders(
     cfg.request,

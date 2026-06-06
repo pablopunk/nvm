@@ -7,6 +7,7 @@ import {
   bigserial,
   uuid,
   index,
+  uniqueIndex,
   jsonb,
 } from 'drizzle-orm/pg-core';
 
@@ -39,6 +40,7 @@ export const creditLedger = pgTable(
   },
   (t) => ({
     userIdx: index('credit_ledger_user_idx').on(t.userId),
+    userReasonRefIdx: uniqueIndex('credit_ledger_user_reason_ref_idx').on(t.userId, t.reason, t.refId),
   }),
 );
 
@@ -114,3 +116,18 @@ export const subscriptions = pgTable('subscriptions', {
   status: text('status').notNull(),
   currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
 });
+
+export const stripeEvents = pgTable(
+  'stripe_events',
+  {
+    eventId: text('event_id').primaryKey(),
+    type: text('type').notNull(),
+    apiVersion: text('api_version'),
+    payload: jsonb('payload'),
+    processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    typeIdx: index('stripe_events_type_idx').on(t.type),
+  }),
+);
