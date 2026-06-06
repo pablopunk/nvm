@@ -60,9 +60,28 @@ test('supports simple unit-bearing percent changes', () => {
   assert.equal(raw('19m - 47%'), '10.07 m')
 })
 
+test('converts local offline units', () => {
+  assert.equal(raw('10ft in m'), '3.048 m')
+  assert.equal(raw('500 miles to km'), '804.672 km')
+  assert.equal(raw('5kg in lbs'), '11.0231 lb')
+  assert.equal(raw('100 c to f'), '212 °F')
+  assert.equal(raw('23C to F'), '73.4 °F')
+  assert.equal(raw('29 inches to cm'), '73.66 cm')
+  assert.equal(raw('4 feet to cm'), '121.92 cm')
+  assert.equal(raw('3 teaspoon in ml'), '14.7868 ml')
+  assert.equal(raw('16px to rem'), '1 rem')
+  assert.equal(raw('145 mins to timespan'), '2h 25m')
+})
+
+test('keeps conversion dimensions strict', () => {
+  assert.equal(raw('10ft to kg'), null)
+  assert.equal(raw('10kg to timespan'), null)
+})
+
 test('keeps compatibility wrapper raw and ungrouped', () => {
   assert.equal(calculate('1,000 + 2,500'), '3500')
   assert.equal(formatted('1,000 + 2,500'), '3,500')
+  assert.equal(calculate('10ft in m'), '3.048 m')
 })
 
 test('does not trigger for plain non-calculator queries', () => {

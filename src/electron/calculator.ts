@@ -57,6 +57,80 @@ const FUNCTION_ARITY: Record<string, { min: number; max: number }> = {
   max: { min: 1, max: Number.POSITIVE_INFINITY },
 }
 
+type UnitDimension = 'length' | 'mass' | 'volume' | 'data' | 'time' | 'design' | 'temperature'
+
+type UnitDefinition = {
+  dimension: UnitDimension
+  symbol: string
+  toBase: (value: number) => number
+  fromBase: (value: number) => number
+}
+
+const UNIT_BY_ALIAS = createUnitMap()
+
+function createUnitMap() {
+  const units = new Map<string, UnitDefinition>()
+  const addLinear = (dimension: UnitDimension, symbol: string, factor: number, aliases: string[]) => {
+    addUnit(units, { dimension, symbol, toBase: (value) => value * factor, fromBase: (value) => value / factor }, aliases)
+  }
+  const addTemperature = (symbol: string, toBase: (value: number) => number, fromBase: (value: number) => number, aliases: string[]) => {
+    addUnit(units, { dimension: 'temperature', symbol, toBase, fromBase }, aliases)
+  }
+
+  addLinear('length', 'mm', 0.001, ['mm', 'millimeter', 'millimeters'])
+  addLinear('length', 'cm', 0.01, ['cm', 'centimeter', 'centimeters'])
+  addLinear('length', 'm', 1, ['m', 'meter', 'meters', 'metre', 'metres'])
+  addLinear('length', 'km', 1000, ['km', 'kilometer', 'kilometers', 'kilometre', 'kilometres'])
+  addLinear('length', 'in', 0.0254, ['in', 'inch', 'inches'])
+  addLinear('length', 'ft', 0.3048, ['ft', 'foot', 'feet'])
+  addLinear('length', 'yd', 0.9144, ['yd', 'yard', 'yards'])
+  addLinear('length', 'mi', 1609.344, ['mi', 'mile', 'miles'])
+
+  addLinear('mass', 'mg', 0.000001, ['mg', 'milligram', 'milligrams'])
+  addLinear('mass', 'g', 0.001, ['g', 'gram', 'grams'])
+  addLinear('mass', 'kg', 1, ['kg', 'kilogram', 'kilograms'])
+  addLinear('mass', 'oz', 0.028349523125, ['oz', 'ounce', 'ounces'])
+  addLinear('mass', 'lb', 0.45359237, ['lb', 'lbs', 'pound', 'pounds'])
+
+  addLinear('volume', 'ml', 0.001, ['ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres'])
+  addLinear('volume', 'l', 1, ['l', 'liter', 'liters', 'litre', 'litres'])
+  addLinear('volume', 'tsp', 0.00492892159375, ['tsp', 'teaspoon', 'teaspoons'])
+  addLinear('volume', 'tbsp', 0.01478676478125, ['tbsp', 'tablespoon', 'tablespoons'])
+  addLinear('volume', 'cup', 0.2365882365, ['cup', 'cups'])
+  addLinear('volume', 'pint', 0.473176473, ['pint', 'pints'])
+  addLinear('volume', 'quart', 0.946352946, ['quart', 'quarts'])
+  addLinear('volume', 'gal', 3.785411784, ['gal', 'gallon', 'gallons'])
+
+  addLinear('data', 'B', 1, ['b', 'byte', 'bytes'])
+  addLinear('data', 'KB', 1000, ['kb', 'kilobyte', 'kilobytes'])
+  addLinear('data', 'MB', 1000 ** 2, ['mb', 'megabyte', 'megabytes'])
+  addLinear('data', 'GB', 1000 ** 3, ['gb', 'gigabyte', 'gigabytes'])
+  addLinear('data', 'TB', 1000 ** 4, ['tb', 'terabyte', 'terabytes'])
+  addLinear('data', 'KiB', 1024, ['kib', 'kibibyte', 'kibibytes'])
+  addLinear('data', 'MiB', 1024 ** 2, ['mib', 'mebibyte', 'mebibytes'])
+  addLinear('data', 'GiB', 1024 ** 3, ['gib', 'gibibyte', 'gibibytes'])
+  addLinear('data', 'TiB', 1024 ** 4, ['tib', 'tebibyte', 'tebibytes'])
+
+  addLinear('time', 'ms', 0.001, ['ms', 'millisecond', 'milliseconds'])
+  addLinear('time', 's', 1, ['s', 'sec', 'secs', 'second', 'seconds'])
+  addLinear('time', 'min', 60, ['min', 'mins', 'minute', 'minutes'])
+  addLinear('time', 'h', 3600, ['h', 'hr', 'hrs', 'hour', 'hours'])
+  addLinear('time', 'day', 86400, ['day', 'days'])
+  addLinear('time', 'week', 604800, ['week', 'weeks'])
+
+  addLinear('design', 'px', 1, ['px', 'pixel', 'pixels'])
+  addLinear('design', 'rem', 16, ['rem', 'rems'])
+
+  addTemperature('°C', (value) => value, (value) => value, ['c', '°c', 'celsius'])
+  addTemperature('°F', (value) => (value - 32) * 5 / 9, (value) => value * 9 / 5 + 32, ['f', '°f', 'fahrenheit'])
+  addTemperature('K', (value) => value - 273.15, (value) => value + 273.15, ['k', 'kelvin'])
+  return units
+}
+
+function addUnit(units: Map<string, UnitDefinition>, unit: UnitDefinition, aliases: string[]) {
+  for (const alias of aliases) units.set(normalizeUnitAlias(alias), unit)
+}
+
 export function calculate(query: string) {
   return calculateDetailed(query)?.raw ?? null
 }
@@ -64,6 +138,9 @@ export function calculate(query: string) {
 export function calculateDetailed(query: string): CalculatorResult | null {
   const normalized = normalizeCalculationQuery(query)
   if (!normalized || !isLikelyCalculation(normalized.expression, normalized.explicit)) return null
+
+  const conversionResult = calculateConversionExpression(normalized.expression, query)
+  if (conversionResult) return conversionResult
 
   const unitPercentResult = calculateUnitPercentExpression(normalized.expression, query)
   if (unitPercentResult) return unitPercentResult
@@ -99,6 +176,7 @@ function isLikelyCalculation(expression: string, explicit: boolean) {
   if (/[+*/%^()]/.test(expression)) return true
   if (/\d\s-\s\d/.test(expression)) return true
   if (/\b(sqrt|square root|power|squared|cubed|sin|cos|tan|log|ln|abs|round|floor|ceil|min|max|percent)\b/i.test(expression)) return true
+  if (looksLikeConversionExpression(expression)) return true
   return /\d(?:\.\d+)?\s*[kmb]\b.*[+\-*/^]/i.test(expression)
 }
 
@@ -113,6 +191,80 @@ function normalizeNaturalMath(expression: string) {
   next = next.replace(/^(.+)\s+cubed$/i, '($1)^3')
   if (/%/.test(next)) next = next.replace(/\bof\b/gi, '*')
   return next
+}
+
+function looksLikeConversionExpression(expression: string) {
+  return conversionExpressionMatch(expression) !== null
+}
+
+function calculateConversionExpression(expression: string, query: string): CalculatorResult | null {
+  const match = conversionExpressionMatch(expression)
+  if (!match) return null
+  const amount = parseNumberLiteral(match.amount)
+  if (amount === null) return null
+  const source = unitForAlias(match.sourceUnit)
+  if (!source) return null
+
+  const targetAlias = normalizeUnitAlias(match.targetUnit)
+  const isTimespan = targetAlias === 'timespan'
+  const target = isTimespan ? null : unitForAlias(match.targetUnit)
+  if (isTimespan && source.dimension !== 'time') return null
+  if (!isTimespan && (!target || source.dimension !== target.dimension)) return null
+
+  const baseValue = source.toBase(amount)
+  const value = isTimespan ? baseValue : target!.fromBase(baseValue)
+  if (!Number.isFinite(value)) return null
+
+  const raw = isTimespan ? formatTimespan(value) : `${formatRawNumber(value, 4)} ${target!.symbol}`
+  const formatted = isTimespan ? raw : `${formatDisplayNumber(value, 4)} ${target!.symbol}`
+  const swapQuery = isTimespan ? undefined : `${formatRawNumber(value, 4)} ${target!.symbol} to ${source.symbol}`
+  return {
+    kind: 'conversion',
+    query: query.trim(),
+    expression: expression.trim(),
+    value,
+    raw,
+    formatted,
+    unit: source.symbol,
+    targetUnit: isTimespan ? 'timespan' : target!.symbol,
+    title: `${expression.trim()} = ${formatted}`,
+    subtitle: 'Copy converted result to clipboard',
+    alternate: raw === formatted ? undefined : { raw, formatted },
+    swapQuery,
+  }
+}
+
+function conversionExpressionMatch(expression: string) {
+  const number = '[+-]?(?:(?:\\d+(?:,\\d{3})*)|(?:\\d+)|(?:\\d*\\.\\d+))(?:\\.\\d+)?'
+  const unit = '[a-zA-Z°]+'
+  const match = expression.trim().match(new RegExp(`^(?:convert\\s+)?(${number})\\s*(${unit})\\s+(?:in|to|as)\\s+(${unit}|timespan)$`, 'i'))
+  if (!match) return null
+  return { amount: match[1], sourceUnit: match[2], targetUnit: match[3] }
+}
+
+function unitForAlias(alias: string) {
+  return UNIT_BY_ALIAS.get(normalizeUnitAlias(alias)) || null
+}
+
+function normalizeUnitAlias(alias: string) {
+  return String(alias || '').trim().toLowerCase().replace(/\./g, '')
+}
+
+function formatTimespan(seconds: number) {
+  const sign = seconds < 0 ? '-' : ''
+  let remaining = Math.round(Math.abs(seconds))
+  const days = Math.floor(remaining / 86400)
+  remaining -= days * 86400
+  const hours = Math.floor(remaining / 3600)
+  remaining -= hours * 3600
+  const minutes = Math.floor(remaining / 60)
+  remaining -= minutes * 60
+  const parts = []
+  if (days) parts.push(`${days}d`)
+  if (hours) parts.push(`${hours}h`)
+  if (minutes) parts.push(`${minutes}m`)
+  if (remaining || parts.length === 0) parts.push(`${remaining}s`)
+  return `${sign}${parts.join(' ')}`
 }
 
 function calculateUnitPercentExpression(expression: string, query: string): CalculatorResult | null {
@@ -398,13 +550,13 @@ function normalizeFloatingPoint(value: number) {
   return Number(Number(value).toPrecision(12))
 }
 
-function formatRawNumber(value: number) {
+function formatRawNumber(value: number, maximumFractionDigits = 12) {
   const normalized = normalizeFloatingPoint(value)
   if (Number.isInteger(normalized)) return String(normalized)
-  return String(normalized)
+  return normalized.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits })
 }
 
-function formatDisplayNumber(value: number) {
+function formatDisplayNumber(value: number, maximumFractionDigits = 12) {
   const normalized = normalizeFloatingPoint(value)
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 12 }).format(normalized)
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(normalized)
 }
