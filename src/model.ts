@@ -37,6 +37,7 @@ export const ACTION_DEFINITIONS = {
   pasteClipboard: { description: 'Paste into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   typeText: { description: 'Type into the frontmost app', dismiss: 'immediate', loading: 'none', execute: 'main' },
   trash: { description: 'Move to Trash', dismiss: 'manual', loading: 'view', execute: 'main' },
+  rootView: { description: 'Open top-level view', dismiss: 'manual', loading: 'view', execute: 'main' },
   pushView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
   replaceView: { description: 'Open nested view', dismiss: 'manual', loading: 'view', execute: 'main' },
   popView: { description: 'Go back', dismiss: 'manual', loading: 'view', execute: 'main' },

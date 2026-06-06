@@ -1727,7 +1727,7 @@ function normalizeViewAction(action, entry) {
     return normalizeViewAction({ ...rest, type: 'runExtensionAction', handlerId }, entry)
   }
   const normalized = action.submenu ? { ...action, submenu: normalizeActionPanel(action.submenu, [], entry) } : action
-  if ((normalized.type === 'pushView' || normalized.type === 'replaceView') && normalized.view) {
+  if ((normalized.type === 'rootView' || normalized.type === 'pushView' || normalized.type === 'replaceView') && normalized.view) {
     return registerViewActionForRenderer({ ...normalized, view: normalizeView(normalized.view, entry) })
   }
   if (normalized.type === 'promptAction' && normalized.targetAction) {
@@ -2077,6 +2077,8 @@ async function executeViewAction(action, launchContext?: any) {
         if (itemPath) await shell.trashItem(expandUserPath(itemPath))
       }
       return { toast: { message: 'Moved to Trash' } }
+    case 'rootView':
+      return { view: action.view, navigation: 'root' }
     case 'pushView':
       return { view: action.view, navigation: 'push' }
     case 'replaceView':
@@ -3630,6 +3632,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
       typeText: (text, title = 'Type Text', options: any = {}) => ({ ...options, type: 'typeText', title, text }),
       copyImage: (image, title = 'Copy image', options: any = {}) => String(image || '').startsWith('data:') ? ({ ...options, type: 'copyImage', title, imageDataUrl: image }) : ({ ...options, type: 'copyImage', title, path: image }),
       trash: (paths, title = 'Move to Trash', options: any = {}) => ({ ...options, type: 'trash', title, paths: Array.isArray(paths) ? paths : [paths], style: options.style || 'destructive', requiresConfirmation: options.requiresConfirmation ?? true }),
+      root: (title, view, options: any = {}) => ({ ...options, type: 'rootView', title, view }),
       push: (title, view, options: any = {}) => ({ ...options, type: 'pushView', title, view }),
       replace: (title, view, options: any = {}) => ({ ...options, type: 'replaceView', title, view }),
       pop: (title = 'Back', options: any = {}) => ({ ...options, type: 'popView', title }),
@@ -3677,6 +3680,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
     },
     action: (input) => input,
     navigation: {
+      root: (view) => ({ view, navigation: 'root' }),
       push: (view) => ({ view, navigation: 'push' }),
       replace: (view) => ({ view, navigation: 'replace' }),
       pop: () => ({ navigation: 'pop' }),

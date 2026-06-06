@@ -342,6 +342,7 @@ function listView(ctx: ExtensionContext) {
       title: 'Rows',
       items: [
         ctx.ui.item({ id: 'form', title: 'Open Form Fixture', subtitle: 'Textarea, dropdowns, errors, descriptions', icon: 'list-checks', accessories: [{ text: 'form' }], primaryAction: ctx.actions.push('Open Form', formView(ctx)) }),
+        ctx.ui.item({ id: 'root-navigation', title: 'Open Root Navigation Fixture', subtitle: 'Replaces the stack; Escape returns to the palette root', icon: 'corner-up-left', accessories: [{ text: 'root' }], primaryAction: ctx.actions.root('Open Root Navigation', ctx.ui.preview({ id: 'dev-ui-root-navigation', title: 'Dev UI · Root Navigation', content: '# Root Navigation\n\nThis view intentionally resets the palette navigation stack.' })) }),
         ctx.ui.item({ id: 'text-input', title: 'Open Text Input Fixture', subtitle: 'Paste/type actions for snippets and transforms', icon: 'keyboard', accessories: [{ text: 'text' }], primaryAction: ctx.actions.push('Open Text Input', textInputView(ctx)) }),
         ctx.ui.item({ id: 'floating-window', title: 'Open Floating Window Fixture', subtitle: 'Independent host-rendered extension window', icon: 'panel-top-open', accessories: [{ text: 'window' }], primaryAction: ctx.actions.push('Open Floating Window', floatingWindowView(ctx)) }),
         ctx.ui.item({ id: 'prompt', title: 'Open Prompt Fixture', subtitle: 'Prompted arguments before an action runs', icon: 'text-cursor-input', accessories: [{ text: 'prompt' }], primaryAction: ctx.actions.push('Open Prompt', promptView(ctx)) }),

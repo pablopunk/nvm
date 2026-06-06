@@ -209,11 +209,13 @@ export type ExtensionViewPatch = {
 }
 
 /** Return shape accepted by `ctx.actions.run` handlers and command handlers. */
+export type ExtensionNavigationMode = 'root' | 'push' | 'replace' | 'pop'
+
 export type ExtensionActionResult =
   | ExtensionView
   | ExtensionAction
   | ExtensionToastResult
-  | { view?: ExtensionView | null; action?: ExtensionAction; patch?: ExtensionViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: ExtensionToastResult['toast'] }
+  | { view?: ExtensionView | null; action?: ExtensionAction; patch?: ExtensionViewPatch; navigation?: ExtensionNavigationMode; toast?: ExtensionToastResult['toast'] }
   | void
 
 /** A declarative action. Helpers under `ctx.actions.*` create these; they do not execute them. */
@@ -736,7 +738,11 @@ export type ExtensionContext = {
     copyImage(image: string, title?: string, options?: Record<string, unknown>): ExtensionAction
     /** Destructive by default and confirmation-gated by the host. */
     trash(paths: string | string[], title?: string, options?: Record<string, unknown>): ExtensionAction
+    /** Replace the palette's current navigation stack with this view. Use for top-level destinations, not drill-down rows. */
+    root(title: string, view: ExtensionView | null, options?: Record<string, unknown>): ExtensionAction
+    /** Drill into a child view and let Escape return to the current view. */
     push(title: string, view: ExtensionView | null, options?: Record<string, unknown>): ExtensionAction
+    /** Swap the current view without adding a back-stack entry. */
     replace(title: string, view: ExtensionView | null, options?: Record<string, unknown>): ExtensionAction
     pop(title?: string, options?: Record<string, unknown>): ExtensionAction
     run(title: string, handler: (ctx: ExtensionContext, action: ExtensionAction) => ExtensionActionResult | Promise<ExtensionActionResult>, options?: Record<string, unknown>): ExtensionAction
@@ -798,7 +804,11 @@ export type ExtensionContext = {
 
   /** Explicit return helpers from action handlers. Prefer these for imperative handler results. */
   navigation: {
+    /** Replace the palette's current navigation stack with this view. Use for top-level destinations. */
+    root(view: ExtensionView | null): { view: ExtensionView | null; navigation: 'root' }
+    /** Drill into a child view and let Escape return to the current view. */
     push(view: ExtensionView | null): { view: ExtensionView | null; navigation: 'push' }
+    /** Swap the current view without adding a back-stack entry. */
     replace(view: ExtensionView | null): { view: ExtensionView | null; navigation: 'replace' }
     pop(): { navigation: 'pop' }
     run(action: ExtensionAction): { action: ExtensionAction }
