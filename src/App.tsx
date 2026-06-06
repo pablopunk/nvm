@@ -203,7 +203,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     })
   }
 
-  async function handleActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
+  async function handleActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'root' | 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void) {
     if (!result) return
     if (result.patch) applyPatch(result.patch)
     if (result.navigation === 'pop') await window.nvm.closeExtensionWindow()
@@ -494,7 +494,7 @@ export function App() {
       } else if (!payload.asSibling) {
         setSiblingViews([])
       }
-      if (payload.view.aiChat) await openAiChat(payload.view)
+      if (payload.view.aiChat) await openAiChat(payload.view, 'root')
       else showExtensionView(payload.view, 'root')
       markShortcutReady(Boolean(payload?.revealWhenReady))
     })
@@ -781,12 +781,12 @@ export function App() {
   }
 
 
-  async function handleViewActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
+  async function handleViewActionResult(result?: { view?: ExtensionView; patch?: CommandViewPatch; navigation?: 'root' | 'push' | 'replace' | 'pop'; toast?: { message: string; tone?: 'default' | 'error' } } | void, fallbackNavigation: 'push' | 'replace' | 'root' = 'push') {
     if (!result) return
     if (result.toast) showToast(result.toast.message, result.toast.tone || 'default')
     if (result.patch) applyViewPatch(result.patch)
     if (result.navigation === 'pop') popExtensionView()
-    else if (result.view?.aiChat) await openAiChat(result.view)
+    else if (result.view?.aiChat) await openAiChat(result.view, result.navigation || fallbackNavigation)
     else if (result.view) showExtensionView(result.view, result.navigation || fallbackNavigation)
   }
 
@@ -888,10 +888,13 @@ export function App() {
       if (dismissedImmediately) window.nvm.hide()
       else if (showsLoading) showActionLoadingView(action.title || 'Running…', 'Waiting for the action to finish', loadingNavigation)
       const result = await resultPromise
+      const resultAfterLoading = showsLoading && loadingNavigation === 'push' && result?.navigation === 'push' && result.view
+        ? { ...result, navigation: 'replace' as const }
+        : result
       if (showsLoading && loadingNavigation === 'push' && (result?.navigation === 'replace' || result?.navigation === 'pop')) {
         extensionNavigation.setBackStack((stack) => stack.slice(0, -1))
       }
-      await handleViewActionResult(result, showsLoading ? 'replace' : 'push')
+      await handleViewActionResult(resultAfterLoading, showsLoading ? 'replace' : 'push')
       if (!dismissedImmediately && !action.keepPaletteOpen && action.dismissAfterRun === 'auto' && !result?.view && !result?.patch && result?.navigation !== 'pop') {
         if (extensionNavigation.backStack.length > 0) popExtensionView()
         else window.nvm.hide()
@@ -905,14 +908,14 @@ export function App() {
     }
   }
 
-  async function openAiChat(view: ExtensionView) {
-    showExtensionView(view, 'root')
+  async function openAiChat(view: ExtensionView, navigation: 'root' | 'push' | 'replace' = 'root') {
+    showExtensionView(view, navigation)
     await aiChat.openChat(view)
   }
 
   async function startBuilderChatFromQuery(prompt: string) {
     const result = await window.nvm.startBuilderChat({ prompt, title: `Automate "${prompt}"` })
-    if (result?.view?.aiChat) await openAiChat(result.view)
+    if (result?.view?.aiChat) await openAiChat(result.view, 'root')
     else if (result?.view) showExtensionView(result.view, 'root')
   }
 
@@ -929,7 +932,7 @@ export function App() {
     if (result?.view) {
       setOptionsFor(null)
       setPreviewFor(null)
-      if (result.view.aiChat) await openAiChat(result.view)
+      if (result.view.aiChat) await openAiChat(result.view, 'root')
       else showExtensionView(result.view, 'root')
     } else if (!dismissedImmediately) {
       window.nvm.hide()
@@ -1071,7 +1074,7 @@ export function App() {
     const result = await window.nvm.tweakExtension({ extensionFile: action.extensionFile, title: action.title })
     if (result?.view) {
       setOptionsFor(null)
-      await openAiChat(result.view)
+      await openAiChat(result.view, 'root')
     }
   }
 

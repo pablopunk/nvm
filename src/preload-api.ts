@@ -71,7 +71,7 @@ export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
 export type ViewActionResult = {
   view?: CommandView
   patch?: CommandViewPatch
-  navigation?: 'push' | 'replace' | 'pop'
+  navigation?: 'root' | 'push' | 'replace' | 'pop'
   toast?: { message: string; tone?: 'default' | 'error' }
   skipped?: boolean
 }
