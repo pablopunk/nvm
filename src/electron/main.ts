@@ -1933,7 +1933,8 @@ function applyExtensionWindowOptions(win: BrowserWindow, options: any = {}) {
 }
 
 function createOrUpdateExtensionWindow(view: any, options: any = {}) {
-  const normalizedView = view
+  const normalizedView = normalizeView(view, null)
+  structuredClone(normalizedView)
   const id = extensionWindowId(normalizedView, options)
   const existing = extensionWindows.get(id)
   if (existing && !existing.win.isDestroyed()) {
@@ -4825,13 +4826,13 @@ async function executeShortcutAction(action) {
   const wasVisible = Boolean(paletteWindow.win?.isVisible())
   if (!wasVisible) {
     paletteWindow.showPalette({ skipShownEvent: true, deferReveal: true })
-    paletteWindow.win?.webContents.send('action:view-open', {
+    paletteWindow.win?.webContents.send('action:view-open', normalizeHostViewResult({
       view: progressView({ title: currentAction?.title || 'Opening…', label: 'Opening…' }),
       revealWhenReady: true,
       asSibling: false,
-    })
+    }))
   }
-  const result = await executeAction(currentAction, { keepPaletteOpen: true })
+  const result = normalizeHostViewResult(await executeAction(currentAction, { keepPaletteOpen: true }))
   if (result?.view) {
     if (wasVisible) paletteWindow.showPalette({ skipShownEvent: true })
     paletteWindow.win?.webContents.send('action:view-open', { ...result, revealWhenReady: false, asSibling: wasVisible })
@@ -5235,11 +5236,11 @@ app.whenReady().then(async () => {
     const file = input?.extensionFile || input?.extensionId
     if (!file) return { toast: { message: 'No extension specified', tone: 'error' } }
     const item = getOrCreateExtensionChat(file, input.title || file)
-    return { view: aiChatView(item, { initialPrompt: input.prompt }) }
+    return normalizeHostViewResult({ view: aiChatView(item, { initialPrompt: input.prompt }) })
   })
   ipcMain.handle('ai-builder:start-chat', (_event, input: any = {}) => {
     const item = createDraftAiChat(String(input?.prompt || input?.query || ''))
-    return { view: aiChatView(item, { start: item.messages.length <= 1 }) }
+    return normalizeHostViewResult({ view: aiChatView(item, { start: item.messages.length <= 1 }) })
   })
   ipcMain.handle('nevermind:auth-status', async () => {
     const auth = await getNevermindAuth()
