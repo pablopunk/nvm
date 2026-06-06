@@ -38,6 +38,7 @@
 ## Verification
 
 * Run tests and verify core flows before committing API or palette changes.
+* For bug fixes, add a repro test and confirm red/green when practical; for streaming parsers, cover split-frame/chunk-boundary input.
 * Ensure new dependencies resolve correctly within the Electron `app.asar`.
 * Use `mise exec -- pnpm palette:debug` to trace provider output and ranking.
 * Verify navigation, action panels, shortcuts, and dismissal behavior for all changes.
