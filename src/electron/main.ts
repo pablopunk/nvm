@@ -18,7 +18,7 @@ import { initSentry } from './sentry'
 initSentry()
 import { createPaletteWindowController, installPermissionHandlers } from './palette-window'
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
-import { calculate, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
+import { calculate, calculateDetailed, getUrlFromQuery, hashValue, normalize, score, scoreNormalized } from './search-utils'
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
@@ -3093,9 +3093,14 @@ function createCalculatorExtension() {
     permissions: [] as const,
     commands: [],
     searchItems(_ctx, query) {
-      const result = query ? calculate(query) : null
+      const result = query ? calculateDetailed(query) : null
       if (result === null) return []
-      return [{ id: `calculate:${query}`, title: `${query} = ${result}`, subtitle: 'Copy result to clipboard', icon: 'calculator', score: 105, dismissAfterRun: 'auto', primaryAction: { type: 'copyText', title: 'Copy Result', text: String(result), dismissAfterRun: 'auto' } }]
+      const actions = [
+        { type: 'copyText', title: 'Copy Result', text: result.formatted, dismissAfterRun: 'auto' },
+        result.raw !== result.formatted ? { type: 'copyText', title: 'Copy Unformatted Result', text: result.raw, dismissAfterRun: 'auto' } : null,
+        { type: 'pasteText', title: 'Paste Result', text: result.formatted, dismissAfterRun: 'auto' },
+      ].filter(Boolean)
+      return [{ id: `calculate:${query}`, title: result.title, subtitle: result.subtitle, aliases: [String(query || '').trim()], icon: 'calculator', score: 105, dismissAfterRun: 'auto', primaryAction: actions[0], actions: actions.slice(1) }]
     },
   }
 }

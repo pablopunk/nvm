@@ -1,4 +1,7 @@
 import crypto from 'node:crypto'
+import { calculate, calculateDetailed } from './calculator'
+
+export { calculate, calculateDetailed }
 
 export function normalize(value: unknown) {
   return String(value || '').toLowerCase().trim()
@@ -41,17 +44,3 @@ export function getUrlFromQuery(query: string) {
   return /^https?:\/\//i.test(opened) ? opened : `https://${opened}`
 }
 
-export function calculate(query: string) {
-  const expression = query.trim().replace(/^=?\s*/, '').replace(/^calc(?:ulate)?\s+/i, '')
-  if (!expression || !/[+\-*/%^()]/.test(expression)) return null
-  if (!/^[\d\s.+\-*/%^(),]+$/.test(expression)) return null
-
-  try {
-    const jsExpression = expression.replace(/%/g, '/100')
-    const result = Function(`"use strict"; return (${jsExpression})`)()
-    if (typeof result !== 'number' || !Number.isFinite(result)) return null
-    return Number.isInteger(result) ? String(result) : String(Number(result.toPrecision(12)))
-  } catch {
-    return null
-  }
-}
