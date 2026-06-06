@@ -81,8 +81,13 @@ test('keeps conversion dimensions strict', () => {
 test('handles local date and timezone questions', () => {
   const now = new Date('2026-06-06T12:00:00Z')
   assert.equal(calculateDetailed('days until 25 Dec', { now })?.raw, '202 days')
+  assert.equal(calculateDetailed('December 25', { now })?.raw, '2026-12-25')
+  assert.equal(calculateDetailed('June 6', { now })?.raw, '2026-06-06')
+  assert.equal(calculateDetailed('tomorrow', { now })?.raw, '2026-06-07')
+  assert.equal(calculateDetailed('yesterday', { now })?.raw, '2026-06-05')
   assert.equal(calculateDetailed('35 days ago', { now })?.raw, '2026-05-02')
   assert.equal(calculateDetailed('Monday in 3 weeks', { now })?.raw, '2026-06-29')
+  assert.equal(calculateDetailed('next Monday', { now })?.raw, '2026-06-08')
   assert.equal(calculateDetailed('time in Tokyo', { now })?.raw, '21:00')
   assert.equal(calculateDetailed('5pm ldn in sf', { now })?.raw, '09:00')
 })

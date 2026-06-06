@@ -262,7 +262,7 @@ function looksLikeConversionExpression(expression: string) {
 }
 
 function looksLikeDateTimeExpression(expression: string) {
-  return /^(?:days?\s+until\s+\d{1,2}\s+[a-z]+|\d+\s+days?\s+ago|(?:sun|mon|tue|wed|thu|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\s+in\s+\d+\s+weeks?|time\s+in\s+.+|\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s+.+\s+in\s+.+)$/i.test(expression.trim())
+  return /^(?:(?:days?\s+until\s+)?(?:\d{1,2}\s+[a-z]+|[a-z]+\s+\d{1,2})|\d+\s+days?\s+ago|(?:next\s+)?(?:sun|mon|tue|wed|thu|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)(?:\s+in\s+\d+\s+weeks?)?|tomorrow|yesterday|time\s+in\s+.+|\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s+.+\s+in\s+.+)$/i.test(expression.trim())
 }
 
 function calculateDateTimeExpression(expression: string, query: string, options: CalculatorOptions): CalculatorResult | null {
@@ -272,13 +272,26 @@ function calculateDateTimeExpression(expression: string, query: string, options:
 function calculateDateExpression(expression: string, query: string, options: CalculatorOptions): CalculatorResult | null {
   const now = optionDate(options)
   const today = startOfLocalDay(now)
-  const daysUntil = expression.trim().match(/^days?\s+until\s+(\d{1,2})\s+([a-z]+)$/i)
-  if (daysUntil) {
-    const target = nextMonthDay(Number(daysUntil[1]), daysUntil[2], today)
+  const monthDay = parseMonthDayExpression(expression)
+  if (monthDay) {
+    const target = nextMonthDay(monthDay.day, monthDay.month, today)
     if (!target) return null
     const days = Math.round((target.getTime() - today.getTime()) / 86400000)
-    const text = `${days} ${days === 1 ? 'day' : 'days'}`
-    return dateResult('date', query, expression, days, text, text, `Until ${formatDateDisplay(target)}`)
+    if (monthDay.until) {
+      const text = `${days} ${days === 1 ? 'day' : 'days'}`
+      return dateResult('date', query, expression, days, text, text, `Until ${formatDateDisplay(target)}`)
+    }
+    return dateResult('date', query, expression, target.getTime(), isoLocalDate(target), formatDateDisplay(target), 'Date')
+  }
+
+  if (/^tomorrow$/i.test(expression.trim())) {
+    const date = addLocalDays(today, 1)
+    return dateResult('date', query, expression, date.getTime(), isoLocalDate(date), formatDateDisplay(date), 'Date')
+  }
+
+  if (/^yesterday$/i.test(expression.trim())) {
+    const date = addLocalDays(today, -1)
+    return dateResult('date', query, expression, date.getTime(), isoLocalDate(date), formatDateDisplay(date), 'Date')
   }
 
   const daysAgo = expression.trim().match(/^(\d+)\s+days?\s+ago$/i)
@@ -287,11 +300,11 @@ function calculateDateExpression(expression: string, query: string, options: Cal
     return dateResult('date', query, expression, date.getTime(), isoLocalDate(date), formatDateDisplay(date), 'Date')
   }
 
-  const weekdayInWeeks = expression.trim().match(/^([a-z]+)\s+in\s+(\d+)\s+weeks?$/i)
+  const weekdayInWeeks = expression.trim().match(/^(?:next\s+)?([a-z]+)(?:\s+in\s+(\d+)\s+weeks?)?$/i)
   if (weekdayInWeeks) {
     const weekday = WEEKDAY_INDEX[weekdayInWeeks[1].toLowerCase()]
     if (weekday === undefined) return null
-    const date = addLocalDays(nextWeekday(today, weekday), Number(weekdayInWeeks[2]) * 7)
+    const date = addLocalDays(nextWeekday(today, weekday), Number(weekdayInWeeks[2] || 0) * 7)
     return dateResult('date', query, expression, date.getTime(), isoLocalDate(date), formatDateDisplay(date), 'Date')
   }
   return null
@@ -439,6 +452,15 @@ function normalizeUnitAlias(alias: string) {
 function optionDate(options: CalculatorOptions) {
   const date = options.now === undefined ? new Date() : new Date(options.now)
   return Number.isFinite(date.getTime()) ? date : new Date()
+}
+
+function parseMonthDayExpression(expression: string) {
+  const trimmed = expression.trim()
+  const dayFirst = trimmed.match(/^(days?\s+until\s+)?(\d{1,2})\s+([a-z]+)$/i)
+  if (dayFirst) return { until: Boolean(dayFirst[1]), day: Number(dayFirst[2]), month: dayFirst[3] }
+  const monthFirst = trimmed.match(/^(days?\s+until\s+)?([a-z]+)\s+(\d{1,2})$/i)
+  if (monthFirst) return { until: Boolean(monthFirst[1]), day: Number(monthFirst[3]), month: monthFirst[2] }
+  return null
 }
 
 function startOfLocalDay(date: Date) {
