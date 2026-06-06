@@ -38,6 +38,13 @@ export class BillingConfigError extends Error {
   }
 }
 
+export class BillingEligibilityError extends Error {
+  constructor(public type: 'top_up_requires_subscription', message: string) {
+    super(message);
+    this.name = 'BillingEligibilityError';
+  }
+}
+
 export function setStripeForTests(next: StripeLike | null) {
   stripeOverride = next;
 }
@@ -133,9 +140,21 @@ export async function getOrCreateStripeCustomer(user: typeof users.$inferSelect)
   return customer.id;
 }
 
+async function userHasActiveSubscription(database: BillingDb, userId: string): Promise<boolean> {
+  const [subscription] = await database
+    .select({ status: subscriptions.status })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  return subscription ? isActiveBillingSubscriptionStatus(subscription.status) : false;
+}
+
 export async function createBillingCheckout(input: { user: typeof users.$inferSelect; kind: BillingKind; priceId?: string; tier?: string }) {
   const item = findCatalogItem(input);
   if (!item) throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
+  if (item.kind === 'top_up' && !(await userHasActiveSubscription(db, input.user.id))) {
+    throw new BillingEligibilityError('top_up_requires_subscription', 'Top-ups are available after subscribing to Pro.');
+  }
   const customer = await getOrCreateStripeCustomer(input.user);
   const metadata: Stripe.MetadataParam = {
     billing_kind: item.kind,
@@ -249,10 +268,10 @@ async function upsertSubscription(database: BillingDb, input: {
       currentPeriodEnd: input.currentPeriodEnd,
     },
   });
-  await updateUserPlan(database, input.userId, activeSubscriptionStatus(input.status) ? input.tier : 'free');
+  await updateUserPlan(database, input.userId, isActiveBillingSubscriptionStatus(input.status) ? input.tier : 'free');
 }
 
-function activeSubscriptionStatus(status: string): boolean {
+export function isActiveBillingSubscriptionStatus(status: string): boolean {
   return status === 'active' || status === 'trialing' || status === 'past_due';
 }
 
@@ -303,6 +322,10 @@ async function handlePaymentIntentSucceeded(database: BillingDb, intent: Stripe.
   if (!user) return;
   const item = findItemByPriceId(metadata.price_id);
   if (!item || item.kind !== 'top_up') return;
+  if (!(await userHasActiveSubscription(database, user.id))) {
+    log.warn('stripe_top_up_rejected_without_subscription', { user_id: user.id, payment_intent_id: intent.id });
+    return;
+  }
   await grantPaidCredits(database, user.id, item.credits, 'stripe_top_up', intent.id);
 }
 

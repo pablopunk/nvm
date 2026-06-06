@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
-import { processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
+import { BillingEligibilityError, createBillingCheckout, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
 const user = {
@@ -217,10 +217,20 @@ test('subscription deletion updates status and plan without revoking paid credit
   assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'free'), true);
 });
 
-test('payment intent succeeded grants one-time top-up credits from metadata', async () => {
+test('top-up checkout requires an active subscription', async () => {
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
+  installDb(createFakeBillingDb({ selects: [[]] }));
+
+  await assert.rejects(
+    () => createBillingCheckout({ user, kind: 'top_up', priceId: 'price_topup' }),
+    (error) => error instanceof BillingEligibilityError && error.type === 'top_up_requires_subscription',
+  );
+});
+
+test('payment intent succeeded grants one-time top-up credits from metadata for active subscribers', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
+  const db = installDb(createFakeBillingDb({ selects: [[user], [{ status: 'active' }], []] }));
 
   await processStripeEvent(stripeEvent('payment_intent.succeeded', {
     id: 'pi_123',
@@ -235,10 +245,24 @@ test('payment intent succeeded grants one-time top-up credits from metadata', as
   assert.equal(creditInserts[0].values.delta, 500);
 });
 
+test('top-up webhook does not grant credits without an active subscription', async () => {
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
+  installStripe();
+  const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
+
+  await processStripeEvent(stripeEvent('payment_intent.succeeded', {
+    id: 'pi_123',
+    customer: 'cus_123',
+    metadata: { billing_kind: 'top_up', user_id: user.id, price_id: 'price_topup' },
+  }, 'evt_topup_without_subscription'));
+
+  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+});
+
 test('distinct Stripe events do not double-grant an already credited payment object', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user], [{ id: 1 }]] }));
+  const db = installDb(createFakeBillingDb({ selects: [[user], [{ status: 'active' }], [{ id: 1 }]] }));
 
   await processStripeEvent(stripeEvent('payment_intent.succeeded', {
     id: 'pi_123',

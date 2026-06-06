@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
 import { users, subscriptions } from '../db/schema';
-import { billingCatalog } from '../lib/billing';
+import { billingCatalog, isActiveBillingSubscriptionStatus } from '../lib/billing';
 import { ensureMonthlyFreeCredits, getBalances } from '../lib/users';
 import { listApiTokens } from '../lib/tokens';
 
@@ -20,6 +20,7 @@ const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
 const isAdmin = user?.role === 'admin';
+const canBuyTopUps = subscription ? isActiveBillingSubscriptionStatus(subscription.status) : false;
 const billingState = Astro.url.searchParams.get('billing');
 ---
 <Layout title="Nevermind · Profile">
@@ -60,11 +61,12 @@ const billingState = Astro.url.searchParams.get('billing');
           Subscribe {item.tier} · {item.credits} credits/mo
         </button>
       ))}
-      {catalog.topUps.map((item) => (
+      {canBuyTopUps && catalog.topUps.map((item) => (
         <button class="button billing-checkout" data-kind="top_up" data-price-id={item.priceId}>
           Top up · {item.credits} credits
         </button>
       ))}
+      {!canBuyTopUps && catalog.topUps.length > 0 && <span class="muted">Top-ups unlock after subscribing to Pro.</span>}
       {user?.stripeCustomerId && <button class="button" id="manage-billing" type="button">Manage billing</button>}
       {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span class="muted">Billing is not configured yet.</span>}
     </div>

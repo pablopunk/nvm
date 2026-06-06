@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
-import { BillingConfigError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
+import { BillingConfigError, BillingEligibilityError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
 import { getSessionFromCookies } from '../../../lib/workos';
 
 export const POST: APIRoute = async ({ request }) => {
@@ -24,6 +24,9 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     if (error instanceof BillingConfigError) {
       return Response.json({ error: { type: 'billing_not_configured', message: error.message } }, { status: 503 });
+    }
+    if (error instanceof BillingEligibilityError) {
+      return Response.json({ error: { type: error.type, message: error.message } }, { status: 403 });
     }
     throw error;
   }
