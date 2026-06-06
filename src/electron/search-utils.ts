@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
-import { calculate, calculateDetailed } from './calculator'
+import { calculate, calculateDetailed, calculateRateResult, parseRateExpression } from './calculator'
 
-export { calculate, calculateDetailed }
+export { calculate, calculateDetailed, calculateRateResult, parseRateExpression }
 
 export function normalize(value: unknown) {
   return String(value || '').toLowerCase().trim()

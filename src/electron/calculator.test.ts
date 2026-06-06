@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calculate, calculateDetailed } from './calculator'
+import { calculate, calculateDetailed, calculateRateResult, parseRateExpression } from './calculator'
 
 function raw(query: string) {
   return calculateDetailed(query)?.raw ?? null
@@ -76,6 +76,21 @@ test('converts local offline units', () => {
 test('keeps conversion dimensions strict', () => {
   assert.equal(raw('10ft to kg'), null)
   assert.equal(raw('10kg to timespan'), null)
+})
+
+test('parses and formats cached fiat rates', () => {
+  const quote = { rate: 0.8, provider: 'Frankfurter', updatedAt: Date.now(), fetchedAt: Date.now() }
+  const usdToGbp = parseRateExpression('10 usd in gbp')
+  assert.deepEqual(usdToGbp && { amount: usdToGbp.amount, sourceCurrency: usdToGbp.sourceCurrency, targetCurrency: usdToGbp.targetCurrency }, { amount: 10, sourceCurrency: 'USD', targetCurrency: 'GBP' })
+  assert.equal(calculateRateResult('10 usd in gbp', usdToGbp!, quote)?.raw, '8 GBP')
+
+  const prefixed = parseRateExpression('$1.2m in gbp')
+  assert.deepEqual(prefixed && { amount: prefixed.amount, sourceCurrency: prefixed.sourceCurrency, targetCurrency: prefixed.targetCurrency }, { amount: 1_200_000, sourceCurrency: 'USD', targetCurrency: 'GBP' })
+  assert.equal(calculateRateResult('$1.2m in gbp', prefixed!, quote)?.raw, '960000 GBP')
+
+  const hourly = parseRateExpression('8 dollars/hour in gbp')
+  assert.deepEqual(hourly && { amount: hourly.amount, sourceCurrency: hourly.sourceCurrency, targetCurrency: hourly.targetCurrency, rateUnit: hourly.rateUnit }, { amount: 8, sourceCurrency: 'USD', targetCurrency: 'GBP', rateUnit: 'hour' })
+  assert.equal(calculateRateResult('8 dollars/hour in gbp', hourly!, quote)?.raw, '6.4 GBP/hour')
 })
 
 test('keeps compatibility wrapper raw and ungrouped', () => {

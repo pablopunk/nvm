@@ -66,7 +66,23 @@ type UnitDefinition = {
   fromBase: (value: number) => number
 }
 
+export type RateExpression = {
+  amount: number
+  sourceCurrency: string
+  targetCurrency: string
+  expression: string
+  rateUnit?: string
+}
+
+export type RateQuote = {
+  rate: number
+  provider: string
+  updatedAt: number
+  fetchedAt: number
+}
+
 const UNIT_BY_ALIAS = createUnitMap()
+const CURRENCY_BY_ALIAS = createCurrencyMap()
 
 function createUnitMap() {
   const units = new Map<string, UnitDefinition>()
@@ -129,6 +145,25 @@ function createUnitMap() {
 
 function addUnit(units: Map<string, UnitDefinition>, unit: UnitDefinition, aliases: string[]) {
   for (const alias of aliases) units.set(normalizeUnitAlias(alias), unit)
+}
+
+function createCurrencyMap() {
+  const currencies = new Map<string, string>()
+  const add = (code: string, aliases: string[]) => {
+    currencies.set(code.toLowerCase(), code)
+    for (const alias of aliases) currencies.set(normalizeCurrencyAlias(alias), code)
+  }
+  add('USD', ['$', 'dollar', 'dollars', 'usd'])
+  add('EUR', ['€', 'euro', 'euros', 'eur'])
+  add('GBP', ['£', 'pound', 'pounds', 'sterling', 'gbp'])
+  add('JPY', ['¥', 'yen', 'jpy'])
+  add('INR', ['₹', 'rupee', 'rupees', 'inr'])
+  add('CHF', ['franc', 'francs', 'chf'])
+  add('CAD', ['cad'])
+  add('AUD', ['aud'])
+  add('NZD', ['nzd'])
+  add('CNY', ['yuan', 'rmb', 'cny'])
+  return currencies
 }
 
 export function calculate(query: string) {
@@ -194,7 +229,60 @@ function normalizeNaturalMath(expression: string) {
 }
 
 function looksLikeConversionExpression(expression: string) {
-  return conversionExpressionMatch(expression) !== null
+  return conversionExpressionMatch(expression) !== null || parseRateExpression(expression) !== null
+}
+
+export function calculateRateResult(query: string, parsed: RateExpression, quote: RateQuote): CalculatorResult | null {
+  const value = normalizeFloatingPoint(parsed.amount * quote.rate)
+  if (!Number.isFinite(value)) return null
+  const rawAmount = formatRawNumber(value, 4)
+  const formattedAmount = formatCurrencyDisplay(value, parsed.targetCurrency)
+  const raw = parsed.rateUnit ? `${rawAmount} ${parsed.targetCurrency}/${parsed.rateUnit}` : `${rawAmount} ${parsed.targetCurrency}`
+  const formatted = parsed.rateUnit ? `${formattedAmount}/${parsed.rateUnit}` : formattedAmount
+  const age = rateAgeLabel(quote.fetchedAt)
+  return {
+    kind: 'rate',
+    query: query.trim(),
+    expression: parsed.expression,
+    value,
+    raw,
+    formatted,
+    unit: parsed.sourceCurrency,
+    targetUnit: parsed.targetCurrency,
+    rateUnit: parsed.rateUnit,
+    title: `${parsed.expression} = ${formatted}`,
+    subtitle: `Copy converted result to clipboard · ${quote.provider}${age ? ` · ${age}` : ''}`,
+    alternate: raw === formatted ? undefined : { raw, formatted },
+    swapQuery: `${rawAmount} ${parsed.targetCurrency}${parsed.rateUnit ? `/${parsed.rateUnit}` : ''} to ${parsed.sourceCurrency}`,
+  }
+}
+
+export function parseRateExpression(query: string): RateExpression | null {
+  const normalized = normalizeCalculationQuery(query)
+  if (!normalized) return null
+  const expression = normalized.expression
+  const amount = '([+-]?(?:(?:\\d+(?:,\\d{3})*)|(?:\\d+)|(?:\\d*\\.\\d+))(?:\\.\\d+)?\\s*[kmb]?)'
+  const currency = '([$€£¥₹]|[a-zA-Z]{3,})'
+  const rateUnit = '(?:\\s*/\\s*([a-zA-Z]+))?'
+  const suffixMatch = expression.trim().match(new RegExp(`^${amount}\\s*${currency}${rateUnit}\\s+(?:in|to|as)\\s+${currency}$`, 'i'))
+  const prefixMatch = expression.trim().match(new RegExp(`^${currency}\\s*${amount}${rateUnit}\\s+(?:in|to|as)\\s+${currency}$`, 'i'))
+  const sourceAlias = suffixMatch?.[2] || prefixMatch?.[1]
+  const amountValue = suffixMatch?.[1] || prefixMatch?.[2]
+  const rateUnitValue = suffixMatch?.[3] || prefixMatch?.[3]
+  const targetAlias = suffixMatch?.[4] || prefixMatch?.[4]
+  if (!sourceAlias || !amountValue || !targetAlias) return null
+  const sourceCurrency = currencyForAlias(sourceAlias)
+  const targetCurrency = currencyForAlias(targetAlias)
+  if (!sourceCurrency || !targetCurrency || sourceCurrency === targetCurrency) return null
+  const parsedAmount = parseAmountWithSuffix(amountValue)
+  if (parsedAmount === null) return null
+  return {
+    amount: parsedAmount,
+    sourceCurrency,
+    targetCurrency,
+    expression: expression.trim(),
+    rateUnit: rateUnitValue ? normalizeRateUnit(rateUnitValue) : undefined,
+  }
 }
 
 function calculateConversionExpression(expression: string, query: string): CalculatorResult | null {
@@ -248,6 +336,48 @@ function unitForAlias(alias: string) {
 
 function normalizeUnitAlias(alias: string) {
   return String(alias || '').trim().toLowerCase().replace(/\./g, '')
+}
+
+function currencyForAlias(alias: string) {
+  const normalized = normalizeCurrencyAlias(alias)
+  if (/^[a-z]{3}$/.test(normalized)) return normalized.toUpperCase()
+  return CURRENCY_BY_ALIAS.get(normalized) || null
+}
+
+function normalizeCurrencyAlias(alias: string) {
+  return String(alias || '').trim().toLowerCase().replace(/\./g, '')
+}
+
+function normalizeRateUnit(unit: string) {
+  const normalized = String(unit || '').trim().toLowerCase()
+  return normalized === 'hours' ? 'hour' : normalized.endsWith('s') ? normalized.slice(0, -1) : normalized
+}
+
+function parseAmountWithSuffix(value: string) {
+  const trimmed = String(value || '').trim()
+  const suffix = trimmed.match(/[kmb]$/i)?.[0]?.toLowerCase()
+  const number = suffix ? trimmed.slice(0, -1) : trimmed
+  const parsed = parseNumberLiteral(number.trim())
+  if (parsed === null) return null
+  return parsed * (suffix ? SUFFIX_MULTIPLIERS[suffix] : 1)
+}
+
+function rateAgeLabel(fetchedAt: number) {
+  if (!fetchedAt) return ''
+  const ageMs = Date.now() - fetchedAt
+  if (ageMs < 0) return ''
+  const hours = Math.floor(ageMs / 36e5)
+  if (hours < 1) return 'fresh'
+  if (hours < 48) return `${hours}h old`
+  return `${Math.floor(hours / 24)}d old`
+}
+
+function formatCurrencyDisplay(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 4 }).format(normalizeFloatingPoint(value))
+  } catch {
+    return `${formatDisplayNumber(value, 4)} ${currency}`
+  }
 }
 
 function formatTimespan(seconds: number) {
