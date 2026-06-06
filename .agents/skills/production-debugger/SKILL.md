@@ -5,7 +5,7 @@ description: Use when production breaks or alerts fire for Nevermind — Sentry 
 
 # Production Debugger
 
-This is the production incident router. It keeps app-specific stack knowledge here, then sends the agent to vendor-specific playbooks that act like MCP connectors: Sentry, Axiom, Vercel, Neon, WorkOS, Upstash, GitHub, OpenRouter, and OpenCode.
+This is the production incident router. It keeps app-specific stack knowledge here, then sends the agent to vendor-specific playbooks that act like MCP connectors: Sentry, Axiom, Vercel, Neon, WorkOS, Upstash, Stripe, GitHub, OpenRouter, and OpenCode.
 
 Do not start by reading code. Start from the alert/log source, collect production evidence, and only inspect code after a vendor signal points to a code path.
 
@@ -17,6 +17,7 @@ Do not start by reading code. Start from the alert/log source, collect productio
 - Error tracking: Sentry for backend and desktop.
 - Database: Neon serverless Postgres with Drizzle migrations.
 - Auth: WorkOS AuthKit plus desktop device auth.
+- Billing: Stripe Checkout, Billing Portal, subscriptions, top-ups, and webhooks.
 - Rate limits/cache: Upstash Redis REST / Vercel KV-compatible env.
 - AI upstreams: OpenCode Zen by default, OpenRouter as alternate provider.
 - Releases: GitHub Actions + GitHub Releases for desktop artifacts.
@@ -30,6 +31,7 @@ Do not start by reading code. Start from the alert/log source, collect productio
 - `./neon.md` — Neon project/branch/connection/operation and safe database incident checks.
 - `./workos.md` — WorkOS AuthKit, redirect URI, auth events, users/sessions, device auth evidence.
 - `./upstash.md` — Upstash Redis/rate-limit health and key/prefix checks.
+- `./stripe.md` — Stripe billing setup/incidents, price IDs, webhooks, live/test mode, and local forwarding.
 - `./github.md` — GitHub Actions/release artifacts/signing/update failures.
 - `./openrouter.md` — OpenRouter upstream model/API failures.
 - `./opencode.md` — OpenCode Zen upstream model/API failures.
@@ -41,7 +43,8 @@ Do not start by reading code. Start from the alert/log source, collect productio
 - Auth/OAuth/device login failure? Read `workos.md`, then `axiom.md`.
 - DB/health/migration/balance issue? Read `neon.md`, then `axiom.md`.
 - Rate-limit/cache issue? Read `upstash.md`, then `axiom.md`.
-- AI proxy/upstream/billing issue? Read `axiom.md`, then `opencode.md` or `openrouter.md` based on active provider.
+- Billing/checkout/subscription/top-up/webhook issue? Read `stripe.md`, then `axiom.md` and `vercel.md` as needed.
+- AI proxy/upstream issue? Read `axiom.md`, then `opencode.md` or `openrouter.md` based on active provider.
 - Release/update/install issue? Read `github.md`; use Sentry/desktop logs only if the installed app is crashing.
 
 ## Minimum incident context
