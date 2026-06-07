@@ -29,6 +29,7 @@ import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
 import { extensionPermissionCapabilities, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
+import { createMeasuredIpcRegistrar } from './ipc-registration'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -5207,9 +5208,7 @@ async function runPaletteDebugCli() {
   console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
 }
 
-function ipcHandleMeasured(channel: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown) {
-  ipcMain.handle(channel, (event, ...args) => measureDebugPerformance(`ipc.${channel}.handler`, { args: args.map(summarizeDebugValue), alwaysLog: true }, () => handler(event, ...args)))
-}
+const ipcHandleMeasured = createMeasuredIpcRegistrar({ ipcMain, measure: measureDebugPerformance, summarize: summarizeDebugValue })
 
 async function pickFormFieldPaths(event, input: any = {}) {
   const senderWindow = BrowserWindow.fromWebContents(event.sender) || paletteWindow.win || undefined
