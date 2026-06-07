@@ -80,9 +80,10 @@ Several operational details are easy to miss:
 
 When doing backend/Vercel work from a git worktree, remember that ignored local configuration does not come along with the worktree:
 
-- Use the canonical checkout as the source of truth for local `backend/.env` and `.vercel/` linkage when available.
-- Copy or symlink `.vercel/`, or run `vercel link`, before Vercel env/deploy commands.
-- Copy `backend/.env` only into ignored local files, never into tracked docs or committed files.
+- Use the canonical checkout as the source of truth for ignored local env files when available.
+- Run `pnpm worktree:env:copy --dry-run` to preview copied env files, then `pnpm worktree:env:copy` to copy them into the active worktree without printing secrets.
+- Use `pnpm worktree:env:copy --force` only when you intentionally want to overwrite existing local env files.
+- If `.vercel/project.json` is still missing, run `vercel link` before Vercel deploy commands.
 - Prefer restrictive permissions when pulling production env for debugging, for example `umask 077` before `vercel env pull`.
 - Never print, commit, or persist raw secrets in documentation, logs, or solution notes.
 

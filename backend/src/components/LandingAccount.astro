@@ -1,0 +1,32 @@
+---
+import { getSessionFromCookies } from '../lib/workos';
+
+interface Props {
+  placement?: 'nav' | 'hero';
+}
+
+const { placement = 'nav' } = Astro.props;
+const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
+---
+{placement === 'hero' ? (
+  session ? (
+    <div class="landing-actions">
+      <a class="button button--primary" href="/profile">Open dashboard</a>
+      <span class="landing-account-note">Signed in as <code>{session.user.email}</code></span>
+    </div>
+  ) : (
+    <div class="landing-actions">
+      <a class="button button--primary" href="/api/auth/signin">Sign in</a>
+      <a class="button" href="https://github.com/pablopunk/nvm/releases">Get the latest release</a>
+    </div>
+  )
+) : (
+  session ? (
+    <div class="landing-nav-account">
+      <span class="landing-nav-email">{session.user.email}</span>
+      <a class="button button--primary" href="/profile">Dashboard</a>
+    </div>
+  ) : (
+    <a class="button" href="/api/auth/signin">Sign in</a>
+  )
+)}

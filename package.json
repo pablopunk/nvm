@@ -15,6 +15,7 @@
     "palette:debug": "node .agents/skills/palette-debug/palette-debug.cjs",
     "learnings:export": "node scripts/learnings-export.cjs",
     "logs:tail": "node scripts/tail-log.cjs",
+    "worktree:env:copy": "node scripts/copy-worktree-env.cjs",
     "electron": "electron .",
     "electron:dev": "node ./scripts/electron-dev.cjs",
     "dist": "pnpm run dist:mac:arm64",

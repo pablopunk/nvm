@@ -74,8 +74,10 @@ Use Stripe test mode for localhost. The Stripe Dashboard webhook URL cannot be p
 
 Git worktrees do not inherit ignored local files from the canonical checkout.
 
-- Treat the canonical checkout as the source of truth for local `backend/.env` and `.vercel/` linkage when available.
-- Copy or symlink `.vercel/`, or run `vercel link`, before Vercel env/deploy commands.
+- Treat the canonical checkout as the source of truth for ignored local env files when available.
+- Prefer `pnpm worktree:env:copy --dry-run`, then `pnpm worktree:env:copy`, to copy env files into the active worktree without printing secrets.
+- Use `pnpm worktree:env:copy --force` only when the user explicitly wants to overwrite existing local env files.
+- If `.vercel/project.json` is still missing, run `vercel link` before Vercel env/deploy commands.
 - Mirror local Stripe test env values into both the active worktree and canonical checkout only when the user asks.
 - Never commit `.env`, `.vercel/`, pulled production env files, or raw secret values.
 
