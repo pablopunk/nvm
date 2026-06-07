@@ -85,7 +85,7 @@ test('creates extension windows with hardened renderer preferences and state', (
 
   assert.equal(FakeBrowserWindow.instances.length, 1)
   assert.equal(win.loadedUrl, 'http://localhost:5173/?extensionWindowId=panel')
-  assert.deepEqual(win.options.webPreferences, { preload: '/preload.cjs', contextIsolation: true, nodeIntegration: false, sandbox: false })
+  assert.deepEqual(win.options.webPreferences, { preload: '/preload.cjs', contextIsolation: true, nodeIntegration: false, sandbox: true })
   assert.equal(win.options.backgroundColor, '#111111')
   assert.deepEqual(manager.getState('panel'), { id: 'panel', view: { title: 'Panel', normalized: true }, options: { id: 'panel', titleBar: 'hidden' } })
   assert.deepEqual(trustedChecks, [{ id: 'installed', url: 'policy' }, { id: 'panel', url: 'trusted-url' }])

@@ -108,7 +108,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       ...(hiddenTitleBar ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } } : {}),
       title: String(options.title || normalizedView.title || 'Nevermind'),
       backgroundColor: deps.shouldUseDarkColors() ? '#111111' : '#f7f7f7',
-      webPreferences: { preload: deps.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
+      webPreferences: { preload: deps.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
     const record = { id, win, view: normalizedView, options: { ...options, id } }
     records.set(id, record)
