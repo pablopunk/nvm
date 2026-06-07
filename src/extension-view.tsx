@@ -227,6 +227,9 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
 
 type ExtensionViewSurfaceProps = ExtensionViewRendererProps & { renderEmpty: NonNullable<ExtensionViewRendererProps['renderEmpty']> }
 
+export const EXTENSION_WEBVIEW_SANDBOX = 'allow-scripts allow-forms'
+export const EXTENSION_WEBVIEW_ALLOW = 'autoplay'
+
 function ViewPagination({ view, runAction }: Pick<ExtensionViewSurfaceProps, 'view' | 'runAction'>) {
   if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
   return <button className="loadMoreButton" type="button" onClick={() => runAction(view.pagination!.onLoadMore!)}>Load More</button>
@@ -283,7 +286,7 @@ function EditorExtensionView({ view, renderMarkdown, renderActionPanel, actionPa
 function WebExtensionView({ view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {
   const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
   const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
-  return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox="allow-scripts allow-forms allow-same-origin" allow="camera; microphone; display-capture; autoplay; clipboard-read; clipboard-write" />{webviewActions}</div>
+  return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox={EXTENSION_WEBVIEW_SANDBOX} allow={EXTENSION_WEBVIEW_ALLOW} />{webviewActions}</div>
 }
 
 function CameraExtensionView({ view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {
