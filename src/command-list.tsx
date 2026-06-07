@@ -28,6 +28,7 @@ export function RootCommandList({ items, iconForItem, onSelect, emptyTitle = EMP
       title={item.title}
       subtitle={item.subtitle || item.text}
       accessories={item.accessories}
+      className={item.className}
       shortcut={shortcut}
       appearance={item.appearance}
       extras={extraForItem?.(item)}

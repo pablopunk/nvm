@@ -318,6 +318,7 @@ export function App() {
   const resultsListRef = useRef<HTMLDivElement>(null)
   const paletteRef = useRef<HTMLDivElement>(null)
   const requestedIcons = useRef(new Set<string>())
+  const runningAppsRequestIdRef = useRef(0)
   const aiChatOpenRef = useRef(false)
   const aiChatIdRef = useRef<string | undefined>(undefined)
   const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined)
@@ -331,6 +332,7 @@ export function App() {
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
   const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({})
+  const [runningAppPaths, setRunningAppPaths] = useState<Record<string, boolean>>({})
   const [selectedValue, setSelectedValue] = useState('')
   const selectedValueRef = useRef('')
   const [optionsFor, setOptionsFor] = useState<Action | null>(null)
@@ -661,6 +663,28 @@ export function App() {
         setIconUrls((current) => ({ ...current, [action.id]: iconUrl }))
       })
     }
+  }, [actions])
+
+  useEffect(() => {
+    const appPaths = Array.from(new Set(actions.map(appPathForRunningStatus).filter(Boolean) as string[]))
+    if (!appPaths.length) return
+    const requestId = ++runningAppsRequestIdRef.current
+    window.nvm.getRunningAppPaths(appPaths).then((openPaths) => {
+      if (requestId !== runningAppsRequestIdRef.current) return
+      const openSet = new Set(openPaths)
+      setRunningAppPaths((current) => {
+        let changed = false
+        const next = { ...current }
+        for (const appPath of appPaths) {
+          const isOpen = openSet.has(appPath)
+          if (next[appPath] !== isOpen) {
+            next[appPath] = isOpen
+            changed = true
+          }
+        }
+        return changed ? next : current
+      })
+    }).catch(() => {})
   }, [actions])
 
   const selectedAction = useMemo(
@@ -1548,6 +1572,11 @@ export function App() {
     return renderChildEmpty(view.emptyView?.title || fallback, view.emptyView?.subtitle)
   }
 
+  function runningAppClassName(action: Action) {
+    const appPath = appPathForRunningStatus(action)
+    return appPath && runningAppPaths[appPath] ? 'runningAppResult' : undefined
+  }
+
   function commandItemFromAction(action: Action): CommandItem {
     return {
       id: action.id,
@@ -1556,6 +1585,7 @@ export function App() {
       icon: action.icon,
       image: action.thumbnailUrl || action.iconUrl || iconUrls[action.id] || undefined,
       appearance: action.appearance,
+      className: runningAppClassName(action),
       primaryAction: { type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action },
       actionPanel: action.actionPanel || actionPanelFromActions([{ type: 'nativeAction', title: action.title, shortcut: action.shortcut, nativeAction: action }]),
     }
@@ -1619,6 +1649,11 @@ export function App() {
   function appPathForIcon(action: Action | null | undefined) {
     const candidate = action?.app?.path || action?.rootAction?.path
     return candidate?.endsWith('.app') ? candidate : null
+  }
+
+  function appPathForRunningStatus(action: Action | null | undefined) {
+    const candidate = action?.extensionId === 'nevermind.apps' ? action.rootAction?.path : action?.app?.path
+    return typeof candidate === 'string' && candidate ? candidate : null
   }
 
   function diskPathForAction(action: Action | null | undefined) {

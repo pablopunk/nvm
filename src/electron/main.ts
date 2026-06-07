@@ -20,7 +20,7 @@ import { createPaletteWindowController, installPermissionHandlers } from './pale
 import { settingDefinition, SETTING_DEFINITIONS, settingValue, toggledSettingValue } from './settings'
 import { calculate, calculateDetailed, calculateRateResult, getUrlFromQuery, hashValue, normalize, parseRateExpression, score, scoreNormalized } from './search-utils'
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
-import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
+import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, runningAppPaths as detectRunningAppPaths, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -265,6 +265,9 @@ const appIconCache = new Map<string, string | null>()
 const appIconLoadPromises = new Map<string, Promise<string | null>>()
 const pendingAppIconPaths = new Set<string>()
 const appIconWaiters = new Map<string, Array<(result: string | null) => void>>()
+const RUNNING_APPS_SNAPSHOT_TTL_MS = 1500
+let runningAppsSnapshot: { updatedAt: number; paths: Set<string> } | null = null
+let runningAppsRefresh: Promise<Set<string>> | null = null
 const pendingThumbnailPaths = new Map<string, string>()
 const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
@@ -688,6 +691,35 @@ async function getAppIconDataUrl(appPath) {
     appIconLoadPromises.set(appPath, promise)
     jobRegistry.schedule('cache.app-icons', 'icon-request', 0)
     return promise
+  })
+}
+
+function normalizedRunningPath(value) {
+  const text = String(value || '').trim()
+  return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text
+}
+
+async function runningAppPathSnapshot() {
+  const now = Date.now()
+  if (runningAppsSnapshot && now - runningAppsSnapshot.updatedAt < RUNNING_APPS_SNAPSHOT_TTL_MS) return runningAppsSnapshot.paths
+  if (runningAppsRefresh) return runningAppsRefresh
+  runningAppsRefresh = measureDebugPerformance('apps.running.snapshot', { indexedCount: appIndex.length, alwaysLog: true }, async () => {
+    const paths = await detectRunningAppPaths(appIndex)
+    runningAppsSnapshot = { updatedAt: Date.now(), paths }
+    markDebugPerformance('apps.running.snapshot.result', { count: paths.size })
+    return paths
+  }).finally(() => {
+    runningAppsRefresh = null
+  })
+  return runningAppsRefresh
+}
+
+async function runningAppPathsForRenderer(appPaths) {
+  return measureDebugPerformance('apps.running.get', { requestedCount: Array.isArray(appPaths) ? appPaths.length : 0, alwaysLog: true }, async () => {
+    const requestedPaths = Array.from(new Set((Array.isArray(appPaths) ? appPaths : []).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 30)
+    if (!requestedPaths.length) return []
+    const runningPaths = await runningAppPathSnapshot()
+    return requestedPaths.filter((appPath) => runningPaths.has(normalizedRunningPath(appPath)))
   })
 }
 
@@ -4737,6 +4769,7 @@ async function indexApplications() {
       const deduped = new Map()
       for (const item of apps) deduped.set(normalize(item.name), item)
       appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
+      runningAppsSnapshot = null
       markDebugPerformance('apps.index.result', { scannedCount: apps.length, indexedCount: appIndex.length })
       paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
     } catch (error) {
@@ -5439,6 +5472,7 @@ app.whenReady().then(async () => {
     return { ok: false, error: 'error' in result ? result.error : 'unknown' }
   })
   ipcHandleMeasured('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
+  ipcHandleMeasured('apps:running-paths', (_event, appPaths) => runningAppPathsForRenderer(appPaths))
   ipcHandleMeasured('palette:set-mode', (_event, mode) => {
     paletteWindow.setPaletteSizeForMode(mode)
     paletteWindow.centerWindow()

@@ -202,6 +202,7 @@ export type CommandItem = {
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
   appearance?: CommandItemAppearance
+  className?: string
   detail?: CommandDetail
 }
 

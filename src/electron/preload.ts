@@ -57,6 +57,7 @@ const api: NevermindApi = {
   tweakExtension: (input) => invokeMeasured('ai-builder:tweak-extension', input),
   startBuilderChat: (input) => invokeMeasured('ai-builder:start-chat', input),
   getAppIcon: (appPath) => invokeMeasured('apps:icon', appPath),
+  getRunningAppPaths: (appPaths) => invokeMeasured('apps:running-paths', appPaths),
   setPaletteMode: (mode) => invokeMeasured('palette:set-mode', mode),
   hide: () => invokeMeasured('palette:hide'),
   quitApp: () => invokeMeasured('app:quit'),

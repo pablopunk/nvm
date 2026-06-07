@@ -1392,6 +1392,24 @@ kbd {
 .accessory[data-tone='danger'] { color: var(--danger-text); }
 .accessory[data-tone='muted'] { color: var(--text-muted); }
 
+.runningAppResult .resultIcon {
+  position: relative;
+  overflow: visible;
+}
+
+.runningAppResult .resultIcon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 2px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--item-foreground-green);
+  box-shadow: 0 0 0 2px var(--surface-2);
+  transform: translateX(-50%);
+}
+
 .accessoryText {
   overflow: hidden;
   text-overflow: ellipsis;
