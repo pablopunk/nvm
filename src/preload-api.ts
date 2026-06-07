@@ -120,6 +120,7 @@ export type NevermindApi = {
   tweakExtension: (input: { extensionFile: string; title?: string; prompt?: string }) => Promise<ViewActionResult>
   startBuilderChat: (input: { prompt: string; title?: string }) => Promise<ViewActionResult>
   getAppIcon: (appPath: string) => Promise<string | null>
+  getRunningAppPaths: (appPaths: string[]) => Promise<string[]>
   setPaletteMode: (mode: PaletteMode) => Promise<void>
   hide: () => Promise<void>
   quitApp: () => Promise<{ ok: boolean }>

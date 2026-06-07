@@ -195,8 +195,9 @@ async function scanLinuxApps() {
       if (/^(NoDisplay|Hidden)=true$/im.test(body)) return
       const name = body.match(/^Name=(.+)$/m)?.[1]
       const exec = body.match(/^Exec=(.+)$/m)?.[1]
+      const wmClass = body.match(/^StartupWMClass=(.+)$/m)?.[1]
       if (!name || !exec) return
-      found.push({ id: fullPath, name, path: fullPath, command: exec.replace(/\s*%[fFuUdDnNickvm]/g, '').trim() })
+      found.push({ id: fullPath, name, path: fullPath, command: exec.replace(/\s*%[fFuUdDnNickvm]/g, '').trim(), wmClass })
     }))
   }))
   return found
@@ -204,6 +205,76 @@ async function scanLinuxApps() {
 
 export async function scanApps() {
   return osFunction({ darwin: scanMacApps, win32: scanWindowsApps }, scanLinuxApps)()
+}
+
+type RunningAppCandidate = { id?: string; name?: string; path?: string; command?: string; wmClass?: string }
+
+function normalizedRunningPath(value: unknown) {
+  const text = String(value || '').trim()
+  return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text
+}
+
+async function runningMacAppPaths() {
+  const script = `set outputLines to {}
+tell application "System Events"
+repeat with appProcess in (application processes whose background only is false)
+set appPath to ""
+try
+set appPath to POSIX path of (file of appProcess as alias)
+end try
+if appPath is not "" then set end of outputLines to appPath
+end repeat
+end tell
+set AppleScript's text item delimiters to linefeed
+return outputLines as text`
+  const result = await runAppleScript(script, 5_000)
+  if (result.exitCode !== 0) return new Set<string>()
+  return new Set(result.stdout.split(/\r?\n/).map((item) => normalizedRunningPath(item)).filter(Boolean))
+}
+
+function shellWords(command: string) {
+  return command.match(/"[^"]+"|'[^']+'|\S+/g)?.map((token) => token.replace(/^['"]|['"]$/g, '')) || []
+}
+
+function executableNameForLinuxCommand(command: unknown) {
+  const words = shellWords(String(command || '').trim())
+  while (words[0] && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || path.basename(words[0]) === 'env')) words.shift()
+  return words[0] ? path.basename(words[0]).toLowerCase() : ''
+}
+
+async function linuxProcessNames() {
+  const names = new Set<string>()
+  const entries = await fs.readdir('/proc', { withFileTypes: true }).catch(() => [])
+  await Promise.all(entries.map(async (entry) => {
+    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) return
+    const base = path.join('/proc', entry.name)
+    const [comm, cmdline] = await Promise.all([
+      fs.readFile(path.join(base, 'comm'), 'utf8').catch(() => ''),
+      fs.readFile(path.join(base, 'cmdline'), 'utf8').catch(() => ''),
+    ])
+    const commName = comm.trim()
+    if (commName) names.add(commName.toLowerCase())
+    const commandName = path.basename(cmdline.split('\0')[0] || '').trim()
+    if (commandName) names.add(commandName.toLowerCase())
+  }))
+  return names
+}
+
+async function runningLinuxAppPaths(apps: RunningAppCandidate[] = []) {
+  const processNames = await linuxProcessNames()
+  const running = new Set<string>()
+  for (const item of apps) {
+    const candidates = [
+      executableNameForLinuxCommand(item.command),
+      String(item.wmClass || '').toLowerCase(),
+    ].filter(Boolean)
+    if (candidates.some((candidate) => processNames.has(candidate))) running.add(normalizedRunningPath(item.path || item.id))
+  }
+  return running
+}
+
+export async function runningAppPaths(apps: RunningAppCandidate[] = []) {
+  return osFunction({ darwin: runningMacAppPaths, linux: () => runningLinuxAppPaths(apps) }, async () => new Set<string>())()
 }
 
 export function watchApps(onChange: () => void) {
