@@ -333,6 +333,7 @@ export function App() {
   const [actions, setActions] = useSearchResults<Action>(window.nvm.search, query, refreshNonce)
   const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({})
   const [runningAppPaths, setRunningAppPaths] = useState<Record<string, boolean>>({})
+  const [runningAppPathsRefreshNonce, setRunningAppPathsRefreshNonce] = useState(0)
   const [selectedValue, setSelectedValue] = useState('')
   const selectedValueRef = useRef('')
   const [optionsFor, setOptionsFor] = useState<Action | null>(null)
@@ -665,6 +666,10 @@ export function App() {
     }
   }, [actions])
 
+  useEffect(() => window.nvm.onRunningAppPathsChanged(() => {
+    setRunningAppPathsRefreshNonce((nonce) => nonce + 1)
+  }), [])
+
   useEffect(() => {
     const appPaths = Array.from(new Set(actions.map(appPathForRunningStatus).filter(Boolean) as string[]))
     if (!appPaths.length) return
@@ -685,7 +690,7 @@ export function App() {
         return changed ? next : current
       })
     }).catch(() => {})
-  }, [actions])
+  }, [actions, runningAppPathsRefreshNonce])
 
   const selectedAction = useMemo(
     () => actions.find((action) => action.id === selectedValue),
