@@ -27,6 +27,7 @@ import { openExternalUrl } from './url-utils'
 import { createExtensionWindowManager } from './extension-window-manager'
 import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
+import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -616,18 +617,8 @@ function defaultActionIdFor(action: any) {
 let shortcutByAiChatIdCache: Map<string, string> | null = null
 function shortcutByAiChatIdMap() {
   if (shortcutByAiChatIdCache) return shortcutByAiChatIdCache
-  const shortcutsByChat = new Map<string, string[]>()
-  for (const [actionId, storedAction] of Object.entries(userState.shortcutActions) as Array<[string, any]>) {
-    if (storedAction?.aiChatId && userState.shortcuts[actionId]) {
-      shortcutsByChat.set(storedAction.aiChatId, [...(shortcutsByChat.get(storedAction.aiChatId) || []), userState.shortcuts[actionId]])
-    }
-  }
-  const map = new Map<string, string>()
-  for (const [chatId, shortcuts] of shortcutsByChat) {
-    if (shortcuts.length === 1 && chatTouchedExtensionFiles(userState.aiChats[chatId]).length === 1) map.set(chatId, shortcuts[0])
-  }
-  shortcutByAiChatIdCache = map
-  return map
+  shortcutByAiChatIdCache = buildShortcutByAiChatIdMap(userState.shortcutActions, userState.shortcuts, userState.aiChats, chatTouchedExtensionFiles)
+  return shortcutByAiChatIdCache
 }
 
 function invalidateShortcutCaches() {
