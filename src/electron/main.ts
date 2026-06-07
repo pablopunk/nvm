@@ -29,7 +29,7 @@ import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
 import { extensionPermissionCapabilities, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
-import { createMeasuredIpcRegistrar } from './ipc-registration'
+import { registerAppIpcHandlers } from './app-ipc-handlers'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -5208,8 +5208,6 @@ async function runPaletteDebugCli() {
   console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
 }
 
-const ipcHandleMeasured = createMeasuredIpcRegistrar({ ipcMain, measure: measureDebugPerformance, summarize: summarizeDebugValue })
-
 async function pickFormFieldPaths(event, input: any = {}) {
   const senderWindow = BrowserWindow.fromWebContents(event.sender) || paletteWindow.win || undefined
   const type = input.type === 'folder' ? 'folder' : input.type === 'files' ? 'files' : 'file'
@@ -5255,88 +5253,58 @@ app.whenReady().then(async () => {
   powerMonitor.on('resume', () => jobRegistry.emit('wake'))
   jobRegistry.emit('login')
 
-  ipcHandleMeasured('actions:search', (_event, query, options) => searchActions(query, options))
-  ipcHandleMeasured('actions:execute', (_event, action) => executeActionForIpc(action))
-  ipcHandleMeasured('view-action:execute', (_event, action) => executeViewActionForIpc(action))
-  ipcMain.handle('view:refresh', (event, input) => measureDebugPerformance('ipc.view:refresh.handler', { args: [summarizeDebugValue(input)], alwaysLog: true }, () => refreshViewForIpc(input)))
-  ipcHandleMeasured('dialog:pick-form-field-paths', pickFormFieldPaths)
-  ipcMain.on('drag:file', startFileDrag)
-  ipcHandleMeasured('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
-  ipcHandleMeasured('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))
-  ipcHandleMeasured('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
-  ipcHandleMeasured('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
-  ipcHandleMeasured('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
-  ipcHandleMeasured('actions:remove-alias', (_event, action, alias) => removeAlias(action, alias))
-  ipcHandleMeasured('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
-  ipcHandleMeasured('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
-  ipcHandleMeasured('settings:get', (_event, id) => getSetting(id))
-  ipcHandleMeasured('system:open-keyboard-settings', () => openSystemKeyboardSettings())
-  ipcHandleMeasured('actions:get-shortcuts', () => getShortcuts())
-  ipcHandleMeasured('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))
-  ipcHandleMeasured('actions:suspend-shortcuts', () => unregisterActionShortcuts())
-  ipcHandleMeasured('actions:resume-shortcuts', () => registerActionShortcuts())
-  ipcHandleMeasured('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
-  ipcHandleMeasured('actions:clear-override', (_event, action) => clearOverride(action))
-  ipcHandleMeasured('actions:duplicate-created', (_event, action) => duplicateCreatedAction(action))
-  ipcHandleMeasured('actions:remove-created', (_event, action) => removeCreatedAction(action))
-  ipcHandleMeasured('ai-builder:tweak-extension', (_event, input: any = {}) => {
-    const file = input?.extensionFile || input?.extensionId
-    if (!file) return { toast: { message: 'No extension specified', tone: 'error' } }
-    const item = getOrCreateExtensionChat(file, input.title || file)
-    return normalizeHostViewResult({ view: aiChatView(item, { initialPrompt: input.prompt }) })
-  })
-  ipcHandleMeasured('ai-builder:start-chat', (_event, input: any = {}) => {
-    const item = createDraftAiChat(String(input?.prompt || input?.query || ''))
-    return normalizeHostViewResult({ view: aiChatView(item, { start: item.messages.length <= 1 }) })
-  })
-  ipcHandleMeasured('nevermind:auth-status', async () => {
-    const auth = await getNevermindAuth()
-    activeNevermindBaseUrl = auth?.baseUrl || null
-    if (auth?.baseUrl) warmNevermindCompatibilityCache(auth.baseUrl)
-    logInfo('nevermind.auth-status.check', { authed: Boolean(auth), email: auth?.email, userData: app.getPath('userData') }, { source: 'host', scope: 'nevermind' })
-    return auth ? { authed: true, email: auth.email } : { authed: false }
-  })
-  ipcHandleMeasured('nevermind:sign-in', async () => {
-    const result = await signInToNevermind()
-    if (result.ok) {
-      activeNevermindBaseUrl = result.auth.baseUrl
-      warmNevermindCompatibilityCache(result.auth.baseUrl)
-      invalidateExtensionRootItems()
-      broadcastAuthChanged({ authed: true, email: result.auth.email })
-      return { ok: true, email: result.auth.email }
-    }
-    return { ok: false, error: 'error' in result ? result.error : 'unknown' }
-  })
-  ipcHandleMeasured('apps:icon', (_event, appPath) => appIconCache.get(appPath))
-  ipcHandleMeasured('apps:running-paths', (_event, appPaths) => runningAppStatus.getForRenderer(appPaths))
-  ipcHandleMeasured('palette:set-mode', (_event, mode) => {
-    paletteWindow.setPaletteSizeForMode(mode)
-    paletteWindow.centerWindow()
-  })
-  ipcHandleMeasured('palette:hide', () => paletteWindow.hidePalette())
-  ipcHandleMeasured('app:quit', () => {
-    requestQuitApp('ipc')
-    return { ok: true }
-  })
-  ipcHandleMeasured('palette:shortcut-ready', () => paletteWindow.revealPalette())
-  ipcHandleMeasured('camera:request-access', async () => {
-    if (!hasCapability('camera')) return { ok: false, status: 'unsupported' }
-    if (process.platform !== 'darwin') return { ok: true, status: 'unknown' }
-    const status = systemPreferences.getMediaAccessStatus('camera')
-    if (status === 'granted') return { ok: true, status }
-    if (status === 'denied' || status === 'restricted') return { ok: false, status }
-    return { ok: true, status }
-  })
-  ipcHandleMeasured('extension-window:get-state', (_event, id) => {
-    return extensionWindowManager.getState(String(id || ''))
-  })
-  ipcHandleMeasured('extension-window:close', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    win?.close()
-  })
-  ipcHandleMeasured('logs:write', (_event, level, message, data) => {
-    const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo
-    method(String(message || ''), data, { source: 'renderer', scope: 'renderer' })
+  registerAppIpcHandlers({
+    ipcMain,
+    measureDebugPerformance,
+    summarizeDebugValue,
+    searchActions,
+    executeActionForIpc,
+    executeViewActionForIpc,
+    refreshViewForIpc,
+    pickFormFieldPaths,
+    startFileDrag,
+    sendAiChatMessage,
+    noteAiChatExited,
+    abortAiChat,
+    resetAiChat,
+    setAlias,
+    removeAlias,
+    setShortcut,
+    setPaletteHotkey,
+    getSetting,
+    openSystemKeyboardSettings,
+    getShortcuts,
+    removeShortcut,
+    unregisterActionShortcuts,
+    registerActionShortcuts,
+    setOverride,
+    clearOverride,
+    duplicateCreatedAction,
+    removeCreatedAction,
+    getOrCreateExtensionChat,
+    aiChatView,
+    normalizeHostViewResult,
+    createDraftAiChat,
+    getNevermindAuth,
+    setActiveNevermindBaseUrl: (baseUrl) => { activeNevermindBaseUrl = baseUrl },
+    warmNevermindCompatibilityCache,
+    logInfo,
+    userDataPath: () => app.getPath('userData'),
+    signInToNevermind,
+    invalidateExtensionRootItems,
+    broadcastAuthChanged,
+    appIconCache,
+    runningAppStatus,
+    paletteWindow,
+    requestQuitApp,
+    hasCapability,
+    processPlatform: process.platform,
+    getCameraMediaAccessStatus: () => systemPreferences.getMediaAccessStatus('camera'),
+    extensionWindowManager,
+    BrowserWindow,
+    logError,
+    logWarn,
+    loggerDebug,
   })
 })
 
