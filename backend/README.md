@@ -23,28 +23,6 @@ Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
 - `pnpm db:generate` → produces a new `drizzle/NNNN_*.sql`
 - `pnpm db:migrate` → applies pending migrations (also runs automatically on `pnpm build` / Vercel deploy)
 
-## Credits and billing
-
-Credits are user-facing retail units, not raw provider dollars. By default `CREDIT_USD=0.01` and `CREDIT_MARKUP=5`, so 1 credit represents about one cent of retail usage while covering roughly $0.002 of raw model cost. New and returning users receive a monthly free allowance up to `MONTHLY_FREE_CREDITS` free credits; paid Stripe prices map to monthly subscription or one-time top-up credit grants through `STRIPE_SUBSCRIPTION_TIERS` and `STRIPE_TOP_UP_PACKS`.
-
-Suggested launch packages:
-
-- Free: 500 credits/month, free-model pool only.
-- Pro: $10/month for 1,000 paid credits/month.
-- Top-up: $10 one-time for 1,000 paid credits when a user is low or out.
-
-## Routes
-
-- `GET  /` — landing, sign-in link
-- `GET  /dashboard` — auth-gated balance view
-- `GET  /api/auth/signin` — redirects to WorkOS AuthKit
-- `GET  /api/auth/callback` — exchanges code → session cookie, upserts user + free grant
-- `POST /api/auth/signout`
-- `GET  /api/me` — `{ email, plan, balance, recentUsage }`
-- `POST /api/billing/checkout` — create a Stripe Checkout session for subscription or top-up
-- `POST /api/billing/portal` — create a Stripe Billing Portal session
-- `POST /api/billing/webhook` — Stripe webhook receiver with idempotent credit grants
-
 ## Deploy
 
 Push to GitHub, import in Vercel, set env vars, point `nvm.fyi` + `api.nvm.fyi` at it.
