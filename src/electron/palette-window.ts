@@ -1,6 +1,7 @@
 import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
 import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, canRequestMediaPermission, paletteBrowserWindowOptions } from './os'
 import * as logger from './logger'
+import { openExternalUrl } from './url-utils'
 import { markDebugPerformance, measureDebugPerformanceSync } from './debug-performance'
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
@@ -30,16 +31,19 @@ function addWindowBlurMargin(size: { width: number; height: number }) {
   }
 }
 
+function isTrustedAppPage(url: string, isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
+  return url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
+}
+
 export function installPermissionHandlers(isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
-  const isTrustedAppPage = (url: string) => url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
   const allowedPermissions = ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write']
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
     const url = webContents?.getURL() || ''
-    return isTrustedAppPage(url) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)
+    return isTrustedAppPage(url, isDev, rendererUrl) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)
   })
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL()
-    if (isTrustedAppPage(url) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)) return callback(true)
+    if (isTrustedAppPage(url, isDev, rendererUrl) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)) return callback(true)
     callback(false)
   })
 }
@@ -107,6 +111,15 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       }
     })
 
+    win.webContents.setWindowOpenHandler(({ url }) => {
+      void openExternalUrl(url)
+      return { action: 'deny' }
+    })
+    win.webContents.on('will-navigate', (event, url) => {
+      if (isTrustedAppPage(url, options.isDev, options.rendererUrl)) return
+      event.preventDefault()
+      void openExternalUrl(url)
+    })
     win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
       debugLog('renderer.didFailLoad', { errorCode, errorDescription, validatedURL })
     })

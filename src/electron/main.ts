@@ -22,6 +22,7 @@ import { calculate, calculateDetailed, calculateRateResult, getUrlFromQuery, has
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, runningAppPaths as detectRunningAppPaths, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
+import { openExternalUrl } from './url-utils'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
@@ -2065,6 +2066,16 @@ function createOrUpdateExtensionWindow(view: any, options: any = {}) {
   win.once('ready-to-show', () => { centerExtensionWindow(win); win.show() })
   if (options.hideOnBlur) win.on('blur', () => win.hide())
   win.on('closed', () => { if (extensionWindows.get(id)?.win === win) extensionWindows.delete(id) })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void openExternalUrl(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (event, url) => {
+    const expectedDevUrl = rendererUrl ? `${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}` : ''
+    if (url.startsWith('file:') || (isDev && expectedDevUrl && url.startsWith(expectedDevUrl))) return
+    event.preventDefault()
+    void openExternalUrl(url)
+  })
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => loggerDebug('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }, { source: 'host', scope: 'extensions' }))
   loadExtensionWindow(win, id)
   return record
@@ -2142,7 +2153,9 @@ async function executeViewAction(action, launchContext?: any) {
       runInBackground(() => openPathWithApp(action.path, action.appPath || action.app?.path))
       break
     case 'openUrl':
-      runInBackground(() => shell.openExternal(action.url))
+      runInBackground(async () => {
+        if (!await openExternalUrl(action.url)) logWarn('openUrl.rejected', { url: action.url }, { source: 'host', scope: 'action' })
+      })
       break
     case 'copyText':
       clipboard.writeText(action.text || '')
@@ -3973,7 +3986,9 @@ function createExtensionContext(extension, command, launchContext?: any) {
         searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
       shell: canUseSystem ? {
-        openExternal: (url) => runInBackground(() => shell.openExternal(url)),
+        openExternal: (url) => runInBackground(async () => {
+          if (!await openExternalUrl(url)) throw new Error('Unsafe external URL')
+        }),
         exec: runShellCommand,
         script: runShellScript,
         appleScript: (script, options: any = {}) => new Promise((resolve) => {

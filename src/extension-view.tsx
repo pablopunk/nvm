@@ -225,78 +225,89 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
   return <div className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}><div className="cameraFrame"><video ref={videoRef} className="cameraVideo" autoPlay playsInline muted={muted} controls={controls} />{switcher}{error ? <div className="cameraError"><strong>Camera Issue</strong><span>{error}</span></div> : null}<div className="cameraStatus">{status}</div></div>{actions}</div>
 }
 
-export function ExtensionViewRenderer({ view, aiChat, nevermindAuthed, onSignInToNevermind, formValues, setFormValues, filterItems, filterSections, renderMarkdown, renderActionPanel, actionPanelRows, renderRootIcon, renderEmpty = fallbackEmpty, runDefaultAction, runAction, sendAiPrompt, abortAiChat, dragPathForItem, startItemDrag, selectedItemId }: ExtensionViewRendererProps) {
-  function pagination() {
-    if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
-    return <button className="loadMoreButton" type="button" onClick={() => runAction(view.pagination!.onLoadMore!)}>Load More</button>
-  }
+type ExtensionViewSurfaceProps = ExtensionViewRendererProps & { renderEmpty: NonNullable<ExtensionViewRendererProps['renderEmpty']> }
 
-  if (view.type === 'grid') {
-    return <GridView
-      items={filterItems(view.items)}
-      sections={filterSections(view)}
-      subtitle={view.subtitle}
-      layout={view.layout || 'square'}
-      style={gridStyle(view)}
-      empty={renderEmpty(view)}
-      isLoading={view.isLoading}
-      pagination={pagination()}
-      renderItem={(item) => <CommandTile key={item.id} value={item.id} title={item.title} subtitle={item.subtitle} image={item.image} video={item.video || item.videoUrl} actionHint={tileActionHint(item)} appearance={item.appearance} draggable={Boolean(dragPathForItem(item))} onDragStart={(event) => startItemDrag(event, item)} onSelect={() => runDefaultAction(item)} />}
-    />
-  }
+function ViewPagination({ view, runAction }: Pick<ExtensionViewSurfaceProps, 'view' | 'runAction'>) {
+  if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
+  return <button className="loadMoreButton" type="button" onClick={() => runAction(view.pagination!.onLoadMore!)}>Load More</button>
+}
 
-  if (view.type === 'list') {
-    const items = filterItems(view.items)
-    if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={renderRootIcon} onSelect={runDefaultAction} emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE} emptySubtitle={view.emptyView?.subtitle} />
-    const selected = items.find((item) => item.id === selectedItemId) || items[0]
-    const list = <ListView
-      items={items}
-      sections={filterSections(view)}
-      empty={renderEmpty(view)}
-      isLoading={view.isLoading}
-      pagination={pagination()}
-      renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} appearance={item.appearance} onSelect={() => runDefaultAction(item)} />}
-    />
-    if (view.detail?.visible && selected?.detail) return <div className={`extensionListWithDetail extensionListDetail-${view.detail.placement || 'side'}`}><div className="extensionListPane">{list}</div><ExtensionItemDetail item={selected} renderMarkdown={renderMarkdown} renderActionPanel={renderActionPanel} actionPanelRows={actionPanelRows} /></div>
-    return list
-  }
+function GridExtensionView({ view, filterItems, filterSections, renderEmpty, runDefaultAction, dragPathForItem, startItemDrag, runAction }: ExtensionViewSurfaceProps) {
+  return <GridView
+    items={filterItems(view.items)}
+    sections={filterSections(view)}
+    subtitle={view.subtitle}
+    layout={view.layout || 'square'}
+    style={gridStyle(view)}
+    empty={renderEmpty(view)}
+    isLoading={view.isLoading}
+    pagination={<ViewPagination view={view} runAction={runAction} />}
+    renderItem={(item) => <CommandTile key={item.id} value={item.id} title={item.title} subtitle={item.subtitle} image={item.image} video={item.video || item.videoUrl} actionHint={tileActionHint(item)} appearance={item.appearance} draggable={Boolean(dragPathForItem(item))} onDragStart={(event) => startItemDrag(event, item)} onSelect={() => runDefaultAction(item)} />}
+  />
+}
 
-  if (view.type === 'chat') {
-    if (view.aiChat && nevermindAuthed === false) {
-      return <NevermindSignInGate onSignIn={onSignInToNevermind} />
-    }
-    if (view.aiChat && aiChat.limit) {
-      return <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />
-    }
-    const messages = (view.aiChat ? aiChat.messages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
-    const input = view.aiChat ? <form className="chatInputRow" onSubmit={(event) => { event.preventDefault(); sendAiPrompt(aiChat.input) }}><textarea ref={aiChat.inputRef} rows={1} value={aiChat.input} onChange={(event) => aiChat.setInput(event.target.value)} onInput={(event) => aiChat.resizeInput(event.currentTarget)} onKeyDown={(event) => { if (event.key !== 'Enter') return; event.stopPropagation(); if (!event.shiftKey) { event.preventDefault(); sendAiPrompt(aiChat.input) } }} placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'} />{aiChat.busy ? <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => abortAiChat(view.chatId)}><Square size={14} fill="currentColor" /></button> : <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiChat.input.trim()}><CornerDownLeft size={16} /></button>}</form> : null
-    return <ChatView messages={messages} isBusy={aiChat.busy} input={input} messagesRef={view.aiChat ? aiChat.messagesRef : undefined} />
-  }
+function ListExtensionView({ view, filterItems, filterSections, renderRootIcon, renderEmpty, renderMarkdown, renderActionPanel, actionPanelRows, runDefaultAction, runAction, selectedItemId }: ExtensionViewSurfaceProps) {
+  const items = filterItems(view.items)
+  if (view.presentation === 'root') return <RootCommandList items={items} iconForItem={renderRootIcon} onSelect={runDefaultAction} emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE} emptySubtitle={view.emptyView?.subtitle} />
+  const selected = items.find((item) => item.id === selectedItemId) || items[0]
+  const list = <ListView
+    items={items}
+    sections={filterSections(view)}
+    empty={renderEmpty(view)}
+    isLoading={view.isLoading}
+    pagination={<ViewPagination view={view} runAction={runAction} />}
+    renderItem={(item) => <CommandRow key={item.id} value={item.id} className="result extensionListItem" icon={iconForItem(item)} title={item.title} subtitle={item.subtitle || item.text} accessories={item.accessories} shortcut={item.actionPanelVisibility === 'hidden' ? undefined : actionsFromPanel(item.actionPanel, item.actions || []).find((action) => action.shortcut)?.shortcut} appearance={item.appearance} onSelect={() => runDefaultAction(item)} />}
+  />
+  if (view.detail?.visible && selected?.detail) return <div className={`extensionListWithDetail extensionListDetail-${view.detail.placement || 'side'}`}><div className="extensionListPane">{list}</div><ExtensionItemDetail item={selected} renderMarkdown={renderMarkdown} renderActionPanel={renderActionPanel} actionPanelRows={actionPanelRows} /></div>
+  return list
+}
 
-  if (view.type === 'form') return <FormView fields={view.fields || []} values={formValues} onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))} onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, formValues }) : undefined} submitTitle={view.submitAction?.title} />
+function ChatExtensionView({ view, aiChat, nevermindAuthed, onSignInToNevermind, renderMarkdown, runAction, sendAiPrompt, abortAiChat }: ExtensionViewSurfaceProps) {
+  if (view.aiChat && nevermindAuthed === false) return <NevermindSignInGate onSignIn={onSignInToNevermind} />
+  if (view.aiChat && aiChat.limit) return <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />
+  const messages = (view.aiChat ? aiChat.messages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
+  const input = view.aiChat ? <form className="chatInputRow" onSubmit={(event) => { event.preventDefault(); sendAiPrompt(aiChat.input) }}><textarea ref={aiChat.inputRef} rows={1} value={aiChat.input} onChange={(event) => aiChat.setInput(event.target.value)} onInput={(event) => aiChat.resizeInput(event.currentTarget)} onKeyDown={(event) => { if (event.key !== 'Enter') return; event.stopPropagation(); if (!event.shiftKey) { event.preventDefault(); sendAiPrompt(aiChat.input) } }} placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'} />{aiChat.busy ? <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => abortAiChat(view.chatId)}><Square size={14} fill="currentColor" /></button> : <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiChat.input.trim()}><CornerDownLeft size={16} /></button>}</form> : null
+  return <ChatView messages={messages} isBusy={aiChat.busy} input={input} messagesRef={view.aiChat ? aiChat.messagesRef : undefined} />
+}
 
-  if (view.type === 'editor') {
-    const editorActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-editor', false))
-    const editorActions = editorActionRows.length ? renderActionPanel(editorActionRows) : null
-    return <EditorSurface view={view} actions={editorActions} renderMarkdown={renderMarkdown} runAction={runAction} />
-  }
+function FormExtensionView({ view, formValues, setFormValues, runAction }: ExtensionViewSurfaceProps) {
+  return <FormView fields={view.fields || []} values={formValues} onChange={(id, value) => setFormValues((current) => ({ ...current, [id]: value }))} onSubmit={view.submitAction ? () => runAction({ ...view.submitAction!, formValues }) : undefined} submitTitle={view.submitAction?.title} />
+}
 
-  if (view.type === 'progress') return <ProgressView steps={view.steps || []} value={view.value} total={view.total} status={view.status} />
+function EditorExtensionView({ view, renderMarkdown, renderActionPanel, actionPanelRows, runAction }: ExtensionViewSurfaceProps) {
+  const editorActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-editor', false))
+  const editorActions = editorActionRows.length ? renderActionPanel(editorActionRows) : null
+  return <EditorSurface view={view} actions={editorActions} renderMarkdown={renderMarkdown} runAction={runAction} />
+}
 
-  if (view.type === 'webview') {
-    const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
-    const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
-    return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox="allow-scripts allow-forms allow-same-origin" allow="camera; microphone; display-capture; autoplay; clipboard-read; clipboard-write" />{webviewActions}</div>
-  }
+function WebExtensionView({ view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {
+  const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
+  const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
+  return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox="allow-scripts allow-forms allow-same-origin" allow="camera; microphone; display-capture; autoplay; clipboard-read; clipboard-write" />{webviewActions}</div>
+}
 
-  if (view.type === 'camera') {
-    const cameraActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-camera', false))
-    const cameraActions = cameraActionRows.length ? renderActionPanel(cameraActionRows) : null
-    return <CameraView view={view} actions={cameraActions} />
-  }
+function CameraExtensionView({ view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {
+  const cameraActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-camera', false))
+  const cameraActions = cameraActionRows.length ? renderActionPanel(cameraActionRows) : null
+  return <CameraView view={view} actions={cameraActions} />
+}
 
+function PreviewExtensionView({ view, renderMarkdown, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {
   const previewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-view', false))
   const previewActions = previewActionRows.length ? renderActionPanel(previewActionRows) : null
   const previewContent = view.content ? renderMarkdown(view.content) : view.subtitle || ''
   return <div className={view.presentation === 'preview' || view.size === 'large' ? 'previewMode' : undefined}><PreviewView content={previewContent} image={view.image} video={view.video || view.videoUrl} actions={previewActions} /></div>
+}
+
+export function ExtensionViewRenderer(props: ExtensionViewRendererProps) {
+  const surfaceProps: ExtensionViewSurfaceProps = { ...props, renderEmpty: props.renderEmpty || fallbackEmpty }
+  if (props.view.type === 'grid') return <GridExtensionView {...surfaceProps} />
+  if (props.view.type === 'list') return <ListExtensionView {...surfaceProps} />
+  if (props.view.type === 'chat') return <ChatExtensionView {...surfaceProps} />
+  if (props.view.type === 'form') return <FormExtensionView {...surfaceProps} />
+  if (props.view.type === 'editor') return <EditorExtensionView {...surfaceProps} />
+  if (props.view.type === 'progress') return <ProgressView steps={props.view.steps || []} value={props.view.value} total={props.view.total} status={props.view.status} />
+  if (props.view.type === 'webview') return <WebExtensionView {...surfaceProps} />
+  if (props.view.type === 'camera') return <CameraExtensionView {...surfaceProps} />
+  return <PreviewExtensionView {...surfaceProps} />
 }

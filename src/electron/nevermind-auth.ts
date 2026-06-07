@@ -1,10 +1,11 @@
-import { app, safeStorage, shell } from 'electron'
+import { app, safeStorage } from 'electron'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import * as logger from './logger'
 import { checkNevermindCompatibility } from './nevermind-compatibility'
 import { nevermindDesktopHeaders } from './nevermind-api'
+import { openExternalUrl } from './url-utils'
 
 const FILENAME = 'nevermind-auth.json'
 
@@ -146,7 +147,7 @@ export async function signInToNevermind({ baseUrl = DEFAULT_BASE_URL, label = de
       const initRes = await postJson(`${trimmedBase}/api/auth/device/initiate`, { label })
       if (!initRes.ok) return { ok: false, error: `initiate failed: ${initRes.status}` }
       const { code, verifyUrl, expiresAt, pollIntervalMs } = (await initRes.json()) as { code: string; verifyUrl: string; expiresAt: string; pollIntervalMs?: number }
-      await shell.openExternal(verifyUrl)
+      if (!await openExternalUrl(verifyUrl)) return { ok: false, error: 'unsafe verification URL' }
       const deadline = new Date(expiresAt).getTime()
       const interval = Math.max(1000, pollIntervalMs ?? 2000)
       while (Date.now() < deadline) {
