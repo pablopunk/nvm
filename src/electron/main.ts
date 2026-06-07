@@ -26,6 +26,7 @@ import { createRunningAppStatusService } from './running-app-status'
 import { openExternalUrl } from './url-utils'
 import { createExtensionWindowManager } from './extension-window-manager'
 import { createAppIconCache } from './app-icon-cache'
+import { createAppIndexService } from './app-index-service'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -124,7 +125,6 @@ function bundledResourcePath(...relativePath) {
   return candidates.find((candidate) => fsSync.existsSync(candidate)) || candidates[0]
 }
 
-let appIndex: any[] = []
 let fileIndex: any[] = []
 let clipboardHistory: any[] = []
 const suppressedClipboardItemIds = new Map<string, number>()
@@ -138,8 +138,6 @@ let learningRulesPath = ''
 let legacyLearningRulesPath = ''
 let learningTracesPath = ''
 let saveTimer: NodeJS.Timeout | undefined
-let appIndexTimer: NodeJS.Timeout | undefined
-let appWatchers: Array<{ close: () => unknown }> = []
 let extensionFileWatchers: Array<{ close: () => unknown }> = []
 let clipboardWatcherLastId = ''
 let frontmostWatcherLastId = ''
@@ -296,10 +294,23 @@ function recordLearningReview(chatId: string) {
   learningReviewJobs.set(chatId, job)
 }
 
+const appIndexService = createAppIndexService({
+  scanApps,
+  watchApps,
+  normalize,
+  emitChanged: () => jobRegistry.emit('apps.changed'),
+  invalidateRunningStatus: () => runningAppStatus.invalidate(),
+  scheduleRunningStatusRefresh: (reason) => runningAppStatus.scheduleRefresh(reason),
+  notifyIndexed: (count) => paletteWindow.win?.webContents.send('apps:indexed', count),
+  measure: measureDebugPerformance,
+  mark: markDebugPerformance,
+  error: (message, error) => logError(message, error, { source: 'host', scope: 'apps' }),
+})
+
 const RUNNING_APPS_SNAPSHOT_TTL_MS = 1500
 const runningAppStatus = createRunningAppStatusService({
   ttlMs: RUNNING_APPS_SNAPSHOT_TTL_MS,
-  getCandidates: () => appIndex,
+  getCandidates: () => appIndexService.get(),
   detectRunningAppPaths,
   notifyChanged: () => paletteWindow.win?.webContents.send('apps:running-paths-changed'),
   measure: measureDebugPerformance,
@@ -1968,7 +1979,7 @@ function runQuitCleanup() {
   updateManager.clearTimers()
   jobRegistry.clear()
   extensionWindowManager.closeAll()
-  for (const watcher of appWatchers) watcher.close()
+  appIndexService.closeWatchers()
   for (const watcher of extensionFileWatchers) watcher.close()
 }
 
@@ -2519,11 +2530,11 @@ async function documentTypesForApp(appPath) {
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath)
   if (!resolvedPath || !path.isAbsolute(resolvedPath)) return []
-  if (!hasCapability('open-with')) return appIndex
+  if (!hasCapability('open-with')) return appIndexService.get()
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase()
   const contentTypes = new Set(await contentTypesForPath(resolvedPath))
   const scored = []
-  await Promise.all(appIndex.map(async (item) => {
+  await Promise.all(appIndexService.get().map(async (item) => {
     if (!item.path?.endsWith('.app')) return
     const documentTypes = await documentTypesForApp(item.path)
     let score = 0
@@ -3803,10 +3814,10 @@ function createExtensionContext(extension, command, launchContext?: any) {
       apps: canUseDesktopApps ? {
         frontmost: frontmostApp,
         launch: (appPath) => runInBackground(() => shell.openPath(expandUserPath(appPath))),
-        list: () => appIndex.map((entry) => ({ id: entry.id, name: entry.name, path: entry.path })),
+        list: () => appIndexService.get().map((entry) => ({ id: entry.id, name: entry.name, path: entry.path })),
         search: (query) => {
           const needle = String(query || '').toLowerCase()
-          return appIndex
+          return appIndexService.get()
             .filter((entry) => !needle || String(entry.name || '').toLowerCase().includes(needle))
             .map((entry) => ({ id: entry.id, name: entry.name, path: entry.path }))
         },
@@ -4633,31 +4644,6 @@ async function scanFiles(options: any = {}) {
   })
 }
 
-function scheduleIndexApplications() {
-  jobRegistry.emit('apps.changed')
-}
-
-async function startAppWatcher() {
-  for (const watcher of appWatchers) watcher.close()
-  appWatchers = watchApps(scheduleIndexApplications)
-}
-
-async function indexApplications() {
-  await measureDebugPerformance('apps.index', { alwaysLog: true }, async () => {
-    try {
-      const apps = await scanApps()
-      const deduped = new Map()
-      for (const item of apps) deduped.set(normalize(item.name), item)
-      appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
-      runningAppStatus.invalidate()
-      markDebugPerformance('apps.index.result', { scannedCount: apps.length, indexedCount: appIndex.length })
-      paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
-      runningAppStatus.scheduleRefresh('apps-indexed')
-    } catch (error) {
-      logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
-    }
-  })
-}
 
 async function indexFiles() {
   await measureDebugPerformance('files.index', { alwaysLog: true }, async () => {
@@ -4695,7 +4681,7 @@ function registerHostJobs() {
     scope: 'apps',
     triggers: [{ type: 'startup', delayMs: 100 }, { type: 'event', event: 'apps.changed', debounceMs: APP_REINDEX_DEBOUNCE_MS }],
     timeoutMs: 30_000,
-    run: indexApplications,
+    run: appIndexService.indexApplications,
   })
   jobRegistry.register({
     id: 'files.index',
@@ -5240,7 +5226,7 @@ async function removeCreatedAction(action) {
 }
 
 async function runPaletteDebugCli() {
-  await indexApplications()
+  await appIndexService.indexApplications()
   await indexFiles()
   const query = String(process.env.NVM_PALETTE_QUERY || '')
   const actions = await searchActions(query)
@@ -5296,7 +5282,7 @@ app.whenReady().then(async () => {
   paletteWindow.registerHotkey()
   registerActionShortcuts()
   startClipboardWatcher()
-  await startAppWatcher()
+  await appIndexService.startWatcher()
   powerMonitor.on('resume', () => jobRegistry.emit('wake'))
   jobRegistry.emit('login')
 
