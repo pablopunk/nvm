@@ -38,10 +38,10 @@ export const creditLedger = pgTable(
     refId: text('ref_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({
-    userIdx: index('credit_ledger_user_idx').on(t.userId),
-    userReasonRefIdx: uniqueIndex('credit_ledger_user_reason_ref_idx').on(t.userId, t.reason, t.refId),
-  }),
+  (t) => [
+    index('credit_ledger_user_idx').on(t.userId),
+    uniqueIndex('credit_ledger_user_reason_ref_idx').on(t.userId, t.reason, t.refId),
+  ],
 );
 
 export const usage = pgTable(
@@ -60,10 +60,10 @@ export const usage = pgTable(
     latencyMs: integer('latency_ms'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({
-    userIdx: index('usage_user_idx').on(t.userId),
-    createdIdx: index('usage_created_idx').on(t.createdAt),
-  }),
+  (t) => [
+    index('usage_user_idx').on(t.userId),
+    index('usage_created_idx').on(t.createdAt),
+  ],
 );
 
 export const apiTokens = pgTable(
@@ -78,9 +78,9 @@ export const apiTokens = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
-  (t) => ({
-    userIdx: index('api_tokens_user_idx').on(t.userId),
-  }),
+  (t) => [
+    index('api_tokens_user_idx').on(t.userId),
+  ],
 );
 
 export const deviceCodes = pgTable('device_codes', {
@@ -104,9 +104,9 @@ export const auditLog = pgTable(
     meta: jsonb('meta'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({
-    createdIdx: index('audit_log_created_idx').on(t.createdAt),
-  }),
+  (t) => [
+    index('audit_log_created_idx').on(t.createdAt),
+  ],
 );
 
 export const subscriptions = pgTable('subscriptions', {
@@ -127,7 +127,7 @@ export const stripeEvents = pgTable(
     processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({
-    typeIdx: index('stripe_events_type_idx').on(t.type),
-  }),
+  (t) => [
+    index('stripe_events_type_idx').on(t.type),
+  ],
 );
