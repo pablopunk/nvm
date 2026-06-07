@@ -25,6 +25,7 @@ import { createUpdateManager } from './update-manager'
 import { createRunningAppStatusService } from './running-app-status'
 import { openExternalUrl } from './url-utils'
 import { createExtensionWindowManager } from './extension-window-manager'
+import { createAppIconCache } from './app-icon-cache'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -62,6 +63,23 @@ const extensionWindowManager = createExtensionWindowManager({
   installNavigationPolicy: installExternalNavigationPolicy,
   isTrustedPage: (url, id) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl),
   debug: (message, data) => loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
+})
+const appIconCache = createAppIconCache({
+  hasAppIcons: () => hasCapability('app-icons'),
+  hashValue,
+  readCachedIcon: (cacheKey) => fs.readFile(path.join(iconCacheDir, `${cacheKey}.png`)).catch(() => null),
+  writeCachedIcon: async (cacheKey, png) => {
+    await fs.mkdir(iconCacheDir, { recursive: true })
+    await fs.writeFile(path.join(iconCacheDir, `${cacheKey}.png`), png)
+  },
+  loadIcon: async (appPath) => {
+    const { fileIconToBuffer } = await import('file-icon')
+    return Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
+  },
+  schedule: (reason, delayMs = 0) => jobRegistry.schedule('cache.app-icons', reason, delayMs),
+  mark: markDebugPerformance,
+  measure: measureDebugPerformance,
+  warn: (message, data) => logWarn(message, data, { source: 'host', scope: 'apps' }),
 })
 
 const CLIPBOARD_LIMIT = 300
@@ -278,10 +296,6 @@ function recordLearningReview(chatId: string) {
   learningReviewJobs.set(chatId, job)
 }
 
-const appIconCache = new Map<string, string | null>()
-const appIconLoadPromises = new Map<string, Promise<string | null>>()
-const pendingAppIconPaths = new Set<string>()
-const appIconWaiters = new Map<string, Array<(result: string | null) => void>>()
 const RUNNING_APPS_SNAPSHOT_TTL_MS = 1500
 const runningAppStatus = createRunningAppStatusService({
   ttlMs: RUNNING_APPS_SNAPSHOT_TTL_MS,
@@ -658,65 +672,6 @@ function recordRecent(action: any) {
   scheduleSaveState()
 }
 
-async function loadAppIconDataUrl(appPath) {
-  return measureDebugPerformance('apps.icon.load', { appPath }, async () => {
-    try {
-      const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
-      const cached = await fs.readFile(cachePath).catch(() => null)
-      if (cached) {
-        markDebugPerformance('apps.icon.cache-hit', { appPath })
-        return `data:image/png;base64,${cached.toString('base64')}`
-      }
-
-      const { fileIconToBuffer } = await import('file-icon')
-      const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
-      await fs.mkdir(iconCacheDir, { recursive: true })
-      await fs.writeFile(cachePath, png).catch(() => {})
-      return `data:image/png;base64,${png.toString('base64')}`
-    } catch (error) {
-      logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
-      return null
-    }
-  })
-}
-
-async function processPendingAppIcons() {
-  const paths = Array.from(pendingAppIconPaths).slice(0, 20)
-  for (const appPath of paths) pendingAppIconPaths.delete(appPath)
-  await Promise.all(paths.map(async (appPath) => {
-    const result = await loadAppIconDataUrl(appPath)
-    appIconCache.set(appPath, result)
-    for (const resolve of appIconWaiters.get(appPath) || []) resolve(result)
-    appIconWaiters.delete(appPath)
-    appIconLoadPromises.delete(appPath)
-  }))
-  if (pendingAppIconPaths.size) jobRegistry.schedule('cache.app-icons', 'icon-backlog', 50)
-}
-
-async function getAppIconDataUrl(appPath) {
-  return measureDebugPerformance('apps.icon.get', { appPath, alwaysLog: true }, async () => {
-    if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
-    if (appIconCache.has(appPath)) {
-      markDebugPerformance('apps.icon.memory-cache-hit', { appPath })
-      return appIconCache.get(appPath)
-    }
-    const inFlight = appIconLoadPromises.get(appPath)
-    if (inFlight) {
-      markDebugPerformance('apps.icon.in-flight-hit', { appPath })
-      return inFlight
-    }
-
-    pendingAppIconPaths.add(appPath)
-    const promise = new Promise<string | null>((resolve) => {
-      const waiters = appIconWaiters.get(appPath) || []
-      waiters.push(resolve)
-      appIconWaiters.set(appPath, waiters)
-    })
-    appIconLoadPromises.set(appPath, promise)
-    jobRegistry.schedule('cache.app-icons', 'icon-request', 0)
-    return promise
-  })
-}
 
 function isFixtureExtension(extension) {
   return Boolean(extension?.__fixture)
@@ -3855,7 +3810,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
             .filter((entry) => !needle || String(entry.name || '').toLowerCase().includes(needle))
             .map((entry) => ({ id: entry.id, name: entry.name, path: entry.path }))
         },
-        icon: (appPath) => getAppIconDataUrl(appPath),
+        icon: (appPath) => appIconCache.get(appPath),
       } : undefined,
       files: canUseDesktopFiles ? {
         find: findFiles,
@@ -4766,7 +4721,7 @@ function registerHostJobs() {
     owner: 'host',
     scope: 'cache',
     timeoutMs: 15_000,
-    run: processPendingAppIcons,
+    run: appIconCache.processPending,
   })
   jobRegistry.register({
     id: 'cache.thumbnails',
@@ -5397,7 +5352,7 @@ app.whenReady().then(async () => {
     }
     return { ok: false, error: 'error' in result ? result.error : 'unknown' }
   })
-  ipcHandleMeasured('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
+  ipcHandleMeasured('apps:icon', (_event, appPath) => appIconCache.get(appPath))
   ipcHandleMeasured('apps:running-paths', (_event, appPaths) => runningAppStatus.getForRenderer(appPaths))
   ipcHandleMeasured('palette:set-mode', (_event, mode) => {
     paletteWindow.setPaletteSizeForMode(mode)
