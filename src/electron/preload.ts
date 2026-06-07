@@ -93,6 +93,11 @@ const api: NevermindApi = {
     ipcRenderer.on('apps:indexed', listener)
     return () => ipcRenderer.removeListener('apps:indexed', listener)
   },
+  onRunningAppPathsChanged: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('apps:running-paths-changed', listener)
+    return () => ipcRenderer.removeListener('apps:running-paths-changed', listener)
+  },
   onClipboardChanged: (callback) => {
     const listener = () => callback()
     ipcRenderer.on('clipboard:changed', listener)

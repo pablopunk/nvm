@@ -214,22 +214,30 @@ function normalizedRunningPath(value: unknown) {
   return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text
 }
 
-async function runningMacAppPaths() {
-  const script = `set outputLines to {}
-tell application "System Events"
-repeat with appProcess in (application processes whose background only is false)
-set appPath to ""
-try
-set appPath to POSIX path of (file of appProcess as alias)
-end try
-if appPath is not "" then set end of outputLines to appPath
-end repeat
-end tell
-set AppleScript's text item delimiters to linefeed
-return outputLines as text`
-  const result = await runAppleScript(script, 5_000)
-  if (result.exitCode !== 0) return new Set<string>()
-  return new Set(result.stdout.split(/\r?\n/).map((item) => normalizedRunningPath(item)).filter(Boolean))
+async function macProcessExecutablePaths() {
+  return new Promise<string[]>((resolve) => {
+    execFile('ps', ['-axo', 'comm='], { timeout: 1_000, maxBuffer: 1024 * 1024 }, (error, stdout) => {
+      if (error) return resolve([])
+      resolve(stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean))
+    })
+  })
+}
+
+function macExecutableBelongsToApp(executablePath: string, appPath: string) {
+  const normalizedExecutable = normalizedRunningPath(executablePath)
+  const normalizedAppPath = normalizedRunningPath(appPath).replace(/\/+$/, '')
+  return normalizedExecutable.startsWith(`${normalizedAppPath}/contents/`)
+}
+
+async function runningMacAppPaths(apps: RunningAppCandidate[] = []) {
+  const candidates = Array.from(new Set(apps.map((item) => item.path || item.id).filter((item): item is string => Boolean(item?.endsWith('.app')))))
+  if (!candidates.length) return new Set<string>()
+  const executables = await macProcessExecutablePaths()
+  const running = new Set<string>()
+  for (const appPath of candidates) {
+    if (executables.some((executablePath) => macExecutableBelongsToApp(executablePath, appPath))) running.add(normalizedRunningPath(appPath))
+  }
+  return running
 }
 
 function shellWords(command: string) {
@@ -274,7 +282,7 @@ async function runningLinuxAppPaths(apps: RunningAppCandidate[] = []) {
 }
 
 export async function runningAppPaths(apps: RunningAppCandidate[] = []) {
-  return osFunction({ darwin: runningMacAppPaths, linux: () => runningLinuxAppPaths(apps) }, async () => new Set<string>())()
+  return osFunction({ darwin: () => runningMacAppPaths(apps), linux: () => runningLinuxAppPaths(apps) }, async () => new Set<string>())()
 }
 
 export function watchApps(onChange: () => void) {
