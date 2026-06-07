@@ -12,6 +12,7 @@ export type ExtensionPermission =
   | 'updates'
   | 'settings.write'
   | 'camera'
+  | 'ocr'
 
 export type ActionDismissBehavior = 'manual' | 'immediate' | 'after-success'
 export type ActionLoadingBehavior = 'view' | 'none'
