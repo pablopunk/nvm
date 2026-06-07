@@ -24,6 +24,7 @@ import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin
 import { createUpdateManager } from './update-manager'
 import { createRunningAppStatusService } from './running-app-status'
 import { openExternalUrl } from './url-utils'
+import { createExtensionWindowManager } from './extension-window-manager'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -46,6 +47,21 @@ const paletteWindow = createPaletteWindowController({
   rendererUrl,
   rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
+})
+const extensionWindowManager = createExtensionWindowManager({
+  BrowserWindow,
+  preloadPath,
+  rendererIndexPath,
+  rendererUrl,
+  isDev,
+  shouldUseDarkColors: () => nativeTheme.shouldUseDarkColors,
+  getCursorScreenPoint: () => screen.getCursorScreenPoint(),
+  getDisplayNearestPoint: (point) => screen.getDisplayNearestPoint(point),
+  normalizeView: (view) => normalizeView(view, null),
+  hashValue,
+  installNavigationPolicy: installExternalNavigationPolicy,
+  isTrustedPage: (url, id) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl),
+  debug: (message, data) => loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
 })
 
 const CLIPBOARD_LIMIT = 300
@@ -115,8 +131,6 @@ let learningStore: LocalLearningStore | null = null
 const learningReviewJobs = new Map<string, Promise<void>>()
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
-type ExtensionWindowRecord = { id: string; win: BrowserWindow; view: any; options: any }
-const extensionWindows = new Map<string, ExtensionWindowRecord>()
 let didRunQuitCleanup = false
 let userState: AnyRecord = {
   recents: {},
@@ -1980,101 +1994,8 @@ function pasteTextAction(action: any) {
   }
 }
 
-function extensionWindowSize(options: any = {}) {
-  const large = options.size === 'large'
-  return {
-    width: Math.max(320, Math.min(1600, Number(options.width || (large ? 900 : 560)))),
-    height: Math.max(240, Math.min(1200, Number(options.height || (large ? 680 : 420)))),
-  }
-}
-
-function extensionWindowId(view: any, options: any = {}) {
-  return String(options.id || view?.id || `window:${hashValue(`${view?.title || 'Extension Window'}:${JSON.stringify(view || {})}`)}`)
-}
-
-function loadExtensionWindow(win: BrowserWindow, id: string) {
-  if (isDev && rendererUrl) return win.loadURL(`${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}`)
-  return win.loadFile(rendererIndexPath, { query: { extensionWindowId: id } })
-}
-
-function centerExtensionWindow(win: BrowserWindow) {
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
-  const bounds = win.getBounds()
-  const { x, y, width, height } = display.workArea
-  win.setBounds({ x: Math.round(x + (width - bounds.width) / 2), y: Math.round(y + (height - bounds.height) / 2), width: bounds.width, height: bounds.height })
-}
-
-function applyExtensionWindowOptions(win: BrowserWindow, options: any = {}) {
-  const alwaysOnTop = options.alwaysOnTop !== false
-  win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal')
-  if (options.visibleOnAllSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-}
-
-function createOrUpdateExtensionWindow(view: any, options: any = {}) {
-  const normalizedView = normalizeView(view, null)
-  structuredClone(normalizedView)
-  const id = extensionWindowId(normalizedView, options)
-  const existing = extensionWindows.get(id)
-  if (existing && !existing.win.isDestroyed()) {
-    existing.view = normalizedView
-    existing.options = { ...existing.options, ...options, id }
-    existing.win.setTitle(String(options.title || normalizedView.title || 'Nevermind'))
-    existing.win.webContents.send('extension-window:view', { id, view: normalizedView, options: existing.options })
-    existing.win.show()
-    existing.win.focus()
-    return existing
-  }
-
-  const size = extensionWindowSize(options)
-  const hiddenTitleBar = options.titleBar === 'hidden'
-  const win = new BrowserWindow({
-    width: size.width,
-    height: size.height,
-    minWidth: 320,
-    minHeight: 240,
-    show: false,
-    frame: true,
-    ...(hiddenTitleBar ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } } : {}),
-    title: String(options.title || normalizedView.title || 'Nevermind'),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f7f7',
-    webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
-  } satisfies Electron.BrowserWindowConstructorOptions)
-  const record = { id, win, view: normalizedView, options: { ...options, id } }
-  extensionWindows.set(id, record)
-  applyExtensionWindowOptions(win, options)
-  win.once('ready-to-show', () => { centerExtensionWindow(win); win.show() })
-  if (options.hideOnBlur) win.on('blur', () => win.hide())
-  win.on('closed', () => { if (extensionWindows.get(id)?.win === win) extensionWindows.delete(id) })
-  installExternalNavigationPolicy(win, (url) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl))
-  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => loggerDebug('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }, { source: 'host', scope: 'extensions' }))
-  loadExtensionWindow(win, id)
-  return record
-}
-
 function executeWindowAction(action: any) {
-  const id = String(action.windowId || action.id || '')
-  if (action.type === 'createWindow') {
-    createOrUpdateExtensionWindow(action.view, action.windowOptions || {})
-    return { toast: { message: 'Opened window' } }
-  }
-  const record = extensionWindows.get(id)
-  if (!record) {
-    if (action.type === 'toggleWindow' && action.view) {
-      createOrUpdateExtensionWindow(action.view, { ...(action.windowOptions || {}), id })
-      return { toast: { message: 'Opened window' } }
-    }
-    return { toast: { message: 'Window is not open', tone: 'error' } }
-  }
-  if (action.type === 'showWindow') { record.win.show(); record.win.focus(); return { toast: { message: 'Shown window' } } }
-  if (action.type === 'hideWindow') { record.win.hide(); return { toast: { message: 'Hidden window' } } }
-  if (action.type === 'toggleWindow') {
-    if (action.view || action.windowOptions) createOrUpdateExtensionWindow(action.view || record.view, { ...(record.options || {}), ...(action.windowOptions || {}), id })
-    if (record.win.isVisible()) record.win.hide(); else { record.win.show(); record.win.focus() }
-    return { toast: { message: 'Toggled window' } }
-  }
-  if (action.type === 'closeWindow') { record.win.close(); return { toast: { message: 'Closed window' } } }
-  return null
+  return extensionWindowManager.executeWindowAction(action)
 }
 
 function shellResultView(title, result) {
@@ -2091,8 +2012,7 @@ function runQuitCleanup() {
   if (app.isReady()) globalShortcut.unregisterAll()
   updateManager.clearTimers()
   jobRegistry.clear()
-  for (const record of extensionWindows.values()) record.win.close()
-  extensionWindows.clear()
+  extensionWindowManager.closeAll()
   for (const watcher of appWatchers) watcher.close()
   for (const watcher of extensionFileWatchers) watcher.close()
 }
@@ -5498,8 +5418,7 @@ app.whenReady().then(async () => {
     return { ok: true, status }
   })
   ipcHandleMeasured('extension-window:get-state', (_event, id) => {
-    const record = extensionWindows.get(String(id || ''))
-    return record ? { id: record.id, view: record.view, options: record.options } : null
+    return extensionWindowManager.getState(String(id || ''))
   })
   ipcHandleMeasured('extension-window:close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
