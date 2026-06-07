@@ -700,14 +700,24 @@ function normalizedRunningPath(value) {
   return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text
 }
 
-async function runningAppPathSnapshot() {
-  const now = Date.now()
-  if (runningAppsSnapshot && now - runningAppsSnapshot.updatedAt < RUNNING_APPS_SNAPSHOT_TTL_MS) return runningAppsSnapshot.paths
+function runningSnapshotIsFresh() {
+  return Boolean(runningAppsSnapshot && Date.now() - runningAppsSnapshot.updatedAt < RUNNING_APPS_SNAPSHOT_TTL_MS)
+}
+
+function sameRunningPathSet(a: Set<string> | undefined, b: Set<string>) {
+  if (!a || a.size !== b.size) return false
+  for (const item of a) if (!b.has(item)) return false
+  return true
+}
+
+function refreshRunningAppPathSnapshot(reason: string) {
   if (runningAppsRefresh) return runningAppsRefresh
-  runningAppsRefresh = measureDebugPerformance('apps.running.snapshot', { indexedCount: appIndex.length, alwaysLog: true }, async () => {
+  const previousPaths = runningAppsSnapshot?.paths
+  runningAppsRefresh = measureDebugPerformance('apps.running.snapshot', { indexedCount: appIndex.length, reason, alwaysLog: true }, async () => {
     const paths = await detectRunningAppPaths(appIndex)
     runningAppsSnapshot = { updatedAt: Date.now(), paths }
-    markDebugPerformance('apps.running.snapshot.result', { count: paths.size })
+    markDebugPerformance('apps.running.snapshot.result', { count: paths.size, reason })
+    if (!sameRunningPathSet(previousPaths, paths)) paletteWindow.win?.webContents.send('apps:running-paths-changed')
     return paths
   }).finally(() => {
     runningAppsRefresh = null
@@ -715,11 +725,17 @@ async function runningAppPathSnapshot() {
   return runningAppsRefresh
 }
 
+function scheduleRunningAppPathSnapshotRefresh(reason: string) {
+  if (runningSnapshotIsFresh() || runningAppsRefresh) return
+  void refreshRunningAppPathSnapshot(reason).catch((error) => logWarn('apps.running.snapshot.failed', error, { source: 'host', scope: 'apps' }))
+}
+
 async function runningAppPathsForRenderer(appPaths) {
-  return measureDebugPerformance('apps.running.get', { requestedCount: Array.isArray(appPaths) ? appPaths.length : 0, alwaysLog: true }, async () => {
+  return measureDebugPerformance('apps.running.get', { requestedCount: Array.isArray(appPaths) ? appPaths.length : 0, cached: Boolean(runningAppsSnapshot), alwaysLog: true }, async () => {
     const requestedPaths = Array.from(new Set((Array.isArray(appPaths) ? appPaths : []).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 30)
     if (!requestedPaths.length) return []
-    const runningPaths = await runningAppPathSnapshot()
+    scheduleRunningAppPathSnapshotRefresh('renderer-request')
+    const runningPaths = runningAppsSnapshot?.paths || new Set<string>()
     return requestedPaths.filter((appPath) => runningPaths.has(normalizedRunningPath(appPath)))
   })
 }
@@ -4806,6 +4822,7 @@ async function indexApplications() {
       runningAppsSnapshot = null
       markDebugPerformance('apps.index.result', { scannedCount: apps.length, indexedCount: appIndex.length })
       paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
+      scheduleRunningAppPathSnapshotRefresh('apps-indexed')
     } catch (error) {
       logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
     }
