@@ -8,6 +8,7 @@ import type {
   ExtensionFormValue,
   ExtensionImage,
   ExtensionPermission as PublicExtensionPermission,
+  ExtensionView,
   ForegroundColor,
   PatchMode,
   ViewPresentation,
@@ -269,9 +270,9 @@ export type CommandView = {
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
   actionPanelVisibility?: ActionPanelVisibility
-  layout?: 'square' | 'wide' | 'compact'
-  aspectRatio?: string | number
-  columns?: number
+  layout?: NonNullable<ExtensionView['layout']>
+  aspectRatio?: NonNullable<ExtensionView['aspectRatio']>
+  columns?: NonNullable<ExtensionView['columns']>
 }
 
 export type RowModel = {
