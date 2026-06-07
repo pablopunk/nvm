@@ -2963,6 +2963,21 @@ async function normalizeExtensionAiAttachments(extension, attachments, capabilit
   return { context: textSections.filter(Boolean).join('\n\n'), images }
 }
 
+function normalizeExtensionAiModelRole(value) {
+  if (value == null || value === '') return undefined
+  if (value === 'smart' || value === 'fast') return value
+  throw new Error(`Unsupported AI model role: ${value}. Use 'smart' or 'fast'.`)
+}
+
+function normalizeExtensionAiCallOptions(input: any = {}) {
+  if (typeof input === 'string') return { model: normalizeExtensionAiModelRole(input) }
+  const output = { ...(input || {}) }
+  const model = normalizeExtensionAiModelRole(input?.model)
+  if (model) output.model = model
+  else delete output.model
+  return output
+}
+
 function createExtensionAi(extension) {
   const extensionKey = path.basename(extension.__filePath || extension.id || 'extension').replace(/[^a-zA-Z0-9._-]/g, '-')
   const capabilities = {
@@ -2974,74 +2989,78 @@ function createExtensionAi(extension) {
     if (!checkAiRateLimit(extension)) throw Object.assign(new Error('AI rate limit exceeded'), { code: 'ai-rate-limit-exceeded', extensionId: extension?.id })
   }
   const normalizeOptions = async (options: any = {}) => {
-    const normalized = await normalizeExtensionAiAttachments(extension, options.attachments || [], capabilities)
+    const callOptions = normalizeExtensionAiCallOptions(options)
+    const normalized = await normalizeExtensionAiAttachments(extension, callOptions.attachments || [], capabilities)
     return {
-      system: options.system,
-      signal: options.signal,
+      model: callOptions.model,
+      system: callOptions.system,
+      signal: callOptions.signal,
       context: normalized.context,
       images: normalized.images,
       onEvent: (event) => {
-        if (event.type === 'delta' && event.text) options.onDelta?.(event.text)
-        options.onEvent?.(event)
+        if (event.type === 'delta' && event.text) callOptions.onDelta?.(event.text)
+        callOptions.onEvent?.(event)
       },
     }
   }
   const stream = (prompt, options: any = {}, session: any = nevermindAi) => {
     enforceAiQuota()
+    const callOptions = normalizeExtensionAiCallOptions(options)
     const controller = new AbortController()
-    const removeExternalAbortListener = options.signal?.addEventListener ? (() => {
+    const removeExternalAbortListener = callOptions.signal?.addEventListener ? (() => {
       const listener = () => controller.abort()
-      options.signal.addEventListener('abort', listener, { once: true })
-      return () => options.signal.removeEventListener?.('abort', listener)
+      callOptions.signal.addEventListener('abort', listener, { once: true })
+      return () => callOptions.signal.removeEventListener?.('abort', listener)
     })() : () => {}
     let inner: any = null
     const result = (async () => {
-      const normalized = await normalizeOptions({ ...options, signal: controller.signal })
+      const normalized = await normalizeOptions({ ...callOptions, signal: controller.signal })
       inner = session.stream(String(prompt || ''), normalized)
       return inner.result
     })().finally(removeExternalAbortListener)
     return { result, abort: () => { controller.abort(); inner?.abort?.() } }
   }
-  return {
-    ask: async (prompt, options: any = {}) => {
-      enforceAiQuota()
-      return nevermindAi.ask(String(prompt || ''), await normalizeOptions(options))
+  const ai: any = async (prompt, options: any = {}) => ai.ask(prompt, options)
+  ai.ask = async (prompt, options: any = {}) => {
+    enforceAiQuota()
+    return nevermindAi.ask(String(prompt || ''), await normalizeOptions(options))
+  }
+  ai.stream = stream
+  ai.session = (id = 'default', options: any = {}) => {
+    const sessionOptions = normalizeExtensionAiCallOptions(options)
+    const session = nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: sessionOptions.system, model: sessionOptions.model })
+    return {
+      ...session,
+      ask: async (prompt: any, askOptions: any = {}) => {
+        enforceAiQuota()
+        return session.ask(prompt, await normalizeOptions({ ...sessionOptions, ...normalizeExtensionAiCallOptions(askOptions) }))
+      },
+      stream: (prompt: any, streamOptions: any = {}) => stream(prompt, { ...sessionOptions, ...normalizeExtensionAiCallOptions(streamOptions) }, session),
+    }
+  }
+  ai.attachments = {
+    text: (text, title) => ({ type: 'text', text: String(text || ''), title }),
+    image: (input, options: any = {}) => ({ ...options, type: 'image', ...(String(input || '').startsWith('data:') ? { dataUrl: input } : { path: input }) }),
+    file: (input, options: any = {}) => ({ ...options, type: 'file', path: typeof input === 'string' ? input : input?.path || input?.filePath }),
+    selectedText: async (title = 'Selected Text') => ({ type: 'text', title, text: await selectedText() }),
+    selectedFiles: async (options: any = {}) => {
+      if (!capabilities.files) throw permissionDeniedError('desktop.files')
+      return (await selectedExtensionFiles()).map((file) => ({ ...options, type: 'file', file }))
     },
-    stream,
-    session: (id = 'default', options: any = {}) => {
-      const session = nevermindAi.session(`${extensionKey}:${String(id || 'default')}`, { system: options.system })
-      return {
-        ...session,
-        ask: async (prompt: any, askOptions: any = {}) => {
-          enforceAiQuota()
-          return session.ask(prompt, await normalizeOptions({ ...options, ...askOptions }))
-        },
-        stream: (prompt: any, streamOptions: any = {}) => stream(prompt, { ...options, ...streamOptions }, session),
-      }
+    clipboard: async (options: any = {}) => {
+      if (!capabilities.clipboard) throw permissionDeniedError('clipboard.history')
+      const item: any = await readDesktopClipboard()
+      if (item.type === 'text') return { type: 'text', title: options.title || 'Clipboard', text: item.text }
+      if (item.type === 'image') return { ...options, type: 'image', title: options.title || 'Clipboard Image', dataUrl: item.image }
+      if (item.type === 'files') return item.files.map((file) => ({ ...options, type: 'file', file }))
+      return null
     },
-    attachments: {
-      text: (text, title) => ({ type: 'text', text: String(text || ''), title }),
-      image: (input, options: any = {}) => ({ ...options, type: 'image', ...(String(input || '').startsWith('data:') ? { dataUrl: input } : { path: input }) }),
-      file: (input, options: any = {}) => ({ ...options, type: 'file', path: typeof input === 'string' ? input : input?.path || input?.filePath }),
-      selectedText: async (title = 'Selected Text') => ({ type: 'text', title, text: await selectedText() }),
-      selectedFiles: async (options: any = {}) => {
-        if (!capabilities.files) throw permissionDeniedError('desktop.files')
-        return (await selectedExtensionFiles()).map((file) => ({ ...options, type: 'file', file }))
-      },
-      clipboard: async (options: any = {}) => {
-        if (!capabilities.clipboard) throw permissionDeniedError('clipboard.history')
-        const item: any = await readDesktopClipboard()
-        if (item.type === 'text') return { type: 'text', title: options.title || 'Clipboard', text: item.text }
-        if (item.type === 'image') return { ...options, type: 'image', title: options.title || 'Clipboard Image', dataUrl: item.image }
-        if (item.type === 'files') return item.files.map((file) => ({ ...options, type: 'file', file }))
-        return null
-      },
-      ocrImage: async (input, options: any = {}) => {
-        if (!capabilities.ocr) throw permissionDeniedError('ocr')
-        return { type: 'text', title: options.title || 'OCR Text', text: extensionAiOcrText(await ocrImage(input, options)) }
-      },
+    ocrImage: async (input, options: any = {}) => {
+      if (!capabilities.ocr) throw permissionDeniedError('ocr')
+      return { type: 'text', title: options.title || 'OCR Text', text: extensionAiOcrText(await ocrImage(input, options)) }
     },
   }
+  return ai
 }
 
 function systemItems(ctx) {

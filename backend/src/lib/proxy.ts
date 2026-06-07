@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/client';
 import { creditLedger, usage } from '../db/schema';
-import { getModelRoute, ModelNotConfiguredError } from './settings';
+import { getModelRoute, ModelNotConfiguredError, parseExtensionAiModelRole, type ModelRouteSlot } from './settings';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
@@ -112,11 +112,11 @@ type ResolvedRouting = {
 
 type ModelRouting = Pick<ResolvedRouting, 'provider' | 'activeModelId' | 'costRow' | 'upstreamBaseUrl' | 'upstreamApiKey'>;
 
-async function resolveModelRouting(kind: 'free' | 'paid'): Promise<Response | ModelRouting> {
+async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | ModelRouting> {
   let provider: string;
   let activeModelId: string;
   try {
-    const route = await getModelRoute(kind);
+    const route = await getModelRoute(slot);
     provider = route.provider;
     activeModelId = route.modelId;
   } catch (err) {
@@ -169,7 +169,8 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
   }
 
   const kind: 'free' | 'paid' = balances.paid > 0 ? 'paid' : 'free';
-  const modelRouting = await resolveModelRouting(kind);
+  const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model'));
+  const modelRouting = await resolveModelRouting(requestedModel ?? kind);
   if (modelRouting instanceof Response) return modelRouting;
 
   return {
@@ -254,7 +255,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     }
     let estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
     if (estimatedCredits > routing.balanceAvailable && routing.kind === 'paid' && routing.freeBalanceAvailable > 0) {
-      const freeRouting = await resolveModelRouting('free');
+      const freeRouting = await resolveModelRouting(parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'free');
       if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
       const freeEstimatedCredits = estimatePromptCredits(inputTokens, freeRouting.costRow);
       if (freeEstimatedCredits <= routing.freeBalanceAvailable) {

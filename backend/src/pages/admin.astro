@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError } from '../lib/settings';
+import { getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError, type ModelRouteSlot } from '../lib/settings';
 import { listModelsForProvider } from '../lib/pricing';
 import { CREDIT_USD } from '../lib/cost';
 
@@ -10,11 +10,13 @@ const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-const safeModelRef = async (tier: 'free' | 'paid') => {
-  try { return modelRouteToRef(await getModelRoute(tier)); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
+const safeModelRef = async (slot: ModelRouteSlot) => {
+  try { return modelRouteToRef(await getModelRoute(slot)); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
 };
 const activeModelRef = await safeModelRef('paid');
 const freeModelRef = await safeModelRef('free');
+const smartModelRef = await safeModelRef('smart');
+const fastModelRef = await safeModelRef('fast');
 const modelOptions = (await Promise.all(listKnownProviders().map(async (provider) => {
   const models = await listModelsForProvider(provider);
   return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
@@ -35,19 +37,35 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
 
   <div class="section card">
     <h3>Models</h3>
-    <p class="muted">Each selector includes provider and model. Free users use the free route; users with paid credits use the pro route immediately.</p>
+    <p class="muted">Each selector includes provider and model. Extensions can call <code>ctx.ai(prompt, 'smart')</code> or <code>ctx.ai(prompt, 'fast')</code>; unset smart/fast routes fall back to pro/free.</p>
     <div class="stack">
       <div class="row">
-        <label class="field field--inline">Pro →
-          <select id="model-select-paid" class="input combo autosave" data-tier="paid">
+        <label class="field field--inline">Smart →
+          <select id="model-select-smart" class="input combo autosave" data-purpose="smart">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === smartModelRef}>{m.ref}</option>)}
+          </select>
+        </label>
+        <span class="status" data-status-for="model-select-smart"></span>
+      </div>
+      <div class="row">
+        <label class="field field--inline">Fast →
+          <select id="model-select-fast" class="input combo autosave" data-purpose="fast">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === fastModelRef}>{m.ref}</option>)}
+          </select>
+        </label>
+        <span class="status" data-status-for="model-select-fast"></span>
+      </div>
+      <div class="row">
+        <label class="field field--inline">Pro default →
+          <select id="model-select-paid" class="input combo autosave" data-purpose="paid">
             {modelOptions.map((m) => <option value={m.ref} selected={m.ref === activeModelRef}>{m.ref}</option>)}
           </select>
         </label>
         <span class="status" data-status-for="model-select-paid"></span>
       </div>
       <div class="row">
-        <label class="field field--inline">Free →
-          <select id="model-select-free" class="input combo autosave" data-tier="free">
+        <label class="field field--inline">Free default →
+          <select id="model-select-free" class="input combo autosave" data-purpose="free">
             {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeModelRef}>{m.ref}</option>)}
           </select>
         </label>
@@ -148,7 +166,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       document.querySelectorAll('.autosave').forEach((el) => {
         el.addEventListener('change', () => autosave(el, (model) => fetch('/api/admin/model', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modelRef: model, tier: el.dataset.tier }),
+          body: JSON.stringify({ modelRef: model, purpose: el.dataset.purpose || el.dataset.tier }),
         })));
       });
     }

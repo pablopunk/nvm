@@ -549,7 +549,11 @@ export type ExtensionAiStreamEvent =
   | { type: 'aborted' }
   | { type: 'error'; message?: string; data?: unknown }
 
+export type ExtensionAiModel = 'smart' | 'fast'
+
 export type ExtensionAiOptions = {
+  /** Admin-defined backend model route. `smart` favors capability; `fast` favors latency/cost. */
+  model?: ExtensionAiModel
   system?: string
   /** Text, file, image, selected, clipboard, or OCR context. File/image attachments require `desktop.files`; clipboard helpers require `clipboard.history`; OCR requires `ocr`. */
   attachments?: ExtensionAiResolvableAttachment | ExtensionAiResolvableAttachment[]
@@ -567,9 +571,14 @@ export type ExtensionAiStream = {
 }
 
 export type ExtensionAi = {
+  /** Easy one-shot AI call. Quota-limited per extension; declare `ai` permission. Smart/fast routes are configured by the backend admin. */
+  (prompt: string, model?: ExtensionAiModel): Promise<string>
+  (prompt: string, options?: ExtensionAiOptions): Promise<string>
   /** One-shot AI call. Quota-limited per extension; declare `ai` permission. Supports attachments and AbortController signals. */
+  ask(prompt: string, model?: ExtensionAiModel): Promise<string>
   ask(prompt: string, options?: ExtensionAiOptions): Promise<string>
   /** Streaming AI call. Use `onDelta`/`onEvent` for incremental updates and await `result` for the final text. */
+  stream(prompt: string, model?: ExtensionAiModel): ExtensionAiStream
   stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream
   /** Attachment builders normalize host-owned context for AI prompts. */
   attachments: {
@@ -582,7 +591,7 @@ export type ExtensionAi = {
     ocrImage(pathOrDataUrlOrFile: string | ExtensionFile, options?: { title?: string }): Promise<ExtensionAiAttachment>
   }
   /** Per-extension conversational session. Session ids are scoped to the extension. */
-  session(id?: string, options?: { system?: string }): { ask(prompt: string, options?: ExtensionAiOptions): Promise<string>; stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream; reset(): unknown }
+  session(id?: string, options?: { system?: string; model?: ExtensionAiModel }): { ask(prompt: string, model?: ExtensionAiModel): Promise<string>; ask(prompt: string, options?: ExtensionAiOptions): Promise<string>; stream(prompt: string, model?: ExtensionAiModel): ExtensionAiStream; stream(prompt: string, options?: ExtensionAiOptions): ExtensionAiStream; reset(): unknown }
 }
 
 export type ExtensionOwnership = {

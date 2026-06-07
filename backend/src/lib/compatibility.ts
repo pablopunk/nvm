@@ -15,6 +15,7 @@ export type DesktopClient = {
 const DEFAULT_FEATURES: Record<string, FeatureFlagRule> = {
   active_model_descriptor: true,
   proxy_streaming: true,
+  extension_ai_model_roles: true,
 };
 
 type FeatureFlagRule = boolean | {
