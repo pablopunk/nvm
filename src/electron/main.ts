@@ -28,6 +28,7 @@ import { createExtensionWindowManager } from './extension-window-manager'
 import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
+import { extensionPermissionCapabilities, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
@@ -353,20 +354,6 @@ function enforceExtensionCacheBudget(store: Map<string, { value: any; expiresAt:
 
 const extensionRefreshBurstWindow = new Map<string, number[]>()
 const extensionAiCallWindow = new Map<string, number[]>()
-
-function isInternalExtension(extension: any) {
-  return typeof extension?.id === 'string' && extension.id.startsWith('nevermind.')
-}
-
-function hasExtensionPermission(extension: any, permission: string) {
-  const declared = Array.isArray(extension?.permissions) ? extension.permissions : null
-  if (declared) return declared.includes(permission)
-  return isInternalExtension(extension)
-}
-
-function permissionDeniedError(permission: string) {
-  return new Error(`Extension is missing required permission: ${permission}`)
-}
 
 const ACTION_EXECUTION_TTL_MS = 30 * 60_000
 const ACTION_EXECUTION_MAX_RECORDS = 2_000
@@ -3631,15 +3618,7 @@ async function expandTextTemplate(input: string, variablesOrOptions: Record<stri
 }
 
 function createExtensionContext(extension, command, launchContext?: any) {
-  const canUseDesktopApps = hasExtensionPermission(extension, 'desktop.apps')
-  const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
-  const canUseClipboard = hasExtensionPermission(extension, 'clipboard.history')
-  const canUseSystem = hasExtensionPermission(extension, 'system')
-  const canUseOcr = hasExtensionPermission(extension, 'ocr')
-  const canUseUpdates = hasExtensionPermission(extension, 'updates')
-  const canUseShortcuts = hasExtensionPermission(extension, 'shortcuts')
-  const canUseAi = hasExtensionPermission(extension, 'ai')
-  const canWriteSettings = hasExtensionPermission(extension, 'settings.write')
+  const { canUseDesktopApps, canUseDesktopFiles, canUseClipboard, canUseSystem, canUseOcr, canUseUpdates, canUseShortcuts, canUseAi, canWriteSettings, canManageExtensionOwnership } = extensionPermissionCapabilities(extension)
   const denyShortcut = (name: string) => () => { throw permissionDeniedError(`shortcuts (${name})`) }
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
@@ -3889,7 +3868,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
     state: {},
     ai: canUseAi ? createExtensionAi(extension) : undefined,
     aiBuilder: createAiBuilderApi(extension),
-    extensions: { ownership: hasExtensionPermission(extension, 'extensions.ownership') ? createExtensionOwnershipApi(extension) : undefined },
+    extensions: { ownership: canManageExtensionOwnership ? createExtensionOwnershipApi(extension) : undefined },
   }
 }
 
