@@ -124,7 +124,7 @@ body:has(.landing-shell) .container--wide { max-width: 1280px; }
 .landing-hero { flex: 1; display: grid; grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr); gap: 64px; align-items: center; }
 .landing-hero__copy { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .landing-hero__title { margin: 0; line-height: 0; display: flex; align-items: center; justify-content: center; }
-.landing-wordmark { display: block; width: min(460px, 100%); height: auto; }
+.landing-wordmark { display: block; width: min(360px, 100%); height: auto; }
 .landing-hero__lede { max-width: 460px; margin: 0; color: var(--muted); font-size: 18px; line-height: 1.5; text-align: center; }
 .landing-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .landing-account-note { color: var(--muted); font-size: 13px; }
