@@ -1,7 +1,7 @@
 import { BrowserWindow, app, globalShortcut, screen, session, type BrowserWindowConstructorOptions } from 'electron'
 import { applyPaletteWindowPolicy as applyOsPaletteWindowPolicy, canRequestMediaPermission, paletteBrowserWindowOptions } from './os'
 import * as logger from './logger'
-import { openExternalUrl } from './url-utils'
+import { installExternalNavigationPolicy, isTrustedAppPage } from './window-navigation-policy'
 import { markDebugPerformance, measureDebugPerformanceSync } from './debug-performance'
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview'
@@ -29,10 +29,6 @@ function addWindowBlurMargin(size: { width: number; height: number }) {
     width: size.width + WINDOW_BLUR_MARGIN * 2,
     height: size.height + WINDOW_BLUR_MARGIN * 2,
   }
-}
-
-function isTrustedAppPage(url: string, isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
-  return url.startsWith('file:') || (isDev && url.startsWith(rendererUrl))
 }
 
 export function installPermissionHandlers(isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
@@ -111,15 +107,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       }
     })
 
-    win.webContents.setWindowOpenHandler(({ url }) => {
-      void openExternalUrl(url)
-      return { action: 'deny' }
-    })
-    win.webContents.on('will-navigate', (event, url) => {
-      if (isTrustedAppPage(url, options.isDev, options.rendererUrl)) return
-      event.preventDefault()
-      void openExternalUrl(url)
-    })
+    installExternalNavigationPolicy(win, (url) => isTrustedAppPage(url, options.isDev, options.rendererUrl))
     win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
       debugLog('renderer.didFailLoad', { errorCode, errorDescription, validatedURL })
     })

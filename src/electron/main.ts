@@ -22,7 +22,9 @@ import { calculate, calculateDetailed, calculateRateResult, getUrlFromQuery, has
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, runningAppPaths as detectRunningAppPaths, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
+import { createRunningAppStatusService } from './running-app-status'
 import { openExternalUrl } from './url-utils'
+import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
@@ -267,8 +269,15 @@ const appIconLoadPromises = new Map<string, Promise<string | null>>()
 const pendingAppIconPaths = new Set<string>()
 const appIconWaiters = new Map<string, Array<(result: string | null) => void>>()
 const RUNNING_APPS_SNAPSHOT_TTL_MS = 1500
-let runningAppsSnapshot: { updatedAt: number; paths: Set<string> } | null = null
-let runningAppsRefresh: Promise<Set<string>> | null = null
+const runningAppStatus = createRunningAppStatusService({
+  ttlMs: RUNNING_APPS_SNAPSHOT_TTL_MS,
+  getCandidates: () => appIndex,
+  detectRunningAppPaths,
+  notifyChanged: () => paletteWindow.win?.webContents.send('apps:running-paths-changed'),
+  measure: measureDebugPerformance,
+  mark: markDebugPerformance,
+  onRefreshFailed: (error) => logWarn('apps.running.snapshot.failed', error, { source: 'host', scope: 'apps' }),
+})
 const pendingThumbnailPaths = new Map<string, string>()
 const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
@@ -692,51 +701,6 @@ async function getAppIconDataUrl(appPath) {
     appIconLoadPromises.set(appPath, promise)
     jobRegistry.schedule('cache.app-icons', 'icon-request', 0)
     return promise
-  })
-}
-
-function normalizedRunningPath(value) {
-  const text = String(value || '').trim()
-  return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text
-}
-
-function runningSnapshotIsFresh() {
-  return Boolean(runningAppsSnapshot && Date.now() - runningAppsSnapshot.updatedAt < RUNNING_APPS_SNAPSHOT_TTL_MS)
-}
-
-function sameRunningPathSet(a: Set<string> | undefined, b: Set<string>) {
-  if (!a || a.size !== b.size) return false
-  for (const item of a) if (!b.has(item)) return false
-  return true
-}
-
-function refreshRunningAppPathSnapshot(reason: string) {
-  if (runningAppsRefresh) return runningAppsRefresh
-  const previousPaths = runningAppsSnapshot?.paths
-  runningAppsRefresh = measureDebugPerformance('apps.running.snapshot', { indexedCount: appIndex.length, reason, alwaysLog: true }, async () => {
-    const paths = await detectRunningAppPaths(appIndex)
-    runningAppsSnapshot = { updatedAt: Date.now(), paths }
-    markDebugPerformance('apps.running.snapshot.result', { count: paths.size, reason })
-    if (!sameRunningPathSet(previousPaths, paths)) paletteWindow.win?.webContents.send('apps:running-paths-changed')
-    return paths
-  }).finally(() => {
-    runningAppsRefresh = null
-  })
-  return runningAppsRefresh
-}
-
-function scheduleRunningAppPathSnapshotRefresh(reason: string) {
-  if (runningSnapshotIsFresh() || runningAppsRefresh) return
-  void refreshRunningAppPathSnapshot(reason).catch((error) => logWarn('apps.running.snapshot.failed', error, { source: 'host', scope: 'apps' }))
-}
-
-async function runningAppPathsForRenderer(appPaths) {
-  return measureDebugPerformance('apps.running.get', { requestedCount: Array.isArray(appPaths) ? appPaths.length : 0, cached: Boolean(runningAppsSnapshot), alwaysLog: true }, async () => {
-    const requestedPaths = Array.from(new Set((Array.isArray(appPaths) ? appPaths : []).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 30)
-    if (!requestedPaths.length) return []
-    scheduleRunningAppPathSnapshotRefresh('renderer-request')
-    const runningPaths = runningAppsSnapshot?.paths || new Set<string>()
-    return requestedPaths.filter((appPath) => runningPaths.has(normalizedRunningPath(appPath)))
   })
 }
 
@@ -2082,16 +2046,7 @@ function createOrUpdateExtensionWindow(view: any, options: any = {}) {
   win.once('ready-to-show', () => { centerExtensionWindow(win); win.show() })
   if (options.hideOnBlur) win.on('blur', () => win.hide())
   win.on('closed', () => { if (extensionWindows.get(id)?.win === win) extensionWindows.delete(id) })
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    void openExternalUrl(url)
-    return { action: 'deny' }
-  })
-  win.webContents.on('will-navigate', (event, url) => {
-    const expectedDevUrl = rendererUrl ? `${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}` : ''
-    if (url.startsWith('file:') || (isDev && expectedDevUrl && url.startsWith(expectedDevUrl))) return
-    event.preventDefault()
-    void openExternalUrl(url)
-  })
+  installExternalNavigationPolicy(win, (url) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl))
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => loggerDebug('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }, { source: 'host', scope: 'extensions' }))
   loadExtensionWindow(win, id)
   return record
@@ -4819,10 +4774,10 @@ async function indexApplications() {
       const deduped = new Map()
       for (const item of apps) deduped.set(normalize(item.name), item)
       appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
-      runningAppsSnapshot = null
+      runningAppStatus.invalidate()
       markDebugPerformance('apps.index.result', { scannedCount: apps.length, indexedCount: appIndex.length })
       paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
-      scheduleRunningAppPathSnapshotRefresh('apps-indexed')
+      runningAppStatus.scheduleRefresh('apps-indexed')
     } catch (error) {
       logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
     }
@@ -5523,7 +5478,7 @@ app.whenReady().then(async () => {
     return { ok: false, error: 'error' in result ? result.error : 'unknown' }
   })
   ipcHandleMeasured('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
-  ipcHandleMeasured('apps:running-paths', (_event, appPaths) => runningAppPathsForRenderer(appPaths))
+  ipcHandleMeasured('apps:running-paths', (_event, appPaths) => runningAppStatus.getForRenderer(appPaths))
   ipcHandleMeasured('palette:set-mode', (_event, mode) => {
     paletteWindow.setPaletteSizeForMode(mode)
     paletteWindow.centerWindow()
