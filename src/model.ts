@@ -12,6 +12,7 @@ import type {
   PatchMode,
   ViewPresentation,
   ViewSize,
+  ExtensionWebviewPermission,
 } from './resources/nevermind-extension-api'
 
 export type ExtensionPermission = PublicExtensionPermission
@@ -245,6 +246,7 @@ export type CommandView = {
   language?: string
   readOnly?: boolean
   html?: string
+  webviewPermissions?: ExtensionWebviewPermission[]
   items?: CommandItem[]
   sections?: CommandItemSection[]
   isLoading?: boolean

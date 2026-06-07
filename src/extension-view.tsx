@@ -228,7 +228,24 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
 type ExtensionViewSurfaceProps = ExtensionViewRendererProps & { renderEmpty: NonNullable<ExtensionViewRendererProps['renderEmpty']> }
 
 export const EXTENSION_WEBVIEW_SANDBOX = 'allow-scripts allow-forms'
-export const EXTENSION_WEBVIEW_ALLOW = 'autoplay'
+export const DEFAULT_EXTENSION_WEBVIEW_PERMISSIONS = ['autoplay'] as const
+export const EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES = {
+  autoplay: 'autoplay',
+  camera: 'camera',
+  microphone: 'microphone',
+  'display-capture': 'display-capture',
+  'clipboard-read': 'clipboard-read',
+  'clipboard-write': 'clipboard-write',
+} as const
+export const EXTENSION_WEBVIEW_ALLOW = DEFAULT_EXTENSION_WEBVIEW_PERMISSIONS.map((permission) => EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES[permission]).join('; ')
+
+export function extensionWebviewAllow(webviewPermissions?: readonly string[]) {
+  const permissions = webviewPermissions?.length ? webviewPermissions : DEFAULT_EXTENSION_WEBVIEW_PERMISSIONS
+  return Array.from(new Set(permissions))
+    .map((permission) => EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES[permission as keyof typeof EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES])
+    .filter(Boolean)
+    .join('; ')
+}
 
 function ViewPagination({ view, runAction }: Pick<ExtensionViewSurfaceProps, 'view' | 'runAction'>) {
   if (!view.pagination?.hasMore || !view.pagination.onLoadMore) return null
@@ -286,7 +303,7 @@ function EditorExtensionView({ view, renderMarkdown, renderActionPanel, actionPa
 function WebExtensionView({ view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {
   const webviewActionRows = visibleActionPanelRows(view, actionPanelRows(view.actionPanel, view.actions || [], 'extension-webview', false))
   const webviewActions = webviewActionRows.length ? renderActionPanel(webviewActionRows) : null
-  return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox={EXTENSION_WEBVIEW_SANDBOX} allow={EXTENSION_WEBVIEW_ALLOW} />{webviewActions}</div>
+  return <div className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}><iframe className="extensionWebview" title={view.title} srcDoc={view.html || view.content || ''} sandbox={EXTENSION_WEBVIEW_SANDBOX} allow={extensionWebviewAllow(view.webviewPermissions)} />{webviewActions}</div>
 }
 
 function CameraExtensionView({ view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps) {

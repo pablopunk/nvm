@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Command } from 'cmdk'
-import { EXTENSION_WEBVIEW_ALLOW, EXTENSION_WEBVIEW_SANDBOX, ExtensionViewRenderer, NevermindLimitGate, type ExtensionViewRendererProps } from './extension-view'
+import { EXTENSION_WEBVIEW_ALLOW, EXTENSION_WEBVIEW_SANDBOX, ExtensionViewRenderer, NevermindLimitGate, extensionWebviewAllow, type ExtensionViewRendererProps } from './extension-view'
 import { nextNavigationState, previousNavigationState } from './use-extension-navigation'
 import type { CommandAction, CommandView } from './model'
 
@@ -114,4 +114,19 @@ test('extension webview iframe keeps scripts isolated from app origin and privil
   assert.match(html, new RegExp(`allow="${EXTENSION_WEBVIEW_ALLOW}"`))
   assert.doesNotMatch(html, /allow-same-origin/)
   assert.doesNotMatch(html, /camera|microphone|display-capture|clipboard-read|clipboard-write/)
+})
+
+test('extension webview privileged iframe permissions are explicit and allowlisted', () => {
+  assert.equal(extensionWebviewAllow(['autoplay', 'camera', 'camera', 'bad-permission']), 'autoplay; camera')
+
+  const html = renderExtensionView({
+    type: 'webview',
+    title: 'Camera HTML',
+    html: '<main>camera</main>',
+    webviewPermissions: ['camera', 'microphone'],
+  })
+
+  assert.match(html, /allow="camera; microphone"/)
+  assert.doesNotMatch(html, /allow-same-origin/)
+  assert.doesNotMatch(html, /display-capture|clipboard-read|clipboard-write/)
 })

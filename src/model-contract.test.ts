@@ -8,6 +8,7 @@ import type {
   ExtensionFormValue,
   ExtensionImage,
   ExtensionPermission as PublicExtensionPermission,
+  ExtensionWebviewPermission,
   ForegroundColor,
   PatchMode,
   ViewPresentation,
@@ -45,6 +46,7 @@ const viewTypeContract: AssertEqual<NonNullable<CommandView['type']>, NonNullabl
 const viewSizeContract: AssertEqual<NonNullable<CommandView['size']>, ViewSize> = true
 const viewPresentationContract: AssertEqual<NonNullable<CommandView['presentation']>, ViewPresentation> = true
 const editorFormatContract: AssertEqual<NonNullable<CommandView['format']>, ExtensionEditorFormat> = true
+const webviewPermissionContract: AssertEqual<NonNullable<CommandView['webviewPermissions']>[number], ExtensionWebviewPermission> = true
 
 export const modelContractAssertions = {
   permissionContract,
@@ -59,6 +61,7 @@ export const modelContractAssertions = {
   viewSizeContract,
   viewPresentationContract,
   editorFormatContract,
+  webviewPermissionContract,
 }
 
 test('host model shares canonical public extension API literal contracts', () => {
