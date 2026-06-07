@@ -69,9 +69,12 @@ type NevermindAiOptions = {
 
 type AiImageContent = { type: 'image'; data: string; mimeType: string }
 
+type AiModelRole = 'smart' | 'fast'
+
 type AiPromptOptions = {
   sessionId?: string
   system?: string
+  model?: AiModelRole
   context?: string
   images?: AiImageContent[]
   signal?: { aborted?: boolean; addEventListener?: (type: 'abort', listener: () => void, options?: { once?: boolean }) => void; removeEventListener?: (type: 'abort', listener: () => void) => void }
@@ -235,9 +238,9 @@ function createNevermindAi(options: NevermindAiOptions) {
     }
   }
 
-  async function generalSession(sessionOptions: { sessionId?: string; system?: string }) {
+  async function generalSession(sessionOptions: { sessionId?: string; system?: string; model?: AiModelRole }) {
     if (!sessionOptions.sessionId) return createGeneralSession(options, sessionOptions)
-    const key = sessionOptions.sessionId
+    const key = generalSessionCacheKey(sessionOptions.sessionId, sessionOptions.model)
     let promise = generalSessions.get(key)
     if (!promise) {
       promise = measureDebugPerformance('ai.general-session.create', { sessionId: key, alwaysLog: true }, () => createGeneralSession(options, sessionOptions))
@@ -247,16 +250,26 @@ function createNevermindAi(options: NevermindAiOptions) {
     return promise
   }
 
-  function session(sessionId: string, sessionOptions: { system?: string } = {}) {
+  function session(sessionId: string, sessionOptions: { system?: string; model?: AiModelRole } = {}) {
     return {
       ask: (message: string, options: AiPromptOptions = {}) => ask(message, { ...sessionOptions, ...options, sessionId }),
       stream: (message: string, options: AiPromptOptions = {}) => stream(message, { ...sessionOptions, ...options, sessionId }),
       reset: async () => {
-        const current = await generalSessions.get(sessionId)?.catch(() => null)
-        current?.dispose?.()
-        generalSessions.delete(sessionId)
+        for (const key of generalSessionCacheKeys(sessionId)) {
+          const current = await generalSessions.get(key)?.catch(() => null)
+          current?.dispose?.()
+          generalSessions.delete(key)
+        }
       },
     }
+  }
+
+  function generalSessionCacheKey(sessionId: string, model?: AiModelRole) {
+    return `${model || 'default'}:${sessionId}`
+  }
+
+  function generalSessionCacheKeys(sessionId: string) {
+    return [generalSessionCacheKey(sessionId), generalSessionCacheKey(sessionId, 'smart'), generalSessionCacheKey(sessionId, 'fast')]
   }
 
   async function disposeAllSessions() {
@@ -443,7 +456,7 @@ function stringifyError(value: unknown) {
   }
 }
 
-async function createGeneralSession(options: NevermindAiOptions, sessionOptions: { sessionId?: string; system?: string }) {
+async function createGeneralSession(options: NevermindAiOptions, sessionOptions: { sessionId?: string; system?: string; model?: AiModelRole }) {
   const { agentDir, workspaceDir } = options
   await fs.mkdir(agentDir, { recursive: true })
   await fs.mkdir(workspaceDir, { recursive: true })
@@ -452,7 +465,7 @@ async function createGeneralSession(options: NevermindAiOptions, sessionOptions:
     import('@earendil-works/pi-ai') as Promise<any>,
   ])
   const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'))
-  const { model } = await resolveAiModelAndAuth(pi, ai, authStorage)
+  const { model } = await resolveAiModelAndAuth(pi, ai, authStorage, sessionOptions.model)
   const resourceLoader = {
     getExtensions: () => ({ extensions: [], errors: [], runtime: pi.createExtensionRuntime() }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
@@ -493,11 +506,13 @@ type BackendDescriptor = {
   baseUrl: string
 }
 
-async function fetchActiveModelDescriptor(baseUrl: string, token: string): Promise<BackendDescriptor> {
+async function fetchActiveModelDescriptor(baseUrl: string, token: string, modelRole?: AiModelRole): Promise<BackendDescriptor> {
   const trimmed = baseUrl.replace(/\/$/, '')
   const manifest = await checkNevermindCompatibility(trimmed)
   requireNevermindCompatibilityFeature('active_model_descriptor', manifest)
-  const res = await fetch(`${trimmed}/api/v1/active-model`, {
+  if (modelRole) requireNevermindCompatibilityFeature('extension_ai_model_roles', manifest)
+  const query = modelRole ? `?model=${encodeURIComponent(modelRole)}` : ''
+  const res = await fetch(`${trimmed}/api/v1/active-model${query}`, {
     headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
   })
   if (res.status === 401) throw new NevermindAuthRequiredError()
@@ -508,11 +523,11 @@ async function fetchActiveModelDescriptor(baseUrl: string, token: string): Promi
   return (await res.json()) as BackendDescriptor
 }
 
-async function resolveAiModelAndAuth(_pi: any, _ai: any, authStorage: any) {
+async function resolveAiModelAndAuth(_pi: any, _ai: any, authStorage: any, modelRole?: AiModelRole) {
   const nevermind = await getNevermindAuth()
   if (!nevermind) throw new NevermindAuthRequiredError()
   authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token)
-  const descriptor = await fetchActiveModelDescriptor(nevermind.baseUrl, nevermind.token)
+  const descriptor = await fetchActiveModelDescriptor(nevermind.baseUrl, nevermind.token, modelRole)
   const model = {
     id: descriptor.id,
     name: descriptor.name,
@@ -524,7 +539,7 @@ async function resolveAiModelAndAuth(_pi: any, _ai: any, authStorage: any) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: descriptor.contextWindow,
     maxTokens: descriptor.maxTokens,
-    headers: nevermindDesktopHeaders(),
+    headers: nevermindDesktopHeaders(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
   }
   return { model, source: 'nevermind' as const }
 }
@@ -929,7 +944,7 @@ function capabilities() {
     ocr: ['requires ocr permission; ctx.ocr.image(pathOrFileOrDataUrl), ctx.ocr.screen(options), and ctx.ocr.region(rect, options) return recognized text plus blocks/confidence; check ctx.system.capabilities.has(\'ocr\') and render graceful unavailable states'], 
     text: ['template(input, variablesOrOptions) expands {name}/{{name}} placeholders plus date, time, datetime, uuid, selectedText, clipboard, cursor, {argument:name}, and {calculator:1 + 2}; pass { variables, returnCursor/returnResult, includeClipboard, includeSelectedText, promptMissing } for cursor/missing-variable results'], 
     input: ['prompt({ title, message, fields, action, submitTitle }) opens a host prompt form, then runs the wrapped action with submitted values in action.formValues'],
-    ai: ['ask(prompt, { system, attachments, signal })', 'stream(prompt, { onDelta, onEvent, attachments, signal }).result/abort()', 'session(id, options).ask/stream/reset()', 'attachments.text/image/file/selectedText/selectedFiles/clipboard/ocrImage'],
+    ai: ['call ctx.ai(prompt, \'smart\'|\'fast\') for simple one-shot AI; smart/fast are admin-defined backend model routes', 'ask(prompt, { model, system, attachments, signal })', 'stream(prompt, { model, onDelta, onEvent, attachments, signal }).result/abort()', 'session(id, { model, system }).ask/stream/reset()', 'attachments.text/image/file/selectedText/selectedFiles/clipboard/ocrImage'],
     webTools: ['web_search', 'code_search', 'fetch_content', 'get_search_content'],
     desktop: {
       keyboard: ['typeText(text, options) types into the frontmost app without touching the clipboard when keyboard.type-text is available'],

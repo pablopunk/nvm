@@ -6,15 +6,19 @@ const ACTIVE_MODEL_KEY = 'active_model';
 const FREE_MODEL_KEY = 'free_model';
 const ACTIVE_MODEL_ROUTE_KEY = 'active_model_route';
 const FREE_MODEL_ROUTE_KEY = 'free_model_route';
+const SMART_MODEL_ROUTE_KEY = 'smart_model_route';
+const FAST_MODEL_ROUTE_KEY = 'fast_model_route';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
 const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter']);
 
 export type ModelTier = 'free' | 'paid';
+export type ExtensionAiModelRole = 'smart' | 'fast';
+export type ModelRouteSlot = ModelTier | ExtensionAiModelRole;
 export type ModelRoute = { provider: string; modelId: string };
 
 export class ModelNotConfiguredError extends Error {
-  constructor(public key: 'active_model' | 'free_model' | 'active_model_route' | 'free_model_route') {
+  constructor(public key: 'active_model' | 'free_model' | 'active_model_route' | 'free_model_route' | 'smart_model_route' | 'fast_model_route') {
     super(`No ${key} configured in app_settings`);
   }
 }
@@ -57,8 +61,16 @@ function parseStoredModelRoute(value: string | null): ModelRoute | null {
   return null;
 }
 
-function modelRouteKey(tier: ModelTier): string {
-  return tier === 'free' ? FREE_MODEL_ROUTE_KEY : ACTIVE_MODEL_ROUTE_KEY;
+function modelRouteKey(slot: ModelRouteSlot): string {
+  if (slot === 'smart') return SMART_MODEL_ROUTE_KEY;
+  if (slot === 'fast') return FAST_MODEL_ROUTE_KEY;
+  return slot === 'free' ? FREE_MODEL_ROUTE_KEY : ACTIVE_MODEL_ROUTE_KEY;
+}
+
+function fallbackRouteSlot(slot: ModelRouteSlot): ModelTier | null {
+  if (slot === 'smart') return 'paid';
+  if (slot === 'fast') return 'free';
+  return null;
 }
 
 async function getLegacyModelId(tier: ModelTier): Promise<string> {
@@ -68,15 +80,21 @@ async function getLegacyModelId(tier: ModelTier): Promise<string> {
   return v;
 }
 
-export async function getModelRoute(tier: ModelTier): Promise<ModelRoute> {
-  const stored = parseStoredModelRoute(await getSetting(modelRouteKey(tier)));
+export async function getModelRoute(slot: ModelRouteSlot): Promise<ModelRoute> {
+  const stored = parseStoredModelRoute(await getSetting(modelRouteKey(slot)));
   if (stored) return stored;
-  return { provider: await getActiveProvider(), modelId: await getLegacyModelId(tier) };
+  const fallback = fallbackRouteSlot(slot);
+  if (fallback) return getModelRoute(fallback);
+  return { provider: await getActiveProvider(), modelId: await getLegacyModelId(slot as ModelTier) };
 }
 
-export async function setModelRoute(tier: ModelTier, route: ModelRoute) {
+export async function setModelRoute(slot: ModelRouteSlot, route: ModelRoute) {
   if (!KNOWN_PROVIDERS.has(route.provider)) throw new Error(`Unknown provider: ${route.provider}`);
-  await setSetting(modelRouteKey(tier), JSON.stringify(route));
+  await setSetting(modelRouteKey(slot), JSON.stringify(route));
+}
+
+export function parseExtensionAiModelRole(value: string | null | undefined): ExtensionAiModelRole | null {
+  return value === 'smart' || value === 'fast' ? value : null;
 }
 
 export async function getActiveModelId(): Promise<string> {

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getUserFromBearer } from '../../../lib/tokens';
-import { getModelRoute, ModelNotConfiguredError } from '../../../lib/settings';
+import { getModelRoute, ModelNotConfiguredError, parseExtensionAiModelRole } from '../../../lib/settings';
 import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
 import { lookupModelDescriptor } from '../../../lib/pricing';
 import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
@@ -20,10 +20,12 @@ export const GET: APIRoute = async ({ request }) => {
 
   const balances = await getBalances(user.id);
   const tier = balances.paid > 0 ? 'paid' : 'free';
+  const url = new URL(request.url);
+  const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model') || url.searchParams.get('model'));
   let provider: string;
   let modelId: string;
   try {
-    const route = await getModelRoute(tier);
+    const route = await getModelRoute(requestedModel ?? tier);
     provider = route.provider;
     modelId = route.modelId;
   } catch (err) {

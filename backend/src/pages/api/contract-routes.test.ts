@@ -71,6 +71,13 @@ function installModelsDevFetch() {
               limit: { context: 100000, output: 8192 },
               modalities: { input: ['text'] },
             },
+            'gemini-3-fast': {
+              id: 'gemini-3-fast',
+              name: 'Gemini 3 Fast',
+              cost: { input: 0.1, output: 0.5 },
+              limit: { context: 64000, output: 4096 },
+              modalities: { input: ['text'] },
+            },
           },
         },
       });
@@ -91,7 +98,7 @@ function proxySelects(options: { free?: number; paid?: number; model?: string | 
   ];
 }
 
-function authorizedChatRequest(body: unknown = { model: 'placeholder', messages: [{ role: 'user', content: 'hello' }] }) {
+function authorizedChatRequest(body: unknown = { model: 'placeholder', messages: [{ role: 'user', content: 'hello' }] }, extraHeaders: Record<string, string> = {}) {
   return new Request('https://api.nvm.fyi/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -100,6 +107,7 @@ function authorizedChatRequest(body: unknown = { model: 'placeholder', messages:
       'x-nevermind-client': 'desktop',
       'x-nevermind-client-version': '0.6.2',
       'x-nevermind-api-version': '1',
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -203,6 +211,21 @@ test('active-model route returns descriptor contract with compatibility headers'
   assert.equal(body.baseUrl, 'https://api.nvm.fyi/api/v1');
 });
 
+test('active-model route resolves admin-defined extension model roles', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: proxySelects({ model: 'gemini-3-fast' }) }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?model=fast', {
+    headers: { authorization: 'Bearer nvm_pat_test', 'x-request-id': 'req_fast_model' },
+  })));
+  const body = await response.json() as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-request-id'), 'req_fast_model');
+  assert.equal(body.id, 'gemini-3-fast');
+  assert.equal(body.name, 'Gemini 3 Fast');
+  assert.equal(body.provider, 'nevermind');
+});
+
 test('proxy route kill switch returns service-unavailable contract', async () => {
   process.env.NEVERMIND_KILL_SWITCHES = 'ai_proxy';
   const response = await postChatCompletion(routeContext(authorizedChatRequest()));
@@ -242,6 +265,31 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   assert.deepEqual(await promptTooLarge.json(), {
     error: { type: 'prompt_too_large', message: 'Prompt exceeds 100000 input tokens' },
   });
+});
+
+test('proxy route honors extension smart/fast model selection headers', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000, model: 'gemini-3-fast' }) }));
+  let forwardedBody = '';
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 } } } } });
+    }
+    assert.equal(url, 'https://upstream.example/v1/chat/completions');
+    forwardedBody = String(init?.body);
+    assert.equal(new Headers(init?.headers).get('x-nevermind-ai-model'), null);
+    return Response.json({ usage: { prompt_tokens: 2, completion_tokens: 3 } });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' })));
+
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
+  assert.equal(db.insertedValues.length, 2);
+  assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
 });
 
 test('proxy route returns the rate-limit contract', async () => {
