@@ -49,4 +49,4 @@ Suggested launch packages:
 
 Push to GitHub, import in Vercel, set env vars, point `nvm.fyi` + `api.nvm.fyi` at it.
 
-When working from a git worktree, Vercel CLI project links are not inherited because `.vercel/` is untracked. Copy or symlink `.vercel/` from the canonical checkout, or run `vercel link`, before Vercel env/deploy commands; never commit `.vercel/`.
+When working from a git worktree, ignored local env files are not inherited. Run `pnpm worktree:env:copy` from the worktree to copy env files from the canonical checkout without printing secrets; use `--dry-run` to preview and `--force` only when you intend to overwrite local env files. If `.vercel/project.json` is still missing, run `vercel link` before Vercel deploy commands; never commit `.env*` or `.vercel/` files.

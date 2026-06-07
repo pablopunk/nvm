@@ -1,19 +1,40 @@
 ---
+import { Download } from '@lucide/astro';
+import LandingAccount from '../components/LandingAccount.astro';
 import Layout from '../layouts/Layout.astro';
-import { getSessionFromCookies } from '../lib/workos';
-const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 ---
-<Layout title="Nevermind" width="narrow">
-  <h1>Nevermind</h1>
-  <p class="muted">Bring-your-own-credits gateway for AI desktop apps.</p>
-  <div class="section">
-    {session ? (
-      <div class="stack">
-        <p>Signed in as <code>{session.user.email}</code>.</p>
-        <div class="row"><a class="button button--primary" href="/profile">Open dashboard</a></div>
+<Layout title="Nevermind" width="wide">
+  <div class="landing-shell">
+    <header class="landing-nav" aria-label="Primary navigation">
+      <a class="landing-brand" href="/" aria-label="Nevermind home">
+        <img src="/icon.png" alt="" class="landing-brand__icon" />
+        <span>Nevermind</span>
+      </a>
+      <nav class="landing-nav__links" aria-label="Product links">
+        <a href="https://github.com/pablopunk/nvm/releases"><Download size={14} /> Get the latest release</a>
+      </nav>
+      <LandingAccount placement="nav" server:defer>
+        <a class="button" href="/api/auth/signin" slot="fallback">Sign in</a>
+      </LandingAccount>
+    </header>
+
+    <section class="landing-hero">
+      <div class="landing-hero__copy">
+        <h1 class="landing-hero__title">
+          <img src="/wordmark.png" alt="Nevermind" class="landing-wordmark" />
+        </h1>
+        <p class="landing-hero__lede"><em>An AI-native desktop command palette that extends itself.</em></p>
+        <div class="landing-actions">
+          <a class="button button--primary" href="https://github.com/pablopunk/nvm/releases"><Download size={14} /> Get the latest release</a>
+        </div>
       </div>
-    ) : (
-      <div class="row"><a class="button button--primary" href="/api/auth/signin">Sign in</a></div>
-    )}
+
+      <figure class="landing-screenshot">
+        <img src="/screenshot.jpg" alt="Nevermind command palette showing AI-built Screenshot and Open Camera extensions" />
+        <figcaption>
+          In the screenshot above, Screenshots and Open Camera were extensions done by our AI. Not builtin. That's all you need to know.
+        </figcaption>
+      </figure>
+    </section>
   </div>
 </Layout>
