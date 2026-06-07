@@ -29,6 +29,7 @@ import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
 import { extensionPermissionCapabilities, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
+import { createExtensionUiApi } from './extension-ui-api'
 import { registerAppIpcHandlers } from './app-ipc-handlers'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
@@ -3625,39 +3626,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
     extension: createExtensionRuntimeMetadata(extension, command),
     command,
     launch: launchContext ? structuredClone(launchContext) : undefined,
-    ui: {
-      list: (view) => ({ ...view, type: 'list' }),
-      grid: (view) => ({ ...view, type: 'grid' }),
-      preview: (fileOrView, view: any = {}) => {
-        if (fileOrView?.kind && ['clipboard', 'image', 'video', 'file', 'text'].includes(fileOrView.kind)) return buildPreviewItemAction(fileOrView)
-        const isFile = fileOrView?.path || fileOrView?.fileUrl || fileOrView?.videoUrl || fileOrView?.thumbnailUrl
-        if (!isFile) return { ...fileOrView, type: 'preview' }
-        const file = fileOrView
-        return {
-          ...view,
-          type: 'preview',
-          presentation: view.presentation || 'preview',
-          title: view.title || file.name || 'Preview',
-          subtitle: view.subtitle || file.displayPath,
-          content: view.content || file.displayPath || '',
-          image: file.thumbnailUrl || file.url,
-          video: file.videoUrl || undefined,
-        }
-      },
-      chat: (view) => ({ ...view, type: 'chat' }),
-      form: (view) => ({ ...view, type: 'form' }),
-      editor: (view) => ({ ...view, type: 'editor' }),
-      progress: (input: any = {}) => progressView(input),
-      confirm: (input: any = {}) => buildConfirmAction(input),
-      toast: (input: any = {}) => ({ toast: { message: String(input?.message || ''), tone: input?.tone || 'default' } }),
-      webview: (view) => ({ ...view, type: 'webview' }),
-      camera: (view = {}) => ({ title: 'Camera', size: 'large', muted: true, ...view, type: 'camera' }),
-      item: (item) => item,
-      actions: (actions) => actions,
-      empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
-      loading: (title = 'Loading…') => progressView({ title, label: title }),
-      error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
-    },
+    ui: createExtensionUiApi({ buildPreviewItemAction, progressView, buildConfirmAction }),
     actions: {
       openPath: (filePath, title = 'Open', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openPath', title, path: filePath }),
       revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'revealPath', title, path: filePath }),
