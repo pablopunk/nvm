@@ -12,6 +12,10 @@ function isSafeLimitAction(action: unknown): action is CommandAction {
   return Object.values(action).every((value) => typeof value !== 'function')
 }
 
+export function aiChatEventMatchesActiveChat(event: AiChatEvent, activeChatId?: string) {
+  return !event.chatId || event.chatId === activeChatId
+}
+
 function limitStateFromEvent(event: AiChatEvent): AiLimitState | null {
   const data = event.data as AiLimitState | undefined
   if (!data || typeof data !== 'object' || typeof data.title !== 'string' || typeof data.message !== 'string') return null
@@ -113,7 +117,7 @@ export function useAiChat(sendMessage: (message: string, chatId?: string) => Pro
   }
 
   function handleEvent(event: AiChatEvent, activeChatId?: string) {
-    if (event.chatId && event.chatId !== activeChatId) return
+    if (!aiChatEventMatchesActiveChat(event, activeChatId)) return
     if (event.type === 'start') {
       setLimit(null)
       setBusy(true)
