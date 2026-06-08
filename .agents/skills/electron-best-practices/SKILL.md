@@ -13,7 +13,8 @@ Nevermind is an Electron command palette with privileged desktop capabilities. T
 2. **Read the contracts.** Inspect `src/electron/preload.ts`, `src/preload-api.ts`, `src/electron/main.ts`, `src/electron/palette-window.ts`, and `src/electron/os.ts` before changing Electron behavior.
 3. **Prefer intent-named OS capabilities.** Use `src/electron/os.ts` primitives and follow `src/docs/os-architecture.md` instead of scattering platform-specific native calls.
 4. **Keep extension APIs declarative.** If an extension needs a capability, add a typed host primitive and permission gate; do not bypass the extension API with bespoke native code.
-5. **Verify native contracts.** Check keyboard shortcuts, dismissal, focus, icons/thumbnails, drag/drop, updater behavior, async lifecycle, and cross-platform fallbacks.
+5. **Protect packaged boundaries.** For dependency, bundling, or app-size changes, follow `src/docs/packaged-app-size.md`; fix main/preload runtime boundaries instead of moving renderer/build/test packages into production dependencies.
+6. **Verify native contracts.** Check keyboard shortcuts, dismissal, focus, icons/thumbnails, drag/drop, updater behavior, async lifecycle, and cross-platform fallbacks.
 
 ## Security baseline
 
@@ -34,6 +35,7 @@ Nevermind is an Electron command palette with privileged desktop capabilities. T
 - Auth and backend token use: `src/electron/nevermind-auth.ts`, `src/electron/ai.ts`.
 - Renderer extension surfaces: `src/extension-view.tsx`, `src/ui.tsx`.
 - Packaging/update config: `electron-builder.yml`, `electron.vite.config.ts`.
+- Packaged runtime dependency rules: `src/docs/packaged-app-size.md`.
 
 ## Review checklist
 
@@ -46,6 +48,7 @@ Nevermind is an Electron command palette with privileged desktop capabilities. T
 - Are external URLs restricted to safe schemes and opened outside the app?
 - Are app tokens/auth files stored and logged safely?
 - Are shortcut and window lifecycle behaviors native and reversible?
+- Are renderer/build/test-only packages kept out of packaged runtime dependencies unless main/preload source imports them directly?
 - Are packaged resources present in `app.asar` and free of dev-only secrets?
 
 ## Output expectations

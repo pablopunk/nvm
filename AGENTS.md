@@ -12,8 +12,9 @@
 
 * **Dogfood the Extension API as the app's primary development model. Treat extension APIs as declarative host points, not backdoors; fix missing primitives in the API instead of bypassing it with bespoke native code, and keep commands and provider items distinct to avoid duplication in search. When adding background or automation primitives, migrate an existing Nevermind host job first, then expose the extension API.**
 * Keep files small and focused. Refactor slow patterns when encountered.
+* Model OS/desktop integrations as intent-named capabilities; keep platform checks in the capability layer and see `src/docs/os-architecture.md`.
 * Maintain native behavioral contracts (shortcuts, icons, async lifecycle) when migrating features to extensions.
-* Keep every action/search/view payload that crosses Electron IPC `structuredClone`-safe; strip handlers/functions after registering them and add clone-safety checks for new payload shapes.
+* Keep every action/search/view payload that crosses Electron IPC clone-safe and privilege-safe; strip handlers/functions after registering them, tokenize privileged actions or expose opaque host-owned handles, and add clone-safety checks for new payload shapes.
 * Keep desktop/backend API changes backward-compatible for supported released clients; see `src/docs/backend-api-compatibility.md`.
 * When fixing bugs, evaluate how the system would look if built from scratch and propose improvements.
 
@@ -21,6 +22,7 @@
 
 * Use the Command-K palette for all interactions. Avoid `window.confirm`, `alert`, or dedicated settings windows.
 * Show cached snapshots immediately and refresh in place. Do not disrupt navigation history with passive loading states.
+* Do not block palette first paint, typing, or command execution on decoration/enrichment work such as running status, icons, thumbnails, metadata, or heavy refreshes.
 * Reset filters and search during navigation unless inheritance is explicit.
 * Reserve empty states for active result lists; do not show them in passive surfaces.
 * Use canonical storage (`Command+Alt+K`) and symbol display (`⌘⌥K`) formats via `shortcutLabel`.
