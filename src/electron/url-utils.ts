@@ -20,8 +20,13 @@ async function electronShell() {
 
 export async function openExternalUrl(raw: unknown) {
   const url = safeExternalUrl(raw)
-  const shell = await electronShell()
-  if (!url || !shell) return false
-  await shell.openExternal(url)
-  return true
+  if (!url) return false
+  try {
+    const shell = await electronShell()
+    if (!shell) return false
+    await shell.openExternal(url)
+    return true
+  } catch {
+    return false
+  }
 }

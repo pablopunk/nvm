@@ -4,7 +4,7 @@ type ExtensionWindowLike = {
     on(event: string, listener: (...args: any[]) => void): void
     setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void
   }
-  getBounds(): { width: number; height: number }
+  getBounds(): { x?: number; y?: number; width: number; height: number }
   setBounds(bounds: { x: number; y: number; width: number; height: number }): void
   setAlwaysOnTop(flag: boolean, level?: string): void
   setVisibleOnAllWorkspaces(flag: boolean, options?: { visibleOnFullScreen?: boolean }): void
@@ -24,6 +24,9 @@ type ExtensionWindowLike = {
 type BrowserWindowConstructor = new (options: Record<string, unknown>) => ExtensionWindowLike
 
 type ExtensionWindowRecord = { id: string; win: ExtensionWindowLike; view: any; options: any }
+
+type CloneSafeRecord = { [key: string]: CloneSafeValue }
+type CloneSafeValue = null | boolean | number | string | CloneSafeValue[] | CloneSafeRecord
 
 type ExtensionWindowManagerDeps = {
   BrowserWindow: BrowserWindowConstructor
@@ -59,6 +62,37 @@ function defaultHashValue(value: string) {
   return String(Math.abs(hash))
 }
 
+function cloneSafeWindowOptions(value: unknown): CloneSafeValue | undefined {
+  if (value === null) return null
+  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const result: CloneSafeValue[] = []
+    for (const item of value) {
+      const safeItem = cloneSafeWindowOptions(item)
+      if (safeItem !== undefined) result.push(safeItem)
+    }
+    return result
+  }
+  if (!value || typeof value !== 'object') return undefined
+  const result: CloneSafeRecord = {}
+  for (const [key, item] of Object.entries(value)) {
+    const safeItem = cloneSafeWindowOptions(item)
+    if (safeItem !== undefined) result[key] = safeItem
+  }
+  return result
+}
+
+function cloneSafeWindowOptionRecord(value: unknown): CloneSafeRecord {
+  const safeValue = cloneSafeWindowOptions(value)
+  return safeValue && typeof safeValue === 'object' && !Array.isArray(safeValue) ? safeValue : {}
+}
+
+function extensionWindowViewPayload(id: string, view: any, options: any) {
+  const payload = { id, view, options: cloneSafeWindowOptionRecord(options) }
+  structuredClone(payload)
+  return payload
+}
+
 export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   const records = new Map<string, ExtensionWindowRecord>()
 
@@ -76,28 +110,35 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   }
 
   function applyOptions(win: ExtensionWindowLike, options: any = {}) {
+    const size = extensionWindowSize(options)
+    const bounds = win.getBounds()
+    if (bounds.width !== size.width || bounds.height !== size.height) {
+      win.setBounds({ x: bounds.x || 0, y: bounds.y || 0, width: size.width, height: size.height })
+    }
     const alwaysOnTop = options.alwaysOnTop !== false
     win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal')
-    if (options.visibleOnAllSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    win.setVisibleOnAllWorkspaces(Boolean(options.visibleOnAllSpaces), { visibleOnFullScreen: true })
   }
 
   function createOrUpdate(view: any, options: any = {}) {
     const normalizedView = deps.normalizeView(view)
     structuredClone(normalizedView)
-    const id = extensionWindowId(normalizedView, options, deps.hashValue)
+    const safeOptions = cloneSafeWindowOptionRecord(options)
+    const id = extensionWindowId(normalizedView, safeOptions, deps.hashValue)
     const existing = records.get(id)
     if (existing && !existing.win.isDestroyed()) {
       existing.view = normalizedView
-      existing.options = { ...existing.options, ...options, id }
-      existing.win.setTitle(String(options.title || normalizedView.title || 'Nevermind'))
-      existing.win.webContents.send('extension-window:view', { id, view: normalizedView, options: existing.options })
+      existing.options = { ...existing.options, ...safeOptions, id }
+      applyOptions(existing.win, existing.options)
+      existing.win.setTitle(String(existing.options.title || normalizedView.title || 'Nevermind'))
+      existing.win.webContents.send('extension-window:view', extensionWindowViewPayload(id, normalizedView, existing.options))
       existing.win.show()
       existing.win.focus()
       return existing
     }
 
-    const size = extensionWindowSize(options)
-    const hiddenTitleBar = options.titleBar === 'hidden'
+    const size = extensionWindowSize(safeOptions)
+    const hiddenTitleBar = safeOptions.titleBar === 'hidden'
     const win = new deps.BrowserWindow({
       width: size.width,
       height: size.height,
@@ -106,15 +147,16 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       show: false,
       frame: true,
       ...(hiddenTitleBar ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } } : {}),
-      title: String(options.title || normalizedView.title || 'Nevermind'),
+      title: String((safeOptions as any).title || normalizedView.title || 'Nevermind'),
       backgroundColor: deps.shouldUseDarkColors() ? '#111111' : '#f7f7f7',
       webPreferences: { preload: deps.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
-    const record = { id, win, view: normalizedView, options: { ...options, id } }
+    const record = { id, win, view: normalizedView, options: { ...safeOptions, id } }
     records.set(id, record)
-    applyOptions(win, options)
+    structuredClone(extensionWindowViewPayload(id, normalizedView, record.options))
+    applyOptions(win, record.options)
     win.once('ready-to-show', () => { center(win); win.show() })
-    if (options.hideOnBlur) win.on('blur', () => win.hide())
+    if ((safeOptions as any).hideOnBlur) win.on('blur', () => win.hide())
     win.on('closed', () => { if (records.get(id)?.win === win) records.delete(id) })
     deps.installNavigationPolicy(win, (url) => deps.isTrustedPage(url, id))
     win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => deps.debug?.('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }))

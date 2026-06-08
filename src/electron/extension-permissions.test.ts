@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { extensionPermissionCapabilities, filterWebviewPermissionsForExtension, hasExtensionPermission, isInternalExtension, permissionDeniedError } from './extension-permissions'
+import { extensionPermissionCapabilities, filterWebviewPermissionsForExtension, hasExtensionPermission, isInternalExtension, markInternalExtension, permissionDeniedError } from './extension-permissions'
 
-test('internal extensions are trusted when they omit explicit permissions', () => {
-  const extension = { id: 'nevermind.system' }
+test('only host-marked internal extensions are trusted when they omit explicit permissions', () => {
+  const extension = markInternalExtension({ id: 'nevermind.system' })
 
   assert.equal(isInternalExtension(extension), true)
   assert.equal(hasExtensionPermission(extension, 'system'), true)
   assert.equal(hasExtensionPermission(extension, 'desktop.files'), true)
+  assert.equal(isInternalExtension({ id: 'nevermind.spoof' }), false)
+  assert.equal(hasExtensionPermission({ id: 'nevermind.spoof' }, 'system'), false)
 })
 
 test('explicit permission arrays are authoritative even for internal extensions', () => {
-  assert.equal(hasExtensionPermission({ id: 'nevermind.fixture', permissions: [] }, 'system'), false)
+  assert.equal(hasExtensionPermission(markInternalExtension({ id: 'nevermind.fixture', permissions: [] }), 'system'), false)
   assert.equal(hasExtensionPermission({ id: 'third.party', permissions: ['ai'] }, 'ai'), true)
   assert.equal(hasExtensionPermission({ id: 'third.party', permissions: ['ai'] }, 'system'), false)
 })

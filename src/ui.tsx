@@ -1,7 +1,7 @@
 import React, { type ReactNode } from 'react'
 import { Command } from 'cmdk'
 import { Folder } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { CommandImage } from './model'
 
@@ -96,7 +96,7 @@ export function SearchAccessory({ tooltip, value, items, onChange }: SearchAcces
 }
 
 export function MarkdownContent({ content }: MarkdownContentProps) {
-  return <div className="markdownContent"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown></div>
+  return <div className="markdownContent"><ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={defaultUrlTransform} components={{ a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown></div>
 }
 
 export function PreviewView({ content, image, video, poster, actions }: PreviewViewProps) {

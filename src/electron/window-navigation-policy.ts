@@ -20,13 +20,25 @@ function isTrustedFilePage(url: string, rendererIndexPath?: string) {
   }
 }
 
+function isTrustedDevRendererPage(url: string, rendererUrl: string, requiresExtensionWindowId?: string) {
+  if (!rendererUrl) return false
+  try {
+    const parsed = new URL(url)
+    const expected = new URL(rendererUrl)
+    if (parsed.origin !== expected.origin || parsed.pathname !== expected.pathname) return false
+    if (requiresExtensionWindowId === undefined) return true
+    return parsed.searchParams.get('extensionWindowId') === requiresExtensionWindowId
+  } catch {
+    return false
+  }
+}
+
 export function isTrustedAppPage(url: string, isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '', rendererIndexPath?: string) {
-  return isTrustedFilePage(url, rendererIndexPath) || (isDev && Boolean(rendererUrl) && url.startsWith(rendererUrl))
+  return isTrustedFilePage(url, rendererIndexPath) || (isDev && isTrustedDevRendererPage(url, rendererUrl))
 }
 
 export function isTrustedExtensionWindowPage(url: string, id: string, isDev: boolean, rendererUrl?: string, rendererIndexPath?: string) {
-  const expectedDevUrl = rendererUrl ? `${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}` : ''
-  if (isDev && Boolean(expectedDevUrl) && url.startsWith(expectedDevUrl)) return true
+  if (isDev && isTrustedDevRendererPage(url, rendererUrl || '', id)) return true
   if (!isTrustedFilePage(url, rendererIndexPath)) return false
   try {
     return new URL(url).searchParams.get('extensionWindowId') === id
@@ -41,12 +53,12 @@ export function installExternalNavigationPolicy(
   openExternal: (url: string) => Promise<boolean> = openExternalUrl,
 ) {
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void openExternal(url)
+    void openExternal(url).catch(() => false)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
     if (isTrustedNavigation(url)) return
     event.preventDefault()
-    void openExternal(url)
+    void openExternal(url).catch(() => false)
   })
 }

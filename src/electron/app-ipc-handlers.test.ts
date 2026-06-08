@@ -94,6 +94,19 @@ test('registerAppIpcHandlers preserves palette, camera, and window behavior', as
   assert.deepEqual(calls, ['mode:preview', 'center', 'close-window'])
 })
 
+test('registerAppIpcHandlers redacts auth status logs and keeps sign-in failures stable', async () => {
+  const logEntries: unknown[] = []
+  const { handles } = createDeps({
+    getNevermindAuth: async () => ({ baseUrl: 'https://nvm.example', email: 'pablo@example.com' }),
+    logInfo: (_message, data) => logEntries.push(data),
+    signInToNevermind: async () => ({ ok: false, error: 'provider-secret' }),
+  })
+
+  assert.deepEqual(await handles.get('nevermind:auth-status')?.({}), { authed: true, email: 'pablo@example.com' })
+  assert.deepEqual(logEntries, [{ authed: true }])
+  assert.deepEqual(await handles.get('nevermind:sign-in')?.({}), { ok: false, error: 'Unable to sign in' })
+})
+
 test('registerAppIpcHandlers handles auth status and sign in side effects', async () => {
   const { handles, calls } = createDeps({
     getNevermindAuth: async () => ({ baseUrl: 'https://nvm.example', email: 'pablo@example.com' }),

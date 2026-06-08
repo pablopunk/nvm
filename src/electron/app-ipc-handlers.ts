@@ -95,7 +95,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     const auth = await deps.getNevermindAuth()
     deps.setActiveNevermindBaseUrl(auth?.baseUrl || null)
     if (auth?.baseUrl) deps.warmNevermindCompatibilityCache(auth.baseUrl)
-    deps.logInfo('nevermind.auth-status.check', { authed: Boolean(auth), email: auth?.email, userData: deps.userDataPath() }, { source: 'host', scope: 'nevermind' })
+    deps.logInfo('nevermind.auth-status.check', { authed: Boolean(auth) }, { source: 'host', scope: 'nevermind' })
     return auth ? { authed: true, email: auth.email } : { authed: false }
   })
   ipcHandleMeasured('nevermind:sign-in', async () => {
@@ -107,7 +107,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       deps.broadcastAuthChanged({ authed: true, email: result.auth.email })
       return { ok: true, email: result.auth.email }
     }
-    return { ok: false, error: 'error' in result ? result.error : 'unknown' }
+    return { ok: false, error: 'Unable to sign in' }
   })
   ipcHandleMeasured('apps:icon', (_event, appPath) => deps.appIconCache.get(appPath))
   ipcHandleMeasured('apps:running-paths', (_event, appPaths) => deps.runningAppStatus.getForRenderer(appPaths))

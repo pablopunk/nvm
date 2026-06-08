@@ -67,6 +67,20 @@ test('does not block renderer requests when no snapshot exists', async () => {
   await service.refresh('join-in-flight')
 })
 
+test('normalizes detected running paths before storing snapshots', async () => {
+  const service = createRunningAppStatusService({
+    ttlMs: 100,
+    platform: 'darwin',
+    getCandidates: () => [{ path: '/Applications/Notes.app' }],
+    detectRunningAppPaths: async () => new Set(['/Applications/NOTES.app']),
+    notifyChanged: () => {},
+  })
+
+  await service.refresh('initial')
+
+  assert.deepEqual(await service.getForRenderer(['/Applications/Notes.app']), ['/Applications/Notes.app'])
+})
+
 test('dedupes in-flight refreshes and caps renderer requested paths', async () => {
   let detectCount = 0
   const service = createRunningAppStatusService({

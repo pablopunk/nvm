@@ -8,7 +8,9 @@ class FakeBrowserWindow {
   title = ''
   visible = false
   destroyed = false
-  bounds = { width: 0, height: 0 }
+  bounds = { x: 0, y: 0, width: 0, height: 0 }
+  alwaysOnTop: Array<{ flag: boolean; level?: string }> = []
+  visibleOnAllWorkspaces: Array<{ flag: boolean; options?: { visibleOnFullScreen?: boolean } }> = []
   sent: Array<{ channel: string; payload: unknown }> = []
   loadedUrl = ''
   loadedFile: { path: string; options?: unknown } | null = null
@@ -22,14 +24,14 @@ class FakeBrowserWindow {
   constructor(options: Record<string, unknown>) {
     this.options = options
     this.title = String(options.title || '')
-    this.bounds = { width: Number(options.width), height: Number(options.height) }
+    this.bounds = { x: 0, y: 0, width: Number(options.width), height: Number(options.height) }
     FakeBrowserWindow.instances.push(this)
   }
 
   getBounds() { return this.bounds }
-  setBounds(bounds: { x: number; y: number; width: number; height: number }) { this.bounds = { width: bounds.width, height: bounds.height } }
-  setAlwaysOnTop() {}
-  setVisibleOnAllWorkspaces() {}
+  setBounds(bounds: { x: number; y: number; width: number; height: number }) { this.bounds = bounds }
+  setAlwaysOnTop(flag: boolean, level?: string) { this.alwaysOnTop.push({ flag, level }) }
+  setVisibleOnAllWorkspaces(flag: boolean, options?: { visibleOnFullScreen?: boolean }) { this.visibleOnAllWorkspaces.push({ flag, options }) }
   setTitle(title: string) { this.title = title }
   once(event: string, listener: (...args: any[]) => void) { this.handlers.set(`once:${event}`, listener) }
   on(event: string, listener: (...args: any[]) => void) { this.handlers.set(event, listener) }
@@ -91,16 +93,20 @@ test('creates extension windows with hardened renderer preferences and state', (
   assert.deepEqual(trustedChecks, [{ id: 'installed', url: 'policy' }, { id: 'panel', url: 'trusted-url' }])
 })
 
-test('updates existing extension windows in place and sends view payloads', () => {
+test('updates existing extension windows in place and sends clone-safe view payloads', () => {
   const { manager } = createManager()
-  manager.createOrUpdate({ title: 'Old' }, { id: 'panel' })
-  const record = manager.createOrUpdate({ title: 'New' }, { id: 'panel', title: 'Custom' })
+  manager.createOrUpdate({ title: 'Old' }, { id: 'panel', width: 400, height: 300, visibleOnAllSpaces: true, onClick: () => 'ignored' })
+  const record = manager.createOrUpdate({ title: 'New' }, { id: 'panel', title: 'Custom', width: 640, height: 360, alwaysOnTop: false, visibleOnAllSpaces: false, onClick: () => 'ignored' })
   const win = record.win as FakeBrowserWindow
 
   assert.equal(FakeBrowserWindow.instances.length, 1)
   assert.equal(win.title, 'Custom')
   assert.equal(win.visible, true)
-  assert.deepEqual(win.sent, [{ channel: 'extension-window:view', payload: { id: 'panel', view: { title: 'New', normalized: true }, options: { id: 'panel', title: 'Custom' } } }])
+  assert.deepEqual(win.bounds, { x: 0, y: 0, width: 640, height: 360 })
+  assert.deepEqual(win.alwaysOnTop.at(-1), { flag: false, level: 'normal' })
+  assert.deepEqual(win.visibleOnAllWorkspaces.at(-1), { flag: false, options: { visibleOnFullScreen: true } })
+  assert.deepEqual(win.sent, [{ channel: 'extension-window:view', payload: { id: 'panel', view: { title: 'New', normalized: true }, options: { id: 'panel', width: 640, height: 360, visibleOnAllSpaces: false, title: 'Custom', alwaysOnTop: false } } }])
+  assert.doesNotThrow(() => structuredClone(win.sent[0].payload))
 })
 
 test('executes toggle and cleanup actions against tracked windows', () => {

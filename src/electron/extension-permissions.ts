@@ -1,7 +1,14 @@
-export type ExtensionLike = { id?: string; permissions?: readonly string[] | null }
+const INTERNAL_EXTENSION_MARKER = Symbol.for('nevermind.internalExtension')
+
+export type ExtensionLike = { id?: string; permissions?: readonly string[] | null; [INTERNAL_EXTENSION_MARKER]?: true }
+
+export function markInternalExtension<T extends ExtensionLike>(extension: T): T {
+  Object.defineProperty(extension, INTERNAL_EXTENSION_MARKER, { value: true, enumerable: false, configurable: false })
+  return extension
+}
 
 export function isInternalExtension(extension: ExtensionLike | null | undefined) {
-  return typeof extension?.id === 'string' && extension.id.startsWith('nevermind.')
+  return extension?.[INTERNAL_EXTENSION_MARKER] === true
 }
 
 export function hasExtensionPermission(extension: ExtensionLike | null | undefined, permission: string) {

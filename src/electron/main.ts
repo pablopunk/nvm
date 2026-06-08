@@ -28,7 +28,7 @@ import { createExtensionWindowManager } from './extension-window-manager'
 import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
-import { extensionPermissionCapabilities, filterWebviewPermissionsForExtension, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
+import { extensionPermissionCapabilities, filterWebviewPermissionsForExtension, hasExtensionPermission, markInternalExtension, permissionDeniedError } from './extension-permissions'
 import { createExtensionUiApi } from './extension-ui-api'
 import { registerAppIpcHandlers } from './app-ipc-handlers'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
@@ -3785,9 +3785,9 @@ function createExtensionContext(extension, command, launchContext?: any) {
         searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
       shell: canUseSystem ? {
-        openExternal: (url) => runInBackground(async () => {
+        openExternal: async (url) => {
           if (!await openExternalUrl(url)) throw new Error('Unsafe external URL')
-        }),
+        },
         exec: runShellCommand,
         script: runShellScript,
         appleScript: (script, options: any = {}) => new Promise((resolve) => {
@@ -4301,7 +4301,7 @@ async function loadDevExtensions() {
 }
 
 function registerInternalExtensions() {
-  for (const createExtension of INTERNAL_EXTENSION_FACTORIES) registerExtension(createExtension())
+  for (const createExtension of INTERNAL_EXTENSION_FACTORIES) registerExtension(markInternalExtension(createExtension()))
   assertInternalExtensionsRegistered()
 }
 

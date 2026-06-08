@@ -38,6 +38,10 @@ function sameRunningPathSet(a: Set<string> | undefined, b: Set<string>) {
   return true
 }
 
+function normalizedRunningPathSet(paths: Set<string>, platform: NodeJS.Platform) {
+  return new Set(Array.from(paths).map((item) => normalizedRunningPath(item, platform)).filter(Boolean))
+}
+
 function rendererRequestedPaths(appPaths: unknown) {
   return Array.from(new Set((Array.isArray(appPaths) ? appPaths : []).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 30)
 }
@@ -59,7 +63,7 @@ export function createRunningAppStatusService(options: RunningAppStatusServiceOp
     const previousPaths = snapshot?.paths
     const candidates = options.getCandidates()
     refreshPromise = measure('apps.running.snapshot', { indexedCount: candidates.length, reason, alwaysLog: true }, async () => {
-      const paths = await options.detectRunningAppPaths(candidates)
+      const paths = normalizedRunningPathSet(await options.detectRunningAppPaths(candidates), platform)
       snapshot = { updatedAt: now(), paths }
       mark('apps.running.snapshot.result', { count: paths.size, reason })
       if (!sameRunningPathSet(previousPaths, paths)) options.notifyChanged()
