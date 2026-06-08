@@ -5,8 +5,8 @@ export type PatchCommandViewOptions = {
 }
 
 function patchCommandItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']> = [], mode: CommandViewPatch['mode'] = 'patch', removeItemIds: string[] = [], options: PatchCommandViewOptions = {}) {
-  if (!Array.isArray(items)) return options.preserveMissingItems ? items : []
-  let next = items
+  if (!Array.isArray(items) && options.preserveMissingItems && patches.length === 0 && removeItemIds.length === 0) return items
+  let next = Array.isArray(items) ? items : []
   if (removeItemIds.length) {
     const remove = new Set(removeItemIds)
     next = next.filter((item) => !remove.has(item.id))

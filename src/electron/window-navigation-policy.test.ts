@@ -31,11 +31,16 @@ function createFakeWindow() {
 }
 
 test('identifies trusted app and extension window pages', () => {
-  assert.equal(isTrustedAppPage('file:///app/index.html', false), true)
+  const rendererIndexPath = '/app/index.html'
+  assert.equal(isTrustedAppPage('file:///app/index.html', false, '', rendererIndexPath), true)
+  assert.equal(isTrustedAppPage('file:///tmp/evil.html', false, '', rendererIndexPath), false)
+  assert.equal(isTrustedAppPage('file:///app/index.html', false), false)
   assert.equal(isTrustedAppPage('http://localhost:5173/', true, 'http://localhost:5173/'), true)
   assert.equal(isTrustedAppPage('https://example.com/', true, 'http://localhost:5173/'), false)
 
-  assert.equal(isTrustedExtensionWindowPage('file:///app/index.html', 'abc 123', false), true)
+  assert.equal(isTrustedExtensionWindowPage('file:///app/index.html?extensionWindowId=abc%20123', 'abc 123', false, '', rendererIndexPath), true)
+  assert.equal(isTrustedExtensionWindowPage('file:///app/index.html', 'abc 123', false, '', rendererIndexPath), false)
+  assert.equal(isTrustedExtensionWindowPage('file:///tmp/evil.html?extensionWindowId=abc%20123', 'abc 123', false, '', rendererIndexPath), false)
   assert.equal(isTrustedExtensionWindowPage('http://localhost:5173/?extensionWindowId=abc%20123', 'abc 123', true, 'http://localhost:5173/'), true)
   assert.equal(isTrustedExtensionWindowPage('http://localhost:5173/?extensionWindowId=other', 'abc 123', true, 'http://localhost:5173/'), false)
 })

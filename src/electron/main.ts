@@ -28,7 +28,7 @@ import { createExtensionWindowManager } from './extension-window-manager'
 import { createAppIconCache } from './app-icon-cache'
 import { createAppIndexService } from './app-index-service'
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
-import { extensionPermissionCapabilities, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
+import { extensionPermissionCapabilities, filterWebviewPermissionsForExtension, hasExtensionPermission, permissionDeniedError } from './extension-permissions'
 import { createExtensionUiApi } from './extension-ui-api'
 import { registerAppIpcHandlers } from './app-ipc-handlers'
 import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
@@ -66,7 +66,7 @@ const extensionWindowManager = createExtensionWindowManager({
   normalizeView: (view) => normalizeView(view, null),
   hashValue,
   installNavigationPolicy: installExternalNavigationPolicy,
-  isTrustedPage: (url, id) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl),
+  isTrustedPage: (url, id) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl, rendererIndexPath),
   debug: (message, data) => loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
 })
 const appIconCache = createAppIconCache({
@@ -1694,8 +1694,10 @@ function normalizeExtensionView(result, entry) {
 
 function normalizeView(view, entry) {
   const actions = normalizeViewActions(view.actions, entry)
+  const webviewPermissions = view.type === 'webview' ? filterWebviewPermissionsForExtension(entry?.extension, view.webviewPermissions) : view.webviewPermissions
   return {
     ...view,
+    ...(webviewPermissions === undefined ? {} : { webviewPermissions }),
     actions,
     actionPanel: normalizeActionPanel(view.actionPanel, actions, entry),
     onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
@@ -5200,7 +5202,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   prepareAppWindowPolicy()
   registerLocalFileProtocol()
-  installPermissionHandlers(isDev)
+  installPermissionHandlers(isDev, rendererUrl, rendererIndexPath)
   updateManager.configure()
   updateManager.onStateChange(() => { patchUpdatesView(); invalidateExtensionRootItems() })
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems())

@@ -31,15 +31,15 @@ function addWindowBlurMargin(size: { width: number; height: number }) {
   }
 }
 
-export function installPermissionHandlers(isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
+export function installPermissionHandlers(isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '', rendererIndexPath?: string) {
   const allowedPermissions = ['media', 'display-capture', 'clipboard-read', 'clipboard-sanitized-write']
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
     const url = webContents?.getURL() || ''
-    return isTrustedAppPage(url, isDev, rendererUrl) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)
+    return isTrustedAppPage(url, isDev, rendererUrl, rendererIndexPath) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)
   })
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL()
-    if (isTrustedAppPage(url, isDev, rendererUrl) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)) return callback(true)
+    if (isTrustedAppPage(url, isDev, rendererUrl, rendererIndexPath) && allowedPermissions.includes(permission) && canRequestMediaPermission(permission)) return callback(true)
     callback(false)
   })
 }
@@ -107,7 +107,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       }
     })
 
-    installExternalNavigationPolicy(win, (url) => isTrustedAppPage(url, options.isDev, options.rendererUrl))
+    installExternalNavigationPolicy(win, (url) => isTrustedAppPage(url, options.isDev, options.rendererUrl, options.rendererIndexPath))
     win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
       debugLog('renderer.didFailLoad', { errorCode, errorDescription, validatedURL })
     })

@@ -45,6 +45,23 @@ test('patchCommandView patches sections and can preserve missing root items', ()
   }
   const next = patchCommandView(sectioned, { items: [{ id: 'one', subtitle: 'Patched' }] }, { preserveMissingItems: true })
 
-  assert.equal(next.items, undefined)
+  assert.deepEqual(next.items, [])
   assert.deepEqual(next.sections?.[0]?.items, [{ id: 'one', title: 'One', subtitle: 'Patched' }])
+
+  const passive = patchCommandView(sectioned, { isLoading: false }, { preserveMissingItems: true })
+  assert.equal(passive.items, undefined)
+})
+
+test('patchCommandView applies item patches to views that omitted items', () => {
+  const loadingView: CommandView = { type: 'list', title: 'Loading' }
+
+  assert.deepEqual(patchCommandView(loadingView, { mode: 'replace', items: [{ id: 'one', title: 'One' }] }).items, [
+    { id: 'one', title: 'One' },
+  ])
+  assert.deepEqual(patchCommandView(loadingView, { mode: 'prepend', items: [{ id: 'one', title: 'One' }] }).items, [
+    { id: 'one', title: 'One' },
+  ])
+  assert.deepEqual(patchCommandView(loadingView, { mode: 'append', items: [{ id: 'one', title: 'One' }] }).items, [
+    { id: 'one', title: 'One' },
+  ])
 })

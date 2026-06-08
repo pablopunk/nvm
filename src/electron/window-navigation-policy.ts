@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { openExternalUrl } from './url-utils'
 
 type WindowOpenHandlerDetails = { url: string }
@@ -9,13 +10,29 @@ type WebContentsWithNavigationPolicy = {
 
 type WindowWithNavigationPolicy = { webContents: WebContentsWithNavigationPolicy }
 
-export function isTrustedAppPage(url: string, isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '') {
-  return url.startsWith('file:') || (isDev && Boolean(rendererUrl) && url.startsWith(rendererUrl))
+function isTrustedFilePage(url: string, rendererIndexPath?: string) {
+  if (!rendererIndexPath) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'file:' && fileURLToPath(parsed) === rendererIndexPath
+  } catch {
+    return false
+  }
 }
 
-export function isTrustedExtensionWindowPage(url: string, id: string, isDev: boolean, rendererUrl?: string) {
+export function isTrustedAppPage(url: string, isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '', rendererIndexPath?: string) {
+  return isTrustedFilePage(url, rendererIndexPath) || (isDev && Boolean(rendererUrl) && url.startsWith(rendererUrl))
+}
+
+export function isTrustedExtensionWindowPage(url: string, id: string, isDev: boolean, rendererUrl?: string, rendererIndexPath?: string) {
   const expectedDevUrl = rendererUrl ? `${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}` : ''
-  return url.startsWith('file:') || (isDev && Boolean(expectedDevUrl) && url.startsWith(expectedDevUrl))
+  if (isDev && Boolean(expectedDevUrl) && url.startsWith(expectedDevUrl)) return true
+  if (!isTrustedFilePage(url, rendererIndexPath)) return false
+  try {
+    return new URL(url).searchParams.get('extensionWindowId') === id
+  } catch {
+    return false
+  }
 }
 
 export function installExternalNavigationPolicy(
