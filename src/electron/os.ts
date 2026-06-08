@@ -322,7 +322,12 @@ function chunkArray<T>(items: T[], size: number) {
 export async function fileDateAddedMs(paths: string[]) {
   if (!hasCapability('file-date-added') || paths.length === 0) return new Map<string, number>()
   const dates = new Map<string, number>()
-  await Promise.all(chunkArray(paths, 100).map(async (chunk) => {
+  const chunks = chunkArray(paths, 100)
+  let nextChunkIndex = 0
+
+  async function readNextChunk() {
+    const chunk = chunks[nextChunkIndex++]
+    if (!chunk) return
     try {
       const output = await new Promise<string>((resolve, reject) => {
         execFile('mdls', ['-raw', '-name', 'kMDItemDateAdded', ...chunk], { timeout: 2_000, maxBuffer: 1024 * 1024 }, (error, stdout) => error ? reject(error) : resolve(stdout))
@@ -332,7 +337,10 @@ export async function fileDateAddedMs(paths: string[]) {
     } catch {
       chunk.forEach((filePath) => dates.set(filePath, 0))
     }
-  }))
+    await readNextChunk()
+  }
+
+  await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, readNextChunk))
   return dates
 }
 

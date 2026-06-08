@@ -1857,7 +1857,7 @@ async function refreshViewForIpc(input: any = {}) {
     if (record.running) return { skipped: true }
     record.running = measureDebugPerformance('view.refresh.host-action', { refreshId, viewId: record.viewId, extensionId: record.entry?.extension?.id, commandId: record.entry?.command?.id, alwaysLog: true }, async () => {
       try {
-        const result = normalizeHostViewResult(await executeHostRefreshAction(record, { refresh: true }))
+        const result = normalizeHostViewResult(await executeHostRefreshAction(record, { refresh: true, reason: 'refresh', startedAt: Date.now() }))
         structuredClone(result)
         record.failureCount = 0
         record.backoffUntil = undefined
@@ -2351,10 +2351,11 @@ async function ocrScreen(options: any = {}) {
   finally { await fs.rm(imagePath, { force: true }).catch(() => {}) }
 }
 
-async function fileToExtensionFile(filePath) {
+async function fileToExtensionFile(filePath, options: any = {}) {
   const expandedPath = expandUserPath(filePath)
-  const stat = await fs.stat(expandedPath).catch(() => null)
-  const dimensions = await imageDimensionsForPath(expandedPath)
+  const stat = options.stat === undefined ? await fs.stat(expandedPath).catch(() => null) : options.stat
+  const dateAddedMs = Number(options.dateAddedMs || 0)
+  const dimensions = options.includeDimensions ? await imageDimensionsForPath(expandedPath) : {}
   return {
     path: expandedPath,
     name: path.basename(expandedPath),
@@ -2371,8 +2372,8 @@ async function fileToExtensionFile(filePath) {
     mtimeMs: stat?.mtimeMs || 0,
     birthtime: stat ? new Date(stat.birthtimeMs).toISOString() : null,
     birthtimeMs: stat?.birthtimeMs || 0,
-    dateAdded: null,
-    dateAddedMs: 0,
+    dateAdded: dateAddedMs ? new Date(dateAddedMs).toISOString() : null,
+    dateAddedMs,
     size: stat?.size || 0,
   }
 }
@@ -2415,23 +2416,52 @@ function sortFoundFiles(files, options: any = {}) {
   })
 }
 
-async function enrichDateAdded(files) {
-  const dates = await fileDateAddedMs(files.map((file) => file.path))
-  return files.map((file) => {
-    const addedMs = dates.get(file.path) || file.birthtimeMs || 0
-    return { ...file, dateAdded: addedMs ? new Date(addedMs).toISOString() : null, dateAddedMs: addedMs }
+function fileCandidate(fullPath, name = path.basename(fullPath)) {
+  return {
+    path: fullPath,
+    name,
+    displayPath: displayUserPath(fullPath),
+    extension: extensionForPath(name),
+    kind: isImagePath(fullPath) ? 'image' : isVideoPath(fullPath) ? 'video' : 'file',
+  }
+}
+
+async function eachChunk(items, size, fn) {
+  for (let index = 0; index < items.length; index += size) await Promise.all(items.slice(index, index + size).map(fn))
+}
+
+async function attachFileStats(files) {
+  await eachChunk(files, 100, async (file: any) => {
+    const stat = await fs.stat(file.path).catch(() => null)
+    file.stat = stat
+    file.mtimeMs = stat?.mtimeMs || 0
+    file.birthtimeMs = stat?.birthtimeMs || 0
+    file.size = stat?.size || 0
   })
+  return files.filter((file) => file.stat)
+}
+
+async function attachDateAdded(files) {
+  const dates = await fileDateAddedMs(files.map((file) => file.path))
+  for (const file of files) file.dateAddedMs = dates.get(file.path) || file.birthtimeMs || 0
+  return files
+}
+
+function findFilesNeedsStats(sortBy) {
+  return ['added', 'created', 'recent', 'modified', 'size'].includes(sortBy)
 }
 
 async function findFiles(roots, options: any = {}) {
   const limit = Math.max(1, Math.min(Number(options.limit || 100), MAX_FILE_INDEX_LIMIT))
+  const scanLimit = Math.max(limit, Math.min(Number(options.scanLimit || MAX_FILE_INDEX_LIMIT), MAX_FILE_INDEX_LIMIT))
   const maxDepth = options.depth ?? 2
   const extensions = extensionsForFindOptions(options)
   const ignored = normalizedIgnorePatterns(options.ignore)
   const includeHidden = Boolean(options.includeHidden)
+  const candidates: any[] = []
 
-  async function walk(dir, depth, found) {
-    if (found.length >= limit) return
+  async function walk(dir, depth) {
+    if (candidates.length >= scanLimit) return
     let entries = []
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -2440,28 +2470,27 @@ async function findFiles(roots, options: any = {}) {
     }
 
     for (const entry of entries) {
-      if (found.length >= limit) return
+      if (candidates.length >= scanLimit) return
       if (!includeHidden && entry.name.startsWith('.')) continue
       const fullPath = path.join(dir, entry.name)
       if (ignoredByPattern(fullPath, entry.name, ignored)) continue
       if (entry.isFile()) {
         const ext = extensionForPath(entry.name)
-        if (!extensions || extensions.has(ext)) found.push(await fileToExtensionFile(fullPath))
+        if (!extensions || extensions.has(ext)) candidates.push(fileCandidate(fullPath, entry.name))
         continue
       }
-      if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1, found)
+      if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
     }
   }
 
   const findRoots = normalizeFindRoots(roots).map(expandUserPath).filter((root) => root && path.isAbsolute(root))
-  const rootResults = await Promise.all(findRoots.map(async (root) => {
-    const found = []
-    await walk(root, maxDepth, found)
-    return found
-  }))
-  let found = rootResults.flat()
-  if ((options.sortBy || options.sort) === 'added') found = await enrichDateAdded(found)
-  return sortFoundFiles(found, options).slice(0, limit)
+  await Promise.all(findRoots.map((root) => walk(root, maxDepth)))
+  const sortBy = options.sortBy || options.sort || null
+  let found = candidates
+  if (findFilesNeedsStats(sortBy)) found = await attachFileStats(found)
+  if (sortBy === 'added') found = await attachDateAdded(found)
+  const selected = sortFoundFiles(found, options).slice(0, limit)
+  return Promise.all(selected.map((file) => fileToExtensionFile(file.path, { includeDimensions: Boolean(options.includeDimensions), stat: file.stat, dateAddedMs: file.dateAddedMs })))
 }
 
 function dragIconForPath(filePath) {
@@ -3114,8 +3143,24 @@ function fileIndexSnapshot(options: any = {}) {
       const needle = String(query).toLowerCase()
       entries = entries.filter((entry) => `${entry.name || ''} ${entry.displayPath || ''}`.toLowerCase().includes(needle))
     }
+    entries = sortFoundFiles(entries, { sortBy: options.sortBy || options.sort || 'added', order: options.order })
     const max = typeof limit === 'number' ? Math.max(0, Math.min(limit, entries.length)) : entries.length
-    return entries.slice(0, max).map((entry) => ({ id: entry.id, name: entry.name, path: entry.path, displayPath: entry.displayPath, extension: entry.extension, kind: entry.kind }))
+    return entries.slice(0, max).map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      path: entry.path,
+      displayPath: entry.displayPath,
+      extension: entry.extension,
+      kind: entry.kind,
+      url: entry.url,
+      fileUrl: entry.fileUrl,
+      videoUrl: entry.videoUrl,
+      thumbnailUrl: entry.thumbnailUrl,
+      mtimeMs: entry.mtimeMs,
+      birthtimeMs: entry.birthtimeMs,
+      dateAddedMs: entry.dateAddedMs,
+      size: entry.size,
+    }))
   })
 }
 
@@ -3777,7 +3822,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
         thumbnail: (filePath) => thumbnailUrlForPreviewablePath(filePath),
-        metadata: (filePath) => fileToExtensionFile(filePath),
+        metadata: (filePath) => fileToExtensionFile(filePath, { includeDimensions: true }),
         indexedRoots: () => defaultFileIndexRoots().map(displayUserPath),
         indexSnapshot: (options: any = {}) => fileIndexSnapshot(options),
         reindex: (options: any = {}) => reindexFiles(options),
@@ -4566,14 +4611,7 @@ async function scanFiles(options: any = {}) {
       if (entry.isFile()) {
         const ext = extensionForPath(entry.name)
         if (extensions && !extensions.has(ext)) continue
-        found.push({
-          id: fullPath,
-          name: entry.name,
-          path: fullPath,
-          displayPath: displayUserPath(fullPath),
-          extension: ext,
-          kind: isImagePath(fullPath) ? 'image' : isVideoPath(fullPath) ? 'video' : 'file',
-        })
+        found.push(fileCandidate(fullPath, entry.name))
         continue
       }
       if (entry.isDirectory() && depth > 0) await walk(fullPath, depth - 1)
@@ -4581,8 +4619,17 @@ async function scanFiles(options: any = {}) {
   }
 
   await Promise.all(roots.map((root) => walk(root, maxDepth)))
-  markDebugPerformance('files.scan.result', { foundCount: found.length, limit })
-  return found.slice(0, limit)
+  await attachFileStats(found)
+  await attachDateAdded(found)
+  const sorted = sortFoundFiles(found, { sortBy: options.sortBy || options.sort || 'added', order: options.order })
+  markDebugPerformance('files.scan.result', { foundCount: sorted.length, limit })
+  return sorted.slice(0, limit).map((file) => ({
+    ...file,
+    url: thumbnailUrlForPreviewablePath(file.path) || fileUrlForPath(file.path),
+    fileUrl: fileUrlForPath(file.path),
+    videoUrl: isVideoPath(file.path) ? fileUrlForPath(file.path) : null,
+    thumbnailUrl: thumbnailUrlForPreviewablePath(file.path),
+  }))
   })
 }
 

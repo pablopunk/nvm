@@ -95,7 +95,9 @@ export type ExtensionLaunchContext = {
   files?: ExtensionFile[]
   /** Absolute changed paths for `files.changed` triggers. Bounded by the host. */
   changedPaths?: string[]
-  /** Run reason such as `manual`, `startup`, `interval`, or `event:*`. */
+  /** True when a host-owned view refresh is re-running the command after the initial view was shown. */
+  refresh?: boolean
+  /** Run reason such as `manual`, `startup`, `interval`, `event:*`, or `refresh`. */
   reason?: string
   /** Epoch milliseconds for when the host started this action/job. */
   startedAt: number
@@ -381,8 +383,8 @@ export type ExtensionView = {
   onSelectionChange?: ExtensionAction
   pagination?: ExtensionPagination
   searchAccessory?: ExtensionSearchAccessory
-  /** Host polls only while visible. The renderer receives an opaque host refresh handle, never an executable action. */
-  refresh?: { intervalMs?: number; mode?: PatchMode; /** @deprecated Use `ctx.views.refresh()` only for existing extensions; new refreshes should be declarative and host-owned. */ action?: ExtensionAction }
+  /** Host-owned visible-view refresh. Use `immediate: true` to render a cheap persisted/snapshot cache first, then refresh after paint and update that cache for the next open; the renderer receives an opaque host handle, never an executable action. */
+  refresh?: { intervalMs?: number; mode?: PatchMode; immediate?: boolean; /** @deprecated Refresh is host-owned; omit `action` for new extensions. */ action?: ExtensionAction }
   actions?: ExtensionAction[]
   actionPanel?: ExtensionActionPanel
   actionPanelVisibility?: ActionPanelVisibility
@@ -460,9 +462,13 @@ export type ExtensionFindFilesOptions = {
   /** `added` is usually best for Downloads/screenshots; `recent`/`modified` use filesystem mtime. */
   sortBy?: 'recent' | 'modified' | 'added' | 'created' | 'name' | 'size'
   order?: 'asc' | 'desc'
+  /** Loads image dimensions during scans. Defaults false because native image metadata can block large media grids; use `metadata(path)` for one-off detail hydration. */
+  includeDimensions?: boolean
+  /** Maximum matching candidates to inspect before sorting. Defaults to the host cap; lower this for huge roots when approximate newest results are acceptable. */
+  scanLimit?: number
 }
 
-export type ExtensionFileIndexOptions = Omit<ExtensionFindFilesOptions, 'sortBy' | 'order'> & {
+export type ExtensionFileIndexOptions = ExtensionFindFilesOptions & {
   /** Roots to scan or filter, e.g. ['~/Downloads']. Defaults to Desktop/Documents/Downloads. */
   roots?: string | string[]
   /** Include hidden dotfiles during explicit reindex scans. Defaults to false. */
@@ -485,13 +491,13 @@ export type ExtensionApp = { id: string; name: string; path: string; [key: strin
 /** An app that can open a specific file. Returned by `ctx.desktop.files.openWithApps(filePath)`. */
 export type ExtensionOpenWithApp = ExtensionApp
 /** A host-indexed file from `ctx.desktop.files.indexSnapshot/recent/searchIndex`. */
-export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string; extension?: string; kind?: ExtensionFileKind }
+export type ExtensionIndexedFile = { id: string; name: string; path: string; displayPath?: string; extension?: string; kind?: ExtensionFileKind; url?: string; fileUrl?: string; videoUrl?: string | null; thumbnailUrl?: string | null; mtimeMs?: number; birthtimeMs?: number; dateAddedMs?: number; size?: number }
 
 export type RecentLogOptions = { limit?: number; level?: LogLevel; source?: LogSource; sinceMs?: number; query?: string; extensionId?: string }
 export type LogEntry = { timestamp: string; level: LogLevel; source: LogSource; scope?: string; extensionId?: string; commandId?: string; message: string; data?: unknown }
 
 export type ExtensionStorage = {
-  /** Persistent per-extension JSON state stored in app data. */
+  /** Persistent per-extension JSON state stored in app data. Use it for first-paint snapshots that lazy refreshes revalidate for the next open. */
   get<T = unknown>(key: string, fallback?: T): Promise<T | undefined>
   set<T = unknown>(key: string, value: T): Promise<T>
   delete(key: string): Promise<void>
@@ -883,11 +889,11 @@ export type ExtensionContext = {
       metadata(filePath: string): Promise<ExtensionFile>
       /** Configured default roots for the lightweight host file index. */
       indexedRoots(): string[]
-      /** Snapshot of the host file index, filtered without rescanning. */
+      /** Instant snapshot of the host file index, filtered/sorted without rescanning. Use this to open views immediately; refresh lazily for newest data. */
       indexSnapshot(options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
-      /** Rebuild the lightweight host file index with bounded roots/depth/filter controls. */
+      /** Rebuild the lightweight host file index with bounded roots/depth/filter controls. Run from background jobs or refreshes, not before first paint. */
       reindex(options?: ExtensionFileIndexOptions): Promise<{ count: number; roots: string[] }>
-      /** Entries from the current host file index snapshot. */
+      /** Instant newest-first entries from the current host file index snapshot. Never rescans. Use as a fallback seed; prefer extension storage for the last refreshed first-paint cache. */
       recent(options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]
       /** Host file index entries whose name or path matches the query. */
       searchIndex(query: string, options?: ExtensionFileIndexOptions): ExtensionIndexedFile[]

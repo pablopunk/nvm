@@ -401,11 +401,13 @@ export function App() {
     }
     const minimumIntervalMs = extensionView.type === 'grid' ? 5000 : 1000
     const timer = window.setInterval(refresh, Math.max(minimumIntervalMs, intervalMs))
+    const immediateTimer = extensionView.refresh.immediate ? window.setTimeout(refresh, 0) : undefined
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      if (immediateTimer !== undefined) window.clearTimeout(immediateTimer)
     }
-  }, [extensionView?.id, extensionView?.type, extensionView?.title, extensionView?.refresh?.id, extensionView?.refresh?.intervalMs])
+  }, [extensionView?.id, extensionView?.type, extensionView?.title, extensionView?.refresh?.id, extensionView?.refresh?.intervalMs, extensionView?.refresh?.immediate])
 
   useLayoutEffect(() => {
     const card = resultsListRef.current
