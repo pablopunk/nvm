@@ -1,12 +1,12 @@
 ---
-import { MoreHorizontal } from '@lucide/astro';
+import { Ellipsis } from '@lucide/astro';
 interface Props { label?: string; align?: 'left' | 'right' }
 const { label, align = 'right' } = Astro.props;
 const cls = align === 'left' ? 'dropdown dropdown--left' : 'dropdown';
 ---
 <details class={cls}>
   <summary class="dropdown__trigger" aria-label={label || 'More'}>
-    <MoreHorizontal size={16} />
+    <Ellipsis size={16} />
   </summary>
   <div class="dropdown__menu">
     <slot />

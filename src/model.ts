@@ -1,17 +1,22 @@
 import type { ReactNode } from 'react'
+import type {
+  ActionPanelVisibility,
+  ExtensionAccessoryTone,
+  ExtensionEditorFormat,
+  ExtensionFormFieldType,
+  ExtensionFormOption,
+  ExtensionFormValue,
+  ExtensionImage,
+  ExtensionPermission as PublicExtensionPermission,
+  ExtensionView,
+  ForegroundColor,
+  PatchMode,
+  ViewPresentation,
+  ViewSize,
+  ExtensionWebviewPermission,
+} from './resources/nevermind-extension-api'
 
-export type ExtensionPermission =
-  | 'desktop.apps'
-  | 'desktop.files'
-  | 'clipboard.history'
-  | 'ai'
-  | 'extensions.ownership'
-  | 'shortcuts'
-  | 'system'
-  | 'places'
-  | 'updates'
-  | 'settings.write'
-  | 'camera'
+export type ExtensionPermission = PublicExtensionPermission
 
 export type ActionDismissBehavior = 'manual' | 'immediate' | 'after-success'
 export type ActionLoadingBehavior = 'view' | 'none'
@@ -162,22 +167,22 @@ export type CommandActionPanel = {
   sections: CommandActionSection[]
 }
 
-export type CommandAccessoryTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger'
+export type CommandAccessoryTone = ExtensionAccessoryTone
 export type CommandItemAccessory = { text?: string; icon?: string | ReactNode; tone?: CommandAccessoryTone; tooltip?: string }
-export type CommandImage = string | { src?: string; light?: string; dark?: string; fallback?: string; alt?: string; fit?: 'cover' | 'contain'; shape?: 'square' | 'rounded' | 'circle'; tint?: string; mask?: 'none' | 'rounded' | 'circle' }
+export type CommandImage = ExtensionImage
 export type CommandMetadataItem =
   | { type?: 'text'; label: string; value: string; copyable?: boolean }
   | { type: 'link'; label: string; value: string; url: string }
   | { type: 'tag'; label?: string; value: string; tone?: CommandAccessoryTone }
   | { type: 'separator' }
 export type CommandDetail = { title?: string; subtitle?: string; markdown?: string; metadata?: CommandMetadataItem[]; image?: CommandImage; actions?: CommandAction[] }
-export type CommandItemForeground = 'yellow' | 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'pink'
+export type CommandItemForeground = ForegroundColor
 export type CommandItemAppearance = { foreground?: CommandItemForeground }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & { id: string }
-export type CommandFormValue = string | boolean | string[]
-export type CommandFormFieldType = 'text' | 'textarea' | 'password' | 'email' | 'url' | 'number' | 'date' | 'checkbox' | 'dropdown' | 'select' | 'multiselect' | 'file' | 'files' | 'folder' | 'description' | 'separator'
-export type CommandFormOption = { title: string; value: string }
+export type CommandFormValue = ExtensionFormValue
+export type CommandFormFieldType = ExtensionFormFieldType
+export type CommandFormOption = ExtensionFormOption
 export type CommandFormField = { id: string; label?: string; type?: CommandFormFieldType; value?: CommandFormValue; placeholder?: string; required?: boolean; options?: CommandFormOption[]; description?: string; error?: string; rows?: number; extensions?: string[]; filterName?: string; buttonLabel?: string; defaultPath?: string; canCreateDirectories?: boolean }
 
 export type CommandItem = {
@@ -200,7 +205,7 @@ export type CommandItem = {
   persistentAction?: unknown
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
-  actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
+  actionPanelVisibility?: ActionPanelVisibility
   appearance?: CommandItemAppearance
   className?: string
   detail?: CommandDetail
@@ -214,7 +219,7 @@ export type CommandItemSection = {
 
 export type CommandViewPatch = {
   items?: CommandItemPatch[]
-  mode?: 'patch' | 'replace' | 'prepend' | 'append'
+  mode?: PatchMode
   removeItemIds?: string[]
   isLoading?: boolean
   selectedItemId?: string
@@ -224,7 +229,7 @@ export type CommandView = {
   id?: string
   type: 'list' | 'grid' | 'preview' | 'chat' | 'form' | 'editor' | 'progress' | 'webview' | 'camera'
   title: string
-  size?: 'default' | 'large'
+  size?: ViewSize
   image?: CommandImage
   video?: string
   videoUrl?: string
@@ -238,17 +243,18 @@ export type CommandView = {
   subtitle?: string
   content?: string
   placeholder?: string
-  format?: 'text' | 'markdown'
+  format?: ExtensionEditorFormat
   language?: string
   readOnly?: boolean
   html?: string
+  webviewPermissions?: ExtensionWebviewPermission[]
   items?: CommandItem[]
   sections?: CommandItemSection[]
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
   detail?: { placement?: 'side' | 'bottom'; visible?: boolean }
   searchBarPlaceholder?: string
-  presentation?: 'root' | 'stacked' | 'preview'
+  presentation?: ViewPresentation
   selectedItemId?: string
   onSelectionChange?: CommandAction
   pagination?: { hasMore?: boolean; pageSize?: number; onLoadMore?: CommandAction }
@@ -263,10 +269,10 @@ export type CommandView = {
   status?: string
   actions?: CommandAction[]
   actionPanel?: CommandActionPanel
-  actionPanelVisibility?: 'visible' | 'menu' | 'hidden'
-  layout?: 'square' | 'wide' | 'compact'
-  aspectRatio?: string | number
-  columns?: number
+  actionPanelVisibility?: ActionPanelVisibility
+  layout?: NonNullable<ExtensionView['layout']>
+  aspectRatio?: NonNullable<ExtensionView['aspectRatio']>
+  columns?: NonNullable<ExtensionView['columns']>
 }
 
 export type RowModel = {

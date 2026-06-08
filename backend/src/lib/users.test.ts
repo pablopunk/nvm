@@ -4,7 +4,12 @@ import { resetDbForTests, setDbForTests } from '../db/client';
 import { creditLedger } from '../db/schema';
 import { ensureMonthlyFreeCredits } from './users';
 
-type FakeDb = ReturnType<typeof createFakeDb>;
+type FakeDb = {
+  insertedValues: unknown[];
+  select: () => ReturnType<typeof createChain>;
+  insert: (table: unknown) => ReturnType<typeof createChain>;
+  transaction: (callback: (tx: FakeDb) => Promise<void>) => Promise<void>;
+};
 
 function createChain(result: unknown, onValues?: (values: unknown) => void) {
   const promise = () => Promise.resolve(result);
@@ -23,14 +28,15 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
   return chain;
 }
 
-function createFakeDb(selects: unknown[]) {
+function createFakeDb(selects: unknown[]): FakeDb {
   const remainingSelects = [...selects];
   const insertedValues: unknown[] = [];
-  const db = {
+  let db: FakeDb;
+  db = {
     insertedValues,
     select: () => createChain(remainingSelects.shift() ?? []),
     insert: (table: unknown) => table === creditLedger ? createChain([], (values) => insertedValues.push(values)) : createChain([]),
-    transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db as FakeDb),
+    transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db),
   };
   return db;
 }

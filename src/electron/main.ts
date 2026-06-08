@@ -22,6 +22,16 @@ import { calculate, calculateDetailed, calculateRateResult, getUrlFromQuery, has
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils'
 import { autoUpdatesUnavailableMessage, captureScreenImage, executeSystemBuiltin, fileDateAddedMs, frontmostApp, getLaunchAtLoginEnabled, hasCapability, keyboardSettingsSubtitle, launchApp as launchOsApp, osLabel, pasteIntoFrontmostApp, prepareAppWindowPolicy, quickLookTitle, recognizeTextInImage, reservedPaletteShortcutName, revealPathTitle, runningAppPaths as detectRunningAppPaths, scanApps, selectedFilePaths, selectedText, setLaunchAtLoginEnabled, settingsTitle, typeTextIntoFrontmostApp, watchApps } from './os'
 import { createUpdateManager } from './update-manager'
+import { createRunningAppStatusService } from './running-app-status'
+import { openExternalUrl } from './url-utils'
+import { createExtensionWindowManager } from './extension-window-manager'
+import { createAppIconCache } from './app-icon-cache'
+import { createAppIndexService } from './app-index-service'
+import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
+import { extensionPermissionCapabilities, filterWebviewPermissionsForExtension, hasExtensionPermission, markInternalExtension, permissionDeniedError } from './extension-permissions'
+import { createExtensionUiApi } from './extension-ui-api'
+import { registerAppIpcHandlers } from './app-ipc-handlers'
+import { installExternalNavigationPolicy, isTrustedExtensionWindowPage } from './window-navigation-policy'
 import { JobRegistry, type JobSnapshot } from './jobs'
 import { isNewerVersion as isVersionNewerThan } from './version-utils'
 import { configureLogger, extensionLogger, info as logInfo, warn as logWarn, error as logError, debug as loggerDebug } from './logger'
@@ -43,6 +53,38 @@ const paletteWindow = createPaletteWindowController({
   rendererUrl,
   rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
+})
+const extensionWindowManager = createExtensionWindowManager({
+  BrowserWindow,
+  preloadPath,
+  rendererIndexPath,
+  rendererUrl,
+  isDev,
+  shouldUseDarkColors: () => nativeTheme.shouldUseDarkColors,
+  getCursorScreenPoint: () => screen.getCursorScreenPoint(),
+  getDisplayNearestPoint: (point) => screen.getDisplayNearestPoint(point),
+  normalizeView: (view) => normalizeView(view, null),
+  hashValue,
+  installNavigationPolicy: installExternalNavigationPolicy,
+  isTrustedPage: (url, id) => isTrustedExtensionWindowPage(url, id, isDev, rendererUrl, rendererIndexPath),
+  debug: (message, data) => loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
+})
+const appIconCache = createAppIconCache({
+  hasAppIcons: () => hasCapability('app-icons'),
+  hashValue,
+  readCachedIcon: (cacheKey) => fs.readFile(path.join(iconCacheDir, `${cacheKey}.png`)).catch(() => null),
+  writeCachedIcon: async (cacheKey, png) => {
+    await fs.mkdir(iconCacheDir, { recursive: true })
+    await fs.writeFile(path.join(iconCacheDir, `${cacheKey}.png`), png)
+  },
+  loadIcon: async (appPath) => {
+    const { fileIconToBuffer } = await import('file-icon')
+    return Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
+  },
+  schedule: (reason, delayMs = 0) => jobRegistry.schedule('cache.app-icons', reason, delayMs),
+  mark: markDebugPerformance,
+  measure: measureDebugPerformance,
+  warn: (message, data) => logWarn(message, data, { source: 'host', scope: 'apps' }),
 })
 
 const CLIPBOARD_LIMIT = 300
@@ -87,7 +129,6 @@ function bundledResourcePath(...relativePath) {
   return candidates.find((candidate) => fsSync.existsSync(candidate)) || candidates[0]
 }
 
-let appIndex: any[] = []
 let fileIndex: any[] = []
 let clipboardHistory: any[] = []
 const suppressedClipboardItemIds = new Map<string, number>()
@@ -101,8 +142,6 @@ let learningRulesPath = ''
 let legacyLearningRulesPath = ''
 let learningTracesPath = ''
 let saveTimer: NodeJS.Timeout | undefined
-let appIndexTimer: NodeJS.Timeout | undefined
-let appWatchers: Array<{ close: () => unknown }> = []
 let extensionFileWatchers: Array<{ close: () => unknown }> = []
 let clipboardWatcherLastId = ''
 let frontmostWatcherLastId = ''
@@ -112,8 +151,6 @@ let learningStore: LocalLearningStore | null = null
 const learningReviewJobs = new Map<string, Promise<void>>()
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
-type ExtensionWindowRecord = { id: string; win: BrowserWindow; view: any; options: any }
-const extensionWindows = new Map<string, ExtensionWindowRecord>()
 let didRunQuitCleanup = false
 let userState: AnyRecord = {
   recents: {},
@@ -261,13 +298,29 @@ function recordLearningReview(chatId: string) {
   learningReviewJobs.set(chatId, job)
 }
 
-const appIconCache = new Map<string, string | null>()
-const appIconLoadPromises = new Map<string, Promise<string | null>>()
-const pendingAppIconPaths = new Set<string>()
-const appIconWaiters = new Map<string, Array<(result: string | null) => void>>()
+const appIndexService = createAppIndexService({
+  scanApps,
+  watchApps,
+  normalize,
+  emitChanged: () => jobRegistry.emit('apps.changed'),
+  invalidateRunningStatus: () => runningAppStatus.invalidate(),
+  scheduleRunningStatusRefresh: (reason) => runningAppStatus.scheduleRefresh(reason),
+  notifyIndexed: (count) => paletteWindow.win?.webContents.send('apps:indexed', count),
+  measure: measureDebugPerformance,
+  mark: markDebugPerformance,
+  error: (message, error) => logError(message, error, { source: 'host', scope: 'apps' }),
+})
+
 const RUNNING_APPS_SNAPSHOT_TTL_MS = 1500
-let runningAppsSnapshot: { updatedAt: number; paths: Set<string> } | null = null
-let runningAppsRefresh: Promise<Set<string>> | null = null
+const runningAppStatus = createRunningAppStatusService({
+  ttlMs: RUNNING_APPS_SNAPSHOT_TTL_MS,
+  getCandidates: () => appIndexService.get(),
+  detectRunningAppPaths,
+  notifyChanged: () => paletteWindow.win?.webContents.send('apps:running-paths-changed'),
+  measure: measureDebugPerformance,
+  mark: markDebugPerformance,
+  onRefreshFailed: (error) => logWarn('apps.running.snapshot.failed', error, { source: 'host', scope: 'apps' }),
+})
 const pendingThumbnailPaths = new Map<string, string>()
 const extensionActionRegistry = new Map<string, any>()
 const extensionModules = new Map<string, any>()
@@ -303,20 +356,6 @@ function enforceExtensionCacheBudget(store: Map<string, { value: any; expiresAt:
 
 const extensionRefreshBurstWindow = new Map<string, number[]>()
 const extensionAiCallWindow = new Map<string, number[]>()
-
-function isInternalExtension(extension: any) {
-  return typeof extension?.id === 'string' && extension.id.startsWith('nevermind.')
-}
-
-function hasExtensionPermission(extension: any, permission: string) {
-  const declared = Array.isArray(extension?.permissions) ? extension.permissions : null
-  if (declared) return declared.includes(permission)
-  return isInternalExtension(extension)
-}
-
-function permissionDeniedError(permission: string) {
-  return new Error(`Extension is missing required permission: ${permission}`)
-}
 
 const ACTION_EXECUTION_TTL_MS = 30 * 60_000
 const ACTION_EXECUTION_MAX_RECORDS = 2_000
@@ -567,18 +606,8 @@ function defaultActionIdFor(action: any) {
 let shortcutByAiChatIdCache: Map<string, string> | null = null
 function shortcutByAiChatIdMap() {
   if (shortcutByAiChatIdCache) return shortcutByAiChatIdCache
-  const shortcutsByChat = new Map<string, string[]>()
-  for (const [actionId, storedAction] of Object.entries(userState.shortcutActions) as Array<[string, any]>) {
-    if (storedAction?.aiChatId && userState.shortcuts[actionId]) {
-      shortcutsByChat.set(storedAction.aiChatId, [...(shortcutsByChat.get(storedAction.aiChatId) || []), userState.shortcuts[actionId]])
-    }
-  }
-  const map = new Map<string, string>()
-  for (const [chatId, shortcuts] of shortcutsByChat) {
-    if (shortcuts.length === 1 && chatTouchedExtensionFiles(userState.aiChats[chatId]).length === 1) map.set(chatId, shortcuts[0])
-  }
-  shortcutByAiChatIdCache = map
-  return map
+  shortcutByAiChatIdCache = buildShortcutByAiChatIdMap(userState.shortcutActions, userState.shortcuts, userState.aiChats, chatTouchedExtensionFiles)
+  return shortcutByAiChatIdCache
 }
 
 function invalidateShortcutCaches() {
@@ -634,110 +663,6 @@ function recordRecent(action: any) {
   scheduleSaveState()
 }
 
-async function loadAppIconDataUrl(appPath) {
-  return measureDebugPerformance('apps.icon.load', { appPath }, async () => {
-    try {
-      const cachePath = path.join(iconCacheDir, `${hashValue(appPath)}.png`)
-      const cached = await fs.readFile(cachePath).catch(() => null)
-      if (cached) {
-        markDebugPerformance('apps.icon.cache-hit', { appPath })
-        return `data:image/png;base64,${cached.toString('base64')}`
-      }
-
-      const { fileIconToBuffer } = await import('file-icon')
-      const png = Buffer.from(await fileIconToBuffer(appPath, { size: 64 }))
-      await fs.mkdir(iconCacheDir, { recursive: true })
-      await fs.writeFile(cachePath, png).catch(() => {})
-      return `data:image/png;base64,${png.toString('base64')}`
-    } catch (error) {
-      logWarn('appIcon.load.failed', { appPath, error }, { source: 'host', scope: 'apps' })
-      return null
-    }
-  })
-}
-
-async function processPendingAppIcons() {
-  const paths = Array.from(pendingAppIconPaths).slice(0, 20)
-  for (const appPath of paths) pendingAppIconPaths.delete(appPath)
-  await Promise.all(paths.map(async (appPath) => {
-    const result = await loadAppIconDataUrl(appPath)
-    appIconCache.set(appPath, result)
-    for (const resolve of appIconWaiters.get(appPath) || []) resolve(result)
-    appIconWaiters.delete(appPath)
-    appIconLoadPromises.delete(appPath)
-  }))
-  if (pendingAppIconPaths.size) jobRegistry.schedule('cache.app-icons', 'icon-backlog', 50)
-}
-
-async function getAppIconDataUrl(appPath) {
-  return measureDebugPerformance('apps.icon.get', { appPath, alwaysLog: true }, async () => {
-    if (!hasCapability('app-icons') || !appPath || !appPath.endsWith('.app')) return null
-    if (appIconCache.has(appPath)) {
-      markDebugPerformance('apps.icon.memory-cache-hit', { appPath })
-      return appIconCache.get(appPath)
-    }
-    const inFlight = appIconLoadPromises.get(appPath)
-    if (inFlight) {
-      markDebugPerformance('apps.icon.in-flight-hit', { appPath })
-      return inFlight
-    }
-
-    pendingAppIconPaths.add(appPath)
-    const promise = new Promise<string | null>((resolve) => {
-      const waiters = appIconWaiters.get(appPath) || []
-      waiters.push(resolve)
-      appIconWaiters.set(appPath, waiters)
-    })
-    appIconLoadPromises.set(appPath, promise)
-    jobRegistry.schedule('cache.app-icons', 'icon-request', 0)
-    return promise
-  })
-}
-
-function normalizedRunningPath(value) {
-  const text = String(value || '').trim()
-  return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text
-}
-
-function runningSnapshotIsFresh() {
-  return Boolean(runningAppsSnapshot && Date.now() - runningAppsSnapshot.updatedAt < RUNNING_APPS_SNAPSHOT_TTL_MS)
-}
-
-function sameRunningPathSet(a: Set<string> | undefined, b: Set<string>) {
-  if (!a || a.size !== b.size) return false
-  for (const item of a) if (!b.has(item)) return false
-  return true
-}
-
-function refreshRunningAppPathSnapshot(reason: string) {
-  if (runningAppsRefresh) return runningAppsRefresh
-  const previousPaths = runningAppsSnapshot?.paths
-  runningAppsRefresh = measureDebugPerformance('apps.running.snapshot', { indexedCount: appIndex.length, reason, alwaysLog: true }, async () => {
-    const paths = await detectRunningAppPaths(appIndex)
-    runningAppsSnapshot = { updatedAt: Date.now(), paths }
-    markDebugPerformance('apps.running.snapshot.result', { count: paths.size, reason })
-    if (!sameRunningPathSet(previousPaths, paths)) paletteWindow.win?.webContents.send('apps:running-paths-changed')
-    return paths
-  }).finally(() => {
-    runningAppsRefresh = null
-  })
-  return runningAppsRefresh
-}
-
-function scheduleRunningAppPathSnapshotRefresh(reason: string) {
-  if (runningSnapshotIsFresh() || runningAppsRefresh) return
-  void refreshRunningAppPathSnapshot(reason).catch((error) => logWarn('apps.running.snapshot.failed', error, { source: 'host', scope: 'apps' }))
-}
-
-async function runningAppPathsForRenderer(appPaths) {
-  return measureDebugPerformance('apps.running.get', { requestedCount: Array.isArray(appPaths) ? appPaths.length : 0, cached: Boolean(runningAppsSnapshot), alwaysLog: true }, async () => {
-    const requestedPaths = Array.from(new Set((Array.isArray(appPaths) ? appPaths : []).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 30)
-    if (!requestedPaths.length) return []
-    scheduleRunningAppPathSnapshotRefresh('renderer-request')
-    const runningPaths = runningAppsSnapshot?.paths || new Set<string>()
-    return requestedPaths.filter((appPath) => runningPaths.has(normalizedRunningPath(appPath)))
-  })
-}
 
 function isFixtureExtension(extension) {
   return Boolean(extension?.__fixture)
@@ -1769,8 +1694,10 @@ function normalizeExtensionView(result, entry) {
 
 function normalizeView(view, entry) {
   const actions = normalizeViewActions(view.actions, entry)
+  const webviewPermissions = view.type === 'webview' ? filterWebviewPermissionsForExtension(entry?.extension, view.webviewPermissions) : view.webviewPermissions
   return {
     ...view,
+    ...(webviewPermissions === undefined ? {} : { webviewPermissions }),
     actions,
     actionPanel: normalizeActionPanel(view.actionPanel, actions, entry),
     onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
@@ -2015,100 +1942,8 @@ function pasteTextAction(action: any) {
   }
 }
 
-function extensionWindowSize(options: any = {}) {
-  const large = options.size === 'large'
-  return {
-    width: Math.max(320, Math.min(1600, Number(options.width || (large ? 900 : 560)))),
-    height: Math.max(240, Math.min(1200, Number(options.height || (large ? 680 : 420)))),
-  }
-}
-
-function extensionWindowId(view: any, options: any = {}) {
-  return String(options.id || view?.id || `window:${hashValue(`${view?.title || 'Extension Window'}:${JSON.stringify(view || {})}`)}`)
-}
-
-function loadExtensionWindow(win: BrowserWindow, id: string) {
-  if (isDev && rendererUrl) return win.loadURL(`${rendererUrl}?extensionWindowId=${encodeURIComponent(id)}`)
-  return win.loadFile(rendererIndexPath, { query: { extensionWindowId: id } })
-}
-
-function centerExtensionWindow(win: BrowserWindow) {
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
-  const bounds = win.getBounds()
-  const { x, y, width, height } = display.workArea
-  win.setBounds({ x: Math.round(x + (width - bounds.width) / 2), y: Math.round(y + (height - bounds.height) / 2), width: bounds.width, height: bounds.height })
-}
-
-function applyExtensionWindowOptions(win: BrowserWindow, options: any = {}) {
-  const alwaysOnTop = options.alwaysOnTop !== false
-  win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal')
-  if (options.visibleOnAllSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-}
-
-function createOrUpdateExtensionWindow(view: any, options: any = {}) {
-  const normalizedView = normalizeView(view, null)
-  structuredClone(normalizedView)
-  const id = extensionWindowId(normalizedView, options)
-  const existing = extensionWindows.get(id)
-  if (existing && !existing.win.isDestroyed()) {
-    existing.view = normalizedView
-    existing.options = { ...existing.options, ...options, id }
-    existing.win.setTitle(String(options.title || normalizedView.title || 'Nevermind'))
-    existing.win.webContents.send('extension-window:view', { id, view: normalizedView, options: existing.options })
-    existing.win.show()
-    existing.win.focus()
-    return existing
-  }
-
-  const size = extensionWindowSize(options)
-  const hiddenTitleBar = options.titleBar === 'hidden'
-  const win = new BrowserWindow({
-    width: size.width,
-    height: size.height,
-    minWidth: 320,
-    minHeight: 240,
-    show: false,
-    frame: true,
-    ...(hiddenTitleBar ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } } : {}),
-    title: String(options.title || normalizedView.title || 'Nevermind'),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f7f7',
-    webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
-  } satisfies Electron.BrowserWindowConstructorOptions)
-  const record = { id, win, view: normalizedView, options: { ...options, id } }
-  extensionWindows.set(id, record)
-  applyExtensionWindowOptions(win, options)
-  win.once('ready-to-show', () => { centerExtensionWindow(win); win.show() })
-  if (options.hideOnBlur) win.on('blur', () => win.hide())
-  win.on('closed', () => { if (extensionWindows.get(id)?.win === win) extensionWindows.delete(id) })
-  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => loggerDebug('extensionWindow.didFailLoad', { id, errorCode, errorDescription, validatedURL }, { source: 'host', scope: 'extensions' }))
-  loadExtensionWindow(win, id)
-  return record
-}
-
 function executeWindowAction(action: any) {
-  const id = String(action.windowId || action.id || '')
-  if (action.type === 'createWindow') {
-    createOrUpdateExtensionWindow(action.view, action.windowOptions || {})
-    return { toast: { message: 'Opened window' } }
-  }
-  const record = extensionWindows.get(id)
-  if (!record) {
-    if (action.type === 'toggleWindow' && action.view) {
-      createOrUpdateExtensionWindow(action.view, { ...(action.windowOptions || {}), id })
-      return { toast: { message: 'Opened window' } }
-    }
-    return { toast: { message: 'Window is not open', tone: 'error' } }
-  }
-  if (action.type === 'showWindow') { record.win.show(); record.win.focus(); return { toast: { message: 'Shown window' } } }
-  if (action.type === 'hideWindow') { record.win.hide(); return { toast: { message: 'Hidden window' } } }
-  if (action.type === 'toggleWindow') {
-    if (action.view || action.windowOptions) createOrUpdateExtensionWindow(action.view || record.view, { ...(record.options || {}), ...(action.windowOptions || {}), id })
-    if (record.win.isVisible()) record.win.hide(); else { record.win.show(); record.win.focus() }
-    return { toast: { message: 'Toggled window' } }
-  }
-  if (action.type === 'closeWindow') { record.win.close(); return { toast: { message: 'Closed window' } } }
-  return null
+  return extensionWindowManager.executeWindowAction(action)
 }
 
 function shellResultView(title, result) {
@@ -2125,9 +1960,8 @@ function runQuitCleanup() {
   if (app.isReady()) globalShortcut.unregisterAll()
   updateManager.clearTimers()
   jobRegistry.clear()
-  for (const record of extensionWindows.values()) record.win.close()
-  extensionWindows.clear()
-  for (const watcher of appWatchers) watcher.close()
+  extensionWindowManager.closeAll()
+  appIndexService.closeWatchers()
   for (const watcher of extensionFileWatchers) watcher.close()
 }
 
@@ -2158,7 +1992,9 @@ async function executeViewAction(action, launchContext?: any) {
       runInBackground(() => openPathWithApp(action.path, action.appPath || action.app?.path))
       break
     case 'openUrl':
-      runInBackground(() => shell.openExternal(action.url))
+      runInBackground(async () => {
+        if (!await openExternalUrl(action.url)) logWarn('openUrl.rejected', { url: action.url }, { source: 'host', scope: 'action' })
+      })
       break
     case 'copyText':
       clipboard.writeText(action.text || '')
@@ -2676,11 +2512,11 @@ async function documentTypesForApp(appPath) {
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath)
   if (!resolvedPath || !path.isAbsolute(resolvedPath)) return []
-  if (!hasCapability('open-with')) return appIndex
+  if (!hasCapability('open-with')) return appIndexService.get()
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase()
   const contentTypes = new Set(await contentTypesForPath(resolvedPath))
   const scored = []
-  await Promise.all(appIndex.map(async (item) => {
+  await Promise.all(appIndexService.get().map(async (item) => {
     if (!item.path?.endsWith('.app')) return
     const documentTypes = await documentTypesForApp(item.path)
     let score = 0
@@ -3786,53 +3622,13 @@ async function expandTextTemplate(input: string, variablesOrOptions: Record<stri
 }
 
 function createExtensionContext(extension, command, launchContext?: any) {
-  const canUseDesktopApps = hasExtensionPermission(extension, 'desktop.apps')
-  const canUseDesktopFiles = hasExtensionPermission(extension, 'desktop.files')
-  const canUseClipboard = hasExtensionPermission(extension, 'clipboard.history')
-  const canUseSystem = hasExtensionPermission(extension, 'system')
-  const canUseOcr = hasExtensionPermission(extension, 'ocr')
-  const canUseUpdates = hasExtensionPermission(extension, 'updates')
-  const canUseShortcuts = hasExtensionPermission(extension, 'shortcuts')
-  const canUseAi = hasExtensionPermission(extension, 'ai')
-  const canWriteSettings = hasExtensionPermission(extension, 'settings.write')
+  const { canUseDesktopApps, canUseDesktopFiles, canUseClipboard, canUseSystem, canUseOcr, canUseUpdates, canUseShortcuts, canUseAi, canWriteSettings, canManageExtensionOwnership } = extensionPermissionCapabilities(extension)
   const denyShortcut = (name: string) => () => { throw permissionDeniedError(`shortcuts (${name})`) }
   return {
     extension: createExtensionRuntimeMetadata(extension, command),
     command,
     launch: launchContext ? structuredClone(launchContext) : undefined,
-    ui: {
-      list: (view) => ({ ...view, type: 'list' }),
-      grid: (view) => ({ ...view, type: 'grid' }),
-      preview: (fileOrView, view: any = {}) => {
-        if (fileOrView?.kind && ['clipboard', 'image', 'video', 'file', 'text'].includes(fileOrView.kind)) return buildPreviewItemAction(fileOrView)
-        const isFile = fileOrView?.path || fileOrView?.fileUrl || fileOrView?.videoUrl || fileOrView?.thumbnailUrl
-        if (!isFile) return { ...fileOrView, type: 'preview' }
-        const file = fileOrView
-        return {
-          ...view,
-          type: 'preview',
-          presentation: view.presentation || 'preview',
-          title: view.title || file.name || 'Preview',
-          subtitle: view.subtitle || file.displayPath,
-          content: view.content || file.displayPath || '',
-          image: file.thumbnailUrl || file.url,
-          video: file.videoUrl || undefined,
-        }
-      },
-      chat: (view) => ({ ...view, type: 'chat' }),
-      form: (view) => ({ ...view, type: 'form' }),
-      editor: (view) => ({ ...view, type: 'editor' }),
-      progress: (input: any = {}) => progressView(input),
-      confirm: (input: any = {}) => buildConfirmAction(input),
-      toast: (input: any = {}) => ({ toast: { message: String(input?.message || ''), tone: input?.tone || 'default' } }),
-      webview: (view) => ({ ...view, type: 'webview' }),
-      camera: (view = {}) => ({ title: 'Camera', size: 'large', muted: true, ...view, type: 'camera' }),
-      item: (item) => item,
-      actions: (actions) => actions,
-      empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
-      loading: (title = 'Loading…') => progressView({ title, label: title }),
-      error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
-    },
+    ui: createExtensionUiApi({ buildPreviewItemAction, progressView, buildConfirmAction }),
     actions: {
       openPath: (filePath, title = 'Open', options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'openPath', title, path: filePath }),
       revealPath: (filePath, title = revealPathTitle(), options: any = {}) => ({ dismissAfterRun: 'auto', ...options, type: 'revealPath', title, path: filePath }),
@@ -3960,14 +3756,14 @@ function createExtensionContext(extension, command, launchContext?: any) {
       apps: canUseDesktopApps ? {
         frontmost: frontmostApp,
         launch: (appPath) => runInBackground(() => shell.openPath(expandUserPath(appPath))),
-        list: () => appIndex.map((entry) => ({ id: entry.id, name: entry.name, path: entry.path })),
+        list: () => appIndexService.get().map((entry) => ({ id: entry.id, name: entry.name, path: entry.path })),
         search: (query) => {
           const needle = String(query || '').toLowerCase()
-          return appIndex
+          return appIndexService.get()
             .filter((entry) => !needle || String(entry.name || '').toLowerCase().includes(needle))
             .map((entry) => ({ id: entry.id, name: entry.name, path: entry.path }))
         },
-        icon: (appPath) => getAppIconDataUrl(appPath),
+        icon: (appPath) => appIconCache.get(appPath),
       } : undefined,
       files: canUseDesktopFiles ? {
         find: findFiles,
@@ -3989,7 +3785,9 @@ function createExtensionContext(extension, command, launchContext?: any) {
         searchIndex: (query, options: any = {}) => fileIndexSnapshot({ ...options, query }),
       } : undefined,
       shell: canUseSystem ? {
-        openExternal: (url) => runInBackground(() => shell.openExternal(url)),
+        openExternal: async (url) => {
+          if (!await openExternalUrl(url)) throw new Error('Unsafe external URL')
+        },
         exec: runShellCommand,
         script: runShellScript,
         appleScript: (script, options: any = {}) => new Promise((resolve) => {
@@ -4042,7 +3840,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
     state: {},
     ai: canUseAi ? createExtensionAi(extension) : undefined,
     aiBuilder: createAiBuilderApi(extension),
-    extensions: { ownership: hasExtensionPermission(extension, 'extensions.ownership') ? createExtensionOwnershipApi(extension) : undefined },
+    extensions: { ownership: canManageExtensionOwnership ? createExtensionOwnershipApi(extension) : undefined },
   }
 }
 
@@ -4503,7 +4301,7 @@ async function loadDevExtensions() {
 }
 
 function registerInternalExtensions() {
-  for (const createExtension of INTERNAL_EXTENSION_FACTORIES) registerExtension(createExtension())
+  for (const createExtension of INTERNAL_EXTENSION_FACTORIES) registerExtension(markInternalExtension(createExtension()))
   assertInternalExtensionsRegistered()
 }
 
@@ -4788,31 +4586,6 @@ async function scanFiles(options: any = {}) {
   })
 }
 
-function scheduleIndexApplications() {
-  jobRegistry.emit('apps.changed')
-}
-
-async function startAppWatcher() {
-  for (const watcher of appWatchers) watcher.close()
-  appWatchers = watchApps(scheduleIndexApplications)
-}
-
-async function indexApplications() {
-  await measureDebugPerformance('apps.index', { alwaysLog: true }, async () => {
-    try {
-      const apps = await scanApps()
-      const deduped = new Map()
-      for (const item of apps) deduped.set(normalize(item.name), item)
-      appIndex = Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name))
-      runningAppsSnapshot = null
-      markDebugPerformance('apps.index.result', { scannedCount: apps.length, indexedCount: appIndex.length })
-      paletteWindow.win?.webContents.send('apps:indexed', appIndex.length)
-      scheduleRunningAppPathSnapshotRefresh('apps-indexed')
-    } catch (error) {
-      logError('applications.index.failed', error, { source: 'host', scope: 'apps' })
-    }
-  })
-}
 
 async function indexFiles() {
   await measureDebugPerformance('files.index', { alwaysLog: true }, async () => {
@@ -4850,7 +4623,7 @@ function registerHostJobs() {
     scope: 'apps',
     triggers: [{ type: 'startup', delayMs: 100 }, { type: 'event', event: 'apps.changed', debounceMs: APP_REINDEX_DEBOUNCE_MS }],
     timeoutMs: 30_000,
-    run: indexApplications,
+    run: appIndexService.indexApplications,
   })
   jobRegistry.register({
     id: 'files.index',
@@ -4876,7 +4649,7 @@ function registerHostJobs() {
     owner: 'host',
     scope: 'cache',
     timeoutMs: 15_000,
-    run: processPendingAppIcons,
+    run: appIconCache.processPending,
   })
   jobRegistry.register({
     id: 'cache.thumbnails',
@@ -5395,7 +5168,7 @@ async function removeCreatedAction(action) {
 }
 
 async function runPaletteDebugCli() {
-  await indexApplications()
+  await appIndexService.indexApplications()
   await indexFiles()
   const query = String(process.env.NVM_PALETTE_QUERY || '')
   const actions = await searchActions(query)
@@ -5404,10 +5177,6 @@ async function runPaletteDebugCli() {
     : null
   const result = selected ? await executeActionForIpc(selected) : undefined
   console.log(JSON.stringify({ query, count: actions.length, actions, selected, result }, null, 2))
-}
-
-function ipcHandleMeasured(channel: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown) {
-  ipcMain.handle(channel, (event, ...args) => measureDebugPerformance(`ipc.${channel}.handler`, { args: args.map(summarizeDebugValue), alwaysLog: true }, () => handler(event, ...args)))
 }
 
 async function pickFormFieldPaths(event, input: any = {}) {
@@ -5433,7 +5202,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   prepareAppWindowPolicy()
   registerLocalFileProtocol()
-  installPermissionHandlers(isDev)
+  installPermissionHandlers(isDev, rendererUrl, rendererIndexPath)
   updateManager.configure()
   updateManager.onStateChange(() => { patchUpdatesView(); invalidateExtensionRootItems() })
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems())
@@ -5451,93 +5220,62 @@ app.whenReady().then(async () => {
   paletteWindow.registerHotkey()
   registerActionShortcuts()
   startClipboardWatcher()
-  await startAppWatcher()
+  await appIndexService.startWatcher()
   powerMonitor.on('resume', () => jobRegistry.emit('wake'))
   jobRegistry.emit('login')
 
-  ipcHandleMeasured('actions:search', (_event, query, options) => searchActions(query, options))
-  ipcHandleMeasured('actions:execute', (_event, action) => executeActionForIpc(action))
-  ipcHandleMeasured('view-action:execute', (_event, action) => executeViewActionForIpc(action))
-  ipcMain.handle('view:refresh', (event, input) => measureDebugPerformance('ipc.view:refresh.handler', { args: [summarizeDebugValue(input)], alwaysLog: true }, () => refreshViewForIpc(input)))
-  ipcHandleMeasured('dialog:pick-form-field-paths', pickFormFieldPaths)
-  ipcMain.on('drag:file', startFileDrag)
-  ipcHandleMeasured('ai:chat:send', (_event, message, chatId) => sendAiChatMessage(message, chatId))
-  ipcHandleMeasured('ai:chat:exited', (_event, chatId) => noteAiChatExited(chatId))
-  ipcHandleMeasured('ai:chat:abort', (_event, chatId) => abortAiChat(chatId))
-  ipcHandleMeasured('ai:chat:reset', (_event, chatId) => resetAiChat(chatId))
-  ipcHandleMeasured('actions:set-alias', (_event, action, alias) => setAlias(action, alias))
-  ipcHandleMeasured('actions:remove-alias', (_event, action, alias) => removeAlias(action, alias))
-  ipcHandleMeasured('actions:set-shortcut', (_event, action, shortcut) => setShortcut(action, shortcut))
-  ipcHandleMeasured('palette:set-hotkey', (_event, accelerator) => setPaletteHotkey(accelerator))
-  ipcHandleMeasured('settings:get', (_event, id) => getSetting(id))
-  ipcHandleMeasured('system:open-keyboard-settings', () => openSystemKeyboardSettings())
-  ipcHandleMeasured('actions:get-shortcuts', () => getShortcuts())
-  ipcHandleMeasured('actions:remove-shortcut', (_event, actionId) => removeShortcut(actionId))
-  ipcHandleMeasured('actions:suspend-shortcuts', () => unregisterActionShortcuts())
-  ipcHandleMeasured('actions:resume-shortcuts', () => registerActionShortcuts())
-  ipcHandleMeasured('actions:set-override', (_event, action, instruction) => setOverride(action, instruction))
-  ipcHandleMeasured('actions:clear-override', (_event, action) => clearOverride(action))
-  ipcHandleMeasured('actions:duplicate-created', (_event, action) => duplicateCreatedAction(action))
-  ipcHandleMeasured('actions:remove-created', (_event, action) => removeCreatedAction(action))
-  ipcHandleMeasured('ai-builder:tweak-extension', (_event, input: any = {}) => {
-    const file = input?.extensionFile || input?.extensionId
-    if (!file) return { toast: { message: 'No extension specified', tone: 'error' } }
-    const item = getOrCreateExtensionChat(file, input.title || file)
-    return normalizeHostViewResult({ view: aiChatView(item, { initialPrompt: input.prompt }) })
-  })
-  ipcHandleMeasured('ai-builder:start-chat', (_event, input: any = {}) => {
-    const item = createDraftAiChat(String(input?.prompt || input?.query || ''))
-    return normalizeHostViewResult({ view: aiChatView(item, { start: item.messages.length <= 1 }) })
-  })
-  ipcHandleMeasured('nevermind:auth-status', async () => {
-    const auth = await getNevermindAuth()
-    activeNevermindBaseUrl = auth?.baseUrl || null
-    if (auth?.baseUrl) warmNevermindCompatibilityCache(auth.baseUrl)
-    logInfo('nevermind.auth-status.check', { authed: Boolean(auth), email: auth?.email, userData: app.getPath('userData') }, { source: 'host', scope: 'nevermind' })
-    return auth ? { authed: true, email: auth.email } : { authed: false }
-  })
-  ipcHandleMeasured('nevermind:sign-in', async () => {
-    const result = await signInToNevermind()
-    if (result.ok) {
-      activeNevermindBaseUrl = result.auth.baseUrl
-      warmNevermindCompatibilityCache(result.auth.baseUrl)
-      invalidateExtensionRootItems()
-      broadcastAuthChanged({ authed: true, email: result.auth.email })
-      return { ok: true, email: result.auth.email }
-    }
-    return { ok: false, error: 'error' in result ? result.error : 'unknown' }
-  })
-  ipcHandleMeasured('apps:icon', (_event, appPath) => getAppIconDataUrl(appPath))
-  ipcHandleMeasured('apps:running-paths', (_event, appPaths) => runningAppPathsForRenderer(appPaths))
-  ipcHandleMeasured('palette:set-mode', (_event, mode) => {
-    paletteWindow.setPaletteSizeForMode(mode)
-    paletteWindow.centerWindow()
-  })
-  ipcHandleMeasured('palette:hide', () => paletteWindow.hidePalette())
-  ipcHandleMeasured('app:quit', () => {
-    requestQuitApp('ipc')
-    return { ok: true }
-  })
-  ipcHandleMeasured('palette:shortcut-ready', () => paletteWindow.revealPalette())
-  ipcHandleMeasured('camera:request-access', async () => {
-    if (!hasCapability('camera')) return { ok: false, status: 'unsupported' }
-    if (process.platform !== 'darwin') return { ok: true, status: 'unknown' }
-    const status = systemPreferences.getMediaAccessStatus('camera')
-    if (status === 'granted') return { ok: true, status }
-    if (status === 'denied' || status === 'restricted') return { ok: false, status }
-    return { ok: true, status }
-  })
-  ipcHandleMeasured('extension-window:get-state', (_event, id) => {
-    const record = extensionWindows.get(String(id || ''))
-    return record ? { id: record.id, view: record.view, options: record.options } : null
-  })
-  ipcHandleMeasured('extension-window:close', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    win?.close()
-  })
-  ipcHandleMeasured('logs:write', (_event, level, message, data) => {
-    const method = level === 'error' ? logError : level === 'warn' ? logWarn : level === 'debug' ? loggerDebug : logInfo
-    method(String(message || ''), data, { source: 'renderer', scope: 'renderer' })
+  registerAppIpcHandlers({
+    ipcMain,
+    measureDebugPerformance,
+    summarizeDebugValue,
+    searchActions,
+    executeActionForIpc,
+    executeViewActionForIpc,
+    refreshViewForIpc,
+    pickFormFieldPaths,
+    startFileDrag,
+    sendAiChatMessage,
+    noteAiChatExited,
+    abortAiChat,
+    resetAiChat,
+    setAlias,
+    removeAlias,
+    setShortcut,
+    setPaletteHotkey,
+    getSetting,
+    openSystemKeyboardSettings,
+    getShortcuts,
+    removeShortcut,
+    unregisterActionShortcuts,
+    registerActionShortcuts,
+    setOverride,
+    clearOverride,
+    duplicateCreatedAction,
+    removeCreatedAction,
+    getOrCreateExtensionChat,
+    aiChatView,
+    normalizeHostViewResult,
+    createDraftAiChat,
+    getNevermindAuth,
+    setActiveNevermindBaseUrl: (baseUrl) => { activeNevermindBaseUrl = baseUrl },
+    warmNevermindCompatibilityCache,
+    logInfo,
+    userDataPath: () => app.getPath('userData'),
+    signInToNevermind,
+    invalidateExtensionRootItems,
+    broadcastAuthChanged,
+    appIconCache,
+    runningAppStatus,
+    paletteWindow,
+    requestQuitApp,
+    hasCapability,
+    processPlatform: process.platform,
+    getCameraMediaAccessStatus: () => systemPreferences.getMediaAccessStatus('camera'),
+    extensionWindowManager,
+    BrowserWindow,
+    logError,
+    logWarn,
+    loggerDebug,
   })
 })
 

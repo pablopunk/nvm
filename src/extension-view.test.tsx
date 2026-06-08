@@ -3,9 +3,42 @@ import { test } from 'node:test'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Command } from 'cmdk'
-import { NevermindLimitGate } from './extension-view'
+import { EXTENSION_WEBVIEW_ALLOW, EXTENSION_WEBVIEW_SANDBOX, ExtensionViewRenderer, NevermindLimitGate, extensionWebviewAllow, type ExtensionViewRendererProps } from './extension-view'
 import { nextNavigationState, previousNavigationState } from './use-extension-navigation'
 import type { CommandAction, CommandView } from './model'
+
+function renderExtensionView(view: CommandView) {
+  const props: ExtensionViewRendererProps = {
+    view,
+    aiChat: {
+      messages: [],
+      input: '',
+      setInput: () => {},
+      busy: false,
+      limit: null,
+      inputRef: React.createRef<HTMLTextAreaElement>(),
+      messagesRef: React.createRef<HTMLDivElement>(),
+      resizeInput: () => {},
+    },
+    nevermindAuthed: null,
+    onSignInToNevermind: () => {},
+    formValues: {},
+    setFormValues: () => {},
+    filterItems: (items) => items || [],
+    filterSections: (currentView) => currentView.sections,
+    renderMarkdown: (content) => content,
+    renderActionPanel: () => null,
+    actionPanelRows: () => [],
+    renderRootIcon: () => null,
+    runDefaultAction: () => {},
+    runAction: () => {},
+    sendAiPrompt: () => {},
+    abortAiChat: () => {},
+    dragPathForItem: () => null,
+    startItemDrag: () => {},
+  }
+  return renderToStaticMarkup(<Command><ExtensionViewRenderer {...props} /></Command>)
+}
 
 test('renders unsupported-client update UI with structured updater action', () => {
   const actions: CommandAction[] = []
@@ -67,4 +100,33 @@ test('renders deprecation-warning UI with dashboard fallback action', () => {
   assert.match(html, /Backend API deprecation/)
   assert.match(html, /This API contract will sunset soon\. Review the migration path\./)
   assert.match(html, /Review migration/)
+})
+
+test('extension webview iframe keeps scripts isolated from app origin and privileged permissions', () => {
+  const html = renderExtensionView({
+    type: 'webview',
+    title: 'Sandboxed HTML',
+    html: '<form><script>document.body.dataset.ready = "1"</script></form>',
+  })
+
+  assert.match(html, /<iframe/)
+  assert.match(html, new RegExp(`sandbox="${EXTENSION_WEBVIEW_SANDBOX}"`))
+  assert.match(html, new RegExp(`allow="${EXTENSION_WEBVIEW_ALLOW}"`))
+  assert.doesNotMatch(html, /allow-same-origin/)
+  assert.doesNotMatch(html, /camera|microphone|display-capture|clipboard-read|clipboard-write/)
+})
+
+test('extension webview privileged iframe permissions are explicit and allowlisted', () => {
+  assert.equal(extensionWebviewAllow(['autoplay', 'camera', 'camera', 'bad-permission']), 'autoplay; camera')
+
+  const html = renderExtensionView({
+    type: 'webview',
+    title: 'Camera HTML',
+    html: '<main>camera</main>',
+    webviewPermissions: ['camera', 'microphone'],
+  })
+
+  assert.match(html, /allow="camera; microphone"/)
+  assert.doesNotMatch(html, /allow-same-origin/)
+  assert.doesNotMatch(html, /display-capture|clipboard-read|clipboard-write/)
 })

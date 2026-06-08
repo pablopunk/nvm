@@ -95,18 +95,22 @@ export function billingCatalog(): BillingCatalog {
 
   const fallbackSubscriptionPriceId = env('STRIPE_SUBSCRIPTION_PRICE_ID');
   const fallbackTopUpPriceId = env('STRIPE_TOP_UP_PRICE_ID');
+  const fallbackSubscriptionCredits = parsePositiveInt(env('STRIPE_SUBSCRIPTION_CREDITS'), 0);
+  const fallbackTopUpCredits = parsePositiveInt(env('STRIPE_TOP_UP_CREDITS'), 0);
+  const fallbackSubscriptions: SubscriptionTier[] = fallbackSubscriptionPriceId && fallbackSubscriptionCredits > 0 ? [{
+    kind: 'subscription',
+    priceId: fallbackSubscriptionPriceId,
+    tier: env('STRIPE_SUBSCRIPTION_TIER') ?? 'pro',
+    credits: fallbackSubscriptionCredits,
+  }] : [];
+  const fallbackTopUps: TopUpPack[] = fallbackTopUpPriceId && fallbackTopUpCredits > 0 ? [{
+    kind: 'top_up',
+    priceId: fallbackTopUpPriceId,
+    credits: fallbackTopUpCredits,
+  }] : [];
   return {
-    subscriptions: subscriptionsFromJson.length ? subscriptionsFromJson : fallbackSubscriptionPriceId ? [{
-      kind: 'subscription',
-      priceId: fallbackSubscriptionPriceId,
-      tier: env('STRIPE_SUBSCRIPTION_TIER') ?? 'pro',
-      credits: parsePositiveInt(env('STRIPE_SUBSCRIPTION_CREDITS'), 0),
-    }].filter((item) => item.credits > 0) : [],
-    topUps: topUpsFromJson.length ? topUpsFromJson : fallbackTopUpPriceId ? [{
-      kind: 'top_up',
-      priceId: fallbackTopUpPriceId,
-      credits: parsePositiveInt(env('STRIPE_TOP_UP_CREDITS'), 0),
-    }].filter((item) => item.credits > 0) : [],
+    subscriptions: subscriptionsFromJson.length ? subscriptionsFromJson : fallbackSubscriptions,
+    topUps: topUpsFromJson.length ? topUpsFromJson : fallbackTopUps,
   };
 }
 

@@ -2,7 +2,10 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
-const source = fs.readFileSync(path.join(process.cwd(), 'src', 'electron', 'main.ts'), 'utf8')
+const source = [
+  fs.readFileSync(path.join(process.cwd(), 'src', 'electron', 'main.ts'), 'utf8'),
+  fs.readFileSync(path.join(process.cwd(), 'src', 'electron', 'app-ipc-handlers.ts'), 'utf8'),
+].join('\n')
 
 function fail(message) {
   console.error(`Clone-safety check failed: ${message}`)

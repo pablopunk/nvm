@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Command } from 'cmdk'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
   Clipboard,
   Copy,
@@ -14,17 +12,18 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
-import { EmptyState, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow, type FormValue } from './ui'
+import { EmptyState, MarkdownContent, SearchAccessory, Toast, setShortcutLabelHyperKey, shortcutLabel, EMPTY_ROOT_TITLE, EMPTY_ROOT_SUBTITLE, EMPTY_ACTIONS_TITLE, EMPTY_ITEMS_TITLE, type ActionPanelRow, type FormValue } from './ui'
 import { RootCommandList } from './command-list'
 import { acceleratorFromKeyboardEvent, keyNameForShortcut, normalizedShortcut } from './shortcuts'
 import { allViewItems, filterCommandItems, filterCommandSections, valuesMatch } from './filtering'
 import { iconFor, iconForAction, iconForItem, type CommandIconName } from './command-icons'
 import { useExtensionNavigation } from './use-extension-navigation'
-import { useAiChat, type AiLimitState } from './use-ai-chat'
+import { useAiChat } from './use-ai-chat'
 import { useSearchResults } from './use-search-results'
 import { ActionPanel } from './action-panel'
 import { ExtensionViewRenderer } from './extension-view'
 import { markDebugPerformance, measureDebugPerformance, measureDebugPerformanceSync } from './debug-performance'
+import { patchCommandView } from './view-patches'
 import { ShortcutManagerView, shortcutItems, shortcutOptionRows, shortcutRecorderRows, type ShortcutRecordLike } from './shortcut-manager'
 import { actionDefinition, actionDescription, actionsFromPanel, actionPanelFromActions, canCustomizeCommandAction, type CommandAction, type CommandActionPanel, type CommandItem, type CommandItemAppearance, type CommandView, type CommandViewPatch } from './model'
 import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api'
@@ -173,6 +172,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({})
   const [selectedValue, setSelectedValue] = useState('')
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat)
+  const windowAiChatIdRef = useRef<string | undefined>(undefined)
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null)
   const [toast, setToast] = useState<{ message: string; tone?: 'default' | 'error' } | null>(null)
 
@@ -184,6 +184,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setFormValues(seedFormValuesFromView(state.view))
         setSelectedValue(selectedItemIdForView(state.view))
         setWindowOptions(state.options || {})
+        if (state.view.aiChat) void aiChat.openChat(state.view)
       }
     })
     return window.nvm.onExtensionWindowView((payload) => {
@@ -192,29 +193,21 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setFormValues(seedFormValuesFromView(payload.view))
         setSelectedValue(selectedItemIdForView(payload.view))
         setWindowOptions(payload.options || {})
+        if (payload.view.aiChat) void aiChat.openChat(payload.view)
       }
     })
   }, [windowId])
 
+  useEffect(() => {
+    windowAiChatIdRef.current = view?.chatId
+  }, [view?.chatId])
+
+  useEffect(() => window.nvm.onAiChatEvent((event) => aiChat.handleEvent(event, windowAiChatIdRef.current)), [])
+
   function applyPatch(patch: CommandViewPatch) {
     setView((current) => {
       if (!current) return current
-      const patchItems = patch.items || []
-      const removeIds = new Set(patch.removeItemIds || [])
-      const patchMap = new Map(patchItems.map((item) => [item.id, item]))
-      const applyItems = (items: ExtensionViewItem[] = []) => {
-        if (patch.mode === 'replace') return patchItems as ExtensionViewItem[]
-        if (patch.mode === 'prepend') return [...patchItems as ExtensionViewItem[], ...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id))]
-        if (patch.mode === 'append') return [...items.filter((item) => !removeIds.has(item.id) && !patchMap.has(item.id)), ...patchItems as ExtensionViewItem[]]
-        return items.filter((item) => !removeIds.has(item.id)).map((item) => patchMap.has(item.id) ? { ...item, ...patchMap.get(item.id) } : item)
-      }
-      const nextView = {
-        ...current,
-        ...(patch.isLoading !== undefined ? { isLoading: patch.isLoading } : {}),
-        ...(patch.selectedItemId !== undefined ? { selectedItemId: patch.selectedItemId } : {}),
-        items: current.items ? applyItems(current.items) : current.items,
-        sections: current.sections?.map((section) => ({ ...section, items: applyItems(section.items) })),
-      }
+      const nextView = patchCommandView(current, patch, { preserveMissingItems: true })
       setSelectedValue(selectedItemIdForView(nextView, selectedValue))
       return nextView
     })
@@ -260,7 +253,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   function renderMarkdown(content: string) {
-    return <div className="markdownContent"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown></div>
+    return <MarkdownContent content={content} />
   }
 
   function runDefaultAction(item: ExtensionViewItem) {
@@ -550,19 +543,7 @@ export function App() {
     const stopAi = window.nvm.onAiChatEvent((event) => {
       markDebugPerformance(`ai.event.${event.type}`, { chatId: event.chatId, textLength: event.text?.length || 0, label: event.label })
       if (event.type === 'debug') window.nvm.log('debug', `Nevermind AI: ${event.label || ''}`, event.data)
-      if (event.chatId && event.chatId !== aiChatIdRef.current) return
-      if (event.type === 'start') {
-        aiChat.setLimit(null)
-        aiChat.setBusy(true)
-      }
-      if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') aiChat.setBusy(false)
-      if (event.type === 'delta' && event.text) aiChat.appendDelta(event.text)
-      if (event.type === 'tool_start' && event.name) aiChat.appendMessage('system', event.name)
-      if (event.type === 'error') {
-        const limit = event.data as AiLimitState | undefined
-        if (limit?.title && limit.message) aiChat.setLimit(limit)
-        else if (event.message) aiChat.appendMessage('system', event.message)
-      }
+      aiChat.handleEvent(event, aiChatIdRef.current)
     })
     return () => {
       stopShown()
@@ -834,32 +815,6 @@ export function App() {
     extensionNavigation.popView()
   }
 
-  function patchItems(items: CommandItem[] | undefined, patches: NonNullable<CommandViewPatch['items']> = [], mode: CommandViewPatch['mode'] = 'patch', removeItemIds: string[] = []) {
-    let next = Array.isArray(items) ? items : []
-    if (removeItemIds.length) {
-      const remove = new Set(removeItemIds)
-      next = next.filter((item) => !remove.has(item.id))
-    }
-    if (patches.length === 0) return next
-    if (mode === 'replace') return patches as CommandItem[]
-    const byId = new Map(next.map((item) => [item.id, item]))
-    const patchedIds = new Set(patches.map((patch) => patch.id))
-    const patchedItems = patches.map((patch) => ({ ...(byId.get(patch.id) || {} as CommandItem), ...patch }))
-    if (mode === 'prepend') return [...patchedItems, ...next.filter((item) => !patchedIds.has(item.id))]
-    if (mode === 'append') return [...next.filter((item) => !patchedIds.has(item.id)), ...patchedItems]
-    return next.map((item) => patchedIds.has(item.id) ? { ...item, ...patches.find((patch) => patch.id === item.id) } : item)
-  }
-
-  function patchedView(current: ExtensionView, patch: CommandViewPatch): ExtensionView {
-    return {
-      ...current,
-      ...(patch.isLoading === undefined ? {} : { isLoading: patch.isLoading }),
-      ...(patch.selectedItemId === undefined ? {} : { selectedItemId: patch.selectedItemId }),
-      items: patchItems(current.items, patch.items || [], patch.mode || current.refresh?.mode, patch.removeItemIds || []),
-      sections: current.sections?.map((section) => ({ ...section, items: patchItems(section.items, patch.items || [], patch.mode || current.refresh?.mode, patch.removeItemIds || []) || [] })),
-    }
-  }
-
   function selectionAfterPatch(current: ExtensionView, next: ExtensionView, patch: CommandViewPatch) {
     const nextItems = allViewItems(next)
     if (nextItems.length === 0) return ''
@@ -892,7 +847,7 @@ export function App() {
       const current = extensionViewRef.current
       if (!current) return
       const scrollTop = resultsListRef.current?.scrollTop
-      const next = patchedView(current, patch)
+      const next = patchCommandView(current, patch)
       const nextSelected = selectionAfterPatch(current, next, patch)
       extensionViewRef.current = next
       extensionNavigation.setView(next)
@@ -1632,18 +1587,7 @@ export function App() {
 
   function renderMarkdown(content: string) {
     markDebugPerformance('markdown.render', { contentLength: content.length })
-    return (
-      <div className="markdownContent">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a>,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
-    )
+    return <MarkdownContent content={content} />
   }
 
   function runDefaultViewAction(item: ExtensionViewItem) {

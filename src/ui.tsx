@@ -1,6 +1,8 @@
 import React, { type ReactNode } from 'react'
 import { Command } from 'cmdk'
 import { Folder } from 'lucide-react'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { CommandImage } from './model'
 
 export const EMPTY_ROOT_TITLE = 'Type anything'
@@ -29,6 +31,7 @@ export type ChatViewProps = { messages: { role: string; content: ReactNode }[]; 
 export type ActionPanelRow = { value: string; icon?: ReactNode; title: string; subtitle?: string; shortcut?: string; className?: string; sectionHeader?: boolean; onSelect: () => void }
 export type ActionPanelViewProps = { rows: ActionPanelRow[]; renderEmpty: () => ReactNode }
 export type SearchAccessoryProps = { tooltip?: string; value?: string; items: { title: string; value: string }[]; onChange?: (value: string) => void }
+export type MarkdownContentProps = { content: string }
 
 let shortcutLabelHyperKey = 'Command+Control+Alt+Shift'
 
@@ -90,6 +93,10 @@ export function Toast({ message, tone }: ToastProps) {
 
 export function SearchAccessory({ tooltip, value, items, onChange }: SearchAccessoryProps) {
   return <select className="searchAccessory" aria-label={tooltip || 'View filter'} value={value || items[0]?.value || ''} onChange={(event) => onChange?.(event.target.value)}>{items.map((item) => <option key={item.value} value={item.value}>{item.title}</option>)}</select>
+}
+
+export function MarkdownContent({ content }: MarkdownContentProps) {
+  return <div className="markdownContent"><ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={defaultUrlTransform} components={{ a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown></div>
 }
 
 export function PreviewView({ content, image, video, poster, actions }: PreviewViewProps) {

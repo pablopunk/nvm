@@ -15,12 +15,18 @@ const user = {
   createdAt: new Date(),
 };
 
-type FakeDb = ReturnType<typeof createFakeBillingDb>;
-
 type InsertCall = { table: unknown; values: any; conflict?: 'nothing' | 'update' };
 type UpdateCall = { table: unknown; values: any };
+type FakeDb = {
+  inserts: InsertCall[];
+  updates: UpdateCall[];
+  select: () => any;
+  insert: (table: unknown) => any;
+  update: (table: unknown) => any;
+  transaction: (callback: (tx: FakeDb) => Promise<unknown>) => Promise<unknown>;
+};
 
-function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[]; existingLedgerRefs?: string[] } = {}) {
+function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[]; existingLedgerRefs?: string[] } = {}): FakeDb {
   const selects = [...(input.selects ?? [])];
   const eventIds = new Set(input.existingEvents ?? []);
   const ledgerRefs = new Set(input.existingLedgerRefs ?? []);
@@ -107,13 +113,14 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
     return chain;
   }
 
-  const db = {
+  let db: FakeDb;
+  db = {
     inserts,
     updates,
     select: () => createSelectChain(),
     insert: (table: unknown) => createInsertChain(table),
     update: (table: unknown) => createUpdateChain(table),
-    transaction: async (callback: (tx: FakeDb) => Promise<unknown>) => callback(db as FakeDb),
+    transaction: async (callback: (tx: FakeDb) => Promise<unknown>) => callback(db),
   };
   return db;
 }

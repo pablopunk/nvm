@@ -340,6 +340,8 @@ export type ExtensionSearchAccessory = {
   onChange?: ExtensionAction
 }
 
+export type ExtensionWebviewPermission = 'autoplay' | 'camera' | 'microphone' | 'display-capture' | 'clipboard-read' | 'clipboard-write'
+
 /** Host-rendered view. Prefer helpers such as `ctx.ui.list(...)` so the `type` is set for you. */
 export type ExtensionView = {
   id?: string
@@ -358,6 +360,8 @@ export type ExtensionView = {
   /** Render an editor as read-only while preserving selection/copy behavior. */
   readOnly?: boolean
   html?: string
+  /** Sandboxed webview iframe permissions. Defaults to `['autoplay']`; camera, microphone, display capture, and clipboard access are explicit opt-ins. */
+  webviewPermissions?: ExtensionWebviewPermission[]
   image?: ExtensionImage
   video?: string
   videoUrl?: string

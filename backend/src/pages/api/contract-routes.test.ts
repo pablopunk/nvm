@@ -9,8 +9,13 @@ import { GET as getActiveModel } from './v1/active-model';
 import { POST as postChatCompletion } from './v1/chat/completions';
 import { POST as postGoogleModel } from './v1/models/[...path]';
 
-type FakeDb = ReturnType<typeof createFakeDb>;
-type MinimalAPIContext = Pick<APIContext, 'request' | 'url'>;
+type FakeDb = {
+  insertedValues: unknown[];
+  select: () => ReturnType<typeof createChain>;
+  insert: () => ReturnType<typeof createChain>;
+  update: () => ReturnType<typeof createChain>;
+  transaction: (callback: (tx: FakeDb) => Promise<void>) => Promise<void>;
+};
 
 const originalFetch = globalThis.fetch;
 
@@ -33,23 +38,24 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
   return chain;
 }
 
-function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates?: unknown[] } = {}) {
+function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates?: unknown[] } = {}): FakeDb {
   const selects = [...(input.selects ?? [])];
   const inserts = [...(input.inserts ?? [])];
   const updates = [...(input.updates ?? [])];
   const insertedValues: unknown[] = [];
-  const db = {
+  let db: FakeDb;
+  db = {
     insertedValues,
     select: () => createChain(selects.shift() ?? []),
     insert: () => createChain(inserts.shift() ?? [], (values) => insertedValues.push(values)),
     update: () => createChain(updates.shift() ?? []),
-    transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db as FakeDb),
+    transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db),
   };
   return db;
 }
 
-function routeContext(request: Request, url = new URL(request.url)): MinimalAPIContext {
-  return { request, url };
+function routeContext(request: Request, url = new URL(request.url)): APIContext {
+  return { request, url } as APIContext;
 }
 
 function installDb(db: FakeDb) {
