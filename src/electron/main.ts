@@ -1195,7 +1195,7 @@ function installDownloadedUpdate() {
 
 function settingItemPatch(definition) {
   const value = getSetting(definition.id)
-  const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? String(value || '') : String(value)
+  const accessoryText = definition.type === 'boolean' ? (value ? 'On' : 'Off') : definition.type === 'shortcut' ? '' : String(value)
   const shortcutInput = definition.id === 'paletteHotkey'
     ? { scope: 'palette', title: 'Change Shortcut', shortcut: String(value || '') }
     : { action: { id: '__hyper-key__' }, title: 'Change Hyper Key', shortcut: String(value || '') }
