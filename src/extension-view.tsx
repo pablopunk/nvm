@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { CornerDownLeft, CreditCard, LogIn, Search, Square } from 'lucide-react'
 import { actionsFromPanel, type CommandAction, type CommandItem, type CommandView } from './model'
 import type { AiLimitState } from './use-ai-chat'
@@ -282,12 +282,41 @@ function ListExtensionView({ view, filterItems, filterSections, renderRootIcon, 
   return list
 }
 
+function ChatInputForm({ value, onChange, onResize, onSubmit, busy, inputRef, placeholder, onAbort, chatId }: { value: string; onChange: (value: string) => void; onResize: (textarea?: HTMLTextAreaElement | null) => void; onSubmit: () => void; busy: boolean; inputRef: React.RefObject<HTMLTextAreaElement | null>; placeholder?: string; onAbort?: (chatId?: string) => void; chatId?: string }) {
+  return <form className="chatInputRow" onSubmit={(event) => { event.preventDefault(); onSubmit() }}><textarea ref={inputRef} rows={1} value={value} onChange={(event) => onChange(event.target.value)} onInput={(event) => onResize(event.currentTarget)} onKeyDown={(event) => { if (event.key !== 'Enter') return; event.stopPropagation(); if (!event.shiftKey) { event.preventDefault(); onSubmit() } }} placeholder={busy ? 'Thinking…' : placeholder || 'Message AI'} />{busy ? <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => onAbort?.(chatId)}><Square size={14} fill="currentColor" /></button> : <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!value.trim()}><CornerDownLeft size={16} /></button>}</form>
+}
+
 function ChatExtensionView({ view, aiChat, nevermindAuthed, onSignInToNevermind, renderMarkdown, runAction, sendAiPrompt, abortAiChat }: ExtensionViewSurfaceProps) {
   if (view.aiChat && nevermindAuthed === false) return <NevermindSignInGate onSignIn={onSignInToNevermind} />
   if (view.aiChat && aiChat.limit) return <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />
   const messages = (view.aiChat ? aiChat.messages : view.messages || []).map((message) => ({ ...message, content: renderMarkdown(message.content) }))
-  const input = view.aiChat ? <form className="chatInputRow" onSubmit={(event) => { event.preventDefault(); sendAiPrompt(aiChat.input) }}><textarea ref={aiChat.inputRef} rows={1} value={aiChat.input} onChange={(event) => aiChat.setInput(event.target.value)} onInput={(event) => aiChat.resizeInput(event.currentTarget)} onKeyDown={(event) => { if (event.key !== 'Enter') return; event.stopPropagation(); if (!event.shiftKey) { event.preventDefault(); sendAiPrompt(aiChat.input) } }} placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'} />{aiChat.busy ? <button className="chatIconButton chatStopButton" type="button" aria-label="Stop" title="Stop" onClick={() => abortAiChat(view.chatId)}><Square size={14} fill="currentColor" /></button> : <button className="chatIconButton chatEnterButton" type="submit" aria-label="Enter" title="Enter" disabled={!aiChat.input.trim()}><CornerDownLeft size={16} /></button>}</form> : null
-  return <ChatView messages={messages} isBusy={aiChat.busy} input={input} messagesRef={view.aiChat ? aiChat.messagesRef : undefined} />
+  const chatInputRef = useRef<HTMLTextAreaElement>(null)
+  const [chatValue, setChatValue] = useState('')
+  function resizeChatInput(textarea?: HTMLTextAreaElement | null) {
+    const el = textarea || chatInputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+    el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden'
+  }
+  useLayoutEffect(() => { resizeChatInput() }, [])
+  useLayoutEffect(() => {
+    if (view.aiChat || !view.submitAction) return
+    const frame = requestAnimationFrame(() => chatInputRef.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [view.aiChat, view.id, view.title])
+  function handleNonAiSubmit() {
+    const trimmed = chatValue.trim()
+    if (!trimmed) return
+    setChatValue('')
+    runAction({ ...view.submitAction!, formValues: { message: trimmed } })
+  }
+  const input = view.aiChat
+    ? <ChatInputForm value={aiChat.input} onChange={aiChat.setInput} onResize={aiChat.resizeInput} onSubmit={() => sendAiPrompt(aiChat.input)} busy={aiChat.busy} inputRef={aiChat.inputRef} placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'} onAbort={abortAiChat} chatId={view.chatId} />
+    : view.submitAction
+      ? <ChatInputForm value={chatValue} onChange={setChatValue} onResize={resizeChatInput} onSubmit={handleNonAiSubmit} busy={false} inputRef={chatInputRef} placeholder={view.placeholder || 'Type a message…'} />
+      : null
+  return <ChatView messages={messages} isBusy={view.aiChat ? aiChat.busy : false} input={input} messagesRef={view.aiChat ? aiChat.messagesRef : undefined} />
 }
 
 function FormExtensionView({ view, formValues, setFormValues, runAction }: ExtensionViewSurfaceProps) {

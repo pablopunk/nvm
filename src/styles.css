@@ -725,6 +725,11 @@ kbd {
   padding: 0;
 }
 
+.resultsCard > .extensionView.chatView {
+  padding: 8px 12px 12px;
+  gap: 8px;
+}
+
 .chatView,
 .formView,
 .progressView,
@@ -815,17 +820,18 @@ kbd {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 24px 24px 16px;
+  padding: 8px 12px 12px;
+  gap: 8px;
 }
 
 .chatMessages {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 4px 4px 8px;
+  padding: 0;
   scroll-padding-bottom: 8px;
 }
 
@@ -890,8 +896,8 @@ kbd {
 .chatInputRow textarea {
   display: block;
   width: 100%;
-  min-height: 36px;
-  max-height: 120px;
+  min-height: 44px;
+  max-height: 144px;
   box-sizing: border-box;
   border: 1px solid var(--surface-4);
   border-radius: var(--radius-sm);
@@ -959,6 +965,16 @@ kbd {
   background: transparent;
   font-size: var(--fs-lg);
   line-height: 1.5;
+}
+
+.chatBubble.assistant {
+  align-self: flex-start;
+  max-width: 78%;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--surface-2);
 }
 
 .chatBubble.user {
@@ -1702,7 +1718,8 @@ kbd {
 
 .siblingPane-aiChat .chatView {
   height: clamp(260px, 34vh, 340px);
-  padding: 16px;
+  padding: 8px 12px 12px;
+  gap: 8px;
 }
 
 .siblingPane-aiChat .chatMessages {
