@@ -181,7 +181,8 @@ function CameraView({ view, actions }: { view: CommandView; actions: ReactNode }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         setStatus('Camera unavailable')
-        setError(message)
+        const hint = /not found|not available|not read|device/i.test(message) ? ' Check System Settings → Privacy & Security → Camera.' : ''
+        setError(message + hint)
       }
     }
 

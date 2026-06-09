@@ -626,16 +626,21 @@ function createTools(pi: PiApi, Type: TypeApi, { extensionsDir, extensionApiPath
     }
   }
 
+  let cachedApiText: string | undefined
+
   return [
     pi.defineTool({
       name: 'read_extension_api',
       label: 'Read Extension API',
       description: 'Read the typed Nevermind extension API reference.',
       parameters: Type.Object({}),
-      execute: observedTool('read_extension_api', async () => ({
-        content: [{ type: 'text', text: await fs.readFile(extensionApiPath, 'utf8') }],
-        details: {},
-      })),
+      execute: observedTool('read_extension_api', async () => {
+        if (cachedApiText === undefined) cachedApiText = await fs.readFile(extensionApiPath, 'utf8')
+        return {
+          content: [{ type: 'text', text: cachedApiText }],
+          details: {},
+        }
+      }),
     }),
     pi.defineTool({
       name: 'list_capabilities',
@@ -896,7 +901,9 @@ function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
     getCurrentDirectory: () => path.dirname(filePath),
     getNewLine: () => '\n',
   }
-  throw new Error(`TypeScript validation failed:\n${ts.formatDiagnosticsWithColorAndContext(diagnostics, host)}`)
+  const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, host)
+  const plain = formatted.replace(/\x1b\[[0-9;]*m/g, '')
+  throw new Error(`TypeScript validation failed:\n${plain}`)
 }
 
 async function importExtensionForValidation(filePath: string) {

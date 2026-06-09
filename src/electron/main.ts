@@ -1778,7 +1778,9 @@ function normalizeViewAction(action, entry) {
 
 function runShellCommand(command, args = [], options: any = {}) {
   return new Promise((resolve) => {
-    const child = spawn(String(command), Array.isArray(args) ? args.map(String) : [], {
+    const expandedCommand = expandUserPath(String(command))
+    const expandedArgs = Array.isArray(args) ? args.map((arg) => expandUserPath(String(arg))) : []
+    const child = spawn(expandedCommand, expandedArgs, {
       cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
       env: { ...process.env, ...(options.env || {}) },
       shell: Boolean(options.shell),
@@ -1794,7 +1796,9 @@ function runShellCommand(command, args = [], options: any = {}) {
 }
 
 function runShellScript(script, options: any = {}) {
-  return runShellCommand(options.shell || '/bin/bash', ['-lc', String(script)], { ...options, shell: false })
+  const home = os.homedir()
+  const resolvedScript = String(script).replace(new RegExp('~(?=/|$)', 'g'), home)
+  return runShellCommand(options.shell || '/bin/bash', ['-lc', resolvedScript], { ...options, shell: false })
 }
 
 function isAction(value) {

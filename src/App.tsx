@@ -233,6 +233,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       window.dispatchEvent(new CustomEvent('nvm:camera-action', { detail: action }))
       return
     }
+    const nativeKind = (action.nativeAction as { kind?: string } | undefined)?.kind
+    if (String(nativeKind || '').startsWith('camera.')) {
+      window.dispatchEvent(new CustomEvent('nvm:camera-action', { detail: action.nativeAction }))
+      return
+    }
     await handleActionResult(await window.nvm.runViewAction(action))
   }
 
