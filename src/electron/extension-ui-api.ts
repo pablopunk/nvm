@@ -9,7 +9,7 @@ function isPreviewableItem(value: any) {
 }
 
 function isFilePreviewInput(value: any) {
-  return value?.path || value?.fileUrl || value?.videoUrl || value?.thumbnailUrl
+  return value?.path || value?.fileUrl
 }
 
 export function createExtensionUiApi({ buildPreviewItemAction, progressView, buildConfirmAction }: ExtensionUiApiDeps) {
@@ -17,19 +17,21 @@ export function createExtensionUiApi({ buildPreviewItemAction, progressView, bui
     list: (view: any) => ({ ...view, type: 'list' }),
     grid: (view: any) => ({ ...view, type: 'grid' }),
     preview: (fileOrView: any, view: any = {}) => {
-      if (isPreviewableItem(fileOrView)) return buildPreviewItemAction(fileOrView)
-      if (!isFilePreviewInput(fileOrView)) return { ...fileOrView, type: 'preview' }
-      const file = fileOrView
-      return {
-        ...view,
-        type: 'preview',
-        presentation: view.presentation || 'preview',
-        title: view.title || file.name || 'Preview',
-        subtitle: view.subtitle || file.displayPath,
-        content: view.content || file.displayPath || '',
-        image: file.thumbnailUrl || file.url,
-        video: file.videoUrl || undefined,
+      if (isFilePreviewInput(fileOrView)) {
+        const file = fileOrView
+        return {
+          ...view,
+          type: 'preview',
+          presentation: view.presentation || 'preview',
+          title: view.title || file.name || 'Preview',
+          subtitle: view.subtitle || file.displayPath,
+          content: view.content || file.displayPath || '',
+          image: file.thumbnailUrl || file.url,
+          video: file.videoUrl || undefined,
+        }
       }
+      if (isPreviewableItem(fileOrView)) return buildPreviewItemAction(fileOrView)
+      return { ...fileOrView, type: 'preview' }
     },
     chat: (view: any) => ({ ...view, type: 'chat' }),
     form: (view: any) => ({ ...view, type: 'form' }),
