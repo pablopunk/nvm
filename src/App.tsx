@@ -644,7 +644,8 @@ export function App() {
 
       requestedIcons.current.add(action.id)
       window.nvm.getAppIcon(appPath).then((iconUrl) => {
-        setIconUrls((current) => ({ ...current, [action.id]: iconUrl }))
+        if (iconUrl) setIconUrls((current) => ({ ...current, [action.id]: iconUrl }))
+        else requestedIcons.current.delete(action.id)
       })
     }
   }, [actions])

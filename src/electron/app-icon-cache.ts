@@ -49,7 +49,7 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
     for (const appPath of paths) pendingPaths.delete(appPath)
     await Promise.all(paths.map(async (appPath) => {
       const result = await loadAppIconDataUrl(appPath)
-      memoryCache.set(appPath, result)
+      if (result) memoryCache.set(appPath, result)
       for (const resolve of waiters.get(appPath) || []) resolve(result)
       waiters.delete(appPath)
       loadPromises.delete(appPath)
