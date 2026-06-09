@@ -552,6 +552,8 @@ kbd {
   font: inherit;
   font-size: var(--fs-sm);
   line-height: 1.5;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .previewDetails {
@@ -1197,6 +1199,8 @@ kbd {
 .previewText {
   min-width: 0;
   white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .previewText .markdownContent {
