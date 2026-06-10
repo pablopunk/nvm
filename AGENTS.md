@@ -17,6 +17,7 @@
 * Keep every action/search/view payload that crosses Electron IPC clone-safe and privilege-safe; strip handlers/functions after registering them, tokenize privileged actions or expose opaque host-owned handles, and add clone-safety checks for new payload shapes.
 * In extension API host-layer routing (`extension-ui-api.ts`), discriminate on properties unique to one input shape before checking optional shared fields — the `kind` field is semantically overloaded across `ExtensionFileKind` and preview-item descriptors, and routing by it first causes misroutes when both shapes overlap.
 * Keep desktop/backend API changes backward-compatible for supported released clients; see `src/docs/backend-api-compatibility.md`.
+* Installed user extensions live in `app.getPath('userData')/extensions` (macOS: `~/Library/Application Support/nvm/extensions/`); read that directory directly to inspect an extension's source instead of searching the filesystem.
 * When fixing bugs, evaluate how the system would look if built from scratch and propose improvements.
 
 ## Product and UX

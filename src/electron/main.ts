@@ -1780,13 +1780,35 @@ function normalizeViewAction(action, entry) {
   return registerViewActionForRenderer(normalized)
 }
 
-function runShellCommand(command, args = [], options: any = {}) {
+let cachedUserShellPathPromise: Promise<string> | null = null
+
+function resolveUserShellPath(): Promise<string> {
+  if (cachedUserShellPathPromise) return cachedUserShellPathPromise
+  cachedUserShellPathPromise = new Promise((resolve) => {
+    const userShell = process.platform === 'win32' ? '' : process.env.SHELL
+    if (!userShell) return resolve('')
+    const delimiter = '__NVM_PATH_DELIM__'
+    execFile(userShell, ['-ilc', `printf '%s%s%s' '${delimiter}' "$PATH" '${delimiter}'`], { timeout: 5_000 }, (_error, stdout) => {
+      resolve(typeof stdout === 'string' ? stdout.split(delimiter)[1] || '' : '')
+    })
+  })
+  return cachedUserShellPathPromise
+}
+
+async function shellSpawnEnv(extraEnv?: Record<string, string>) {
+  const userShellPath = await resolveUserShellPath()
+  const mergedPath = [userShellPath, process.env.PATH].filter(Boolean).join(path.delimiter)
+  return { ...process.env, ...(mergedPath ? { PATH: mergedPath } : {}), ...(extraEnv || {}) }
+}
+
+async function runShellCommand(command, args = [], options: any = {}) {
+  const env = await shellSpawnEnv(options.env)
   return new Promise((resolve) => {
     const expandedCommand = expandUserPath(String(command))
     const expandedArgs = Array.isArray(args) ? args.map((arg) => expandUserPath(String(arg))) : []
     const child = spawn(expandedCommand, expandedArgs, {
       cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
-      env: { ...process.env, ...(options.env || {}) },
+      env,
       shell: Boolean(options.shell),
       timeout: Number(options.timeout || 30_000),
     })
@@ -3867,9 +3889,12 @@ function createExtensionContext(extension, command, launchContext?: any) {
           if (!hasCapability('applescript')) return resolve({ stdout: '', stderr: 'AppleScript is not available on this OS', exitCode: 1 })
           execFile('osascript', ['-e', String(script)], { timeout: Number(options.timeout || 30_000) }, (error, stdout, stderr) => resolve({ stdout: limitedOutput(stdout, options.outputLimit), stderr: limitedOutput(stderr || error?.message || '', options.outputLimit), exitCode: error ? 1 : 0 }))
         }),
-        which: (command) => new Promise((resolve) => {
-          execFile('/usr/bin/which', [String(command)], (error, stdout, stderr) => resolve({ stdout: stdout.trim(), stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
-        }),
+        which: async (command) => {
+          const env = await shellSpawnEnv()
+          return new Promise((resolve) => {
+            execFile('/usr/bin/which', [String(command)], { env }, (error, stdout, stderr) => resolve({ stdout: stdout.trim(), stderr: stderr || error?.message || '', exitCode: error ? 1 : 0 }))
+          })
+        },
       } : undefined,
     },
     ocr: canUseOcr ? {
