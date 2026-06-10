@@ -151,6 +151,34 @@ let learningStore: LocalLearningStore | null = null
 const learningReviewJobs = new Map<string, Promise<void>>()
 let activeAiChatId: string | undefined
 const draftAiChats = new Map<string, AnyRecord>()
+const viewLoaderRegistry = new Map<string, { fn: () => Promise<any[]>; retry: boolean; entry: any }>()
+
+function isLoaderHandle(value: unknown): value is { _loader: true; _fn: () => Promise<any[]>; _retry: boolean } {
+  return Boolean(value && typeof value === 'object' && '_loader' in value)
+}
+
+function spawnViewLoader(viewId: string, loader: { fn: () => Promise<any[]>; retry: boolean; entry: any }) {
+  const send = (payload: Record<string, unknown>) => paletteWindow.win?.webContents.send('view:hydrate', { viewId, ...payload })
+  loader.fn()
+    .then((items) => {
+      viewLoaderRegistry.delete(viewId)
+      const normalized = Array.isArray(items) ? normalizeViewItems(items, loader.entry) : []
+      send({ items: normalized, isLoading: false })
+    })
+    .catch((error) => {
+      viewLoaderRegistry.delete(viewId)
+      const message = error instanceof Error ? error.message : String(error)
+      send({ error: { message }, retry: loader.retry })
+      logWarn('view.loader.failed', { viewId, error: message }, { source: 'host', scope: 'extension' })
+    })
+}
+
+function spawnPendingViewLoaders(result: any) {
+  const viewId = result?.view?.id
+  if (viewId && viewLoaderRegistry.has(viewId)) {
+    spawnViewLoader(viewId, viewLoaderRegistry.get(viewId)!)
+  }
+}
 let didRunQuitCleanup = false
 let userState: AnyRecord = {
   recents: {},
@@ -1641,6 +1669,7 @@ async function executeActionForIpc(action) {
       trustedAction = resolveRootActionForIpc(action)
       const result = normalizeHostViewResult(await measureDebugPerformance('action.execute', { action: summarizeDebugValue(trustedAction), alwaysLog: true }, () => executeAction(trustedAction)))
       structuredClone(result)
+      spawnPendingViewLoaders(result)
       return result
     } catch (error) {
       if (trustedAction?.kind === 'extension-command') {
@@ -1699,8 +1728,24 @@ function normalizeExtensionView(result, entry) {
 function normalizeView(view, entry) {
   const actions = normalizeViewActions(view.actions, entry)
   const webviewPermissions = view.type === 'webview' ? filterWebviewPermissionsForExtension(entry?.extension, view.webviewPermissions) : view.webviewPermissions
+  const viewId = view.id || `view:${crypto.randomUUID()}`
+
+  // Detect and register data loader before stripping it from items
+  const loaderHandle = isLoaderHandle(view.items) ? view.items : undefined
+  if (loaderHandle) {
+    viewLoaderRegistry.set(viewId, { fn: loaderHandle._fn, retry: loaderHandle._retry, entry })
+  }
+
+  const items = normalizeViewItems(loaderHandle ? [] : view.items, entry)
+  const sections = Array.isArray(view.sections) ? view.sections.map((section) => ({ ...section, items: normalizeViewItems(section.items, entry) })) : view.sections
+
+  const emptyView = loaderHandle && !view.emptyView
+    ? { title: 'No items', subtitle: '' }
+    : view.emptyView
+
   return {
     ...view,
+    id: viewId,
     ...(webviewPermissions === undefined ? {} : { webviewPermissions }),
     actions,
     actionPanel: normalizeActionPanel(view.actionPanel, actions, entry),
@@ -1708,8 +1753,10 @@ function normalizeView(view, entry) {
     submitAction: normalizeViewAction(view.submitAction, entry),
     searchAccessory: view.searchAccessory ? { ...view.searchAccessory, onChange: normalizeViewAction(view.searchAccessory.onChange, entry) } : view.searchAccessory,
     refresh: registerViewRefreshForRenderer(view.refresh, entry, view),
-    items: normalizeViewItems(view.items, entry),
-    sections: Array.isArray(view.sections) ? view.sections.map((section) => ({ ...section, items: normalizeViewItems(section.items, entry) })) : view.sections,
+    items,
+    sections,
+    ...(emptyView ? { emptyView } : {}),
+    ...(loaderHandle ? { isLoading: true } : {}),
   }
 }
 
@@ -1722,6 +1769,7 @@ function persistentActionForRef(action, entry) {
 }
 
 function normalizeViewItems(items, entry) {
+  if (isLoaderHandle(items)) return []
   return Array.isArray(items) ? items.map((item) => {
     const itemActions = normalizeViewActions(item.actions, entry)
     const primaryAction = normalizeViewAction(item.primaryAction || item.action, entry)
@@ -1867,7 +1915,7 @@ async function executeHostRefreshAction(record, launchContext?: any) {
   if (!record.entry?.command || typeof record.entry.command.run !== 'function') return { skipped: true }
   const result = await record.entry.command.run(createExtensionContext(record.entry.extension, record.entry.command, launchContext))
   const view = result?.type ? result : result?.view?.type ? result.view : null
-  if (view?.items) return { patch: { mode: record.mode || 'replace', items: normalizeViewItems(view.items, record.entry) } }
+  if (view?.items && !isLoaderHandle(view.items) && Array.isArray(view.items) && view.items.length > 0) return { patch: { mode: record.mode || 'replace', items: normalizeViewItems(view.items, record.entry) } }
   return executeViewActionResult(result, record.entry, launchContext)
 }
 
@@ -1889,6 +1937,7 @@ async function refreshViewForIpc(input: any = {}) {
       try {
         const result = normalizeHostViewResult(await executeHostRefreshAction(record, { refresh: true, reason: 'refresh', startedAt: Date.now() }))
         structuredClone(result)
+        spawnPendingViewLoaders(result)
         record.failureCount = 0
         record.backoffUntil = undefined
         return result
@@ -1912,6 +1961,7 @@ async function executeViewActionForIpc(action) {
       trustedAction = resolveViewActionForIpc(action)
       const result = normalizeHostViewResult(await measureDebugPerformance('view-action.execute', { action: summarizeDebugValue(trustedAction), alwaysLog: true }, () => executeViewAction(trustedAction)))
       structuredClone(result)
+      spawnPendingViewLoaders(result)
       return result
     } catch (error) {
       const record = trustedAction?.type === 'runExtensionAction' ? extensionActionHandlers.get(trustedAction.handlerId) : null
@@ -2008,8 +2058,16 @@ function requestQuitApp(reason = 'action') {
 
 async function executeViewAction(action, launchContext?: any) {
   switch (action?.type) {
-    case 'nativeAction':
+    case 'nativeAction': {
+      const native = action.nativeAction as { kind?: string; viewId?: string } | undefined
+      if (native?.kind === 'view-hydrate-retry' && native.viewId) {
+        const loader = viewLoaderRegistry.get(native.viewId)
+        if (loader) spawnViewLoader(native.viewId, loader)
+        // Return a loading skeleton so the renderer replaces the error view
+        return { view: { type: 'list' as const, id: native.viewId, title: 'Loading…', isLoading: true, items: [] }, navigation: 'replace' as const }
+      }
       return executeAction(action.nativeAction, { keepPaletteOpen: true })
+    }
     case 'openPath':
       runInBackground(() => shell.openPath(action.path))
       break
@@ -3936,6 +3994,11 @@ function createExtensionContext(extension, command, launchContext?: any) {
     views: createExtensionViewsApi(extension, command),
     updates: canUseUpdates ? { getState: () => updatesStateSnapshot() } : undefined,
     state: {},
+    data: {
+      loader(fn, options: any = {}) {
+        return { _loader: true, _fn: fn, _retry: Boolean(options.retry) }
+      },
+    },
     ai: canUseAi ? createExtensionAi(extension) : undefined,
     aiBuilder: createAiBuilderApi(extension),
     extensions: { ownership: canManageExtensionOwnership ? createExtensionOwnershipApi(extension) : undefined },
@@ -4044,7 +4107,7 @@ function createExtensionViewsApi(extension, command) {
         if (!checkRefreshBurst(extension)) return { skipped: true }
         const result = await command.run(innerCtx)
         const view = result?.type ? result : result?.view?.type ? result.view : null
-        if (view?.items) return { patch: { mode: 'replace', items: view.items } }
+        if (view?.items && !isLoaderHandle(view.items) && Array.isArray(view.items) && view.items.length > 0) return { patch: { mode: 'replace', items: view.items } }
         if (view) return { view, navigation: 'replace' }
         return result
       },
@@ -5375,6 +5438,12 @@ app.whenReady().then(async () => {
     logError,
     logWarn,
     loggerDebug,
+  })
+
+  ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) => {
+    const loader = viewLoaderRegistry.get(viewId)
+    if (!loader) return
+    spawnViewLoader(viewId, loader)
   })
 })
 

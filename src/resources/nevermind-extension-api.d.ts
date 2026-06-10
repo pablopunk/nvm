@@ -371,7 +371,8 @@ export type ExtensionView = {
   showDeviceSwitcher?: boolean
   muted?: boolean
   controls?: boolean
-  items?: ExtensionItem[]
+  /** View items or a lazy loader handle from `ctx.data.loader(fn)`. When a loader handle is used, the host owns the loading lifecycle and `emptyView` is required. */
+  items?: ExtensionItem[] | ExtensionDataLoaderHandle
   sections?: ExtensionItemSection[]
   isLoading?: boolean
   emptyView?: { title?: string; subtitle?: string }
@@ -578,6 +579,26 @@ export type ExtensionAiStream = {
   result: Promise<string>
   /** Abort the in-flight request. */
   abort(): void
+}
+
+/** Opaque handle returned by `ctx.data.loader()`. The host replaces it with resolved items after the loader completes. */
+export type ExtensionDataLoaderHandle = { _loader: true }
+
+/** Lazy data fetching. The host owns the loading/error/empty lifecycle. */
+export type ExtensionData = {
+  /**
+   * Declare items that resolve asynchronously. The view skeleton paints immediately;
+   * the loader runs in the background. When it resolves, items are patched into the
+   * already-visible view. The host shows a deferred spinner (200ms) while the loader
+   * runs and renders `view.emptyView` content behind it. On failure, the host shows
+   * an error view with an optional retry button.
+   *
+   * The returned handle is opaque to extensions. Assign it to `view.items`.
+   */
+  loader(
+    fn: () => Promise<ExtensionItem[]>,
+    options?: { retry?: boolean }
+  ): ExtensionDataLoaderHandle
 }
 
 export type ExtensionAi = {
@@ -923,6 +944,8 @@ export type ExtensionContext = {
   /** App update state. Present only with the `updates` permission. Pair with `ctx.actions.updates.*`. */
   updates?: { getState(): ExtensionUpdateState }
   state: Record<string, unknown>
+  /** Lazy data fetching. Use `ctx.data.loader(fn)` so the view skeleton paints immediately while the loader runs in the background. */
+  data: ExtensionData
   ai?: ExtensionAi
   aiBuilder?: ExtensionAiBuilder
   extensions: { ownership?: ExtensionOwnership }

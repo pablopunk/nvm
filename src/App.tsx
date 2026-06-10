@@ -547,6 +547,31 @@ export function App() {
       if (!current) return
       applyViewPatch(payload.patch)
     })
+    const stopViewHydrate = window.nvm.onViewHydrate((payload) => {
+      markDebugPerformance('view.hydrate-event', { viewId: payload?.viewId, hasItems: Boolean(payload?.items), hasError: Boolean(payload?.error) })
+      const current = extensionViewRef.current
+      if (payload.viewId && current?.id !== payload.viewId) return
+      if (!current) return
+      if (payload.error) {
+        const retryAction: CommandAction | undefined = payload.retry ? {
+          type: 'nativeAction',
+          title: 'Retry',
+          nativeAction: { kind: 'view-hydrate-retry', viewId: payload.viewId },
+        } : undefined
+        const dismissAction: CommandAction = { type: 'popView', title: 'Dismiss' }
+        showExtensionView({
+          type: 'preview',
+          title: 'Something went wrong',
+          content: `# Failed to load items\n\n\`\`\`\n${payload.error.message}\n\`\`\``,
+          actions: [...(retryAction ? [retryAction] : []), dismissAction],
+          ...(retryAction ? { actionPanel: { sections: [{ actions: [retryAction] }] } } : {}),
+        }, 'replace')
+        return
+      }
+      if (payload.items) {
+        applyViewPatch({ mode: 'replace', items: payload.items as any, isLoading: false })
+      }
+    })
     const stopAi = window.nvm.onAiChatEvent((event) => {
       markDebugPerformance(`ai.event.${event.type}`, { chatId: event.chatId, textLength: event.text?.length || 0, label: event.label })
       if (event.type === 'debug') window.nvm.log('debug', `Nevermind AI: ${event.label || ''}`, event.data)
@@ -561,6 +586,7 @@ export function App() {
       stopRootItems()
       stopOpenActionView()
       stopViewPatch()
+      stopViewHydrate()
       stopAi()
     }
   }, [])
