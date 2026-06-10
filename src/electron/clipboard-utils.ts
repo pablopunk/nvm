@@ -26,7 +26,7 @@ export function normalizeClipboardHistory(items: unknown, limit: number, persist
           type: 'image',
           imagePath,
           imageDataUrl: imagePath ? fileUrlForPath(imagePath) : item.imageDataUrl,
-          thumbnailUrl: imagePath ? fileUrlForPath(imagePath) : item.thumbnailUrl || item.imageDataUrl,
+          thumbnailUrl: imagePath ? thumbnailUrlForPath(imagePath) : item.thumbnailUrl || item.imageDataUrl,
           createdAt: item.createdAt || Date.now(),
         }
       }

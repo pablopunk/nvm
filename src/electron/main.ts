@@ -4831,13 +4831,12 @@ function readClipboardItem() {
   const png = image.toPNG()
   const hash = hashValue(png)
   const imagePath = persistClipboardImage(png, hash)
-  const thumbnail = image.resize({ width: 64, height: 64 })
   return {
     id: `image:${hash}`,
     type: 'image',
     imagePath,
     imageDataUrl: fileUrlForPath(imagePath),
-    thumbnailUrl: thumbnail.toDataURL(),
+    thumbnailUrl: thumbnailUrlForPath(imagePath),
     createdAt: Date.now(),
   }
 }
