@@ -1588,6 +1588,10 @@ function extensionRootActionFromItem(entry, item) {
     icon: item.icon || 'sparkles',
     iconUrl: item.image || item.iconUrl || null,
     thumbnailUrl: item.thumbnailUrl || null,
+    videoUrl: item.videoUrl || null,
+    imageDataUrl: item.imageDataUrl || null,
+    filePath: item.filePath || item.path || null,
+    text: item.text || '',
     score: Math.min(Number(item.score || 35), 90),
     lastUsed: Number(item.lastUsed || 0),
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
@@ -3130,7 +3134,26 @@ function appRootItem(item) {
 }
 
 function fileRootItem(item) {
-  return { id: `file:${item.path}`, title: item.name, subtitle: item.displayPath, icon: 'folder', score: 4, dismissAfterRun: 'auto', primaryAction: { type: 'openPath', title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' } }
+  const openAction = { type: 'openPath' as const, title: `Open ${item.name}`, path: item.path, dismissAfterRun: 'auto' as const }
+  const revealAction = { type: 'revealPath' as const, title: revealPathTitle(), path: item.path, dismissAfterRun: 'auto' as const }
+  const quickLookAction = { type: 'quickLook' as const, title: quickLookTitle(), path: item.path }
+  const isMedia = item.kind === 'image' || item.kind === 'video'
+  const text = isMedia ? undefined : item.displayPath
+  const previewAction = buildPreviewItemAction({ kind: item.kind || 'file', title: 'Preview', filePath: item.path, videoUrl: item.videoUrl, thumbnailUrl: item.thumbnailUrl, text })
+  return {
+    id: `file:${item.path}`,
+    title: item.name,
+    subtitle: item.displayPath,
+    icon: isMedia ? item.kind : 'folder',
+    score: 4,
+    dismissAfterRun: 'auto',
+    filePath: item.path,
+    videoUrl: item.videoUrl || undefined,
+    thumbnailUrl: item.thumbnailUrl || undefined,
+    text,
+    primaryAction: openAction,
+    actionPanel: { sections: [{ actions: [previewAction, quickLookAction, revealAction, openAction] }] },
+  }
 }
 
 function fileIndexSnapshot(options: any = {}) {
@@ -3594,6 +3617,7 @@ function buildPreviewItemAction(input: any) {
   return {
     type: 'previewClipboardItem',
     title: input?.title || 'Preview',
+    description: input?.description || (kind === 'file' || kind === 'image' || kind === 'video' ? 'Preview this file' : 'Preview clipboard item'),
     shortcut: input?.shortcut || 'Command+Y',
     clipboardType: input?.clipboardType || kind,
     text: input?.text,

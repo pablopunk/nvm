@@ -1239,7 +1239,7 @@ export function App() {
   const canDuplicateCreatedAction = Boolean(['extension-root-item', 'extension-action'].includes(optionsFor?.kind || '') && optionsFor?.removable)
   const canCustomizeAction = canCustomizeCommandAction(optionsFor)
   const canRemoveOptionsShortcut = Boolean(optionsFor && shortcutRecords.some((record) => record.actionId === optionsFor.id))
-  const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.text)
+  const canPreviewAction = Boolean(optionsFor?.imageDataUrl || optionsFor?.videoUrl || optionsFor?.thumbnailUrl || optionsFor?.text || optionsFor?.filePath)
   const canQuickLookAction = Boolean(optionsFor?.filePath)
   const selectedExtensionItem = useMemo(() => {
     if (!extensionView) return null
@@ -1443,6 +1443,9 @@ export function App() {
   }
 
   function getOptionActionRows() {
+    const declaredActions = actionsFromPanel(optionsFor?.actionPanel)
+    const hasDeclaredPreviewAction = declaredActions.some((action) => action.type === 'previewClipboardItem')
+    const hasDeclaredQuickLookAction = declaredActions.some((action) => action.type === 'quickLook')
     const optionRows = [
       {
         value: 'option:shortcut',
@@ -1468,7 +1471,7 @@ export function App() {
         subtitle: 'Press → to preview an item',
         shortcut: 'Command+Y',
         onSelect: () => optionsFor && setPreviewFor(optionsFor),
-        show: canPreviewAction,
+        show: canPreviewAction && !hasDeclaredPreviewAction,
       },
       {
         value: 'option:quick-look',
@@ -1477,7 +1480,7 @@ export function App() {
         subtitle: 'Preview this file',
         shortcut: 'Command+Y',
         onSelect: quickLookOptionsAction,
-        show: canQuickLookAction,
+        show: canQuickLookAction && !hasDeclaredQuickLookAction,
       },
       {
         value: 'option:alias',
@@ -1886,7 +1889,7 @@ export function App() {
       const input = event.target instanceof HTMLInputElement ? event.target : null
       if (input && input.selectionStart !== input.value.length) return
       if (event.target instanceof HTMLTextAreaElement) return
-      if (!isChildOpen && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.text)) {
+      if (!isChildOpen && selectedAction && (selectedAction.imageDataUrl || selectedAction.videoUrl || selectedAction.thumbnailUrl || selectedAction.text)) {
         event.preventDefault()
         setPreviewFor(selectedAction)
         setOptionsFor(null)
@@ -1996,6 +1999,8 @@ export function App() {
                 <video className="previewImage" src={previewFor.videoUrl} controls autoPlay muted loop playsInline />
               ) : previewFor.imageDataUrl ? (
                 <img className="previewImage" src={previewFor.imageDataUrl} alt="Clipboard preview" />
+              ) : previewFor.thumbnailUrl ? (
+                <img className="previewImage" src={previewFor.thumbnailUrl} alt={previewFor.title} />
               ) : previewFor.text ? (
                 <pre className="previewText">{previewFor.text}</pre>
               ) : (
