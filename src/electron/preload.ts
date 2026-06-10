@@ -128,6 +128,12 @@ const api: NevermindApi = {
     ipcRenderer.on('view:patch', listener)
     return () => ipcRenderer.removeListener('view:patch', listener)
   },
+  onViewHydrate: (callback) => {
+    const listener = (_event: IpcRendererEvent, payload: Parameters<NevermindApi['onViewHydrate']>[0] extends (payload: infer Payload) => void ? Payload : never) => callback(payload)
+    ipcRenderer.on('view:hydrate', listener)
+    return () => ipcRenderer.removeListener('view:hydrate', listener)
+  },
+  retryViewLoader: (viewId) => invokeMeasured('view:hydrate:retry', viewId),
 }
 
 contextBridge.exposeInMainWorld('nvm', api)

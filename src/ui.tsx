@@ -1,6 +1,6 @@
-import React, { type ReactNode } from 'react'
+import React, { useEffect, useState, type ReactNode } from 'react'
 import { Command } from 'cmdk'
-import { Folder } from 'lucide-react'
+import { Folder, Loader2 } from 'lucide-react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { CommandImage } from './model'
@@ -190,14 +190,26 @@ function normalizedSections<T>(items?: T[], sections?: ItemSection<T>[]) {
   return sections?.length ? sections : [{ items: items || [] }]
 }
 
+function LoadingSpinner({ delayMs = 200 }: { delayMs?: number }) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), delayMs)
+    return () => clearTimeout(timer)
+  }, [delayMs])
+  if (!visible) return null
+  return <div className="loadingSpinner"><Loader2 size={20} className="spinnerIcon" /></div>
+}
+
 export function ListView<T>({ items, sections, renderItem, empty, subtitle, isLoading, pagination }: ListViewProps<T>) {
   const visibleSections = normalizedSections(items, sections).filter((section) => section.items.length > 0)
-  return <>{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{visibleSections.length > 0 ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="actionSectionSubtitle">{section.subtitle}</div> : null}{section.items.map(renderItem)}</div>) : empty}{pagination}</>
+  const hasItems = visibleSections.length > 0
+  return <>{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{hasItems ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="actionSectionSubtitle">{section.subtitle}</div> : null}{section.items.map(renderItem)}</div>) : isLoading ? <LoadingSpinner /> : empty}{pagination}</>
 }
 
 export function GridView<T>({ items, sections, renderItem, empty, subtitle, layout = 'square', style, isLoading, pagination }: GridViewProps<T>) {
   const visibleSections = normalizedSections(items, sections).filter((section) => section.items.length > 0)
-  return <div className="extensionView">{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{visibleSections.length > 0 ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="actionSectionSubtitle">{section.subtitle}</div> : null}<div className={`extensionGrid extensionGrid-${layout}`} style={style}>{section.items.map(renderItem)}</div></div>) : empty}{pagination}</div>
+  const hasItems = visibleSections.length > 0
+  return <div className="extensionView">{subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}{hasItems ? visibleSections.map((section, index) => <div key={index} className="itemSection">{section.title ? <div className="actionSectionHeader">{section.title}</div> : null}{section.subtitle ? <div className="actionSectionSubtitle">{section.subtitle}</div> : null}<div className={`extensionGrid extensionGrid-${layout}`} style={style}>{section.items.map(renderItem)}</div></div>) : isLoading ? <LoadingSpinner /> : empty}{pagination}</div>
 }
 
 export function ChatView({ messages, isBusy, input, messagesRef }: ChatViewProps) {

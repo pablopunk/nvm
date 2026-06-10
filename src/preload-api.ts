@@ -92,6 +92,14 @@ export type AiChatEvent = {
   data?: unknown
 }
 
+export type ViewHydratePayload = {
+  viewId: string
+  items?: CommandView['items']
+  isLoading?: false
+  error?: { message: string }
+  retry?: boolean
+}
+
 export type NevermindApi = {
   search: (query: string, options?: { clipboardOnly?: boolean }) => Promise<RootAction[]>
   execute: (action: RootAction) => Promise<{ view?: CommandView }>
@@ -143,4 +151,6 @@ export type NevermindApi = {
   closeExtensionWindow: () => Promise<void>
   onExtensionWindowView: (callback: (payload: { id: string; view: CommandView; options?: Record<string, unknown> }) => void) => () => void
   onViewPatch: (callback: (payload: { viewId?: string; patch: CommandViewPatch }) => void) => () => void
+  onViewHydrate: (callback: (payload: ViewHydratePayload) => void) => () => void
+  retryViewLoader: (viewId: string) => Promise<void>
 }
