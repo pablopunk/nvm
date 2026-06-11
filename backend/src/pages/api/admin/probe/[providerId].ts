@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '../../../lib/admin';
-import { getUpstreamConfig, UpstreamConfigError } from '../../../lib/upstream';
+import { requireAdmin } from '../../../../lib/admin';
+import { getUpstreamConfig, UpstreamConfigError } from '../../../../lib/upstream';
 
 export const GET: APIRoute = async ({ request, params }) => {
   if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
