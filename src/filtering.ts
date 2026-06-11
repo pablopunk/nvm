@@ -1,18 +1,10 @@
 import { actionsFromPanel, type CommandItem, type CommandView } from './model'
+import { scoreNormalizedNonEmpty } from './search-ranking'
 
-export function scoreText(value: string | undefined, filter: string) {
-  const text = value?.toLowerCase() || ''
+export function scoreText(value: string | undefined, filter: string): number {
   if (!filter) return 1
-  if (text === filter) return 100
-  if (text.startsWith(filter)) return 80
-  if (text.includes(filter)) return 50
-  let position = 0
-  for (const character of filter) {
-    position = text.indexOf(character, position)
-    if (position === -1) return 0
-    position += 1
-  }
-  return 20
+  const text = (value || '').toLowerCase()
+  return scoreNormalizedNonEmpty(text, filter)
 }
 
 export function valuesMatch(filterValue: string, ...values: Array<string | undefined>) {

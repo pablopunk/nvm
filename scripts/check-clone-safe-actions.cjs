@@ -20,8 +20,10 @@ if (!/function\s+normalizeActionPanel[\s\S]*const\s+\{\s*lazyActions,\s*\.\.\.sa
   fail('normalizeActionPanel must strip lazyActions after normalizing them')
 }
 
-if (!/async\s+function\s+searchActions[\s\S]*structuredClone\(sorted\)[\s\S]*return\s+sorted/.test(source)) {
-  fail('searchActions must structuredClone-check results before returning through IPC')
+// Note: prepareRootActionForRenderer already strips handlers so sorted is clone-safe.
+// The discarded structuredClone(sorted) was removed per #33. Verify the function returns sorted.
+if (!/async\s+function\s+searchActions[\s\S]*return\s+sorted/.test(source)) {
+  fail('searchActions must return the sorted results for IPC')
 }
 
 if (!/async\s+function\s+executeActionForIpc[\s\S]*structuredClone\(result\)/.test(source)) {
