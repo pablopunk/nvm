@@ -3,6 +3,7 @@ import { afterEach, test } from 'node:test';
 import type { APIContext } from 'astro';
 import { setDbForTests, resetDbForTests } from '../../db/client';
 import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
+import { resetPricingCacheForTests } from '../../lib/pricing';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
@@ -26,6 +27,7 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
     innerJoin: () => chain,
     where: () => chain,
     limit: () => promise(),
+    orderBy: () => promise(),
     set: () => chain,
     values: (values: unknown) => {
       onValues?.(values);
@@ -379,4 +381,261 @@ test('google proxy records split streaming usage metadata', async () => {
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
   assert.equal((db.insertedValues.at(-1) as any).costCredits, 1);
+});
+
+test('proxy failover: primary 5xx falls back to next provider in chain', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENCODE_API_KEY = 'primary-key';
+  process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
+  process.env.GOOGLE_API_KEY = 'fallback-key';
+  process.env.GOOGLE_BASE_URL = 'https://fallback.example';
+  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const providerChain = [{ providerId: 'google' }];
+  const db = installDb(createFakeDb({
+    selects: [
+      [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+      [{ id: 1 }],
+      [{ paid: 1000, free: 500 }],
+      modelRoute,
+      providerChain,
+    ],
+  }));
+
+  let primaryCalled = false;
+  let fallbackCalled = false;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } }, google: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    if (url.startsWith('https://primary.example')) {
+      primaryCalled = true;
+      return Response.json({ error: { message: 'Down' } }, { status: 503 });
+    }
+    if (url.startsWith('https://fallback.example')) {
+      fallbackCalled = true;
+      assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'fallback-key');
+      return Response.json({ usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, thoughtsTokenCount: 0 } });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  const request = authorizedGoogleRequest();
+  const response = await postGoogleModel({ ...routeContext(request), params: { path: 'placeholder:streamGenerateContent' } } as any);
+  const body = await response.json() as any;
+
+  assert.equal(response.status, 200);
+  assert.ok(primaryCalled, 'primary provider should have been tried');
+  assert.ok(fallbackCalled, 'fallback provider should have been tried');
+  assert.equal(db.insertedValues.length, 2);
+  assert.equal((db.insertedValues[0] as any).kind, 'paid');
+  assert.equal((db.insertedValues.at(-1) as any).provider, 'google');
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 5);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 10);
+});
+
+test('proxy failover: when all providers fail, last error passes through', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENCODE_API_KEY = 'primary-key';
+  process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
+  process.env.GOOGLE_API_KEY = 'fallback-key';
+  process.env.GOOGLE_BASE_URL = 'https://fallback.example';
+  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const providerChain = [{ providerId: 'google' }];
+  installDb(createFakeDb({
+    selects: [
+      [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+      [{ id: 1 }],
+      [{ free: 1000, paid: 0 }],
+      modelRoute,
+      providerChain,
+    ],
+  }));
+
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } }, google: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    return Response.json({ error: { type: 'server_error', message: 'Down' } }, { status: 503 });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+
+  // Both providers 5xx, last provider's error passes through with compatibility headers
+  assert.equal(response.status, 503);
+  assert.ok(response.headers.get('x-request-id'));
+  assert.ok(response.headers.get('x-nevermind-backend-version'));
+});
+
+test('proxy failover: 4xx errors do not trigger failover', async () => {
+  resetPricingCacheForTests();
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'primary-key';
+  process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
+  process.env.GOOGLE_API_KEY = 'fallback-key';
+  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const providerChain = [{ providerId: 'google' }];
+  installDb(createFakeDb({
+    selects: [
+      [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+      [{ id: 1 }],
+      [{ free: 1000, paid: 0 }],
+      modelRoute,
+      providerChain,
+    ],
+  }));
+
+  let fallbackCalled = false;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } }, google: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    if (url.startsWith('https://primary.example')) {
+      return Response.json({ error: { message: 'Bad request' } }, { status: 400 });
+    }
+    fallbackCalled = true;
+    return Response.json({}, { status: 200 });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+
+  assert.equal(response.status, 400);
+  assert.ok(!fallbackCalled, 'fallback should NOT be called on 4xx');
+});
+
+test('proxy failover: ai_failover kill switch disables failover', async () => {
+  process.env.NEVERMIND_KILL_SWITCHES = 'ai_failover';
+  resetPricingCacheForTests();
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'primary-key';
+  process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
+  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  installDb(createFakeDb({
+    selects: [
+      [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+      [{ id: 1 }],
+      [{ free: 1000, paid: 0 }],
+      modelRoute,
+      [],
+    ],
+  }));
+
+  let primaryCalled = false;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    primaryCalled = true;
+    return new Response('Service Unavailable', { status: 503 });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+
+  assert.equal(response.status, 503);
+  assert.ok(primaryCalled);
+  // With kill switch, the 503 is passed through (not chain-exhausted)
+  assert.equal(response.status, 503);
+});
+
+test('proxy failover: format-incompatible provider is skipped', async () => {
+  resetPricingCacheForTests();
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'primary-key';
+  process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
+  process.env.OPENAI_API_KEY = 'openai-key';
+  process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
+  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'claude-sonnet-4-6' }) }];
+  const providerChain = [{ providerId: 'openai' }];
+  installDb(createFakeDb({
+    selects: [
+      [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+      [{ id: 1 }],
+      [{ free: 1000, paid: 0 }],
+      modelRoute,
+      providerChain,
+    ],
+  }));
+
+  let openaiCalled = false;
+  let primaryCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        opencode: { models: { 'claude-sonnet-4-6': { id: 'claude-sonnet-4-6', cost: { input: 3, output: 15 } } } },
+        openai: { models: { 'claude-sonnet-4-6': { id: 'claude-sonnet-4-6', cost: { input: 3, output: 15 } } } },
+      });
+    }
+    if (url.startsWith('https://primary.example')) {
+      primaryCalled = true;
+      return new Response('Service Unavailable', { status: 503 });
+    }
+    openaiCalled = true;
+    return Response.json({}, { status: 200 });
+  };
+
+  const response = await postMessages(routeContext(authorizedMessagesRequest()));
+
+  assert.equal(response.status, 503);
+  assert.ok(primaryCalled);
+  assert.ok(!openaiCalled, 'openai should be skipped because it does not support anthropic-messages format');
+  globalThis.fetch = originalFetch;
+});
+
+function authorizedMessagesRequest(body: unknown = { model: 'placeholder', messages: [{ role: 'user', content: 'hello' }] }) {
+  return new Request('https://api.nvm.fyi/api/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': 'nvm_pat_test',
+      'content-type': 'application/json',
+      'x-nevermind-client': 'desktop',
+      'x-nevermind-client-version': '0.6.2',
+      'x-nevermind-api-version': '1',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+let postMessages: typeof postChatCompletion;
+postMessages = async (ctx: Parameters<typeof postChatCompletion>[0]) => {
+  const { POST } = await import('./v1/messages');
+  return POST(ctx);
+};
+
+test('proxy failover: chain exhaustion when all providers are skipped returns upstream_unavailable', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENAI_API_KEY = 'openai-key';
+  process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
+  // Primary: openai with gemini model → google-generative-ai format.
+  // openai only supports openai-completions → format-skipped → chain exhausted.
+  const modelRoute = [{ value: JSON.stringify({ provider: 'openai', modelId: 'gemini-3-flash' }) }];
+  installDb(createFakeDb({
+    selects: [
+      [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+      [{ id: 1 }],
+      [{ free: 1000, paid: 0 }],
+      modelRoute,
+      [],
+    ],
+  }));
+
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ openai: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    return Response.json({}, { status: 200 });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const body = await response.json() as any;
+
+  assert.equal(response.status, 503);
+  assert.equal(body.error.type, 'upstream_unavailable');
+  assert.equal(body.error.message, 'All configured upstream providers are unavailable');
+  assert.ok(response.headers.get('x-request-id'));
 });

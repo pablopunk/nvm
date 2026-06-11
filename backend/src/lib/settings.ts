@@ -1,6 +1,6 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import { db } from '../db/client';
-import { appSettings } from '../db/schema';
+import { appSettings, modelProviders, providers } from '../db/schema';
 
 const ACTIVE_MODEL_KEY = 'active_model';
 const FREE_MODEL_KEY = 'free_model';
@@ -10,7 +10,7 @@ const SMART_MODEL_ROUTE_KEY = 'smart_model_route';
 const FAST_MODEL_ROUTE_KEY = 'fast_model_route';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
-const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter']);
+const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter', 'anthropic', 'openai', 'google']);
 
 export type ModelTier = 'free' | 'paid';
 export type ExtensionAiModelRole = 'smart' | 'fast';
@@ -127,3 +127,71 @@ export function listKnownProviders(): string[] {
   return [...KNOWN_PROVIDERS];
 }
 
+// ── Provider chain (failover) ──
+
+export async function getModelProviderChain(slot: ModelRouteSlot, modelId: string): Promise<string[]> {
+  const rows = await db
+    .select({ providerId: modelProviders.providerId })
+    .from(modelProviders)
+    .innerJoin(providers, eq(modelProviders.providerId, providers.id))
+    .where(
+      and(
+        eq(modelProviders.routeSlot, slot),
+        eq(modelProviders.modelId, modelId),
+        eq(providers.enabled, 'true'),
+      ),
+    )
+    .orderBy(modelProviders.priority);
+
+  return rows.map((r) => r.providerId);
+}
+
+export async function setModelProviderChain(
+  slot: ModelRouteSlot,
+  modelId: string,
+  providerIds: string[],
+) {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(modelProviders)
+      .where(
+        and(
+          eq(modelProviders.routeSlot, slot),
+          eq(modelProviders.modelId, modelId),
+        ),
+      );
+
+    if (providerIds.length === 0) return;
+
+    const values = providerIds.map((providerId, i) => ({
+      routeSlot: slot,
+      modelId,
+      providerId,
+      priority: i,
+    }));
+
+    await tx.insert(modelProviders).values(values);
+  });
+}
+
+export async function listEnabledProviders() {
+  return db
+    .select()
+    .from(providers)
+    .where(eq(providers.enabled, 'true'))
+    .orderBy(providers.priority);
+}
+
+export async function listAllProviders() {
+  return db.select().from(providers).orderBy(providers.priority);
+}
+
+export async function updateProvider(
+  providerId: string,
+  updates: { enabled?: boolean; priority?: number },
+) {
+  const set: Record<string, unknown> = { updatedAt: sql`now()` };
+  if (updates.enabled !== undefined) set.enabled = updates.enabled ? 'true' : 'false';
+  if (updates.priority !== undefined) set.priority = updates.priority;
+  await db.update(providers).set(set).where(eq(providers.id, providerId));
+}

@@ -43,6 +43,13 @@
       "when": 1780750313748,
       "tag": "0005_mean_living_mummy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781169775811,
+      "tag": "0006_furry_wildside",
+      "breakpoints": true
     }
   ]
 }

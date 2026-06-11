@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/client';
 import { creditLedger, usage } from '../db/schema';
-import { getModelRoute, ModelNotConfiguredError, parseExtensionAiModelRole, type ModelRouteSlot } from './settings';
+import { getModelRoute, getModelProviderChain, ModelNotConfiguredError, parseExtensionAiModelRole, type ModelRouteSlot } from './settings';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
@@ -10,7 +10,7 @@ import {
   usdToMicrocents,
   type ModelCost,
 } from './cost';
-import { getUpstreamConfig, UpstreamConfigError } from './upstream';
+import { getUpstreamConfig, selectApiForModel, providerSupportsFormat, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
@@ -225,6 +225,99 @@ function withRequestId(res: Response, requestId: string): Response {
   return res;
 }
 
+function chainExhaustedResponse(requestId: string): Response {
+  return withRequestId(Response.json(
+    { error: { type: 'upstream_unavailable', message: 'All configured upstream providers are unavailable' } },
+    { status: 503 },
+  ), requestId);
+}
+
+async function tryUpstreamProviders(
+  cfg: ProxyConfig,
+  routing: ResolvedRouting,
+  forwardBody: BodyInit | undefined,
+  requestId: string,
+): Promise<{ response: Response; provider: string; costRow: ModelCost } | Response> {
+  const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
+  const failoverEnabled = !backendKillSwitchEnabled('ai_failover');
+
+  let chainProviders: string[] = [];
+  if (failoverEnabled) {
+    try {
+      chainProviders = await getModelProviderChain(routing.kind, routing.activeModelId);
+    } catch (err) {
+      log.warn('provider_chain_fetch_failed', { request_id: requestId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  const providerChain = [routing.provider, ...chainProviders.filter((p) => p !== routing.provider)];
+  let lastErrorStatus = 503;
+
+  for (const providerId of providerChain) {
+    if (!providerSupportsFormat(providerId, apiFormat)) {
+      log.info('upstream_format_skip', { request_id: requestId, provider: providerId, format: apiFormat });
+      continue;
+    }
+
+    let upstreamCfg;
+    try {
+      upstreamCfg = getUpstreamConfig(providerId);
+    } catch (err) {
+      log.warn('upstream_config_skip', { request_id: requestId, provider: providerId, error: err instanceof Error ? err.message : String(err) });
+      continue;
+    }
+
+    const costRow = providerId === routing.provider
+      ? routing.costRow
+      : await lookupModelCost(providerId, routing.activeModelId);
+    if (!costRow) {
+      log.warn('upstream_cost_skip', { request_id: requestId, provider: providerId, model: routing.activeModelId });
+      continue;
+    }
+
+    const upstreamUrl = cfg.buildUpstreamUrl({
+      upstreamBaseUrl: upstreamCfg.baseUrl,
+      activeModelId: routing.activeModelId,
+    });
+
+    const headers = buildForwardHeaders(
+      cfg.request,
+      cfg.authHeaderName,
+      cfg.upstreamAuthHeaderName,
+      cfg.formatUpstreamAuthValue(upstreamCfg.apiKey),
+    );
+
+    let resp;
+    try {
+      resp = await fetch(upstreamUrl, {
+        method: cfg.request.method,
+        headers,
+        body: forwardBody,
+      });
+    } catch (err) {
+      log.warn('upstream_fetch_error', {
+        request_id: requestId,
+        provider: providerId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+
+    const isLast = providerId === providerChain[providerChain.length - 1];
+
+    if (resp.status >= 500) {
+      lastErrorStatus = resp.status;
+      log.warn('upstream_5xx', { request_id: requestId, provider: providerId, status: resp.status });
+      if (!isLast) continue;
+    }
+
+    log.info('upstream_selected', { request_id: requestId, provider: providerId, status: resp.status });
+    return { response: resp, provider: providerId, costRow };
+  }
+
+  return chainExhaustedResponse(requestId);
+}
+
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const requestId = randomUUID();
   if (backendKillSwitchEnabled('ai_proxy')) return killSwitchResponse('ai_proxy', 'AI proxy is temporarily disabled.', requestId);
@@ -278,29 +371,18 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
   }
 
-  const upstreamUrl = cfg.buildUpstreamUrl({
-    upstreamBaseUrl: routing.upstreamBaseUrl,
-    activeModelId: routing.activeModelId,
-  });
+  const result = await tryUpstreamProviders(cfg, routing, forwardBody, requestId);
+  if (result instanceof Response) return result;
 
-  const headers = buildForwardHeaders(
-    cfg.request,
-    cfg.authHeaderName,
-    cfg.upstreamAuthHeaderName,
-    cfg.formatUpstreamAuthValue(routing.upstreamApiKey),
-  );
-
-  const upstreamResponse = await fetch(upstreamUrl, {
-    method: cfg.request.method,
-    headers,
-    body: forwardBody,
-  });
+  const upstreamResponse = result.response;
+  const winningProvider = result.provider;
+  const winningCostRow = result.costRow;
 
   const billCtx: BillContext = {
     user: routing.user,
-    provider: routing.provider,
+    provider: winningProvider,
     activeModelId: routing.activeModelId,
-    costRow: routing.costRow,
+    costRow: winningCostRow,
     kind: routing.kind,
     requestId,
     client,
