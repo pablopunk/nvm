@@ -1,28 +1,36 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/admin';
-import { getActiveProvider, setActiveProvider, listKnownProviders } from '../../../lib/settings';
+import { listAllProviders, updateProvider } from '../../../lib/settings';
 import { recordAudit } from '../../../lib/audit';
 
 export const GET: APIRoute = async ({ request }) => {
   if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
-  return Response.json({ active: await getActiveProvider(), providers: listKnownProviders() });
+  const all = await listAllProviders();
+  return Response.json({ providers: all });
 };
 
 export const PUT: APIRoute = async ({ request }) => {
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as { provider?: string };
-  if (!body.provider) return new Response('Missing provider', { status: 400 });
-  try {
-    await setActiveProvider(body.provider);
-  } catch (err) {
-    return new Response((err as Error).message, { status: 400 });
-  }
+  const body = (await request.json().catch(() => ({}))) as {
+    id?: string;
+    enabled?: boolean;
+    priority?: number;
+  };
+  if (!body.id) return new Response('Missing id', { status: 400 });
+
+  await updateProvider(body.id, {
+    enabled: body.enabled,
+    priority: body.priority,
+  });
+
   await recordAudit({
     actorUserId: actor.id,
     action: 'provider.changed',
     targetType: 'provider',
-    targetId: body.provider,
+    targetId: body.id,
+    meta: { enabled: body.enabled, priority: body.priority },
   });
+
   return Response.json({ ok: true });
 };

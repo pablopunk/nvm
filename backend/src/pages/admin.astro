@@ -75,6 +75,15 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
   </div>
 
   <div class="section card">
+    <h3>Providers</h3>
+    <p class="muted">Toggle providers on/off. Disabled providers are skipped during failover. Click Probe to test connectivity.</p>
+    <table class="table" id="providers-table">
+      <thead><tr><th>Provider</th><th>Enabled</th><th>Priority</th><th>Health</th><th></th></tr></thead>
+      <tbody><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section card">
     <h2>Last 30 days</h2>
     <div class="stat-grid" id="timeseries-grid">
       <div class="stat"><div class="v" id="ts-requests">…</div><div class="l">Requests/day</div><svg class="spark" id="ts-requests-spark" viewBox="0 0 100 24" preserveAspectRatio="none"></svg></div>
@@ -277,9 +286,65 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       renderSpark('ts-errors-spark', errors);
       renderSpark('ts-p95-spark', p95);
     }
+    async function loadProviders() {
+      const res = await fetch('/api/admin/provider');
+      const { providers } = await res.json();
+      const tbody = document.querySelector('#providers-table tbody');
+      tbody.innerHTML = providers.map((p) => `
+        <tr>
+          <td><code>${p.id}</code> <span class="muted">${p.displayName}</span></td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" class="provider-toggle" data-id="${p.id}" ${p.enabled === 'true' ? 'checked' : ''}>
+              <span class="toggle__slider"></span>
+            </label>
+          </td>
+          <td>${p.priority}</td>
+          <td><span class="probe-status" data-provider="${p.id}">—</span></td>
+          <td><button type="button" class="btn btn--sm probe-btn" data-id="${p.id}">Probe</button></td>
+        </tr>
+      `).join('');
+
+      tbody.querySelectorAll('.provider-toggle').forEach((cb) => {
+        cb.addEventListener('change', async () => {
+          const res = await fetch('/api/admin/provider', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: cb.dataset.id, enabled: cb.checked }),
+          });
+          if (!res.ok) cb.checked = !cb.checked;
+        });
+      });
+
+      tbody.querySelectorAll('.probe-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const statusEl = document.querySelector(`.probe-status[data-provider="${btn.dataset.id}"]`);
+          statusEl.textContent = '…';
+          statusEl.className = 'probe-status';
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/api/admin/probe/${btn.dataset.id}`);
+            const r = await res.json();
+            if (r.ok) {
+              statusEl.textContent = `✓ ${r.status} ${r.latencyMs}ms`;
+              statusEl.className = 'probe-status status--ok';
+            } else {
+              statusEl.textContent = `✗ ${r.error || r.status || 'unreachable'}`;
+              statusEl.className = 'probe-status status--err';
+            }
+          } catch (err) {
+            statusEl.textContent = '✗ error';
+            statusEl.className = 'probe-status status--err';
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
     loadStats();
     loadUsers();
     loadAudit();
     loadTimeseries();
+    loadProviders();
   </script>
 </Layout>

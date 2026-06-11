@@ -131,3 +131,28 @@ export const stripeEvents = pgTable(
     index('stripe_events_type_idx').on(t.type),
   ],
 );
+
+export const providers = pgTable('providers', {
+  id: text('id').primaryKey(),
+  displayName: text('display_name').notNull(),
+  enabled: text('enabled').notNull().default('true'),
+  priority: integer('priority').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const modelProviders = pgTable(
+  'model_providers',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    routeSlot: text('route_slot').notNull(),
+    modelId: text('model_id').notNull(),
+    providerId: text('provider_id').notNull().references(() => providers.id, { onDelete: 'cascade' }),
+    priority: integer('priority').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('model_providers_route_model_provider_unique').on(t.routeSlot, t.modelId, t.providerId),
+    index('model_providers_route_model_idx').on(t.routeSlot, t.modelId),
+  ],
+);

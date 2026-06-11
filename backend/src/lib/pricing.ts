@@ -121,3 +121,8 @@ export async function listModelsForProvider(provider: string): Promise<string[]>
   const models = catalog[key]?.models ?? {};
   return Object.keys(models).sort();
 }
+
+export function resetPricingCacheForTests() {
+  cache = null;
+  inflight = null;
+}
