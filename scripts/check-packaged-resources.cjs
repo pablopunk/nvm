@@ -30,4 +30,8 @@ if (!/from:\s*node_modules\/typescript\/lib[\s\S]*to:\s*node_modules\/typescript
   fail('electron-builder.yml must package TypeScript lib*.d.ts files so generated extension validation works in the app')
 }
 
+if (/src\/fixtures/.test(config)) {
+  fail('electron-builder.yml must not include src/fixtures; fixtures are dev-only and excluded from shipped product')
+}
+
 console.log('Packaged resource checks passed')
