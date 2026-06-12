@@ -1,129 +1,177 @@
-import { app, safeStorage } from 'electron'
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
-import * as logger from './logger'
-import { checkNevermindCompatibility } from './nevermind-compatibility'
-import { nevermindDesktopHeaders } from './nevermind-api'
-import { openExternalUrl } from './url-utils'
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { app, safeStorage } from 'electron';
+import * as logger from './logger';
+import { nevermindDesktopHeaders } from './nevermind-api';
+import { checkNevermindCompatibility } from './nevermind-compatibility';
+import { openExternalUrl } from './url-utils';
 
-const FILENAME = 'nevermind-auth.json'
+const FILENAME = 'nevermind-auth.json';
 
-type StoredAuth = { encryptedToken: string; email: string; role: string; baseUrl: string; connectedAt: string }
-type AuthSnapshot = { token: string; email: string; role: string; baseUrl: string } | null
-type SignInResult = { ok: true; auth: NonNullable<AuthSnapshot> } | { ok: false; error: string }
+type StoredAuth = {
+  encryptedToken: string;
+  email: string;
+  role: string;
+  baseUrl: string;
+  connectedAt: string;
+};
+type AuthSnapshot = {
+  token: string;
+  email: string;
+  role: string;
+  baseUrl: string;
+} | null;
+type SignInResult =
+  | { ok: true; auth: NonNullable<AuthSnapshot> }
+  | { ok: false; error: string };
 
-const PRODUCTION_BASE_URL = 'https://api.nvm.fyi'
-const DEFAULT_BASE_URL = process.env.NEVERMIND_BASE_URL || (process.env.ELECTRON_RENDERER_URL ? 'http://localhost:4321' : PRODUCTION_BASE_URL)
+const PRODUCTION_BASE_URL = 'https://api.nvm.fyi';
+const DEFAULT_BASE_URL =
+  process.env.NEVERMIND_BASE_URL ||
+  (process.env.ELECTRON_RENDERER_URL
+    ? 'http://localhost:4321'
+    : PRODUCTION_BASE_URL);
 
 function shouldUseProductionBaseUrl() {
-  return app.isPackaged && !process.env.NEVERMIND_BASE_URL
+  return app.isPackaged && !process.env.NEVERMIND_BASE_URL;
 }
 
 function isLoopbackBaseUrl(baseUrl: string) {
   try {
-    const host = new URL(baseUrl).hostname
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+    const host = new URL(baseUrl).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
   } catch {
-    return false
+    return false;
   }
 }
 
 function normalizedBaseUrl(baseUrl: string) {
-  const trimmed = baseUrl.replace(/\/$/, '')
-  if (shouldUseProductionBaseUrl() && (['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed) || isLoopbackBaseUrl(trimmed))) return PRODUCTION_BASE_URL
-  return trimmed
+  const trimmed = baseUrl.replace(/\/$/, '');
+  if (
+    shouldUseProductionBaseUrl() &&
+    (['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed) ||
+      isLoopbackBaseUrl(trimmed))
+  )
+    return PRODUCTION_BASE_URL;
+  return trimmed;
 }
 
 function authPath() {
-  return path.join(app.getPath('userData'), FILENAME)
+  return path.join(app.getPath('userData'), FILENAME);
 }
 
-let cached: AuthSnapshot = null
-let loadPromise: Promise<AuthSnapshot> | null = null
-let activeSignIn: Promise<SignInResult> | null = null
+let cached: AuthSnapshot = null;
+let loadPromise: Promise<AuthSnapshot> | null = null;
+let activeSignIn: Promise<SignInResult> | null = null;
 
 async function readFromDisk(): Promise<AuthSnapshot> {
   try {
-    const raw = await fs.readFile(authPath(), 'utf8')
-    const data = JSON.parse(raw) as StoredAuth
+    const raw = await fs.readFile(authPath(), 'utf8');
+    const data = JSON.parse(raw) as StoredAuth;
     if (!safeStorage.isEncryptionAvailable()) {
-      logger.warn('safeStorage unavailable; ignoring stored Nevermind token')
-      return null
+      logger.warn('safeStorage unavailable; ignoring stored Nevermind token');
+      return null;
     }
-    const token = safeStorage.decryptString(Buffer.from(data.encryptedToken, 'base64'))
-    const baseUrl = normalizedBaseUrl(data.baseUrl)
-    if (baseUrl !== data.baseUrl) logger.warn('normalized stored Nevermind auth base URL', { from: data.baseUrl, to: baseUrl })
-    return { token, email: data.email, role: data.role, baseUrl }
+    const token = safeStorage.decryptString(
+      Buffer.from(data.encryptedToken, 'base64'),
+    );
+    const baseUrl = normalizedBaseUrl(data.baseUrl);
+    if (baseUrl !== data.baseUrl)
+      logger.warn('normalized stored Nevermind auth base URL', {
+        from: data.baseUrl,
+        to: baseUrl,
+      });
+    return { token, email: data.email, role: data.role, baseUrl };
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') logger.warn('Failed to read nevermind auth', err as Error)
-    return null
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT')
+      logger.warn('Failed to read nevermind auth', err as Error);
+    return null;
   }
 }
 
 async function load() {
-  if (loadPromise) return loadPromise
-  loadPromise = readFromDisk().then((auth) => { cached = auth; return auth })
-  return loadPromise
+  if (loadPromise) return loadPromise;
+  loadPromise = readFromDisk().then((auth) => {
+    cached = auth;
+    return auth;
+  });
+  return loadPromise;
 }
 
 export async function getNevermindAuth(): Promise<AuthSnapshot> {
-  return load()
+  return load();
 }
 
-async function persist({ token, email, role, baseUrl }: { token: string; email: string; role: string; baseUrl: string }) {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('safeStorage encryption unavailable')
+async function persist({
+  token,
+  email,
+  role,
+  baseUrl,
+}: {
+  token: string;
+  email: string;
+  role: string;
+  baseUrl: string;
+}) {
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error('safeStorage encryption unavailable');
   const payload: StoredAuth = {
     encryptedToken: safeStorage.encryptString(token).toString('base64'),
     email,
     role,
     baseUrl,
     connectedAt: new Date().toISOString(),
-  }
-  await fs.writeFile(authPath(), JSON.stringify(payload, null, 2), { mode: 0o600 })
-  cached = { token, email, role, baseUrl }
-  loadPromise = Promise.resolve(cached)
-  return cached
+  };
+  await fs.writeFile(authPath(), JSON.stringify(payload, null, 2), {
+    mode: 0o600,
+  });
+  cached = { token, email, role, baseUrl };
+  loadPromise = Promise.resolve(cached);
+  return cached;
 }
 
 export async function clearNevermindAuth() {
-  await fs.rm(authPath(), { force: true })
-  cached = null
-  loadPromise = Promise.resolve(null)
+  await fs.rm(authPath(), { force: true });
+  cached = null;
+  loadPromise = Promise.resolve(null);
 }
 
 export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {
-  const current = await load()
-  let revoked = false
+  const current = await load();
+  let revoked = false;
   if (current) {
     try {
       const res = await fetch(`${current.baseUrl}/api/tokens/current`, {
         method: 'DELETE',
-        headers: nevermindDesktopHeaders({ Authorization: `Bearer ${current.token}`, Origin: current.baseUrl }),
-      })
-      revoked = res.ok || res.status === 401
-      if (!revoked) logger.warn(`token revoke returned ${res.status}`)
+        headers: nevermindDesktopHeaders({
+          Authorization: `Bearer ${current.token}`,
+          Origin: current.baseUrl,
+        }),
+      });
+      revoked = res.ok || res.status === 401;
+      if (!revoked) logger.warn(`token revoke returned ${res.status}`);
     } catch (err) {
-      logger.warn('token revoke failed', err as Error)
+      logger.warn('token revoke failed', err as Error);
     }
   }
-  await clearNevermindAuth()
-  return { revoked }
+  await clearNevermindAuth();
+  return { revoked };
 }
 
 export class NevermindAuthRequiredError extends Error {
   constructor() {
-    super('Sign in to Nevermind to use AI features.')
-    this.name = 'NevermindAuthRequiredError'
+    super('Sign in to Nevermind to use AI features.');
+    this.name = 'NevermindAuthRequiredError';
   }
 }
 
 export function getDefaultNevermindBaseUrl() {
-  return DEFAULT_BASE_URL
+  return DEFAULT_BASE_URL;
 }
 
 function defaultDeviceLabel() {
-  return `${os.hostname()} (${process.platform})`
+  return `${os.hostname()} (${process.platform})`;
 }
 
 async function postJson(url: string, body: unknown) {
@@ -131,46 +179,75 @@ async function postJson(url: string, body: unknown) {
     method: 'POST',
     headers: nevermindDesktopHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
-  })
+  });
 }
 
 export function isSigningIn() {
-  return Boolean(activeSignIn)
+  return Boolean(activeSignIn);
 }
 
-export async function signInToNevermind({ baseUrl = DEFAULT_BASE_URL, label = defaultDeviceLabel() }: { baseUrl?: string; label?: string } = {}): Promise<SignInResult> {
-  if (activeSignIn) return activeSignIn
-  const trimmedBase = normalizedBaseUrl(baseUrl)
+export async function signInToNevermind({
+  baseUrl = DEFAULT_BASE_URL,
+  label = defaultDeviceLabel(),
+}: {
+  baseUrl?: string;
+  label?: string;
+} = {}): Promise<SignInResult> {
+  if (activeSignIn) return activeSignIn;
+  const trimmedBase = normalizedBaseUrl(baseUrl);
   activeSignIn = (async (): Promise<SignInResult> => {
     try {
-      await checkNevermindCompatibility(trimmedBase)
-      const initRes = await postJson(`${trimmedBase}/api/auth/device/initiate`, { label })
-      if (!initRes.ok) return { ok: false, error: `initiate failed: ${initRes.status}` }
-      const { code, verifyUrl, expiresAt, pollIntervalMs } = (await initRes.json()) as { code: string; verifyUrl: string; expiresAt: string; pollIntervalMs?: number }
-      if (!await openExternalUrl(verifyUrl)) return { ok: false, error: 'unsafe verification URL' }
-      const deadline = new Date(expiresAt).getTime()
-      const interval = Math.max(1000, pollIntervalMs ?? 2000)
+      await checkNevermindCompatibility(trimmedBase);
+      const initRes = await postJson(
+        `${trimmedBase}/api/auth/device/initiate`,
+        { label },
+      );
+      if (!initRes.ok)
+        return { ok: false, error: `initiate failed: ${initRes.status}` };
+      const { code, verifyUrl, expiresAt, pollIntervalMs } =
+        (await initRes.json()) as {
+          code: string;
+          verifyUrl: string;
+          expiresAt: string;
+          pollIntervalMs?: number;
+        };
+      if (!(await openExternalUrl(verifyUrl)))
+        return { ok: false, error: 'unsafe verification URL' };
+      const deadline = new Date(expiresAt).getTime();
+      const interval = Math.max(1000, pollIntervalMs ?? 2000);
       while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, interval))
-        const res = await postJson(`${trimmedBase}/api/auth/device/exchange`, { code })
-        if (res.status === 410) return { ok: false, error: 'code expired or already used' }
+        await new Promise((r) => setTimeout(r, interval));
+        const res = await postJson(`${trimmedBase}/api/auth/device/exchange`, {
+          code,
+        });
+        if (res.status === 410)
+          return { ok: false, error: 'code expired or already used' };
         if (!res.ok) {
-          logger.warn(`device exchange returned ${res.status}`)
-          continue
+          logger.warn(`device exchange returned ${res.status}`);
+          continue;
         }
-        const data = (await res.json()) as { status: string; token?: string; user?: { email: string; role: string } }
+        const data = (await res.json()) as {
+          status: string;
+          token?: string;
+          user?: { email: string; role: string };
+        };
         if (data.status === 'ok' && data.token && data.user) {
-          const auth = await persist({ token: data.token, email: data.user.email, role: data.user.role, baseUrl: trimmedBase })
-          return { ok: true, auth }
+          const auth = await persist({
+            token: data.token,
+            email: data.user.email,
+            role: data.user.role,
+            baseUrl: trimmedBase,
+          });
+          return { ok: true, auth };
         }
       }
-      return { ok: false, error: 'timed out waiting for approval' }
+      return { ok: false, error: 'timed out waiting for approval' };
     } catch (err) {
-      logger.error('signInToNevermind failed', err as Error)
-      return { ok: false, error: (err as Error).message }
+      logger.error('signInToNevermind failed', err as Error);
+      return { ok: false, error: (err as Error).message };
     } finally {
-      activeSignIn = null
+      activeSignIn = null;
     }
-  })()
-  return activeSignIn
+  })();
+  return activeSignIn;
 }

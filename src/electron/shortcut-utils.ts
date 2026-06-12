@@ -1,4 +1,4 @@
-import { isReservedPaletteAccelerator } from './os'
+import { isReservedPaletteAccelerator } from './os';
 
 const SHORTCUT_SYMBOLS: Record<string, string> = {
   Command: '⌘',
@@ -12,10 +12,13 @@ const SHORTCUT_SYMBOLS: Record<string, string> = {
   Return: '↵',
   Escape: 'Esc',
   Tab: 'Tab',
-}
+};
 
 export function formatShortcut(accelerator: unknown) {
-  return String(accelerator || '').split('+').map((part) => SHORTCUT_SYMBOLS[part] || part).join('')
+  return String(accelerator || '')
+    .split('+')
+    .map((part) => SHORTCUT_SYMBOLS[part] || part)
+    .join('');
 }
 
 export function normalizeAccelerator(value: unknown) {
@@ -24,19 +27,19 @@ export function normalizeAccelerator(value: unknown) {
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => {
-      const normalized = part.toLowerCase()
-      if (['cmd', 'command', '⌘'].includes(normalized)) return 'Command'
-      if (['ctrl', 'control', '^'].includes(normalized)) return 'Control'
-      if (['option', 'opt', 'alt', '⌥'].includes(normalized)) return 'Alt'
-      if (['shift', '⇧'].includes(normalized)) return 'Shift'
-      if (['enter', 'return', '↵'].includes(normalized)) return 'Enter'
-      if (['esc', 'escape'].includes(normalized)) return 'Escape'
-      if (normalized === 'space') return 'Space'
-      return part.length === 1 ? part.toUpperCase() : part
+      const normalized = part.toLowerCase();
+      if (['cmd', 'command', '⌘'].includes(normalized)) return 'Command';
+      if (['ctrl', 'control', '^'].includes(normalized)) return 'Control';
+      if (['option', 'opt', 'alt', '⌥'].includes(normalized)) return 'Alt';
+      if (['shift', '⇧'].includes(normalized)) return 'Shift';
+      if (['enter', 'return', '↵'].includes(normalized)) return 'Enter';
+      if (['esc', 'escape'].includes(normalized)) return 'Escape';
+      if (normalized === 'space') return 'Space';
+      return part.length === 1 ? part.toUpperCase() : part;
     })
-    .join('+')
+    .join('+');
 }
 
 export function isSpotlightAccelerator(accelerator: unknown) {
-  return isReservedPaletteAccelerator(normalizeAccelerator(accelerator))
+  return isReservedPaletteAccelerator(normalizeAccelerator(accelerator));
 }

@@ -28,6 +28,9 @@ jobs:
           mise exec -- pnpm install --frozen-lockfile
           mise exec -- pnpm -C backend install --frozen-lockfile
 
+      - name: Biome check
+        run: mise exec -- pnpm check
+
       - name: Test app
         run: mise exec -- pnpm test
 

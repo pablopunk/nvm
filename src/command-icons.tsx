@@ -1,8 +1,8 @@
-import * as LucideIcons from 'lucide-react'
-import type { ComponentType } from 'react'
-import type { CommandAction, CommandItem } from './model'
+import * as LucideIcons from 'lucide-react';
+import type { ComponentType } from 'react';
+import type { CommandAction, CommandItem } from './model';
 
-type LucideComponent = ComponentType<{ size?: number; className?: string }>
+type LucideComponent = ComponentType<{ size?: number; className?: string }>;
 
 const curatedIconAliases = {
   app: 'AppWindow',
@@ -22,13 +22,16 @@ const curatedIconAliases = {
   sparkles: 'Sparkles',
   tag: 'Tag',
   trash: 'Trash2',
-} as const
+} as const;
 
 export const iconFor = Object.fromEntries(
-  Object.entries(curatedIconAliases).map(([name, lucideName]) => [name, LucideIcons[lucideName] as LucideComponent]),
-) as Record<keyof typeof curatedIconAliases, LucideComponent>
+  Object.entries(curatedIconAliases).map(([name, lucideName]) => [
+    name,
+    LucideIcons[lucideName] as LucideComponent,
+  ]),
+) as Record<keyof typeof curatedIconAliases, LucideComponent>;
 
-export type CommandIconName = string
+export type CommandIconName = string;
 
 function pascalCaseIconName(name: string) {
   return name
@@ -36,36 +39,70 @@ function pascalCaseIconName(name: string) {
     .split(/[^a-zA-Z0-9]+/)
     .filter(Boolean)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join('')
+    .join('');
 }
 
-function lucideIcon(name: unknown, fallback: keyof typeof curatedIconAliases = 'sparkles') {
-  const requested = String(name || '').trim()
-  const alias = curatedIconAliases[requested as keyof typeof curatedIconAliases]
-  const candidates = [alias, requested, pascalCaseIconName(requested), `${pascalCaseIconName(requested)}Icon`].filter(Boolean)
+function lucideIcon(
+  name: unknown,
+  fallback: keyof typeof curatedIconAliases = 'sparkles',
+) {
+  const requested = String(name || '').trim();
+  const alias =
+    curatedIconAliases[requested as keyof typeof curatedIconAliases];
+  const candidates = [
+    alias,
+    requested,
+    pascalCaseIconName(requested),
+    `${pascalCaseIconName(requested)}Icon`,
+  ].filter(Boolean);
   for (const candidate of candidates) {
-    const Icon = (LucideIcons as Record<string, unknown>)[candidate]
-    if (typeof Icon === 'object' || typeof Icon === 'function') return Icon as LucideComponent
+    const Icon = (LucideIcons as Record<string, unknown>)[candidate];
+    if (typeof Icon === 'object' || typeof Icon === 'function')
+      return Icon as LucideComponent;
   }
-  return iconFor[fallback]
+  return iconFor[fallback];
 }
 
 export function iconForAction(action: CommandAction) {
-  if (action.type === 'copyText' || action.type === 'copyImage' || action.type === 'pasteText') return <LucideIcons.Clipboard size={18} />
-  if (action.type === 'trash' || action.type === 'removeClipboardHistory') return <LucideIcons.Trash2 size={18} />
-  if (action.type === 'revealPath' || action.type === 'openPath' || action.type === 'quickLook' || action.type === 'openWith') return <LucideIcons.Folder size={18} />
-  if (action.type === 'nativeAction') return <LucideIcons.Sparkles size={18} />
-  return <LucideIcons.Globe size={18} />
+  if (
+    action.type === 'copyText' ||
+    action.type === 'copyImage' ||
+    action.type === 'pasteText'
+  )
+    return <LucideIcons.Clipboard size={18} />;
+  if (action.type === 'trash' || action.type === 'removeClipboardHistory')
+    return <LucideIcons.Trash2 size={18} />;
+  if (
+    action.type === 'revealPath' ||
+    action.type === 'openPath' ||
+    action.type === 'quickLook' ||
+    action.type === 'openWith'
+  )
+    return <LucideIcons.Folder size={18} />;
+  if (action.type === 'nativeAction') return <LucideIcons.Sparkles size={18} />;
+  return <LucideIcons.Globe size={18} />;
 }
 
 function imageSource(image: CommandItem['image']) {
-  if (!image) return ''
-  if (typeof image === 'string') return image
-  return image.dark || image.src || image.light || image.fallback || ''
+  if (!image) return '';
+  if (typeof image === 'string') return image;
+  return image.dark || image.src || image.light || image.fallback || '';
 }
 
-export function iconForItem(item: CommandItem, fallback: CommandIconName = 'sparkles') {
-  const Icon = lucideIcon(item.icon, fallback as keyof typeof curatedIconAliases)
-  const image = imageSource(item.image)
-  return image ? <span className="thumbnailIcon"><img src={image} alt="" /></span> : <Icon size={18} />
+export function iconForItem(
+  item: CommandItem,
+  fallback: CommandIconName = 'sparkles',
+) {
+  const Icon = lucideIcon(
+    item.icon,
+    fallback as keyof typeof curatedIconAliases,
+  );
+  const image = imageSource(item.image);
+  return image ? (
+    <span className="thumbnailIcon">
+      <img src={image} alt="" />
+    </span>
+  ) : (
+    <Icon size={18} />
+  );
 }

@@ -10,12 +10,19 @@ if (!fs.existsSync(apiV2Dir)) {
 
 const migrationDoc = path.join(process.cwd(), 'src/docs/backend-api-v2.md');
 if (!fs.existsSync(migrationDoc)) {
-  console.error('/api/v2 routes require src/docs/backend-api-v2.md with breaking-change and sunset details.');
+  console.error(
+    '/api/v2 routes require src/docs/backend-api-v2.md with breaking-change and sunset details.',
+  );
   process.exit(1);
 }
 
 const text = fs.readFileSync(migrationDoc, 'utf8').toLowerCase();
-for (const required of ['breaking change', 'sunset', 'client count', 'update message']) {
+for (const required of [
+  'breaking change',
+  'sunset',
+  'client count',
+  'update message',
+]) {
   if (!text.includes(required)) {
     console.error(`src/docs/backend-api-v2.md must mention: ${required}`);
     process.exit(1);
