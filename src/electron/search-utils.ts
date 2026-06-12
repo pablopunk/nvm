@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { calculate, calculateDetailed, calculateRateResult, parseRateExpression } from './calculator'
+import { scoreNormalizedNonEmpty } from '../search-ranking'
 
 export { calculate, calculateDetailed, calculateRateResult, parseRateExpression }
 
@@ -11,19 +12,10 @@ export function hashValue(value: unknown) {
   return crypto.createHash('sha1').update(String(value)).digest('hex')
 }
 
-export function scoreNormalized(value: unknown, q: string) {
+export function scoreNormalized(value: unknown, q: string): number {
   if (!q) return 0
   const v = normalize(value)
-  if (v === q) return 100
-  if (v.startsWith(q)) return 80
-  if (v.includes(q)) return 50
-  let pos = 0
-  for (const ch of q) {
-    pos = v.indexOf(ch, pos)
-    if (pos === -1) return 0
-    pos += 1
-  }
-  return 20
+  return scoreNormalizedNonEmpty(v, q)
 }
 
 export function score(value: unknown, query: unknown) {

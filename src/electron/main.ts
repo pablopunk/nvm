@@ -1361,13 +1361,12 @@ async function searchActions(query, options: any = {}) {
       }
     })
 
-    const sorted = measureDebugPerformanceSync('search.sort-prepare-clone', { queryLength: q.length, resultCount: results.length }, () => results
+    const sorted = measureDebugPerformanceSync('search.sort-prepare', { queryLength: q.length, resultCount: results.length }, () => results
       .sort((a, b) => {
         return b.score - a.score || b.lastUsed - a.lastUsed || a.title.localeCompare(b.title)
       })
       .slice(0, 30)
       .map(prepareRootActionForRenderer))
-    structuredClone(sorted)
     markDebugPerformance('search.actions.result', { queryLength: q.length, contributedCount: contributedItems.length, rankedCount: results.length, resultCount: sorted.length })
     return sorted
   })
