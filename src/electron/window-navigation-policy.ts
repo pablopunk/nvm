@@ -1,49 +1,85 @@
-import { fileURLToPath } from 'node:url'
-import { openExternalUrl } from './url-utils'
+import { fileURLToPath } from 'node:url';
+import { openExternalUrl } from './url-utils';
 
-type WindowOpenHandlerDetails = { url: string }
-type NavigationEvent = { preventDefault: () => void }
+type WindowOpenHandlerDetails = { url: string };
+type NavigationEvent = { preventDefault: () => void };
 type WebContentsWithNavigationPolicy = {
-  setWindowOpenHandler: (handler: (details: WindowOpenHandlerDetails) => { action: 'allow' | 'deny' }) => void
-  on: (event: 'will-navigate', listener: (event: NavigationEvent, url: string) => void) => void
-}
+  setWindowOpenHandler: (
+    handler: (details: WindowOpenHandlerDetails) => {
+      action: 'allow' | 'deny';
+    },
+  ) => void;
+  on: (
+    event: 'will-navigate',
+    listener: (event: NavigationEvent, url: string) => void,
+  ) => void;
+};
 
-type WindowWithNavigationPolicy = { webContents: WebContentsWithNavigationPolicy }
+type WindowWithNavigationPolicy = {
+  webContents: WebContentsWithNavigationPolicy;
+};
 
 function isTrustedFilePage(url: string, rendererIndexPath?: string) {
-  if (!rendererIndexPath) return false
+  if (!rendererIndexPath) return false;
   try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'file:' && fileURLToPath(parsed) === rendererIndexPath
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'file:' && fileURLToPath(parsed) === rendererIndexPath
+    );
   } catch {
-    return false
+    return false;
   }
 }
 
-function isTrustedDevRendererPage(url: string, rendererUrl: string, requiresExtensionWindowId?: string) {
-  if (!rendererUrl) return false
+function isTrustedDevRendererPage(
+  url: string,
+  rendererUrl: string,
+  requiresExtensionWindowId?: string,
+) {
+  if (!rendererUrl) return false;
   try {
-    const parsed = new URL(url)
-    const expected = new URL(rendererUrl)
-    if (parsed.origin !== expected.origin || parsed.pathname !== expected.pathname) return false
-    if (requiresExtensionWindowId === undefined) return true
-    return parsed.searchParams.get('extensionWindowId') === requiresExtensionWindowId
+    const parsed = new URL(url);
+    const expected = new URL(rendererUrl);
+    if (
+      parsed.origin !== expected.origin ||
+      parsed.pathname !== expected.pathname
+    )
+      return false;
+    if (requiresExtensionWindowId === undefined) return true;
+    return (
+      parsed.searchParams.get('extensionWindowId') === requiresExtensionWindowId
+    );
   } catch {
-    return false
+    return false;
   }
 }
 
-export function isTrustedAppPage(url: string, isDev: boolean, rendererUrl = process.env.ELECTRON_RENDERER_URL || '', rendererIndexPath?: string) {
-  return isTrustedFilePage(url, rendererIndexPath) || (isDev && isTrustedDevRendererPage(url, rendererUrl))
+export function isTrustedAppPage(
+  url: string,
+  isDev: boolean,
+  rendererUrl = process.env.ELECTRON_RENDERER_URL || '',
+  rendererIndexPath?: string,
+) {
+  return (
+    isTrustedFilePage(url, rendererIndexPath) ||
+    (isDev && isTrustedDevRendererPage(url, rendererUrl))
+  );
 }
 
-export function isTrustedExtensionWindowPage(url: string, id: string, isDev: boolean, rendererUrl?: string, rendererIndexPath?: string) {
-  if (isDev && isTrustedDevRendererPage(url, rendererUrl || '', id)) return true
-  if (!isTrustedFilePage(url, rendererIndexPath)) return false
+export function isTrustedExtensionWindowPage(
+  url: string,
+  id: string,
+  isDev: boolean,
+  rendererUrl?: string,
+  rendererIndexPath?: string,
+) {
+  if (isDev && isTrustedDevRendererPage(url, rendererUrl || '', id))
+    return true;
+  if (!isTrustedFilePage(url, rendererIndexPath)) return false;
   try {
-    return new URL(url).searchParams.get('extensionWindowId') === id
+    return new URL(url).searchParams.get('extensionWindowId') === id;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -53,12 +89,12 @@ export function installExternalNavigationPolicy(
   openExternal: (url: string) => Promise<boolean> = openExternalUrl,
 ) {
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void openExternal(url).catch(() => false)
-    return { action: 'deny' }
-  })
+    void openExternal(url).catch(() => false);
+    return { action: 'deny' };
+  });
   win.webContents.on('will-navigate', (event, url) => {
-    if (isTrustedNavigation(url)) return
-    event.preventDefault()
-    void openExternal(url).catch(() => false)
-  })
+    if (isTrustedNavigation(url)) return;
+    event.preventDefault();
+    void openExternal(url).catch(() => false);
+  });
 }

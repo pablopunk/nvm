@@ -1,6 +1,6 @@
-import { app } from 'electron'
+import { app } from 'electron';
 
-export const NEVERMIND_DESKTOP_API_VERSION = '1'
+export const NEVERMIND_DESKTOP_API_VERSION = '1';
 
 export function nevermindDesktopHeaders(headers: Record<string, string> = {}) {
   return {
@@ -10,5 +10,5 @@ export function nevermindDesktopHeaders(headers: Record<string, string> = {}) {
     'X-Nevermind-API-Version': NEVERMIND_DESKTOP_API_VERSION,
     'X-Nevermind-Platform': process.platform,
     'X-Nevermind-Arch': process.arch,
-  }
+  };
 }

@@ -14,7 +14,9 @@ function walk(dir) {
 
 const files = walk(root).filter((file) => file.endsWith('.json'));
 if (files.length === 0) {
-  console.error('No backend contract fixtures found under backend/src/fixtures/contracts');
+  console.error(
+    'No backend contract fixtures found under backend/src/fixtures/contracts',
+  );
   process.exit(1);
 }
 
@@ -23,16 +25,27 @@ for (const file of files) {
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (error) {
-    console.error(`Invalid JSON fixture: ${path.relative(process.cwd(), file)}`);
+    console.error(
+      `Invalid JSON fixture: ${path.relative(process.cwd(), file)}`,
+    );
     console.error(error);
     process.exit(1);
   }
 
   const relative = path.relative(process.cwd(), file);
   if (relative.endsWith('compatibility-manifest.json')) {
-    for (const key of ['backend', 'api', 'desktop', 'client', 'features', 'notices']) {
+    for (const key of [
+      'backend',
+      'api',
+      'desktop',
+      'client',
+      'features',
+      'notices',
+    ]) {
       if (!(key in parsed)) {
-        console.error(`Compatibility manifest fixture missing ${key}: ${relative}`);
+        console.error(
+          `Compatibility manifest fixture missing ${key}: ${relative}`,
+        );
         process.exit(1);
       }
     }
@@ -44,4 +57,6 @@ for (const file of files) {
   }
 }
 
-console.log(`Backend contract fixture checks passed (${files.length} fixtures)`);
+console.log(
+  `Backend contract fixture checks passed (${files.length} fixtures)`,
+);

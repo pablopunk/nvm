@@ -1,24 +1,31 @@
 export type ExtensionUiApiDeps = {
-  buildPreviewItemAction: (item: unknown) => unknown
-  progressView: (input?: unknown) => unknown
-  buildConfirmAction: (input?: unknown) => unknown
-}
+  buildPreviewItemAction: (item: unknown) => unknown;
+  progressView: (input?: unknown) => unknown;
+  buildConfirmAction: (input?: unknown) => unknown;
+};
 
 function isPreviewableItem(value: any) {
-  return value?.kind && ['clipboard', 'image', 'video', 'file', 'text'].includes(value.kind)
+  return (
+    value?.kind &&
+    ['clipboard', 'image', 'video', 'file', 'text'].includes(value.kind)
+  );
 }
 
 function isFilePreviewInput(value: any) {
-  return value?.path || value?.fileUrl
+  return value?.path || value?.fileUrl;
 }
 
-export function createExtensionUiApi({ buildPreviewItemAction, progressView, buildConfirmAction }: ExtensionUiApiDeps) {
+export function createExtensionUiApi({
+  buildPreviewItemAction,
+  progressView,
+  buildConfirmAction,
+}: ExtensionUiApiDeps) {
   return {
     list: (view: any) => ({ ...view, type: 'list' }),
     grid: (view: any) => ({ ...view, type: 'grid' }),
     preview: (fileOrView: any, view: any = {}) => {
       if (isFilePreviewInput(fileOrView)) {
-        const file = fileOrView
+        const file = fileOrView;
         return {
           ...view,
           type: 'preview',
@@ -28,23 +35,43 @@ export function createExtensionUiApi({ buildPreviewItemAction, progressView, bui
           content: view.content || file.displayPath || '',
           image: file.thumbnailUrl || file.url,
           video: file.videoUrl || undefined,
-        }
+        };
       }
-      if (isPreviewableItem(fileOrView)) return buildPreviewItemAction(fileOrView)
-      return { ...fileOrView, type: 'preview' }
+      if (isPreviewableItem(fileOrView))
+        return buildPreviewItemAction(fileOrView);
+      return { ...fileOrView, type: 'preview' };
     },
     chat: (view: any) => ({ ...view, type: 'chat' }),
     form: (view: any) => ({ ...view, type: 'form' }),
     editor: (view: any) => ({ ...view, type: 'editor' }),
     progress: (input: any = {}) => progressView(input),
     confirm: (input: any = {}) => buildConfirmAction(input),
-    toast: (input: any = {}) => ({ toast: { message: String(input?.message || ''), tone: input?.tone || 'default' } }),
+    toast: (input: any = {}) => ({
+      toast: {
+        message: String(input?.message || ''),
+        tone: input?.tone || 'default',
+      },
+    }),
     webview: (view: any) => ({ ...view, type: 'webview' }),
-    camera: (view = {}) => ({ title: 'Camera', size: 'large', muted: true, ...view, type: 'camera' }),
+    camera: (view = {}) => ({
+      title: 'Camera',
+      size: 'large',
+      muted: true,
+      ...view,
+      type: 'camera',
+    }),
     item: (item: any) => item,
     actions: (actions: any) => actions,
-    empty: (title = 'Nothing here', subtitle = '') => ({ type: 'preview', title, content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}` }),
+    empty: (title = 'Nothing here', subtitle = '') => ({
+      type: 'preview',
+      title,
+      content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}`,
+    }),
     loading: (title = 'Loading…') => progressView({ title, label: title }),
-    error: (title = 'Something went wrong', message = '') => ({ type: 'preview', title, content: `# ${title}${message ? `\n\n${message}` : ''}` }),
-  }
+    error: (title = 'Something went wrong', message = '') => ({
+      type: 'preview',
+      title,
+      content: `# ${title}${message ? `\n\n${message}` : ''}`,
+    }),
+  };
 }
