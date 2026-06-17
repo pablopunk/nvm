@@ -1,6 +1,6 @@
-import assert from 'node:assert/strict'
-import test from 'node:test'
-import { buildShortcutByAiChatIdMap } from './shortcut-ownership'
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
 
 test('buildShortcutByAiChatIdMap maps chats with exactly one shortcut and one generated file', () => {
   const map = buildShortcutByAiChatIdMap(
@@ -17,10 +17,10 @@ test('buildShortcutByAiChatIdMap maps chats with exactly one shortcut and one ge
       'chat-c': { files: ['c.ts'] },
     },
     (chat) => (chat as { files?: string[] } | undefined)?.files || [],
-  )
+  );
 
-  assert.deepEqual(Array.from(map.entries()), [['chat-a', 'Cmd+1']])
-})
+  assert.deepEqual(Array.from(map.entries()), [['chat-a', 'Cmd+1']]);
+});
 
 test('buildShortcutByAiChatIdMap ignores missing shortcut bindings and missing chats', () => {
   const map = buildShortcutByAiChatIdMap(
@@ -28,7 +28,7 @@ test('buildShortcutByAiChatIdMap ignores missing shortcut bindings and missing c
     { actionA: '' },
     {},
     () => ['file.ts'],
-  )
+  );
 
-  assert.deepEqual(Array.from(map.entries()), [])
-})
+  assert.deepEqual(Array.from(map.entries()), []);
+});

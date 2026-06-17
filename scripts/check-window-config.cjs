@@ -21,11 +21,8 @@ const OS_FILE = path.join(ROOT, 'src', 'electron', 'os.ts');
 const CONTRACTS = [
   {
     name: 'paletteBrowserWindowOptions',
-    required: [
-      "type: 'panel'",
-      'darwin',
-    ],
-    message: 'must return { type: \'panel\' } on darwin',
+    required: ["type: 'panel'", 'darwin'],
+    message: "must return { type: 'panel' } on darwin",
     docRef: 'src/docs/window-management.md:7',
   },
   {
@@ -37,15 +34,13 @@ const CONTRACTS = [
       'visibleOnFullScreen: true',
       'darwin',
     ],
-    message: 'must set always-on-top (screen-saver) and visible-on-all-workspaces on macOS',
+    message:
+      'must set always-on-top (screen-saver) and visible-on-all-workspaces on macOS',
     docRef: 'src/docs/window-management.md:7-10',
   },
   {
     name: 'prepareAppWindowPolicy',
-    required: [
-      "setActivationPolicy('accessory')",
-      'darwin',
-    ],
+    required: ["setActivationPolicy('accessory')", 'darwin'],
     message: 'must set activationPolicy to accessory on macOS',
     docRef: 'src/docs/window-management.md:8',
   },
@@ -71,7 +66,11 @@ function findFunctionSource(source, sf, name) {
 
   function visit(node) {
     // Named function: function applyPaletteWindowPolicy(...) { ... }
-    if (ts.isFunctionDeclaration(node) && node.name && node.name.text === name) {
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name &&
+      node.name.text === name
+    ) {
       found = { start: node.pos, end: node.end };
       return;
     }
@@ -103,7 +102,7 @@ function main() {
     if (!fnSource) {
       fail(
         `Function "${contract.name}" not found in ${relative(OS_FILE)}.\n` +
-        `  Contract: ${contract.message} (${contract.docRef})`
+          `  Contract: ${contract.message} (${contract.docRef})`,
       );
       continue;
     }
@@ -112,7 +111,7 @@ function main() {
       if (!fnSource.includes(required)) {
         fail(
           `"${required}" missing from ${contract.name}() in ${relative(OS_FILE)}.\n` +
-          `  Contract: ${contract.message} (${contract.docRef})`
+            `  Contract: ${contract.message} (${contract.docRef})`,
         );
       }
     }

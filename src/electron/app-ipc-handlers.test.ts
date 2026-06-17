@@ -1,11 +1,14 @@
-import assert from 'node:assert/strict'
-import test from 'node:test'
-import { registerAppIpcHandlers, type AppIpcHandlersDeps } from './app-ipc-handlers'
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  type AppIpcHandlersDeps,
+  registerAppIpcHandlers,
+} from './app-ipc-handlers';
 
 function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
-  const handles = new Map<string, (event: any, ...args: any[]) => unknown>()
-  const listeners = new Map<string, (...args: any[]) => unknown>()
-  const calls: string[] = []
+  const handles = new Map<string, (event: any, ...args: any[]) => unknown>();
+  const listeners = new Map<string, (...args: any[]) => unknown>();
+  const calls: string[] = [];
   const deps: AppIpcHandlersDeps = {
     ipcMain: {
       handle: (channel, handler) => handles.set(channel, handler),
@@ -62,59 +65,91 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     processPlatform: 'darwin',
     getCameraMediaAccessStatus: () => 'granted',
     extensionWindowManager: { getState: (id) => ({ id }) },
-    BrowserWindow: { fromWebContents: () => ({ close: () => calls.push('close-window') }) },
+    BrowserWindow: {
+      fromWebContents: () => ({ close: () => calls.push('close-window') }),
+    },
     logError: (message) => calls.push(`error:${message}`),
     logWarn: (message) => calls.push(`warn:${message}`),
     loggerDebug: (message) => calls.push(`debug:${message}`),
     ...overrides,
-  }
-  registerAppIpcHandlers(deps)
-  return { handles, listeners, calls }
+  };
+  registerAppIpcHandlers(deps);
+  return { handles, listeners, calls };
 }
 
 test('registerAppIpcHandlers registers core invoke handlers and drag listener', () => {
-  const { handles, listeners } = createDeps()
+  const { handles, listeners } = createDeps();
 
-  assert.equal(handles.has('actions:search'), true)
-  assert.equal(handles.has('view:refresh'), true)
-  assert.equal(handles.has('nevermind:auth-status'), true)
-  assert.equal(handles.has('camera:request-access'), true)
-  assert.equal(handles.has('logs:write'), true)
-  assert.equal(listeners.has('drag:file'), true)
-})
+  assert.equal(handles.has('actions:search'), true);
+  assert.equal(handles.has('view:refresh'), true);
+  assert.equal(handles.has('nevermind:auth-status'), true);
+  assert.equal(handles.has('camera:request-access'), true);
+  assert.equal(handles.has('logs:write'), true);
+  assert.equal(listeners.has('drag:file'), true);
+});
 
 test('registerAppIpcHandlers preserves palette, camera, and window behavior', async () => {
-  const { handles, calls } = createDeps()
+  const { handles, calls } = createDeps();
 
-  assert.deepEqual(await handles.get('palette:set-mode')?.({}, 'preview'), undefined)
-  assert.deepEqual(await handles.get('camera:request-access')?.({}), { ok: true, status: 'granted' })
-  assert.deepEqual(await handles.get('extension-window:get-state')?.({}, 'window-a'), { id: 'window-a' })
-  await handles.get('extension-window:close')?.({ sender: 'sender' })
+  assert.deepEqual(
+    await handles.get('palette:set-mode')?.({}, 'preview'),
+    undefined,
+  );
+  assert.deepEqual(await handles.get('camera:request-access')?.({}), {
+    ok: true,
+    status: 'granted',
+  });
+  assert.deepEqual(
+    await handles.get('extension-window:get-state')?.({}, 'window-a'),
+    { id: 'window-a' },
+  );
+  await handles.get('extension-window:close')?.({ sender: 'sender' });
 
-  assert.deepEqual(calls, ['mode:preview', 'center', 'close-window'])
-})
+  assert.deepEqual(calls, ['mode:preview', 'center', 'close-window']);
+});
 
 test('registerAppIpcHandlers redacts auth status logs and keeps sign-in failures stable', async () => {
-  const logEntries: unknown[] = []
+  const logEntries: unknown[] = [];
   const { handles } = createDeps({
-    getNevermindAuth: async () => ({ baseUrl: 'https://nvm.example', email: 'pablo@example.com' }),
+    getNevermindAuth: async () => ({
+      baseUrl: 'https://nvm.example',
+      email: 'pablo@example.com',
+    }),
     logInfo: (_message, data) => logEntries.push(data),
     signInToNevermind: async () => ({ ok: false, error: 'provider-secret' }),
-  })
+  });
 
-  assert.deepEqual(await handles.get('nevermind:auth-status')?.({}), { authed: true, email: 'pablo@example.com' })
-  assert.deepEqual(logEntries, [{ authed: true }])
-  assert.deepEqual(await handles.get('nevermind:sign-in')?.({}), { ok: false, error: 'Unable to sign in' })
-})
+  assert.deepEqual(await handles.get('nevermind:auth-status')?.({}), {
+    authed: true,
+    email: 'pablo@example.com',
+  });
+  assert.deepEqual(logEntries, [{ authed: true }]);
+  assert.deepEqual(await handles.get('nevermind:sign-in')?.({}), {
+    ok: false,
+    error: 'Unable to sign in',
+  });
+});
 
 test('registerAppIpcHandlers handles auth status and sign in side effects', async () => {
   const { handles, calls } = createDeps({
-    getNevermindAuth: async () => ({ baseUrl: 'https://nvm.example', email: 'pablo@example.com' }),
-    signInToNevermind: async () => ({ ok: true, auth: { baseUrl: 'https://nvm.example', email: 'pablo@example.com' } }),
-  })
+    getNevermindAuth: async () => ({
+      baseUrl: 'https://nvm.example',
+      email: 'pablo@example.com',
+    }),
+    signInToNevermind: async () => ({
+      ok: true,
+      auth: { baseUrl: 'https://nvm.example', email: 'pablo@example.com' },
+    }),
+  });
 
-  assert.deepEqual(await handles.get('nevermind:auth-status')?.({}), { authed: true, email: 'pablo@example.com' })
-  assert.deepEqual(await handles.get('nevermind:sign-in')?.({}), { ok: true, email: 'pablo@example.com' })
+  assert.deepEqual(await handles.get('nevermind:auth-status')?.({}), {
+    authed: true,
+    email: 'pablo@example.com',
+  });
+  assert.deepEqual(await handles.get('nevermind:sign-in')?.({}), {
+    ok: true,
+    email: 'pablo@example.com',
+  });
   assert.deepEqual(calls, [
     'base:https://nvm.example',
     'warm:https://nvm.example',
@@ -123,5 +158,5 @@ test('registerAppIpcHandlers handles auth status and sign in side effects', asyn
     'warm:https://nvm.example',
     'invalidate',
     'broadcast-auth',
-  ])
-})
+  ]);
+});

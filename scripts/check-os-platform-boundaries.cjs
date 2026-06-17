@@ -8,9 +8,7 @@ const ROOT = process.cwd();
 const SRC = path.join(ROOT, 'src');
 
 /** Files where process.platform is always allowed. */
-const PLATFORM_ALLOWLIST = new Set([
-  'src/electron/os.ts',
-]);
+const PLATFORM_ALLOWLIST = new Set(['src/electron/os.ts']);
 
 /**
  * OS-specific UI labels that should not appear in renderer/shared code.
@@ -45,8 +43,10 @@ function relative(filePath) {
 }
 
 function isElectronFile(filePath) {
-  return filePath.startsWith(path.join(SRC, 'electron') + path.sep) ||
-         filePath === path.join(SRC, 'electron');
+  return (
+    filePath.startsWith(path.join(SRC, 'electron') + path.sep) ||
+    filePath === path.join(SRC, 'electron')
+  );
 }
 
 function isAllowedPlatformFile(filePath) {
@@ -60,7 +60,9 @@ function isRendererOrShared(filePath) {
   if (rel.endsWith('.d.ts')) return false;
   if (rel.startsWith('src/electron/')) return false;
   if (rel.startsWith('src/fixtures/')) return false;
-  return rel.startsWith('src/') && (rel.endsWith('.ts') || rel.endsWith('.tsx'));
+  return (
+    rel.startsWith('src/') && (rel.endsWith('.ts') || rel.endsWith('.tsx'))
+  );
 }
 
 // ── file walking ────────────────────────────────────────────────────────────
@@ -68,13 +70,23 @@ function isRendererOrShared(filePath) {
 function walkTsFiles(dir) {
   if (!fs.existsSync(dir)) return [];
   const results = [];
-  const skip = new Set(['node_modules', 'dist', '.git', 'backend', 'build', 'release']);
+  const skip = new Set([
+    'node_modules',
+    'dist',
+    '.git',
+    'backend',
+    'build',
+    'release',
+  ]);
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (skip.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...walkTsFiles(full));
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !entry.name.includes('.test.')) {
+    } else if (
+      /\.(ts|tsx)$/.test(entry.name) &&
+      !entry.name.includes('.test.')
+    ) {
       results.push(full);
     }
   }
@@ -93,13 +105,20 @@ function checkFile(filePath) {
     const line = lines[i];
     const lineNum = i + 1;
 
-    if (/\bprocess\.platform\b/.test(line) || /\bos\.platform\(\)\b/.test(line)) {
+    if (
+      /\bprocess\.platform\b/.test(line) ||
+      /\bos\.platform\(\)\b/.test(line)
+    ) {
       if (isAllowedPlatformFile(filePath)) continue;
 
       if (isElectronFile(filePath)) {
-        warn(`${rel}:${lineNum} — process.platform outside os.ts capability layer`);
+        warn(
+          `${rel}:${lineNum} — process.platform outside os.ts capability layer`,
+        );
       } else {
-        fail(`${rel}:${lineNum} — process.platform in renderer/shared code; use capability checks instead`);
+        fail(
+          `${rel}:${lineNum} — process.platform in renderer/shared code; use capability checks instead`,
+        );
       }
     }
   }
@@ -108,7 +127,9 @@ function checkFile(filePath) {
   if (isRendererOrShared(filePath)) {
     for (const label of OS_UI_LABELS) {
       if (source.includes(label)) {
-        warn(`${rel} — OS-specific label "${label}" in shared code; use OS capability labels instead`);
+        warn(
+          `${rel} — OS-specific label "${label}" in shared code; use OS capability labels instead`,
+        );
       }
     }
   }

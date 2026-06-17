@@ -25,18 +25,24 @@ function main() {
   const rel = relative(LOGGER_FILE);
 
   // 1. Log file name must be 'nevermind.log' (not the old debug.log)
-  if (source.includes("LOG_FILE_NAME = 'debug.log'") || !source.includes("LOG_FILE_NAME = 'nevermind.log'")) {
+  if (
+    source.includes("LOG_FILE_NAME = 'debug.log'") ||
+    !source.includes("LOG_FILE_NAME = 'nevermind.log'")
+  ) {
     fail(
       `${rel}: LOG_FILE_NAME must be 'nevermind.log'.\n` +
-      `  Per src/docs/logging.md, the canonical log file is nevermind.log in Electron's logs directory.`
+        `  Per src/docs/logging.md, the canonical log file is nevermind.log in Electron's logs directory.`,
     );
   }
 
   // 2. readRecentLogs must be bounded by MAX_RECENT_LIMIT
-  if (!source.includes('MAX_RECENT_LIMIT') || !source.includes('MAX_LOG_LINES')) {
+  if (
+    !source.includes('MAX_RECENT_LIMIT') ||
+    !source.includes('MAX_LOG_LINES')
+  ) {
     fail(
       `${rel}: readRecentLogs must enforce MAX_RECENT_LIMIT and MAX_LOG_LINES bounds.\n` +
-      `  Per src/docs/logging.md, logs must not include unbounded reads.`
+        `  Per src/docs/logging.md, logs must not include unbounded reads.`,
     );
   }
 
@@ -44,7 +50,7 @@ function main() {
   if (!source.includes('log[level](JSON.stringify(entry))')) {
     fail(
       `${rel}: log writes must go through JSON.stringify via electron-log.\n` +
-      `  Per src/docs/logging.md, production logs must be structured and bounded.`
+        `  Per src/docs/logging.md, production logs must be structured and bounded.`,
     );
   }
 
@@ -52,7 +58,7 @@ function main() {
   if (!source.includes('data instanceof Error')) {
     fail(
       `${rel}: serializeData must strip Error objects to name/message/stack only.\n` +
-      `  Per src/docs/logging.md, production logs must not include arbitrary secrets.`
+        `  Per src/docs/logging.md, production logs must not include arbitrary secrets.`,
     );
   }
 

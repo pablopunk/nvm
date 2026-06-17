@@ -1,24 +1,24 @@
 export type SettingDefinition =
   | {
-      id: 'paletteHotkey' | 'hyperKey'
-      title: string
-      description: string
-      icon: string
-      type: 'shortcut'
-      default: string
+      id: 'paletteHotkey' | 'hyperKey';
+      title: string;
+      description: string;
+      icon: string;
+      type: 'shortcut';
+      default: string;
     }
   | {
-      id: 'showClipboardInRoot' | 'startAtLogin'
-      title: string
-      description: string
-      icon: string
-      type: 'boolean'
-      default: boolean
-      capability?: string
-    }
+      id: 'showClipboardInRoot' | 'startAtLogin';
+      title: string;
+      description: string;
+      icon: string;
+      type: 'boolean';
+      default: boolean;
+      capability?: string;
+    };
 
-export type SettingId = SettingDefinition['id']
-export type SettingsState = Partial<Record<SettingId, string | boolean>>
+export type SettingId = SettingDefinition['id'];
+export type SettingsState = Partial<Record<SettingId, string | boolean>>;
 
 export const SETTING_DEFINITIONS: SettingDefinition[] = [
   {
@@ -54,19 +54,25 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     default: false,
     capability: 'launch-at-login',
   },
-]
+];
 
 export function settingDefinition(id: string) {
-  return SETTING_DEFINITIONS.find((entry) => entry.id === id)
+  return SETTING_DEFINITIONS.find((entry) => entry.id === id);
 }
 
-export function settingValue(settings: SettingsState | undefined, id: SettingId) {
-  const definition = settingDefinition(id)
-  if (!definition) return undefined
-  const stored = settings?.[id]
-  return stored === undefined ? definition.default : stored
+export function settingValue(
+  settings: SettingsState | undefined,
+  id: SettingId,
+) {
+  const definition = settingDefinition(id);
+  if (!definition) return undefined;
+  const stored = settings?.[id];
+  return stored === undefined ? definition.default : stored;
 }
 
-export function toggledSettingValue(definition: SettingDefinition, current: unknown) {
-  return definition.type === 'boolean' ? !current : current
+export function toggledSettingValue(
+  definition: SettingDefinition,
+  current: unknown,
+) {
+  return definition.type === 'boolean' ? !current : current;
 }
