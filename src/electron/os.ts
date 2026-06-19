@@ -300,15 +300,28 @@ async function scanMacApps() {
       .catch(() => []);
     await Promise.all(
       entries.map(async (entry) => {
-        if (!entry.isDirectory() || entry.name.startsWith('.')) return;
+        if (entry.name.startsWith('.')) return;
         const fullPath = path.join(dir, entry.name);
-        if (entry.name.endsWith('.app'))
-          return found.push({
-            id: fullPath,
-            name: entry.name.replace(/\.app$/i, ''),
-            path: fullPath,
-          });
-        if (depth > 0) await walk(fullPath, depth - 1);
+        if (entry.name.endsWith('.app')) {
+          try {
+            const st = await fs.stat(fullPath);
+            if (st.isDirectory())
+              return found.push({
+                id: fullPath,
+                name: entry.name.replace(/\.app$/i, ''),
+                path: fullPath,
+              });
+          } catch {
+            /* broken symlink or inaccessible, skip */
+          }
+          return;
+        }
+        try {
+          const st = await fs.stat(fullPath);
+          if (st.isDirectory() && depth > 0) await walk(fullPath, depth - 1);
+        } catch {
+          /* skip inaccessible entries */
+        }
       }),
     );
   }
