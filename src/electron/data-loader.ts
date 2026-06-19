@@ -14,7 +14,12 @@ export function createDataLoaderHandle(
 }
 
 export function isLoaderHandle(value: unknown): value is DataLoaderHandle {
-  return Boolean(value && typeof value === 'object' && '_loader' in value);
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      '_loader' in value &&
+      typeof (value as Record<string, unknown>)._fn === 'function',
+  );
 }
 
 export function normalizeLoaderItems(items: unknown) {
@@ -41,6 +46,8 @@ export function createViewLoaderRegistry(deps: {
     if (!loader) return undefined;
     try {
       const items = await loader.fn();
+      // Guard: skip if a newer loader was registered while we awaited
+      if (registry.get(viewId) !== loader) return { ok: true as const, items };
       registry.delete(viewId);
       deps.sendHydrate(viewId, {
         items: Array.isArray(items)
@@ -50,8 +57,11 @@ export function createViewLoaderRegistry(deps: {
       });
       return { ok: true as const, items };
     } catch (error) {
-      if (!loader.retry) registry.delete(viewId);
       const message = error instanceof Error ? error.message : String(error);
+      // Guard: skip mutations if a newer loader was registered while we awaited
+      if (registry.get(viewId) !== loader)
+        return { ok: false as const, error: message, retry: loader.retry };
+      if (!loader.retry) registry.delete(viewId);
       deps.sendHydrate(viewId, { error: { message }, retry: loader.retry });
       deps.warn?.(viewId, message);
       return { ok: false as const, error: message, retry: loader.retry };

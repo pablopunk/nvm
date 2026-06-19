@@ -18,6 +18,12 @@ test('ctx.data.loader returns an opaque handle and normalizeLoaderItems strips i
   assert.equal(typeof loader._fn, 'function');
   assert.equal(loader._retry, true);
   assert.deepEqual(normalizeLoaderItems(loader), []);
+
+  // isLoaderHandle rejects objects missing _fn
+  assert.equal(isLoaderHandle({ _loader: true }), false);
+  assert.equal(isLoaderHandle({ _loader: true, _fn: 'not-a-function' }), false);
+  assert.equal(isLoaderHandle(null), false);
+  assert.equal(isLoaderHandle('string'), false);
 });
 
 test('loader registry hydrates normalized items', async () => {
@@ -116,4 +122,40 @@ test('loader errors preserve entry for retry and retry re-runs after re-registra
     { viewId: 'view:no-retry', message: 'boom' },
     { viewId: 'view:retry', message: 'retry me' },
   ]);
+});
+
+test('stale in-flight completions do not overwrite newer registrations', async () => {
+  const payloads: Array<Record<string, unknown>> = [];
+  const registry = createViewLoaderRegistry({
+    sendHydrate: (_viewId, payload) => payloads.push(payload),
+    normalizeItems: (items) => items,
+  });
+
+  // Register and spawn a slow loader
+  let slowResolve!: (items: any[]) => void;
+  const slowLoader = createDataLoaderHandle(
+    () =>
+      new Promise<any[]>((resolve) => {
+        slowResolve = resolve;
+      }),
+  );
+  registry.register('view:1', slowLoader, null);
+  const spawnPromise = registry.spawn('view:1');
+
+  // While the first spawn is in-flight, re-register with a new handle
+  const fastLoader = createDataLoaderHandle(async () => [{ id: 'fast' }]);
+  registry.register('view:1', fastLoader, null);
+
+  // Resolve the original (now-stale) loader
+  slowResolve([{ id: 'stale' }]);
+  await spawnPromise;
+
+  // The stale completion must not have hydrated or deleted the new entry
+  assert.equal(registry.has('view:1'), true);
+  assert.deepEqual(payloads, []);
+
+  // The new registration should still work
+  await registry.spawn('view:1');
+  assert.equal(registry.has('view:1'), false);
+  assert.deepEqual(payloads, [{ items: [{ id: 'fast' }], isLoading: false }]);
 });
