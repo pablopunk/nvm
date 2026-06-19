@@ -64,6 +64,13 @@ import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
+  createDataLoaderHandle,
+  createViewLoaderRegistry,
+  isLoaderHandle,
+  normalizeLoaderItems,
+  resolveLoaderEmptyView,
+} from './data-loader';
+import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
@@ -78,6 +85,13 @@ import {
 } from './extension-permissions';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
+import {
+  applyDateAdded,
+  findFilesNeedsStats,
+  includeDimensionsForFindOptions,
+  selectFindFiles,
+  sortFoundFiles,
+} from './file-index-sorting';
 import { JobRegistry, type JobSnapshot } from './jobs';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
@@ -292,49 +306,22 @@ let learningStore: LocalLearningStore | null = null;
 const learningReviewJobs = new Map<string, Promise<void>>();
 let activeAiChatId: string | undefined;
 const draftAiChats = new Map<string, AnyRecord>();
-const viewLoaderRegistry = new Map<
-  string,
-  { fn: () => Promise<any[]>; retry: boolean; entry: any }
->();
-
-function isLoaderHandle(
-  value: unknown,
-): value is { _loader: true; _fn: () => Promise<any[]>; _retry: boolean } {
-  return Boolean(value && typeof value === 'object' && '_loader' in value);
-}
-
-function spawnViewLoader(
-  viewId: string,
-  loader: { fn: () => Promise<any[]>; retry: boolean; entry: any },
-) {
-  const send = (payload: Record<string, unknown>) =>
-    paletteWindow.win?.webContents.send('view:hydrate', { viewId, ...payload });
-  loader
-    .fn()
-    .then((items) => {
-      viewLoaderRegistry.delete(viewId);
-      const normalized = Array.isArray(items)
-        ? normalizeViewItems(items, loader.entry)
-        : [];
-      send({ items: normalized, isLoading: false });
-    })
-    .catch((error) => {
-      viewLoaderRegistry.delete(viewId);
-      const message = error instanceof Error ? error.message : String(error);
-      send({ error: { message }, retry: loader.retry });
-      logWarn(
-        'view.loader.failed',
-        { viewId, error: message },
-        { source: 'host', scope: 'extension' },
-      );
-    });
-}
+const viewLoaderRegistry = createViewLoaderRegistry({
+  sendHydrate: (viewId, payload) =>
+    paletteWindow.win?.webContents.send('view:hydrate', { viewId, ...payload }),
+  normalizeItems: (items, entry) => normalizeViewItems(items, entry),
+  warn: (viewId, message) =>
+    logWarn(
+      'view.loader.failed',
+      { viewId, error: message },
+      { source: 'host', scope: 'extension' },
+    ),
+});
 
 function spawnPendingViewLoaders(result: any) {
   const viewId = result?.view?.id;
-  if (viewId && viewLoaderRegistry.has(viewId)) {
-    spawnViewLoader(viewId, viewLoaderRegistry.get(viewId)!);
-  }
+  if (viewId && viewLoaderRegistry.has(viewId))
+    viewLoaderRegistry.spawn(viewId);
 }
 let didRunQuitCleanup = false;
 let userState: AnyRecord = {
@@ -2658,15 +2645,9 @@ function normalizeView(view, entry) {
 
   // Detect and register data loader before stripping it from items
   const loaderHandle = isLoaderHandle(view.items) ? view.items : undefined;
-  if (loaderHandle) {
-    viewLoaderRegistry.set(viewId, {
-      fn: loaderHandle._fn,
-      retry: loaderHandle._retry,
-      entry,
-    });
-  }
+  if (loaderHandle) viewLoaderRegistry.register(viewId, loaderHandle, entry);
 
-  const items = normalizeViewItems(loaderHandle ? [] : view.items, entry);
+  const items = normalizeViewItems(normalizeLoaderItems(view.items), entry);
   const sections = Array.isArray(view.sections)
     ? view.sections.map((section) => ({
         ...section,
@@ -2674,10 +2655,7 @@ function normalizeView(view, entry) {
       }))
     : view.sections;
 
-  const emptyView =
-    loaderHandle && !view.emptyView
-      ? { title: 'No items', subtitle: '' }
-      : view.emptyView;
+  const emptyView = resolveLoaderEmptyView(view.emptyView, loaderHandle);
 
   return {
     ...view,
@@ -3194,8 +3172,8 @@ async function executeViewAction(action, launchContext?: any) {
         | { kind?: string; viewId?: string }
         | undefined;
       if (native?.kind === 'view-hydrate-retry' && native.viewId) {
-        const loader = viewLoaderRegistry.get(native.viewId);
-        if (loader) spawnViewLoader(native.viewId, loader);
+        if (viewLoaderRegistry.has(native.viewId))
+          viewLoaderRegistry.retry(native.viewId);
         // Return a loading skeleton so the renderer replaces the error view
         return {
           view: {
@@ -3928,31 +3906,6 @@ function extensionsForFindOptions(options: any = {}) {
     : null;
 }
 
-function sortFoundFiles(files, options: any = {}) {
-  const sortBy = options.sortBy || options.sort || null;
-  if (!sortBy) return files;
-  const direction = options.order === 'asc' ? 1 : -1;
-  const field =
-    sortBy === 'recent' || sortBy === 'modified'
-      ? 'mtimeMs'
-      : sortBy === 'added'
-        ? 'dateAddedMs'
-        : sortBy === 'created'
-          ? 'birthtimeMs'
-          : sortBy === 'name'
-            ? 'name'
-            : sortBy === 'size'
-              ? 'size'
-              : sortBy;
-  return [...files].sort((a, b) => {
-    const av = a[field] || 0;
-    const bv = b[field] || 0;
-    if (typeof av === 'string' || typeof bv === 'string')
-      return direction * String(av).localeCompare(String(bv));
-    return direction * (av - bv);
-  });
-}
-
 function fileCandidate(fullPath, name = path.basename(fullPath)) {
   return {
     path: fullPath,
@@ -3984,14 +3937,10 @@ async function attachFileStats(files) {
 }
 
 async function attachDateAdded(files) {
-  const dates = await fileDateAddedMs(files.map((file) => file.path));
-  for (const file of files)
-    file.dateAddedMs = dates.get(file.path) || file.birthtimeMs || 0;
-  return files;
-}
-
-function findFilesNeedsStats(sortBy) {
-  return ['added', 'created', 'recent', 'modified', 'size'].includes(sortBy);
+  return applyDateAdded(
+    files,
+    await fileDateAddedMs(files.map((file) => file.path)),
+  );
 }
 
 async function findFiles(roots, options: any = {}) {
@@ -4044,11 +3993,11 @@ async function findFiles(roots, options: any = {}) {
   let found = candidates;
   if (findFilesNeedsStats(sortBy)) found = await attachFileStats(found);
   if (sortBy === 'added') found = await attachDateAdded(found);
-  const selected = sortFoundFiles(found, options).slice(0, limit);
+  const selected = selectFindFiles(found, options, limit);
   return Promise.all(
     selected.map((file) =>
       fileToExtensionFile(file.path, {
-        includeDimensions: Boolean(options.includeDimensions),
+        includeDimensions: includeDimensionsForFindOptions(options),
         stat: file.stat,
         dateAddedMs: file.dateAddedMs,
       }),
@@ -6716,7 +6665,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
     state: {},
     data: {
       loader(fn, options: any = {}) {
-        return { _loader: true, _fn: fn, _retry: Boolean(options.retry) };
+        return createDataLoaderHandle(fn, options);
       },
     },
     ai: canUseAi ? createExtensionAi(extension) : undefined,
@@ -8863,9 +8812,8 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) => {
-    const loader = viewLoaderRegistry.get(viewId);
-    if (!loader) return;
-    spawnViewLoader(viewId, loader);
+    if (!viewLoaderRegistry.has(viewId)) return;
+    await viewLoaderRegistry.retry(viewId);
   });
 });
 

@@ -65,4 +65,10 @@ if (
   );
 }
 
+if (/src\/fixtures/.test(config)) {
+  fail(
+    'electron-builder.yml must not include src/fixtures; fixtures are dev-only and excluded from shipped product',
+  );
+}
+
 console.log('Packaged resource checks passed');
