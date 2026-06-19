@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/admin';
+import { requireSameOrigin } from '../../../lib/csrf';
 import { listAllProviders, updateProvider } from '../../../lib/settings';
 import { recordAudit } from '../../../lib/audit';
 
@@ -10,6 +11,9 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const PUT: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
+
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
   const body = (await request.json().catch(() => ({}))) as {

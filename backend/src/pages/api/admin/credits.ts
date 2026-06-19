@@ -1,10 +1,14 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/admin';
+import { requireSameOrigin } from '../../../lib/csrf';
 import { db } from '../../../db/client';
 import { creditLedger } from '../../../db/schema';
 import { recordAudit } from '../../../lib/audit';
 
 export const POST: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
+
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
   const body = (await request.json().catch(() => ({}))) as { userId?: string; delta?: number; kind?: 'free' | 'paid'; reason?: string };

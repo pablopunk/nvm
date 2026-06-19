@@ -48,7 +48,24 @@ type BillContext = {
   kind: 'free' | 'paid';
   requestId: string;
   client: DesktopClient;
+  estimatedInputTokens: number;
 };
+
+export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, status: number): UsageTokens {
+  if (status >= 200 && status < 300 && tokens.outputTokens === 0 && ctx.estimatedInputTokens > 0) {
+    log.error('usage_missing_on_success', {
+      request_id: ctx.requestId,
+      provider: ctx.provider,
+      model: ctx.activeModelId,
+      estimated_input_tokens: ctx.estimatedInputTokens,
+    });
+    return {
+      inputTokens: ctx.estimatedInputTokens,
+      outputTokens: 1,
+    };
+  }
+  return tokens;
+}
 
 async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number, latencyMs: number) {
   const costUsd = computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens);
@@ -182,6 +199,17 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
   };
 }
 
+const FORWARD_ALLOWLIST = new Set([
+  'content-type',
+  'accept',
+  'accept-encoding',
+  'user-agent',
+  'anthropic-beta',
+  'anthropic-version',
+  'openai-beta',
+  'x-goog-api-client',
+]);
+
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -203,12 +231,9 @@ function buildForwardHeaders(
 ): Headers {
   const out = new Headers();
   for (const [name, value] of request.headers) {
-    const lower = name.toLowerCase();
-    if (HOP_BY_HOP.has(lower)) continue;
-    if (lower === 'x-request-id' || lower.startsWith('x-nevermind-')) continue;
-    if (lower === desktopAuthHeader) continue;
-    if (lower === upstreamAuthHeader) continue;
-    out.set(name, value);
+    if (FORWARD_ALLOWLIST.has(name.toLowerCase())) {
+      out.set(name, value);
+    }
   }
   out.set(upstreamAuthHeader, upstreamAuthValue);
   return out;
@@ -337,20 +362,21 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   }
 
   let forwardBody: BodyInit | undefined;
+  let estimatedInputTokens = 0;
   if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
     const text = await cfg.request.text();
-    const inputTokens = estimateInputTokensFromBody(text);
-    if (inputTokens > MAX_INPUT_TOKENS) {
+    estimatedInputTokens = estimateInputTokensFromBody(text);
+    if (estimatedInputTokens > MAX_INPUT_TOKENS) {
       return withRequestId(Response.json(
         { error: { type: 'prompt_too_large', message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens` } },
         { status: 413 },
       ), requestId);
     }
-    let estimatedCredits = estimatePromptCredits(inputTokens, routing.costRow);
+    let estimatedCredits = estimatePromptCredits(estimatedInputTokens, routing.costRow);
     if (estimatedCredits > routing.balanceAvailable && routing.kind === 'paid' && routing.freeBalanceAvailable > 0) {
       const freeRouting = await resolveModelRouting(parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'free');
       if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
-      const freeEstimatedCredits = estimatePromptCredits(inputTokens, freeRouting.costRow);
+      const freeEstimatedCredits = estimatePromptCredits(estimatedInputTokens, freeRouting.costRow);
       if (freeEstimatedCredits <= routing.freeBalanceAvailable) {
         routing = {
           user: routing.user,
@@ -386,6 +412,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     kind: routing.kind,
     requestId,
     client,
+    estimatedInputTokens,
   };
 
   const responseHeaders = stripHopByHop(upstreamResponse.headers);
@@ -423,6 +450,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   } catch (err) {
     log.warn('parse_usage_failed', { request_id: requestId, error: err });
   }
+  tokens = resolveBillableTokens(billCtx, tokens, upstreamResponse.status);
   await recordUsage(billCtx, tokens, upstreamResponse.status, latencyMs);
   return new Response(buffered, {
     status: upstreamResponse.status,
@@ -466,12 +494,12 @@ function teeStreamAndBill(
         if (acc.pendingText) cfg.parseUsageFromStreamChunk('\n', acc);
       } catch {}
       const latencyMs = Date.now() - startedAt;
-      await recordUsage(
+      const streamTokens = resolveBillableTokens(
         billCtx,
         { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens },
         status,
-        latencyMs,
       );
+      await recordUsage(billCtx, streamTokens, status, latencyMs);
     },
   });
   return upstreamResponse.body!.pipeThrough(transform);
