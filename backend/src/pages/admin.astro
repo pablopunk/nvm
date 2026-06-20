@@ -125,6 +125,10 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
   </div>
 
   <script is:inline>
+    function esc(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
     async function loadStats() {
       const res = await fetch('/api/admin/stats');
       const s = await res.json();
@@ -139,7 +143,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       tbody.innerHTML = s.byModel.map((r) => {
         const usd = Number(r.upstreamCostMicrocents || 0) / 1e8;
         const collectedUsd = (r.costCredits || 0) * creditUsd;
-        return `<tr><td>${r.provider || '—'}</td><td><code>${r.model}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
+        return `<tr><td>${esc(r.provider) || '—'}</td><td><code>${esc(r.model)}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
       }).join('') || '<tr><td colspan="8" class="muted">No usage yet</td></tr>';
     }
     function statusEl(selectId) {
@@ -189,20 +193,20 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       const iconShield = '<svg class="dropdown__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3z"/></svg>';
       tbody.innerHTML = users.map((u) => `
         <tr>
-          <td>${u.email}</td>
-          <td>${u.role}</td>
-          <td>${u.plan}</td>
+          <td>${esc(u.email)}</td>
+          <td>${esc(u.role)}</td>
+          <td>${esc(u.plan)}</td>
           <td>${u.balance}</td>
           <td>${u.requests}</td>
           <td>${u.spent}</td>
-          <td>${u.lastModel ? `<code>${u.lastModel}</code>` : '—'}</td>
+          <td>${u.lastModel ? `<code>${esc(u.lastModel)}</code>` : '—'}</td>
           <td>${u.lastUsedAt ? new Date(u.lastUsedAt).toLocaleString() : '—'}</td>
           <td>${new Date(u.createdAt).toLocaleDateString()}</td>
           <td>
             <details class="dropdown">
               <summary class="dropdown__trigger" aria-label="Actions">${iconMore}</summary>
               <div class="dropdown__menu">
-                <button type="button" class="dropdown__item grant-credits" data-id="${u.id}" data-email="${u.email}">${iconPlus}Grant credits</button>
+                <button type="button" class="dropdown__item grant-credits" data-id="${u.id}" data-email="${esc(u.email)}">${iconPlus}Grant credits</button>
                 <div class="dropdown__separator"></div>
                 <button type="button" class="dropdown__item toggle-role" data-id="${u.id}" data-role="${u.role === 'admin' ? 'user' : 'admin'}">${iconShield}${u.role === 'admin' ? 'Demote to user' : 'Promote to admin'}</button>
               </div>
@@ -249,10 +253,10 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       tbody.innerHTML = entries.map((e) => `
         <tr>
           <td>${new Date(e.createdAt).toLocaleString()}</td>
-          <td>${e.actorEmail ?? '—'}</td>
-          <td><code>${e.action}</code></td>
-          <td>${e.targetType ? `${e.targetType}:${e.targetId ?? '—'}` : '—'}</td>
-          <td><code>${e.meta ? JSON.stringify(e.meta) : ''}</code></td>
+          <td>${e.actorEmail ? esc(e.actorEmail) : '—'}</td>
+          <td><code>${esc(e.action)}</code></td>
+          <td>${e.targetType ? `${esc(e.targetType)}:${e.targetId ? esc(e.targetId) : '—'}` : '—'}</td>
+          <td><code>${e.meta ? esc(JSON.stringify(e.meta)) : ''}</code></td>
         </tr>
       `).join('');
     }
@@ -292,7 +296,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       const tbody = document.querySelector('#providers-table tbody');
       tbody.innerHTML = providers.map((p) => `
         <tr>
-          <td><code>${p.id}</code> <span class="muted">${p.displayName}</span></td>
+          <td><code>${esc(p.id)}</code> <span class="muted">${esc(p.displayName)}</span></td>
           <td>
             <label class="toggle">
               <input type="checkbox" class="provider-toggle" data-id="${p.id}" ${p.enabled === 'true' ? 'checked' : ''}>

@@ -2,13 +2,21 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { log } from './log';
 
+function isProduction(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV;
+  if (vercelEnv) return vercelEnv === 'production';
+  return process.env.NODE_ENV === 'production';
+}
+
 const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
 const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
 
 const redis = url && token ? new Redis({ url, token }) : null;
-if (!redis) {
+if (!redis && isProduction()) {
+  log.error('ratelimit_misconfigured', { reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing in production' });
+} else if (!redis) {
   log.warn('ratelimit_disabled', { reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing' });
 }
 
@@ -50,7 +58,13 @@ async function checkPair(
   perMin: Ratelimit | null,
   perDay: Ratelimit | null,
 ): Promise<RateLimitDecision> {
-  if (!perMin || !perDay) return { ok: true };
+  if (!perMin || !perDay) {
+    if (isProduction()) {
+      log.error('ratelimit_misconfigured', { reason: 'Redis unavailable in production' });
+      return { ok: false, scope: `${scope}:misconfigured`, retryAfterSec: 60 };
+    }
+    return { ok: true };
+  }
   const minRes = await perMin.limit(key);
   if (!minRes.success) {
     return { ok: false, scope: `${scope}:minute`, retryAfterSec: Math.max(1, Math.ceil((minRes.reset - Date.now()) / 1000)) };
@@ -84,7 +98,13 @@ export async function rateLimitIp(
   if (testOverrides.ip) return testOverrides.ip(scope, ip, limit, window);
   if (!ip) return { ok: true };
   const limiter = ipLimiter(scope, limit, window);
-  if (!limiter) return { ok: true };
+  if (!limiter) {
+    if (isProduction()) {
+      log.error('ratelimit_misconfigured', { reason: 'Redis unavailable in production' });
+      return { ok: false, scope: `ip:${scope}:misconfigured`, retryAfterSec: 60 };
+    }
+    return { ok: true };
+  }
   const res = await limiter.limit(ip);
   if (res.success) return { ok: true };
   return { ok: false, scope: `ip:${scope}`, retryAfterSec: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) };

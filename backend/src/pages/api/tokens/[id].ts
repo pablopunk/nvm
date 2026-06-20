@@ -4,8 +4,12 @@ import { getSessionFromCookies } from '../../../lib/workos';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { revokeApiToken } from '../../../lib/tokens';
+import { requireSameOrigin } from '../../../lib/csrf';
 
 export const DELETE: APIRoute = async ({ request, params }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
+
   const session = await getSessionFromCookies(request.headers.get('cookie'));
   if (!session) return new Response('Unauthorized', { status: 401 });
   const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
@@ -13,5 +17,3 @@ export const DELETE: APIRoute = async ({ request, params }) => {
   await revokeApiToken(user.id, params.id as string);
   return new Response(null, { status: 204 });
 };
-
-export const POST: APIRoute = async (ctx) => DELETE(ctx);

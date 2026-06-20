@@ -4,6 +4,7 @@ import { getSessionFromCookies } from '../../../lib/workos';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { createApiToken, listApiTokens } from '../../../lib/tokens';
+import { requireSameOrigin } from '../../../lib/csrf';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 
 async function getUser(request: Request) {
@@ -20,6 +21,9 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
+
   const decision = await rateLimitIp('tokens', clientIp(request), 10, '1 m');
   if (!decision.ok) return tooManyRequests(decision);
   const user = await getUser(request);
