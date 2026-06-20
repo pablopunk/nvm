@@ -1,18 +1,12 @@
 import crypto from 'node:crypto';
 import { scoreFuzzy } from '../search-ranking';
-import {
-  calculate,
-  calculateDetailed,
-  calculateRateResult,
-  parseRateExpression,
-} from './calculator';
 
 export {
   calculate,
   calculateDetailed,
   calculateRateResult,
   parseRateExpression,
-};
+} from './calculator';
 
 export function normalize(value: unknown) {
   return String(value || '')
