@@ -31,7 +31,12 @@ export function createDataLoaderHandle(
   fn: () => Promise<any[]>,
   options: { retry?: boolean } = {},
 ): DataLoaderHandle {
-  return { _kind: 'loader', _loader: true, _fn: fn, _retry: Boolean(options.retry) };
+  return {
+    _kind: 'loader',
+    _loader: true,
+    _fn: fn,
+    _retry: Boolean(options.retry),
+  };
 }
 
 export function createStaleWhileRevalidateHandle(
@@ -57,8 +62,13 @@ export function isLoaderHandle(value: unknown): value is DataLoaderHandle {
   );
 }
 
-export function isStaleWhileRevalidateHandle(value: unknown): value is DataLoaderHandle {
-  return isLoaderHandle(value) && (value as DataLoaderHandle)._kind === 'stale-while-revalidate';
+export function isStaleWhileRevalidateHandle(
+  value: unknown,
+): value is DataLoaderHandle {
+  return (
+    isLoaderHandle(value) &&
+    (value as DataLoaderHandle)._kind === 'stale-while-revalidate'
+  );
 }
 
 export function normalizeLoaderItems(items: unknown) {
@@ -89,7 +99,9 @@ export function createViewLoaderRegistry(deps: {
     if (!loader) return undefined;
 
     // Stale-while-revalidate: check persistent cache before running the loader
-    const staleHandle = isStaleWhileRevalidateHandle(loader.handle) ? loader.handle : null;
+    const staleHandle = isStaleWhileRevalidateHandle(loader.handle)
+      ? loader.handle
+      : null;
     let cachedItems: any[] | undefined;
     let isFresh = false;
 
@@ -147,15 +159,14 @@ export function createViewLoaderRegistry(deps: {
 
       // Update persistent cache fire-and-forget (non-blocking, non-fatal)
       if (staleHandle && deps.writeCache && loader.entry?.extension) {
-        deps.writeCache(
-          loader.entry.extension,
-          {
+        deps
+          .writeCache(loader.entry.extension, {
             ...(await (deps.readCache
               ? deps.readCache(loader.entry.extension).catch(() => ({}))
               : {})),
             [staleHandle._cacheKey!]: { value: items, updatedAt: Date.now() },
-          },
-        ).catch(() => {});
+          })
+          .catch(() => {});
       }
       return { ok: true as const, items };
     } catch (error) {
@@ -166,7 +177,10 @@ export function createViewLoaderRegistry(deps: {
 
       // Graceful fallback for stale-while-revalidate: show stale items on failure
       if (staleHandle && cachedItems && Array.isArray(cachedItems)) {
-        deps.warn?.(viewId, `Stale cache fallback for ${staleHandle._cacheKey}: ${message}`);
+        deps.warn?.(
+          viewId,
+          `Stale cache fallback for ${staleHandle._cacheKey}: ${message}`,
+        );
         registry.delete(viewId);
         deps.sendHydrate(viewId, {
           items: deps.normalizeItems(cachedItems, loader.entry),
@@ -184,7 +198,12 @@ export function createViewLoaderRegistry(deps: {
 
   return {
     register(viewId: string, handle: DataLoaderHandle, entry: any) {
-      registry.set(viewId, { fn: handle._fn, retry: handle._retry, entry, handle });
+      registry.set(viewId, {
+        fn: handle._fn,
+        retry: handle._retry,
+        entry,
+        handle,
+      });
     },
     has(viewId: string) {
       return registry.has(viewId);
