@@ -26,16 +26,22 @@ export default defineConfig({
             id.includes('mdast') ||
             id.includes('unist') ||
             id.includes('hast')
-          )
+          ) {
             return 'markdown';
+          }
           if (
             id.includes('/react/') ||
             id.includes('/react-dom/') ||
             id.includes('/scheduler/')
-          )
+          ) {
             return 'react';
-          if (id.includes('/cmdk/')) return 'cmdk';
-          if (id.includes('lucide-react')) return 'icons';
+          }
+          if (id.includes('/cmdk/')) {
+            return 'cmdk';
+          }
+          if (id.includes('lucide-react')) {
+            return 'icons';
+          }
         },
       },
     },

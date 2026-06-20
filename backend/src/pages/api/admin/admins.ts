@@ -1,11 +1,15 @@
 import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
 import { requireAdmin } from '../../../lib/admin';
+import { requireSameOrigin } from '../../../lib/csrf';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { recordAudit } from '../../../lib/audit';
 
 export const POST: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
+
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
   const body = (await request.json().catch(() => ({}))) as { email?: string; userId?: string; role?: 'admin' | 'user' };
