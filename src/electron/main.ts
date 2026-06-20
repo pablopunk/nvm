@@ -104,6 +104,7 @@ import {
   runningAppPaths as detectRunningAppPaths,
   executeSystemBuiltin,
   fileDateAddedMs,
+  forceQuitApp as forceQuitOsApp,
   frontmostApp,
   getLaunchAtLoginEnabled,
   hasCapability,
@@ -696,6 +697,7 @@ const TOKEN_REQUIRED_VIEW_ACTION_TYPES = new Set([
   'openSystemSettings',
   'openKeyboardSettings',
   'quitApp',
+  'forceQuitApp',
   'checkForUpdates',
   'downloadUpdate',
   'installUpdate',
@@ -3093,6 +3095,31 @@ async function executeViewAction(action, launchContext?: any) {
     case 'quitApp':
       requestQuitApp('view-action');
       break;
+    case 'forceQuitApp': {
+      const appPath = action.path || action.appPath || '';
+      const appName =
+        action.app?.name || action.title?.replace(/^Force Quit /, '') || '';
+      try {
+        const result = await forceQuitOsApp(appPath, appName);
+        if (result.ok) {
+          return { toast: { message: `Force quit ${appName}` } };
+        }
+        return {
+          toast: {
+            message: result.error || `Could not force quit ${appName}`,
+            tone: 'error',
+          },
+        };
+      } catch (error) {
+        logWarn('forceQuitApp.failed', error, {
+          source: 'host',
+          scope: 'apps',
+        });
+        return {
+          toast: { message: `Could not force quit ${appName}`, tone: 'error' },
+        };
+      }
+    }
     case 'checkForUpdates':
       return checkForUpdatesView();
     case 'downloadUpdate':
@@ -3417,7 +3444,7 @@ async function localFileResponse(requestPath: string, request: Request) {
 
   if (range) {
     const match = range.match(/^bytes=(\d*)-(\d*)$/);
-    if (!match || !(match[1] || match[2]))
+    if (!(match && (match[1] || match[2])))
       return new Response('Invalid range', {
         status: 416,
         headers: { 'content-range': `bytes */${stat.size}` },
@@ -4965,20 +4992,111 @@ function createClipboardExtension() {
   return clipboardService!.createClipboardExtension();
 }
 
+function createForceQuitAppItem(app: any) {
+  return {
+    id: `force-quit:${app.id}`,
+    title: app.name,
+    subtitle: 'Force quit this application',
+    icon: 'stop-circle',
+    appearance: { foreground: 'red' as const },
+    primaryAction: {
+      type: 'forceQuitApp' as const,
+      title: `Force Quit ${app.name}`,
+      path: app.path,
+      app: { name: app.name, path: app.path },
+      style: 'destructive' as const,
+      requiresConfirmation: true,
+      confirmMessage: `Force quit ${app.name}? Unsaved data may be lost.`,
+      confirmLabel: 'Force Quit',
+      cancelLabel: 'Cancel',
+      dismissAfterRun: 'auto' as const,
+    },
+  };
+}
+
 function createAppsExtension() {
   return {
     id: 'nevermind.apps',
     title: 'Applications',
     permissions: ['desktop.apps'] as const,
-    commands: [],
+    commands: [
+      {
+        id: 'force-quit-apps',
+        actionId: 'force-quit-apps',
+        title: 'Force Quit Apps',
+        subtitle: 'Force quit running applications',
+        icon: 'stop-circle',
+        score: 14,
+        appearance: { foreground: 'red' as const },
+        run: async (ctx: any) => {
+          const runningPaths =
+            await runningAppStatus.refresh('force-quit-command');
+          const apps = appIndexService
+            .get()
+            .filter(
+              (app) =>
+                app.path && runningPaths.has(String(app.path).toLowerCase()),
+            );
+          if (!apps.length)
+            return ctx.ui.empty(
+              'No running apps',
+              'No running applications to force quit.',
+            );
+          return ctx.ui.list({
+            id: 'force-quit-apps',
+            title: 'Force Quit Apps',
+            presentation: 'root',
+            searchBarPlaceholder: 'Search running apps',
+            items: apps.map(createForceQuitAppItem),
+          });
+        },
+      },
+    ],
     rootItems(ctx) {
-      return ctx.desktop.apps.list().map(appRootItem);
+      const items = ctx.desktop.apps.list().map(appRootItem);
+      return [
+        {
+          id: 'force-quit-apps-command',
+          title: 'Force Quit Apps',
+          subtitle: 'Force quit running applications',
+          aliases: ['force quit', 'kill', 'quit apps'],
+          icon: 'stop-circle',
+          score: 14,
+          dismissAfterRun: 'auto',
+          appearance: { foreground: 'red' as const },
+          primaryAction: {
+            type: 'runExtensionRegisteredAction' as const,
+            title: 'Force Quit Apps',
+            extensionId: 'nevermind.apps',
+            registeredActionId: 'force-quit-apps',
+          },
+        },
+        ...items,
+      ];
     },
     searchItems(ctx, query) {
-      return ctx.desktop.apps
+      const items = ctx.desktop.apps
         .list()
         .map(appRootItem)
-        .filter((item) => rankAction(item, query));
+        .filter((item: any) => rankAction(item, query));
+      const forceQuitItem = {
+        id: 'force-quit-apps-command',
+        title: 'Force Quit Apps',
+        subtitle: 'Force quit running applications',
+        aliases: ['force quit', 'kill', 'quit apps'],
+        icon: 'stop-circle',
+        score: 14,
+        dismissAfterRun: 'auto',
+        appearance: { foreground: 'red' as const },
+        primaryAction: {
+          type: 'runExtensionRegisteredAction' as const,
+          title: 'Force Quit Apps',
+          extensionId: 'nevermind.apps',
+          registeredActionId: 'force-quit-apps',
+        },
+      };
+      if (rankAction(forceQuitItem, query)) return [forceQuitItem, ...items];
+      return items;
     },
   };
 }

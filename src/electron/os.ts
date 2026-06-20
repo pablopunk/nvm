@@ -169,7 +169,7 @@ export function prepareAppWindowPolicy() {
 }
 
 export function getLaunchAtLoginEnabled() {
-  if (!hasCapability('launch-at-login') || !app.isPackaged) return false;
+  if (!(hasCapability('launch-at-login') && app.isPackaged)) return false;
   return app.getLoginItemSettings().openAtLogin;
 }
 
@@ -361,14 +361,14 @@ async function scanLinuxApps() {
         .catch(() => []);
       await Promise.all(
         entries.map(async (entry) => {
-          if (!entry.isFile() || !entry.name.endsWith('.desktop')) return;
+          if (!(entry.isFile() && entry.name.endsWith('.desktop'))) return;
           const fullPath = path.join(root, entry.name);
           const body = await fs.readFile(fullPath, 'utf8').catch(() => '');
           if (/^(NoDisplay|Hidden)=true$/im.test(body)) return;
           const name = body.match(/^Name=(.+)$/m)?.[1];
           const exec = body.match(/^Exec=(.+)$/m)?.[1];
           const wmClass = body.match(/^StartupWMClass=(.+)$/m)?.[1];
-          if (!name || !exec) return;
+          if (!(name && exec)) return;
           found.push({
             id: fullPath,
             name,
@@ -410,7 +410,7 @@ async function macProcessExecutablePaths() {
     execFile(
       'ps',
       ['-axo', 'comm='],
-      { timeout: 1_000, maxBuffer: 1024 * 1024 },
+      { timeout: 1000, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
         if (error) return resolve([]);
         resolve(
@@ -478,7 +478,7 @@ async function linuxProcessNames() {
     .catch(() => []);
   await Promise.all(
     entries.map(async (entry) => {
-      if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) return;
+      if (!(entry.isDirectory() && /^\d+$/.test(entry.name))) return;
       const base = path.join('/proc', entry.name);
       const [comm, cmdline] = await Promise.all([
         fs.readFile(path.join(base, 'comm'), 'utf8').catch(() => ''),
@@ -592,7 +592,7 @@ export async function fileDateAddedMs(paths: string[]) {
         execFile(
           'mdls',
           ['-raw', '-name', 'kMDItemDateAdded', ...chunk],
-          { timeout: 2_000, maxBuffer: 1024 * 1024 },
+          { timeout: 2000, maxBuffer: 1024 * 1024 },
           (error, stdout) => (error ? reject(error) : resolve(stdout)),
         );
       });
@@ -653,7 +653,7 @@ export function typeTextIntoFrontmostApp(text: string, options: any = {}) {
           execFile(
             'osascript',
             ['-e', script],
-            { timeout: Math.max(5_000, Number(opts?.timeoutMs || 30_000)) },
+            { timeout: Math.max(5000, Number(opts?.timeoutMs || 30_000)) },
             (error, _stdout, stderr) => {
               resolve(
                 error
@@ -700,7 +700,7 @@ export async function selectedText() {
       darwin: async () => {
         const script =
           'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\ntry\nset selectedText to value of attribute "AXSelectedText" of focused UI element of frontProcess\nif selectedText is missing value then return ""\nreturn selectedText as text\non error\nreturn ""\nend try\nend tell';
-        const result = await runAppleScript(script, 5_000);
+        const result = await runAppleScript(script, 5000);
         const text = result.stdout.trim();
         return text || null;
       },
@@ -715,7 +715,7 @@ export async function frontmostApp() {
       darwin: async () => {
         const script =
           'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\nset appName to name of frontProcess\nset appBundle to bundle identifier of frontProcess\ntry\nset appPath to POSIX path of (file of frontProcess as alias)\non error\nset appPath to ""\nend try\nreturn appName & linefeed & appBundle & linefeed & appPath\nend tell';
-        const result = await runAppleScript(script, 5_000);
+        const result = await runAppleScript(script, 5000);
         if (result.exitCode !== 0) return null;
         const [name, bundleId, appPath] = result.stdout.split(/\r?\n/);
         return name
@@ -838,7 +838,7 @@ async function recognizeTextInImageMac(filePath: string, options: any = {}) {
       ? [String(options.language)]
       : [];
   return execFileJson('/usr/bin/swift', [helperPath, filePath, ...languages], {
-    timeout: Math.max(5_000, Number(options.timeoutMs || 30_000)),
+    timeout: Math.max(5000, Number(options.timeoutMs || 30_000)),
   });
 }
 
@@ -876,7 +876,7 @@ async function captureScreenImageMac(options: any = {}) {
     execFile(
       '/usr/sbin/screencapture',
       args,
-      { timeout: Math.max(5_000, Number(options.timeoutMs || 15_000)) },
+      { timeout: Math.max(5000, Number(options.timeoutMs || 15_000)) },
       (error, _stdout, stderr) =>
         error
           ? reject(
@@ -901,6 +901,77 @@ export async function captureScreenImage(options: any = {}) {
       throw new Error(`Screen capture is not available on ${osLabel()}`);
     },
   )(options);
+}
+
+async function forceQuitMacApp(appPath: string, appName: string) {
+  const cleanedPath = appPath.replace(/\/$/, '');
+  const bundleName = path.basename(cleanedPath, '.app');
+  const candidates = [appName, bundleName].filter(Boolean);
+  const names = Array.from(new Set(candidates));
+  for (const name of names) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        execFile('killall', ['-KILL', name], { timeout: 8000 }, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+      return { ok: true };
+    } catch {}
+  }
+  return { ok: false, error: `Could not force quit ${appName || bundleName}` };
+}
+
+async function forceQuitLinuxApp(appName: string) {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'pkill',
+        ['-KILL', '-f', appName],
+        { timeout: 8000 },
+        (error) => {
+          if (error) reject(error);
+          else resolve();
+        },
+      );
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: `Could not force quit ${appName}` };
+  }
+}
+
+async function forceQuitWindowsApp(appName: string) {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'taskkill',
+        ['/F', '/IM', `${appName}.exe`],
+        { timeout: 8000 },
+        (error) => {
+          if (error) reject(error);
+          else resolve();
+        },
+      );
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: `Could not force quit ${appName}` };
+  }
+}
+
+export async function forceQuitApp(appPath: string, appName: string) {
+  return osFunction(
+    {
+      darwin: () => forceQuitMacApp(appPath, appName),
+      linux: () => forceQuitLinuxApp(appName),
+      win32: () => forceQuitWindowsApp(appName),
+    },
+    async () => ({
+      ok: false,
+      error: 'Force quit not supported on this platform',
+    }),
+  )();
 }
 
 export async function executeSystemBuiltin(action: any, quit: () => void) {
