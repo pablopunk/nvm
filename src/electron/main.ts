@@ -24,13 +24,8 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
-import {
-  clipboardFilePaths,
-  clipboardItemSubtitle,
-  clipboardItemTitle,
-  normalizeClipboardHistory,
-  clipboardFilePath as readClipboardFilePath,
-} from './clipboard-utils';
+import { createClipboardHistory } from './clipboard-history';
+import { normalizeClipboardHistory } from './clipboard-utils';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -287,6 +282,7 @@ function bundledResourcePath(...relativePath) {
 let fileIndex: any[] = [];
 let clipboardHistory: any[] = [];
 const suppressedClipboardItemIds = new Map<string, number>();
+let clipboardService: ReturnType<typeof createClipboardHistory> | null = null;
 let statePath = '';
 let iconCacheDir = '';
 let clipboardImagesDir = '';
@@ -298,7 +294,6 @@ let legacyLearningRulesPath = '';
 let learningTracesPath = '';
 let saveTimer: NodeJS.Timeout | undefined;
 let extensionFileWatchers: Array<{ close: () => unknown }> = [];
-let clipboardWatcherLastId = '';
 let frontmostWatcherLastId = '';
 const jobRegistry = new JobRegistry();
 let nevermindAi: any;
@@ -338,6 +333,53 @@ let userState: AnyRecord = {
   rateCache: {},
 };
 
+clipboardService = createClipboardHistory({
+  getHistory: () => clipboardHistory,
+  setHistory: (h) => {
+    clipboardHistory = h;
+  },
+  getSuppressedItemIds: () => suppressedClipboardItemIds,
+  getImagesDir: () => clipboardImagesDir,
+  clipboard,
+  nativeImage,
+  ensureDir: (dir) => fs.mkdir(dir, { recursive: true }).then(() => {}),
+  writeFile: (filePath, data) => fs.writeFile(filePath, data),
+  hashValue,
+  fileUrlForPath,
+  thumbnailUrlForPath,
+  isVideoPath,
+  expandUserPath,
+  isImagePath,
+  extensionForPath,
+  pathJoin: path.join.bind(path),
+  pathBasename: path.basename.bind(path),
+  pathToFileURL: (filePath) => pathToFileURL(filePath),
+  logWarn: (message, data, opts) => logWarn(message, data, opts),
+  measureSync: measureDebugPerformanceSync,
+  scheduleSaveState,
+  invalidateExtensionRootItems,
+  emitChanged: () => jobRegistry.emit('clipboard.changed'),
+  sendToRenderer: (channel, ...args) =>
+    paletteWindow.win?.webContents.send(channel, ...args),
+  patchOpenView,
+  pasteIntoFrontmostApp,
+  getSetting,
+  buildPreviewItemAction,
+  rankAction,
+  fileToExtensionFile,
+  findFiles,
+  selectedFilePaths,
+  selectedExtensionFiles,
+  selectedText,
+  selectedFiles,
+  frontmostApp,
+  readDesktopSelection,
+  CLIPBOARD_LIMIT,
+  CLIPBOARD_POLL_INTERVAL_MS,
+  CLIPBOARD_LAST_HOUR_MS,
+  CLIPBOARD_LAST_DAY_MS,
+});
+
 function osCacheRoot() {
   const appName = app.getName();
   if (process.platform === 'darwin')
@@ -368,7 +410,7 @@ function availableSettingDefinitions() {
 
 function getSetting(id: any) {
   const definition = settingDefinition(String(id));
-  if (!definition || !settingIsAvailable(definition)) return undefined;
+  if (!(definition && settingIsAvailable(definition))) return;
   if (definition.id === 'startAtLogin') return getLaunchAtLoginEnabled();
   return settingValue(userState.settings, definition.id);
 }
@@ -630,7 +672,7 @@ const extensionRefreshBurstWindow = new Map<string, number[]>();
 const extensionAiCallWindow = new Map<string, number[]>();
 
 const ACTION_EXECUTION_TTL_MS = 30 * 60_000;
-const ACTION_EXECUTION_MAX_RECORDS = 2_000;
+const ACTION_EXECUTION_MAX_RECORDS = 2000;
 const RENDERER_ONLY_VIEW_ACTION_TYPES = new Set([
   'recordShortcut',
   'previewClipboardItem',
@@ -818,8 +860,8 @@ function createExtensionCache(extension) {
   return {
     get(key) {
       const entry = store.get(key);
-      if (!entry) return undefined;
-      if (entry.expiresAt && Date.now() > entry.expiresAt) return undefined;
+      if (!entry) return;
+      if (entry.expiresAt && Date.now() > entry.expiresAt) return;
       return entry.value;
     },
     getStale(key) {
@@ -1062,7 +1104,7 @@ function aiChatItem(id, query) {
     messages: [
       {
         role: 'assistant',
-        content: `What should “${query}” do? Tell me the exact behavior, inputs, and what UI you want, then I’ll build it.`,
+        content: `What should "${query}" do? Tell me the exact behavior, inputs, and what UI you want, then I'll build it.`,
       },
     ],
   };
@@ -1092,7 +1134,7 @@ function promoteDraftAiChat(chatId) {
 
 function appendAiChatMessage(chatId, role, content) {
   const chat = userState.aiChats[chatId];
-  if (!chat || !content) return;
+  if (!(chat && content)) return;
   chat.messages = [...(chat.messages || []), { role, content }].slice(-100);
   chat.updatedAt = Date.now();
   learningStore?.appendMessage(
@@ -1107,7 +1149,7 @@ function appendAiChatMessage(chatId, role, content) {
 
 function appendAiChatDelta(chatId, text) {
   const chat = userState.aiChats[chatId];
-  if (!chat || !text) return;
+  if (!(chat && text)) return;
   const messages = chat.messages || [];
   const last = messages[messages.length - 1];
   if (last?.role === 'assistant') last.content = `${last.content}${text}`;
@@ -1121,7 +1163,7 @@ function appendAiChatDelta(chatId, text) {
 function aiChatView(item, options: any = {}) {
   return {
     type: 'chat',
-    title: `Automate “${item.query}”`,
+    title: `Automate "${item.query}"`,
     aiChat: true,
     chatId: item.id,
     initialPrompt: options.initialPrompt,
@@ -1144,7 +1186,7 @@ function aiChatRemoveAction(chat) {
       style: 'destructive',
     }),
     {
-      message: `Remove “${chat.title || chat.query || 'AI chat'}” and its history? Generated extension files stay.`,
+      message: `Remove "${chat.title || chat.query || 'AI chat'}" and its history? Generated extension files stay.`,
       confirmLabel: 'Remove Chat',
       destructive: true,
     },
@@ -1257,7 +1299,7 @@ function aiChatIdForExtensionFile(filename) {
 }
 
 function touchExtensionFileForChat(chat, filename) {
-  if (!chat || !filename) return;
+  if (!(chat && filename)) return;
   chat.touchedExtensionFiles = Array.from(
     new Set([...chatTouchedExtensionFiles(chat), path.basename(filename)]),
   );
@@ -1307,7 +1349,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
     messages: [
       {
         role: 'assistant',
-        content: `I can tweak “${title || filename}”. I can read this extension as context and inspect any other extension if needed.`,
+        content: `I can tweak "${title || filename}". I can read this extension as context and inspect any other extension if needed.`,
       },
     ],
   };
@@ -1320,272 +1362,60 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
 }
 
 function clipboardPreviewAction(item) {
-  return buildPreviewItemAction({
-    kind:
-      item.type === 'image'
-        ? 'image'
-        : item.type === 'video'
-          ? 'video'
-          : item.filePath
-            ? 'file'
-            : 'clipboard',
-    clipboardType: item.type,
-    text: item.text,
-    imageDataUrl: item.imageDataUrl,
-    imagePath: item.imagePath,
-    videoUrl: item.videoUrl,
-    filePath: item.filePath,
-    thumbnailUrl: item.thumbnailUrl,
-  });
+  return clipboardService!.clipboardPreviewAction(item);
 }
 
 function clipboardCopyAction(item) {
-  if (item.type === 'image')
-    return {
-      type: 'copyImage',
-      title: 'Copy Image',
-      imageDataUrl: item.imageDataUrl,
-      imagePath: item.imagePath,
-      dismissAfterRun: 'auto',
-    };
-  return {
-    type: 'copyText',
-    title: item.type === 'video' ? 'Copy Video Path' : 'Copy Text',
-    text: item.filePath || item.text,
-    dismissAfterRun: 'auto',
-  };
+  return clipboardService!.clipboardCopyAction(item);
 }
 
 function clipboardHistoryRemovalAction(range, title, message, itemId = '') {
-  return {
-    type: 'removeClipboardHistory',
+  return clipboardService!.clipboardHistoryRemovalAction(
+    range,
     title,
-    clipboardHistoryRange: range,
-    clipboardHistoryItemId: itemId,
-    style: 'destructive',
-    requiresConfirmation: true,
-    confirmLabel: title,
-    confirmMessage: message,
-  };
+    message,
+    itemId,
+  );
 }
 
 function clipboardHistoryRemovalActions(item: any = null) {
-  if (clipboardHistory.length === 0) return [];
-  const actions: any[] = [];
-  if (item?.id)
-    actions.push(
-      clipboardHistoryRemovalAction(
-        'item',
-        'Remove Item',
-        `Remove “${clipboardItemTitle(item)}” from clipboard history?`,
-        item.id,
-      ),
-    );
-  actions.push(
-    clipboardHistoryRemovalAction(
-      'last-hour',
-      'Remove Entries from Last Hour',
-      'Remove clipboard history entries copied in the last hour?',
-    ),
-    clipboardHistoryRemovalAction(
-      'last-day',
-      'Remove Entries from Last Day',
-      'Remove clipboard history entries copied in the last day?',
-    ),
-    clipboardHistoryRemovalAction(
-      'all',
-      'Remove All Entries',
-      'Remove all clipboard history entries?',
-    ),
-  );
-  return actions;
+  return clipboardService!.clipboardHistoryRemovalActions(item);
 }
 
-const CLIPBOARD_ITEM_APPEARANCE = { foreground: 'blue' } as const;
-
 function clipboardRootItem(item) {
-  return {
-    id: `clipboard:${item.id}`,
-    title: clipboardItemTitle(item),
-    subtitle: clipboardItemSubtitle(item),
-    icon: 'clipboard',
-    image: item.thumbnailUrl,
-    score: 60,
-    lastUsed: item.createdAt || 0,
-    appearance: CLIPBOARD_ITEM_APPEARANCE,
-    primaryAction: clipboardCopyAction(item),
-    actionPanel: {
-      sections: [
-        {
-          actions: [
-            clipboardPreviewAction(item),
-            clipboardCopyAction(item),
-          ].filter(Boolean),
-        },
-      ],
-    },
-  };
+  return clipboardService!.clipboardRootItem(item);
 }
 
 function clipboardHistoryItem(item: any) {
-  const isImage = item.type === 'image';
-  const isVideo = item.type === 'video';
-  const copyAction = clipboardCopyAction(item);
-  const previewAction = clipboardPreviewAction(item);
-  const pasteAction =
-    isImage || isVideo
-      ? null
-      : {
-          type: 'pasteText',
-          title: 'Paste Text',
-          text: item.text,
-          dismissAfterRun: 'auto',
-        };
-  return {
-    id: `clipboard:${item.id}`,
-    title: clipboardItemTitle(item),
-    subtitle: clipboardItemSubtitle(item),
-    icon: 'clipboard',
-    image: item.thumbnailUrl,
-    keywords: [
-      item.text || '',
-      item.type || '',
-      `clipboard ${item.type || ''}`,
-      isImage ? 'image photo picture screenshot' : '',
-      isVideo ? 'video movie recording' : '',
-    ].filter(Boolean),
-    appearance: CLIPBOARD_ITEM_APPEARANCE,
-    primaryAction: copyAction,
-    actionPanel: {
-      sections: [
-        { actions: [previewAction, copyAction, pasteAction].filter(Boolean) },
-        {
-          title: 'Manage History',
-          actions: clipboardHistoryRemovalActions(item),
-        },
-      ],
-    },
-  };
+  return clipboardService!.clipboardHistoryItem(item);
 }
 
 function clipboardHistoryItems() {
-  return clipboardHistory.slice(0, CLIPBOARD_LIMIT).map(clipboardHistoryItem);
+  return clipboardService!.clipboardHistoryItems();
 }
 
 function clipboardHistorySnapshot(options: any = {}) {
-  return measureDebugPerformanceSync(
-    'clipboard.snapshot',
-    {
-      queryLength: String(options.query || '').length,
-      clipboardCount: clipboardHistory.length,
-      limit: options.limit,
-    },
-    () => {
-      const { limit, query, types } = options;
-      let entries = clipboardHistory;
-      if (Array.isArray(types) && types.length)
-        entries = entries.filter((entry) => types.includes(entry.type));
-      if (query) {
-        const needle = String(query).toLowerCase();
-        entries = entries.filter((entry) =>
-          `${entry.text || ''} ${entry.type || ''} ${entry.filePath || ''}`
-            .toLowerCase()
-            .includes(needle),
-        );
-      }
-      const max = typeof limit === 'number' ? limit : CLIPBOARD_LIMIT;
-      return entries.slice(0, max).map((entry) => ({
-        id: entry.id,
-        type: entry.type,
-        text: entry.text,
-        imageDataUrl: entry.imageDataUrl,
-        imagePath: entry.imagePath,
-        videoUrl: entry.videoUrl,
-        filePath: entry.filePath,
-        thumbnailUrl: entry.thumbnailUrl,
-        createdAt: entry.createdAt,
-      }));
-    },
-  );
+  return clipboardService!.clipboardHistorySnapshot(options);
 }
 
 function clipboardHistoryRemovalEntries(action) {
-  const range = action?.clipboardHistoryRange || 'item';
-  const now = Date.now();
-  const types = new Set(
-    Array.isArray(action?.types) ? action.types.map(String) : [],
-  );
-  const typeMatches = (entry) => !types.size || types.has(entry.type);
-  if (range === 'item')
-    return clipboardHistory.filter(
-      (entry) =>
-        entry.id === action?.clipboardHistoryItemId && typeMatches(entry),
-    );
-  if (range === 'ids') {
-    const ids = new Set(
-      Array.isArray(action?.clipboardHistoryItemIds)
-        ? action.clipboardHistoryItemIds
-        : [action?.clipboardHistoryItemId].filter(Boolean),
-    );
-    return clipboardHistory.filter(
-      (entry) => ids.has(entry.id) && typeMatches(entry),
-    );
-  }
-  if (range === 'last-hour')
-    return clipboardHistory.filter(
-      (entry) =>
-        (entry.createdAt || 0) >= now - CLIPBOARD_LAST_HOUR_MS &&
-        typeMatches(entry),
-    );
-  if (range === 'last-day')
-    return clipboardHistory.filter(
-      (entry) =>
-        (entry.createdAt || 0) >= now - CLIPBOARD_LAST_DAY_MS &&
-        typeMatches(entry),
-    );
-  if (range === 'older-than')
-    return clipboardHistory.filter(
-      (entry) =>
-        (entry.createdAt || 0) <
-          now - Math.max(0, Number(action?.olderThanMs || 0)) &&
-        typeMatches(entry),
-    );
-  if (range === 'all') return clipboardHistory.filter(typeMatches);
-  return [];
+  return clipboardService!.clipboardHistoryRemovalEntries(action);
 }
 
 function clipboardHistoryGet(id) {
-  return clipboardHistorySnapshot().find((entry) => entry.id === id) || null;
+  return clipboardService!.clipboardHistoryGet(id);
 }
 
 function removeClipboardHistoryByAction(action) {
-  const removed = clipboardHistoryRemovalEntries(action);
-  if (removed.length === 0) return 0;
-  const removedIds = new Set(removed.map((entry) => entry.id));
-  clipboardHistory = clipboardHistory.filter(
-    (entry) => !removedIds.has(entry.id),
-  );
-  scheduleSaveState();
-  invalidateExtensionRootItems();
-  paletteWindow.win?.webContents.send('clipboard:changed');
-  return removed.length;
+  return clipboardService!.removeClipboardHistoryByAction(action);
 }
 
 function clipboardHistoryRemovedMessage(count) {
-  return count === 1
-    ? 'Removed 1 clipboard item'
-    : `Removed ${count} clipboard items`;
+  return clipboardService!.clipboardHistoryRemovedMessage(count);
 }
 
 function removeClipboardHistoryEntries(action) {
-  const removed = removeClipboardHistoryByAction(action);
-  if (removed === 0)
-    return { toast: { message: 'No matching clipboard items to remove' } };
-  return {
-    view: clipboardHistoryView(),
-    navigation: 'replace',
-    toast: { message: clipboardHistoryRemovedMessage(removed) },
-  };
+  return clipboardService!.removeClipboardHistoryEntries(action);
 }
 
 function viewRefreshAction(itemsBuilder) {
@@ -1597,23 +1427,7 @@ function viewRefreshAction(itemsBuilder) {
 }
 
 function clipboardHistoryView() {
-  const actions = clipboardHistoryRemovalActions();
-  return {
-    type: 'list',
-    id: 'clipboard-history',
-    title: 'Clipboard History',
-    presentation: 'root',
-    searchBarPlaceholder: 'Search Clipboard History',
-    emptyView: {
-      title: 'No clipboard items found.',
-      subtitle: 'Copy text or images and they will appear here.',
-    },
-    actions,
-    actionPanel: actions.length
-      ? { sections: [{ title: 'Manage History', actions }] }
-      : undefined,
-    items: clipboardHistoryItems(),
-  };
+  return clipboardService!.clipboardHistoryView();
 }
 
 function isNewerVersion(version) {
@@ -1650,13 +1464,13 @@ function updateStatusView(_options: any = {}) {
         ? {
             type: 'downloadUpdate',
             title: updateManager.state.downloadInFlight
-              ? 'Downloading…'
+              ? 'Downloading...'
               : 'Download Update',
           }
         : {
             type: 'checkForUpdates',
             title: updateManager.state.checkInFlight
-              ? 'Checking…'
+              ? 'Checking...'
               : 'Check Again',
           };
   const title = unsupported
@@ -1668,14 +1482,14 @@ function updateStatusView(_options: any = {}) {
         : availableInfo
           ? `Nevermind ${version} is available`
           : updateManager.state.checkInFlight
-            ? 'Checking for updates…'
+            ? 'Checking for updates...'
             : updateManager.state.status === 'error'
               ? 'Update check failed'
               : 'No versions available';
   const subtitle = unsupported
     ? autoUpdatesUnavailableMessage()
     : installing
-      ? 'Restarting Nevermind to finish updating…'
+      ? 'Restarting Nevermind to finish updating...'
       : downloadedInfo
         ? 'Install the downloaded update and restart Nevermind'
         : availableInfo
@@ -1763,8 +1577,8 @@ function scheduleUpdateInstallQuitFallback() {
       });
       runQuitCleanup();
       app.exit(0);
-    }, 2_000).unref?.();
-  }, 5_000);
+    }, 2000).unref?.();
+  }, 5000);
   updateInstallQuitFallbackTimer.unref?.();
 }
 
@@ -1840,7 +1654,7 @@ function settingsView(selectedItemId = '') {
 
 function patchSettingsView(settingId: string, options: any = {}) {
   const definition = SETTING_DEFINITIONS.find((item) => item.id === settingId);
-  if (!definition || !settingIsAvailable(definition)) return;
+  if (!(definition && settingIsAvailable(definition))) return;
   patchOpenView('app-settings', {
     mode: 'patch',
     items: [
@@ -1924,7 +1738,7 @@ function compatibilityPromptAction() {
       ? `Nevermind ${version} or newer is required for backend compatibility`
       : 'This version is no longer supported by the backend',
     icon: 'restart',
-    score: 1_100,
+    score: 1100,
     primaryAction,
     actionPanel: primaryAction
       ? { sections: [{ actions: [primaryAction] }] }
@@ -1951,9 +1765,9 @@ function updatePromptAction() {
     return {
       id: 'updates:installing',
       title: `Installing Nevermind ${version || ''}`.trim(),
-      subtitle: 'Restarting Nevermind to finish updating…',
+      subtitle: 'Restarting Nevermind to finish updating...',
       icon: 'restart',
-      score: 1_000,
+      score: 1000,
     };
   }
   if (downloadedInfo) {
@@ -1962,7 +1776,7 @@ function updatePromptAction() {
       title: `Install Nevermind ${version}`,
       subtitle: 'Restart Nevermind to finish updating',
       icon: 'restart',
-      score: 1_000,
+      score: 1000,
       primaryAction: {
         type: 'installUpdate',
         title: `Install Nevermind ${version}`,
@@ -1974,10 +1788,10 @@ function updatePromptAction() {
       id: 'updates:download',
       title: `Download Nevermind ${version}`,
       subtitle: updateManager.state.downloadInFlight
-        ? 'Downloading update…'
+        ? 'Downloading update...'
         : 'Update available',
       icon: 'restart',
-      score: 1_000,
+      score: 1000,
       primaryAction: {
         type: 'downloadUpdate',
         title: `Download Nevermind ${version}`,
@@ -2053,13 +1867,12 @@ async function searchActions(query, options: any = {}) {
         { queryLength: q.length, resultCount: results.length },
         () =>
           results
-            .sort((a, b) => {
-              return (
+            .sort(
+              (a, b) =>
                 b.score - a.score ||
                 b.lastUsed - a.lastUsed ||
-                a.title.localeCompare(b.title)
-              );
-            })
+                a.title.localeCompare(b.title),
+            )
             .slice(0, 30)
             .map(prepareRootActionForRenderer),
       );
@@ -2436,12 +2249,12 @@ function withTimeout(promise, timeoutMs) {
 
 function normalizeItemAppearance(appearance) {
   const foreground = appearance?.foreground;
-  if (!ITEM_FOREGROUND_COLORS.has(foreground)) return undefined;
+  if (!ITEM_FOREGROUND_COLORS.has(foreground)) return;
   return { foreground };
 }
 
 function extensionRootActionFromItem(entry, item) {
-  if (!item?.id || !item.title) return null;
+  if (!(item?.id && item.title)) return null;
   const primaryAction = normalizeViewAction(
     item.primaryAction || item.action,
     entry,
@@ -2481,7 +2294,7 @@ function extensionRootActionFromItem(entry, item) {
 
 function extensionActionFromContribution(entry) {
   const item = entry.item;
-  if (!item?.id || !item.title) return null;
+  if (!(item?.id && item.title)) return null;
   const extensionFile = entry.extension.__filePath
     ? path.basename(entry.extension.__filePath)
     : undefined;
@@ -2812,7 +2625,7 @@ function resolveUserShellPath(): Promise<string> {
     execFile(
       userShell,
       ['-ilc', `printf '%s%s%s' '${delimiter}' "$PATH" '${delimiter}'`],
-      { timeout: 5_000 },
+      { timeout: 5000 },
       (_error, stdout) => {
         resolve(
           typeof stdout === 'string' ? stdout.split(delimiter)[1] || '' : '',
@@ -2957,7 +2770,7 @@ async function executeHostRefreshAction(record, launchContext?: any) {
 function refreshBackoffDelay(failureCount: number) {
   return Math.min(
     30_000,
-    1_000 * Math.max(1, 2 ** Math.max(0, failureCount - 1)),
+    1000 * Math.max(1, 2 ** Math.max(0, failureCount - 1)),
   );
 }
 
@@ -3070,61 +2883,25 @@ async function executeViewActionForIpc(action) {
 }
 
 function clipboardSnapshot() {
-  const image = clipboard.readImage();
-  return {
-    text: clipboard.readText(),
-    html: clipboard.readHTML(),
-    rtf: clipboard.readRTF(),
-    bookmark: clipboard.readBookmark(),
-    image: image.isEmpty() ? null : image,
-  };
+  return clipboardService!.clipboardSnapshot();
 }
 
 function restoreClipboardSnapshot(
   snapshot: ReturnType<typeof clipboardSnapshot>,
 ) {
-  if (!snapshot) return;
-  const data: any = {};
-  if (snapshot.text) data.text = snapshot.text;
-  if (snapshot.html) data.html = snapshot.html;
-  if (snapshot.rtf) data.rtf = snapshot.rtf;
-  if (snapshot.bookmark?.title || snapshot.bookmark?.url)
-    data.bookmark = snapshot.bookmark;
-  if (snapshot.image && !snapshot.image.isEmpty()) data.image = snapshot.image;
-  if (Object.keys(data).length === 0) clipboard.clear();
-  else clipboard.write(data);
+  clipboardService!.restoreClipboardSnapshot(snapshot);
 }
 
 function clipboardHistoryIdForText(text: string) {
-  const value = String(text || '').trim();
-  return value ? `text:${hashValue(value)}` : '';
+  return clipboardService!.clipboardHistoryIdForText(text);
 }
 
-function suppressClipboardHistoryId(id: string, durationMs = 2_000) {
-  if (id) suppressedClipboardItemIds.set(id, Date.now() + durationMs);
+function suppressClipboardHistoryId(id: string, durationMs = 2000) {
+  clipboardService!.suppressClipboardHistoryId(id, durationMs);
 }
 
 function pasteTextAction(action: any) {
-  const text = String(action.text || '');
-  const restoreClipboard = Boolean(action.restoreClipboard);
-  const concealed = Boolean(action.concealed || restoreClipboard);
-  const snapshot = restoreClipboard ? clipboardSnapshot() : null;
-  const suppressedId = clipboardHistoryIdForText(text);
-  if (concealed) suppressClipboardHistoryId(suppressedId);
-  if (action.plainText === false && action.html)
-    clipboard.write({ text, html: String(action.html) });
-  else clipboard.writeText(text);
-  pasteIntoFrontmostApp();
-  if (restoreClipboard && snapshot) {
-    const delay = Math.max(
-      50,
-      Math.min(5_000, Number(action.restoreDelayMs || 250)),
-    );
-    setTimeout(() => {
-      suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text));
-      restoreClipboardSnapshot(snapshot);
-    }, delay).unref?.();
-  }
+  clipboardService!.pasteTextAction(action);
 }
 
 function executeWindowAction(action: any) {
@@ -3135,7 +2912,7 @@ function shellResultView(title, result) {
   return {
     type: 'preview',
     title,
-    content: `Exit code: ${result.exitCode ?? 0}\n\nSTDOUT\n${result.stdout || '—'}\n\nSTDERR\n${result.stderr || '—'}`,
+    content: `Exit code: ${result.exitCode ?? 0}\n\nSTDOUT\n${result.stdout || '-'}\n\nSTDERR\n${result.stderr || '-'}`,
   };
 }
 
@@ -3179,7 +2956,7 @@ async function executeViewAction(action, launchContext?: any) {
           view: {
             type: 'list' as const,
             id: native.viewId,
-            title: 'Loading…',
+            title: 'Loading...',
             isLoading: true,
             items: [],
           },
@@ -3637,17 +3414,17 @@ async function localFileResponse(requestPath: string, request: Request) {
 
   if (range) {
     const match = range.match(/^bytes=(\d*)-(\d*)$/);
-    if (!match || (!match[1] && !match[2]))
+    if (!match || !(match[1] || match[2]))
       return new Response('Invalid range', {
         status: 416,
         headers: { 'content-range': `bytes */${stat.size}` },
       });
-    if (!match[1]) {
-      start = Math.max(0, stat.size - Number(match[2]));
-      end = stat.size - 1;
-    } else {
+    if (match[1]) {
       start = Number(match[1]);
       end = match[2] ? Number(match[2]) : stat.size - 1;
+    } else {
+      start = Math.max(0, stat.size - Number(match[2]));
+      end = stat.size - 1;
     }
     if (
       Number.isNaN(start) ||
@@ -4016,7 +3793,7 @@ function dragIconForPath(filePath) {
 
 function startFileDrag(event, filePath) {
   const resolvedPath = expandUserPath(filePath);
-  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return;
+  if (!(resolvedPath && path.isAbsolute(resolvedPath))) return;
   event.sender.startDrag({
     file: resolvedPath,
     icon: dragIconForPath(resolvedPath),
@@ -4032,7 +3809,7 @@ function quickLookPath(filePath) {
       },
     };
   const resolvedPath = expandUserPath(filePath);
-  if (!resolvedPath || !path.isAbsolute(resolvedPath))
+  if (!(resolvedPath && path.isAbsolute(resolvedPath)))
     return {
       toast: { message: `Cannot ${quickLookTitle()} this item`, tone: 'error' },
     };
@@ -4083,7 +3860,7 @@ async function documentTypesForApp(appPath) {
 
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath);
-  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return [];
+  if (!(resolvedPath && path.isAbsolute(resolvedPath))) return [];
   if (!hasCapability('open-with')) return appIndexService.get();
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase();
   const contentTypes = new Set(await contentTypesForPath(resolvedPath));
@@ -4121,10 +3898,12 @@ async function openPathWithApp(filePath, appPath) {
   const resolvedPath = expandUserPath(filePath);
   const resolvedAppPath = expandUserPath(appPath);
   if (
-    !resolvedPath ||
-    !resolvedAppPath ||
-    !path.isAbsolute(resolvedPath) ||
-    !path.isAbsolute(resolvedAppPath)
+    !(
+      resolvedPath &&
+      resolvedAppPath &&
+      path.isAbsolute(resolvedPath) &&
+      path.isAbsolute(resolvedAppPath)
+    )
   )
     return {
       toast: { message: 'Cannot open this file with that app', tone: 'error' },
@@ -4147,132 +3926,39 @@ async function selectedExtensionFiles() {
 }
 
 async function clipboardFiles() {
-  return Promise.all(clipboardFilePaths(clipboard).map(fileToExtensionFile));
+  return clipboardService!.clipboardFiles();
 }
 
 function clipboardImageDataUrl() {
-  const image = clipboard.readImage();
-  return image.isEmpty() ? null : image.toDataURL();
+  return clipboardService!.clipboardImageDataUrl();
 }
 
 function clipboardFormats(options: any = {}) {
-  const formats = Array.isArray(options.formats)
-    ? options.formats.map(String)
-    : [];
-  return formats.length ? new Set(formats) : null;
+  return clipboardService!.clipboardFormats(options);
 }
 
 async function readDesktopClipboard(options: any = {}) {
-  const formats = clipboardFormats(options);
-  if (!formats || formats.has('files')) {
-    const files = await clipboardFiles();
-    if (files.length)
-      return {
-        type: 'files',
-        files,
-        paths: files.map((file: any) => file.path),
-      };
-  }
-  if (!formats || formats.has('image')) {
-    const image = clipboardImageDataUrl();
-    if (image) return { type: 'image', imageDataUrl: image, image };
-  }
-  if (!formats || formats.has('html')) {
-    const html = clipboard.readHTML();
-    if (html) return { type: 'html', html, text: clipboard.readText() };
-  }
-  if (!formats || formats.has('text')) {
-    const text = clipboard.readText();
-    if (text)
-      return { type: 'text', text, html: clipboard.readHTML() || undefined };
-  }
-  return { type: 'empty' };
+  return clipboardService!.readDesktopClipboard(options);
 }
 
 function clipboardImageForContent(item: any) {
-  const image = item?.image || item?.imageDataUrl || item?.path;
-  if (!image) return null;
-  return String(image).startsWith('data:')
-    ? nativeImage.createFromDataURL(String(image))
-    : nativeImage.createFromPath(expandUserPath(String(image)));
+  return clipboardService!.clipboardImageForContent(item);
 }
 
 function suppressClipboardHistoryForContent(item: any) {
-  if (!item) return;
-  if (typeof item === 'string')
-    return suppressClipboardHistoryId(clipboardHistoryIdForText(item));
-  const text = item.text || (item.type === 'html' ? item.html : '');
-  if (text) suppressClipboardHistoryId(clipboardHistoryIdForText(String(text)));
-  const image = clipboardImageForContent(item);
-  if (image && !image.isEmpty())
-    suppressClipboardHistoryId(`image:${hashValue(image.toPNG())}`);
-  const paths = Array.isArray(item.paths)
-    ? item.paths
-    : Array.isArray(item.files)
-      ? item.files.map((file) => file.path || file).filter(Boolean)
-      : [];
-  for (const filePath of paths)
-    if (isVideoPath(String(filePath)))
-      suppressClipboardHistoryId(
-        `video:${hashValue(expandUserPath(String(filePath)))}`,
-      );
+  clipboardService!.suppressClipboardHistoryForContent(item);
 }
 
 function writeDesktopClipboardFiles(paths) {
-  const resolvedPaths = (Array.isArray(paths) ? paths : [paths])
-    .map((filePath) => expandUserPath(String(filePath)))
-    .filter(Boolean);
-  const fileUrls = resolvedPaths
-    .map((filePath) => pathToFileURL(filePath).href)
-    .join('\n');
-  clipboard.write({ text: resolvedPaths.join('\n') });
-  if (fileUrls)
-    clipboard.writeBuffer('public.file-url', Buffer.from(fileUrls, 'utf8'));
+  clipboardService!.writeDesktopClipboardFiles(paths);
 }
 
 function writeDesktopClipboard(item, options: any = {}) {
-  const content =
-    typeof item === 'string' ? { type: 'text', text: item } : item || {};
-  if (content.concealed || options.concealed)
-    suppressClipboardHistoryForContent(content);
-  if (
-    content.type === 'files' ||
-    Array.isArray(content.paths) ||
-    Array.isArray(content.files)
-  )
-    return writeDesktopClipboardFiles(content.paths || content.files);
-  if (content.type === 'html' || content.html != null)
-    return clipboard.write({
-      text: String(content.text || ''),
-      html: String(content.html || ''),
-    });
-  if (content.type === 'text' || content.text != null)
-    return content.html
-      ? clipboard.write({
-          text: String(content.text || ''),
-          html: String(content.html),
-        })
-      : clipboard.writeText(String(content.text || ''));
-  const image = clipboardImageForContent(content);
-  if (content.type === 'image' || image)
-    return clipboard.writeImage(image || nativeImage.createEmpty());
+  return clipboardService!.writeDesktopClipboard(item, options);
 }
 
 function pasteClipboardAction(action: any) {
-  const restoreClipboard = Boolean(action.restoreClipboard);
-  const snapshot = restoreClipboard ? clipboardSnapshot() : null;
-  const content = action.content || action.clipboard || action;
-  writeDesktopClipboard(content, {
-    concealed: action.concealed || restoreClipboard,
-  });
-  pasteIntoFrontmostApp();
-  if (restoreClipboard && snapshot) {
-    const delay = Math.max(
-      50,
-      Math.min(5_000, Number(action.restoreDelayMs || 250)),
-    );
-    setTimeout(() => restoreClipboardSnapshot(snapshot), delay).unref?.();
-  }
+  clipboardService!.pasteClipboardAction(action);
 }
 
 async function readDesktopSelection() {
@@ -4355,7 +4041,7 @@ function extensionStorageRefreshKey(extension, key) {
 function limitedOutput(value, limit = 200_000) {
   const text = String(value || '');
   return text.length > limit
-    ? `${text.slice(0, limit)}\n… output truncated …`
+    ? `${text.slice(0, limit)}\n... output truncated ...`
     : text;
 }
 
@@ -4399,7 +4085,7 @@ function createExtensionStorage(extension) {
       const age =
         cached && typeof cached === 'object'
           ? Date.now() - Number(cached.updatedAt || 0)
-          : Infinity;
+          : Number.POSITIVE_INFINITY;
       if (age < Number(ttlMs || 0)) return cached.value;
       const refreshKey = extensionStorageRefreshKey(extension, key);
       const refresh =
@@ -4530,13 +4216,13 @@ async function normalizeExtensionAiAttachments(
     }
     const type =
       attachment?.type ||
-      (attachment?.text != null
-        ? 'text'
-        : attachment?.path || attachment?.file
+      (attachment?.text == null
+        ? attachment?.path || attachment?.file
           ? 'file'
           : attachment?.dataUrl || attachment?.imageDataUrl
             ? 'image'
-            : '');
+            : ''
+        : 'text');
     if (type === 'text') {
       textSections.push(
         `${attachment.title ? `### ${attachment.title}\n` : ''}${limitedOutput(attachment.text || '', EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`,
@@ -4607,7 +4293,7 @@ async function normalizeExtensionAiAttachments(
 }
 
 function normalizeExtensionAiModelRole(value) {
-  if (value == null || value === '') return undefined;
+  if (value == null || value === '') return;
   if (value === 'smart' || value === 'fast') return value;
   throw new Error(
     `Unsupported AI model role: ${value}. Use 'smart' or 'fast'.`,
@@ -4969,7 +4655,7 @@ function scheduleRateRefresh(base: string, quote: string, options: any = {}) {
 async function refreshRate(base: string, quote: string) {
   const key = rateCacheKey(base, quote);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5_000);
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(
       `${FRANKFURTER_API_BASE}/v2/rate/${encodeURIComponent(base)}/${encodeURIComponent(quote)}`,
@@ -5019,14 +4705,14 @@ function calculatorResultItem(query: string, result: any) {
           keepPaletteOpen: true,
         }
       : null,
-    result.raw !== result.formatted
-      ? {
+    result.raw === result.formatted
+      ? null
+      : {
           type: 'copyText',
           title: 'Copy Unformatted Result',
           text: result.raw,
           dismissAfterRun: 'auto',
-        }
-      : null,
+        },
     {
       type: 'pasteText',
       title: 'Paste Result',
@@ -5273,52 +4959,7 @@ async function reindexFiles(options: any = {}) {
 }
 
 function createClipboardExtension() {
-  function historyItem() {
-    const latestClipboardTime = clipboardHistory[0]?.createdAt || 0;
-    return {
-      id: 'clipboard-history',
-      title: 'Clipboard History',
-      subtitle: clipboardHistory.length
-        ? `Show all ${clipboardHistory.length} copied items`
-        : 'Show copied items',
-      icon: 'clipboard',
-      score: 14,
-      lastUsed: latestClipboardTime ? latestClipboardTime - 1 : 0,
-      primaryAction: {
-        type: 'pushView',
-        title: 'Clipboard History',
-        view: clipboardHistoryView(),
-      },
-    };
-  }
-
-  return {
-    id: 'nevermind.clipboard',
-    title: 'Clipboard',
-    permissions: ['clipboard.history'] as const,
-    commands: [
-      {
-        id: 'clipboard-history',
-        actionId: 'clipboard-history',
-        title: 'Clipboard History',
-        subtitle: 'Show copied items',
-        icon: 'clipboard',
-        score: 14,
-        run: () => clipboardHistoryView(),
-      },
-    ],
-    rootItems(ctx) {
-      if (!getSetting('showClipboardInRoot')) return [];
-      return ctx.clipboard.history.list({ limit: 10 }).map(clipboardRootItem);
-    },
-    searchItems(ctx, query) {
-      return ctx.clipboard.history
-        .list()
-        .map(clipboardRootItem)
-        .filter((item) => rankAction(item, query))
-        .slice(0, 5);
-    },
-  };
+  return clipboardService!.createClipboardExtension();
 }
 
 function createAppsExtension() {
@@ -5570,12 +5211,12 @@ function jobDetailsMarkdown(job: JobSnapshot) {
     `- Triggers: ${jobTriggerSummary(job)}`,
     `- Runs: ${job.runCount}`,
     `- Failures: ${job.failureCount}`,
-    `- Last reason: ${job.lastReason || '—'}`,
+    `- Last reason: ${job.lastReason || '-'}`,
     `- Last started: ${jobTime(job.lastStartedAt)}`,
     `- Last finished: ${jobTime(job.lastFinishedAt)}`,
-    job.lastDurationMs != null
-      ? `- Last duration: ${job.lastDurationMs}ms`
-      : '',
+    job.lastDurationMs == null
+      ? ''
+      : `- Last duration: ${job.lastDurationMs}ms`,
     job.nextRunAt ? `- Next run: ${jobTime(job.nextRunAt)}` : '',
     job.backoffUntil ? `- Backoff until: ${jobTime(job.backoffUntil)}` : '',
     `- Consecutive failures: ${job.consecutiveFailures}`,
@@ -5718,7 +5359,7 @@ function createAccountExtension() {
             broadcastAuthChanged({ authed: false });
             const suffix = revoked
               ? ''
-              : ' (token revoke failed — check connection)';
+              : ' (token revoke failed - check connection)';
             return {
               toast: {
                 message: `Logged out of ${existing.email}${suffix}`,
@@ -5822,13 +5463,13 @@ function buildRecordShortcutAction(input: any, options: any) {
     options?.title ||
     (scope === 'palette' ? 'Change Shortcut' : 'Record shortcut');
   const shortcut =
-    input?.shortcut !== undefined ? String(input.shortcut) : undefined;
+    input?.shortcut === undefined ? undefined : String(input.shortcut);
   return {
     ...options,
     type: 'recordShortcut',
     title,
     action: targetAction,
-    ...(shortcut !== undefined ? { shortcut } : {}),
+    ...(shortcut === undefined ? {} : { shortcut }),
   };
 }
 
@@ -5852,15 +5493,15 @@ function wrapWithConfirmation(action: any, input: any) {
     title: input?.title || action.title,
     requiresConfirmation: true,
     ...(destructive ? { style: 'destructive' } : {}),
-    ...(input?.message !== undefined
-      ? { confirmMessage: String(input.message) }
-      : {}),
-    ...(input?.confirmLabel !== undefined
-      ? { confirmLabel: String(input.confirmLabel) }
-      : {}),
-    ...(input?.cancelLabel !== undefined
-      ? { cancelLabel: String(input.cancelLabel) }
-      : {}),
+    ...(input?.message === undefined
+      ? {}
+      : { confirmMessage: String(input.message) }),
+    ...(input?.confirmLabel === undefined
+      ? {}
+      : { confirmLabel: String(input.confirmLabel) }),
+    ...(input?.cancelLabel === undefined
+      ? {}
+      : { cancelLabel: String(input.cancelLabel) }),
   };
 }
 
@@ -5873,13 +5514,13 @@ function buildPromptAction(input: any = {}, options: any = {}) {
     type: 'promptAction',
     title,
     subtitle:
-      input?.message !== undefined ? String(input.message) : options.subtitle,
+      input?.message === undefined ? options.subtitle : String(input.message),
     promptMessage:
-      input?.message !== undefined ? String(input.message) : undefined,
+      input?.message === undefined ? undefined : String(input.message),
     fields: Array.isArray(input?.fields) ? input.fields : [],
     targetAction,
     submitTitle:
-      input?.submitTitle !== undefined ? String(input.submitTitle) : undefined,
+      input?.submitTitle === undefined ? undefined : String(input.submitTitle),
   };
 }
 
@@ -5952,16 +5593,16 @@ function progressView(input: any = {}) {
     ? input.steps
     : [
         {
-          title: input.label || input.title || 'Loading…',
+          title: input.label || input.title || 'Loading...',
           status: input.status || 'active',
         },
       ];
   return {
     ...input,
     type: 'progress',
-    title: input.title || input.label || 'Loading…',
+    title: input.title || input.label || 'Loading...',
     steps,
-    ...(input.id !== undefined ? { id: String(input.id) } : {}),
+    ...(input.id === undefined ? {} : { id: String(input.id) }),
     ...(typeof input.value === 'number' ? { value: input.value } : {}),
     ...(typeof input.total === 'number' ? { total: input.total } : {}),
   };
@@ -6692,7 +6333,7 @@ function buildAiBuilderAction(title, handler, options: any = {}) {
 
 function createAiBuilderApi(extension) {
   const privileged = extension?.id === AI_BUILDER_EXTENSION_ID;
-  if (!privileged) return undefined;
+  if (!privileged) return;
   return {
     startChat: (input: any = {}) => {
       const prompt = String(input.prompt || input.query || '');
@@ -6721,9 +6362,7 @@ function createAiBuilderApi(extension) {
     removeChat: (chatId, input: any = {}) =>
       buildAiBuilderAction(
         input.title || 'Remove Chat',
-        async () => {
-          return removeAiChat(chatId);
-        },
+        async () => removeAiChat(chatId),
         { style: 'destructive', ...(input.options || {}) },
       ),
     tweakExtension: (input: any = {}) =>
@@ -7029,7 +6668,7 @@ async function removeGeneratedExtensionForChat(
   chatId = activeAiChatId,
 ) {
   const base = path.basename(filename || '');
-  if (!base || !isExtensionSourceFile(base)) return { removed: false };
+  if (!(base && isExtensionSourceFile(base))) return { removed: false };
   if (!chatCanWriteExtension(base, chatId))
     throw new Error(
       `Refusing to remove ${base}: this AI chat does not own that extension.`,
@@ -7228,10 +6867,12 @@ function applyExtensionMetadata(extension, metadata) {
 async function renameExtension(extension, command, metadata) {
   const normalized = normalizedExtensionMetadata(metadata);
   if (
-    !normalized.title &&
-    !normalized.subtitle &&
-    !normalized.commandTitle &&
-    !normalized.commandSubtitle
+    !(
+      normalized.title ||
+      normalized.subtitle ||
+      normalized.commandTitle ||
+      normalized.commandSubtitle
+    )
   )
     throw new Error(
       'rename requires a title, subtitle, commandTitle, or commandSubtitle',
@@ -7465,7 +7106,7 @@ function normalizedFileTriggerForLaunch(trigger: any) {
 }
 
 function extensionTriggerForLaunch(trigger: any) {
-  if (!trigger) return undefined;
+  if (!trigger) return;
   if (trigger.type === 'files.changed')
     return normalizedFileTriggerForLaunch(trigger);
   return structuredClone(trigger);
@@ -7642,7 +7283,10 @@ function registerExtension(extension) {
       if (!extension?.id) return;
       extensionModules.set(extension.id, extension);
       for (const command of extension.commands || []) {
-        if (!command?.id || !command.title || typeof command.run !== 'function')
+        if (
+          !(command?.id && command.title) ||
+          typeof command.run !== 'function'
+        )
           continue;
         const entry = { extension, command, source: 'command' };
         const action = {
@@ -7695,7 +7339,7 @@ function registerExtension(extension) {
             source: 'action',
           };
           for (const item of items) {
-            if (!item?.id || !item.title) continue;
+            if (!(item?.id && item.title)) continue;
             const action = item.run
               ? {
                   type: 'runExtensionAction',
@@ -7747,7 +7391,7 @@ const DEFAULT_FILE_INDEX_IGNORES = [
   'Library',
   'Applications',
 ];
-const DEFAULT_FILE_INDEX_LIMIT = 5_000;
+const DEFAULT_FILE_INDEX_LIMIT = 5000;
 const MAX_FILE_INDEX_LIMIT = 20_000;
 
 function defaultFileIndexRoots() {
@@ -7895,7 +7539,7 @@ function registerHostJobs() {
     title: 'Save User State',
     owner: 'host',
     scope: 'state',
-    timeoutMs: 5_000,
+    timeoutMs: 5000,
     run: saveUserState,
   });
   jobRegistry.register({
@@ -7928,8 +7572,8 @@ function registerHostJobs() {
     title: 'Frontmost App Poll',
     owner: 'host',
     scope: 'apps',
-    triggers: [{ type: 'interval', everyMs: 5_000, delayMs: 5_000 }],
-    timeoutMs: 3_000,
+    triggers: [{ type: 'interval', everyMs: 5000, delayMs: 5000 }],
+    timeoutMs: 3000,
     run: pollFrontmostAppChange,
   });
   jobRegistry.register({
@@ -8022,7 +7666,16 @@ async function loadUserState() {
   clipboardHistory = normalizeClipboardHistory(
     userState.clipboardHistory,
     CLIPBOARD_LIMIT,
-    persistClipboardImage,
+    (png, hash) => {
+      const imagePath = path.join(clipboardImagesDir, `${hash}.png`);
+      try {
+        fsSync.mkdirSync(clipboardImagesDir, { recursive: true });
+        fsSync.writeFileSync(imagePath, png);
+      } catch {
+        // migrate with sync I/O; runtime writes use async
+      }
+      return imagePath;
+    },
   );
   jobRegistry.hydrateEnabled(userState.jobSettings?.enabled || {});
 }
@@ -8036,78 +7689,16 @@ function migrateAiChats() {
   }
 }
 
-function persistClipboardImage(png, hash) {
-  const imagePath = path.join(clipboardImagesDir, `${hash}.png`);
-  fs.mkdir(clipboardImagesDir, { recursive: true })
-    .then(() => fs.writeFile(imagePath, png))
-    .catch((error) =>
-      logWarn('clipboard.image.persist.failed', error, {
-        source: 'host',
-        scope: 'clipboard',
-      }),
-    );
-  return imagePath;
+async function persistClipboardImage(png, hash) {
+  return clipboardService!.persistClipboardImage(png, hash);
 }
 
 function readClipboardItem() {
-  const filePath = readClipboardFilePath(clipboard);
-  if (filePath && isVideoPath(filePath)) {
-    return {
-      id: `video:${hashValue(filePath)}`,
-      type: 'video',
-      filePath,
-      videoUrl: fileUrlForPath(filePath),
-      thumbnailUrl: thumbnailUrlForPath(filePath),
-      createdAt: Date.now(),
-    };
-  }
-
-  const text = clipboard.readText().trim();
-  if (text) {
-    return {
-      id: `text:${hashValue(text)}`,
-      type: 'text',
-      text,
-      createdAt: Date.now(),
-    };
-  }
-
-  const image = clipboard.readImage();
-  if (image.isEmpty()) return null;
-
-  const png = image.toPNG();
-  const hash = hashValue(png);
-  const imagePath = persistClipboardImage(png, hash);
-  return {
-    id: `image:${hash}`,
-    type: 'image',
-    imagePath,
-    imageDataUrl: fileUrlForPath(imagePath),
-    thumbnailUrl: thumbnailUrlForPath(imagePath),
-    createdAt: Date.now(),
-  };
+  return clipboardService!.readClipboardItem();
 }
 
 function rememberClipboardItem(item) {
-  if (!item) return;
-  const previousIds = new Set(clipboardHistory.map((entry) => entry.id));
-  clipboardHistory = [
-    item,
-    ...clipboardHistory.filter((current) => current.id !== item.id),
-  ].slice(0, CLIPBOARD_LIMIT);
-  scheduleSaveState();
-  invalidateExtensionRootItems();
-  jobRegistry.emit('clipboard.changed');
-  paletteWindow.win?.webContents.send('clipboard:changed');
-  const currentIds = new Set(clipboardHistory.map((entry) => entry.id));
-  const removeItemIds = [...previousIds]
-    .filter((id) => !currentIds.has(id))
-    .map((id) => `clipboard:${id}`);
-  patchOpenView('clipboard-history', {
-    mode: 'prepend',
-    items: [clipboardHistoryItem(item)],
-    removeItemIds,
-  });
+  clipboardService!.rememberClipboardItem(item);
 }
 
 function scheduleSaveState() {
@@ -8135,35 +7726,12 @@ async function saveUserState() {
 }
 
 function pollClipboardChange() {
-  const item = readClipboardItem();
-  if (!item || item.id === clipboardWatcherLastId) return;
-  const suppressUntil = suppressedClipboardItemIds.get(item.id) || 0;
-  if (suppressUntil > Date.now()) {
-    clipboardWatcherLastId = item.id;
-    return;
-  }
-  if (suppressUntil) suppressedClipboardItemIds.delete(item.id);
-  clipboardWatcherLastId = item.id;
-  rememberClipboardItem(item);
+  return clipboardService!.pollClipboardChange();
 }
 
-function startClipboardWatcher() {
-  clipboardWatcherLastId = readClipboardItem()?.id || '';
-  jobRegistry.register({
-    id: 'clipboard.poll',
-    title: 'Clipboard Poll',
-    owner: 'host',
-    scope: 'clipboard',
-    triggers: [
-      {
-        type: 'interval',
-        everyMs: CLIPBOARD_POLL_INTERVAL_MS,
-        delayMs: CLIPBOARD_POLL_INTERVAL_MS,
-      },
-    ],
-    timeoutMs: 2_000,
-    run: pollClipboardChange,
-  });
+async function startClipboardWatcher() {
+  const watcherJob = await clipboardService!.startClipboardWatcher();
+  jobRegistry.register(watcherJob);
 }
 
 function unregisterShortcutForAction(actionId) {
@@ -8180,8 +7748,8 @@ async function executeShortcutAction(action) {
       'action:view-open',
       normalizeHostViewResult({
         view: progressView({
-          title: currentAction?.title || 'Opening…',
-          label: 'Opening…',
+          title: currentAction?.title || 'Opening...',
+          label: 'Opening...',
         }),
         revealWhenReady: true,
         asSibling: false,
@@ -8308,8 +7876,10 @@ function getShortcuts() {
   const declared = declaredGlobalShortcuts()
     .filter(
       (item) =>
-        !userState.shortcuts[item.actionId] &&
-        !userState.removedShortcuts?.[item.actionId],
+        !(
+          userState.shortcuts[item.actionId] ||
+          userState.removedShortcuts?.[item.actionId]
+        ),
     )
     .map((item) => ({
       ...item,
@@ -8360,7 +7930,7 @@ async function setAlias(action, alias) {
       ok: false,
       message: 'Aliases are only available for persistent actions',
     };
-  if (!action?.id || !alias.trim())
+  if (!(action?.id && alias.trim()))
     return { ok: false, message: 'Missing alias' };
   const aliases = new Set(actionAliases(action.id));
   aliases.add(alias.trim());
@@ -8370,7 +7940,7 @@ async function setAlias(action, alias) {
 }
 
 async function removeAlias(action, alias) {
-  if (!action?.id || !alias) return { ok: false, message: 'Missing alias' };
+  if (!(action?.id && alias)) return { ok: false, message: 'Missing alias' };
   const current = actionAliases(action.id).filter((value) => value !== alias);
   if (current.length) userState.aliases[action.id] = current;
   else delete userState.aliases[action.id];
@@ -8384,7 +7954,7 @@ async function setShortcut(action, shortcut) {
       ok: false,
       message: 'Shortcuts are only available for persistent actions',
     };
-  if (!action?.id || !shortcut.trim())
+  if (!(action?.id && shortcut.trim()))
     return { ok: false, message: 'Missing shortcut' };
   const accelerator = normalizeAccelerator(shortcut);
   if (accelerator === getPaletteHotkey())
@@ -8502,8 +8072,10 @@ async function clearOverride(action) {
 
 async function duplicateCreatedAction(action) {
   if (
-    !['extension-root-item', 'extension-action'].includes(action?.kind) ||
-    !action.removable
+    !(
+      ['extension-root-item', 'extension-action'].includes(action?.kind) &&
+      action.removable
+    )
   )
     return {
       ok: false,
@@ -8533,7 +8105,7 @@ async function duplicateCreatedAction(action) {
     messages: [
       {
         role: 'system',
-        content: `Duplicated from “${extension.title || action.title}”. Tweak this copy without changing the original.`,
+        content: `Duplicated from "${extension.title || action.title}". Tweak this copy without changing the original.`,
       },
     ],
   };
@@ -8568,7 +8140,7 @@ async function duplicateCreatedAction(action) {
 }
 
 async function removeAiChat(chatId) {
-  if (!chatId || !userState.aiChats[chatId])
+  if (!(chatId && userState.aiChats[chatId]))
     return { toast: { message: 'AI chat not found', tone: 'error' } };
   await nevermindAi?.reset?.(chatId);
   const chat = userState.aiChats[chatId];
@@ -8749,7 +8321,7 @@ app.whenReady().then(async () => {
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();
   registerActionShortcuts();
-  startClipboardWatcher();
+  await startClipboardWatcher();
   await appIndexService.startWatcher();
   powerMonitor.on('resume', () => jobRegistry.emit('wake'));
   jobRegistry.emit('login');
@@ -8828,6 +8400,6 @@ app.on('will-quit', () => {
 
 if (!isDev) {
   const gotLock = app.requestSingleInstanceLock();
-  if (!gotLock) app.quit();
-  else app.on('second-instance', () => paletteWindow.showPalette());
+  if (gotLock) app.on('second-instance', () => paletteWindow.showPalette());
+  else app.quit();
 }
