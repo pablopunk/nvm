@@ -475,7 +475,7 @@ export type ExtensionView = {
   showDeviceSwitcher?: boolean;
   muted?: boolean;
   controls?: boolean;
-  /** View items or a lazy loader handle from `ctx.data.loader(fn)`. When a loader handle is used, the host owns the loading lifecycle and `emptyView` is required. */
+  /** View items or a lazy loader handle from `ctx.data.loader()` or `ctx.data.staleWhileRevalidate()`. When a loader handle is used, the host owns the loading lifecycle and `emptyView` is required. */
   items?: ExtensionItem[] | ExtensionDataLoaderHandle;
   sections?: ExtensionItemSection[];
   isLoading?: boolean;
@@ -797,7 +797,7 @@ export type ExtensionAiStream = {
   abort(): void;
 };
 
-/** Opaque handle returned by `ctx.data.loader()`. The host replaces it with resolved items after the loader completes. */
+/** Opaque handle returned by `ctx.data.loader()` or `ctx.data.staleWhileRevalidate()`. The host replaces it with resolved items after the loader completes. */
 export type ExtensionDataLoaderHandle = { _loader: true };
 
 /** Lazy data fetching. The host owns the loading/error/empty lifecycle. */
@@ -815,6 +815,41 @@ export type ExtensionData = {
     fn: () => Promise<ExtensionItem[]>,
     options?: { retry?: boolean },
   ): ExtensionDataLoaderHandle;
+  /**
+   * Declare items that resolve with stale-while-revalidate semantics.
+   * Returns a loader handle assigned to `view.items`; the host owns the
+   * cache and loading lifecycle.
+   *
+   * **Fresh cache** (age < `ttlMs`): Cached items render immediately, no
+   * loading indicator, no background refresh.
+   *
+   * **Stale cache** (between `ttlMs` and `staleTtlMs`): Cached items render
+   * immediately with a subtle loading bar. The loader refreshes in the
+   * background and patches in fresh items.
+   *
+   * **No cache or expired** (age > `staleTtlMs`): Behavior matches
+   * `loader()` — the host shows a deferred spinner, then renders items.
+   *
+   * **Loader failure with stale cache**: Shows stale items as a graceful
+   * fallback instead of an error view.
+   *
+   * The `loader` must return JSON-serializable items. Use `ctx.actions.*`
+   * helpers for primary actions — do not attach raw function handlers to
+   * cached items.
+   *
+   * @param cacheKey - Stable key for the extension's persistent cache.
+   * @param ttlMs - Items are fresh within this time. Defaults to 60_000 (1 minute).
+   * @param staleTtlMs - Stale items shown immediately with loading indicator; background refresh. Defaults to 300_000 (5 minutes).
+   * @param loader - Async function returning JSON-serializable items.
+   * @param retry - Show a retry button on error (only when no stale cache fallback).
+   */
+  staleWhileRevalidate(options: {
+    cacheKey: string;
+    ttlMs?: number;
+    staleTtlMs?: number;
+    loader: () => Promise<ExtensionItem[]>;
+    retry?: boolean;
+  }): ExtensionDataLoaderHandle;
 };
 
 export type ExtensionAi = {

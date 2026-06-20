@@ -1587,6 +1587,32 @@ kbd {
   }
 }
 
+.viewLoadingBar {
+  height: 2px;
+  min-height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent) 50%,
+    transparent 100%
+  );
+  opacity: 0.5;
+  background-size: 200% 100%;
+  animation: viewLoadingBarSlide 1.5s ease-in-out infinite;
+  border-radius: 1px;
+  margin: 0 12px 4px;
+  flex-shrink: 0;
+}
+
+@keyframes viewLoadingBarSlide {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 .loadMoreButton {
   margin: 8px auto 0;
   padding: 8px 12px;

@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createDataLoaderHandle,
+  createStaleWhileRevalidateHandle,
   createViewLoaderRegistry,
   isLoaderHandle,
+  isStaleWhileRevalidateHandle,
   normalizeLoaderItems,
   resolveLoaderEmptyView,
 } from './data-loader';
@@ -158,4 +160,195 @@ test('stale in-flight completions do not overwrite newer registrations', async (
   await registry.spawn('view:1');
   assert.equal(registry.has('view:1'), false);
   assert.deepEqual(payloads, [{ items: [{ id: 'fast' }], isLoading: false }]);
+});
+
+test('normalizeLoaderItems returns _initialItems when handle has them', () => {
+  const handle = createDataLoaderHandle(async () => []);
+  assert.deepEqual(normalizeLoaderItems(handle), []);
+
+  handle._initialItems = [{ id: 'a' }, { id: 'b' }];
+  assert.deepEqual(normalizeLoaderItems(handle), [{ id: 'a' }, { id: 'b' }]);
+
+  // Non-handle values pass through
+  assert.deepEqual(normalizeLoaderItems([{ id: 'c' }]), [{ id: 'c' }]);
+  assert.equal(normalizeLoaderItems(null), null);
+});
+
+test('createStaleWhileRevalidateHandle sets correct shape', () => {
+  const loader = async () => [{ id: 'a' }];
+  const handle = createStaleWhileRevalidateHandle({
+    cacheKey: 'my-key',
+    ttlMs: 30_000,
+    staleTtlMs: 120_000,
+    loader,
+    retry: true,
+  });
+
+  assert.equal(isLoaderHandle(handle), true);
+  assert.equal(isStaleWhileRevalidateHandle(handle), true);
+  assert.equal(handle._kind, 'stale-while-revalidate');
+  assert.equal(handle._cacheKey, 'my-key');
+  assert.equal(handle._ttlMs, 30_000);
+  assert.equal(handle._staleTtlMs, 120_000);
+  assert.equal(handle._retry, true);
+
+  // Default TTLs
+  const defaultHandle = createStaleWhileRevalidateHandle({
+    cacheKey: 'k',
+    loader,
+  });
+  assert.equal(defaultHandle._ttlMs, 60_000);
+  assert.equal(defaultHandle._staleTtlMs, 300_000);
+  assert.equal(defaultHandle._retry, false);
+});
+
+test('stale-while-revalidate registry hydrates stale cached items before loader', async () => {
+  const cache: Record<string, any> = {
+    'swr-key': {
+      value: [{ id: 'cached-a' }, { id: 'cached-b' }],
+      updatedAt: Date.now() - 90_000, // stale: > 60s ttl, < 300s stale
+    },
+  };
+
+  const payloads: Array<{ viewId: string; payload: Record<string, unknown> }> =
+    [];
+  const registry = createViewLoaderRegistry({
+    sendHydrate: (viewId, payload) => payloads.push({ viewId, payload }),
+    normalizeItems: (items) => items,
+    readCache: async () => cache,
+    writeCache: async (_ext, data) => {
+      Object.assign(cache, data);
+    },
+  });
+
+  registry.register(
+    'view:swr',
+    createStaleWhileRevalidateHandle({
+      cacheKey: 'swr-key',
+      ttlMs: 60_000,
+      staleTtlMs: 300_000,
+      loader: async () => [{ id: 'fresh' }],
+    }),
+    { extension: { id: 'test' } },
+  );
+
+  await registry.spawn('view:swr');
+
+  // Phase 1: stale items hydrated with isLoading: true
+  // Phase 2: fresh items hydrated with isLoading: false
+  assert.equal(payloads.length, 2);
+  assert.deepEqual(payloads[0], {
+    viewId: 'view:swr',
+    payload: {
+      items: [{ id: 'cached-a' }, { id: 'cached-b' }],
+      isLoading: true,
+    },
+  });
+  assert.deepEqual(payloads[1], {
+    viewId: 'view:swr',
+    payload: {
+      items: [{ id: 'fresh' }],
+      isLoading: false,
+    },
+  });
+
+  // Cache should be updated with fresh items
+  assert.ok(cache['swr-key']);
+  assert.deepEqual(cache['swr-key'].value, [{ id: 'fresh' }]);
+});
+
+test('stale-while-revalidate fresh cache skips loader entirely', async () => {
+  const cache: Record<string, any> = {
+    'swr-fresh': {
+      value: [{ id: 'recent' }],
+      updatedAt: Date.now() - 10_000, // fresh: < 60s ttl
+    },
+  };
+
+  const payloads: Array<{ viewId: string; payload: Record<string, unknown> }> =
+    [];
+  let loaderRan = false;
+  const registry = createViewLoaderRegistry({
+    sendHydrate: (viewId, payload) => payloads.push({ viewId, payload }),
+    normalizeItems: (items) => items,
+    readCache: async () => cache,
+  });
+
+  registry.register(
+    'view:fresh',
+    createStaleWhileRevalidateHandle({
+      cacheKey: 'swr-fresh',
+      ttlMs: 60_000,
+      staleTtlMs: 300_000,
+      loader: async () => {
+        loaderRan = true;
+        return [{ id: 'new' }];
+      },
+    }),
+    { extension: { id: 'test' } },
+  );
+
+  await registry.spawn('view:fresh');
+
+  // Only one hydrate: fresh items with isLoading: false
+  assert.equal(payloads.length, 1);
+  assert.deepEqual(payloads[0], {
+    viewId: 'view:fresh',
+    payload: {
+      items: [{ id: 'recent' }],
+      isLoading: false,
+    },
+  });
+  assert.equal(loaderRan, false);
+  assert.equal(registry.has('view:fresh'), false);
+});
+
+test('stale-while-revalidate loader failure falls back to stale cache', async () => {
+  const cache: Record<string, any> = {
+    'swr-fallback': {
+      value: [{ id: 'stale' }],
+      updatedAt: Date.now() - 90_000,
+    },
+  };
+
+  const payloads: Array<Record<string, unknown>> = [];
+  const warnings: Array<{ viewId: string; message: string }> = [];
+  const registry = createViewLoaderRegistry({
+    sendHydrate: (_viewId, payload) => payloads.push(payload),
+    normalizeItems: (items) => items,
+    warn: (viewId, message) => warnings.push({ viewId, message }),
+    readCache: async () => cache,
+  });
+
+  registry.register(
+    'view:fail',
+    createStaleWhileRevalidateHandle({
+      cacheKey: 'swr-fallback',
+      ttlMs: 60_000,
+      staleTtlMs: 300_000,
+      loader: async () => {
+        throw new Error('network error');
+      },
+    }),
+    { extension: { id: 'test' } },
+  );
+
+  await registry.spawn('view:fail');
+
+  // Phase 1: stale items with isLoading: true
+  // Phase 2 fallback: stale items with isLoading: false (graceful fallback, not error)
+  assert.equal(payloads.length, 2);
+  assert.deepEqual(payloads[0], {
+    items: [{ id: 'stale' }],
+    isLoading: true,
+  });
+  assert.deepEqual(payloads[1], {
+    items: [{ id: 'stale' }],
+    isLoading: false,
+  });
+  assert.equal(registry.has('view:fail'), false);
+
+  // No error payload — stale fallback replaced it
+  const errorPayloads = payloads.filter((p) => 'error' in p);
+  assert.equal(errorPayloads.length, 0);
 });
