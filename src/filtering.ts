@@ -16,13 +16,31 @@ export function valuesMatch(
   return Math.max(...values.map((value) => scoreText(value, filter))) > 0;
 }
 
+export function valuesMatchMinScore(
+  minScore: number,
+  filterValue: string,
+  ...values: Array<string | undefined>
+) {
+  const filter = filterValue.trim().toLowerCase();
+  if (!filter) return true;
+  return (
+    Math.max(...values.map((value) => scoreText(value, filter))) >= minScore
+  );
+}
+
 export function allViewItems(view: CommandView) {
   return view.sections?.flatMap((section) => section.items) || view.items || [];
 }
 
-export function filterCommandItems(items: CommandItem[] = [], filter: string) {
+export function filterCommandItems(
+  items: CommandItem[] = [],
+  filter: string,
+  options?: { minScore?: number },
+) {
+  const minScore = options?.minScore ?? 1;
   return items.filter((item) =>
-    valuesMatch(
+    valuesMatchMinScore(
+      minScore,
       filter,
       item.title,
       item.subtitle,
@@ -36,12 +54,16 @@ export function filterCommandItems(items: CommandItem[] = [], filter: string) {
   );
 }
 
-export function filterCommandSections(view: CommandView, filter: string) {
+export function filterCommandSections(
+  view: CommandView,
+  filter: string,
+  options?: { minScore?: number },
+) {
   if (!view.sections?.length) return undefined;
   return view.sections
     .map((section) => ({
       ...section,
-      items: filterCommandItems(section.items, filter),
+      items: filterCommandItems(section.items, filter, options),
     }))
     .filter((section) => section.items.length > 0);
 }
