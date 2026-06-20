@@ -73,9 +73,7 @@ export type ClipboardHistoryDeps = {
   selectedText: () => Promise<string>;
   selectedFiles: () => Promise<string[]>;
   frontmostApp: () => Promise<{ name: string; path: string } | null>;
-  readDesktopSelection: (
-    opts?: Record<string, unknown>,
-  ) => Promise<unknown>;
+  readDesktopSelection: (opts?: Record<string, unknown>) => Promise<unknown>;
 
   // ── Constants ──────────────────────────────────────────
   CLIPBOARD_LIMIT: number;
@@ -168,10 +166,10 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     const history = deps.getHistory();
     const previousIds = new Set(history.map((entry) => entry.id));
     deps.setHistory(
-      [
-        item,
-        ...history.filter((current) => current.id !== item.id),
-      ].slice(0, deps.CLIPBOARD_LIMIT),
+      [item, ...history.filter((current) => current.id !== item.id)].slice(
+        0,
+        deps.CLIPBOARD_LIMIT,
+      ),
     );
     deps.scheduleSaveState();
     deps.invalidateExtensionRootItems();
@@ -211,8 +209,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
               .includes(needle),
           );
         }
-        const max =
-          typeof limit === 'number' ? limit : deps.CLIPBOARD_LIMIT;
+        const max = typeof limit === 'number' ? limit : deps.CLIPBOARD_LIMIT;
         return entries.slice(0, max).map((entry) => ({
           id: entry.id,
           type: entry.type,
@@ -234,8 +231,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     const types = new Set(
       Array.isArray(action?.types) ? action.types.map(String) : [],
     );
-    const typeMatches = (entry: any) =>
-      !types.size || types.has(entry.type);
+    const typeMatches = (entry: any) => !types.size || types.has(entry.type);
     const history = deps.getHistory();
     if (range === 'item')
       return history.filter(
@@ -248,9 +244,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
           ? action.clipboardHistoryItemIds
           : [action?.clipboardHistoryItemId].filter(Boolean),
       );
-      return history.filter(
-        (entry) => ids.has(entry.id) && typeMatches(entry),
-      );
+      return history.filter((entry) => ids.has(entry.id) && typeMatches(entry));
     }
     if (range === 'last-hour')
       return history.filter(
@@ -276,9 +270,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   }
 
   function clipboardHistoryGet(id: string) {
-    return (
-      clipboardHistorySnapshot().find((entry) => entry.id === id) || null
-    );
+    return clipboardHistorySnapshot().find((entry) => entry.id === id) || null;
   }
 
   function removeClipboardHistoryByAction(action: any) {
@@ -572,9 +564,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         Math.min(5_000, Number(action.restoreDelayMs || 250)),
       );
       setTimeout(() => {
-        suppressClipboardHistoryId(
-          clipboardHistoryIdForText(snapshot.text),
-        );
+        suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text));
         restoreClipboardSnapshot(snapshot);
       }, delay).unref?.();
     }
@@ -645,28 +635,19 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     if (!image) return null;
     return String(image).startsWith('data:')
       ? deps.nativeImage.createFromDataURL(String(image))
-      : deps.nativeImage.createFromPath(
-          deps.expandUserPath(String(image)),
-        );
+      : deps.nativeImage.createFromPath(deps.expandUserPath(String(image)));
   }
 
   function suppressClipboardHistoryForContent(item: any) {
     if (!item) return;
     if (typeof item === 'string')
-      return suppressClipboardHistoryId(
-        clipboardHistoryIdForText(item),
-      );
-    const text =
-      item.text || (item.type === 'html' ? item.html : '');
+      return suppressClipboardHistoryId(clipboardHistoryIdForText(item));
+    const text = item.text || (item.type === 'html' ? item.html : '');
     if (text)
-      suppressClipboardHistoryId(
-        clipboardHistoryIdForText(String(text)),
-      );
+      suppressClipboardHistoryId(clipboardHistoryIdForText(String(text)));
     const image = clipboardImageForContent(item);
     if (image && !image.isEmpty())
-      suppressClipboardHistoryId(
-        `image:${deps.hashValue(image.toPNG())}`,
-      );
+      suppressClipboardHistoryId(`image:${deps.hashValue(image.toPNG())}`);
     const paths = Array.isArray(item.paths)
       ? item.paths
       : Array.isArray(item.files)
@@ -696,9 +677,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   function writeDesktopClipboard(item: any, options: any = {}) {
     const content =
-      typeof item === 'string'
-        ? { type: 'text', text: item }
-        : item || {};
+      typeof item === 'string' ? { type: 'text', text: item } : item || {};
     if (content.concealed || options.concealed)
       suppressClipboardHistoryForContent(content);
     if (
@@ -721,9 +700,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         : deps.clipboard.writeText(String(content.text || ''));
     const image = clipboardImageForContent(content);
     if (content.type === 'image' || image)
-      return deps.clipboard.writeImage(
-        image || deps.nativeImage.createEmpty(),
-      );
+      return deps.clipboard.writeImage(image || deps.nativeImage.createEmpty());
   }
 
   function pasteClipboardAction(action: any) {
@@ -739,10 +716,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         50,
         Math.min(5_000, Number(action.restoreDelayMs || 250)),
       );
-      setTimeout(
-        () => restoreClipboardSnapshot(snapshot),
-        delay,
-      ).unref?.();
+      setTimeout(() => restoreClipboardSnapshot(snapshot), delay).unref?.();
     }
   }
 
@@ -750,8 +724,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   function createClipboardExtension() {
     function historyItem() {
-      const latestClipboardTime =
-        deps.getHistory()[0]?.createdAt || 0;
+      const latestClipboardTime = deps.getHistory()[0]?.createdAt || 0;
       return {
         id: 'clipboard-history',
         title: 'Clipboard History',
@@ -786,9 +759,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       ],
       rootItems(ctx: any) {
         if (!deps.getSetting('showClipboardInRoot')) return [];
-        return ctx.clipboard.history
-          .list({ limit: 10 })
-          .map(clipboardRootItem);
+        return ctx.clipboard.history.list({ limit: 10 }).map(clipboardRootItem);
       },
       searchItems(ctx: any, query: string) {
         return ctx.clipboard.history

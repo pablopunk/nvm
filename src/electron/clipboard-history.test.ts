@@ -106,8 +106,7 @@ function createFakes(overrides: Partial<TestDeps> = {}) {
     thumbnailUrlForPath: (p: string) => `thumb://${p}`,
     isVideoPath: (p: string) => p.endsWith('.mp4') || p.endsWith('.mov'),
     expandUserPath: (p: string) => p,
-    isImagePath: (p: string) =>
-      /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(p),
+    isImagePath: (p: string) => /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(p),
     extensionForPath: (p: string) => p.split('.').pop() || '',
     pathJoin: (...segs: string[]) => segs.join('/'),
     pathBasename: (p: string, ext?: string) => {
@@ -216,10 +215,7 @@ test('persistClipboardImage writes file and returns path', async () => {
 
   assert.ok(result, 'should return a path');
   assert.ok(result!.includes('abc123.png'), 'path should contain hash');
-  assert.ok(
-    getFiles().has(result!),
-    'file should be written',
-  );
+  assert.ok(getFiles().has(result!), 'file should be written');
 });
 
 test('persistClipboardImage returns null on write failure', async () => {

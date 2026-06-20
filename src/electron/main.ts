@@ -24,10 +24,8 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
-import {
-  normalizeClipboardHistory,
-} from './clipboard-utils';
 import { createClipboardHistory } from './clipboard-history';
+import { normalizeClipboardHistory } from './clipboard-utils';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -344,8 +342,7 @@ clipboardService = createClipboardHistory({
   getImagesDir: () => clipboardImagesDir,
   clipboard,
   nativeImage,
-  ensureDir: (dir) =>
-    fs.mkdir(dir, { recursive: true }).then(() => {}),
+  ensureDir: (dir) => fs.mkdir(dir, { recursive: true }).then(() => {}),
   writeFile: (filePath, data) => fs.writeFile(filePath, data),
   hashValue,
   fileUrlForPath,
@@ -357,8 +354,7 @@ clipboardService = createClipboardHistory({
   pathJoin: path.join.bind(path),
   pathBasename: path.basename.bind(path),
   pathToFileURL: (filePath) => pathToFileURL(filePath),
-  logWarn: (message, data, opts) =>
-    logWarn(message, data, opts),
+  logWarn: (message, data, opts) => logWarn(message, data, opts),
   measureSync: measureDebugPerformanceSync,
   scheduleSaveState,
   invalidateExtensionRootItems,
@@ -414,7 +410,7 @@ function availableSettingDefinitions() {
 
 function getSetting(id: any) {
   const definition = settingDefinition(String(id));
-  if (!definition || !settingIsAvailable(definition)) return undefined;
+  if (!(definition && settingIsAvailable(definition))) return;
   if (definition.id === 'startAtLogin') return getLaunchAtLoginEnabled();
   return settingValue(userState.settings, definition.id);
 }
@@ -676,7 +672,7 @@ const extensionRefreshBurstWindow = new Map<string, number[]>();
 const extensionAiCallWindow = new Map<string, number[]>();
 
 const ACTION_EXECUTION_TTL_MS = 30 * 60_000;
-const ACTION_EXECUTION_MAX_RECORDS = 2_000;
+const ACTION_EXECUTION_MAX_RECORDS = 2000;
 const RENDERER_ONLY_VIEW_ACTION_TYPES = new Set([
   'recordShortcut',
   'previewClipboardItem',
@@ -864,8 +860,8 @@ function createExtensionCache(extension) {
   return {
     get(key) {
       const entry = store.get(key);
-      if (!entry) return undefined;
-      if (entry.expiresAt && Date.now() > entry.expiresAt) return undefined;
+      if (!entry) return;
+      if (entry.expiresAt && Date.now() > entry.expiresAt) return;
       return entry.value;
     },
     getStale(key) {
@@ -1138,7 +1134,7 @@ function promoteDraftAiChat(chatId) {
 
 function appendAiChatMessage(chatId, role, content) {
   const chat = userState.aiChats[chatId];
-  if (!chat || !content) return;
+  if (!(chat && content)) return;
   chat.messages = [...(chat.messages || []), { role, content }].slice(-100);
   chat.updatedAt = Date.now();
   learningStore?.appendMessage(
@@ -1153,7 +1149,7 @@ function appendAiChatMessage(chatId, role, content) {
 
 function appendAiChatDelta(chatId, text) {
   const chat = userState.aiChats[chatId];
-  if (!chat || !text) return;
+  if (!(chat && text)) return;
   const messages = chat.messages || [];
   const last = messages[messages.length - 1];
   if (last?.role === 'assistant') last.content = `${last.content}${text}`;
@@ -1303,7 +1299,7 @@ function aiChatIdForExtensionFile(filename) {
 }
 
 function touchExtensionFileForChat(chat, filename) {
-  if (!chat || !filename) return;
+  if (!(chat && filename)) return;
   chat.touchedExtensionFiles = Array.from(
     new Set([...chatTouchedExtensionFiles(chat), path.basename(filename)]),
   );
@@ -1374,7 +1370,12 @@ function clipboardCopyAction(item) {
 }
 
 function clipboardHistoryRemovalAction(range, title, message, itemId = '') {
-  return clipboardService!.clipboardHistoryRemovalAction(range, title, message, itemId);
+  return clipboardService!.clipboardHistoryRemovalAction(
+    range,
+    title,
+    message,
+    itemId,
+  );
 }
 
 function clipboardHistoryRemovalActions(item: any = null) {
@@ -1576,8 +1577,8 @@ function scheduleUpdateInstallQuitFallback() {
       });
       runQuitCleanup();
       app.exit(0);
-    }, 2_000).unref?.();
-  }, 5_000);
+    }, 2000).unref?.();
+  }, 5000);
   updateInstallQuitFallbackTimer.unref?.();
 }
 
@@ -1653,7 +1654,7 @@ function settingsView(selectedItemId = '') {
 
 function patchSettingsView(settingId: string, options: any = {}) {
   const definition = SETTING_DEFINITIONS.find((item) => item.id === settingId);
-  if (!definition || !settingIsAvailable(definition)) return;
+  if (!(definition && settingIsAvailable(definition))) return;
   patchOpenView('app-settings', {
     mode: 'patch',
     items: [
@@ -1737,7 +1738,7 @@ function compatibilityPromptAction() {
       ? `Nevermind ${version} or newer is required for backend compatibility`
       : 'This version is no longer supported by the backend',
     icon: 'restart',
-    score: 1_100,
+    score: 1100,
     primaryAction,
     actionPanel: primaryAction
       ? { sections: [{ actions: [primaryAction] }] }
@@ -1766,7 +1767,7 @@ function updatePromptAction() {
       title: `Installing Nevermind ${version || ''}`.trim(),
       subtitle: 'Restarting Nevermind to finish updating...',
       icon: 'restart',
-      score: 1_000,
+      score: 1000,
     };
   }
   if (downloadedInfo) {
@@ -1775,7 +1776,7 @@ function updatePromptAction() {
       title: `Install Nevermind ${version}`,
       subtitle: 'Restart Nevermind to finish updating',
       icon: 'restart',
-      score: 1_000,
+      score: 1000,
       primaryAction: {
         type: 'installUpdate',
         title: `Install Nevermind ${version}`,
@@ -1790,7 +1791,7 @@ function updatePromptAction() {
         ? 'Downloading update...'
         : 'Update available',
       icon: 'restart',
-      score: 1_000,
+      score: 1000,
       primaryAction: {
         type: 'downloadUpdate',
         title: `Download Nevermind ${version}`,
@@ -1866,13 +1867,12 @@ async function searchActions(query, options: any = {}) {
         { queryLength: q.length, resultCount: results.length },
         () =>
           results
-            .sort((a, b) => {
-              return (
+            .sort(
+              (a, b) =>
                 b.score - a.score ||
                 b.lastUsed - a.lastUsed ||
-                a.title.localeCompare(b.title)
-              );
-            })
+                a.title.localeCompare(b.title),
+            )
             .slice(0, 30)
             .map(prepareRootActionForRenderer),
       );
@@ -2249,12 +2249,12 @@ function withTimeout(promise, timeoutMs) {
 
 function normalizeItemAppearance(appearance) {
   const foreground = appearance?.foreground;
-  if (!ITEM_FOREGROUND_COLORS.has(foreground)) return undefined;
+  if (!ITEM_FOREGROUND_COLORS.has(foreground)) return;
   return { foreground };
 }
 
 function extensionRootActionFromItem(entry, item) {
-  if (!item?.id || !item.title) return null;
+  if (!(item?.id && item.title)) return null;
   const primaryAction = normalizeViewAction(
     item.primaryAction || item.action,
     entry,
@@ -2294,7 +2294,7 @@ function extensionRootActionFromItem(entry, item) {
 
 function extensionActionFromContribution(entry) {
   const item = entry.item;
-  if (!item?.id || !item.title) return null;
+  if (!(item?.id && item.title)) return null;
   const extensionFile = entry.extension.__filePath
     ? path.basename(entry.extension.__filePath)
     : undefined;
@@ -2625,7 +2625,7 @@ function resolveUserShellPath(): Promise<string> {
     execFile(
       userShell,
       ['-ilc', `printf '%s%s%s' '${delimiter}' "$PATH" '${delimiter}'`],
-      { timeout: 5_000 },
+      { timeout: 5000 },
       (_error, stdout) => {
         resolve(
           typeof stdout === 'string' ? stdout.split(delimiter)[1] || '' : '',
@@ -2770,7 +2770,7 @@ async function executeHostRefreshAction(record, launchContext?: any) {
 function refreshBackoffDelay(failureCount: number) {
   return Math.min(
     30_000,
-    1_000 * Math.max(1, 2 ** Math.max(0, failureCount - 1)),
+    1000 * Math.max(1, 2 ** Math.max(0, failureCount - 1)),
   );
 }
 
@@ -2896,7 +2896,7 @@ function clipboardHistoryIdForText(text: string) {
   return clipboardService!.clipboardHistoryIdForText(text);
 }
 
-function suppressClipboardHistoryId(id: string, durationMs = 2_000) {
+function suppressClipboardHistoryId(id: string, durationMs = 2000) {
   clipboardService!.suppressClipboardHistoryId(id, durationMs);
 }
 
@@ -3414,17 +3414,17 @@ async function localFileResponse(requestPath: string, request: Request) {
 
   if (range) {
     const match = range.match(/^bytes=(\d*)-(\d*)$/);
-    if (!match || (!match[1] && !match[2]))
+    if (!match || !(match[1] || match[2]))
       return new Response('Invalid range', {
         status: 416,
         headers: { 'content-range': `bytes */${stat.size}` },
       });
-    if (!match[1]) {
-      start = Math.max(0, stat.size - Number(match[2]));
-      end = stat.size - 1;
-    } else {
+    if (match[1]) {
       start = Number(match[1]);
       end = match[2] ? Number(match[2]) : stat.size - 1;
+    } else {
+      start = Math.max(0, stat.size - Number(match[2]));
+      end = stat.size - 1;
     }
     if (
       Number.isNaN(start) ||
@@ -3793,7 +3793,7 @@ function dragIconForPath(filePath) {
 
 function startFileDrag(event, filePath) {
   const resolvedPath = expandUserPath(filePath);
-  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return;
+  if (!(resolvedPath && path.isAbsolute(resolvedPath))) return;
   event.sender.startDrag({
     file: resolvedPath,
     icon: dragIconForPath(resolvedPath),
@@ -3809,7 +3809,7 @@ function quickLookPath(filePath) {
       },
     };
   const resolvedPath = expandUserPath(filePath);
-  if (!resolvedPath || !path.isAbsolute(resolvedPath))
+  if (!(resolvedPath && path.isAbsolute(resolvedPath)))
     return {
       toast: { message: `Cannot ${quickLookTitle()} this item`, tone: 'error' },
     };
@@ -3860,7 +3860,7 @@ async function documentTypesForApp(appPath) {
 
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath);
-  if (!resolvedPath || !path.isAbsolute(resolvedPath)) return [];
+  if (!(resolvedPath && path.isAbsolute(resolvedPath))) return [];
   if (!hasCapability('open-with')) return appIndexService.get();
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase();
   const contentTypes = new Set(await contentTypesForPath(resolvedPath));
@@ -3898,10 +3898,12 @@ async function openPathWithApp(filePath, appPath) {
   const resolvedPath = expandUserPath(filePath);
   const resolvedAppPath = expandUserPath(appPath);
   if (
-    !resolvedPath ||
-    !resolvedAppPath ||
-    !path.isAbsolute(resolvedPath) ||
-    !path.isAbsolute(resolvedAppPath)
+    !(
+      resolvedPath &&
+      resolvedAppPath &&
+      path.isAbsolute(resolvedPath) &&
+      path.isAbsolute(resolvedAppPath)
+    )
   )
     return {
       toast: { message: 'Cannot open this file with that app', tone: 'error' },
@@ -4083,7 +4085,7 @@ function createExtensionStorage(extension) {
       const age =
         cached && typeof cached === 'object'
           ? Date.now() - Number(cached.updatedAt || 0)
-          : Infinity;
+          : Number.POSITIVE_INFINITY;
       if (age < Number(ttlMs || 0)) return cached.value;
       const refreshKey = extensionStorageRefreshKey(extension, key);
       const refresh =
@@ -4214,13 +4216,13 @@ async function normalizeExtensionAiAttachments(
     }
     const type =
       attachment?.type ||
-      (attachment?.text != null
-        ? 'text'
-        : attachment?.path || attachment?.file
+      (attachment?.text == null
+        ? attachment?.path || attachment?.file
           ? 'file'
           : attachment?.dataUrl || attachment?.imageDataUrl
             ? 'image'
-            : '');
+            : ''
+        : 'text');
     if (type === 'text') {
       textSections.push(
         `${attachment.title ? `### ${attachment.title}\n` : ''}${limitedOutput(attachment.text || '', EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`,
@@ -4291,7 +4293,7 @@ async function normalizeExtensionAiAttachments(
 }
 
 function normalizeExtensionAiModelRole(value) {
-  if (value == null || value === '') return undefined;
+  if (value == null || value === '') return;
   if (value === 'smart' || value === 'fast') return value;
   throw new Error(
     `Unsupported AI model role: ${value}. Use 'smart' or 'fast'.`,
@@ -4653,7 +4655,7 @@ function scheduleRateRefresh(base: string, quote: string, options: any = {}) {
 async function refreshRate(base: string, quote: string) {
   const key = rateCacheKey(base, quote);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5_000);
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(
       `${FRANKFURTER_API_BASE}/v2/rate/${encodeURIComponent(base)}/${encodeURIComponent(quote)}`,
@@ -4703,14 +4705,14 @@ function calculatorResultItem(query: string, result: any) {
           keepPaletteOpen: true,
         }
       : null,
-    result.raw !== result.formatted
-      ? {
+    result.raw === result.formatted
+      ? null
+      : {
           type: 'copyText',
           title: 'Copy Unformatted Result',
           text: result.raw,
           dismissAfterRun: 'auto',
-        }
-      : null,
+        },
     {
       type: 'pasteText',
       title: 'Paste Result',
@@ -5212,9 +5214,9 @@ function jobDetailsMarkdown(job: JobSnapshot) {
     `- Last reason: ${job.lastReason || '-'}`,
     `- Last started: ${jobTime(job.lastStartedAt)}`,
     `- Last finished: ${jobTime(job.lastFinishedAt)}`,
-    job.lastDurationMs != null
-      ? `- Last duration: ${job.lastDurationMs}ms`
-      : '',
+    job.lastDurationMs == null
+      ? ''
+      : `- Last duration: ${job.lastDurationMs}ms`,
     job.nextRunAt ? `- Next run: ${jobTime(job.nextRunAt)}` : '',
     job.backoffUntil ? `- Backoff until: ${jobTime(job.backoffUntil)}` : '',
     `- Consecutive failures: ${job.consecutiveFailures}`,
@@ -5461,13 +5463,13 @@ function buildRecordShortcutAction(input: any, options: any) {
     options?.title ||
     (scope === 'palette' ? 'Change Shortcut' : 'Record shortcut');
   const shortcut =
-    input?.shortcut !== undefined ? String(input.shortcut) : undefined;
+    input?.shortcut === undefined ? undefined : String(input.shortcut);
   return {
     ...options,
     type: 'recordShortcut',
     title,
     action: targetAction,
-    ...(shortcut !== undefined ? { shortcut } : {}),
+    ...(shortcut === undefined ? {} : { shortcut }),
   };
 }
 
@@ -5491,15 +5493,15 @@ function wrapWithConfirmation(action: any, input: any) {
     title: input?.title || action.title,
     requiresConfirmation: true,
     ...(destructive ? { style: 'destructive' } : {}),
-    ...(input?.message !== undefined
-      ? { confirmMessage: String(input.message) }
-      : {}),
-    ...(input?.confirmLabel !== undefined
-      ? { confirmLabel: String(input.confirmLabel) }
-      : {}),
-    ...(input?.cancelLabel !== undefined
-      ? { cancelLabel: String(input.cancelLabel) }
-      : {}),
+    ...(input?.message === undefined
+      ? {}
+      : { confirmMessage: String(input.message) }),
+    ...(input?.confirmLabel === undefined
+      ? {}
+      : { confirmLabel: String(input.confirmLabel) }),
+    ...(input?.cancelLabel === undefined
+      ? {}
+      : { cancelLabel: String(input.cancelLabel) }),
   };
 }
 
@@ -5512,13 +5514,13 @@ function buildPromptAction(input: any = {}, options: any = {}) {
     type: 'promptAction',
     title,
     subtitle:
-      input?.message !== undefined ? String(input.message) : options.subtitle,
+      input?.message === undefined ? options.subtitle : String(input.message),
     promptMessage:
-      input?.message !== undefined ? String(input.message) : undefined,
+      input?.message === undefined ? undefined : String(input.message),
     fields: Array.isArray(input?.fields) ? input.fields : [],
     targetAction,
     submitTitle:
-      input?.submitTitle !== undefined ? String(input.submitTitle) : undefined,
+      input?.submitTitle === undefined ? undefined : String(input.submitTitle),
   };
 }
 
@@ -5600,7 +5602,7 @@ function progressView(input: any = {}) {
     type: 'progress',
     title: input.title || input.label || 'Loading...',
     steps,
-    ...(input.id !== undefined ? { id: String(input.id) } : {}),
+    ...(input.id === undefined ? {} : { id: String(input.id) }),
     ...(typeof input.value === 'number' ? { value: input.value } : {}),
     ...(typeof input.total === 'number' ? { total: input.total } : {}),
   };
@@ -6331,7 +6333,7 @@ function buildAiBuilderAction(title, handler, options: any = {}) {
 
 function createAiBuilderApi(extension) {
   const privileged = extension?.id === AI_BUILDER_EXTENSION_ID;
-  if (!privileged) return undefined;
+  if (!privileged) return;
   return {
     startChat: (input: any = {}) => {
       const prompt = String(input.prompt || input.query || '');
@@ -6360,9 +6362,7 @@ function createAiBuilderApi(extension) {
     removeChat: (chatId, input: any = {}) =>
       buildAiBuilderAction(
         input.title || 'Remove Chat',
-        async () => {
-          return removeAiChat(chatId);
-        },
+        async () => removeAiChat(chatId),
         { style: 'destructive', ...(input.options || {}) },
       ),
     tweakExtension: (input: any = {}) =>
@@ -6668,7 +6668,7 @@ async function removeGeneratedExtensionForChat(
   chatId = activeAiChatId,
 ) {
   const base = path.basename(filename || '');
-  if (!base || !isExtensionSourceFile(base)) return { removed: false };
+  if (!(base && isExtensionSourceFile(base))) return { removed: false };
   if (!chatCanWriteExtension(base, chatId))
     throw new Error(
       `Refusing to remove ${base}: this AI chat does not own that extension.`,
@@ -6867,10 +6867,12 @@ function applyExtensionMetadata(extension, metadata) {
 async function renameExtension(extension, command, metadata) {
   const normalized = normalizedExtensionMetadata(metadata);
   if (
-    !normalized.title &&
-    !normalized.subtitle &&
-    !normalized.commandTitle &&
-    !normalized.commandSubtitle
+    !(
+      normalized.title ||
+      normalized.subtitle ||
+      normalized.commandTitle ||
+      normalized.commandSubtitle
+    )
   )
     throw new Error(
       'rename requires a title, subtitle, commandTitle, or commandSubtitle',
@@ -7104,7 +7106,7 @@ function normalizedFileTriggerForLaunch(trigger: any) {
 }
 
 function extensionTriggerForLaunch(trigger: any) {
-  if (!trigger) return undefined;
+  if (!trigger) return;
   if (trigger.type === 'files.changed')
     return normalizedFileTriggerForLaunch(trigger);
   return structuredClone(trigger);
@@ -7281,7 +7283,10 @@ function registerExtension(extension) {
       if (!extension?.id) return;
       extensionModules.set(extension.id, extension);
       for (const command of extension.commands || []) {
-        if (!command?.id || !command.title || typeof command.run !== 'function')
+        if (
+          !(command?.id && command.title) ||
+          typeof command.run !== 'function'
+        )
           continue;
         const entry = { extension, command, source: 'command' };
         const action = {
@@ -7334,7 +7339,7 @@ function registerExtension(extension) {
             source: 'action',
           };
           for (const item of items) {
-            if (!item?.id || !item.title) continue;
+            if (!(item?.id && item.title)) continue;
             const action = item.run
               ? {
                   type: 'runExtensionAction',
@@ -7386,7 +7391,7 @@ const DEFAULT_FILE_INDEX_IGNORES = [
   'Library',
   'Applications',
 ];
-const DEFAULT_FILE_INDEX_LIMIT = 5_000;
+const DEFAULT_FILE_INDEX_LIMIT = 5000;
 const MAX_FILE_INDEX_LIMIT = 20_000;
 
 function defaultFileIndexRoots() {
@@ -7534,7 +7539,7 @@ function registerHostJobs() {
     title: 'Save User State',
     owner: 'host',
     scope: 'state',
-    timeoutMs: 5_000,
+    timeoutMs: 5000,
     run: saveUserState,
   });
   jobRegistry.register({
@@ -7567,8 +7572,8 @@ function registerHostJobs() {
     title: 'Frontmost App Poll',
     owner: 'host',
     scope: 'apps',
-    triggers: [{ type: 'interval', everyMs: 5_000, delayMs: 5_000 }],
-    timeoutMs: 3_000,
+    triggers: [{ type: 'interval', everyMs: 5000, delayMs: 5000 }],
+    timeoutMs: 3000,
     run: pollFrontmostAppChange,
   });
   jobRegistry.register({
@@ -7871,8 +7876,10 @@ function getShortcuts() {
   const declared = declaredGlobalShortcuts()
     .filter(
       (item) =>
-        !userState.shortcuts[item.actionId] &&
-        !userState.removedShortcuts?.[item.actionId],
+        !(
+          userState.shortcuts[item.actionId] ||
+          userState.removedShortcuts?.[item.actionId]
+        ),
     )
     .map((item) => ({
       ...item,
@@ -7923,7 +7930,7 @@ async function setAlias(action, alias) {
       ok: false,
       message: 'Aliases are only available for persistent actions',
     };
-  if (!action?.id || !alias.trim())
+  if (!(action?.id && alias.trim()))
     return { ok: false, message: 'Missing alias' };
   const aliases = new Set(actionAliases(action.id));
   aliases.add(alias.trim());
@@ -7933,7 +7940,7 @@ async function setAlias(action, alias) {
 }
 
 async function removeAlias(action, alias) {
-  if (!action?.id || !alias) return { ok: false, message: 'Missing alias' };
+  if (!(action?.id && alias)) return { ok: false, message: 'Missing alias' };
   const current = actionAliases(action.id).filter((value) => value !== alias);
   if (current.length) userState.aliases[action.id] = current;
   else delete userState.aliases[action.id];
@@ -7947,7 +7954,7 @@ async function setShortcut(action, shortcut) {
       ok: false,
       message: 'Shortcuts are only available for persistent actions',
     };
-  if (!action?.id || !shortcut.trim())
+  if (!(action?.id && shortcut.trim()))
     return { ok: false, message: 'Missing shortcut' };
   const accelerator = normalizeAccelerator(shortcut);
   if (accelerator === getPaletteHotkey())
@@ -8065,8 +8072,10 @@ async function clearOverride(action) {
 
 async function duplicateCreatedAction(action) {
   if (
-    !['extension-root-item', 'extension-action'].includes(action?.kind) ||
-    !action.removable
+    !(
+      ['extension-root-item', 'extension-action'].includes(action?.kind) &&
+      action.removable
+    )
   )
     return {
       ok: false,
@@ -8131,7 +8140,7 @@ async function duplicateCreatedAction(action) {
 }
 
 async function removeAiChat(chatId) {
-  if (!chatId || !userState.aiChats[chatId])
+  if (!(chatId && userState.aiChats[chatId]))
     return { toast: { message: 'AI chat not found', tone: 'error' } };
   await nevermindAi?.reset?.(chatId);
   const chat = userState.aiChats[chatId];
@@ -8391,6 +8400,6 @@ app.on('will-quit', () => {
 
 if (!isDev) {
   const gotLock = app.requestSingleInstanceLock();
-  if (!gotLock) app.quit();
-  else app.on('second-instance', () => paletteWindow.showPalette());
+  if (gotLock) app.on('second-instance', () => paletteWindow.showPalette());
+  else app.quit();
 }
