@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalize, scoreNormalized } from './electron/search-utils';
 import { scoreText } from './filtering';
-import { scoreNormalizedNonEmpty } from './search-ranking';
+import { scoreFuzzy, scoreNormalizedNonEmpty } from './search-ranking';
 
 // ── Core bands ───────────────────────────────────────────────────────
 test('scoreNormalizedNonEmpty exact match', () => {
@@ -74,7 +74,35 @@ test('scoreText case insensitive via toLowerCase', () => {
   assert.equal(scoreText('HELLO', 'hello'), 100);
 });
 
-// ── scoreNormalized wrapper ───────────────────────────────────────────
+// ── scoreFuzzy (with character-set fallback) ─────────────────────────
+test('scoreFuzzy delegates to sequential bands', () => {
+  assert.equal(scoreFuzzy('hello', 'hello'), 100);
+  assert.equal(scoreFuzzy('hello world', 'hello'), 80);
+  assert.equal(scoreFuzzy('hello world', 'world'), 50);
+  assert.equal(scoreFuzzy('settings', 'stng'), 20);
+});
+
+test('scoreFuzzy char-set fallback — chars in wrong order', () => {
+  // "gmial" vs "gmail": sequential fails (i before a), but all chars exist
+  assert.equal(scoreFuzzy('gmail', 'gmial'), 10);
+  // "tpying" vs "typing"
+  assert.equal(scoreFuzzy('typing', 'tpying'), 10);
+});
+
+test('scoreFuzzy char-set fallback — missing character', () => {
+  assert.equal(scoreFuzzy('hello', 'xyz'), 0);
+  assert.equal(scoreFuzzy('abc', 'abcd'), 0);
+  assert.equal(scoreFuzzy('hello', 'helloo'), 0); // extra 'o' not in text
+});
+
+test('scoreFuzzy char-set fallback — multiplicity respected', () => {
+  // Query has two 'l's, text has one
+  assert.equal(scoreFuzzy('hello', 'helll'), 0);
+  // Query has two 'o's, text has one
+  assert.equal(scoreFuzzy('hello', 'heloo'), 0);
+});
+
+// ── scoreNormalized wrapper (now uses scoreFuzzy) ────────────────────
 test('scoreNormalized empty query returns 0', () => {
   assert.equal(scoreNormalized('anything', ''), 0);
   assert.equal(scoreNormalized('', ''), 0);
@@ -95,6 +123,10 @@ test('scoreNormalized includes', () => {
 
 test('scoreNormalized fuzzy', () => {
   assert.equal(scoreNormalized('settings', normalize('stng')), 20);
+});
+
+test('scoreNormalized char-set fallback via scoreFuzzy', () => {
+  assert.equal(scoreNormalized('gmail', normalize('gmial')), 10);
 });
 
 test('scoreNormalized no match', () => {

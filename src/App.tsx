@@ -2083,21 +2083,33 @@ export function App() {
   }
 
   function filterViewSections(view: ExtensionView) {
+    const minScore = view.id === 'clipboard-history' ? 50 : undefined;
     return measureDebugPerformanceSync(
       'view.filter-sections',
       {
         childQueryLength: childQuery.length,
         sectionCount: view.sections?.length || 0,
       },
-      () => filterCommandSections(view, childQuery),
+      () =>
+        filterCommandSections(
+          view,
+          childQuery,
+          minScore ? { minScore } : undefined,
+        ),
     );
   }
 
   function filterExtensionItems(items: ExtensionViewItem[] = []) {
+    const minScore = extensionView?.id === 'clipboard-history' ? 50 : undefined;
     return measureDebugPerformanceSync(
       'view.filter-items',
       { childQueryLength: childQuery.length, itemCount: items.length },
-      () => filterCommandItems(items, childQuery),
+      () =>
+        filterCommandItems(
+          items,
+          childQuery,
+          minScore ? { minScore } : undefined,
+        ),
     );
   }
 

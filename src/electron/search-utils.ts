@@ -1,18 +1,12 @@
 import crypto from 'node:crypto';
-import { scoreNormalizedNonEmpty } from '../search-ranking';
-import {
-  calculate,
-  calculateDetailed,
-  calculateRateResult,
-  parseRateExpression,
-} from './calculator';
+import { scoreFuzzy } from '../search-ranking';
 
 export {
   calculate,
   calculateDetailed,
   calculateRateResult,
   parseRateExpression,
-};
+} from './calculator';
 
 export function normalize(value: unknown) {
   return String(value || '')
@@ -27,7 +21,7 @@ export function hashValue(value: unknown) {
 export function scoreNormalized(value: unknown, q: string): number {
   if (!q) return 0;
   const v = normalize(value);
-  return scoreNormalizedNonEmpty(v, q);
+  return scoreFuzzy(v, q);
 }
 
 export function score(value: unknown, query: unknown) {
