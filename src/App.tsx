@@ -2091,18 +2091,25 @@ export function App() {
         sectionCount: view.sections?.length || 0,
       },
       () =>
-        filterCommandSections(view, childQuery, minScore ? { minScore } : undefined),
+        filterCommandSections(
+          view,
+          childQuery,
+          minScore ? { minScore } : undefined,
+        ),
     );
   }
 
   function filterExtensionItems(items: ExtensionViewItem[] = []) {
-    const minScore =
-      extensionView?.id === 'clipboard-history' ? 50 : undefined;
+    const minScore = extensionView?.id === 'clipboard-history' ? 50 : undefined;
     return measureDebugPerformanceSync(
       'view.filter-items',
       { childQueryLength: childQuery.length, itemCount: items.length },
       () =>
-        filterCommandItems(items, childQuery, minScore ? { minScore } : undefined),
+        filterCommandItems(
+          items,
+          childQuery,
+          minScore ? { minScore } : undefined,
+        ),
     );
   }
 
