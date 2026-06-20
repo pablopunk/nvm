@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { requireSameOrigin } from './csrf';
 
-test('returns null when origin header is missing', () => {
+test('returns null when origin header is missing', function allowsMissingOrigin() {
   const req = new Request('https://nvm.fyi/api/auth/signout', {
     method: 'POST',
   });
   assert.equal(requireSameOrigin(req), null);
 });
 
-test('returns null when origin matches the request URL origin', () => {
+test('returns null when origin matches the request URL origin', function allowsSameOrigin() {
   const req = new Request('https://nvm.fyi/api/auth/signout', {
     method: 'POST',
     headers: { origin: 'https://nvm.fyi' },
@@ -17,7 +17,7 @@ test('returns null when origin matches the request URL origin', () => {
   assert.equal(requireSameOrigin(req), null);
 });
 
-test('rejects cross-origin POST with 403', () => {
+test('rejects cross-origin POST with 403', function rejectsCrossOrigin() {
   const req = new Request('https://nvm.fyi/api/auth/signout', {
     method: 'POST',
     headers: { origin: 'https://evil.example.com' },
@@ -27,17 +27,16 @@ test('rejects cross-origin POST with 403', () => {
   assert.equal(res!.status, 403);
 });
 
-test('normalizes origin with trailing slash via URL.origin', () => {
+test('normalizes origin with trailing slash via URL.origin', function normalizesTrailingSlash() {
   const req = new Request('https://nvm.fyi/api/auth/signout', {
     method: 'POST',
     headers: { origin: 'https://nvm.fyi/' },
   });
-  // URL.origin strips trailing slash on both sides
   const res = requireSameOrigin(req);
   assert.equal(res, null);
 });
 
-test('rejects malformed origin headers', () => {
+test('rejects malformed origin headers', function rejectsMalformedOrigin() {
   const req = new Request('https://nvm.fyi/api/auth/signout', {
     method: 'POST',
     headers: { origin: 'not-a-valid-url' },
@@ -47,7 +46,7 @@ test('rejects malformed origin headers', () => {
   assert.equal(res!.status, 403);
 });
 
-test('rejects different scheme even if host matches', () => {
+test('rejects different scheme even if host matches', function rejectsDifferentScheme() {
   const req = new Request('https://nvm.fyi/api/auth/signout', {
     method: 'POST',
     headers: { origin: 'http://nvm.fyi' },
@@ -57,7 +56,7 @@ test('rejects different scheme even if host matches', () => {
   assert.equal(res!.status, 403);
 });
 
-test('rejects different port', () => {
+test('rejects different port', function rejectsDifferentPort() {
   const req = new Request('https://nvm.fyi:443/api/auth/signout', {
     method: 'POST',
     headers: { origin: 'https://nvm.fyi:8080' },

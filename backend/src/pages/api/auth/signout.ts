@@ -3,6 +3,9 @@ import { SESSION_COOKIE } from '../../../lib/workos';
 import { requireSameOrigin } from '../../../lib/csrf';
 
 export const POST: APIRoute = ({ request, url }) => {
+  // Custom origin check: more granular than Astro's built-in checkOrigin —
+  // compares against the actual request URL origin (not the site config),
+  // which matters in multi-domain and preview-deploy setups.
   const originCheck = requireSameOrigin(request);
   if (originCheck) return originCheck;
 

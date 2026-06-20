@@ -60,7 +60,7 @@ export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, sta
       estimated_input_tokens: ctx.estimatedInputTokens,
     });
     return {
-      inputTokens: ctx.estimatedInputTokens,
+      inputTokens: tokens.inputTokens > 0 ? tokens.inputTokens : ctx.estimatedInputTokens,
       outputTokens: 1,
     };
   }

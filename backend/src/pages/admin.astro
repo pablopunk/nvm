@@ -253,9 +253,9 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       tbody.innerHTML = entries.map((e) => `
         <tr>
           <td>${new Date(e.createdAt).toLocaleString()}</td>
-          <td>${esc(e.actorEmail) ?? '—'}</td>
+          <td>${e.actorEmail ? esc(e.actorEmail) : '—'}</td>
           <td><code>${esc(e.action)}</code></td>
-          <td>${e.targetType ? `${esc(e.targetType)}:${esc(e.targetId) ?? '—'}` : '—'}</td>
+          <td>${e.targetType ? `${esc(e.targetType)}:${e.targetId ? esc(e.targetId) : '—'}` : '—'}</td>
           <td><code>${e.meta ? esc(JSON.stringify(e.meta)) : ''}</code></td>
         </tr>
       `).join('');
