@@ -65,6 +65,7 @@ import { createAppIndexService } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
   createDataLoaderHandle,
+  createStaleWhileRevalidateHandle,
   createViewLoaderRegistry,
   isLoaderHandle,
   normalizeLoaderItems,
@@ -316,6 +317,8 @@ const viewLoaderRegistry = createViewLoaderRegistry({
       { viewId, error: message },
       { source: 'host', scope: 'extension' },
     ),
+  readCache: (extension) => readExtensionCache(extension),
+  writeCache: (extension, data) => writeExtensionCache(extension, data),
 });
 
 function spawnPendingViewLoaders(result: any) {
@@ -6666,6 +6669,15 @@ function createExtensionContext(extension, command, launchContext?: any) {
     data: {
       loader(fn, options: any = {}) {
         return createDataLoaderHandle(fn, options);
+      },
+      staleWhileRevalidate({ cacheKey, ttlMs, staleTtlMs, loader, retry }) {
+        return createStaleWhileRevalidateHandle({
+          cacheKey,
+          ttlMs,
+          staleTtlMs,
+          loader,
+          retry,
+        });
       },
     },
     ai: canUseAi ? createExtensionAi(extension) : undefined,

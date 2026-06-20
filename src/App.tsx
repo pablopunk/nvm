@@ -877,7 +877,8 @@ export function App() {
         applyViewPatch({
           mode: 'replace',
           items: payload.items as any,
-          isLoading: false,
+          isLoading:
+            payload.isLoading === undefined ? false : payload.isLoading,
         });
       }
     });

@@ -100,7 +100,7 @@ export type AiChatEvent = {
 export type ViewHydratePayload = {
   viewId: string;
   items?: CommandView['items'];
-  isLoading?: false;
+  isLoading?: boolean;
   error?: { message: string };
   retry?: boolean;
 };
