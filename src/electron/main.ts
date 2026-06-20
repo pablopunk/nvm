@@ -3097,16 +3097,27 @@ async function executeViewAction(action, launchContext?: any) {
       break;
     case 'forceQuitApp': {
       const appPath = action.path || action.appPath || '';
-      const appName = action.app?.name || action.title?.replace(/^Force Quit /, '') || '';
+      const appName =
+        action.app?.name || action.title?.replace(/^Force Quit /, '') || '';
       try {
         const result = await forceQuitOsApp(appPath, appName);
         if (result.ok) {
           return { toast: { message: `Force quit ${appName}` } };
         }
-        return { toast: { message: result.error || `Could not force quit ${appName}`, tone: 'error' } };
+        return {
+          toast: {
+            message: result.error || `Could not force quit ${appName}`,
+            tone: 'error',
+          },
+        };
       } catch (error) {
-        logWarn('forceQuitApp.failed', error, { source: 'host', scope: 'apps' });
-        return { toast: { message: `Could not force quit ${appName}`, tone: 'error' } };
+        logWarn('forceQuitApp.failed', error, {
+          source: 'host',
+          scope: 'apps',
+        });
+        return {
+          toast: { message: `Could not force quit ${appName}`, tone: 'error' },
+        };
       }
     }
     case 'checkForUpdates':
@@ -3433,7 +3444,7 @@ async function localFileResponse(requestPath: string, request: Request) {
 
   if (range) {
     const match = range.match(/^bytes=(\d*)-(\d*)$/);
-    if (!match || !(match[1] || match[2]))
+    if (!(match && (match[1] || match[2])))
       return new Response('Invalid range', {
         status: 416,
         headers: { 'content-range': `bytes */${stat.size}` },
@@ -5018,15 +5029,13 @@ function createAppsExtension() {
         score: 14,
         appearance: { foreground: 'red' as const },
         run: async (ctx: any) => {
-          const runningPaths = await runningAppStatus.refresh(
-            'force-quit-command',
-          );
+          const runningPaths =
+            await runningAppStatus.refresh('force-quit-command');
           const apps = appIndexService
             .get()
             .filter(
               (app) =>
-                app.path &&
-                runningPaths.has(String(app.path).toLowerCase()),
+                app.path && runningPaths.has(String(app.path).toLowerCase()),
             );
           if (!apps.length)
             return ctx.ui.empty(
@@ -5086,8 +5095,7 @@ function createAppsExtension() {
           registeredActionId: 'force-quit-apps',
         },
       };
-      if (rankAction(forceQuitItem, query))
-        return [forceQuitItem, ...items];
+      if (rankAction(forceQuitItem, query)) return [forceQuitItem, ...items];
       return items;
     },
   };

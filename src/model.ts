@@ -624,7 +624,7 @@ export function actionPanelFromActions(
   actions?: CommandAction[],
   title?: string,
 ): CommandActionPanel | undefined {
-  if (!actions?.length) return undefined;
+  if (!actions?.length) return;
   return { title, sections: [{ actions }] };
 }
 
