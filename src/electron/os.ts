@@ -903,6 +903,66 @@ export async function captureScreenImage(options: any = {}) {
   )(options);
 }
 
+async function forceQuitMacApp(appPath: string, appName: string) {
+  const cleanedPath = appPath.replace(/\/$/, '');
+  const bundleName = path.basename(cleanedPath, '.app');
+  const candidates = [appName, bundleName].filter(Boolean);
+  const names = Array.from(new Set(candidates));
+  for (const name of names) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        execFile('killall', ['-KILL', name], { timeout: 8000 }, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+      return { ok: true };
+    } catch {
+      continue;
+    }
+  }
+  return { ok: false, error: `Could not force quit ${appName || bundleName}` };
+}
+
+async function forceQuitLinuxApp(appName: string) {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      execFile('pkill', ['-KILL', '-f', appName], { timeout: 8000 }, (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: `Could not force quit ${appName}` };
+  }
+}
+
+async function forceQuitWindowsApp(appName: string) {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      execFile('taskkill', ['/F', '/IM', `${appName}.exe`], { timeout: 8000 }, (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: `Could not force quit ${appName}` };
+  }
+}
+
+export async function forceQuitApp(appPath: string, appName: string) {
+  return osFunction(
+    {
+      darwin: () => forceQuitMacApp(appPath, appName),
+      linux: () => forceQuitLinuxApp(appName),
+      win32: () => forceQuitWindowsApp(appName),
+    },
+    async () => ({ ok: false, error: 'Force quit not supported on this platform' }),
+  )();
+}
+
 export async function executeSystemBuiltin(action: any, quit: () => void) {
   switch (action.builtin) {
     case 'lock-screen':

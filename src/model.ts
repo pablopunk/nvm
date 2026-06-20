@@ -193,6 +193,12 @@ export const ACTION_DEFINITIONS = {
     loading: 'none',
     execute: 'main',
   },
+  forceQuitApp: {
+    description: 'Force quit a running application',
+    dismiss: 'immediate',
+    loading: 'none',
+    execute: 'main',
+  },
   openSystemSettings: {
     description: 'Open system settings',
     dismiss: 'immediate',
