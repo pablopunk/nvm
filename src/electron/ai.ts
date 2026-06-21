@@ -1244,7 +1244,9 @@ function createTools(
                     `Try again in a moment. If the problem persists, restart Nevermind.`,
                 );
               }
-              throw new Error(`Validation failed for ${filename}: ${error.message}`);
+              throw new Error(
+                `Validation failed for ${filename}: ${error.message}`,
+              );
             }
             throw error;
           }
