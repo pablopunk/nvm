@@ -74,9 +74,7 @@ function decryptToken(data: StoredAuth): string | null {
   }
   if (data.token) {
     if (!safeStorage.isEncryptionAvailable())
-      logger.warn(
-        'safeStorage unavailable; reading plaintext Nevermind token',
-      );
+      logger.warn('safeStorage unavailable; reading plaintext Nevermind token');
     return Buffer.from(data.token, 'base64').toString('utf8');
   }
   if (data.encryptedToken) {
