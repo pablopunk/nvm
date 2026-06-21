@@ -2273,6 +2273,7 @@ function extensionRootActionFromItem(entry, item) {
     id: `extension-root:${entry.extension.id}:${item.id}`,
     kind: 'extension-root-item',
     extensionId: entry.extension.id,
+    commandId: item.id,
     extensionFile: entry.extension.__filePath
       ? path.basename(entry.extension.__filePath)
       : undefined,
@@ -2313,6 +2314,7 @@ function extensionActionFromContribution(entry) {
     id: actionId,
     kind: 'extension-action',
     extensionId: entry.extension.id,
+    commandId: item.id,
     registeredActionId: item.id,
     extensionFile,
     aiChatId: extensionFile
@@ -3252,17 +3254,18 @@ async function executeViewAction(action, launchContext?: any) {
       const extension = extensionModuleForAction(extAction);
       if (!extension)
         return { toast: { message: 'Extension not found', tone: 'error' } };
+      const itemTitle = extAction.title || extension.title || '';
       return {
         view: {
           type: 'form',
-          title: `Rename "${extension.title || extension.id}"`,
+          title: `Rename "${itemTitle}"`,
           fields: [
             {
               id: 'title',
               type: 'text',
               label: 'Name',
-              value: extension.title || '',
-              placeholder: 'Enter a new name for this extension',
+              value: itemTitle,
+              placeholder: 'Enter a new name',
               required: true,
             },
           ],
@@ -3270,6 +3273,7 @@ async function executeViewAction(action, launchContext?: any) {
             type: 'renameExtension',
             title: 'Rename',
             extensionId: extension.id,
+            commandId: extAction.commandId || '',
           },
         },
         navigation: 'push',
@@ -3281,15 +3285,21 @@ async function executeViewAction(action, launchContext?: any) {
       );
       if (!extension)
         return { toast: { message: 'Extension not found', tone: 'error' } };
-      const newTitle = action.formValues?.title;
-      if (!String(newTitle || '').trim())
+      const newTitle = String(action.formValues?.title || '').trim();
+      if (!newTitle)
         return { toast: { message: 'Name is required', tone: 'error' } };
-      const result = await renameExtension(extension, null, {
-        title: String(newTitle).trim(),
+      const commandId = action.commandId;
+      const command = commandId
+        ? extensionActionRegistry.get(`${extension.id}:${commandId}`)
+            ?.command || null
+        : null;
+      const result = await renameExtension(extension, command, {
+        title: newTitle,
+        ...(command ? { commandTitle: newTitle } : {}),
       });
       invalidateExtensionRootItems();
       return {
-        toast: { message: `Renamed to ${extension.title}` },
+        toast: { message: `Renamed to ${newTitle}` },
         navigation: 'pop',
       };
     }
