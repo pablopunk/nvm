@@ -1236,6 +1236,16 @@ function createTools(
           } catch (error) {
             if (previous !== null) await fs.writeFile(filePath, previous);
             else await fs.unlink(filePath).catch(() => {});
+            if (error instanceof ExtensionValidationError) {
+              if (error.kind === 'infrastructure') {
+                throw new Error(
+                  `Cannot write ${filename}: Nevermind's built-in extension validator is currently broken. ` +
+                    `${error.message}\n\n` +
+                    `Try again in a moment. If the problem persists, restart Nevermind.`,
+                );
+              }
+              throw new Error(`Validation failed for ${filename}: ${error.message}`);
+            }
             throw error;
           }
           markGeneratedExtension?.(filePath);
@@ -1425,19 +1435,74 @@ function safeExtensionPath(root: string, filename: string) {
   return fullPath;
 }
 
+type ExtensionValidationErrorKind =
+  | 'infrastructure'
+  | 'typecheck'
+  | 'runtime'
+  | 'permissions';
+
+class ExtensionValidationError extends Error {
+  kind: ExtensionValidationErrorKind;
+  details: Record<string, unknown>;
+  constructor(
+    kind: ExtensionValidationErrorKind,
+    message: string,
+    details: Record<string, unknown> = {},
+  ) {
+    super(message);
+    this.name = 'ExtensionValidationError';
+    this.kind = kind;
+    this.details = details;
+  }
+}
+
 async function ensureExtensionTypeDefinitions(
   extensionsDir: string,
   extensionTypesPath: string,
 ) {
+  const targetTypesPath = path.join(
+    extensionsDir,
+    'nevermind-extension-api.d.ts',
+  );
+  const packageJsonPath = path.join(extensionsDir, 'package.json');
   await fs.mkdir(extensionsDir, { recursive: true });
-  await fs.copyFile(
-    extensionTypesPath,
-    path.join(extensionsDir, 'nevermind-extension-api.d.ts'),
+
+  // Write type definitions and validate them — retry once if corrupted
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await fs.copyFile(extensionTypesPath, targetTypesPath);
+    await fs.writeFile(
+      packageJsonPath,
+      `${JSON.stringify({ type: 'module' }, null, 2)}\n`,
+    );
+    if (await typeDefinitionsHealthy(targetTypesPath)) return;
+    if (attempt === 0) {
+      // Wait briefly for any pending I/O to settle, then retry
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  // Both attempts failed — check if the source file itself is healthy
+  const sourceHealthy = await typeDefinitionsHealthy(extensionTypesPath);
+  throw new ExtensionValidationError(
+    'infrastructure',
+    sourceHealthy
+      ? `Cannot write healthy type definitions to ${targetTypesPath}. Check disk space and permissions in ${extensionsDir}.`
+      : `Type definitions source at ${extensionTypesPath} is corrupted or missing. The app installation may be damaged.`,
+    { filePath: targetTypesPath },
   );
-  await fs.writeFile(
-    path.join(extensionsDir, 'package.json'),
-    `${JSON.stringify({ type: 'module' }, null, 2)}\n`,
-  );
+}
+
+async function typeDefinitionsHealthy(filePath: string) {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    return (
+      content.length > 100 &&
+      content.includes('NevermindExtension') &&
+      content.includes('declare module')
+    );
+  } catch {
+    return false;
+  }
 }
 
 function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
@@ -1452,41 +1517,89 @@ function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
     allowSyntheticDefaultImports: true,
     allowImportingTsExtensions: true,
   };
-  const program = ts.createProgram([filePath, typeDefinitionsPath], options);
+  // Use a fresh compiler host per call to prevent TypeScript's internal
+  // document registry and module resolution cache from leaking stale state
+  // between validations of different files.
+  const compilerHost = ts.createCompilerHost(options);
+  const program = ts.createProgram(
+    [filePath, typeDefinitionsPath],
+    options,
+    compilerHost,
+  );
   const diagnostics = ts
     .getPreEmitDiagnostics(program)
     .filter(
       (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
     );
   if (!diagnostics.length) return;
-  const host: ts.FormatDiagnosticsHost = {
+  const formatHost: ts.FormatDiagnosticsHost = {
     getCanonicalFileName: (fileName) => fileName,
     getCurrentDirectory: () => path.dirname(filePath),
     getNewLine: () => '\n',
   };
-  const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, host);
+  const formatted = ts.formatDiagnosticsWithColorAndContext(
+    diagnostics,
+    formatHost,
+  );
   const plain = formatted.replace(/\x1b\[[0-9;]*m/g, '');
-  throw new Error(`TypeScript validation failed:\n${plain}`);
+  throw new ExtensionValidationError(
+    'typecheck',
+    `TypeScript validation failed for ${path.basename(filePath)}:\n${plain}`,
+    { filePath, diagnostics: diagnostics.map((d) => d.messageText) },
+  );
 }
 
 async function importExtensionForValidation(filePath: string) {
   const url = pathToFileURL(filePath);
   url.searchParams.set('validate', String(Date.now()));
-  const imported = await import(url.href);
+  let imported: any;
+  try {
+    imported = await import(url.href);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isRuntimeError =
+      message.includes('Cannot find module') ||
+      message.includes('Unexpected token') ||
+      message.includes('is not a function') ||
+      message.includes('is not defined') ||
+      message.includes('Unexpected end') ||
+      message.includes('SyntaxError');
+    throw new ExtensionValidationError(
+      isRuntimeError ? 'runtime' : 'infrastructure',
+      `Failed to import ${path.basename(filePath)} for validation: ${message}`,
+      { filePath, cause: error instanceof Error ? error.message : undefined },
+    );
+  }
   const extension = imported.default || imported;
   if (!extension?.id || !extension?.title)
-    throw new Error('Extension must export an object with id and title');
+    throw new ExtensionValidationError(
+      'runtime',
+      `Extension ${path.basename(filePath)} must export an object with id and title`,
+      { filePath },
+    );
   if (extension.commands !== undefined && !Array.isArray(extension.commands))
-    throw new Error('Extension commands must be an array');
+    throw new ExtensionValidationError(
+      'runtime',
+      `Extension ${path.basename(filePath)}: commands must be an array`,
+      { filePath },
+    );
   if (
     extension.actions !== undefined &&
     typeof extension.actions !== 'function'
   )
-    throw new Error('Extension actions must be a function');
+    throw new ExtensionValidationError(
+      'runtime',
+      `Extension ${path.basename(filePath)}: actions must be a function`,
+      { filePath },
+    );
   return extension;
 }
 
-function validateExtensionPermissions(extension: any, source: string) {
+function validateExtensionPermissions(
+  extension: any,
+  source: string,
+  filePath: string,
+) {
   const permissions = new Set(
     Array.isArray(extension?.permissions)
       ? extension.permissions.map(String)
@@ -1496,8 +1609,10 @@ function validateExtensionPermissions(extension: any, source: string) {
     /ctx\.desktop\.shell\b/.test(source) ||
     /ctx\.actions\.(?:shellExec|shellScript|system)\b/.test(source);
   if (usesSystemShell && !permissions.has('system')) {
-    throw new Error(
-      "Extension uses shell or system helpers but does not declare the 'system' permission. Add `permissions: ['system']` to the extension manifest.",
+    throw new ExtensionValidationError(
+      'permissions',
+      `Extension ${path.basename(filePath)} uses shell or system helpers but does not declare the 'system' permission. Add \`permissions: ['system']\` to the extension manifest.`,
+      { filePath },
     );
   }
 }
@@ -1516,7 +1631,7 @@ async function validateTypeScriptExtension(
     fs.readFile(filePath, 'utf8'),
     importExtensionForValidation(filePath),
   ]);
-  validateExtensionPermissions(extension, source);
+  validateExtensionPermissions(extension, source, filePath);
 }
 
 function capabilities() {
