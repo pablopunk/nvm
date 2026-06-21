@@ -1624,7 +1624,7 @@ function capabilities() {
       'ocr',
     ],
     backgroundJobs: [
-      'commands and actions(ctx) contributions can declare mode: view|noView|background and triggers startup, interval, clipboard.changed, files.changed, app.frontmost.changed, wake, and login; Nevermind owns scheduling, no-overlap, timeouts, backoff, enable/disable persistence, and diagnostics in Background Tasks; triggered runs receive ctx.launch with reason, trigger, startedAt, and changed file context when applicable',
+      'commands and actions(ctx) contributions can declare mode: view|noView|background and triggers startup, interval, clipboard.changed, files.changed, app.frontmost.changed, wake, and login; Nevermind owns scheduling, no-overlap, timeouts, backoff, enable/disable persistence, and diagnostics in Background Tasks; triggered runs receive ctx.launch with reason, trigger, startedAt, and changed file context when applicable; the host resolves ~ in files.changed roots to absolute paths so use ~/Desktop directly',
     ],
     files: [
       'ctx.desktop.files.metadata(path) returns canonical metadata and host-safe URLs; thumbnail(path) returns a thumbnail URL; indexedRoots(), indexSnapshot(options), searchIndex(query, options), and reindex(options) provide bounded host file-index controls',
@@ -1764,7 +1764,7 @@ function capabilities() {
       'startup',
       'interval',
       'clipboard.changed requires clipboard.history',
-      'files.changed requires desktop.files and supports roots, debounceMs, includeHidden, extensions, kind, ignore, plus ctx.launch.changedPaths/files',
+      'files.changed requires desktop.files and supports roots, debounceMs, includeHidden, extensions, kind, ignore, plus ctx.launch.changedPaths/files; the host resolves ~ in roots to absolute paths (use ~/Desktop directly)',
       'app.frontmost.changed requires desktop.apps',
       'wake',
       'login',

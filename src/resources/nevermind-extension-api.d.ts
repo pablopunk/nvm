@@ -101,7 +101,7 @@ export type ExtensionBackgroundMode = 'view' | 'noView' | 'background';
 export type ExtensionBackgroundTrigger =
   | { type: 'startup'; delayMs?: number }
   | { type: 'interval'; every: string | number; delayMs?: number }
-  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. */
+  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. The host resolves `~` and `~/...` paths to absolute paths so use `~/Desktop`, `~/Downloads`, etc. directly without manual resolution. */
   | {
       type: 'files.changed';
       roots: string | string[];
