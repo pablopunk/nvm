@@ -3851,7 +3851,11 @@ async function findFiles(roots, options: any = {}) {
 
   const { existing, missing } = await partitionRootsByExistence(findRoots);
   for (const root of missing)
-    logWarn('files.find.missingRoot', { root: displayUserPath(root) }, { source: 'host', scope: 'files' });
+    logWarn(
+      'files.find.missingRoot',
+      { root: displayUserPath(root) },
+      { source: 'host', scope: 'files' },
+    );
 
   await Promise.all(existing.map((root) => walk(root, maxDepth)));
   const sortBy = options.sortBy || options.sort || null;
@@ -7669,7 +7673,11 @@ async function scanFiles(options: any = {}) {
 
       const { existing, missing } = await partitionRootsByExistence(roots);
       for (const root of missing)
-        logWarn('files.scan.missingRoot', { root: displayUserPath(root) }, { source: 'host', scope: 'files' });
+        logWarn(
+          'files.scan.missingRoot',
+          { root: displayUserPath(root) },
+          { source: 'host', scope: 'files' },
+        );
 
       await Promise.all(existing.map((root) => walk(root, maxDepth)));
       await attachFileStats(found);

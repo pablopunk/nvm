@@ -8,8 +8,10 @@ test('partitionRootsByExistence separates existing from missing roots', async ()
   const home = os.homedir();
   const exists = path.join(home, 'Desktop');
   const missing = path.join(home, 'nonexistent-root-xyz');
-  const { existing, missing: missingRoots } =
-    await partitionRootsByExistence([exists, missing]);
+  const { existing, missing: missingRoots } = await partitionRootsByExistence([
+    exists,
+    missing,
+  ]);
 
   assert.deepEqual(existing, [exists]);
   assert.deepEqual(missingRoots, [missing]);
