@@ -2050,7 +2050,7 @@ async function executeExtensionRootItem(action) {
             content: 'This extension item is no longer available.',
           },
         };
-      if (!record.entry || !record.entry.extension) {
+      if (!(record.entry && record.entry.extension)) {
         logWarn('extension.rootItem.missingEntry', {
           handlerId: action.rootAction.handlerId,
           actionTitle: action.title,
@@ -2059,8 +2059,7 @@ async function executeExtensionRootItem(action) {
           view: {
             type: 'preview',
             title: 'Action unavailable',
-            content:
-              'This action is not available in the current context.',
+            content: 'This action is not available in the current context.',
           },
         };
       }
@@ -2408,9 +2407,8 @@ function extensionErrorMessage(error) {
 function extensionErrorView(entry, error) {
   const message = extensionErrorMessage(error);
   const title =
-    (entry?.command?.title ||
-      entry?.extension?.title ||
-      'Extension') + ' failed';
+    (entry?.command?.title || entry?.extension?.title || 'Extension') +
+    ' failed';
   return normalizeView(
     {
       type: 'preview',
@@ -3329,7 +3327,7 @@ async function executeViewAction(action, launchContext?: any) {
         return {
           toast: { message: 'Action is no longer available', tone: 'error' },
         };
-      if (!record.entry || !record.entry.extension) {
+      if (!(record.entry && record.entry.extension)) {
         logWarn('extension.action.missingEntry', {
           handlerId: action.handlerId,
           actionTitle: action.title,
@@ -6536,10 +6534,14 @@ function createExtensionContext(extension, command, launchContext?: any) {
   // Belt-and-suspenders: ensure `data` is never stripped from the context.
   // Every handler path expects `ctx.data` to be available.
   if (!context.data) {
-    logError('extension.context.missingData', new Error('ctx.data is missing'), {
-      source: 'host',
-      scope: 'extension',
-    });
+    logError(
+      'extension.context.missingData',
+      new Error('ctx.data is missing'),
+      {
+        source: 'host',
+        scope: 'extension',
+      },
+    );
     // Recover: create a minimal data object so extension code doesn't crash.
     context.data = {
       loader(fn, options: any = {}) {
