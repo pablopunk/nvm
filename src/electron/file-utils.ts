@@ -99,18 +99,29 @@ export function isVideoPath(filePath: string) {
   return VIDEO_EXTENSIONS.has(extensionForPath(filePath));
 }
 
+async function checkRootExistence(
+  root: string,
+  existing: string[],
+  missing: string[],
+) {
+  try {
+    await fs.access(root);
+    existing.push(root);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      missing.push(root);
+    } else {
+      existing.push(root);
+    }
+  }
+}
+
 export async function partitionRootsByExistence(roots: string[]) {
   const existing: string[] = [];
   const missing: string[] = [];
   await Promise.all(
-    roots.map(async (root) => {
-      try {
-        await fs.access(root);
-        existing.push(root);
-      } catch {
-        missing.push(root);
-      }
-    }),
+    roots.map((root) => checkRootExistence(root, existing, missing)),
   );
   return { existing, missing };
 }
