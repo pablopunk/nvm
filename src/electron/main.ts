@@ -55,6 +55,7 @@ import { initSentry } from './sentry';
 initSentry();
 
 import { canCustomizeCommandAction } from '../model';
+import { compareRankedActions } from './action-ranking';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
@@ -1872,12 +1873,7 @@ async function searchActions(query, options: any = {}) {
         { queryLength: q.length, resultCount: results.length },
         () =>
           results
-            .sort(
-              (a, b) =>
-                b.score - a.score ||
-                b.lastUsed - a.lastUsed ||
-                a.title.localeCompare(b.title),
-            )
+            .sort(compareRankedActions)
             .slice(0, 30)
             .map(prepareRootActionForRenderer),
       );
@@ -5187,12 +5183,11 @@ function createAiBuilderExtension() {
     return Object.values(userState.aiChats || {})
       .map((item: any) => ({
         id: `ai-chat:${item.id}`,
-        title: item.title || item.query,
+        title: `Continue AI chat: ${item.title || item.query}`,
         subtitle:
           item.status === 'ready'
             ? 'AI builder chat'
             : 'Continue AI builder chat',
-        aliases: [item.query],
         icon: 'sparkles',
         score: 13,
         lastUsed: Math.max(item.updatedAt || 0, item.createdAt || 0),
