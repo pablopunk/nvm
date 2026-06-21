@@ -1091,7 +1091,7 @@ export type ExtensionContext = {
     ): Promise<unknown>;
   };
   command?: ExtensionCommand;
-  /** Host-owned launch context for background/triggered runs. Undefined for normal palette executions. */
+  /** Host-owned launch context. Populated for: host-owned `refresh:` view refreshes (reason `"refresh"`), all declarative `triggers`-driven runs (startup, interval, clipboard.changed, files.changed, app.frontmost.changed, wake, login), and any action dispatched from a triggered context. Undefined for: manual palette opens (user types command name), `ctx.actions.run()` handler invocations, and `ctx.views.refresh()` handler invocations dispatched from non-triggered contexts. Check `ctx.launch?.refresh` or `ctx.launch?.reason === "refresh"` to distinguish background revalidation from manual opens. */
   launch?: ExtensionLaunchContext;
 
   /** Declarative host-owned UI primitives. Nevermind owns rendering, navigation, filtering, actions, shortcuts, and errors. */

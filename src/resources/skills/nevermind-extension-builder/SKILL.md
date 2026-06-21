@@ -37,4 +37,5 @@ Rules:
 - Keep system automation focused, bounded, and represented in native views with useful output/errors.
 - Keep generated code small, readable, dependency-free, and inside the generated extensions directory.
 - Throw meaningful `Error` objects instead of swallowing failures unless the extension can recover or add context and rethrow.
+- `ctx.launch` is populated for host-owned view refreshes, declarative trigger runs, and startup/wake/login events. It is `undefined` for manual palette opens and programmatic `ctx.actions.run()`/`ctx.views.refresh()` calls from non-triggered contexts. Use `ctx.launch?.refresh` to detect background revalidation; never implement process-level workarounds like `hasRenderedCache` flags.
 - Do not ask the user to edit files manually. If extension tools are unavailable, stop and report the tool failure instead of pasting code.
