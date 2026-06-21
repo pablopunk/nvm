@@ -1616,6 +1616,7 @@ function capabilities() {
       'input',
       'windows',
       'storage',
+      'data',
       'extension',
       'navigation',
       'cache',
@@ -1760,6 +1761,10 @@ function capabilities() {
       'size',
     ],
     storage: ['get', 'set', 'delete', 'clear', 'memo', 'memoStale'],
+    data: [
+      'ctx.data.staleWhileRevalidate({ cacheKey, loader, ttlMs?, staleTtlMs?, retry? }) is the PRIMARY pattern for building cache-first views. It returns a loader handle for view.items; the host owns the full loading lifecycle: fresh cache → instant render, stale cache → instant render + background refresh with subtle loading bar, empty/expired cache → deferred spinner. On loader failure with stale cache, shows stale items as graceful fallback instead of error. Prefer this declarative pattern over manual ctx.storage.get/set + ctx.views.invalidate().',
+      'ctx.data.loader(fn, { retry? }) for non-cached lazy-loading views; the host shows a deferred spinner and an optional retry button on error.',
+    ],
     triggerTypes: [
       'startup',
       'interval',
