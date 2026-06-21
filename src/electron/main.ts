@@ -3289,11 +3289,10 @@ async function executeViewAction(action, launchContext?: any) {
       if (!newTitle)
         return { toast: { message: 'Name is required', tone: 'error' } };
       const commandId = action.commandId;
-      const command =
-        commandId
-          ? extensionActionRegistry.get(`${extension.id}:${commandId}`)
-              ?.command || null
-          : null;
+      const command = commandId
+        ? extensionActionRegistry.get(`${extension.id}:${commandId}`)
+            ?.command || null
+        : null;
       const result = await renameExtension(extension, command, {
         title: newTitle,
         ...(command ? { commandTitle: newTitle } : {}),
