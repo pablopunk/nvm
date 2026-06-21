@@ -10,7 +10,8 @@ import { openExternalUrl } from './url-utils';
 const FILENAME = 'nevermind-auth.json';
 
 type StoredAuth = {
-  encryptedToken: string;
+  encryptedToken?: string;
+  token?: string;
   email: string;
   role: string;
   baseUrl: string;
@@ -65,17 +66,33 @@ let cached: AuthSnapshot = null;
 let loadPromise: Promise<AuthSnapshot> | null = null;
 let activeSignIn: Promise<SignInResult> | null = null;
 
+function decryptToken(data: StoredAuth): string | null {
+  if (data.encryptedToken && safeStorage.isEncryptionAvailable()) {
+    return safeStorage.decryptString(
+      Buffer.from(data.encryptedToken, 'base64'),
+    );
+  }
+  if (data.token) {
+    if (!safeStorage.isEncryptionAvailable())
+      logger.warn(
+        'safeStorage unavailable; reading plaintext Nevermind token',
+      );
+    return Buffer.from(data.token, 'base64').toString('utf8');
+  }
+  if (data.encryptedToken) {
+    logger.warn(
+      'safeStorage unavailable; cannot decrypt stored Nevermind token',
+    );
+  }
+  return null;
+}
+
 async function readFromDisk(): Promise<AuthSnapshot> {
   try {
     const raw = await fs.readFile(authPath(), 'utf8');
     const data = JSON.parse(raw) as StoredAuth;
-    if (!safeStorage.isEncryptionAvailable()) {
-      logger.warn('safeStorage unavailable; ignoring stored Nevermind token');
-      return null;
-    }
-    const token = safeStorage.decryptString(
-      Buffer.from(data.encryptedToken, 'base64'),
-    );
+    const token = decryptToken(data);
+    if (!token) return null;
     const baseUrl = normalizedBaseUrl(data.baseUrl);
     if (baseUrl !== data.baseUrl)
       logger.warn('normalized stored Nevermind auth base URL', {
@@ -114,18 +131,26 @@ async function persist({
   role: string;
   baseUrl: string;
 }) {
-  if (!safeStorage.isEncryptionAvailable())
-    throw new Error('safeStorage encryption unavailable');
   const payload: StoredAuth = {
-    encryptedToken: safeStorage.encryptString(token).toString('base64'),
     email,
     role,
     baseUrl,
     connectedAt: new Date().toISOString(),
   };
+  if (safeStorage.isEncryptionAvailable()) {
+    payload.encryptedToken = safeStorage
+      .encryptString(token)
+      .toString('base64');
+  } else {
+    logger.warn(
+      'safeStorage unavailable; storing Nevermind token as plaintext',
+    );
+    payload.token = Buffer.from(token, 'utf8').toString('base64');
+  }
   await fs.writeFile(authPath(), JSON.stringify(payload, null, 2), {
     mode: 0o600,
   });
+  if (process.platform !== 'win32') await fs.chmod(authPath(), 0o600);
   cached = { token, email, role, baseUrl };
   loadPromise = Promise.resolve(cached);
   return cached;
