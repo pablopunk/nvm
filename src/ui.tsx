@@ -330,9 +330,9 @@ export function CommandTile({
     <video
       src={video}
       draggable={false}
-      muted
-      loop
-      playsInline
+      muted={true}
+      loop={true}
+      playsInline={true}
       preload="none"
       onMouseEnter={(event) => event.currentTarget.play().catch(() => {})}
       onMouseLeave={(event) => event.currentTarget.pause()}
@@ -453,11 +453,11 @@ export function PreviewView({
           className="previewMedia"
           src={video}
           poster={poster || media?.src}
-          controls
-          autoPlay
-          muted
-          loop
-          playsInline
+          controls={true}
+          autoPlay={true}
+          muted={true}
+          loop={true}
+          playsInline={true}
         />
       ) : null}
       {!video && media?.src ? (
@@ -661,7 +661,7 @@ function formFieldControl(
           .filter(Boolean);
     return (
       <select
-        multiple
+        multiple={true}
         value={selected}
         required={field.required}
         onChange={(event) =>

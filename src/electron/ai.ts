@@ -204,7 +204,12 @@ function isAssistantErrorEndEvent(
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>();
   const generalSessions = new Map<string, Promise<AgentSession>>();
-  const creditInfoRef: { current: { credits: { paid: number; free: number; total: number }; notice: string } | null } = { current: null };
+  const creditInfoRef: {
+    current: {
+      credits: { paid: number; free: number; total: number };
+      notice: string;
+    } | null;
+  } = { current: null };
 
   async function getSession(chatId = 'default') {
     const current = sessions.get(chatId);
@@ -237,7 +242,8 @@ function createNevermindAi(options: NevermindAiOptions) {
       const limit: AiLimitNotice = {
         kind: 'insufficient_credits',
         title: 'Credits needed',
-        message: 'You\'ve reached your Nevermind AI credit limit. Open your dashboard to review your account.',
+        message:
+          "You've reached your Nevermind AI credit limit. Open your dashboard to review your account.",
         actionTitle: 'Open Dashboard',
         dashboardUrl: NEVERMIND_DASHBOARD_URL,
       };
@@ -489,15 +495,16 @@ function createNevermindAi(options: NevermindAiOptions) {
     ]);
 
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'));
-    const { model, source: modelSource, creditInfo } = await resolveAiModelAndAuth(
-      pi,
-      ai,
-      authStorage,
-    );
-    if (creditInfo) creditInfoRef.current = {
-      credits: creditInfo.credits,
-      notice: creditInfo.notice,
-    };
+    const {
+      model,
+      source: modelSource,
+      creditInfo,
+    } = await resolveAiModelAndAuth(pi, ai, authStorage);
+    if (creditInfo)
+      creditInfoRef.current = {
+        credits: creditInfo.credits,
+        notice: creditInfo.notice,
+      };
     const modelRegistry = pi.ModelRegistry.inMemory(authStorage);
     onEvent?.({
       type: 'debug',
@@ -831,10 +838,12 @@ async function resolveAiModelAndAuth(
       modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {},
     ),
   };
-  const creditInfo = descriptor.credits ? {
-    credits: descriptor.credits,
-    notice: descriptor.notice ?? 'ok',
-  } : null;
+  const creditInfo = descriptor.credits
+    ? {
+        credits: descriptor.credits,
+        notice: descriptor.notice ?? 'ok',
+      }
+    : null;
   return { model, source: 'nevermind' as const, creditInfo };
 }
 
@@ -1279,16 +1288,16 @@ function createTools(
               extensionsDir,
             );
           } catch (error) {
-            if (previous !== null) await fs.writeFile(filePath, previous);
-            else await fs.unlink(filePath).catch(() => {});
+            if (previous === null) await fs.unlink(filePath).catch(() => {});
+            else await fs.writeFile(filePath, previous);
             throw error;
           }
           markGeneratedExtension?.(filePath);
           await reloadExtensions();
           const runtime = runtimeDetails(filename);
           if (!runtime.loaded) {
-            if (previous !== null) await fs.writeFile(filePath, previous);
-            else await fs.unlink(filePath).catch(() => {});
+            if (previous === null) await fs.unlink(filePath).catch(() => {});
+            else await fs.writeFile(filePath, previous);
             await reloadExtensions();
             throw new Error(
               `Extension ${filename} was written to ${filePath} but did not load. Check read_app_logs for extension.load.failed.`,
@@ -1422,7 +1431,7 @@ function summarizedToolResult(result: any) {
         .filter(Boolean)
         .join('\n\n')
     : '';
-  return text ? { text: summarizeText(text, 1_000) } : undefined;
+  return text ? { text: summarizeText(text, 1000) } : undefined;
 }
 
 function summarizeText(text: string, limit: number) {
@@ -1519,7 +1528,7 @@ async function importExtensionForValidation(filePath: string) {
   url.searchParams.set('validate', String(Date.now()));
   const imported = await import(url.href);
   const extension = imported.default || imported;
-  if (!extension?.id || !extension?.title)
+  if (!(extension?.id && extension?.title))
     throw new Error('Extension must export an object with id and title');
   if (extension.commands !== undefined && !Array.isArray(extension.commands))
     throw new Error('Extension commands must be an array');
