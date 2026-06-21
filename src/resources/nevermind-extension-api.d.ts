@@ -101,7 +101,7 @@ export type ExtensionBackgroundMode = 'view' | 'noView' | 'background';
 export type ExtensionBackgroundTrigger =
   | { type: 'startup'; delayMs?: number }
   | { type: 'interval'; every: string | number; delayMs?: number }
-  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. */
+  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. The host resolves `~` and `~/...` paths to absolute paths so use `~/Desktop`, `~/Downloads`, etc. directly without manual resolution. */
   | {
       type: 'files.changed';
       roots: string | string[];
@@ -1469,6 +1469,14 @@ export type ExtensionContext = {
       icon(appPath: string): Promise<string | null>;
     };
     files?: {
+      /**
+       * Walk one or more directory roots and return matching files.
+       *
+       * Non-existent roots are skipped (with a warning logged to the host)
+       * so that a batch query across multiple roots always returns results
+       * from the roots that exist. Callers do not need to iterate roots
+       * individually to guard against missing directories.
+       */
       find(
         roots: string[],
         options?: ExtensionFindFilesOptions,
