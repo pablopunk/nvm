@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -96,4 +97,31 @@ export function isImagePath(filePath: string) {
 
 export function isVideoPath(filePath: string) {
   return VIDEO_EXTENSIONS.has(extensionForPath(filePath));
+}
+
+async function checkRootExistence(
+  root: string,
+  existing: string[],
+  missing: string[],
+) {
+  try {
+    await fs.access(root);
+    existing.push(root);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      missing.push(root);
+    } else {
+      existing.push(root);
+    }
+  }
+}
+
+export async function partitionRootsByExistence(roots: string[]) {
+  const existing: string[] = [];
+  const missing: string[] = [];
+  await Promise.all(
+    roots.map((root) => checkRootExistence(root, existing, missing)),
+  );
+  return { existing, missing };
 }

@@ -1469,6 +1469,14 @@ export type ExtensionContext = {
       icon(appPath: string): Promise<string | null>;
     };
     files?: {
+      /**
+       * Walk one or more directory roots and return matching files.
+       *
+       * Non-existent roots are skipped (with a warning logged to the host)
+       * so that a batch query across multiple roots always returns results
+       * from the roots that exist. Callers do not need to iterate roots
+       * individually to guard against missing directories.
+       */
       find(
         roots: string[],
         options?: ExtensionFindFilesOptions,
