@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 
+// biome-ignore lint/style/noDefaultExport: Electron-vite requires default export
 export default defineConfig({
   main: {
     build: {
@@ -41,7 +42,9 @@ export default defineConfig({
         input: 'index.html',
         output: {
           manualChunks(id) {
-            if (!id.includes('node_modules')) return;
+            if (!id.includes('node_modules')) {
+              return;
+            }
             if (
               id.includes('react-markdown') ||
               id.includes('remark-') ||
@@ -49,16 +52,22 @@ export default defineConfig({
               id.includes('mdast') ||
               id.includes('unist') ||
               id.includes('hast')
-            )
+            ) {
               return 'markdown';
+            }
             if (
               id.includes('/react/') ||
               id.includes('/react-dom/') ||
               id.includes('/scheduler/')
-            )
+            ) {
               return 'react';
-            if (id.includes('/cmdk/')) return 'cmdk';
-            if (id.includes('lucide-react')) return 'icons';
+            }
+            if (id.includes('/cmdk/')) {
+              return 'cmdk';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
           },
         },
       },

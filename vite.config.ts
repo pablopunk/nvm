@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+// biome-ignore lint/style/noDefaultExport: Vite requires default export
 export default defineConfig({
   base: './',
   plugins: [react()],
@@ -18,7 +19,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return;
+          if (!id.includes('node_modules')) {
+            return;
+          }
           if (
             id.includes('react-markdown') ||
             id.includes('remark-') ||

@@ -2,9 +2,10 @@ import type { APIRoute } from 'astro';
 import { getUserFromBearer } from '../../../lib/tokens';
 import { getModelRoute, ModelNotConfiguredError, parseExtensionAiModelRole } from '../../../lib/settings';
 import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
-import { lookupModelDescriptor } from '../../../lib/pricing';
+import { lookupModelCost, lookupModelDescriptor } from '../../../lib/pricing';
 import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
 import { selectApiForModel, type UpstreamApi } from '../../../lib/upstream';
+import { estimatePromptCredits } from '../../../lib/limits';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
 
@@ -49,11 +50,37 @@ export const GET: APIRoute = async ({ request }) => {
   const api = selectApiForModel(provider, modelId);
   const baseUrl = backendBaseUrlForApi(new URL(request.url), api);
 
+  const CHARS_PER_TOKEN = 4;
+  const inputTokensQ = url.searchParams.get('inputTokens');
+  const charsQ = url.searchParams.get('chars');
+  let costEstimate: number | undefined;
+  if (inputTokensQ || charsQ) {
+    const tokens = inputTokensQ
+      ? Math.max(0, Number(inputTokensQ) || 0)
+      : Math.ceil(Math.max(0, Number(charsQ) || 0) / CHARS_PER_TOKEN);
+    if (tokens > 0) {
+      const costRow = await lookupModelCost(provider, modelId);
+      if (costRow) costEstimate = estimatePromptCredits(tokens, costRow);
+    }
+  }
+
+  let notice: 'ok' | 'low' | 'blocked';
+  if (balances.total <= 0) {
+    notice = 'blocked';
+  } else if (costEstimate !== undefined && balances.total < costEstimate) {
+    notice = 'low';
+  } else {
+    notice = 'ok';
+  }
+
   const requestId = requestIdFromHeaders(request.headers);
   return Response.json({
     ...descriptor,
     api,
     provider: NEVERMIND_PROVIDER_ID,
     baseUrl,
+    credits: { paid: balances.paid, free: balances.free, total: balances.total },
+    notice,
+    ...(costEstimate !== undefined ? { costEstimate } : {}),
   }, { headers: compatibilityHeaders(requestId) });
 };

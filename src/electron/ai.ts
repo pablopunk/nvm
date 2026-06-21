@@ -204,6 +204,12 @@ function isAssistantErrorEndEvent(
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>();
   const generalSessions = new Map<string, Promise<AgentSession>>();
+  const creditInfoRef: {
+    current: {
+      credits: { paid: number; free: number; total: number };
+      notice: string;
+    } | null;
+  } = { current: null };
 
   async function getSession(chatId = 'default') {
     const current = sessions.get(chatId);
@@ -231,6 +237,31 @@ function createNevermindAi(options: NevermindAiOptions) {
   }
 
   async function send(message: string, chatId = 'default') {
+    const credit = creditInfoRef.current;
+    if (credit?.notice === 'blocked') {
+      const limit: AiLimitNotice = {
+        kind: 'insufficient_credits',
+        title: 'Credits needed',
+        message:
+          "You've reached your Nevermind AI credit limit. Open your dashboard to review your account.",
+        actionTitle: 'Open Dashboard',
+        dashboardUrl: NEVERMIND_DASHBOARD_URL,
+      };
+      options.onEvent?.({
+        type: 'error',
+        chatId,
+        message: limit.message,
+        data: limit,
+      });
+      return;
+    }
+    if (credit?.notice === 'low') {
+      options.onEvent?.({
+        type: 'credit_warning',
+        chatId,
+        message: `Low credit balance: ${credit.credits.total} credits remaining. Consider adding credits at nvm.fyi/dashboard.`,
+      });
+    }
     options.onEvent?.({ type: 'start', chatId });
     await measureDebugPerformance(
       'ai.chat.send',
@@ -464,11 +495,16 @@ function createNevermindAi(options: NevermindAiOptions) {
     ]);
 
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'));
-    const { model, source: modelSource } = await resolveAiModelAndAuth(
-      pi,
-      ai,
-      authStorage,
-    );
+    const {
+      model,
+      source: modelSource,
+      creditInfo,
+    } = await resolveAiModelAndAuth(pi, ai, authStorage);
+    if (creditInfo)
+      creditInfoRef.current = {
+        credits: creditInfo.credits,
+        notice: creditInfo.notice,
+      };
     const modelRegistry = pi.ModelRegistry.inMemory(authStorage);
     onEvent?.({
       type: 'debug',
@@ -746,6 +782,9 @@ type BackendDescriptor = {
   api: string;
   provider: string;
   baseUrl: string;
+  credits?: { paid: number; free: number; total: number };
+  notice?: 'ok' | 'low' | 'blocked';
+  costEstimate?: number;
 };
 
 async function fetchActiveModelDescriptor(
@@ -799,7 +838,13 @@ async function resolveAiModelAndAuth(
       modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {},
     ),
   };
-  return { model, source: 'nevermind' as const };
+  const creditInfo = descriptor.credits
+    ? {
+        credits: descriptor.credits,
+        notice: descriptor.notice ?? 'ok',
+      }
+    : null;
+  return { model, source: 'nevermind' as const, creditInfo };
 }
 
 async function createResourceLoader(
@@ -965,15 +1010,24 @@ function createTools(
         });
         return result;
       } catch (error) {
+        const limit = aiLimitNoticeFromError(error);
         emitEvent?.({
           type: 'tool_trace_end',
           name,
           data: {
             toolCallId,
             error: error instanceof Error ? error.message : String(error),
+            limit,
           },
           isError: true,
         });
+        if (limit) {
+          emitEvent?.({
+            type: 'error',
+            message: limit.message,
+            data: limit,
+          });
+        }
         throw error;
       }
     };
@@ -1234,28 +1288,16 @@ function createTools(
               extensionsDir,
             );
           } catch (error) {
-            if (previous !== null) await fs.writeFile(filePath, previous);
-            else await fs.unlink(filePath).catch(() => {});
-            if (error instanceof ExtensionValidationError) {
-              if (error.kind === 'infrastructure') {
-                throw new Error(
-                  `Cannot write ${filename}: Nevermind's built-in extension validator is currently broken. ` +
-                    `${error.message}\n\n` +
-                    `Try again in a moment. If the problem persists, restart Nevermind.`,
-                );
-              }
-              throw new Error(
-                `Validation failed for ${filename}: ${error.message}`,
-              );
-            }
+            if (previous === null) await fs.unlink(filePath).catch(() => {});
+            else await fs.writeFile(filePath, previous);
             throw error;
           }
           markGeneratedExtension?.(filePath);
           await reloadExtensions();
           const runtime = runtimeDetails(filename);
           if (!runtime.loaded) {
-            if (previous !== null) await fs.writeFile(filePath, previous);
-            else await fs.unlink(filePath).catch(() => {});
+            if (previous === null) await fs.unlink(filePath).catch(() => {});
+            else await fs.writeFile(filePath, previous);
             await reloadExtensions();
             throw new Error(
               `Extension ${filename} was written to ${filePath} but did not load. Check read_app_logs for extension.load.failed.`,
@@ -1389,7 +1431,7 @@ function summarizedToolResult(result: any) {
         .filter(Boolean)
         .join('\n\n')
     : '';
-  return text ? { text: summarizeText(text, 1_000) } : undefined;
+  return text ? { text: summarizeText(text, 1000) } : undefined;
 }
 
 function summarizeText(text: string, limit: number) {
@@ -1437,74 +1479,19 @@ function safeExtensionPath(root: string, filename: string) {
   return fullPath;
 }
 
-type ExtensionValidationErrorKind =
-  | 'infrastructure'
-  | 'typecheck'
-  | 'runtime'
-  | 'permissions';
-
-class ExtensionValidationError extends Error {
-  kind: ExtensionValidationErrorKind;
-  details: Record<string, unknown>;
-  constructor(
-    kind: ExtensionValidationErrorKind,
-    message: string,
-    details: Record<string, unknown> = {},
-  ) {
-    super(message);
-    this.name = 'ExtensionValidationError';
-    this.kind = kind;
-    this.details = details;
-  }
-}
-
 async function ensureExtensionTypeDefinitions(
   extensionsDir: string,
   extensionTypesPath: string,
 ) {
-  const targetTypesPath = path.join(
-    extensionsDir,
-    'nevermind-extension-api.d.ts',
-  );
-  const packageJsonPath = path.join(extensionsDir, 'package.json');
   await fs.mkdir(extensionsDir, { recursive: true });
-
-  // Write type definitions and validate them — retry once if corrupted
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await fs.copyFile(extensionTypesPath, targetTypesPath);
-    await fs.writeFile(
-      packageJsonPath,
-      `${JSON.stringify({ type: 'module' }, null, 2)}\n`,
-    );
-    if (await typeDefinitionsHealthy(targetTypesPath)) return;
-    if (attempt === 0) {
-      // Wait briefly for any pending I/O to settle, then retry
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-  }
-
-  // Both attempts failed — check if the source file itself is healthy
-  const sourceHealthy = await typeDefinitionsHealthy(extensionTypesPath);
-  throw new ExtensionValidationError(
-    'infrastructure',
-    sourceHealthy
-      ? `Cannot write healthy type definitions to ${targetTypesPath}. Check disk space and permissions in ${extensionsDir}.`
-      : `Type definitions source at ${extensionTypesPath} is corrupted or missing. The app installation may be damaged.`,
-    { filePath: targetTypesPath },
+  await fs.copyFile(
+    extensionTypesPath,
+    path.join(extensionsDir, 'nevermind-extension-api.d.ts'),
   );
-}
-
-async function typeDefinitionsHealthy(filePath: string) {
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    return (
-      content.length > 100 &&
-      content.includes('NevermindExtension') &&
-      content.includes('declare module')
-    );
-  } catch {
-    return false;
-  }
+  await fs.writeFile(
+    path.join(extensionsDir, 'package.json'),
+    `${JSON.stringify({ type: 'module' }, null, 2)}\n`,
+  );
 }
 
 function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
@@ -1519,89 +1506,41 @@ function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
     allowSyntheticDefaultImports: true,
     allowImportingTsExtensions: true,
   };
-  // Use a fresh compiler host per call to prevent TypeScript's internal
-  // document registry and module resolution cache from leaking stale state
-  // between validations of different files.
-  const compilerHost = ts.createCompilerHost(options);
-  const program = ts.createProgram(
-    [filePath, typeDefinitionsPath],
-    options,
-    compilerHost,
-  );
+  const program = ts.createProgram([filePath, typeDefinitionsPath], options);
   const diagnostics = ts
     .getPreEmitDiagnostics(program)
     .filter(
       (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
     );
   if (!diagnostics.length) return;
-  const formatHost: ts.FormatDiagnosticsHost = {
+  const host: ts.FormatDiagnosticsHost = {
     getCanonicalFileName: (fileName) => fileName,
     getCurrentDirectory: () => path.dirname(filePath),
     getNewLine: () => '\n',
   };
-  const formatted = ts.formatDiagnosticsWithColorAndContext(
-    diagnostics,
-    formatHost,
-  );
+  const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, host);
   const plain = formatted.replace(/\x1b\[[0-9;]*m/g, '');
-  throw new ExtensionValidationError(
-    'typecheck',
-    `TypeScript validation failed for ${path.basename(filePath)}:\n${plain}`,
-    { filePath, diagnostics: diagnostics.map((d) => d.messageText) },
-  );
+  throw new Error(`TypeScript validation failed:\n${plain}`);
 }
 
 async function importExtensionForValidation(filePath: string) {
   const url = pathToFileURL(filePath);
   url.searchParams.set('validate', String(Date.now()));
-  let imported: any;
-  try {
-    imported = await import(url.href);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const isRuntimeError =
-      message.includes('Cannot find module') ||
-      message.includes('Unexpected token') ||
-      message.includes('is not a function') ||
-      message.includes('is not defined') ||
-      message.includes('Unexpected end') ||
-      message.includes('SyntaxError');
-    throw new ExtensionValidationError(
-      isRuntimeError ? 'runtime' : 'infrastructure',
-      `Failed to import ${path.basename(filePath)} for validation: ${message}`,
-      { filePath, cause: error instanceof Error ? error.message : undefined },
-    );
-  }
+  const imported = await import(url.href);
   const extension = imported.default || imported;
-  if (!extension?.id || !extension?.title)
-    throw new ExtensionValidationError(
-      'runtime',
-      `Extension ${path.basename(filePath)} must export an object with id and title`,
-      { filePath },
-    );
+  if (!(extension?.id && extension?.title))
+    throw new Error('Extension must export an object with id and title');
   if (extension.commands !== undefined && !Array.isArray(extension.commands))
-    throw new ExtensionValidationError(
-      'runtime',
-      `Extension ${path.basename(filePath)}: commands must be an array`,
-      { filePath },
-    );
+    throw new Error('Extension commands must be an array');
   if (
     extension.actions !== undefined &&
     typeof extension.actions !== 'function'
   )
-    throw new ExtensionValidationError(
-      'runtime',
-      `Extension ${path.basename(filePath)}: actions must be a function`,
-      { filePath },
-    );
+    throw new Error('Extension actions must be a function');
   return extension;
 }
 
-function validateExtensionPermissions(
-  extension: any,
-  source: string,
-  filePath: string,
-) {
+function validateExtensionPermissions(extension: any, source: string) {
   const permissions = new Set(
     Array.isArray(extension?.permissions)
       ? extension.permissions.map(String)
@@ -1611,10 +1550,8 @@ function validateExtensionPermissions(
     /ctx\.desktop\.shell\b/.test(source) ||
     /ctx\.actions\.(?:shellExec|shellScript|system)\b/.test(source);
   if (usesSystemShell && !permissions.has('system')) {
-    throw new ExtensionValidationError(
-      'permissions',
-      `Extension ${path.basename(filePath)} uses shell or system helpers but does not declare the 'system' permission. Add \`permissions: ['system']\` to the extension manifest.`,
-      { filePath },
+    throw new Error(
+      "Extension uses shell or system helpers but does not declare the 'system' permission. Add `permissions: ['system']` to the extension manifest.",
     );
   }
 }
@@ -1633,7 +1570,7 @@ async function validateTypeScriptExtension(
     fs.readFile(filePath, 'utf8'),
     importExtensionForValidation(filePath),
   ]);
-  validateExtensionPermissions(extension, source, filePath);
+  validateExtensionPermissions(extension, source);
 }
 
 function capabilities() {
@@ -1733,7 +1670,6 @@ function capabilities() {
       'input',
       'windows',
       'storage',
-      'data',
       'extension',
       'navigation',
       'cache',
@@ -1879,10 +1815,6 @@ function capabilities() {
       'size',
     ],
     storage: ['get', 'set', 'delete', 'clear', 'memo', 'memoStale'],
-    data: [
-      'ctx.data.staleWhileRevalidate({ cacheKey, loader, ttlMs?, staleTtlMs?, retry? }) is the PRIMARY pattern for building cache-first views. It returns a loader handle for view.items; the host owns the full loading lifecycle: fresh cache → instant render, stale cache → instant render + background refresh with subtle loading bar, empty/expired cache → deferred spinner. On loader failure with stale cache, shows stale items as graceful fallback instead of error. Prefer this declarative pattern over manual ctx.storage.get/set + ctx.views.invalidate().',
-      'ctx.data.loader(fn, { retry? }) for non-cached lazy-loading views; the host shows a deferred spinner and an optional retry button on error.',
-    ],
     triggerTypes: [
       'startup',
       'interval',
