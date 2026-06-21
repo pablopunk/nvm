@@ -3,6 +3,7 @@ import {
   Clipboard,
   Copy,
   Keyboard,
+  Pencil,
   RotateCcw,
   Search,
   Sparkles,
@@ -1964,6 +1965,16 @@ export function App() {
     await tweakActionWithAi(optionsFor);
   }
 
+  async function renameExtensionAction() {
+    if (!optionsFor) return;
+    setOptionsFor(null);
+    await runViewAction({
+      type: 'renameExtensionPrompt',
+      title: 'Rename Extension',
+      targetAction: optionsFor,
+    });
+  }
+
   function tabActionForRootAction(action: Action | null | undefined) {
     if (!action) return null;
     if (
@@ -2429,6 +2440,14 @@ export function App() {
         subtitle: 'Create a separate copy to tweak while keeping this action',
         onSelect: duplicateCreatedAction,
         show: canDuplicateCreatedAction,
+      },
+      {
+        value: 'option:rename',
+        icon: <Pencil size={18} />,
+        title: 'Rename',
+        subtitle: 'Change the display name of this extension',
+        onSelect: renameExtensionAction,
+        show: canTweakWithAi,
       },
       {
         value: 'option:tweak',

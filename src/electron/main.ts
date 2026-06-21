@@ -3220,6 +3220,52 @@ async function executeViewAction(action, launchContext?: any) {
         ? executeExtensionRootItem(resolved.rootAction)
         : { toast: { message: 'Action unavailable', tone: 'error' } };
     }
+    case 'renameExtensionPrompt': {
+      const extAction = action.targetAction || action.action;
+      const extension = extensionModuleForAction(extAction);
+      if (!extension)
+        return { toast: { message: 'Extension not found', tone: 'error' } };
+      return {
+        view: {
+          type: 'form',
+          title: `Rename "${extension.title || extension.id}"`,
+          fields: [
+            {
+              id: 'title',
+              type: 'text',
+              label: 'Name',
+              value: extension.title || '',
+              placeholder: 'Enter a new name for this extension',
+              required: true,
+            },
+          ],
+          submitAction: {
+            type: 'renameExtension',
+            title: 'Rename',
+            extensionId: extension.id,
+          },
+        },
+        navigation: 'push',
+      };
+    }
+    case 'renameExtension': {
+      const extension = Array.from(extensionModules.values()).find(
+        (ext) => ext.id === action.extensionId,
+      );
+      if (!extension)
+        return { toast: { message: 'Extension not found', tone: 'error' } };
+      const newTitle = action.formValues?.title;
+      if (!String(newTitle || '').trim())
+        return { toast: { message: 'Name is required', tone: 'error' } };
+      const result = await renameExtension(extension, null, {
+        title: String(newTitle).trim(),
+      });
+      invalidateExtensionRootItems();
+      return {
+        toast: { message: `Renamed to ${extension.title}` },
+        navigation: 'pop',
+      };
+    }
     case 'promptAction':
       return { view: promptActionView(action), navigation: 'push' };
     case 'runExtensionAction': {
