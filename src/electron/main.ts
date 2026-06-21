@@ -2050,6 +2050,20 @@ async function executeExtensionRootItem(action) {
             content: 'This extension item is no longer available.',
           },
         };
+      if (!record.entry || !record.entry.extension) {
+        logWarn('extension.rootItem.missingEntry', {
+          handlerId: action.rootAction.handlerId,
+          actionTitle: action.title,
+        });
+        return {
+          view: {
+            type: 'preview',
+            title: 'Action unavailable',
+            content:
+              'This action is not available in the current context.',
+          },
+        };
+      }
       try {
         const result = await measureDebugPerformance(
           'extension.root-item.handler',
@@ -2072,7 +2086,7 @@ async function executeExtensionRootItem(action) {
         logError('extension.rootItem.failed', error, {
           source: 'host',
           scope: 'extension',
-          extensionId: record.entry.extension.id,
+          extensionId: record.entry.extension?.id,
         });
         return { view: extensionErrorView(record.entry, error) };
       }
@@ -2393,10 +2407,14 @@ function extensionErrorMessage(error) {
 
 function extensionErrorView(entry, error) {
   const message = extensionErrorMessage(error);
+  const title =
+    (entry?.command?.title ||
+      entry?.extension?.title ||
+      'Extension') + ' failed';
   return normalizeView(
     {
       type: 'preview',
-      title: `${entry.command.title || entry.extension.title || 'Extension'} failed`,
+      title,
       content: `# Something went wrong\n\n\`\`\`\n${message}\n\`\`\``,
       actions: [extensionErrorAiAction(entry, message)].filter(Boolean),
     },
@@ -2405,11 +2423,12 @@ function extensionErrorView(entry, error) {
 }
 
 function extensionErrorAiAction(entry, message) {
+  if (!entry?.extension) return null;
   const extensionFile = entry.extension.__filePath
     ? path.basename(entry.extension.__filePath)
     : null;
   if (!extensionFile) return null;
-  const prompt = `This generated action failed. Please fix the extension.\n\nAction: ${entry.command.title || entry.command.id}\nExtension: ${entry.extension.title || entry.extension.id}\nFile: ${extensionFile}\n\nError:\n\`\`\`\n${message}\n\`\`\``;
+  const prompt = `This generated action failed. Please fix the extension.\n\nAction: ${entry.command?.title || entry.command?.id || 'unknown'}\nExtension: ${entry.extension.title || entry.extension.id}\nFile: ${extensionFile}\n\nError:\n\`\`\`\n${message}\n\`\`\``;
   return {
     type: 'runExtensionAction',
     title: 'Fix with AI',
@@ -2417,7 +2436,7 @@ function extensionErrorAiAction(entry, message) {
       aiChatView(
         getOrCreateExtensionChat(
           extensionFile,
-          entry.extension.title || entry.command.title,
+          entry.extension.title || entry.command?.title,
         ),
         { initialPrompt: prompt },
       ),
@@ -2578,6 +2597,15 @@ function normalizeViewAction(action, entry) {
         ? action.run
         : null;
   if (handler) {
+    // Do not register handlers without extension context entries.
+    // When entry is null the handler would receive a broken context.
+    if (!entry) {
+      logWarn('extension.normalizeViewAction.nullEntry', {
+        actionType: action.type,
+        actionTitle: action.title,
+      });
+      return { ...action, __handler: undefined, run: undefined };
+    }
     const handlerId = crypto.randomUUID();
     extensionActionHandlers.set(handlerId, { entry, handler });
     const { __handler, run, ...rest } = action;
@@ -3301,12 +3329,24 @@ async function executeViewAction(action, launchContext?: any) {
         return {
           toast: { message: 'Action is no longer available', tone: 'error' },
         };
+      if (!record.entry || !record.entry.extension) {
+        logWarn('extension.action.missingEntry', {
+          handlerId: action.handlerId,
+          actionTitle: action.title,
+        });
+        return {
+          toast: {
+            message: 'This action is not available in the current context.',
+            tone: 'error',
+          },
+        };
+      }
       try {
         const result = await measureDebugPerformance(
           'extension.action.handler',
           {
             extensionId: record.entry.extension.id,
-            commandId: record.entry.command.id,
+            commandId: record.entry.command?.id,
             actionTitle: action.title,
             alwaysLog: true,
           },
@@ -3314,7 +3354,7 @@ async function executeViewAction(action, launchContext?: any) {
             record.handler(
               createExtensionContext(
                 record.entry.extension,
-                record.entry.command,
+                record.entry.command || null,
                 launchContext,
               ),
               action,
@@ -3325,8 +3365,8 @@ async function executeViewAction(action, launchContext?: any) {
         logError('extension.action.failed', error, {
           source: 'host',
           scope: 'extension',
-          extensionId: record.entry.extension.id,
-          commandId: record.entry.command.id,
+          extensionId: record.entry.extension?.id,
+          commandId: record.entry.command?.id,
         });
         return {
           view: extensionErrorView(record.entry, error),
@@ -5879,7 +5919,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
   const denyShortcut = (name: string) => () => {
     throw permissionDeniedError(`shortcuts (${name})`);
   };
-  return {
+  const context = {
     extension: createExtensionRuntimeMetadata(extension, command),
     command,
     launch: launchContext ? structuredClone(launchContext) : undefined,
@@ -6493,6 +6533,24 @@ function createExtensionContext(extension, command, launchContext?: any) {
         : undefined,
     },
   };
+  // Belt-and-suspenders: ensure `data` is never stripped from the context.
+  // Every handler path expects `ctx.data` to be available.
+  if (!context.data) {
+    logError('extension.context.missingData', new Error('ctx.data is missing'), {
+      source: 'host',
+      scope: 'extension',
+    });
+    // Recover: create a minimal data object so extension code doesn't crash.
+    context.data = {
+      loader(fn, options: any = {}) {
+        return createDataLoaderHandle(fn, options);
+      },
+      staleWhileRevalidate(params) {
+        return createStaleWhileRevalidateHandle(params);
+      },
+    };
+  }
+  return context;
 }
 
 function assertAiBuilderPrivilege(extension) {
