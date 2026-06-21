@@ -36,6 +36,7 @@ import {
   isVideoPath,
   LOCAL_FILE_PROTOCOL,
   LOCAL_THUMB_PROTOCOL,
+  partitionRootsByExistence,
   thumbnailUrlForPath,
   VIDEO_EXTENSIONS,
   verifyLocalFileToken,
@@ -3841,7 +3842,12 @@ async function findFiles(roots, options: any = {}) {
   const findRoots = normalizeFindRoots(roots)
     .map(expandUserPath)
     .filter((root) => root && path.isAbsolute(root));
-  await Promise.all(findRoots.map((root) => walk(root, maxDepth)));
+
+  const { existing, missing } = await partitionRootsByExistence(findRoots);
+  for (const root of missing)
+    logWarn('files.find.missingRoot', { root: displayUserPath(root) }, { source: 'host', scope: 'files' });
+
+  await Promise.all(existing.map((root) => walk(root, maxDepth)));
   const sortBy = options.sortBy || options.sort || null;
   let found = candidates;
   if (findFilesNeedsStats(sortBy)) found = await attachFileStats(found);
@@ -7656,7 +7662,11 @@ async function scanFiles(options: any = {}) {
         }
       }
 
-      await Promise.all(roots.map((root) => walk(root, maxDepth)));
+      const { existing, missing } = await partitionRootsByExistence(roots);
+      for (const root of missing)
+        logWarn('files.scan.missingRoot', { root: displayUserPath(root) }, { source: 'host', scope: 'files' });
+
+      await Promise.all(existing.map((root) => walk(root, maxDepth)));
       await attachFileStats(found);
       await attachDateAdded(found);
       const sorted = sortFoundFiles(found, {
