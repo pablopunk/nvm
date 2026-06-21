@@ -132,6 +132,7 @@ export type ChatViewProps = {
   isBusy?: boolean;
   input?: ReactNode;
   messagesRef?: React.RefObject<HTMLDivElement | null>;
+  banner?: ReactNode;
 };
 export type ActionPanelRow = {
   value: string;
@@ -927,9 +928,11 @@ export function ChatView({
   isBusy,
   input,
   messagesRef,
+  banner,
 }: ChatViewProps) {
   return (
     <div className="extensionView chatView">
+      {banner ? <div className="chatBanner">{banner}</div> : null}
       <div className="chatMessages" ref={messagesRef}>
         {messages.map((message, index) => (
           <div key={index} className={`chatBubble ${message.role}`}>

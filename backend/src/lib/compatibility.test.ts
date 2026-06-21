@@ -77,7 +77,7 @@ test('returns comma-list feature flags in the manifest', () => {
 
   const manifest = compatibilityManifestForRequest(request, { requestId: 'req_flags' });
 
-  assert.deepEqual(manifest.features, { active_model_descriptor: true, proxy_streaming: true, extension_ai_model_roles: true, new_models: true, streaming_v2: true });
+  assert.deepEqual(manifest.features, { active_model_descriptor: true, ai_credit_status: true, proxy_streaming: true, extension_ai_model_roles: true, new_models: true, streaming_v2: true });
 });
 
 test('evaluates version, user, plan, and rollout feature rules', () => {
@@ -93,6 +93,7 @@ test('evaluates version, user, plan, and rollout feature rules', () => {
 
   assert.deepEqual(compatibilityFeaturesForClient(client, { userId: 'user_1', plan: 'pro' }), {
     active_model_descriptor: true,
+    ai_credit_status: true,
     proxy_streaming: true,
     extension_ai_model_roles: true,
     enabled: true,

@@ -26,6 +26,7 @@ function renderExtensionView(view: CommandView) {
       setInput: () => {},
       busy: false,
       limit: null,
+      creditNotice: null,
       inputRef: React.createRef<HTMLTextAreaElement>(),
       messagesRef: React.createRef<HTMLDivElement>(),
       resizeInput: () => {},

@@ -204,6 +204,7 @@ function isAssistantErrorEndEvent(
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>();
   const generalSessions = new Map<string, Promise<AgentSession>>();
+  const creditInfoRef: { current: { credits: { paid: number; free: number; total: number }; notice: string } | null } = { current: null };
 
   async function getSession(chatId = 'default') {
     const current = sessions.get(chatId);
@@ -231,6 +232,30 @@ function createNevermindAi(options: NevermindAiOptions) {
   }
 
   async function send(message: string, chatId = 'default') {
+    const credit = creditInfoRef.current;
+    if (credit?.notice === 'blocked') {
+      const limit: AiLimitNotice = {
+        kind: 'insufficient_credits',
+        title: 'Credits needed',
+        message: 'You\'ve reached your Nevermind AI credit limit. Open your dashboard to review your account.',
+        actionTitle: 'Open Dashboard',
+        dashboardUrl: NEVERMIND_DASHBOARD_URL,
+      };
+      options.onEvent?.({
+        type: 'error',
+        chatId,
+        message: limit.message,
+        data: limit,
+      });
+      return;
+    }
+    if (credit?.notice === 'low') {
+      options.onEvent?.({
+        type: 'credit_warning',
+        chatId,
+        message: `Low credit balance: ${credit.credits.total} credits remaining. Consider adding credits at nvm.fyi/dashboard.`,
+      });
+    }
     options.onEvent?.({ type: 'start', chatId });
     await measureDebugPerformance(
       'ai.chat.send',
@@ -464,11 +489,15 @@ function createNevermindAi(options: NevermindAiOptions) {
     ]);
 
     const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'));
-    const { model, source: modelSource } = await resolveAiModelAndAuth(
+    const { model, source: modelSource, creditInfo } = await resolveAiModelAndAuth(
       pi,
       ai,
       authStorage,
     );
+    if (creditInfo) creditInfoRef.current = {
+      credits: creditInfo.credits,
+      notice: creditInfo.notice,
+    };
     const modelRegistry = pi.ModelRegistry.inMemory(authStorage);
     onEvent?.({
       type: 'debug',
@@ -746,6 +775,9 @@ type BackendDescriptor = {
   api: string;
   provider: string;
   baseUrl: string;
+  credits?: { paid: number; free: number; total: number };
+  notice?: 'ok' | 'low' | 'blocked';
+  costEstimate?: number;
 };
 
 async function fetchActiveModelDescriptor(
@@ -799,7 +831,11 @@ async function resolveAiModelAndAuth(
       modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {},
     ),
   };
-  return { model, source: 'nevermind' as const };
+  const creditInfo = descriptor.credits ? {
+    credits: descriptor.credits,
+    notice: descriptor.notice ?? 'ok',
+  } : null;
+  return { model, source: 'nevermind' as const, creditInfo };
 }
 
 async function createResourceLoader(
@@ -965,15 +1001,24 @@ function createTools(
         });
         return result;
       } catch (error) {
+        const limit = aiLimitNoticeFromError(error);
         emitEvent?.({
           type: 'tool_trace_end',
           name,
           data: {
             toolCallId,
             error: error instanceof Error ? error.message : String(error),
+            limit,
           },
           isError: true,
         });
+        if (limit) {
+          emitEvent?.({
+            type: 'error',
+            message: limit.message,
+            data: limit,
+          });
+        }
         throw error;
       }
     };

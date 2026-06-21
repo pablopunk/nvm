@@ -20,6 +20,8 @@ import * as Sentry from '@sentry/astro';
 
 const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
 
+const CREDIT_GRACE_THRESHOLD = Math.max(0, Number(process.env.CREDIT_GRACE_THRESHOLD ?? 100));
+
 export type UsageTokens = { inputTokens: number; outputTokens: number };
 
 export type ProxyConfig = {
@@ -388,11 +390,20 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         estimatedCredits = freeEstimatedCredits;
       }
     }
-    if (estimatedCredits > routing.balanceAvailable) {
+    if (estimatedCredits > routing.balanceAvailable + CREDIT_GRACE_THRESHOLD) {
       return withRequestId(Response.json(
         { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceAvailable, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
       ), requestId);
+    } else if (estimatedCredits > routing.balanceAvailable) {
+      log.warn('credit_grace_used', {
+        request_id: requestId,
+        user_id: routing.user.id,
+        estimated_credits: estimatedCredits,
+        balance: routing.balanceAvailable,
+        grace_threshold: CREDIT_GRACE_THRESHOLD,
+        kind: routing.kind,
+      });
     }
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
   }

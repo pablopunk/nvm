@@ -44,6 +44,7 @@ type AiChatState = {
   setInput: (value: string) => void;
   busy: boolean;
   limit: AiLimitState | null;
+  creditNotice: string | null;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   messagesRef: React.RefObject<HTMLDivElement | null>;
   resizeInput: (textarea?: HTMLTextAreaElement | null) => void;
@@ -745,8 +746,14 @@ function ChatExtensionView({
 }: ExtensionViewSurfaceProps) {
   if (view.aiChat && nevermindAuthed === false)
     return <NevermindSignInGate onSignIn={onSignInToNevermind} />;
-  if (view.aiChat && aiChat.limit)
-    return <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />;
+  const limitBanner = view.aiChat && aiChat.limit ? (
+    <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />
+  ) : view.aiChat && aiChat.creditNotice ? (
+    <div className="creditNoticeBanner">
+      <CreditCard size={14} />
+      <span>{aiChat.creditNotice}</span>
+    </div>
+  ) : null;
   const messages = (view.aiChat ? aiChat.messages : view.messages || []).map(
     (message) => ({ ...message, content: renderMarkdown(message.content) }),
   );
@@ -802,6 +809,7 @@ function ChatExtensionView({
       isBusy={view.aiChat ? aiChat.busy : false}
       input={input}
       messagesRef={view.aiChat ? aiChat.messagesRef : undefined}
+      banner={limitBanner}
     />
   );
 }

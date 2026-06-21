@@ -65,6 +65,7 @@ export function useAiChat(
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState<AiLimitState | null>(null);
+  const [creditNotice, setCreditNotice] = useState<string | null>(null);
   const pendingDeltaRef = useRef('');
   const deltaFrameRef = useRef<number | null>(null);
 
@@ -159,6 +160,7 @@ export function useAiChat(
     const trimmed = message.trim();
     if (!trimmed || busy) return;
     setLimit(null);
+    setCreditNotice(null);
     appendMessage('user', trimmed);
     setInput('');
     try {
@@ -189,6 +191,7 @@ export function useAiChat(
         cancelDeltaFlush();
         setMessages(view.messages || []);
         setLimit(null);
+        setCreditNotice(null);
         setInput('');
         focusInput();
         if (view.initialPrompt)
@@ -202,6 +205,7 @@ export function useAiChat(
     if (!aiChatEventMatchesActiveChat(event, activeChatId)) return;
     if (event.type === 'start') {
       setLimit(null);
+      setCreditNotice(null);
       setBusy(true);
     }
     if (
@@ -213,6 +217,8 @@ export function useAiChat(
     if (event.type === 'delta' && event.text) appendDelta(event.text);
     if (event.type === 'tool_start' && event.name)
       appendMessage('system', `Using ${event.name}…`);
+    if (event.type === 'credit_warning' && event.message)
+      setCreditNotice(event.message);
     if (event.type === 'error') {
       const nextLimit = limitStateFromEvent(event);
       if (nextLimit) setLimit(nextLimit);
@@ -235,6 +241,7 @@ export function useAiChat(
     setBusy,
     limit,
     setLimit,
+    creditNotice,
     messagesRef,
     inputRef,
     appendMessage,
