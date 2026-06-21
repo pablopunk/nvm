@@ -1,3 +1,5 @@
+'use strict';
+
 // Run all check scripts sequentially, failing fast on first error.
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
