@@ -290,6 +290,18 @@ export const ACTION_DEFINITIONS = {
     loading: 'none',
     execute: 'main',
   },
+  renameExtensionPrompt: {
+    description: 'Prompt for extension rename',
+    dismiss: 'manual',
+    loading: 'view',
+    execute: 'main',
+  },
+  renameExtension: {
+    description: 'Rename extension',
+    dismiss: 'manual',
+    loading: 'view',
+    execute: 'main',
+  },
   createWindow: {
     description: 'Open extension window',
     dismiss: 'immediate',
