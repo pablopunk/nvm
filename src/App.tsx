@@ -1367,6 +1367,11 @@ export function App() {
       return nextItems.some((item) => item.id === patch.selectedItemId)
         ? patch.selectedItemId
         : nextItems[0].id;
+    if (
+      next.selectedItemId &&
+      nextItems.some((item) => item.id === next.selectedItemId)
+    )
+      return next.selectedItemId;
     const selected = selectedValueRef.current;
     if (selected && nextItems.some((item) => item.id === selected))
       return selected;
