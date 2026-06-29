@@ -207,8 +207,9 @@ const appIconCache = createAppIconCache({
     await fs.writeFile(path.join(iconCacheDir, `${cacheKey}.png`), png);
   },
   loadIcon: async (appPath) => {
-    const { fileIconToBuffer } = await import('file-icon');
-    return Buffer.from(await fileIconToBuffer(appPath, { size: 64 }));
+    const icon = await app.getFileIcon(appPath, { size: 'normal' });
+    if (icon.isEmpty()) throw new Error(`No icon for ${appPath}`);
+    return icon.toPNG();
   },
   schedule: (reason, delayMs = 0) =>
     jobRegistry.schedule('cache.app-icons', reason, delayMs),
