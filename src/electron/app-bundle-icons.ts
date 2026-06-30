@@ -19,7 +19,9 @@ export function appBundleIconFileNames(infoPlist: string) {
   for (const arrayMatch of infoPlist.matchAll(
     /<key>CFBundleIconFiles<\/key>\s*<array>([\s\S]*?)<\/array>/g,
   )) {
-    for (const itemMatch of arrayMatch[1].matchAll(/<string>([^<]+)<\/string>/g))
+    for (const itemMatch of arrayMatch[1].matchAll(
+      /<string>([^<]+)<\/string>/g,
+    ))
       names.push(itemMatch[1].trim());
   }
 
@@ -34,7 +36,11 @@ export function pngImagesFromIcns(icns: Buffer) {
     const size = icns.readUInt32BE(offset + 4);
     if (size < 8 || offset + size > icns.length) break;
     const data = icns.subarray(offset + 8, offset + size);
-    if (data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    if (
+      data
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    )
       images.push(Buffer.from(data));
     offset += size;
   }
@@ -65,7 +71,9 @@ export async function findAppBundleIconPath(appPath: string) {
     if (resourceName) return path.join(resourcesPath, resourceName);
   }
 
-  const fallback = resources.find((name) => name.toLowerCase().endsWith('.icns'));
+  const fallback = resources.find((name) =>
+    name.toLowerCase().endsWith('.icns'),
+  );
   return fallback ? path.join(resourcesPath, fallback) : null;
 }
 

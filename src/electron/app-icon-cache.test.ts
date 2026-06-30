@@ -91,7 +91,9 @@ test('withTimeout resolves with value when promise settles first', async () => {
   assert.equal(result, 'ok');
 });
 
-test('withTimeout resolves with fallback when promise times out', { skip: 'unref() timer cannot keep event loop alive in test runner' }, async () => {
+test('withTimeout resolves with fallback when promise times out', {
+  skip: 'unref() timer cannot keep event loop alive in test runner',
+}, async () => {
   const never = new Promise<string>(() => {});
   const result = await withTimeout(never, 10, 'timed-out');
   assert.equal(result, 'timed-out');

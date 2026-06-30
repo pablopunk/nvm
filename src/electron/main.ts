@@ -2700,7 +2700,10 @@ async function runShellCommand(command, args = [], options: any = {}) {
   const expandedArgs = Array.isArray(args)
     ? args.map((arg) => expandUserPath(String(arg)))
     : [];
-  const safeTimeoutMs = Math.max(1000, Math.min(Number(options.timeout || 30_000), 120_000));
+  const safeTimeoutMs = Math.max(
+    1000,
+    Math.min(Number(options.timeout || 30_000), 120_000),
+  );
 
   return new Promise((resolve) => {
     const child = spawn(expandedCommand, expandedArgs, {
@@ -2713,7 +2716,11 @@ async function runShellCommand(command, args = [], options: any = {}) {
     let stderr = '';
     let settled = false;
 
-    const settle = (result: { stdout: string; stderr: string; exitCode: number }) => {
+    const settle = (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => {
       if (settled) return;
       settled = true;
       resolve(result);
@@ -2735,7 +2742,11 @@ async function runShellCommand(command, args = [], options: any = {}) {
     const killer = setTimeout(() => {
       if (!settled && !child.killed) {
         child.kill('SIGKILL');
-        settle({ stdout, stderr: `${stderr}\nKilled after ${safeTimeoutMs + 5000}ms`, exitCode: -1 });
+        settle({
+          stdout,
+          stderr: `${stderr}\nKilled after ${safeTimeoutMs + 5000}ms`,
+          exitCode: -1,
+        });
       }
     }, safeTimeoutMs + 5000);
     killer.unref();
@@ -3113,13 +3124,21 @@ async function executeViewAction(action, launchContext?: any) {
           ]);
           clearTimeout(timer);
           if (outcome === 'timedOut') {
-            logWarn('extension.trash.timedOut', { path: fullPath }, { source: 'host', scope: 'extension' });
+            logWarn(
+              'extension.trash.timedOut',
+              { path: fullPath },
+              { source: 'host', scope: 'extension' },
+            );
             results.push({ path: fullPath, ok: false });
           } else {
             results.push({ path: fullPath, ok: true });
           }
         } catch (err: any) {
-          logWarn('extension.trash.failed', { path: fullPath, error: err?.message }, { source: 'host', scope: 'extension' });
+          logWarn(
+            'extension.trash.failed',
+            { path: fullPath, error: err?.message },
+            { source: 'host', scope: 'extension' },
+          );
           results.push({ path: fullPath, ok: false });
         }
       }
@@ -4020,7 +4039,11 @@ function quickLookPath(filePath) {
     stdio: 'ignore',
   });
   child.on('error', (err) =>
-    logWarn('quickLook.failed', { path: resolvedPath, error: err?.message }, { source: 'host', scope: 'action' }),
+    logWarn(
+      'quickLook.failed',
+      { path: resolvedPath, error: err?.message },
+      { source: 'host', scope: 'action' },
+    ),
   );
   child.unref();
 }
@@ -4119,11 +4142,14 @@ async function openPathWithApp(filePath, appPath) {
       stdio: 'ignore',
     });
     child.on('error', (err) =>
-      logWarn('openWith.failed', { app: resolvedAppPath, file: resolvedPath, error: err?.message }, { source: 'host', scope: 'action' }),
+      logWarn(
+        'openWith.failed',
+        { app: resolvedAppPath, file: resolvedPath, error: err?.message },
+        { source: 'host', scope: 'action' },
+      ),
     );
     child.unref();
-  }
-  else await shell.openPath(resolvedPath);
+  } else await shell.openPath(resolvedPath);
 }
 
 async function selectedFiles() {
