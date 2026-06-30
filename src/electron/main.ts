@@ -6,6 +6,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// Global safety net: unhandled rejections and uncaught exceptions must never
+// crash the app. An extension action or shell call that throws unexpectedly
+// should be logged and contained, not silently kill the entire process.
+process.on('unhandledRejection', (reason) => {
+  console.error('FATAL: unhandled rejection (would crash Electron):', reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('FATAL: uncaught exception (would crash Electron):', error);
+});
+
 import {
   app,
   BrowserWindow,
@@ -57,6 +68,7 @@ initSentry();
 
 import { canCustomizeCommandAction } from '../model';
 import { compareRankedActions } from './action-ranking';
+import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
@@ -207,6 +219,9 @@ const appIconCache = createAppIconCache({
     await fs.writeFile(path.join(iconCacheDir, `${cacheKey}.png`), png);
   },
   loadIcon: async (appPath) => {
+    const bundleIconPng = await readAppBundleIconPng(appPath);
+    if (bundleIconPng) return bundleIconPng;
+
     const icon = await app.getFileIcon(appPath, { size: 'normal' });
     if (icon.isEmpty()) throw new Error(`No icon for ${appPath}`);
     return icon.toPNG();
@@ -2681,19 +2696,36 @@ async function shellSpawnEnv(extraEnv?: Record<string, string>) {
 
 async function runShellCommand(command, args = [], options: any = {}) {
   const env = await shellSpawnEnv(options.env);
+  const expandedCommand = expandUserPath(String(command));
+  const expandedArgs = Array.isArray(args)
+    ? args.map((arg) => expandUserPath(String(arg)))
+    : [];
+  const safeTimeoutMs = Math.max(
+    1000,
+    Math.min(Number(options.timeout || 30_000), 120_000),
+  );
+
   return new Promise((resolve) => {
-    const expandedCommand = expandUserPath(String(command));
-    const expandedArgs = Array.isArray(args)
-      ? args.map((arg) => expandUserPath(String(arg)))
-      : [];
     const child = spawn(expandedCommand, expandedArgs, {
       cwd: options.cwd ? expandUserPath(options.cwd) : undefined,
       env,
       shell: Boolean(options.shell),
-      timeout: Number(options.timeout || 30_000),
+      timeout: safeTimeoutMs,
     });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+
+    const settle = (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
     child.stdout?.on('data', (chunk) => {
       stdout = limitedOutput(stdout + chunk.toString(), options.outputLimit);
     });
@@ -2701,9 +2733,24 @@ async function runShellCommand(command, args = [], options: any = {}) {
       stderr = limitedOutput(stderr + chunk.toString(), options.outputLimit);
     });
     child.on('error', (error) =>
-      resolve({ stdout, stderr: stderr || error.message, exitCode: 1 }),
+      settle({ stdout, stderr: stderr || error.message, exitCode: 1 }),
     );
-    child.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }));
+    child.on('close', (exitCode) => settle({ stdout, stderr, exitCode }));
+
+    // Hard kill after timeout + 5s grace period. Node's spawn timeout sends
+    // SIGTERM; if the process ignores it we escalate to SIGKILL.
+    const killer = setTimeout(() => {
+      if (!settled && !child.killed) {
+        child.kill('SIGKILL');
+        settle({
+          stdout,
+          stderr: `${stderr}\nKilled after ${safeTimeoutMs + 5000}ms`,
+          exitCode: -1,
+        });
+      }
+    }, safeTimeoutMs + 5000);
+    killer.unref();
+    child.on('close', () => clearTimeout(killer));
   });
 }
 
@@ -3000,7 +3047,7 @@ async function executeViewAction(action, launchContext?: any) {
       runInBackground(() => shell.openPath(action.path));
       break;
     case 'revealPath':
-      shell.showItemInFolder(action.path);
+      runInBackground(() => shell.showItemInFolder(action.path));
       break;
     case 'quickLook':
       return quickLookPath(action.path);
@@ -3061,11 +3108,54 @@ async function executeViewAction(action, launchContext?: any) {
       break;
     case 'removeClipboardHistory':
       return removeClipboardHistoryEntries(action);
-    case 'trash':
+    case 'trash': {
+      const results: Array<{ path: string; ok: boolean }> = [];
       for (const itemPath of action.paths || [action.path]) {
-        if (itemPath) await shell.trashItem(expandUserPath(itemPath));
+        if (!itemPath) continue;
+        const fullPath = expandUserPath(itemPath);
+        try {
+          let timer: NodeJS.Timeout | undefined;
+          const timedOut = new Promise<'timedOut'>((resolve) => {
+            timer = setTimeout(() => resolve('timedOut'), 10000);
+          });
+          const outcome = await Promise.race([
+            shell.trashItem(fullPath).then(() => 'ok' as const),
+            timedOut,
+          ]);
+          clearTimeout(timer);
+          if (outcome === 'timedOut') {
+            logWarn(
+              'extension.trash.timedOut',
+              { path: fullPath },
+              { source: 'host', scope: 'extension' },
+            );
+            results.push({ path: fullPath, ok: false });
+          } else {
+            results.push({ path: fullPath, ok: true });
+          }
+        } catch (err: any) {
+          logWarn(
+            'extension.trash.failed',
+            { path: fullPath, error: err?.message },
+            { source: 'host', scope: 'extension' },
+          );
+          results.push({ path: fullPath, ok: false });
+        }
       }
-      return { toast: { message: 'Moved to Trash' } };
+      const successCount = results.filter((r) => r.ok).length;
+      const total = results.length;
+      return {
+        toast: {
+          message:
+            total === 0
+              ? 'Nothing to trash'
+              : successCount === total
+                ? `Moved ${total} item${total > 1 ? 's' : ''} to Trash`
+                : `Moved ${successCount}/${total} items to Trash`,
+          tone: successCount === total ? 'default' : 'error',
+        },
+      };
+    }
     case 'rootView':
       return { view: action.view, navigation: 'root' };
     case 'pushView':
@@ -3948,6 +4038,13 @@ function quickLookPath(filePath) {
     detached: true,
     stdio: 'ignore',
   });
+  child.on('error', (err) =>
+    logWarn(
+      'quickLook.failed',
+      { path: resolvedPath, error: err?.message },
+      { source: 'host', scope: 'action' },
+    ),
+  );
   child.unref();
 }
 
@@ -4039,12 +4136,20 @@ async function openPathWithApp(filePath, appPath) {
     return {
       toast: { message: 'Cannot open this file with that app', tone: 'error' },
     };
-  if (hasCapability('open-with'))
-    spawn('open', ['-a', resolvedAppPath, resolvedPath], {
+  if (hasCapability('open-with')) {
+    const child = spawn('open', ['-a', resolvedAppPath, resolvedPath], {
       detached: true,
       stdio: 'ignore',
-    }).unref();
-  else await shell.openPath(resolvedPath);
+    });
+    child.on('error', (err) =>
+      logWarn(
+        'openWith.failed',
+        { app: resolvedAppPath, file: resolvedPath, error: err?.message },
+        { source: 'host', scope: 'action' },
+      ),
+    );
+    child.unref();
+  } else await shell.openPath(resolvedPath);
 }
 
 async function selectedFiles() {

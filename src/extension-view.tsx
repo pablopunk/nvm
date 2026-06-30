@@ -118,6 +118,48 @@ function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   );
 }
 
+type ExtensionRenderBoundaryProps = {
+  children: ReactNode;
+  resetKey: string;
+};
+
+type ExtensionRenderBoundaryState = {
+  error: string | null;
+};
+
+class ExtensionRenderBoundary extends React.Component<
+  ExtensionRenderBoundaryProps,
+  ExtensionRenderBoundaryState
+> {
+  state: ExtensionRenderBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  componentDidUpdate(previous: ExtensionRenderBoundaryProps) {
+    if (previous.resetKey !== this.props.resetKey && this.state.error)
+      this.setState({ error: null });
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('extension-view.render.failed', error);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <EmptyState
+        icon={<Square size={24} />}
+        title="Extension view failed to render"
+        subtitle={this.state.error}
+      />
+    );
+  }
+}
+
 function imageSource(image: CommandItem['image']) {
   if (!image) return '';
   if (typeof image === 'string') return image;
@@ -959,7 +1001,7 @@ function PreviewExtensionView({
   );
 }
 
-export function ExtensionViewRenderer(props: ExtensionViewRendererProps) {
+function ExtensionViewSurface(props: ExtensionViewRendererProps) {
   const surfaceProps: ExtensionViewSurfaceProps = {
     ...props,
     renderEmpty: props.renderEmpty || fallbackEmpty,
@@ -988,4 +1030,13 @@ export function ExtensionViewRenderer(props: ExtensionViewRendererProps) {
   if (props.view.type === 'camera')
     return <CameraExtensionView {...surfaceProps} />;
   return <PreviewExtensionView {...surfaceProps} />;
+}
+
+export function ExtensionViewRenderer(props: ExtensionViewRendererProps) {
+  const resetKey = `${props.view.id || ''}:${props.view.type}:${props.view.title}`;
+  return (
+    <ExtensionRenderBoundary resetKey={resetKey}>
+      <ExtensionViewSurface {...props} />
+    </ExtensionRenderBoundary>
+  );
 }

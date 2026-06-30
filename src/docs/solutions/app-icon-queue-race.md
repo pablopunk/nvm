@@ -34,6 +34,17 @@ Keep batching, but make icon requests resolve per app path:
 - Schedule a backlog job when pending paths remain.
 - Do not treat a running job's `null` return as an icon result.
 
+## Related issue: generic app icons despite successful hydration
+
+A later icon issue looked superficially fixed because rows rendered `<img src="data:image/png...">`, but the image itself was the generic Apple/Xcode placeholder rather than the branded app icon.
+
+Two extra root causes were involved:
+
+- Root search rows read hydrated icons by action id only, while extension-view hydration also cached icons by app path. If an icon had already been requested by path, the root row could skip re-requesting it but still miss the cached value. Root rows should read by app path as well as action id.
+- Electron `app.getFileIcon('/Applications/Pipz.app')` returned the generic placeholder even though the app bundle declared `CFBundleIconFile => AppIcon` and contained `Contents/Resources/AppIcon.icns`. Raycast showed the branded icon because the bundle icon was available. Prefer the app bundle's declared `.icns` resource and extract an embedded PNG before falling back to `app.getFileIcon`.
+
+When changing app icon extraction semantics, bump the app-icon cache version or clear the disk cache; otherwise previously cached generic placeholders will continue to render and hide the fix.
+
 ## Verification
 
 Commands and checks used:
@@ -45,6 +56,21 @@ node scripts/check-clone-safe-actions.cjs
 
 Live dev verification used CDP/agent-browser to inspect rendered rows after hydration. Slack, WhatsApp, and Helium all had `data:image/png` image sources in the DOM.
 
+For generic-placeholder cases, DOM verification must go beyond "has `<img>`". Also verify the source image is the branded bundle icon:
+
+```sh
+plutil -p /Applications/Pipz.app/Contents/Info.plist | rg "CFBundleIcon"
+find /Applications/Pipz.app/Contents/Resources -iname '*.icns' -print
+```
+
+Then compare the rendered/search icon with the app bundle's declared `.icns` resource. A useful live check is:
+
+```js
+window.nvm.getAppIcon('/Applications/Pipz.app').then(icon => icon?.slice(0, 30))
+```
+
+If this returns a data URL but the UI still shows a fallback SVG, debug renderer cache keys. If it returns a data URL for a generic placeholder, debug the native/bundle icon extraction path and disk cache version.
+
 ## Notes for future searches
 
-Keywords: app icon, `apps:icon`, `apps.icon.get`, `apps.icon.load`, `cache.app-icons`, `file-icon`, `appIconCache`, `appIconLoadPromises`, `pendingAppIconPaths`, fallback app glyph, missing Slack icon, generic app icon, icon hydration race.
+Keywords: app icon, `apps:icon`, `apps.icon.get`, `apps.icon.load`, `cache.app-icons`, `file-icon`, `appIconCache`, `appIconLoadPromises`, `pendingAppIconPaths`, fallback app glyph, missing Slack icon, generic app icon, icon hydration race, Xcode placeholder icon, `CFBundleIconFile`, `CFBundleIconFiles`, `.icns`, `app.getFileIcon`, bundle icon, root action id, app path icon cache.
