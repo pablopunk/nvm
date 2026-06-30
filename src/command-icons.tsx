@@ -1,5 +1,5 @@
 import * as LucideIcons from 'lucide-react';
-import type { ComponentType } from 'react';
+import React, { type ComponentType } from 'react';
 import type { CommandAction, CommandItem } from './model';
 
 type LucideComponent = ComponentType<{ size?: number; className?: string }>;
@@ -42,6 +42,15 @@ function pascalCaseIconName(name: string) {
     .join('');
 }
 
+function isRenderableLucideIcon(value: unknown): value is LucideComponent {
+  if (!(typeof value === 'object' || typeof value === 'function')) return false;
+  // lucide-react also exports helpers such as `Icon`, `icons`, and
+  // `createLucideIcon`. Some of them are objects/functions but are not
+  // complete icon components; rendering them crashes inside lucide-react.
+  // Real generated icon components have a displayName (for example Trash2).
+  return typeof (value as { displayName?: unknown }).displayName === 'string';
+}
+
 function lucideIcon(
   name: unknown,
   fallback: keyof typeof curatedIconAliases = 'sparkles',
@@ -49,16 +58,16 @@ function lucideIcon(
   const requested = String(name || '').trim();
   const alias =
     curatedIconAliases[requested as keyof typeof curatedIconAliases];
+  const pascalName = pascalCaseIconName(requested);
   const candidates = [
     alias,
     requested,
-    pascalCaseIconName(requested),
-    `${pascalCaseIconName(requested)}Icon`,
+    pascalName,
+    pascalName ? `${pascalName}Icon` : '',
   ].filter(Boolean);
   for (const candidate of candidates) {
     const Icon = (LucideIcons as Record<string, unknown>)[candidate];
-    if (typeof Icon === 'object' || typeof Icon === 'function')
-      return Icon as LucideComponent;
+    if (isRenderableLucideIcon(Icon)) return Icon;
   }
   return iconFor[fallback];
 }

@@ -14,6 +14,23 @@ export type AppIconCacheDeps = {
   warn?: (message: string, data?: Record<string, unknown>) => void;
 };
 
+const APP_ICON_LOAD_TIMEOUT_MS = 5000;
+
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallbackValue), timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export function createAppIconCache(deps: AppIconCacheDeps) {
   const memoryCache = new Map<string, string | null>();
   const loadPromises = new Map<string, Promise<string | null>>();
@@ -42,9 +59,20 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
           return dataUrl(cached);
         }
 
-        const png = Buffer.from(await deps.loadIcon(appPath));
-        await deps.writeCachedIcon(cacheKey, png).catch(() => {});
-        return dataUrl(png);
+        const pngBuffer = await withTimeout(
+          deps.loadIcon(appPath).then((png) => Buffer.from(png)),
+          APP_ICON_LOAD_TIMEOUT_MS,
+          null,
+        );
+        if (!pngBuffer) {
+          deps.warn?.('appIcon.load.timedOut', {
+            appPath,
+            timeoutMs: APP_ICON_LOAD_TIMEOUT_MS,
+          });
+          return null;
+        }
+        await deps.writeCachedIcon(cacheKey, pngBuffer).catch(() => {});
+        return dataUrl(pngBuffer);
       } catch (error) {
         deps.warn?.('appIcon.load.failed', { appPath, error });
         return null;
@@ -52,18 +80,27 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
     });
   }
 
+  function resolveWaitersForPath(appPath: string, result: string | null) {
+    for (const resolve of waiters.get(appPath) || []) resolve(result);
+    waiters.delete(appPath);
+    loadPromises.delete(appPath);
+  }
+
   async function processPending() {
-    const paths = Array.from(pendingPaths).slice(0, 20);
-    for (const appPath of paths) pendingPaths.delete(appPath);
-    await Promise.all(
-      paths.map(async (appPath) => {
-        const result = await loadAppIconDataUrl(appPath);
-        if (result) memoryCache.set(appPath, result);
-        for (const resolve of waiters.get(appPath) || []) resolve(result);
-        waiters.delete(appPath);
-        loadPromises.delete(appPath);
-      }),
-    );
+    // Process icons one at a time. app.getFileIcon can block the main thread
+    // synchronously on macOS for system apps, network drives, and broken
+    // symlinks. Processing sequentially prevents multiple concurrent blocks
+    // and gives the event loop a chance to fire timers between each icon.
+    const nextPath = pendingPaths.values().next().value;
+    if (!nextPath) return;
+    pendingPaths.delete(nextPath);
+    try {
+      const result = await loadAppIconDataUrl(nextPath);
+      if (result) memoryCache.set(nextPath, result);
+      resolveWaitersForPath(nextPath, result);
+    } catch (_err) {
+      resolveWaitersForPath(nextPath, null);
+    }
     if (pendingPaths.size) deps.schedule('icon-backlog', 50);
   }
 

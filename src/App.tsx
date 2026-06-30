@@ -2116,7 +2116,16 @@ export function App() {
   }
 
   function filterExtensionItems(items: ExtensionViewItem[] = []) {
-    const minScore = extensionView?.id === 'clipboard-history' ? 50 : undefined;
+    // Filterable child views (list/grid) use a minimum score of 50 to
+    // require exact, starts-with, or contains-substring matches. This
+    // prevents long strings like file paths from causing false-positive
+    // sequential-character matches (score 20) that would show every item.
+    const minScore =
+      extensionView?.id === 'clipboard-history' ||
+      extensionView?.type === 'list' ||
+      extensionView?.type === 'grid'
+        ? 50
+        : undefined;
     return measureDebugPerformanceSync(
       'view.filter-items',
       { childQueryLength: childQuery.length, itemCount: items.length },
