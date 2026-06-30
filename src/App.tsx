@@ -1069,16 +1069,44 @@ export function App() {
   useEffect(() => {
     for (const action of actions) {
       const appPath = appPathForIcon(action);
-      if (!appPath || requestedIcons.current.has(action.id)) continue;
+      if (!appPath || requestedIcons.current.has(appPath)) continue;
 
-      requestedIcons.current.add(action.id);
+      requestedIcons.current.add(appPath);
       window.nvm.getAppIcon(appPath).then((iconUrl) => {
         if (iconUrl)
-          setIconUrls((current) => ({ ...current, [action.id]: iconUrl }));
-        else requestedIcons.current.delete(action.id);
+          setIconUrls((current) => ({
+            ...current,
+            [action.id]: iconUrl,
+            [appPath]: iconUrl,
+          }));
+        else requestedIcons.current.delete(appPath);
       });
     }
   }, [actions]);
+
+  useEffect(() => {
+    const views = [extensionView, ...siblingViews].filter(
+      Boolean,
+    ) as ExtensionView[];
+    for (const view of views) {
+      for (const item of allViewItems(view)) {
+        const appPath = diskPathForItem(item);
+        if (
+          !appPath?.endsWith('.app') ||
+          item.image ||
+          iconUrls[appPath] ||
+          requestedIcons.current.has(appPath)
+        )
+          continue;
+        requestedIcons.current.add(appPath);
+        window.nvm.getAppIcon(appPath).then((iconUrl) => {
+          if (iconUrl)
+            setIconUrls((current) => ({ ...current, [appPath]: iconUrl }));
+          else requestedIcons.current.delete(appPath);
+        });
+      }
+    }
+  }, [extensionView, siblingViews, iconUrls]);
 
   useEffect(
     () =>
@@ -2546,6 +2574,7 @@ export function App() {
         action.thumbnailUrl ||
         action.iconUrl ||
         iconUrls[action.id] ||
+        iconUrls[appPathForIcon(action) || ''] ||
         undefined,
       appearance: action.appearance,
       className: runningAppClassName(action),
@@ -2670,6 +2699,13 @@ export function App() {
     return actions.find((action) => action.path)?.path || null;
   }
 
+  function hydrateExtensionItemIcon(item: ExtensionViewItem) {
+    if (item.image) return item;
+    const appPath = diskPathForItem(item);
+    const iconUrl = appPath?.endsWith('.app') ? iconUrls[appPath] : null;
+    return iconUrl ? { ...item, image: iconUrl } : item;
+  }
+
   function dragPathForItem(item: ExtensionViewItem) {
     return diskPathForItem(item);
   }
@@ -2734,7 +2770,9 @@ export function App() {
         }}
         formValues={formValues}
         setFormValues={setFormValues}
-        filterItems={filterExtensionItems}
+        filterItems={(items) =>
+          filterExtensionItems(items).map(hydrateExtensionItemIcon)
+        }
         filterSections={filterViewSections}
         renderMarkdown={renderMarkdown}
         renderActionPanel={renderActionPanel}

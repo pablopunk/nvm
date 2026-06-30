@@ -47,7 +47,7 @@ test('app icon cache dedupes concurrent requests and resolves waiters from one l
   assert.deepEqual(loaded, ['/Applications/TextEdit.app']);
   assert.deepEqual(
     written.map((item) => item.key),
-    ['hash:/Applications/TextEdit.app'],
+    ['hash:bundle-icon-v2:/Applications/TextEdit.app'],
   );
 });
 

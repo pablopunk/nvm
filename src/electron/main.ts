@@ -68,6 +68,7 @@ initSentry();
 
 import { canCustomizeCommandAction } from '../model';
 import { compareRankedActions } from './action-ranking';
+import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
@@ -218,6 +219,9 @@ const appIconCache = createAppIconCache({
     await fs.writeFile(path.join(iconCacheDir, `${cacheKey}.png`), png);
   },
   loadIcon: async (appPath) => {
+    const bundleIconPng = await readAppBundleIconPng(appPath);
+    if (bundleIconPng) return bundleIconPng;
+
     const icon = await app.getFileIcon(appPath, { size: 'normal' });
     if (icon.isEmpty()) throw new Error(`No icon for ${appPath}`);
     return icon.toPNG();

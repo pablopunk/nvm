@@ -15,6 +15,7 @@ export type AppIconCacheDeps = {
 };
 
 const APP_ICON_LOAD_TIMEOUT_MS = 5000;
+const APP_ICON_CACHE_VERSION = 'bundle-icon-v2';
 
 export function withTimeout<T>(
   promise: Promise<T>,
@@ -52,7 +53,7 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
   async function loadAppIconDataUrl(appPath: string) {
     return measure('apps.icon.load', { appPath }, async () => {
       try {
-        const cacheKey = deps.hashValue(appPath);
+        const cacheKey = deps.hashValue(`${APP_ICON_CACHE_VERSION}:${appPath}`);
         const cached = await deps.readCachedIcon(cacheKey);
         if (cached) {
           deps.mark?.('apps.icon.cache-hit', { appPath });
