@@ -1,6 +1,22 @@
 {
   "crons": [
-    { "path": "/api/cron/abuse-check", "schedule": "0 12 * * *" },
-    { "path": "/api/cron/health-check", "schedule": "0 6 * * *" }
+    {
+      "path": "/api/cron/abuse-check",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/health-check",
+      "schedule": "0 6 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/count.js",
+      "destination": "https://gc.zgo.at/count.js"
+    },
+    {
+      "source": "/goat",
+      "destination": "https://nvmfyi.goatcounter.com/count"
+    }
   ]
 }
