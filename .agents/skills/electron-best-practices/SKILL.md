@@ -26,6 +26,7 @@ Nevermind is an Electron command palette with privileged desktop capabilities. T
 - Custom protocols must normalize and validate paths, deny traversal, avoid broad `bypassCSP` unless justified, and return safe MIME/cache behavior.
 - Permission handlers should grant only known permissions from trusted app pages and should deny by default.
 - Do not let renderer-controlled strings become shell commands, file paths, AppleScript, environment variables, or upstream headers without validation and permission checks.
+- Do not depend on npm packages that spawn a bundled native binary (e.g. `file-icon` via `execFile`/`spawn`); in the packaged app they fail with `spawn ENOTDIR` because binaries cannot execute from inside `app.asar`. Prefer an Electron built-in (e.g. `app.getFileIcon(path, { size: 'normal' }).toPNG()`) over child-process-spawning deps.
 
 ## Nevermind Electron surfaces
 
