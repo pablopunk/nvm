@@ -115,6 +115,8 @@ export const subscriptions = pgTable('subscriptions', {
   tier: text('tier').notNull(),
   status: text('status').notNull(),
   currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
+  lastEventCreatedAt: timestamp('last_event_created_at', { withTimezone: true }),
+  lastEventId: text('last_event_id'),
 });
 
 export const stripeEvents = pgTable(
