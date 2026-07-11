@@ -95,6 +95,9 @@ import {
 } from './extension-permissions';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
+import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
+import { initExtensionContext } from './extensions/_context';
+import { createAiBuilderExtension } from './extensions/ai-builder';
 import {
   applyDateAdded,
   findFilesNeedsStats,
@@ -170,9 +173,6 @@ import {
   installExternalNavigationPolicy,
   isTrustedExtensionWindowPage,
 } from './window-navigation-policy';
-import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
-import { initExtensionContext } from './extensions/_context';
-import { createAiBuilderExtension } from './extensions/ai-builder';
 
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -921,7 +921,6 @@ function createExtensionCache(extension) {
 }
 const registeredActionAccelerators = new Set<string>();
 const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder';
-
 
 const REQUIRED_INTERNAL_EXTENSIONS = [
   'nevermind.system',
@@ -4700,8 +4699,6 @@ function createExtensionAi(extension) {
   return ai;
 }
 
-
-
 function commandFromItem(item) {
   return { ...item, run: (ctx) => ctx.navigation.run(item.primaryAction) };
 }
@@ -4792,8 +4789,6 @@ async function reindexFiles(options: any = {}) {
   );
 }
 
-
-
 function keyboardShortcutItem(record: any) {
   const changeAction = buildRecordShortcutAction(
     { actionId: record.actionId, title: 'Change shortcut' },
@@ -4829,8 +4824,6 @@ function patchKeyboardShortcutsView() {
     items: keyboardShortcutItems(),
   });
 }
-
-
 
 const PALETTE_HOTKEY_ACTION_ID = '__palette-hotkey__';
 

@@ -1,15 +1,15 @@
-import { createSystemExtension, createPlacesExtension } from './system';
-import { createCalculatorExtension } from './calculator';
-import { createWebSearchExtension } from './web-search';
-import { createClipboardExtension } from './clipboard';
-import { createAppsExtension } from './apps';
-import { createFilesExtension } from './files';
+import { createAccountExtension } from './account';
 import { createAiBuilderExtension } from './ai-builder';
-import { createUpdatesExtension } from './updates';
+import { createAppsExtension } from './apps';
+import { createBackgroundTasksExtension } from './background-tasks';
+import { createCalculatorExtension } from './calculator';
+import { createClipboardExtension } from './clipboard';
+import { createFilesExtension } from './files';
 import { createKeyboardShortcutsExtension } from './keyboard-shortcuts';
 import { createSettingsExtension } from './settings';
-import { createBackgroundTasksExtension } from './background-tasks';
-import { createAccountExtension } from './account';
+import { createPlacesExtension, createSystemExtension } from './system';
+import { createUpdatesExtension } from './updates';
+import { createWebSearchExtension } from './web-search';
 
 export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createSystemExtension,

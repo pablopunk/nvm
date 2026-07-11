@@ -61,7 +61,9 @@ export function createAppsExtension() {
         appearance: { foreground: 'red' as const },
         run: async (ctx: any) => {
           const runningPaths =
-            await extensionContext.runningAppStatus.refresh('force-quit-command');
+            await extensionContext.runningAppStatus.refresh(
+              'force-quit-command',
+            );
           const apps = extensionContext.appIndexService
             .get()
             .filter(
@@ -132,4 +134,3 @@ export function createAppsExtension() {
     },
   };
 }
-

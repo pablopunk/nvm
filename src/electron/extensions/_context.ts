@@ -5,7 +5,12 @@ export const extensionContext: {
   nevermindAi: any;
   activeAiChatId: string | undefined;
   draftAiChats: Map<string, Record<string, any>>;
-  jobRegistry: { snapshot: () => any[]; run: (id: string, reason: string) => Promise<unknown>; setEnabled: (id: string, enabled: boolean) => void; clearError: (id: string) => void };
+  jobRegistry: {
+    snapshot: () => any[];
+    run: (id: string, reason: string) => Promise<unknown>;
+    setEnabled: (id: string, enabled: boolean) => void;
+    clearError: (id: string) => void;
+  };
   appIndexService: { get: () => any[] };
   runningAppStatus: { refresh: (reason: string) => Promise<Set<string>> };
   FILE_RESULT_LIMIT: number;
@@ -14,7 +19,11 @@ export const extensionContext: {
   rankAction: (action: any, query: any) => boolean;
   actionAliases: (actionId: any) => string[];
   commandFromItem: (item: any) => any;
-  createExtensionContext: (extension: any, command: any, launchContext?: any) => any;
+  createExtensionContext: (
+    extension: any,
+    command: any,
+    launchContext?: any,
+  ) => any;
   scheduleSaveState: () => void;
   saveUserState: () => Promise<void>;
   invalidateExtensionRootItems: () => void;
@@ -34,7 +43,11 @@ export const extensionContext: {
   settingsItems: () => any[];
   buildRecordShortcutAction: (input: any, options: any) => any;
   buildRemoveShortcutAction: (input: any, options: any) => any;
-  paletteWindow: { win?: { webContents: { send: (channel: string, ...args: any[]) => void } } | null };
+  paletteWindow: {
+    win?: {
+      webContents: { send: (channel: string, ...args: any[]) => void };
+    } | null;
+  };
 } = {} as any;
 
 export function initExtensionContext(ctx: typeof extensionContext): void {

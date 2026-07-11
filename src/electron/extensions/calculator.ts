@@ -1,9 +1,9 @@
+import { warn as logWarn } from '../logger';
 import {
   calculateDetailed,
   calculateRateResult,
   parseRateExpression,
 } from '../search-utils';
-import { warn as logWarn } from '../logger';
 import { extensionContext } from './_context';
 
 const FRANKFURTER_API_BASE = 'https://api.frankfurter.dev';

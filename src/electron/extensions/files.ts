@@ -1,4 +1,4 @@
-import { revealPathTitle, quickLookTitle } from '../os';
+import { quickLookTitle, revealPathTitle } from '../os';
 import { extensionContext } from './_context';
 
 function buildPreviewItemActionForFile(input: any) {
