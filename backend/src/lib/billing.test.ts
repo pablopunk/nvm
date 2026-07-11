@@ -26,12 +26,13 @@ type FakeDb = {
   transaction: (callback: (tx: FakeDb) => Promise<unknown>) => Promise<unknown>;
 };
 
-function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[]; existingLedgerRefs?: string[] } = {}): FakeDb {
+function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[]; existingLedgerRefs?: string[]; trackSubscriptions?: boolean } = {}): FakeDb {
   const selects = [...(input.selects ?? [])];
   const eventIds = new Set(input.existingEvents ?? []);
   const ledgerRefs = new Set(input.existingLedgerRefs ?? []);
   const inserts: InsertCall[] = [];
   const updates: UpdateCall[] = [];
+  let subscriptionRow: any = null;
 
   function createInsertChain(table: unknown) {
     let values: any;
@@ -48,6 +49,7 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
       },
       onConflictDoUpdate() {
         conflict = 'update' as const;
+        if (input.trackSubscriptions && table === subscriptions) subscriptionRow = { ...values };
         inserts.push({ table, values, conflict });
         return chain;
       },
@@ -77,9 +79,18 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
   }
 
   function createSelectChain() {
-    const promise = () => Promise.resolve(selects.shift() ?? []);
+    let fromTable: unknown;
+    const promise = () => {
+      if (input.trackSubscriptions && fromTable === subscriptions) {
+        return Promise.resolve(subscriptionRow ? [subscriptionRow] : []);
+      }
+      return Promise.resolve(selects.shift() ?? []);
+    };
     const chain = {
-      from: () => chain,
+      from: (table: unknown) => {
+        fromTable = table;
+        return chain;
+      },
       where: () => chain,
       limit: () => promise(),
       then: (resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) => promise().then(resolveThen, rejectThen),
@@ -120,7 +131,25 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
     select: () => createSelectChain(),
     insert: (table: unknown) => createInsertChain(table),
     update: (table: unknown) => createUpdateChain(table),
-    transaction: async (callback: (tx: FakeDb) => Promise<unknown>) => callback(db),
+    transaction: async (callback: (tx: FakeDb) => Promise<unknown>) => {
+      const eventSnapshot = new Set(eventIds);
+      const ledgerSnapshot = new Set(ledgerRefs);
+      const subscriptionSnapshot = subscriptionRow ? { ...subscriptionRow } : null;
+      const insertsLength = inserts.length;
+      const updatesLength = updates.length;
+      try {
+        return await callback(db);
+      } catch (error) {
+        eventIds.clear();
+        eventSnapshot.forEach((id) => eventIds.add(id));
+        ledgerRefs.clear();
+        ledgerSnapshot.forEach((ref) => ledgerRefs.add(ref));
+        subscriptionRow = subscriptionSnapshot;
+        inserts.length = insertsLength;
+        updates.length = updatesLength;
+        throw error;
+      }
+    },
   };
   return db;
 }
@@ -147,12 +176,12 @@ function installStripe(subscription: Record<string, unknown> = {}) {
   } as any);
 }
 
-function stripeEvent(type: string, object: Record<string, unknown>, id = `evt_${type}`) {
+function stripeEvent(type: string, object: Record<string, unknown>, id = `evt_${type}`, created = 1) {
   return {
     id,
     object: 'event',
     api_version: '2025-01-27.acacia',
-    created: 1,
+    created,
     livemode: false,
     pending_webhooks: 1,
     request: null,
@@ -302,6 +331,97 @@ test('distinct Stripe events do not double-grant an already credited payment obj
   }, 'evt_topup_retry_shape'));
 
   assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+});
+
+function subscriptionStatusEvent(type: string, status: string, id: string, created: number) {
+  return stripeEvent(type, {
+    id: 'sub_123',
+    customer: 'cus_123',
+    status,
+    current_period_end: 1_800_000_000,
+    items: { data: [{ price: { id: 'price_pro' } }] },
+  }, id, created);
+}
+
+function lastSubscriptionStatus(db: FakeDb): string | undefined {
+  return db.inserts.filter((call) => call.table === subscriptions).at(-1)?.values.status;
+}
+
+test('newer subscription event applies and reactivation restores paid plan', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_1', 100));
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_2', 200));
+
+  assert.equal(lastSubscriptionStatus(db), 'active');
+  assert.equal(db.updates.filter((call) => call.table === users).at(-1)?.values.plan, 'pro');
+});
+
+test('update then delete ends canceled and free regardless of tier resolution', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_a', 100));
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_b', 200));
+
+  assert.equal(lastSubscriptionStatus(db), 'canceled');
+  assert.equal(db.updates.filter((call) => call.table === users).at(-1)?.values.plan, 'free');
+});
+
+test('older update after newer delete is a stale no-op keeping the user free', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_new', 200));
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_old', 100));
+
+  assert.equal(lastSubscriptionStatus(db), 'canceled');
+  assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), false);
+});
+
+test('exact timestamp tie does not let update resurrect a terminal deleted subscription', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_tie', 500));
+  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_tie', 500));
+
+  assert.equal(lastSubscriptionStatus(db), 'canceled');
+  assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), false);
+});
+
+test('duplicate subscription event id is a processed no-op', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  const db = installDb(createFakeBillingDb({ selects: [[user]], trackSubscriptions: true }));
+
+  const event = subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_dup', 100);
+  assert.deepEqual(await processStripeEvent(event), { processed: true });
+  assert.deepEqual(await processStripeEvent(event), { processed: false });
+  assert.equal(db.inserts.filter((call) => call.table === subscriptions).length, 1);
+});
+
+test('handler error rolls back so the event id is not permanently recorded', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  const db = installDb(createFakeBillingDb({ selects: [[user]] }));
+  const event = stripeEvent('invoice.paid', {
+    id: 'in_rollback',
+    customer: 'cus_123',
+    subscription: 'sub_123',
+    billing_reason: 'subscription_cycle',
+    lines: { data: [{ price: { id: 'price_pro' } }] },
+  }, 'evt_rollback');
+
+  setStripeForTests({
+    subscriptions: { retrieve: async () => { throw new Error('stripe unavailable'); } },
+    webhooks: { constructEvent: () => { throw new Error('bad signature'); } },
+  } as any);
+  await assert.rejects(() => processStripeEvent(event));
+  assert.equal(db.inserts.some((call) => call.table === creditLedger), false);
+
+  installStripe();
+  assert.deepEqual(await processStripeEvent(event), { processed: true });
+  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 1);
 });
 
 test('billing POST guard rejects cross-origin cookie-auth posts', async () => {

@@ -279,14 +279,20 @@ async function upsertSubscription(database: BillingDb, input: {
   tier: string;
   status: string;
   currentPeriodEnd: Date;
+  lastEventCreatedAt?: Date;
+  lastEventId?: string;
 }) {
-  await database.insert(subscriptions).values(input).onConflictDoUpdate({
+  const versionColumns = input.lastEventCreatedAt
+    ? { lastEventCreatedAt: input.lastEventCreatedAt, lastEventId: input.lastEventId ?? null }
+    : {};
+  await database.insert(subscriptions).values({ ...input, ...versionColumns }).onConflictDoUpdate({
     target: subscriptions.userId,
     set: {
       stripeSubId: input.stripeSubId,
       tier: input.tier,
       status: input.status,
       currentPeriodEnd: input.currentPeriodEnd,
+      ...versionColumns,
     },
   });
   await updateUserPlan(database, input.userId, isActiveBillingSubscriptionStatus(input.status) ? input.tier : 'free');
@@ -352,16 +358,39 @@ async function handlePaymentIntentSucceeded(database: BillingDb, intent: Stripe.
   await grantPaidCredits(database, user.id, item.credits, 'stripe_top_up', intent.id);
 }
 
-async function handleSubscriptionStatus(database: BillingDb, subscription: Stripe.Subscription) {
+type StoredSubscriptionVersion = { status: string; lastEventCreatedAt: Date | null };
+
+function isStaleSubscriptionStatusEvent(incomingCreatedAt: Date, eventType: Stripe.Event['type'], existing: StoredSubscriptionVersion): boolean {
+  if (!existing.lastEventCreatedAt) return false;
+  const incoming = incomingCreatedAt.getTime();
+  const stored = existing.lastEventCreatedAt.getTime();
+  if (incoming > stored) return false;
+  if (incoming < stored) return true;
+  if (eventType === 'customer.subscription.deleted') return false;
+  return !isActiveBillingSubscriptionStatus(existing.status);
+}
+
+async function handleSubscriptionStatus(database: BillingDb, event: Stripe.Event, subscription: Stripe.Subscription) {
   const customerId = objectId(subscription.customer);
   const user = await userByStripeCustomer(database, customerId);
   if (!user) return;
   const [existing] = await database
-    .select({ stripeSubId: subscriptions.stripeSubId, tier: subscriptions.tier, status: subscriptions.status })
+    .select({ stripeSubId: subscriptions.stripeSubId, tier: subscriptions.tier, status: subscriptions.status, lastEventCreatedAt: subscriptions.lastEventCreatedAt })
     .from(subscriptions)
     .where(eq(subscriptions.userId, user.id))
     .limit(1);
   if (existing && existing.stripeSubId !== subscription.id && isActiveBillingSubscriptionStatus(existing.status)) return;
+
+  const incomingCreatedAt = unixSecondsToDate(event.created);
+  if (existing && existing.stripeSubId === subscription.id && isStaleSubscriptionStatusEvent(incomingCreatedAt, event.type, existing)) {
+    log.info('stripe_subscription_event_stale', {
+      user_id: user.id,
+      stripe_event_id: event.id,
+      stripe_event_type: event.type,
+      stripe_subscription_id: subscription.id,
+    });
+    return;
+  }
 
   const priceId = subscriptionPriceId(subscription);
   const item = findItemByPriceId(priceId);
@@ -372,6 +401,8 @@ async function handleSubscriptionStatus(database: BillingDb, subscription: Strip
     tier,
     status: subscription.status,
     currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
+    lastEventCreatedAt: incomingCreatedAt,
+    lastEventId: event.id,
   });
 }
 
@@ -412,7 +443,7 @@ async function handleStripeEvent(database: BillingDb, prepared: PreparedStripeEv
       break;
     case 'customer.subscription.deleted':
     case 'customer.subscription.updated':
-      await handleSubscriptionStatus(database, prepared.event.data.object as Stripe.Subscription);
+      await handleSubscriptionStatus(database, prepared.event, prepared.event.data.object as Stripe.Subscription);
       break;
   }
 }
