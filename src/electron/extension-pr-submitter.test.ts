@@ -14,7 +14,10 @@ test('promotion naming is deterministic and factory-safe', () => {
   assert.strictEqual(extensionSlug('My résumé!'), 'my-resume');
   assert.strictEqual(extensionSlug('123 Tools'), 'extension-123-tools');
   assert.strictEqual(extensionSlug('你好'), null);
-  assert.strictEqual(factoryName('extension-123-tools'), 'createExtension123ToolsExtension');
+  assert.strictEqual(
+    factoryName('extension-123-tools'),
+    'createExtension123ToolsExtension',
+  );
 });
 
 function createDeps(
