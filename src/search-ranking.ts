@@ -4,7 +4,7 @@
  * Both arguments must already be lowercased and trimmed by the caller.
  * `query` must be non‑empty; wrappers guard that contract.
  */
-const WORD_CHARACTER = /[a-z0-9]/i;
+const WORD_CHARACTER = /[\p{L}\p{N}]/u;
 
 export function scoreNormalizedNonEmpty(text: string, query: string): number {
   if (text === query) return 100;

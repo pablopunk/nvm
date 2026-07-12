@@ -22,6 +22,9 @@ test('scoreNormalizedNonEmpty whole-word matches before prefix and substring', (
   assert.equal(scoreNormalizedNonEmpty('terminal settings', 'terminal'), 90);
   assert.equal(scoreNormalizedNonEmpty('party', 'art'), 50);
   assert.equal(scoreNormalizedNonEmpty('terminally', 'terminal'), 80);
+  assert.equal(scoreNormalizedNonEmpty('café', 'caf'), 80);
+  assert.equal(scoreNormalizedNonEmpty('mañana', 'ma'), 80);
+  assert.equal(scoreNormalizedNonEmpty('東京タワー', '東京'), 80);
 });
 
 test('scoreNormalizedNonEmpty includes', () => {

@@ -73,7 +73,11 @@ import { initSentry } from './sentry';
 initSentry();
 
 import { canCustomizeCommandAction } from '../model';
-import { compareRankedActions, priorityBoost } from './action-ranking';
+import {
+  appResultMarker,
+  compareRankedActions,
+  priorityBoost,
+} from './action-ranking';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
@@ -2390,7 +2394,7 @@ function extensionRootActionFromItem(entry, item) {
     id: `extension-root:${entry.extension.id}:${item.id}`,
     kind: 'extension-root-item',
     extensionId: entry.extension.id,
-    ...(item.isAppResult ? { isAppResult: true } : {}),
+    ...appResultMarker(item),
     commandId: item.id,
     extensionFile: entry.extension.__filePath
       ? path.basename(entry.extension.__filePath)

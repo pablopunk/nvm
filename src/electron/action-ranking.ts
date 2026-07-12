@@ -13,6 +13,17 @@ const APP_RESULT_PRIORITY_BOOST = 25;
 const AI_BUILDER_CHAT_TIE_PRIORITY = -1;
 const DEFAULT_TIE_PRIORITY = 0;
 
+export function appResultMarker(
+  item: { isAppResult?: unknown } & Record<string, unknown>,
+): {
+  isAppResult?: true;
+} {
+  if (item.isAppResult === true) {
+    return { isAppResult: true };
+  }
+  return {};
+}
+
 export function priorityBoost(action: RankedAction): number {
   if (action.isAppResult === true) {
     return APP_RESULT_PRIORITY_BOOST;

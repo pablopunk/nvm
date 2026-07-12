@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compareRankedActions, priorityBoost } from './action-ranking';
+import {
+  appResultMarker,
+  compareRankedActions,
+  priorityBoost,
+} from './action-ranking';
 import { scoreNormalized } from './search-utils';
 
 const EXACT_MATCH_SCORE = 100;
@@ -98,5 +102,18 @@ test('application launch results win equal relevance but not stronger relevance'
   assert.equal(
     [appResult, strongerTextMatch].sort(compareRankedActions)[0],
     strongerTextMatch,
+  );
+});
+
+test('application launch marker survives root-item conversion data shaping', () => {
+  assert.deepEqual(appResultMarker({ isAppResult: true }), {
+    isAppResult: true,
+  });
+  assert.deepEqual(
+    appResultMarker({
+      id: 'force-quit-apps-command',
+      title: 'Force Quit Apps',
+    }),
+    {},
   );
 });
