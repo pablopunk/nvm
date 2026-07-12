@@ -122,3 +122,71 @@ export function tooManyRequests(decision: RateLimitDecision & { ok: false }): Re
     { status: 429, headers: { 'Retry-After': String(decision.retryAfterSec) } },
   );
 }
+
+function parseKillSwitches(): Record<string, boolean> {
+  try {
+    const raw = process.env.NEVERMIND_KILL_SWITCHES;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isCheckoutLockKillSwitched(): boolean {
+  return Boolean(parseKillSwitches().checkout_lock);
+}
+
+type CheckoutLockResult = { ok: true } | { ok: false };
+
+type CheckoutLockFn = {
+  acquire: (userId: string, ttlSec: number) => CheckoutLockResult;
+  release: (userId: string) => void;
+};
+
+let checkoutLockOverride: CheckoutLockFn | null = null;
+
+export function setCheckoutLockForTests(lock: CheckoutLockFn | null) {
+  checkoutLockOverride = lock;
+}
+
+const CHECKOUT_LOCK_TTL = 600;
+
+export async function acquireCheckoutLock(userId: string, ttlSec = CHECKOUT_LOCK_TTL): Promise<CheckoutLockResult> {
+  if (checkoutLockOverride) return checkoutLockOverride.acquire(userId, ttlSec);
+  if (isCheckoutLockKillSwitched()) return { ok: true };
+  if (!redis) {
+    if (isProduction()) {
+      log.error('checkout_lock_failed', { reason: 'Redis unavailable in production' });
+      return { ok: false };
+    }
+    log.warn('checkout_lock_disabled', { reason: 'Redis unavailable' });
+    return { ok: true };
+  }
+  const key = `nvm:checkout_lock:${userId}`;
+  try {
+    const result = await redis.set(key, '1', { nx: true, ex: ttlSec });
+    if (result === 'OK') {
+      log.info('checkout_lock_acquired', { user_id: userId });
+      return { ok: true };
+    }
+    log.info('checkout_lock_contended', { user_id: userId });
+    return { ok: false };
+  } catch (error) {
+    log.error('checkout_lock_error', { user_id: userId, error });
+    if (isProduction()) return { ok: false };
+    return { ok: true };
+  }
+}
+
+export async function releaseCheckoutLock(userId: string): Promise<void> {
+  if (checkoutLockOverride) return checkoutLockOverride.release(userId);
+  if (!redis) return;
+  const key = `nvm:checkout_lock:${userId}`;
+  try {
+    await redis.del(key);
+  } catch (error) {
+    log.warn('checkout_lock_release_error', { user_id: userId, error });
+  }
+}
