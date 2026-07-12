@@ -39,7 +39,7 @@
   },
   "overrides": [
     {
-      "include": ["scripts/**", ".agents/**"],
+      "includes": ["scripts/**", ".agents/**"],
       "linter": {
         "rules": {
           "suspicious": {
