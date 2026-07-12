@@ -3,8 +3,9 @@ import {
   type IpcMainLike,
 } from './ipc-registration';
 
-export type AppIpcHandlersDeps = {
+export interface AppIpcHandlersDeps {
   ipcMain: IpcMainLike & {
+    // biome-ignore lint/suspicious/noExplicitAny: deps-object pattern uses any for maximum caller flexibility
     on(channel: string, handler: (...args: any[]) => unknown): void;
   };
   measureDebugPerformance: <T>(
@@ -18,6 +19,7 @@ export type AppIpcHandlersDeps = {
   executeViewActionForIpc: (action: unknown) => unknown;
   refreshViewForIpc: (input: unknown) => unknown;
   pickFormFieldPaths: (event: unknown, input?: unknown) => unknown;
+  // biome-ignore lint/suspicious/noExplicitAny: deps-object pattern uses any for maximum caller flexibility
   startFileDrag: (...args: any[]) => unknown;
   sendAiChatMessage: (message: unknown, chatId: unknown) => unknown;
   noteAiChatExited: (chatId: unknown) => unknown;
@@ -74,7 +76,8 @@ export type AppIpcHandlersDeps = {
   logError: (message: string, data?: unknown, context?: unknown) => unknown;
   logWarn: (message: string, data?: unknown, context?: unknown) => unknown;
   loggerDebug: (message: string, data?: unknown, context?: unknown) => unknown;
-};
+  probeGh: () => Promise<{ installed: boolean; authed: boolean }>;
+}
 
 export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   const ipcHandleMeasured = createMeasuredIpcRegistrar({
@@ -151,15 +154,24 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('actions:remove-created', (_event, action) =>
     deps.removeCreatedAction(action),
   );
-  ipcHandleMeasured('ai-builder:tweak-extension', (_event, input: any = {}) => {
-    const file = input?.extensionFile || input?.extensionId;
-    if (!file)
-      return { toast: { message: 'No extension specified', tone: 'error' } };
-    const item = deps.getOrCreateExtensionChat(file, input.title || file);
-    return deps.normalizeHostViewResult({
-      view: deps.aiChatView(item, { initialPrompt: input.prompt }),
-    });
-  });
+  ipcHandleMeasured(
+    'ai-builder:tweak-extension',
+    (_event, input: unknown = {}) => {
+      // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
+      const typedInput = input as any;
+      const file = typedInput?.extensionFile || typedInput?.extensionId;
+      if (!file) {
+        return { toast: { message: 'No extension specified', tone: 'error' } };
+      }
+      const item = deps.getOrCreateExtensionChat(
+        file,
+        typedInput.title || file,
+      );
+      return deps.normalizeHostViewResult({
+        view: deps.aiChatView(item, { initialPrompt: typedInput.prompt }),
+      });
+    },
+  );
   ipcHandleMeasured('ai-builder:start-chat', (_event, input: any = {}) => {
     const item = deps.createDraftAiChat(
       String(input?.prompt || input?.query || ''),
@@ -221,6 +233,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       return { ok: false, status };
     return { ok: true, status };
   });
+  ipcHandleMeasured('gh:status', () => deps.probeGh());
   ipcHandleMeasured('extension-window:get-state', (_event, id) =>
     deps.extensionWindowManager.getState(String(id || '')),
   );

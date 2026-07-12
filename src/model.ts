@@ -271,6 +271,12 @@ export const ACTION_DEFINITIONS = {
     loading: 'view',
     execute: 'main',
   },
+  submitExtensionPr: {
+    description: 'Submit as PR',
+    dismiss: 'manual',
+    loading: 'view',
+    execute: 'main',
+  },
   clearActionOverride: {
     description: 'Restore original action',
     dismiss: 'manual',

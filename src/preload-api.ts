@@ -170,6 +170,7 @@ export type NevermindApi = {
     data?: unknown,
   ) => Promise<void>;
   getNevermindAuthStatus: () => Promise<{ authed: boolean; email?: string }>;
+  getGhStatus: () => Promise<{ installed: boolean; authed: boolean }>;
   signInToNevermind: () => Promise<{
     ok: boolean;
     email?: string;
