@@ -1,11 +1,15 @@
 #!/usr/bin/env node
+'use strict';
+
 const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.join(process.cwd(), 'backend/src/fixtures/contracts');
 
 function walk(dir) {
-  if (!fs.existsSync(dir)) return [];
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     return entry.isDirectory() ? walk(full) : [full];
@@ -14,6 +18,7 @@ function walk(dir) {
 
 const files = walk(root).filter((file) => file.endsWith('.json'));
 if (files.length === 0) {
+  // biome-ignore lint/suspicious/noConsole: script CLI output
   console.error(
     'No backend contract fixtures found under backend/src/fixtures/contracts',
   );
@@ -25,9 +30,11 @@ for (const file of files) {
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (error) {
+    // biome-ignore lint/suspicious/noConsole: script CLI output
     console.error(
       `Invalid JSON fixture: ${path.relative(process.cwd(), file)}`,
     );
+    // biome-ignore lint/suspicious/noConsole: script CLI output
     console.error(error);
     process.exit(1);
   }
@@ -43,6 +50,7 @@ for (const file of files) {
       'notices',
     ]) {
       if (!(key in parsed)) {
+        // biome-ignore lint/suspicious/noConsole: script CLI output
         console.error(
           `Compatibility manifest fixture missing ${key}: ${relative}`,
         );
@@ -52,11 +60,13 @@ for (const file of files) {
   }
 
   if (relative.endsWith('-error.json') && !parsed.error?.type) {
+    // biome-ignore lint/suspicious/noConsole: script CLI output
     console.error(`Error fixture missing error.type: ${relative}`);
     process.exit(1);
   }
 }
 
+// biome-ignore lint/suspicious/noConsole: script CLI output
 console.log(
   `Backend contract fixture checks passed (${files.length} fixtures)`,
 );
