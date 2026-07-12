@@ -210,7 +210,7 @@ export async function handleDedup(
   if (existing.status === 'in_flight') {
     const createdAt = new Date(existing.createdAt).getTime();
     if (Date.now() - createdAt > DEDUP_STALE_MS) {
-      await db.update(requestDedup).set({
+      const [reclaimed] = await db.update(requestDedup).set({
         status: 'in_flight',
         requestId,
         createdAt: new Date(),
@@ -219,7 +219,13 @@ export async function handleDedup(
         responseHeaders: null,
         upstreamStatus: null,
         completedAt: null,
-      }).where(eq(requestDedup.id, existing.id));
+      }).where(and(eq(requestDedup.id, existing.id), eq(requestDedup.status, 'in_flight'))).returning();
+      if (!reclaimed) {
+        return withRequestId(Response.json(
+          { error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } },
+          { status: 409 },
+        ), requestId);
+      }
       return undefined;
     }
     return withRequestId(Response.json(
