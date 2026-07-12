@@ -219,7 +219,7 @@ export async function handleDedup(
         responseHeaders: null,
         upstreamStatus: null,
         completedAt: null,
-      }).where(and(eq(requestDedup.id, existing.id), eq(requestDedup.status, 'in_flight'))).returning();
+      }).where(and(eq(requestDedup.id, existing.id), eq(requestDedup.requestId, existing.requestId))).returning();
       if (!reclaimed) {
         return withRequestId(Response.json(
           { error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } },
