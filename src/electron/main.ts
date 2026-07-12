@@ -54,15 +54,15 @@ import {
   verifyLocalFileToken,
 } from './file-utils';
 import {
-  getNevermindAuth,
   getDefaultNevermindBaseUrl,
+  getNevermindAuth,
   nevermindEnvironmentForBaseUrl,
   signInToNevermind,
   signOutFromNevermind,
 } from './nevermind-auth';
 import {
-  currentNevermindCompatibilityManifest,
   checkNevermindCompatibility,
+  currentNevermindCompatibilityManifest,
   invalidateNevermindCompatibilityCache,
   onNevermindCompatibilityChanged,
   warmNevermindCompatibilityCache,
