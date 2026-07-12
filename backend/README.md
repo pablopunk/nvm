@@ -25,6 +25,6 @@ Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
 
 ## Deploy
 
-Push to GitHub, import in Vercel, set env vars, point `nvm.fyi` + `api.nvm.fyi` at it.
+Push to GitHub, import in Vercel, set env vars, point `nvm.fyi` + `api.nvm.fyi` at it. Keep `WORKOS_REDIRECT_URI` set to the production callback (`https://nvm.fyi/api/auth/callback`): Vercel preview deployments use a short-lived encrypted handoff from that callback to establish their own host-only session cookie.
 
 When working from a git worktree, ignored local env files are not inherited. Run `pnpm worktree:env:copy` from the worktree to copy env files from the canonical checkout without printing secrets; use `--dry-run` to preview and `--force` only when you intend to overwrite local env files. If `.vercel/project.json` is still missing, run `vercel link` before Vercel deploy commands; never commit `.env*` or `.vercel/` files.
