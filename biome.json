@@ -37,6 +37,26 @@
       "quoteStyle": "single"
     }
   },
+  "overrides": [
+    {
+      "include": ["scripts/**", ".agents/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off",
+            "useStrictMode": "off"
+          },
+          "style": {
+            "useBlockStatements": "off",
+            "noUnusedTemplateLiteral": "off"
+          },
+          "complexity": {
+            "useSimplifiedLogicExpression": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {
