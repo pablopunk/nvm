@@ -1,5 +1,6 @@
 // biome-ignore-all lint: This extension follows the existing palette-extension API conventions.
 import { getNevermindAuth, signOutFromNevermind } from '../nevermind-auth';
+import { clearByoKey, getByoKey } from '../byo-key';
 import { extensionContext } from './_context';
 
 export function createAccountExtension() {
@@ -162,11 +163,49 @@ export function createAccountExtension() {
     };
   }
 
+  async function byoKeyItem() {
+    const byo = await getByoKey();
+    if (!byo) return null;
+    return {
+      id: 'byo-key-clear',
+      actionId: 'byo-key-clear',
+      title: 'Clear BYO provider key',
+      subtitle: `Using own key for ${byo.provider} (${byo.modelName})`,
+      icon: 'key',
+      score: 4,
+      aliases: ['byo', 'own key', 'clear key'],
+      primaryAction: {
+        type: 'runExtensionAction',
+        title: 'Clear BYO Key',
+        __handler: async () => {
+          await clearByoKey();
+          extensionContext.invalidateExtensionRootItems();
+          return {
+            toast: {
+              message: 'BYO provider key cleared. Using Nevermind backend.',
+              tone: 'default' as const,
+            },
+          };
+        },
+      },
+    };
+  }
+
   return {
     id: extensionId,
     title: 'Nevermind Account',
     permissions: [] as const,
-    searchItems: async () => [await accountItem(), backendEnvironmentItem()],
-    rootItems: async () => [await accountItem(), backendEnvironmentItem()],
+    searchItems: async () => {
+      const items = [await accountItem(), backendEnvironmentItem()];
+      const byo = await byoKeyItem();
+      if (byo) items.push(byo);
+      return items;
+    },
+    rootItems: async () => {
+      const items = [await accountItem(), backendEnvironmentItem()];
+      const byo = await byoKeyItem();
+      if (byo) items.push(byo);
+      return items;
+    },
   };
 }

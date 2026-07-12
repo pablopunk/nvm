@@ -1,0 +1,170 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Documentation · Nevermind">
+  <section class="page-hero">
+    <h1>Documentation</h1>
+    <p>Install Nevermind on your desktop, learn the command palette, and build your own extensions.</p>
+  </section>
+
+  <div class="docs-layout">
+    <nav class="docs-sidebar" aria-label="Docs navigation">
+      <span class="docs-sidebar__section">Getting started</span>
+      <a href="#installation">Installation</a>
+      <a href="#first-run">First run &amp; sign in</a>
+      <a href="#command-palette">The command palette</a>
+
+      <span class="docs-sidebar__section">Everyday tools</span>
+      <a href="#app-launcher">Launch &amp; quit apps</a>
+      <a href="#calculator">Calculator</a>
+      <a href="#web-search">Web search</a>
+      <a href="#clipboard">Clipboard</a>
+      <a href="#system-controls">System controls</a>
+
+      <span class="docs-sidebar__section">Extensions</span>
+      <a href="#ai-builder">AI builder</a>
+      <a href="#custom-extensions">Building your own</a>
+
+      <span class="docs-sidebar__section">Reference</span>
+      <a href="#shortcuts">Keyboard shortcuts</a>
+      <a href="#api-access">API access</a>
+      <a href="#account-billing">Account &amp; billing</a>
+    </nav>
+
+    <article class="docs-article">
+      <h2 id="installation">Installation</h2>
+      <p>Download the latest version from <a href="https://github.com/pablopunk/nvm/releases">GitHub Releases</a>. Choose your platform:</p>
+      <ul>
+        <li><strong>macOS</strong> — <code>.zip</code> for Apple Silicon or Intel. Unzip and drag to Applications.</li>
+        <li><strong>Windows</strong> — <code>.exe</code> installer or portable version.</li>
+        <li><strong>Linux</strong> — <code>.AppImage</code> or <code>.deb</code> package.</li>
+      </ul>
+      <p>On first launch, macOS may show a security prompt since Nevermind is distributed outside the App Store. Open <strong>System Settings → Privacy & Security</strong> and click "Open Anyway."</p>
+
+      <h2 id="first-run">First run &amp; sign in</h2>
+      <p>Press <kbd>Alt+Space</kbd> to open the command palette. Type <strong>"Log in to Nevermind"</strong> and press Enter. A browser window will open — approve the sign-in, and the app receives a secure token automatically.</p>
+      <p>Signing in connects your desktop to Nevermind's AI models and enables the AI extension builder. You can also manage API tokens, credits, and your subscription from the <a href="/profile">profile dashboard</a>.</p>
+      <p>Once signed in, use <kbd>Alt+Space</kbd> anytime to open the palette and <a href="/profile#connect-desktop">connect additional devices</a> from the dashboard.</p>
+
+      <hr />
+
+      <h2 id="command-palette">The command palette</h2>
+      <p>Nevermind is a command palette — a fast, keyboard-driven interface for your desktop. Press <kbd>Alt+Space</kbd> to open it anywhere. Type to search, and the palette shows matching commands, extensions, apps, and files.</p>
+      <p>From the palette you can:</p>
+      <ul>
+        <li><strong>Run built-in commands</strong> — calculator, force quit, web search, and more</li>
+        <li><strong>Launch applications</strong> — type an app name to open or force quit it</li>
+        <li><strong>Use extensions</strong> — screenshots, camera, clipboard viewer, and anything you build</li>
+        <li><strong>Search files</strong> — find recently opened files or browse by name</li>
+        <li><strong>Configure shortcuts</strong> — assign global hotkeys to commands you use often</li>
+      </ul>
+
+      <p><strong>Pro tip:</strong> Press <kbd>Cmd+K</kbd> inside any extension view to see its available actions. Press <kbd>Cmd+Alt+K</kbd> to see keyboard shortcuts.</p>
+
+      <hr />
+
+      <h2 id="everyday-tools">Everyday tools</h2>
+
+      <h3 id="app-launcher">Launch &amp; quit apps</h3>
+      <p>Open the palette and start typing an app name — Nevermind shows running and installed applications. Press Enter to launch or switch to it.</p>
+      <p>To force quit a frozen app, type its name and choose <strong>"Force Quit"</strong> from the action menu, or open <strong>"Force Quit Apps"</strong> to see all running applications.</p>
+
+      <h3 id="calculator">Calculator</h3>
+      <p>Open the palette and type a math expression like <code>42 * 7</code> or <code>sqrt(144)</code>. Nevermind evaluates it inline and shows the result. You can copy the result, continue calculating, or replace the search with the answer.</p>
+      <p>Beyond arithmetic, it handles scientific functions (<code>sin</code>, <code>cos</code>, <code>log</code>), constants (<code>pi</code>, <code>e</code>), and unit conversions (<code>5km to mi</code>, <code>100F to C</code>).</p>
+
+      <h3 id="web-search">Web search</h3>
+      <p>Type a URL like <code>github.com</code> to open it in your default browser, or type a search query and choose <strong>"Search the Web"</strong> to search via your configured search engine.</p>
+
+      <h3 id="clipboard">Clipboard</h3>
+      <p>The clipboard history tracks recently copied text. Search through your clipboard entries from the palette and paste them with one click.</p>
+
+      <h3 id="system-controls">System controls</h3>
+      <p>Lock your screen, put the computer to sleep, or restart — all from the palette. Type <strong>"Lock Screen"</strong>, <strong>"Sleep"</strong>, or <strong>"Restart Computer"</strong>.</p>
+
+      <hr />
+
+      <h2 id="ai-builder">AI builder</h2>
+      <p>The AI builder creates custom extensions from natural language. Open the palette, describe what you want, and Nevermind generates a working TypeScript extension on the spot.</p>
+      <p><strong>Examples:</strong></p>
+      <ul>
+        <li><em>"A screenshot tool that captures a window and shows it in a preview"</em></li>
+        <li><em>"A camera overlay I can use as a mirror"</em></li>
+        <li><em>"A grid of my recent images from the Downloads folder"</em></li>
+      </ul>
+      <p>Each generated extension includes a chat history, so you can iterate — adjust the UI, change behavior, or add permissions without starting over.</p>
+
+      <h3 id="custom-extensions">Building your own</h3>
+      <p>Extensions are local TypeScript files stored in your Nevermind user data directory. Use the built-in editor (<kbd>Cmd+K</kbd> → Edit) to write your own, or open the folder and create a <code>.ts</code> file manually.</p>
+      <p>The extension API provides:</p>
+      <ul>
+        <li><code>ctx.desktop.apps</code> — launch and query applications</li>
+        <li><code>ctx.desktop.files</code> — browse and search local files</li>
+        <li><code>ctx.desktop.shell</code> — run shell commands</li>
+        <li><code>ctx.clipboard</code> — read and write clipboard contents</li>
+        <li><code>ctx.ai</code> — use AI models for text generation and chat</li>
+        <li><code>ctx.camera</code> — capture photos and video frames</li>
+        <li><code>ctx.ocr</code> — extract text from images and screenshots</li>
+      </ul>
+      <p>Extensions declare permissions in their config and are isolated to what they request. For the full API reference, open the extension editor and use the <code>read_extension_api</code> tool.</p>
+      <p>Built-in extensions (Apps, Calculator, Clipboard, Web Search, System, Settings) live alongside yours and can be inspected as examples in <code>~/.nevermind/extensions/</code>.</p>
+
+      <hr />
+
+      <h2 id="shortcuts">Keyboard shortcuts</h2>
+      <p>Nevermind ships with these default shortcuts:</p>
+      <table class="table">
+        <thead>
+          <tr><th>Shortcut</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><kbd>Alt+Space</kbd></td><td>Open command palette</td></tr>
+          <tr><td><kbd>Cmd+K</kbd></td><td>Show actions for the current view</td></tr>
+          <tr><td><kbd>Cmd+Alt+K</kbd></td><td>View and manage keyboard shortcuts</td></tr>
+        </tbody>
+      </table>
+      <p>You can assign custom global shortcuts to any command. Open <strong>"Keyboard Shortcuts"</strong> from the palette, find the command, and click <strong>"Change shortcut"</strong> to record a new key combination.</p>
+
+      <hr />
+
+      <h2 id="api-access">API access</h2>
+      <p>Nevermind provides an OpenAI-compatible chat completions endpoint at <code>https://api.nvm.fyi/api/v1/chat/completions</code>.</p>
+
+      <h3>Authentication</h3>
+      <p>Create a Personal Access Token (PAT) from your <a href="/profile">profile page</a>. Pass it as a Bearer header:</p>
+      <pre><code>Authorization: Bearer nvm_pat_YOUR_TOKEN</code></pre>
+      <p>Tokens are prefixed with <code>nvm_pat_</code> and can be revoked individually. Never share a token or commit it to version control.</p>
+
+      <h3>Example request</h3>
+      <pre><code>curl -sS https://api.nvm.fyi/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer nvm_pat_YOUR_TOKEN" \
+  -d '&#123;"model":"nevermind","messages":[&#123;"role":"user","content":"Hello!"&#125;]&#125;'</code></pre>
+
+      <h3>Models</h3>
+      <p>Requests are routed across a pool of supported AI providers. The model you choose determines the provider path and capabilities. Model availability depends on your plan and the current backend configuration.</p>
+
+      <h3 id="api-errors">Error codes</h3>
+      <table class="table">
+        <thead>
+          <tr><th>Status</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>200</code></td><td>Success — request completed normally</td></tr>
+          <tr><td><code>401</code></td><td>Missing, invalid, or revoked PAT</td></tr>
+          <tr><td><code>402</code></td><td>Insufficient credits — add credits or wait for monthly reset</td></tr>
+          <tr><td><code>403</code></td><td>Forbidden — cross-origin request rejected</td></tr>
+          <tr><td><code>426</code></td><td>Update required — your desktop app version is unsupported</td></tr>
+          <tr><td><code>429</code></td><td>Rate limited — wait and retry after the Retry-After window</td></tr>
+          <tr><td><code>503</code></td><td>Service unavailable — backend maintenance or overload</td></tr>
+        </tbody>
+      </table>
+
+      <hr />
+
+      <h2 id="account-billing">Account &amp; billing</h2>
+      <p>Manage your subscription, view credit balances, and create API tokens from the <a href="/profile">profile dashboard</a>. Billing is handled securely by Stripe — Nevermind does not store payment details.</p>
+      <p>Every account includes free monthly credits. Paid plans add additional credits per billing cycle. See the <a href="/pricing">pricing page</a> for current plans.</p>
+    </article>
+  </div>
+</Layout>

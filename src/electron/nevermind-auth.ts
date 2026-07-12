@@ -231,6 +231,68 @@ export function isSigningIn() {
   return Boolean(activeSignIn);
 }
 
+export async function consumeDeviceCode({
+  code,
+  baseUrl = DEFAULT_BASE_URL,
+}: {
+  code: string;
+  baseUrl?: string;
+}): Promise<SignInResult> {
+  if (activeSignIn) return activeSignIn;
+  const trimmedBase = normalizedBaseUrl(baseUrl);
+  activeSignIn = (async (): Promise<SignInResult> => {
+    try {
+      await checkNevermindCompatibility(trimmedBase);
+      const deadline = Date.now() + 300_000;
+      const interval = 2000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, interval));
+        const res = await postJson(`${trimmedBase}/api/auth/device/exchange`, {
+          code,
+        });
+        if (res.status === 410)
+          return { ok: false, error: 'code expired or already used' };
+        if (res.status === 503) {
+          const body = await res.json().catch(() => ({}));
+          if ((body as any)?.error?.type === 'service_unavailable') {
+            return {
+              ok: false,
+              error:
+                (body as any)?.error?.message ||
+                'device auth is temporarily unavailable',
+            };
+          }
+        }
+        if (!res.ok) {
+          logger.warn(`device exchange returned ${res.status}`);
+          continue;
+        }
+        const data = (await res.json()) as {
+          status: string;
+          token?: string;
+          user?: { email: string; role: string };
+        };
+        if (data.status === 'ok' && data.token && data.user) {
+          const auth = await persist({
+            token: data.token,
+            email: data.user.email,
+            role: data.user.role,
+            baseUrl: trimmedBase,
+          });
+          return { ok: true, auth };
+        }
+      }
+      return { ok: false, error: 'timed out waiting for approval' };
+    } catch (err) {
+      logger.error('consumeDeviceCode failed', err as Error);
+      return { ok: false, error: (err as Error).message };
+    } finally {
+      activeSignIn = null;
+    }
+  })();
+  return activeSignIn;
+}
+
 export async function signInToNevermind({
   baseUrl = DEFAULT_BASE_URL,
   environment = nevermindEnvironmentForBaseUrl(baseUrl),

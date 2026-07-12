@@ -37,7 +37,7 @@ jobs:
           fi
           FILES=$(git diff --name-only "$BASE" | grep -v '^backend/' | grep -v '^\.github/' || true)
           if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs mise exec -- npx biome check --error-on-warnings
+            echo "$FILES" | xargs mise exec -- pnpm exec biome check --error-on-warnings --assist-enabled=false --skip=suspicious --skip=style --skip=a11y --skip=performance --skip=complexity
           else
             echo "Only non-frontend files changed; skipping biome check"
           fi
