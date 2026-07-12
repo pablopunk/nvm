@@ -9,7 +9,7 @@ export const GET: APIRoute = async ({ url, request }) => {
   const decision = await rateLimitIp('auth', clientIp(request), 30, '1 m');
   if (!decision.ok) return tooManyRequests(decision);
   const code = url.searchParams.get('code');
-  const previewTarget = decodePreviewState(url.searchParams.get('state'));
+  const previewTarget = await decodePreviewState(url.searchParams.get('state'));
   const returnTo = safeRelativeRedirectPath(url.searchParams.get('state'));
   if (!code) return new Response('Missing code', { status: 400 });
 
@@ -30,16 +30,16 @@ export const GET: APIRoute = async ({ url, request }) => {
 
   const isHttps = url.protocol === 'https:';
   const headers = new Headers();
-  headers.append(
-    'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(sealedSession!)}; Path=/; HttpOnly; ${isHttps ? 'Secure; ' : ''}SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
-  );
   if (previewTarget) {
     const grant = await createPreviewSessionGrant(previewTarget, sealedSession!);
     const exchangeUrl = new URL('/api/auth/preview-exchange', previewTarget.origin);
     exchangeUrl.searchParams.set('grant', grant);
     headers.set('Location', exchangeUrl.toString());
   } else {
+    headers.append(
+      'Set-Cookie',
+      `${SESSION_COOKIE}=${encodeURIComponent(sealedSession!)}; Path=/; HttpOnly; ${isHttps ? 'Secure; ' : ''}SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+    );
     headers.set('Location', returnTo);
   }
   return new Response(null, { status: 302, headers });

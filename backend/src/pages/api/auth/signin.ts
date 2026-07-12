@@ -10,13 +10,14 @@ export const GET: APIRoute = async ({ url, request, redirect }) => {
   if (!decision.ok) return tooManyRequests(decision);
   const previewTarget = previewTargetFromRequest(url, url.searchParams.get('return_to'));
   const returnTo = previewTarget
-    ? encodePreviewState(previewTarget)
+    ? await encodePreviewState(previewTarget)
     : safeRelativeRedirectPath(url.searchParams.get('return_to'));
+  if (previewTarget && !returnTo) return new Response('Preview authentication is unavailable', { status: 503 });
   const authorizationUrl = workos.userManagement.getAuthorizationUrl({
     provider: 'authkit',
     clientId: WORKOS_CLIENT_ID,
     redirectUri: env('WORKOS_REDIRECT_URI') as string,
-    state: returnTo,
+    state: returnTo ?? undefined,
   });
   return redirect(authorizationUrl);
 };

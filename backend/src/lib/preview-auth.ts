@@ -1,18 +1,22 @@
-import { createHash } from 'node:crypto';
-import { EncryptJWT, jwtDecrypt } from 'jose';
+import { createHash, randomBytes } from 'node:crypto';
+import { Redis } from '@upstash/redis';
+import { EncryptJWT, SignJWT, jwtVerify, jwtDecrypt } from 'jose';
 import { env } from './env';
 import { safeRelativeRedirectPath } from './safe-redirect';
 
 const PREVIEW_STATE_PREFIX = 'preview:';
+const PREVIEW_STATE_AUDIENCE = 'nvm-preview-auth';
 const PREVIEW_AUDIENCE = 'nvm-preview-session';
+const PREVIEW_STATE_TTL_SECONDS = 60;
 const PREVIEW_GRANT_TTL_SECONDS = 60;
+const PREVIEW_HOST_RE = /^nvm-git-[a-z0-9-]+-pablo-varelas-projects-4f86af8b\.vercel\.app$/;
 
-type PreviewTarget = { origin: string; returnTo: string };
+export type PreviewTarget = { origin: string; returnTo: string };
 
 function isVercelPreviewOrigin(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.pathname === '/' && url.search === '' && url.hash === '' && url.hostname.endsWith('.vercel.app');
+    return url.protocol === 'https:' && url.pathname === '/' && url.search === '' && url.hash === '' && PREVIEW_HOST_RE.test(url.hostname);
   } catch {
     return false;
   }
@@ -23,14 +27,47 @@ export function previewTargetFromRequest(url: URL, returnTo: string | null): Pre
   return { origin: url.origin, returnTo: safeRelativeRedirectPath(returnTo) };
 }
 
-export function encodePreviewState(target: PreviewTarget): string {
-  return `${PREVIEW_STATE_PREFIX}${Buffer.from(JSON.stringify(target)).toString('base64url')}`;
+function stateKey(id: string) {
+  return `nvm:preview-auth:${id}`;
 }
 
-export function decodePreviewState(value: string | null): PreviewTarget | null {
-  if (!value?.startsWith(PREVIEW_STATE_PREFIX)) return null;
+const redisUrl = env('UPSTASH_REDIS_REST_URL') ?? env('KV_REST_API_URL');
+const redisToken = env('UPSTASH_REDIS_REST_TOKEN') ?? env('KV_REST_API_TOKEN');
+const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
+let testStore: Map<string, string> | null = null;
+
+export function setPreviewAuthStoreForTests(store: Map<string, string> | null) {
+  testStore = store;
+}
+
+function stateKeyMaterial() {
+  const password = env('WORKOS_COOKIE_PASSWORD');
+  if (!password) throw new Error('WORKOS_COOKIE_PASSWORD is required');
+  return createHash('sha256').update(password).digest();
+}
+
+async function putState(id: string, target: PreviewTarget) {
+  const value = JSON.stringify({ origin: target.origin, returnTo: target.returnTo });
+  if (testStore) {
+    testStore.set(stateKey(id), value);
+    return true;
+  }
+  if (!redis) return false;
   try {
-    const parsed = JSON.parse(Buffer.from(value.slice(PREVIEW_STATE_PREFIX.length), 'base64url').toString()) as Partial<PreviewTarget>;
+    await redis.set(stateKey(id), value, { ex: PREVIEW_STATE_TTL_SECONDS });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function takeState(id: string): Promise<PreviewTarget | null> {
+  let raw: string | null | undefined;
+  try {
+    raw = testStore ? testStore.get(stateKey(id)) : redis ? await redis.getdel<string>(stateKey(id)) : null;
+    if (testStore) testStore.delete(stateKey(id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PreviewTarget>;
     if (typeof parsed.origin !== 'string' || typeof parsed.returnTo !== 'string' || !isVercelPreviewOrigin(parsed.origin)) return null;
     return { origin: parsed.origin, returnTo: safeRelativeRedirectPath(parsed.returnTo) };
   } catch {
@@ -38,10 +75,30 @@ export function decodePreviewState(value: string | null): PreviewTarget | null {
   }
 }
 
+export async function encodePreviewState(target: PreviewTarget): Promise<string | null> {
+  if (!isVercelPreviewOrigin(target.origin)) return null;
+  const id = randomBytes(32).toString('base64url');
+  if (!(await putState(id, target))) return null;
+  return `${PREVIEW_STATE_PREFIX}${await new SignJWT({ id })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setAudience(PREVIEW_STATE_AUDIENCE)
+    .setIssuedAt()
+    .setExpirationTime(`${PREVIEW_STATE_TTL_SECONDS}s`)
+    .sign(stateKeyMaterial())}`;
+}
+
+export async function decodePreviewState(value: string | null): Promise<PreviewTarget | null> {
+  if (!value?.startsWith(PREVIEW_STATE_PREFIX)) return null;
+  try {
+    const { payload } = await jwtVerify(value.slice(PREVIEW_STATE_PREFIX.length), stateKeyMaterial(), { audience: PREVIEW_STATE_AUDIENCE });
+    return typeof payload.id === 'string' ? takeState(payload.id) : null;
+  } catch {
+    return null;
+  }
+}
+
 function grantKey() {
-  const password = env('WORKOS_COOKIE_PASSWORD');
-  if (!password) throw new Error('WORKOS_COOKIE_PASSWORD is required');
-  return createHash('sha256').update(password).digest();
+  return stateKeyMaterial();
 }
 
 export async function createPreviewSessionGrant(target: PreviewTarget, sealedSession: string): Promise<string> {
