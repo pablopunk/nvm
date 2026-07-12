@@ -1,5 +1,4 @@
 ---
-import CookieBanner from '../components/CookieBanner.astro';
 import '../styles/app.css';
 
 interface Props {
@@ -21,7 +20,6 @@ const containerClass = width === 'wide' ? 'container container--wide' : width ==
     <main class={containerClass}>
       <slot />
     </main>
-    <CookieBanner />
     <footer class="site-footer" style="text-align:center;padding:32px 16px;opacity:0.6;font-size:13px">
       <nav style="display:flex;gap:16px;justify-content:center">
         <a href="/terms">Terms</a>
