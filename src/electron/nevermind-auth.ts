@@ -9,6 +9,7 @@ import { checkNevermindCompatibility } from './nevermind-compatibility';
 import { openExternalUrl } from './url-utils';
 
 const FILENAME = 'nevermind-auth.json';
+const STORE_FILENAME = 'nevermind-auth-by-origin.json';
 
 export type NevermindEnvironment = 'production' | 'pr_preview' | 'custom';
 
@@ -21,6 +22,7 @@ type StoredAuth = {
   environment?: NevermindEnvironment;
   connectedAt: string;
 };
+type AuthStore = Record<string, StoredAuth>;
 type AuthSnapshot = {
   token: string;
   email: string;
@@ -75,6 +77,23 @@ function authPath() {
   return path.join(app.getPath('userData'), FILENAME);
 }
 
+function storePath() {
+  return path.join(app.getPath('userData'), STORE_FILENAME);
+}
+
+let activeBaseUrl = normalizedBaseUrl(DEFAULT_BASE_URL);
+let authPathOverride: string | null = null;
+
+function currentAuthPath() {
+  return authPathOverride || storePath();
+}
+
+function legacyAuthPath() {
+  return authPathOverride
+    ? path.join(path.dirname(authPathOverride), FILENAME)
+    : authPath();
+}
+
 let cached: AuthSnapshot = null;
 let loadPromise: Promise<AuthSnapshot> | null = null;
 let activeSignIn: Promise<SignInResult> | null = null;
@@ -98,30 +117,87 @@ function decryptToken(data: StoredAuth): string | null {
   return null;
 }
 
-async function readFromDisk(): Promise<AuthSnapshot> {
+function authFromStored(data: StoredAuth): AuthSnapshot {
+  const token = decryptToken(data);
+  if (!token) return null;
+  const baseUrl = normalizedBaseUrl(data.baseUrl);
+  if (baseUrl !== data.baseUrl)
+    logger.warn('normalized stored Nevermind auth base URL', {
+      from: data.baseUrl,
+      to: baseUrl,
+    });
+  return {
+    token,
+    email: data.email,
+    role: data.role,
+    baseUrl,
+    environment: data.environment || nevermindEnvironmentForBaseUrl(baseUrl),
+  };
+}
+
+function isLegacyAuth(data: unknown): data is StoredAuth {
+  return Boolean(
+    data &&
+      typeof data === 'object' &&
+      'baseUrl' in data &&
+      typeof (data as StoredAuth).baseUrl === 'string',
+  );
+}
+
+async function readStore(): Promise<AuthStore | null> {
   try {
-    const raw = await fs.readFile(authPath(), 'utf8');
-    const data = JSON.parse(raw) as StoredAuth;
-    const token = decryptToken(data);
-    if (!token) return null;
-    const baseUrl = normalizedBaseUrl(data.baseUrl);
-    if (baseUrl !== data.baseUrl)
-      logger.warn('normalized stored Nevermind auth base URL', {
-        from: data.baseUrl,
-        to: baseUrl,
-      });
-    return {
-      token,
-      email: data.email,
-      role: data.role,
-      baseUrl,
-      environment: data.environment || nevermindEnvironmentForBaseUrl(baseUrl),
-    };
+    const raw = await fs.readFile(currentAuthPath(), 'utf8');
+    const data = JSON.parse(raw) as AuthStore | StoredAuth;
+    return isLegacyAuth(data) ? {} : data;
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT')
-      logger.warn('Failed to read nevermind auth', err as Error);
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
+async function migrateLegacyAuthFile(): Promise<AuthSnapshot> {
+  try {
+    const raw = await fs.readFile(legacyAuthPath(), 'utf8');
+    const data = JSON.parse(raw) as AuthStore | StoredAuth;
+    if (!isLegacyAuth(data)) return null;
+    const baseUrl = normalizedBaseUrl(data.baseUrl);
+    const store: AuthStore = { [baseUrl]: { ...data, baseUrl } };
+    await fs.writeFile(currentAuthPath(), JSON.stringify(store, null, 2), {
+      mode: 0o600,
+    });
+    if (process.platform !== 'win32') await fs.chmod(currentAuthPath(), 0o600);
+    await fs.rename(legacyAuthPath(), `${legacyAuthPath()}.bak`);
+    return authFromStored(store[baseUrl]);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    logger.warn('nevermind.auth.migration.failed', err as Error);
     return null;
   }
+}
+
+async function readFromDisk(): Promise<AuthSnapshot> {
+  let store: AuthStore | null;
+  try {
+    store = await readStore();
+  } catch (err) {
+    logger.warn('Failed to read nevermind auth', err as Error);
+    return null;
+  }
+  if (!store || Object.keys(store).length === 0 || !store[activeBaseUrl]) {
+    const migrated = await migrateLegacyAuthFile();
+    if (migrated && migrated.baseUrl === activeBaseUrl) return migrated;
+  }
+  const stored = store?.[activeBaseUrl];
+  return stored ? authFromStored(stored) : null;
+}
+
+async function readOrMigrateStore(): Promise<AuthStore> {
+  let store = (await readStore()) || {};
+  if (Object.keys(store).length === 0) {
+    await migrateLegacyAuthFile();
+    store = (await readStore()) || {};
+  }
+  return store;
 }
 
 async function load() {
@@ -135,6 +211,12 @@ async function load() {
 
 export async function getNevermindAuth(): Promise<AuthSnapshot> {
   return load();
+}
+
+export function setActiveNevermindAuthBaseUrl(baseUrl: string | null) {
+  activeBaseUrl = normalizedBaseUrl(baseUrl || DEFAULT_BASE_URL);
+  cached = null;
+  loadPromise = null;
 }
 
 async function persist({
@@ -167,19 +249,36 @@ async function persist({
     );
     payload.token = Buffer.from(token, 'utf8').toString('base64');
   }
-  await fs.writeFile(authPath(), JSON.stringify(payload, null, 2), {
+  const store = await readOrMigrateStore();
+  store[normalizedBaseUrl(baseUrl)] = payload;
+  await fs.writeFile(currentAuthPath(), JSON.stringify(store, null, 2), {
     mode: 0o600,
   });
-  if (process.platform !== 'win32') await fs.chmod(authPath(), 0o600);
+  if (process.platform !== 'win32') await fs.chmod(currentAuthPath(), 0o600);
   cached = { token, email, role, baseUrl, environment };
   loadPromise = Promise.resolve(cached);
   return cached;
 }
 
 export async function clearNevermindAuth() {
-  await fs.rm(authPath(), { force: true });
+  const store = await readOrMigrateStore();
+  delete store[activeBaseUrl];
+  await fs.writeFile(currentAuthPath(), JSON.stringify(store, null, 2), {
+    mode: 0o600,
+  });
+  if (process.platform !== 'win32') await fs.chmod(currentAuthPath(), 0o600);
   cached = null;
   loadPromise = Promise.resolve(null);
+}
+
+export function setNevermindAuthFilePathForTests(filePath: string | null) {
+  authPathOverride = filePath;
+}
+
+export function clearNevermindAuthCacheForTests() {
+  cached = null;
+  loadPromise = null;
+  activeBaseUrl = normalizedBaseUrl(DEFAULT_BASE_URL);
 }
 
 export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {
