@@ -45,6 +45,11 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     normalizeHostViewResult: (result) => ({ normalized: result }),
     createDraftAiChat: (prompt) => ({ prompt, messages: [] }),
     getNevermindAuth: async () => null,
+    getNevermindDebugStatus: () => ({
+      client: { environment: 'production', baseUrl: 'https://api.nvm.fyi' },
+      active: { environment: 'production', baseUrl: 'https://api.nvm.fyi' },
+      backend: { environment: 'production', version: 'dev' },
+    }),
     setActiveNevermindBaseUrl: (baseUrl) => calls.push(`base:${baseUrl || ''}`),
     warmNevermindCompatibilityCache: (baseUrl) => calls.push(`warm:${baseUrl}`),
     logInfo: (message) => calls.push(`info:${message}`),
@@ -83,6 +88,7 @@ test('registerAppIpcHandlers registers core invoke handlers and drag listener', 
   assert.equal(handles.has('actions:search'), true);
   assert.equal(handles.has('view:refresh'), true);
   assert.equal(handles.has('nevermind:auth-status'), true);
+  assert.equal(handles.has('nevermind:debug-status'), true);
   assert.equal(handles.has('camera:request-access'), true);
   assert.equal(handles.has('logs:write'), true);
   assert.equal(listeners.has('drag:file'), true);
@@ -128,6 +134,17 @@ test('registerAppIpcHandlers redacts auth status logs and keeps sign-in failures
     ok: false,
     error: 'Unable to sign in',
   });
+});
+
+test('registerAppIpcHandlers exposes backend debug status', async () => {
+  const status = {
+    client: { environment: 'custom', baseUrl: 'https://preview.example' },
+    active: { environment: 'custom', baseUrl: 'https://preview.example' },
+    backend: { environment: 'preview', version: 'abc1234' },
+  };
+  const { handles } = createDeps({ getNevermindDebugStatus: () => status });
+
+  assert.deepEqual(await handles.get('nevermind:debug-status')?.({}), status);
 });
 
 test('registerAppIpcHandlers handles auth status and sign in side effects', async () => {

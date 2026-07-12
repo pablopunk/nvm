@@ -170,6 +170,11 @@ export type NevermindApi = {
     data?: unknown,
   ) => Promise<void>;
   getNevermindAuthStatus: () => Promise<{ authed: boolean; email?: string }>;
+  getNevermindDebugStatus: () => Promise<{
+    client: { environment: string; baseUrl: string };
+    active: { environment: string; baseUrl: string };
+    backend: { environment: string; version: string } | null;
+  }>;
   signInToNevermind: () => Promise<{
     ok: boolean;
     email?: string;

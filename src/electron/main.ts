@@ -1786,6 +1786,26 @@ function selectedNevermindEnvironment() {
   return selected;
 }
 
+function getNevermindDebugStatus() {
+  const client = selectedNevermindEnvironment();
+  const baseUrl = activeNevermindBaseUrl || client.baseUrl;
+  const manifest = currentNevermindCompatibilityManifest(baseUrl);
+  return {
+    client,
+    active: {
+      environment: nevermindEnvironmentForBaseUrl(baseUrl),
+      baseUrl,
+    },
+    backend:
+      manifest?.backend?.environment && manifest.backend.version
+        ? {
+            environment: manifest.backend.environment,
+            version: manifest.backend.version,
+          }
+        : null,
+  };
+}
+
 async function signInToSelectedNevermindEnvironment() {
   const selected = selectedNevermindEnvironment();
   const result = await signInToNevermind({
@@ -6404,6 +6424,7 @@ async function loadExtensions() {
           activeNevermindBaseUrl = value;
         },
         switchNevermindBackendEnvironment,
+        getNevermindDebugStatus,
         signInToNevermind: signInToSelectedNevermindEnvironment,
         getPaletteHotkey,
         extensionShortcutRecords,
@@ -8021,6 +8042,7 @@ app.whenReady().then(async () => {
     normalizeHostViewResult,
     createDraftAiChat,
     getNevermindAuth,
+    getNevermindDebugStatus,
     setActiveNevermindBaseUrl: (baseUrl) => {
       activeNevermindBaseUrl = baseUrl;
     },

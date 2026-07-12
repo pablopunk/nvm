@@ -42,6 +42,11 @@ export type AppIpcHandlersDeps = {
   normalizeHostViewResult: (result: unknown) => unknown;
   createDraftAiChat: (prompt: string) => unknown;
   getNevermindAuth: () => Promise<{ baseUrl?: string; email?: string } | null>;
+  getNevermindDebugStatus: () => {
+    client: { environment: string; baseUrl: string };
+    active: { environment: string; baseUrl: string };
+    backend: { environment: string; version: string } | null;
+  };
   setActiveNevermindBaseUrl: (baseUrl: string | null) => void;
   warmNevermindCompatibilityCache: (baseUrl: string) => unknown;
   logInfo: (message: string, data?: unknown, context?: unknown) => unknown;
@@ -181,6 +186,9 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     );
     return auth ? { authed: true, email: auth.email } : { authed: false };
   });
+  ipcHandleMeasured('nevermind:debug-status', () =>
+    deps.getNevermindDebugStatus(),
+  );
   ipcHandleMeasured('nevermind:sign-in', async () => {
     const result = await deps.signInToNevermind();
     if (result.ok) {
