@@ -1,18 +1,24 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { and, eq, gt, isNull, isNotNull } from 'drizzle-orm';
 import { db } from '../../../../db/client';
 import { users, deviceCodes } from '../../../../db/schema';
 import { createApiToken } from '../../../../lib/tokens';
 import { killSwitchResponse, backendKillSwitchEnabled, requestIdFromHeaders } from '../../../../lib/compatibility';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../../lib/ratelimit';
+import { safeJsonBody } from '../../../../lib/validation';
+
+const exchangeSchema = z.object({ code: z.string().min(1) });
 
 export const POST: APIRoute = async ({ request }) => {
   const requestId = requestIdFromHeaders(request.headers);
   if (backendKillSwitchEnabled('auth_device')) return killSwitchResponse('auth_device', 'Device authorization is temporarily disabled.', requestId);
   const decision = await rateLimitIp('auth', clientIp(request), 60, '1 m');
   if (!decision.ok) return tooManyRequests(decision);
-  const body = (await request.json().catch(() => ({}))) as { code?: string };
-  const code = (body.code ?? '').trim();
+
+  const parsed = await safeJsonBody(request, exchangeSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const code = parsed.data.code.trim();
   if (!code) return new Response('Missing code', { status: 400 });
 
   const [row] = await db

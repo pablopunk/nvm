@@ -1,9 +1,18 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
 import { requireSameOrigin } from '../../../lib/csrf';
 import { db } from '../../../db/client';
 import { creditLedger } from '../../../db/schema';
 import { recordAudit } from '../../../lib/audit';
+import { safeJsonBody } from '../../../lib/validation';
+
+const creditsSchema = z.object({
+  userId: z.string().uuid(),
+  delta: z.number().int(),
+  kind: z.enum(['free', 'paid']),
+  reason: z.string().min(1),
+});
 
 export const POST: APIRoute = async ({ request }) => {
   const originCheck = requireSameOrigin(request);
@@ -11,22 +20,22 @@ export const POST: APIRoute = async ({ request }) => {
 
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as { userId?: string; delta?: number; kind?: 'free' | 'paid'; reason?: string };
-  if (!body.userId || !Number.isFinite(body.delta) || !body.delta) return new Response('Missing userId or delta', { status: 400 });
-  const kind = body.kind === 'free' ? 'free' : 'paid';
-  const delta = Math.trunc(body.delta!);
+
+  const parsed = await safeJsonBody(request, creditsSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+
   await db.insert(creditLedger).values({
-    userId: body.userId,
-    delta,
-    kind,
-    reason: body.reason || 'admin_grant',
+    userId: parsed.data.userId,
+    delta: parsed.data.delta,
+    kind: parsed.data.kind,
+    reason: parsed.data.reason,
   });
   await recordAudit({
     actorUserId: actor.id,
     action: 'credits.granted',
     targetType: 'user',
-    targetId: body.userId,
-    meta: { delta, kind, reason: body.reason ?? null },
+    targetId: parsed.data.userId,
+    meta: { delta: parsed.data.delta, kind: parsed.data.kind, reason: parsed.data.reason },
   });
   return Response.json({ ok: true });
 };
