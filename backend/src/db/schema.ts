@@ -178,3 +178,52 @@ export const modelProviders = pgTable(
     index('model_providers_route_model_idx').on(t.routeSlot, t.modelId),
   ],
 );
+
+export const waitlistEntries = pgTable('waitlist_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  status: text('status').notNull().default('pending'),
+  source: text('source').notNull().default('marketing'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewerId: uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewNote: text('review_note'),
+  ipHash: text('ip_hash'),
+});
+
+export const invites = pgTable('invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  waitlistEntryId: uuid('waitlist_entry_id').references(() => waitlistEntries.id, { onDelete: 'set null' }),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  status: text('status').notNull().default('queued'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
+});
+
+export const emailOutbox = pgTable('email_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  inviteId: uuid('invite_id').notNull().references(() => invites.id, { onDelete: 'cascade' }),
+  recipient: text('recipient').notNull(),
+  templateVersion: text('template_version').notNull().default('invite-v1'),
+  idempotencyKey: text('idempotency_key').notNull().unique(),
+  status: text('status').notNull().default('queued'),
+  attempts: integer('attempts').notNull().default(0),
+  providerMessageId: text('provider_message_id'),
+  lastError: text('last_error'),
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const providerEvents = pgTable('provider_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  provider: text('provider').notNull(),
+  eventId: text('event_id').notNull(),
+  eventType: text('event_type').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('provider_events_provider_event_idx').on(t.provider, t.eventId)]);

@@ -64,6 +64,13 @@
       "when": 1783855246502,
       "tag": "0008_damp_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783877338363,
+      "tag": "0009_chilly_red_skull",
+      "breakpoints": true
     }
   ]
 }

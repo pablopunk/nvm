@@ -35,6 +35,15 @@ import Layout from '../layouts/Layout.astro';
           </a>
           <a class="button button--ghost" href="/docs">Read the docs →</a>
         </div>
+        <form class="waitlist-form" id="waitlist-form">
+          <label for="waitlist-email">Join the cloud &amp; AI early-access waitlist</label>
+          <div class="waitlist-form__row">
+            <input id="waitlist-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+            <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="waitlist-form__trap" />
+            <button class="button" type="submit">Join waitlist</button>
+          </div>
+          <small id="waitlist-status" class="muted">We’ll email you if access opens up.</small>
+        </form>
       </div>
 
       <figure class="landing-screenshot">
@@ -45,4 +54,14 @@ import Layout from '../layouts/Layout.astro';
       </figure>
     </section>
   </div>
+  <script is:inline>
+    const form = document.getElementById('waitlist-form');
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = document.getElementById('waitlist-status');
+      const response = await fetch('/api/waitlist', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+      status.textContent = response.ok ? 'If eligible, we’ll email you.' : 'The waitlist is temporarily closed. Please try again later.';
+      if (response.ok) form.querySelector('button')?.setAttribute('disabled', 'true');
+    });
+  </script>
 </Layout>
