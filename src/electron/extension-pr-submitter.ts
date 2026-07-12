@@ -1,357 +1,156 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import ts from 'typescript';
 
 export type ExtensionPrSubmitterDeps = {
-  execFileText: (
-    command: string,
-    args?: string[],
-    options?: { encoding?: string },
-  ) => Promise<string>;
+  execFileText: (command: string, args?: string[], options?: { encoding?: string }) => Promise<string>;
   extensionsDir: string;
   repoOwner: string;
   repoName: string;
   logInfo: (message: string, data?: unknown) => void;
   logWarn: (message: string, data?: unknown) => void;
 };
-
 export type GhStatus = { installed: boolean; authed: boolean };
-
 export type SubmitResult = { ok: boolean; message: string; prUrl?: string };
 
-function sourceExtensionSlug(filePath: string): string {
-  return path.basename(filePath, path.extname(filePath));
+type ParsedSource = { id: string; title: string; idStart: number; idEnd: number };
+
+function parseExtensionSource(source: string): ParsedSource | null {
+  const file = ts.createSourceFile('extension.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  let parsed: ParsedSource | null = null;
+  for (const statement of file.statements) {
+    if (!ts.isExportAssignment(statement) || statement.isExportEquals || !ts.isObjectLiteralExpression(statement.expression)) continue;
+    if (parsed) return null;
+    const properties = statement.expression.properties;
+    let id: ts.PropertyAssignment | undefined;
+    let title: ts.PropertyAssignment | undefined;
+    for (const property of properties) {
+      if (!ts.isPropertyAssignment(property) || property.name === undefined) continue;
+      if (property.name.kind !== ts.SyntaxKind.Identifier) continue;
+      const name = property.name.getText(file);
+      if (name === 'id') {
+        if (id || !ts.isStringLiteral(property.initializer)) return null;
+        id = property;
+      } else {
+        if (title || !ts.isStringLiteral(property.initializer)) return null;
+        title = property;
+      }
+    }
+    if (!id || !title) return null;
+    parsed = { id: (id.initializer as ts.StringLiteral).text, title: (title.initializer as ts.StringLiteral).text, idStart: id.initializer.getStart(file), idEnd: id.initializer.getEnd() };
+  }
+  return parsed;
 }
 
-function createExtensionNameFromSlug(slug: string): string {
-  return slug
-    .split(/[-_]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
+export function extensionSlug(title: string): string | null {
+  const ascii = title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  let slug = ascii.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!slug) return null;
+  if (/^\d/.test(slug)) slug = `extension-${slug}`;
+  return /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(slug) ? slug : null;
 }
 
-function createFactoryFunctionName(slug: string): string {
-  return `create${createExtensionNameFromSlug(slug)}Extension`;
+export function factoryName(slug: string): string {
+  return `create${slug.split('-').map((part) => part[0].toUpperCase() + part.slice(1)).join('')}Extension`;
 }
 
-function createExtensionModuleTitle(source: string, slug: string): string {
-  const match = source.match(/title:\s*["'`]([^"'`]+)/);
-  return match ? match[1] : slug;
+function readJsonContent(raw: string): { content: string; sha: string } {
+  const parsed = JSON.parse(raw);
+  return { content: Buffer.from(parsed.content, 'base64').toString('utf8'), sha: parsed.sha };
 }
 
 export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
   let cachedGhStatus: GhStatus | null = null;
-
+  const gh = (args: string[]) => deps.execFileText('gh', args);
   async function probeGh(): Promise<GhStatus> {
     if (cachedGhStatus) return cachedGhStatus;
-    try {
-      await deps.execFileText('gh', ['--version']);
-    } catch {
-      cachedGhStatus = { installed: false, authed: false };
-      return cachedGhStatus;
-    }
-    try {
-      await deps.execFileText('gh', ['auth', 'status']);
-      cachedGhStatus = { installed: true, authed: true };
-    } catch {
-      cachedGhStatus = { installed: true, authed: false };
-    }
-    return cachedGhStatus;
+    try { await gh(['--version']); } catch { return (cachedGhStatus = { installed: false, authed: false }); }
+    try { await gh(['auth', 'status']); return (cachedGhStatus = { installed: true, authed: true }); }
+    catch { return (cachedGhStatus = { installed: true, authed: false }); }
   }
-
-  async function getMainSha(owner: string, repo: string): Promise<string> {
-    const stdout = await deps.execFileText('gh', [
-      'api',
-      `repos/${owner}/${repo}/branches/main`,
-      '--jq',
-      '.commit.sha',
-    ]);
-    return (stdout as string).trim();
+  async function getContent(owner: string, repo: string, file: string, ref: string) {
+    return readJsonContent(await gh(['api', `repos/${owner}/${repo}/contents/${file}?ref=${encodeURIComponent(ref)}`]));
   }
-
-  async function fetchIndexTs(
-    targetOwner: string,
-  ): Promise<{ content: string; sha: string }> {
-    const stdout = await deps.execFileText('gh', [
-      'api',
-      `repos/${targetOwner}/${deps.repoName}/contents/src/electron/extensions/index.ts`,
-    ]);
-    const parsed = JSON.parse(stdout as string);
-    return {
-      content: Buffer.from(parsed.content, 'base64').toString('utf-8'),
-      sha: parsed.sha,
-    };
+  function updateIndex(index: string, slug: string): string {
+    const fn = factoryName(slug);
+    const importLine = `import { ${fn} } from './${slug}';`;
+    const imports = [...index.matchAll(/^import .*;\s*$/gm)];
+    const lastImport = imports.at(-1);
+    const withImport = lastImport
+      ? `${index.slice(0, (lastImport.index ?? 0) + lastImport[0].length)}\n${importLine}${index.slice((lastImport.index ?? 0) + lastImport[0].length)}`
+      : `${importLine}\n${index}`;
+    const marker = /INTERNAL_EXTENSION_FACTORIES\s*:\s*Array<[^>]+>\s*=\s*\[/;
+    const match = marker.exec(withImport);
+    if (!match) return withImport;
+    const at = match.index + match[0].length;
+    return `${withImport.slice(0, at)}\n  ${fn},${withImport.slice(at)}`;
   }
-
-  function findClosingBracketAfter(text: string, startPos: number): number {
-    let depth = 0;
-    for (let i = startPos; i < text.length; i++) {
-      if (text[i] === '[') depth++;
-      else if (text[i] === ']') {
-        depth--;
-        if (depth === 0) return i;
-      }
-    }
-    return -1;
+  function hasIndexCollision(index: string, slug: string): boolean {
+    const fn = factoryName(slug);
+    return new RegExp(`(?:from ['\"]\\./${slug}['\"]|\\b${fn}\\b|['\"]${slug}['\"])`).test(index);
   }
-
-  function spliceIntoIndexTs(
-    currentIndex: string,
-    slug: string,
-  ): { updated: string; importLine: string; factoryFunc: string } {
-    const factoryFunc = createFactoryFunctionName(slug);
-    const importLine = `import { ${factoryFunc} } from './${slug}';`;
-
-    const escapedFactoryFunc = factoryFunc.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      '\\$&',
-    );
-    if (new RegExp(`\\b${escapedFactoryFunc}\\b`).test(currentIndex)) {
-      return { updated: currentIndex, importLine, factoryFunc };
-    }
-
-    const lastImportMatch = currentIndex.match(
-      /^import\s+\{[^}]+\}\s+from\s+'[^']+';?$/gm,
-    );
-    let withImport: string;
-    if (lastImportMatch && lastImportMatch.length > 0) {
-      const lastLine = lastImportMatch[lastImportMatch.length - 1];
-      const insertAt = currentIndex.lastIndexOf(lastLine) + lastLine.length;
-      withImport =
-        currentIndex.slice(0, insertAt) +
-        `\n${importLine}` +
-        currentIndex.slice(insertAt);
-    } else {
-      withImport = `${importLine}\n${currentIndex}`;
-    }
-
-    const factoriesStartMatch = withImport.match(
-      /\bINTERNAL_EXTENSION_FACTORIES\s*:\s*Array<[^>]*>\s*=\s*\[/,
-    );
-    if (!factoriesStartMatch)
-      return { updated: withImport, importLine, factoryFunc };
-
-    const openBracketIdx =
-      factoriesStartMatch.index! + factoriesStartMatch[0].length - 1;
-    const closeBracketIdx = findClosingBracketAfter(withImport, openBracketIdx);
-    if (closeBracketIdx < 0)
-      return { updated: withImport, importLine, factoryFunc };
-
-    const updated =
-      withImport.slice(0, closeBracketIdx) +
-      `  ${factoryFunc},\n` +
-      withImport.slice(closeBracketIdx);
-    return { updated, importLine, factoryFunc };
-  }
-
   async function submitExtensionPr(action: any): Promise<SubmitResult> {
     const targetAction = action.targetAction || action;
-    if (
-      !(
-        ['extension-root-item', 'extension-action'].includes(
-          targetAction?.kind,
-        ) && targetAction?.removable
-      )
-    ) {
-      return {
-        ok: false,
-        message: 'Only generated extensions can be submitted as PRs',
-      };
-    }
-
+    if (!['extension-root-item', 'extension-action'].includes(targetAction?.kind) || !targetAction?.removable) return { ok: false, message: 'Only generated extensions can be submitted as PRs' };
     const extensionFile = targetAction?.extensionFile;
-    if (!extensionFile)
-      return { ok: false, message: 'Extension file not found' };
-
-    const resolvedExtensionsDir = path.resolve(deps.extensionsDir);
+    if (!extensionFile) return { ok: false, message: 'Extension file not found' };
+    const baseDir = path.resolve(deps.extensionsDir);
     const filePath = path.resolve(path.join(deps.extensionsDir, extensionFile));
-
-    if (!filePath.startsWith(resolvedExtensionsDir + path.sep)) {
-      return {
-        ok: false,
-        message: 'Extension must be inside extensions directory',
-      };
-    }
-
+    if (!filePath.startsWith(`${baseDir}${path.sep}`)) return { ok: false, message: 'Extension must be inside extensions directory' };
     let source: string;
-    try {
-      source = await fs.readFile(filePath, 'utf-8');
-    } catch {
-      return {
-        ok: false,
-        message: `Cannot read extension file: ${extensionFile}`,
-      };
-    }
-
-    const slug = sourceExtensionSlug(filePath);
-    const title =
-      targetAction.title || createExtensionModuleTitle(source, slug);
-
-    try {
-      await deps.execFileText('gh', ['auth', 'status']);
-    } catch {
-      return {
-        ok: false,
-        message: 'Sign in to GitHub CLI to submit extensions (gh auth login)',
-      };
-    }
-
+    try { source = await fs.readFile(filePath, 'utf8'); } catch { return { ok: false, message: `Cannot read extension file: ${extensionFile}` }; }
+    const parsed = parseExtensionSource(source);
+    if (!parsed) return { ok: false, message: 'Extension must export one object with static top-level id and title strings' };
+    const slug = extensionSlug(parsed.title);
+    if (!slug) return { ok: false, message: 'Extension title must contain ASCII letters or numbers' };
+    const fn = factoryName(slug);
+    const promotedSource = `${source.slice(0, parsed.idStart)}'${slug}'${source.slice(parsed.idEnd)}`;
     const { repoOwner, repoName } = deps;
-
+    try { await gh(['auth', 'status']); } catch { return { ok: false, message: 'Sign in to GitHub CLI to submit extensions (gh auth login)' }; }
     let targetOwner: string;
-    try {
-      const currentUserRaw = await deps.execFileText('gh', [
-        'api',
-        'user',
-        '--jq',
-        '.login',
-      ]);
-      targetOwner = (currentUserRaw as string).trim();
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.current-user-failed', { error });
-      return {
-        ok: false,
-        message:
-          'Failed to resolve GitHub account. Check your GitHub CLI setup.',
-      };
-    }
-
-    if (targetOwner !== repoOwner) {
-      try {
-        await deps.execFileText('gh', [
-          'repo',
-          'fork',
-          `${repoOwner}/${repoName}`,
-        ]);
-      } catch (error) {
-        deps.logWarn('extension-pr-submitter.fork-failed', { error });
-        return {
-          ok: false,
-          message: 'Failed to fork repository. Check your GitHub CLI setup.',
-        };
-      }
-    }
+    try { targetOwner = (await gh(['api', 'user', '--jq', '.login'])).trim(); } catch (error) { deps.logWarn('extension-pr-submitter.current-user-failed', { error }); return { ok: false, message: 'Failed to resolve GitHub account. Check your GitHub CLI setup.' }; }
 
     let mainSha: string;
+    let tree: any;
+    let index: { content: string; sha: string };
     try {
-      mainSha = await getMainSha(repoOwner, repoName);
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.main-sha-failed', { error });
-      return {
-        ok: false,
-        message: 'Failed to fetch repository metadata.',
-      };
+      mainSha = (await gh(['api', `repos/${repoOwner}/${repoName}/branches/main`, '--jq', '.commit.sha'])).trim();
+      tree = JSON.parse(await gh(['api', `repos/${repoOwner}/${repoName}/git/trees/${mainSha}?recursive=1`])).tree || [];
+      index = await getContent(repoOwner, repoName, 'src/electron/extensions/index.ts', mainSha);
+    } catch (error) { deps.logWarn('extension-pr-submitter.preflight-read-failed', { error }); return { ok: false, message: 'Failed to read the upstream repository at main.' }; }
+    const outputPath = `src/electron/extensions/${slug}.ts`;
+    if (tree.some((entry: any) => entry.path === outputPath) || hasIndexCollision(index.content, slug)) return { ok: false, message: `Extension name collision: ${slug} already exists` };
+    const sourceEntries = tree.filter((entry: any) => entry.type === 'blob' && /^src\/electron\/extensions\/[^/]+\.ts$/.test(entry.path));
+    for (const entry of sourceEntries) {
+      try {
+        const blob = JSON.parse(await gh(['api', `repos/${repoOwner}/${repoName}/git/blobs/${entry.sha}`]));
+        const existing = parseExtensionSource(Buffer.from(blob.content, blob.encoding || 'base64').toString('utf8'));
+        if (existing?.id === slug) return { ok: false, message: `Extension ID collision: ${slug} already exists` };
+      } catch (error) {
+        deps.logWarn('extension-pr-submitter.source-scan-failed', { error, path: entry.path });
+        return { ok: false, message: 'Failed to scan existing built-in extensions.' };
+      }
     }
-
     const branchName = `submit-extension-${slug}`;
-
     try {
-      await deps.execFileText('gh', [
-        'api',
-        '--method',
-        'POST',
-        `repos/${targetOwner}/${repoName}/git/refs`,
-        '-f',
-        `ref=refs/heads/${branchName}`,
-        '-f',
-        `sha=${mainSha}`,
-      ]);
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.branch-failed', { error });
-      return {
-        ok: false,
-        message: `Failed to create branch. The branch "${branchName}" may already exist.`,
-      };
+      const existingRef = await gh(['api', `repos/${targetOwner}/${repoName}/git/refs/heads/${branchName}`]);
+      if (existingRef.trim()) return { ok: false, message: `Submission branch "${branchName}" already exists; choose a different title` };
     }
-
-    try {
-      await deps.execFileText('gh', [
-        'api',
-        '--method',
-        'PUT',
-        `repos/${targetOwner}/${repoName}/contents/src/electron/extensions/${slug}.ts`,
-        '-f',
-        `message=Add extension ${title}`,
-        '-f',
-        `content=${Buffer.from(source).toString('base64')}`,
-        '-f',
-        `branch=${branchName}`,
-      ]);
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.extension-upload-failed', {
-        error,
-      });
-      return {
-        ok: false,
-        message: 'Failed to upload extension file.',
-      };
+    catch { /* expected 404 */ }
+    if (targetOwner !== repoOwner) {
+      try { await gh(['repo', 'fork', `${repoOwner}/${repoName}`]); } catch (error) { deps.logWarn('extension-pr-submitter.fork-failed', { error }); return { ok: false, message: 'Failed to fork repository. Check your GitHub CLI setup.' }; }
     }
-
-    let currentIndex: string;
-    let indexSha: string;
-    try {
-      const index = await fetchIndexTs(targetOwner);
-      currentIndex = index.content;
-      indexSha = index.sha;
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.index-fetch-failed', { error });
-      return {
-        ok: false,
-        message: 'Failed to fetch extension barrel index.',
-      };
-    }
-
-    const { updated: updatedIndex } = spliceIntoIndexTs(currentIndex, slug);
-
-    try {
-      await deps.execFileText('gh', [
-        'api',
-        '--method',
-        'PUT',
-        `repos/${targetOwner}/${repoName}/contents/src/electron/extensions/index.ts`,
-        '-f',
-        'message=Register extension in barrel',
-        '-f',
-        `content=${Buffer.from(updatedIndex).toString('base64')}`,
-        '-f',
-        `sha=${indexSha}`,
-        '-f',
-        `branch=${branchName}`,
-      ]);
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.index-update-failed', { error });
-      return {
-        ok: false,
-        message: 'Failed to update extension barrel index.',
-      };
-    }
-
+    try { await gh(['api', '--method', 'POST', `repos/${targetOwner}/${repoName}/git/refs`, '-f', `ref=refs/heads/${branchName}`, '-f', `sha=${mainSha}`]); }
+    catch (error) { deps.logWarn('extension-pr-submitter.branch-failed', { error }); return { ok: false, message: `Failed to create branch. The branch "${branchName}" may already exist.` }; }
+    try { await gh(['api', '--method', 'PUT', `repos/${targetOwner}/${repoName}/contents/${outputPath}`, '-f', `message=Add extension ${parsed.title}`, '-f', `content=${Buffer.from(promotedSource).toString('base64')}`, '-f', `branch=${branchName}`]); }
+    catch (error) { deps.logWarn('extension-pr-submitter.extension-upload-failed', { error }); return { ok: false, message: 'Failed to upload extension file.' }; }
+    try { await gh(['api', '--method', 'PUT', `repos/${targetOwner}/${repoName}/contents/src/electron/extensions/index.ts`, '-f', 'message=Register extension in barrel', '-f', `content=${Buffer.from(updateIndex(index.content, slug)).toString('base64')}`, '-f', `sha=${index.sha}`, '-f', `branch=${branchName}`]); }
+    catch (error) { deps.logWarn('extension-pr-submitter.index-update-failed', { error }); return { ok: false, message: 'Failed to update extension barrel index.' }; }
     let prUrl: string;
-    try {
-      const prUrlRaw = await deps.execFileText('gh', [
-        'pr',
-        'create',
-        '--repo',
-        `${repoOwner}/${repoName}`,
-        '--head',
-        targetOwner === repoOwner ? branchName : `${targetOwner}:${branchName}`,
-        '--title',
-        `Add extension: ${title}`,
-        '--body',
-        `Submitted from Nevermind. Adds the \`${title}\` extension under \`src/electron/extensions/${slug}.ts\`.`,
-      ]);
-      prUrl = (prUrlRaw as string).trim();
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.pr-create-failed', { error });
-      return {
-        ok: false,
-        message: 'Failed to create pull request.',
-      };
-    }
-
-    deps.logInfo('extension-pr-submitter.success', { slug, title, prUrl });
-
+    try { prUrl = (await gh(['pr', 'create', '--repo', `${repoOwner}/${repoName}`, '--head', targetOwner === repoOwner ? branchName : `${targetOwner}:${branchName}`, '--title', `Add extension: ${parsed.title}`, '--body', `Submitted from Nevermind. Adds the \`${parsed.title}\` extension under \`${outputPath}\`.`])).trim(); }
+    catch (error) { deps.logWarn('extension-pr-submitter.pr-create-failed', { error }); return { ok: false, message: 'Failed to create pull request.' }; }
+    deps.logInfo('extension-pr-submitter.success', { slug, title: parsed.title, prUrl, factory: fn });
     return { ok: true, message: 'PR opened', prUrl };
   }
-
   return { submitExtensionPr, probe: probeGh };
 }

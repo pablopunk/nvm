@@ -4,8 +4,18 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   createExtensionPrSubmitter,
+  extensionSlug,
+  factoryName,
   type ExtensionPrSubmitterDeps,
 } from './extension-pr-submitter';
+
+test('promotion naming is deterministic and factory-safe', () => {
+  assert.strictEqual(extensionSlug('Screenshots'), 'screenshots');
+  assert.strictEqual(extensionSlug('My résumé!'), 'my-resume');
+  assert.strictEqual(extensionSlug('123 Tools'), 'extension-123-tools');
+  assert.strictEqual(extensionSlug('你好'), null);
+  assert.strictEqual(factoryName('extension-123-tools'), 'createExtension123ToolsExtension');
+});
 
 function createDeps(
   overrides: Partial<ExtensionPrSubmitterDeps> & {
