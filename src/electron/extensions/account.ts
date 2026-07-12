@@ -163,6 +163,29 @@ export function createAccountExtension() {
     };
   }
 
+  async function backendStatusItem() {
+    const status = extensionContext.getNevermindDebugStatus();
+    const backend = status.backend
+      ? `${status.backend.environment} (${status.backend.version})`
+      : 'unavailable';
+    const serverEnvironment =
+      status.backend?.environment === 'preview'
+        ? 'pr_preview'
+        : status.backend?.environment;
+    const mismatch =
+      Boolean(status.backend) &&
+      serverEnvironment !== status.active.environment;
+    return {
+      id: 'account-backend-status',
+      actionId: 'account-backend-status',
+      title: `Nevermind: Backend Status${mismatch ? ' — mismatch' : ''}`,
+      subtitle: `Client ${status.client.environment} · Active ${status.active.environment} · ${status.active.baseUrl} · Server ${backend}`,
+      icon: mismatch ? 'warning' : 'globe',
+      score: 6,
+      aliases: ['debug', 'backend status', 'environment status'],
+    };
+  }
+
   async function byoKeyItem() {
     const byo = await getByoKey();
     if (!byo) return null;
@@ -196,13 +219,21 @@ export function createAccountExtension() {
     title: 'Nevermind Account',
     permissions: [] as const,
     searchItems: async () => {
-      const items = [await accountItem(), backendEnvironmentItem()];
+      const items = [
+        await accountItem(),
+        backendEnvironmentItem(),
+        await backendStatusItem(),
+      ];
       const byo = await byoKeyItem();
       if (byo) items.push(byo);
       return items;
     },
     rootItems: async () => {
-      const items = [await accountItem(), backendEnvironmentItem()];
+      const items = [
+        await accountItem(),
+        backendEnvironmentItem(),
+        await backendStatusItem(),
+      ];
       const byo = await byoKeyItem();
       if (byo) items.push(byo);
       return items;

@@ -103,6 +103,7 @@ const api: NevermindApi = {
   log: (level, message, data) =>
     invokeMeasured('logs:write', level, message, data),
   getNevermindAuthStatus: () => invokeMeasured('nevermind:auth-status'),
+  getNevermindDebugStatus: () => invokeMeasured('nevermind:debug-status'),
   signInToNevermind: () => invokeMeasured('nevermind:sign-in'),
   onNevermindAuthChanged: (callback) => {
     const listener = (

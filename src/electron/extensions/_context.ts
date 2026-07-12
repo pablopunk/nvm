@@ -35,6 +35,11 @@ export const extensionContext: {
     environment: 'production' | 'pr_preview' | 'custom';
     baseUrl?: string;
   }) => Promise<{ ok: boolean; message: string }>;
+  getNevermindDebugStatus: () => {
+    client: { environment: string; baseUrl: string };
+    active: { environment: string; baseUrl: string };
+    backend: { environment: string; version: string } | null;
+  };
   signInToNevermind: () => Promise<
     | { ok: true; auth: { email: string; baseUrl: string } }
     | { ok: false; error: string }

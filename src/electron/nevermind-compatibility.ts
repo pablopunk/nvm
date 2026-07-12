@@ -6,6 +6,10 @@ import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
 
 export type NevermindCompatibilityManifest = {
+  backend?: {
+    environment?: string;
+    version?: string;
+  };
   client?: {
     compatible?: boolean;
     unsupportedReason?: string | null;
