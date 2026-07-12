@@ -219,7 +219,7 @@ export async function handleDedup(
         responseHeaders: null,
         upstreamStatus: null,
         completedAt: null,
-      }).where(and(eq(requestDedup.id, existing.id), eq(requestDedup.requestId, existing.requestId))).returning();
+      }).where(and(eq(requestDedup.id, existing.id), eq(requestDedup.requestId, existing.requestId!))).returning();
       if (!reclaimed) {
         return withRequestId(Response.json(
           { error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } },
@@ -437,7 +437,7 @@ async function tryUpstreamProviders(
 }
 
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
-  const requestId = randomUUID();
+  let requestId = randomUUID();
   if (backendKillSwitchEnabled('ai_proxy')) return killSwitchResponse('ai_proxy', 'AI proxy is temporarily disabled.', requestId);
   const startedAt = Date.now();
   const client = desktopClientFromRequest(cfg.request);
