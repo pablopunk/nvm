@@ -42,14 +42,49 @@ const state = !code
             <span id="approve-status" class="status"></span>
           </div>
         </form>
+        <div class="section" style="margin-top:16px">
+          <p class="muted">Or open directly in the desktop app:</p>
+          <a id="deep-link" class="button" href={`nvm://auth?code=${code}&base_url=${encodeURIComponent(new URL(Astro.request.url).origin)}`}>
+            Open in Nevermind
+          </a>
+          <p id="deep-link-fallback" style="display:none" class="muted">
+            The app didn't open automatically. Copy this code and paste it in Nevermind via ⌘K → "Log in":<br/>
+            <code>{code}</code>
+            <button class="button" id="copy-code-btn" style="margin-top:8px">Copy code</button>
+          </p>
+        </div>
         <script is:inline define:vars={{ code }}>
+          var deepLinkEl = document.getElementById('deep-link');
+          var fallbackEl = document.getElementById('deep-link-fallback');
+          var copyBtn = document.getElementById('copy-code-btn');
+
+          if (deepLinkEl) {
+            deepLinkEl.addEventListener('click', function (e) {
+              var didBlur = false;
+              var onBlur = function () { didBlur = true; };
+              window.addEventListener('blur', onBlur, { once: true });
+              setTimeout(function () {
+                window.removeEventListener('blur', onBlur);
+                if (!didBlur && fallbackEl) {
+                  fallbackEl.style.display = '';
+                }
+              }, 1500);
+            });
+          }
+          if (copyBtn) {
+            copyBtn.addEventListener('click', function () {
+              navigator.clipboard.writeText(code);
+              copyBtn.textContent = 'Copied!';
+            });
+          }
+
           document.getElementById('approve-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const label = e.target.elements.label.value;
-            const status = document.getElementById('approve-status');
+            var label = e.target.elements.label.value;
+            var status = document.getElementById('approve-status');
             status.className = 'status';
             status.textContent = 'Approving…';
-            const res = await fetch('/api/auth/device/approve', {
+            var res = await fetch('/api/auth/device/approve', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ code, label }),

@@ -54,12 +54,20 @@ import {
   verifyLocalFileToken,
 } from './file-utils';
 import {
+  consumeDeviceCode,
   getDefaultNevermindBaseUrl,
   getNevermindAuth,
+  isSigningIn,
   nevermindEnvironmentForBaseUrl,
   signInToNevermind,
   signOutFromNevermind,
 } from './nevermind-auth';
+import {
+  DEEP_LINK_SCHEME,
+  parseAuthDeepLink,
+  setDeepLinkLogger,
+  type ParsedAuthDeepLink,
+} from './deep-link';
 import {
   checkNevermindCompatibility,
   currentNevermindCompatibilityManifest,
@@ -184,6 +192,7 @@ import {
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 configureLogger(isDev);
+setDeepLinkLogger({ warn: logWarn });
 
 const updateManager = createUpdateManager(autoUpdater as any);
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
@@ -1700,6 +1709,71 @@ function patchUpdatesView() {
 }
 
 let activeNevermindBaseUrl: string | null = null;
+const bufferedDeepLinks: string[] = [];
+let appReady = false;
+
+async function handleAuthDeepLink(parsed: ParsedAuthDeepLink) {
+  const baseUrl = parsed.baseUrl || getDefaultNevermindBaseUrl();
+  logInfo('deep_link.handle', {
+    source: 'deep_link',
+    code: parsed.code.slice(0, 8),
+    baseUrl,
+    intent: parsed.intent,
+  });
+  try {
+    if (isSigningIn()) {
+      logWarn('deep_link.signin_in_progress', undefined, {
+        source: 'host',
+        scope: 'deep_link',
+      });
+      return;
+    }
+    const existing = await getNevermindAuth();
+    if (existing && parsed.intent !== 'reconnect') {
+      logInfo(
+        'deep_link.already_authed',
+        { email: existing.email },
+        { source: 'host', scope: 'deep_link' },
+      );
+      return;
+    }
+    const result = await consumeDeviceCode({ code: parsed.code, baseUrl });
+    if (result.ok) {
+      activeNevermindBaseUrl = result.auth.baseUrl;
+      warmNevermindCompatibilityCache(result.auth.baseUrl);
+      invalidateExtensionRootItems();
+      broadcastAuthChanged({ authed: true, email: result.auth.email });
+      logInfo(
+        'deep_link.auth_success',
+        { email: result.auth.email },
+        { source: 'host', scope: 'deep_link' },
+      );
+    } else {
+      logWarn(
+        'deep_link.auth_failed',
+        { error: (result as { error?: string }).error },
+        { source: 'host', scope: 'deep_link' },
+      );
+    }
+  } catch (err) {
+    logError('deep_link.handle.failed', err, {
+      source: 'host',
+      scope: 'deep_link',
+    });
+  }
+}
+
+function processBufferedDeepLink(rawUrl: string) {
+  const baseUrl = activeNevermindBaseUrl || getDefaultNevermindBaseUrl();
+  const parsed = parseAuthDeepLink(rawUrl, baseUrl);
+  if (!parsed) return;
+  void handleAuthDeepLink(parsed);
+}
+
+function flushBufferedDeepLinks() {
+  const links = bufferedDeepLinks.splice(0);
+  for (const link of links) processBufferedDeepLink(link);
+}
 
 const PRODUCTION_NEVERMIND_BASE_URL = 'https://api.nvm.fyi';
 const TRAILING_SLASH = /\/$/;
@@ -7904,6 +7978,7 @@ async function pickFormFieldPaths(event, input: any = {}) {
 }
 
 app.whenReady().then(async () => {
+  appReady = true;
   nativeTheme.themeSource = 'dark';
   prepareAppWindowPolicy();
   registerLocalFileProtocol();
@@ -7937,6 +8012,7 @@ app.whenReady().then(async () => {
   initExtensionContext({ nevermindAi });
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();
+  flushBufferedDeepLinks();
   registerActionShortcuts();
   await startClipboardWatcher();
   await appIndexService.startWatcher();
@@ -8020,6 +8096,18 @@ app.on('will-quit', () => {
 
 if (!isDev) {
   const gotLock = app.requestSingleInstanceLock();
-  if (gotLock) app.on('second-instance', () => paletteWindow.showPalette());
-  else app.quit();
+  if (gotLock) {
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    app.on('second-instance', (_event, argv) => {
+      paletteWindow.showPalette();
+      const deepLinkArg = argv?.find((arg: string) =>
+        arg.startsWith(`${DEEP_LINK_SCHEME}://`),
+      );
+      if (deepLinkArg && appReady) processBufferedDeepLink(deepLinkArg);
+    });
+  } else app.quit();
 }
+app.on('open-url', (_event, url) => {
+  if (appReady) processBufferedDeepLink(url);
+  else bufferedDeepLinks.push(url);
+});

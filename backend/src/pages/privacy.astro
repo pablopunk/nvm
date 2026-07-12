@@ -1,0 +1,48 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Privacy Policy · Nevermind">
+  <nav class="nav">
+    <a href="/">Home</a>
+    <a href="/docs">Docs</a>
+    <a href="/privacy" aria-current="page">Privacy</a>
+  </nav>
+
+  <h1>Privacy Policy</h1>
+  <p class="muted"><em><!-- HUMAN-REVIEW: Legal copy below is a draft placeholder and must be reviewed by a human before launch. --></em></p>
+
+  <div class="section card">
+    <p><em>Last updated: July 2026</em></p>
+
+    <h2>1. Data We Collect</h2>
+    <p>We collect only what is necessary to provide the Service:</p>
+    <ul>
+      <li>Email address (from authentication)</li>
+      <li>API usage data (model calls, token counts, timestamps)</li>
+      <li>Billing information (handled by Stripe — we do not store full payment details)</li>
+      <li>Anonymous usage analytics (opt-in via cookie banner)</li>
+    </ul>
+
+    <h2>2. How We Use Data</h2>
+    <p>Your data is used exclusively to operate the Service — to route API calls, track usage for billing, and enforce rate limits. We do not sell data or share it with third parties for their own purposes.</p>
+
+    <h2>3. Data Retention</h2>
+    <p>Usage data is retained while your account is active. API tokens and user records are deleted upon account deletion. Stripe billing records are retained for tax and accounting compliance. Anonymous analytics data is retained in aggregate.</p>
+
+    <h2>4. Your Rights</h2>
+    <p>You may request deletion of your account and associated data at any time from your <a href="/profile">profile</a> page. This includes cancellation of any active subscription and removal of your personal information.</p>
+
+    <h2>5. Cookies</h2>
+    <p>We use only essential session cookies for authentication. Anonymous analytics cookies are loaded only after your consent via the cookie banner.</p>
+
+    <h2>6. Third-Party Services</h2>
+    <p>We use the following third-party services:</p>
+    <ul>
+      <li><strong>Stripe</strong> — payment processing (<a href="https://stripe.com/privacy">privacy policy</a>)</li>
+      <li><strong>WorkOS</strong> — authentication (<a href="https://workos.com/privacy-policy">privacy policy</a>)</li>
+    </ul>
+
+    <h2>7. Contact</h2>
+    <p>For privacy inquiries, open an issue at <a href="https://github.com/pablopunk/nvm">github.com/pablopunk/nvm</a>.</p>
+  </div>
+</Layout>

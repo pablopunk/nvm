@@ -37,6 +37,13 @@ mac:
   entitlementsInherit: build/entitlements.mac.inherit.plist
   extendInfo:
     NSCameraUsageDescription: Nevermind needs camera access for extensions that display a live camera view.
+    CFBundleURLTypes:
+      - CFBundleURLSchemes:
+        - nvm
+  protocols:
+    - name: nvm
+      schemes:
+        - nvm
   artifactName: '${productName}-${version}-mac-${arch}.${ext}'
 linux:
   icon: build/Icon.icon/Assets/icon.png
@@ -51,10 +58,15 @@ linux:
       arch:
         - x64
         - arm64
+  mimeTypes:
+    - x-scheme-handler/nvm
   artifactName: '${productName}-${version}-linux-${arch}.${ext}'
 win:
   target:
     - nsis
     - portable
+  nsis:
+    perMachine: false
+    protocol: nvm
   artifactName: '${productName}-${version}-win-${arch}.${ext}'
 electronUpdaterCompatibility: '>=2.16'

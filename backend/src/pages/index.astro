@@ -3,7 +3,7 @@ import { Download } from '@lucide/astro';
 import LandingAccount from '../components/LandingAccount.astro';
 import Layout from '../layouts/Layout.astro';
 ---
-<Layout title="Nevermind" width="wide">
+<Layout title="Nevermind" width="wide" showHeader={false}>
   <div class="landing-shell">
     <header class="landing-nav" aria-label="Primary navigation">
       <a class="landing-brand" href="/" aria-label="Nevermind home">
@@ -11,7 +11,9 @@ import Layout from '../layouts/Layout.astro';
         <span>Nevermind</span>
       </a>
       <nav class="landing-nav__links" aria-label="Product links">
-        <a href="https://github.com/pablopunk/nvm/releases"><Download size={14} /> Get the latest release</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/docs">Docs</a>
+        <a href="https://github.com/pablopunk/nvm/releases">Releases</a>
       </nav>
       <LandingAccount placement="nav" server:defer>
         <a class="button" href="/api/auth/signin" slot="fallback">Sign in</a>
@@ -23,16 +25,22 @@ import Layout from '../layouts/Layout.astro';
         <h1 class="landing-hero__title">
           <img src="/wordmark.png" alt="Nevermind" class="landing-wordmark" />
         </h1>
-        <p class="landing-hero__lede"><em>A command palette that extends itself.</em></p>
+        <p class="landing-hero__eyebrow">AI-native command palette for macOS, Windows & Linux</p>
+        <p class="landing-hero__lede">
+          A command palette that builds itself. Tell it what you need — a screenshot tool, a camera overlay, a clipboard search — and it writes the extension on the spot. Free to use. No coding required.
+        </p>
         <div class="landing-actions">
-          <a class="button button--primary" href="https://github.com/pablopunk/nvm/releases"><Download size={14} /> Get the latest release</a>
+          <a class="button button--primary button--lg" href="https://github.com/pablopunk/nvm/releases">
+            <Download size={16} /> Download for free
+          </a>
+          <a class="button button--ghost" href="/docs">Read the docs →</a>
         </div>
       </div>
 
       <figure class="landing-screenshot">
         <img src="/screenshot.jpg" alt="Nevermind command palette showing AI-built Screenshot and Open Camera extensions" />
         <figcaption>
-          In the screenshot above, Screenshots and Open Camera were extensions done by our AI. Not builtin. That's all you need to know.
+          The screenshot and camera tools above were created by telling Nevermind what to build — not by writing code.
         </figcaption>
       </figure>
     </section>
