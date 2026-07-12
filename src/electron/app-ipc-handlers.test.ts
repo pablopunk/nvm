@@ -5,8 +5,11 @@ import {
   registerAppIpcHandlers,
 } from './app-ipc-handlers';
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: test harness creates many stubs
 function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
+  // biome-ignore lint/suspicious/noExplicitAny: test harness uses any for flexibility
   const handles = new Map<string, (event: any, ...args: any[]) => unknown>();
+  // biome-ignore lint/suspicious/noExplicitAny: test harness uses any for flexibility
   const listeners = new Map<string, (...args: any[]) => unknown>();
   const calls: string[] = [];
   const deps: AppIpcHandlersDeps = {
@@ -70,12 +73,14 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     processPlatform: 'darwin',
     getCameraMediaAccessStatus: () => 'granted',
     extensionWindowManager: { getState: (id) => ({ id }) },
+    // biome-ignore lint/style/useNamingConvention: Electron API class name convention
     BrowserWindow: {
       fromWebContents: () => ({ close: () => calls.push('close-window') }),
     },
     logError: (message) => calls.push(`error:${message}`),
     logWarn: (message) => calls.push(`warn:${message}`),
     loggerDebug: (message) => calls.push(`debug:${message}`),
+    probeGh: async () => ({ installed: true, authed: true }),
     ...overrides,
   };
   registerAppIpcHandlers(deps);

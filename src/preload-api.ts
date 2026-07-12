@@ -175,6 +175,7 @@ export type NevermindApi = {
     active: { environment: string; baseUrl: string };
     backend: { environment: string; version: string } | null;
   }>;
+  getGhStatus: () => Promise<{ installed: boolean; authed: boolean }>;
   signInToNevermind: () => Promise<{
     ok: boolean;
     email?: string;

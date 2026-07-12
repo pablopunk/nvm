@@ -347,7 +347,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     }
     if (result.toast) {
       setToast(result.toast);
-      window.setTimeout(() => setToast(null), 2_000);
+      window.setTimeout(() => setToast(null), 2000);
     }
   }
 
@@ -546,6 +546,10 @@ export function App() {
   const extensionViewBackStack = extensionNavigation.backStack;
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
+  const [ghStatus, setGhStatus] = useState<{
+    installed: boolean;
+    authed: boolean;
+  }>({ installed: false, authed: false });
   const [toast, setToast] = useState<{
     message: string;
     tone?: 'default' | 'error';
@@ -602,7 +606,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!extensionView?.refresh?.id || !extensionView.refresh.intervalMs)
+    if (!(extensionView?.refresh?.id && extensionView.refresh.intervalMs))
       return;
     const viewKey = viewIdentity(extensionView);
     const refreshId = extensionView.refresh.id;
@@ -626,8 +630,7 @@ export function App() {
           () => window.nvm.refreshView({ id: refreshId, viewId: current.id }),
         );
         if (
-          !result?.skipped &&
-          !cancelled &&
+          !(result?.skipped || cancelled) &&
           viewIdentity(extensionViewRef.current) === viewKey
         )
           await handleViewActionResult(result, 'replace');
@@ -665,14 +668,14 @@ export function App() {
   useLayoutEffect(() => {
     const card = resultsListRef.current;
     if (!card) return;
-    const LOADING_BORDER_MS_PER_PX = 0.8;
+    const LoadingBorderMsPerPx = 0.8;
     const updateDuration = () => {
       const rect = card.getBoundingClientRect();
       const perimeter = (rect.width + rect.height) * 2;
       if (!perimeter) return;
       card.style.setProperty(
         '--loading-border-duration',
-        `${Math.round(perimeter * LOADING_BORDER_MS_PER_PX)}ms`,
+        `${Math.round(perimeter * LoadingBorderMsPerPx)}ms`,
       );
     };
     updateDuration();
@@ -696,7 +699,7 @@ export function App() {
       const activePane = palette.querySelector(
         '.results',
       ) as HTMLElement | null;
-      if (!searchRow || !activePane) return;
+      if (!(searchRow && activePane)) return;
       const paletteRect = palette.getBoundingClientRect();
       const top = searchRow.getBoundingClientRect().bottom - paletteRect.top;
       const bottom =
@@ -721,6 +724,9 @@ export function App() {
     window.nvm.getNevermindAuthStatus().then((status) => {
       if (!cancelled) setNevermindAuthed(status.authed);
     });
+    window.nvm.getGhStatus().then((status) => {
+      if (!cancelled) setGhStatus(status);
+    });
     const stop = window.nvm.onNevermindAuthChanged((status) =>
       setNevermindAuthed(status.authed),
     );
@@ -735,8 +741,9 @@ export function App() {
       const input = inputRef.current;
       if (!input) return;
       input.focus();
-      if (!input.readOnly) input.select();
-      else input.setSelectionRange(input.value.length, input.value.length);
+      if (input.readOnly)
+        input.setSelectionRange(input.value.length, input.value.length);
+      else input.select();
     };
 
     const stopShown = window.nvm.onShown(() => {
@@ -998,7 +1005,7 @@ export function App() {
   }, [extensionView]);
 
   useEffect(() => {
-    if (!pendingShortcutReveal || !extensionView) return;
+    if (!(pendingShortcutReveal && extensionView)) return;
     const frame = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         window.nvm.shortcutReady();
@@ -1049,7 +1056,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!extensionView?.aiChat && !siblingViews.some((view) => view.aiChat))
+    if (!(extensionView?.aiChat || siblingViews.some((view) => view.aiChat)))
       return;
     requestAnimationFrame(() => {
       aiChat.messagesRef.current?.scrollTo({
@@ -1226,15 +1233,15 @@ export function App() {
   const activeSearchQuery =
     !shortcutFor && isFilterableChildOpen
       ? childQuery
-      : !isChildOpen
-        ? query
-        : '';
+      : isChildOpen
+        ? ''
+        : query;
   const activeSearchScope =
     !shortcutFor && isFilterableChildOpen
       ? `child:${actionSubmenuFor?.title || confirmRemoveFor?.id || confirmViewActionFor?.title || extensionItemOptionsFor?.id || optionsFor?.id || aliasFor?.id || extensionView?.id || extensionView?.title || shortcutManagerOpen}`
-      : !isChildOpen
-        ? 'root'
-        : '';
+      : isChildOpen
+        ? ''
+        : 'root';
 
   function setRootQuery(value: string) {
     queryHistoryIndexRef.current = null;
@@ -1288,7 +1295,7 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!isFilterableChildOpen && !shortcutFor) return;
+    if (!(isFilterableChildOpen || shortcutFor)) return;
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [
     confirmRemoveFor?.id,
@@ -1577,8 +1584,9 @@ export function App() {
       requestAnimationFrame(() => {
         const input = inputRef.current;
         input?.focus();
-        if (action.select !== false) input?.select();
-        else input?.setSelectionRange(nextQuery.length, nextQuery.length);
+        if (action.select === false)
+          input?.setSelectionRange(nextQuery.length, nextQuery.length);
+        else input?.select();
       });
       return;
     }
@@ -1667,7 +1675,7 @@ export function App() {
     const loadingNavigation = nativeAction ? 'root' : 'push';
     const definition = actionDefinition(action);
     const showsLoading =
-      !dismissedImmediately && !nativeAction && definition?.loading === 'view';
+      !(dismissedImmediately || nativeAction) && definition?.loading === 'view';
     try {
       markDebugPerformance('view-action.start', {
         actionType: action.type,
@@ -1719,8 +1727,7 @@ export function App() {
         showsLoading ? 'replace' : 'push',
       );
       if (
-        !dismissedImmediately &&
-        !action.keepPaletteOpen &&
+        !(dismissedImmediately || action.keepPaletteOpen) &&
         action.dismissAfterRun === 'auto' &&
         !result?.view &&
         !result?.patch &&
@@ -1853,11 +1860,11 @@ export function App() {
   }
 
   async function saveRecordedShortcut() {
-    if (!shortcutFor || !recordedShortcut) return;
+    if (!(shortcutFor && recordedShortcut)) return;
     if (shortcutFor.id === PALETTE_HOTKEY_ACTION_ID) {
       const result = await window.nvm.setPaletteHotkey(recordedShortcut);
       showToast(result.message, result.ok ? 'default' : 'error');
-      if (!result.ok && !result.spotlightConflict) return;
+      if (!(result.ok || result.spotlightConflict)) return;
       setShortcutFor(null);
       setOptionsFor(null);
       const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
@@ -2079,6 +2086,20 @@ export function App() {
       optionsFor?.kind || '',
     ) && optionsFor?.removable,
   );
+  const canSubmitExtensionPr = Boolean(
+    canDuplicateCreatedAction && ghStatus.installed,
+  );
+  const canSubmitExtensionPrHint =
+    canDuplicateCreatedAction && ghStatus.installed && !ghStatus.authed;
+  async function submitExtensionPrAction() {
+    if (!optionsFor) return;
+    setOptionsFor(null);
+    await runViewAction({
+      type: 'submitExtensionPr',
+      title: 'Submit as PR',
+      targetAction: optionsFor,
+    } as ExtensionViewAction);
+  }
   const canCustomizeAction = canCustomizeCommandAction(optionsFor);
   const canRemoveOptionsShortcut = Boolean(
     optionsFor &&
@@ -2110,9 +2131,11 @@ export function App() {
 
   useEffect(() => {
     if (
-      !extensionView?.onSelectionChange ||
-      !selectedValue ||
-      !allViewItems(extensionView).some((item) => item.id === selectedValue)
+      !(
+        extensionView?.onSelectionChange &&
+        selectedValue &&
+        allViewItems(extensionView).some((item) => item.id === selectedValue)
+      )
     )
       return;
     runViewAction({
@@ -2502,6 +2525,17 @@ export function App() {
         subtitle: 'Change the display name of this extension',
         onSelect: renameExtensionAction,
         show: canTweakWithAi,
+      },
+      {
+        value: 'option:submit-pr',
+        icon: <Zap size={18} />,
+        title: 'Submit as PR',
+        subtitle: canSubmitExtensionPrHint
+          ? 'Requires GitHub CLI (gh auth login)'
+          : 'Open a pull request adding this extension to Nevermind',
+        onSelect: submitExtensionPrAction,
+        show: canSubmitExtensionPr,
+        disabled: canSubmitExtensionPrHint,
       },
       {
         value: 'option:tweak',
@@ -3205,7 +3239,7 @@ export function App() {
         ref={paletteRef}
         className={`palette ${isVisuallyStacked ? 'isStacked' : ''}`}
         label="Nevermind"
-        loop
+        loop={true}
         shouldFilter={false}
         value={selectedValue}
         onValueChange={selectValue}
@@ -3224,7 +3258,7 @@ export function App() {
               else if (!isChildOpen) setRootQuery(value);
             }}
             placeholder={placeholder}
-            readOnly={!shortcutFor && !isFilterableChildOpen && isChildOpen}
+            readOnly={!(shortcutFor || isFilterableChildOpen) && isChildOpen}
             spellCheck={false}
           />
           {renderSearchAccessory(extensionView)}
@@ -3292,11 +3326,11 @@ export function App() {
                 <video
                   className="previewImage"
                   src={previewFor.videoUrl}
-                  controls
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
+                  controls={true}
+                  autoPlay={true}
+                  muted={true}
+                  loop={true}
+                  playsInline={true}
                 />
               ) : previewFor.imageDataUrl ? (
                 <img
