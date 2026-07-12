@@ -35,10 +35,11 @@ jobs:
           else
             BASE="HEAD~1"
           fi
-          if git diff --name-only "$BASE" | grep -qv '^backend/'; then
-            mise exec -- pnpm check:changed "$BASE"
+          FILES=$(git diff --name-only "$BASE" | grep -v '^backend/' | grep -v '^\.github/' || true)
+          if [ -n "$FILES" ]; then
+            echo "$FILES" | xargs mise exec -- biome check --error-on-warnings
           else
-            echo "Only backend files changed; skipping biome frontend check"
+            echo "Only non-frontend files changed; skipping biome check"
           fi
 
       - name: Verify
