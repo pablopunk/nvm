@@ -167,9 +167,14 @@ const billingState = Astro.url.searchParams.get('billing');
       document.body.appendChild(ta);
       ta.select();
       try {
-        document.execCommand('copy');
-        copyStatus.textContent = 'Copied to clipboard.';
-        copyStatus.className = 'status status--ok';
+        const copied = document.execCommand('copy');
+        if (copied) {
+          copyStatus.textContent = 'Copied to clipboard.';
+          copyStatus.className = 'status status--ok';
+        } else {
+          copyStatus.textContent = 'Could not copy automatically. Please select and copy the token manually.';
+          copyStatus.className = 'status status--err';
+        }
       } catch {
         copyStatus.textContent = 'Could not copy automatically. Please select and copy the token manually.';
         copyStatus.className = 'status status--err';
