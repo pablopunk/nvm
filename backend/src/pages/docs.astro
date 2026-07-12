@@ -24,13 +24,10 @@ import Layout from '../layouts/Layout.astro';
     <p class="muted">Use a Personal Access Token (PAT) from your <a href="/profile">profile page</a>. Pass it as a Bearer token:</p>
     <pre><code>Authorization: Bearer nvm_pat_...</code></pre>
     <h3>Example (curl)</h3>
-    <pre><code>curl https://api.nvm.fyi/api/v1/chat/completions \
+    <pre><code>curl -sS https://api.nvm.fyi/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer nvm_pat_YOUR_TOKEN" \
-  -d '{
-    "model": "nevermind",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'</code></pre>
+  -d '&#123;"model":"nevermind","messages":[&#123;"role":"user","content":"Hello!"&#125;]&#125;'</code></pre>
     <h3>Supported Models</h3>
     <p class="muted">The endpoint routes to the best available model automatically. Query <code>GET /api/v1/models</code> for the current model list.</p>
   </div>
