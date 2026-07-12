@@ -210,11 +210,14 @@ export const emailOutbox = pgTable('email_outbox', {
   recipient: text('recipient').notNull(),
   templateVersion: text('template_version').notNull().default('invite-v1'),
   idempotencyKey: text('idempotency_key').notNull().unique(),
+  tokenCiphertext: text('token_ciphertext').notNull(),
   status: text('status').notNull().default('queued'),
   attempts: integer('attempts').notNull().default(0),
   providerMessageId: text('provider_message_id'),
   lastError: text('last_error'),
   availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+  leaseOwner: text('lease_owner'),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -227,3 +230,18 @@ export const providerEvents = pgTable('provider_events', {
   processedAt: timestamp('processed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('provider_events_provider_event_idx').on(t.provider, t.eventId)]);
+
+export const emailSuppressions = pgTable('email_suppressions', {
+  email: text('email').primaryKey(),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const authIntents = pgTable('auth_intents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  inviteId: uuid('invite_id').notNull().references(() => invites.id, { onDelete: 'cascade' }),
+  nonceHash: text('nonce_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

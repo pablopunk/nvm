@@ -1,0 +1,8 @@
+<html lang="en"><head><meta charset="utf-8" /><meta name="referrer" content="no-referrer" /><title>Nevermind invite</title></head>
+<body><main><h1>Nevermind early access</h1><p id="message">Checking your invitation…</p></main>
+<script is:inline>
+  const token = location.hash.slice(1); history.replaceState(null, '', '/invite');
+  const message = document.getElementById('message');
+  if (!token) message.textContent = 'This invitation link is incomplete. Request a new invite.';
+  else fetch('/api/invite/intents', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token})}).then((response) => { if (response.redirected) location.assign(response.url); else message.textContent = 'This invitation is expired or unavailable.'; }).catch(() => { message.textContent = 'Unable to verify this invitation right now.'; });
+</script></body></html>

@@ -71,6 +71,13 @@
       "when": 1783877338363,
       "tag": "0009_chilly_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783879090138,
+      "tag": "0010_conscious_psynapse",
+      "breakpoints": true
     }
   ]
 }

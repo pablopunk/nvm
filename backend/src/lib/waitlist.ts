@@ -1,7 +1,7 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
-import { emailOutbox, invites, waitlistEntries } from '../db/schema';
+import { authIntents, emailOutbox, invites, waitlistEntries } from '../db/schema';
 import { env } from './env';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,7 +34,7 @@ export async function createInvite(input: { email: string; waitlistEntryId?: str
   const expiresAt = new Date(Date.now() + (Number.isFinite(days) ? days : 7) * 86400000);
   return db.transaction(async (tx) => {
     const [invite] = await tx.insert(invites).values({ email, waitlistEntryId: input.waitlistEntryId, createdBy: input.createdBy, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt }).returning();
-    await tx.insert(emailOutbox).values({ inviteId: invite.id, recipient: email, idempotencyKey: `invite/${invite.id}/v1` });
+    await tx.insert(emailOutbox).values({ inviteId: invite.id, recipient: email, tokenCiphertext: encryptInviteToken(token), idempotencyKey: `invite/${invite.id}/v1` });
     if (input.waitlistEntryId) await tx.update(waitlistEntries).set({ status: 'invited', reviewedAt: new Date(), reviewerId: input.createdBy }).where(eq(waitlistEntries.id, input.waitlistEntryId));
     return { invite, token, existing: false };
   });
@@ -50,4 +50,38 @@ export async function redeemInvite(token: string, email: string) {
     if (invite.waitlistEntryId) await tx.update(waitlistEntries).set({ status: 'redeemed' }).where(eq(waitlistEntries.id, invite.waitlistEntryId));
     return redeemed;
   });
+}
+
+const cookieName = '__Host-nvm-invite-intent';
+const intentSecret = () => env('INVITE_INTENT_SECRET') || env('WORKOS_COOKIE_PASSWORD') || 'development-only-invite-secret';
+const tokenKey = () => createHash('sha256').update(intentSecret()).digest();
+export function encryptInviteToken(token: string) { const iv = randomBytes(12); const cipher = createCipheriv('aes-256-gcm', tokenKey(), iv); const encrypted = Buffer.concat([cipher.update(token), cipher.final()]); return `${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`; }
+const sign = (value: string) => createHash('sha256').update(`${value}.${intentSecret()}`).digest('base64url');
+export const inviteIntentCookieName = cookieName;
+
+export function readInviteIntentCookie(header: string | null): { id: string; nonce: string; expires: number } | null {
+  const raw = header?.split(/;\s*/).find((part) => part.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+  if (!raw) return null;
+  try {
+    const [payload, signature] = decodeURIComponent(raw).split('.');
+    if (!payload || !signature || sign(payload) !== signature) return null;
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { id?: string; nonce?: string; expires?: number };
+    if (!parsed.id || !parsed.nonce || !parsed.expires || parsed.expires <= Date.now()) return null;
+    return { id: parsed.id, nonce: parsed.nonce, expires: parsed.expires };
+  } catch { return null; }
+}
+
+export function clearInviteIntentCookie(secure: boolean) {
+  return `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; ${secure ? 'Secure; ' : ''}Max-Age=0`;
+}
+
+export async function createInviteIntent(token: string) {
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const [invite] = await db.select().from(invites).where(eq(invites.tokenHash, tokenHash)).limit(1);
+  if (!invite || invite.expiresAt <= new Date() || !['queued', 'sending', 'sent'].includes(invite.status)) return null;
+  const nonce = randomBytes(32).toString('base64url');
+  const expires = Date.now() + 10 * 60 * 1000;
+  const [intent] = await db.insert(authIntents).values({ inviteId: invite.id, nonceHash: createHash('sha256').update(nonce).digest('hex'), expiresAt: new Date(expires) }).returning();
+  const payload = Buffer.from(JSON.stringify({ id: intent.id, nonce, expires })).toString('base64url');
+  return { intent, cookie: `${cookieName}=${encodeURIComponent(`${payload}.${sign(payload)}`)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=600` };
 }
