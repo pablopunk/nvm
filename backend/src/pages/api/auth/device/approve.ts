@@ -1,8 +1,15 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { getSessionFromCookies } from '../../../../lib/workos';
 import { db } from '../../../../db/client';
 import { users, deviceCodes } from '../../../../db/schema';
+import { safeJsonBody } from '../../../../lib/validation';
+
+const approveSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().max(120).optional(),
+});
 
 export const POST: APIRoute = async ({ request }) => {
   const session = await getSessionFromCookies(request.headers.get('cookie'));
@@ -10,12 +17,13 @@ export const POST: APIRoute = async ({ request }) => {
   const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as { code?: string; label?: string };
-  const code = (body.code ?? '').trim();
+  const parsed = await safeJsonBody(request, approveSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const code = parsed.data.code.trim();
   if (!code) return new Response('Missing code', { status: 400 });
 
   const updates: { userId: string; approvedAt: Date; deviceLabel?: string } = { userId: user.id, approvedAt: new Date() };
-  const trimmedLabel = (body.label ?? '').trim();
+  const trimmedLabel = (parsed.data.label ?? '').trim();
   if (trimmedLabel) updates.deviceLabel = trimmedLabel;
 
   const updated = await db
