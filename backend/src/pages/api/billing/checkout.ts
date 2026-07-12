@@ -1,9 +1,18 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { BillingConfigError, BillingEligibilityError, BillingRequestError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
+import { acquireCheckoutLock, releaseCheckoutLock } from '../../../lib/ratelimit';
 import { getSessionFromCookies } from '../../../lib/workos';
+import { safeJsonBody } from '../../../lib/validation';
+
+const checkoutSchema = z.object({
+  kind: z.enum(['subscription', 'top_up']),
+  priceId: z.string().optional(),
+  tier: z.string().optional(),
+});
 
 export const POST: APIRoute = async ({ request }) => {
   const crossOriginResponse = rejectCrossOriginBillingPost(request);
@@ -15,11 +24,20 @@ export const POST: APIRoute = async ({ request }) => {
   const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);
   if (!user) return new Response('Unknown user', { status: 404 });
 
-  const body = (await request.json().catch(() => ({}))) as { kind?: BillingKind; priceId?: string; tier?: string };
-  if (body.kind !== 'top_up' && body.kind !== 'subscription') {
-    return Response.json({ error: { type: 'invalid_request', message: 'Invalid billing kind' } }, { status: 400 });
-  }
+  const parsed = await safeJsonBody(request, checkoutSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const body = parsed.data;
   const kind = body.kind;
+
+  if (kind === 'subscription') {
+    const lock = await acquireCheckoutLock(user.id);
+    if (!lock.ok) {
+      return Response.json(
+        { error: { type: 'checkout_in_flight', message: 'A checkout session is already in progress. Please wait and try again.' } },
+        { status: 409 },
+      );
+    }
+  }
 
   try {
     const checkout = await createBillingCheckout({ user, kind, priceId: body.priceId, tier: body.tier });
@@ -38,5 +56,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     throw error;
+  } finally {
+    if (kind === 'subscription') {
+      await releaseCheckoutLock(user.id);
+    }
   }
 };

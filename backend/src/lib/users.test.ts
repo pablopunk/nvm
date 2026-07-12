@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { resetDbForTests, setDbForTests } from '../db/client';
 import { creditLedger } from '../db/schema';
-import { ensureMonthlyFreeCredits } from './users';
+import { ensureMonthlyFreeCredits, getBalances, upsertUserWithFreeGrant, DisposableEmailError } from './users';
+import { users } from '../db/schema';
 
 type FakeDb = {
   insertedValues: unknown[];
@@ -80,4 +81,110 @@ test('monthly free credits skip when the current period was already granted', as
   await ensureMonthlyFreeCredits('user_1', new Date('2026-06-15T12:00:00Z'));
 
   assert.deepEqual(db.insertedValues, []);
+});
+
+// ── getBalances ──
+
+test('getBalances returns free/paid/total split', async () => {
+  const db = createFakeDb([[{ free: 500, paid: 1000 }]]);
+  setDbForTests(db as any);
+
+  const balances = await getBalances('user_1');
+  assert.deepEqual(balances, { free: 500, paid: 1000, total: 1500 });
+});
+
+test('getBalances returns zeros when no ledger rows exist', async () => {
+  const db = createFakeDb([[{}]]);
+  setDbForTests(db as any);
+
+  const balances = await getBalances('user_1');
+  assert.deepEqual(balances, { free: 0, paid: 0, total: 0 });
+});
+
+test('getBalances returns zeros on empty result', async () => {
+  const db = createFakeDb([[]]);
+  setDbForTests(db as any);
+
+  const balances = await getBalances('user_1');
+  assert.deepEqual(balances, { free: 0, paid: 0, total: 0 });
+});
+
+// ── upsertUserWithFreeGrant ──
+
+function createFlexibleFakeDb(
+  selects: unknown[],
+  userReturningValues?: unknown[],
+) {
+  const remainingSelects = [...selects];
+  const returningStack = [...(userReturningValues ?? [])];
+  const insertedValues: unknown[] = [];
+  let db: any;
+
+  function chain(result: unknown, onValues?: (v: unknown) => void) {
+    const p = () => Promise.resolve(result);
+    const c: any = {
+      from: () => c,
+      where: () => c,
+      limit: () => p(),
+      values: (v: unknown) => { onValues?.(v); return c; },
+      returning: () => p(),
+      onConflictDoNothing: () => c,
+      then: (r: any, j: any) => p().then(r, j),
+    };
+    return c;
+  }
+
+  db = {
+    insertedValues,
+    select: () => chain(remainingSelects.shift() ?? []),
+    insert: (table: unknown) => {
+      if (table === creditLedger) {
+        return chain([], (v) => insertedValues.push(v));
+      }
+      const val = returningStack.shift() ?? [];
+      return chain(val, (v) => insertedValues.push(v));
+    },
+    transaction: async (cb: (tx: any) => Promise<void>) => cb(db),
+  };
+
+  return db;
+}
+
+test('upsertUserWithFreeGrant returns existing user without creating', async () => {
+  const existingUser = { id: 'existing-id', workosUserId: 'wos_1', email: 'existing@example.com' };
+  const db = createFlexibleFakeDb([[existingUser]]);
+  setDbForTests(db as any);
+
+  const result = await upsertUserWithFreeGrant({
+    workosUserId: 'wos_1',
+    email: 'existing@example.com',
+  });
+
+  assert.deepEqual(result, existingUser);
+  assert.strictEqual(db.insertedValues.length, 0);
+});
+
+test('upsertUserWithFreeGrant creates user and grants free credits', async () => {
+  const createdUser = { id: 'new-id', workosUserId: 'wos_2', email: 'new@legitdomain.com' };
+  const db = createFlexibleFakeDb([[]], [[createdUser]]);
+  setDbForTests(db as any);
+
+  const result = await upsertUserWithFreeGrant({
+    workosUserId: 'wos_2',
+    email: 'new@legitdomain.com',
+  });
+
+  assert.deepEqual(result, createdUser);
+  assert.strictEqual(db.insertedValues.length, 2);
+  const creditValues = db.insertedValues[1] as Record<string, unknown>;
+  assert.strictEqual(creditValues.userId, 'new-id');
+  assert.strictEqual(creditValues.kind, 'free');
+  assert.strictEqual(creditValues.reason, 'grant_free_monthly');
+});
+
+test('DisposableEmailError is constructible', () => {
+  const err = new DisposableEmailError('test@mailinator.com');
+  assert.ok(err instanceof Error);
+  assert.strictEqual(err.name, 'DisposableEmailError');
+  assert.ok(err.message.includes('test@mailinator.com'));
 });

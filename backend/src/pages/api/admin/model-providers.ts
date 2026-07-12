@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
@@ -9,10 +10,17 @@ import {
   type ModelRouteSlot,
 } from '../../../lib/settings';
 import { recordAudit } from '../../../lib/audit';
+import { safeJsonBody } from '../../../lib/validation';
 
 function slotFromBody(value: unknown): ModelRouteSlot {
   return value === 'free' || value === 'smart' || value === 'fast' ? value : 'paid';
 }
+
+const putProvidersSchema = z.object({
+  slot: z.string().optional(),
+  modelId: z.string().optional(),
+  providerIds: z.array(z.string()).optional(),
+});
 
 export const GET: APIRoute = async ({ request, url }) => {
   if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
@@ -30,11 +38,11 @@ export const PUT: APIRoute = async ({ request }) => {
 
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as {
-    slot?: ModelRouteSlot;
-    modelId?: string;
-    providerIds?: string[];
-  };
+
+  const parsed = await safeJsonBody(request, putProvidersSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const body = parsed.data;
+
   const slot = slotFromBody(body.slot);
   if (!body.modelId) return new Response('Missing modelId', { status: 400 });
   if (!body.providerIds || !Array.isArray(body.providerIds)) return new Response('Missing providerIds', { status: 400 });

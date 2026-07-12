@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
@@ -12,6 +13,14 @@ import {
 } from '../../../lib/settings';
 import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
 import { recordAudit } from '../../../lib/audit';
+import { safeJsonBody } from '../../../lib/validation';
+
+const putModelSchema = z.object({
+  tier: z.string().optional(),
+  purpose: z.string().optional(),
+  model: z.string().optional(),
+  modelRef: z.string().optional(),
+});
 
 async function listModelRefs() {
   const providers = listKnownProviders();
@@ -53,7 +62,11 @@ export const PUT: APIRoute = async ({ request }) => {
 
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as { tier?: ModelRouteSlot; purpose?: ModelRouteSlot; model?: string; modelRef?: string };
+
+  const parsed = await safeJsonBody(request, putModelSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const body = parsed.data;
+
   const slot = modelRouteSlotFromBody(body.purpose ?? body.tier);
   const route = parseModelRouteRef(body.modelRef ?? body.model ?? '');
   if (!route) return new Response('Missing or invalid modelRef', { status: 400 });
