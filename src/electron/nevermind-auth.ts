@@ -9,12 +9,15 @@ import { openExternalUrl } from './url-utils';
 
 const FILENAME = 'nevermind-auth.json';
 
+export type NevermindEnvironment = 'production' | 'pr_preview' | 'custom';
+
 type StoredAuth = {
   encryptedToken?: string;
   token?: string;
   email: string;
   role: string;
   baseUrl: string;
+  environment?: NevermindEnvironment;
   connectedAt: string;
 };
 type AuthSnapshot = {
@@ -22,6 +25,7 @@ type AuthSnapshot = {
   email: string;
   role: string;
   baseUrl: string;
+  environment: NevermindEnvironment;
 } | null;
 type SignInResult =
   | { ok: true; auth: NonNullable<AuthSnapshot> }
@@ -56,6 +60,14 @@ function normalizedBaseUrl(baseUrl: string) {
   )
     return PRODUCTION_BASE_URL;
   return trimmed;
+}
+
+export function nevermindEnvironmentForBaseUrl(
+  baseUrl: string,
+): NevermindEnvironment {
+  return normalizedBaseUrl(baseUrl) === PRODUCTION_BASE_URL
+    ? 'production'
+    : 'custom';
 }
 
 function authPath() {
@@ -97,7 +109,13 @@ async function readFromDisk(): Promise<AuthSnapshot> {
         from: data.baseUrl,
         to: baseUrl,
       });
-    return { token, email: data.email, role: data.role, baseUrl };
+    return {
+      token,
+      email: data.email,
+      role: data.role,
+      baseUrl,
+      environment: data.environment || nevermindEnvironmentForBaseUrl(baseUrl),
+    };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT')
       logger.warn('Failed to read nevermind auth', err as Error);
@@ -123,16 +141,19 @@ async function persist({
   email,
   role,
   baseUrl,
+  environment = nevermindEnvironmentForBaseUrl(baseUrl),
 }: {
   token: string;
   email: string;
   role: string;
   baseUrl: string;
+  environment?: NevermindEnvironment;
 }) {
   const payload: StoredAuth = {
     email,
     role,
     baseUrl,
+    environment,
     connectedAt: new Date().toISOString(),
   };
   if (safeStorage.isEncryptionAvailable()) {
@@ -149,7 +170,7 @@ async function persist({
     mode: 0o600,
   });
   if (process.platform !== 'win32') await fs.chmod(authPath(), 0o600);
-  cached = { token, email, role, baseUrl };
+  cached = { token, email, role, baseUrl, environment };
   loadPromise = Promise.resolve(cached);
   return cached;
 }
@@ -211,9 +232,11 @@ export function isSigningIn() {
 
 export async function signInToNevermind({
   baseUrl = DEFAULT_BASE_URL,
+  environment = nevermindEnvironmentForBaseUrl(baseUrl),
   label = defaultDeviceLabel(),
 }: {
   baseUrl?: string;
+  environment?: NevermindEnvironment;
   label?: string;
 } = {}): Promise<SignInResult> {
   if (activeSignIn) return activeSignIn;
@@ -260,6 +283,7 @@ export async function signInToNevermind({
             email: data.user.email,
             role: data.user.role,
             baseUrl: trimmedBase,
+            environment,
           });
           return { ok: true, auth };
         }
