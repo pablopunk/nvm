@@ -1,4 +1,6 @@
-const fs = require('fs');
+'use strict';
+
+const fs = require('node:fs');
 
 function read(path) {
   return fs.readFileSync(path, 'utf8');
@@ -6,7 +8,9 @@ function read(path) {
 
 function assertIncludes(path, text) {
   const content = read(path);
-  if (!content.includes(text)) throw new Error(`${path} must include ${text}`);
+  if (!content.includes(text)) {
+    throw new Error(`${path} must include ${text}`);
+  }
 }
 
 assertIncludes('src/command-list.tsx', 'RootCommandList');
@@ -22,4 +26,5 @@ assertIncludes('src/ui.tsx', 'selectedOnlyShortcut');
 assertIncludes('src/electron/main.ts', "case 'nativeAction'");
 assertIncludes('src/electron/main.ts', 'declaredGlobalShortcuts');
 
+// biome-ignore lint/suspicious/noConsole: CLI script
 console.log('design-system checks passed');

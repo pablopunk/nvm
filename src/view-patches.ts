@@ -1,8 +1,8 @@
 import type { CommandItem, CommandView, CommandViewPatch } from './model';
 
-export type PatchCommandViewOptions = {
+interface PatchCommandViewOptions {
   preserveMissingItems?: boolean;
-};
+}
 
 function commandItemFromPatch(
   existing: CommandItem | undefined,
@@ -15,6 +15,7 @@ function commandItemFromPatch(
   };
 }
 
+// biome-ignore lint/complexity/useMaxParams: pre-existing internal function — refactoring would cascade
 function patchCommandItems(
   items: CommandItem[] | undefined,
   patches: NonNullable<CommandViewPatch['items']> = [],
@@ -27,32 +28,36 @@ function patchCommandItems(
     options.preserveMissingItems &&
     patches.length === 0 &&
     removeItemIds.length === 0
-  )
+  ) {
     return items;
+  }
   let next = Array.isArray(items) ? items : [];
   if (removeItemIds.length) {
     const remove = new Set(removeItemIds);
     next = next.filter((item) => !remove.has(item.id));
   }
   if (patches.length === 0) return next;
-  if (mode === 'replace')
+  if (mode === 'replace') {
     return patches.map((patch) => commandItemFromPatch(undefined, patch));
+  }
   const byId = new Map(next.map((item) => [item.id, item]));
   const patchedIds = new Set(patches.map((patch) => patch.id));
   const patchById = new Map(patches.map((patch) => [patch.id, patch]));
   const patchedItems = patches.map((patch) =>
     commandItemFromPatch(byId.get(patch.id), patch),
   );
-  if (mode === 'prepend')
+  if (mode === 'prepend') {
     return [
       ...patchedItems,
       ...next.filter((item) => !patchedIds.has(item.id)),
     ];
-  if (mode === 'append')
+  }
+  if (mode === 'append') {
     return [
       ...next.filter((item) => !patchedIds.has(item.id)),
       ...patchedItems,
     ];
+  }
   return next.map((item) =>
     patchedIds.has(item.id)
       ? commandItemFromPatch(item, patchById.get(item.id)!)
