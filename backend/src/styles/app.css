@@ -302,8 +302,9 @@ body:has(.landing-shell) .site-header {
   margin-top: 8px;
 }
 .landing-actions .button--primary { font-size: 15px; padding: 12px 24px; border-radius: 8px; }
-.landing-wordmark { display: none; }
-.landing-hero__title { font-size: 52px; font-weight: 700; color: #fff; }
+.landing-wordmark { display: block; width: min(360px, 100%); height: auto; }
+.landing-hero__title { line-height: 1.1; }
+.landing-hero__eyebrow { color: var(--muted); font-size: 14px; margin: 16px 0 4px; }
 .landing-hero__lede { color: #a8a29e; }
 .landing-account-note { color: var(--muted); font-size: 13px; }
 .landing-screenshot { margin: 0; min-width: 0; }
