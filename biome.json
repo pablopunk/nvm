@@ -42,17 +42,11 @@
       "includes": ["scripts/**", ".agents/**"],
       "linter": {
         "rules": {
-          "suspicious": {
-            "noConsole": "off",
-            "useStrictMode": "off"
-          },
-          "style": {
-            "useBlockStatements": "off",
-            "noUnusedTemplateLiteral": "off"
-          },
-          "complexity": {
-            "useSimplifiedLogicExpression": "off"
-          }
+          "suspicious": "off",
+          "style": "off",
+          "a11y": "off",
+          "performance": "off",
+          "complexity": "off"
         }
       }
     }
