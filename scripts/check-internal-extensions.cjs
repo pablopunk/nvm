@@ -4,6 +4,16 @@ const path = require('node:path');
 
 const sourcePath = path.join(process.cwd(), 'src', 'electron', 'main.ts');
 const source = fs.readFileSync(sourcePath, 'utf8');
+const extensionsIndexPath = path.join(
+  process.cwd(),
+  'src',
+  'electron',
+  'extensions',
+  'index.ts',
+);
+const extensionsIndexSource = fs.existsSync(extensionsIndexPath)
+  ? fs.readFileSync(extensionsIndexPath, 'utf8')
+  : '';
 
 function fail(message) {
   console.error(`Internal extension check failed: ${message}`);
@@ -16,9 +26,11 @@ if (/const\s+INTERNAL_EXTENSIONS\s*=/.test(source)) {
   );
 }
 
-const factoriesMatch = source.match(
-  /const\s+INTERNAL_EXTENSION_FACTORIES[\s\S]*?\];?\n/,
-);
+const factoriesMatch =
+  source.match(/const\s+INTERNAL_EXTENSION_FACTORIES[\s\S]*?\];?\n/) ||
+  extensionsIndexSource.match(
+    /const\s+INTERNAL_EXTENSION_FACTORIES[\s\S]*?\];?\n/,
+  );
 if (!factoriesMatch) fail('missing INTERNAL_EXTENSION_FACTORIES');
 const factories = factoriesMatch[0];
 
