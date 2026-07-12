@@ -19,14 +19,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup mise
         uses: jdx/mise-action@v2
 
       - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Changed-file lint
         run: |
-          mise exec -- pnpm install --frozen-lockfile
-          mise exec -- pnpm -C backend install --frozen-lockfile
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            mise exec -- pnpm check:changed ${{ github.event.pull_request.base.sha }}
+          else
+            mise exec -- pnpm check:changed HEAD~1
+          fi
 
       - name: Biome check
         run: mise exec -- pnpm check
