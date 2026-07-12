@@ -7,7 +7,7 @@ const ctx = {
   user: { id: 'test-user' },
   provider: 'opencode_zen',
   activeModelId: 'gemini-3-flash',
-  costRow: { inputUsdPerMtok: 0, outputUsdPerMtok: 0 },
+  costRow: { provider: 'opencode_zen', modelId: 'gemini-3-flash', inputUsdPerMtok: 0, outputUsdPerMtok: 0 },
   kind: 'free' as const,
   requestId: 'req_123',
   client: { name: null, version: null, apiVersion: null, platform: null, arch: null },
