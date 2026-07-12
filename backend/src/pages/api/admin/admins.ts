@@ -1,10 +1,18 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { requireAdmin } from '../../../lib/admin';
 import { requireSameOrigin } from '../../../lib/csrf';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { recordAudit } from '../../../lib/audit';
+import { safeJsonBody } from '../../../lib/validation';
+
+const adminsSchema = z.object({
+  email: z.string().optional(),
+  userId: z.string().optional(),
+  role: z.enum(['admin', 'user']).optional(),
+});
 
 export const POST: APIRoute = async ({ request }) => {
   const originCheck = requireSameOrigin(request);
@@ -12,7 +20,11 @@ export const POST: APIRoute = async ({ request }) => {
 
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as { email?: string; userId?: string; role?: 'admin' | 'user' };
+
+  const parsed = await safeJsonBody(request, adminsSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const body = parsed.data;
+
   const role = body.role === 'user' ? 'user' : 'admin';
   let targetId: string | null = null;
   if (body.userId) {

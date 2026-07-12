@@ -190,7 +190,9 @@ test('device auth kill switch returns service-unavailable contract', async () =>
 test('device auth exchange returns pending and missing-code contracts', async () => {
   const missingCode = await exchangeDeviceAuth(routeContext(new Request('https://api.nvm.fyi/api/auth/device/exchange', { method: 'POST', body: '{}' })));
   assert.equal(missingCode.status, 400);
-  assert.equal(await missingCode.text(), 'Missing code');
+  const missingCodeBody = await missingCode.json() as any;
+  assert.equal(missingCodeBody.error.type, 'invalid_request');
+  assert.equal(missingCodeBody.error.message, 'Request body validation failed');
 
   installDb(createFakeDb({ selects: [[{ code: 'device_code', approvedAt: null, consumedAt: null, userId: null }]] }));
   const pending = await exchangeDeviceAuth(routeContext(new Request('https://api.nvm.fyi/api/auth/device/exchange', {

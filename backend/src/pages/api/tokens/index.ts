@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../../../lib/workos';
 import { db } from '../../../db/client';
@@ -6,6 +7,11 @@ import { users } from '../../../db/schema';
 import { createApiToken, listApiTokens } from '../../../lib/tokens';
 import { requireSameOrigin } from '../../../lib/csrf';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
+import { safeJsonBody } from '../../../lib/validation';
+
+const createTokenSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+});
 
 async function getUser(request: Request) {
   const session = await getSessionFromCookies(request.headers.get('cookie'));
@@ -28,8 +34,10 @@ export const POST: APIRoute = async ({ request }) => {
   if (!decision.ok) return tooManyRequests(decision);
   const user = await getUser(request);
   if (!user) return new Response('Unauthorized', { status: 401 });
-  const body = (await request.json().catch(() => ({}))) as { name?: string };
-  const name = (body.name ?? '').trim() || 'Untitled token';
+
+  const parsed = await safeJsonBody(request, createTokenSchema);
+  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const name = (parsed.data.name ?? '').trim() || 'Untitled token';
   const created = await createApiToken(user.id, name);
   return Response.json(created, { status: 201 });
 };
