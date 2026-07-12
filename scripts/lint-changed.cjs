@@ -4,7 +4,7 @@ const { spawnSync } = require('node:child_process');
 
 const base = process.argv[2];
 if (!base) {
-  console.error('Usage: node scripts/lint-changed.cjs <base-ref>');
+  process.stderr.write('Usage: node scripts/lint-changed.cjs <base-ref>\n');
   process.exit(2);
 }
 
@@ -22,7 +22,7 @@ if (result.status === 0) {
 }
 
 if (stderr.includes('No files were processed')) {
-  console.log('No biome-lintable files changed — skipping.');
+  process.stdout.write('No biome-lintable files changed — skipping.\n');
   process.exit(0);
 }
 
