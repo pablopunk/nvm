@@ -7,6 +7,7 @@ import {
   markDebugPerformance,
   measureDebugPerformance,
 } from './debug-performance';
+import { getByoKey, type ByoKeySnapshot } from './byo-key';
 import * as logger from './logger';
 import { type LogLevel, type LogSource, readRecentLogs } from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
@@ -815,6 +816,16 @@ async function resolveAiModelAndAuth(
   authStorage: any,
   modelRole?: AiModelRole,
 ) {
+  const byo = await getByoKey();
+  if (byo) {
+    authStorage.setRuntimeApiKey(byo.providerId, byo.apiKey);
+    return {
+      model: byoModelDescriptor(byo),
+      source: 'byo' as const,
+      creditInfo: null,
+    };
+  }
+
   const nevermind = await getNevermindAuth();
   if (!nevermind) throw new NevermindAuthRequiredError();
   authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token);
@@ -845,6 +856,23 @@ async function resolveAiModelAndAuth(
       }
     : null;
   return { model, source: 'nevermind' as const, creditInfo };
+}
+
+function byoModelDescriptor(byo: ByoKeySnapshot) {
+  const model = {
+    id: byo.modelId,
+    name: byo.modelName,
+    api: byo.api as any,
+    provider: byo.provider,
+    baseUrl: byo.baseUrl,
+    reasoning: false,
+    input: ['text'] as ReadonlyArray<string>,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200_000,
+    maxTokens: 16_384,
+    headers: nevermindDesktopHeaders(),
+  };
+  return model;
 }
 
 async function createResourceLoader(

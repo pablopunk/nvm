@@ -1,0 +1,59 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { billingCatalog, isActiveBillingSubscriptionStatus } from '../lib/billing';
+import { getSessionFromCookies } from '../lib/workos';
+
+const catalog = (() => {
+  try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
+})();
+const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
+const isLoggedIn = Boolean(session);
+---
+<Layout title="Pricing · Nevermind">
+  <nav class="nav">
+    <a href="/">Home</a>
+    <a href="/pricing" aria-current="page">Pricing</a>
+    <span class="spacer"></span>
+    {isLoggedIn ? <a href="/profile">Dashboard</a> : <a href="/api/auth/signin">Sign in</a>}
+  </nav>
+
+  <h1>Pricing</h1>
+  <p class="muted">Simple, predictable pricing for AI features.</p>
+
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-top: 24px;">
+    <div class="card">
+      <h3>Free</h3>
+      <p class="muted">Every account starts with <strong>free monthly credits</strong> for trying the AI features and the desktop app. No credit card required.</p>
+      <p class="muted" style="font-size:13px;">Free credits renew each month and are applied automatically.</p>
+    </div>
+    {catalog.subscriptions.map((tier) => (
+      <div class="card">
+        <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
+        <p class="muted"><strong>{tier.credits} credits</strong> per month</p>
+        {!isLoggedIn && (
+          <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
+        )}
+        {isLoggedIn && (
+          <a class="button button--primary" href="/profile">Manage subscription</a>
+        )}
+      </div>
+    ))}
+  </div>
+
+  {catalog.topUps.length > 0 && (
+    <div class="section card" style="margin-top:24px">
+      <h3>Top-ups</h3>
+      <p class="muted">One-time credit packs for when you need more. Available after subscribing.</p>
+      <ul class="list-clean">
+        {catalog.topUps.map((pack) => (
+          <li><strong>{pack.credits} credits</strong></li>
+        ))}
+      </ul>
+    </div>
+  )}
+
+  <div class="section card" style="margin-top:24px">
+    <h3>How credits work</h3>
+    <p class="muted">Credits are Nevermind's usage unit. One credit covers approximately one AI operation depending on the model and prompt size. Free credits are consumed first, then paid credits. Unused credits expire at the end of your billing cycle.</p>
+  </div>
+</Layout>

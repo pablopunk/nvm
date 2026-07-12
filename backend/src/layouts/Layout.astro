@@ -1,4 +1,5 @@
 ---
+import CookieBanner from '../components/CookieBanner.astro';
 import '../styles/app.css';
 
 interface Props {
@@ -15,12 +16,20 @@ const containerClass = width === 'wide' ? 'container container--wide' : width ==
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <script data-goatcounter="/goat" async src="/count.js" is:inline></script>
   </head>
   <body>
     <main class={containerClass}>
       <slot />
     </main>
+    <CookieBanner />
+    <footer class="site-footer" style="text-align:center;padding:32px 16px;opacity:0.6;font-size:13px">
+      <nav style="display:flex;gap:16px;justify-content:center">
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/refund">Refunds</a>
+        <a href="https://github.com/pablopunk/nvm">GitHub</a>
+      </nav>
+    </footer>
     <script>
       document.addEventListener('click', (event) => {
         const target = event.target as Element;

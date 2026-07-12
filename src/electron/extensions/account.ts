@@ -3,6 +3,7 @@ import {
   signInToNevermind,
   signOutFromNevermind,
 } from '../nevermind-auth';
+import { getByoKey, clearByoKey } from '../byo-key';
 import { extensionContext } from './_context';
 
 export function createAccountExtension() {
@@ -10,6 +11,7 @@ export function createAccountExtension() {
 
   async function accountItem() {
     const existing = await getNevermindAuth();
+    const byo = await getByoKey();
     if (existing) {
       return {
         id: 'account-logout',
@@ -74,11 +76,51 @@ export function createAccountExtension() {
     };
   }
 
+  async function byoKeyItem() {
+    const byo = await getByoKey();
+    if (byo) {
+      return {
+        id: 'byo-key-clear',
+        actionId: 'byo-key-clear',
+        title: 'Clear BYO provider key',
+        subtitle: `Using own key for ${byo.provider} (${byo.modelName})`,
+        icon: 'key',
+        score: 4,
+        aliases: ['byo', 'own key', 'clear key'],
+        primaryAction: {
+          type: 'runExtensionAction',
+          title: 'Clear BYO Key',
+          __handler: async () => {
+            await clearByoKey();
+            extensionContext.invalidateExtensionRootItems();
+            return {
+              toast: {
+                message: 'BYO provider key cleared. Using Nevermind backend.',
+                tone: 'default' as const,
+              },
+            };
+          },
+        },
+      };
+    }
+    return null;
+  }
+
   return {
     id: extensionId,
     title: 'Nevermind Account',
     permissions: [] as const,
-    searchItems: async () => [await accountItem()],
-    rootItems: async () => [await accountItem()],
+    searchItems: async () => {
+      const items = [await accountItem()];
+      const byo = await byoKeyItem();
+      if (byo) items.push(byo);
+      return items;
+    },
+    rootItems: async () => {
+      const items = [await accountItem()];
+      const byo = await byoKeyItem();
+      if (byo) items.push(byo);
+      return items;
+    },
   };
 }

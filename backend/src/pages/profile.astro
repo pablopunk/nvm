@@ -47,6 +47,57 @@ const billingState = Astro.url.searchParams.get('billing');
     <p style="margin:0"><code>{user?.email}</code> · {user?.role}</p>
   </div>
 
+  <div class="section card stack" id="connect-desktop">
+    <h3>Connect desktop app</h3>
+    <p class="muted" style="margin:0">Sign into the Nevermind desktop app from this browser.</p>
+    <button class="button button--primary" id="initiate-connect" type="button">Start device connection</button>
+    <p id="connect-status" class="status" style="margin:0"></p>
+    <pre id="connect-code" style="display:none;"></pre>
+    <a id="connect-deep-link" class="button" style="display:none;" href="#">Open in Nevermind</a>
+    <script is:inline>
+      var connectPending = false;
+      var deepLinkUrl = '';
+      var code = '';
+      document.getElementById('initiate-connect').addEventListener('click', async function () {
+        if (connectPending) return;
+        connectPending = true;
+        var status = document.getElementById('connect-status');
+        var codeEl = document.getElementById('connect-code');
+        var linkEl = document.getElementById('connect-deep-link');
+        status.className = 'status';
+        status.textContent = 'Initiating…';
+        try {
+          var res = await fetch('/api/auth/device/initiate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: navigator.platform }),
+          });
+          if (!res.ok) {
+            status.className = 'status status--err';
+            status.textContent = 'Could not connect. Try again.';
+            connectPending = false;
+            return;
+          }
+          var data = await res.json();
+          code = data.code;
+          var params = new URLSearchParams();
+          params.set('code', code);
+          params.set('base_url', window.location.origin);
+          deepLinkUrl = 'nvm://auth?' + params.toString();
+          codeEl.style.display = 'block';
+          codeEl.textContent = 'Device code: ' + code + '\nOpen Nevermind or paste this code manually via Cmd+K → "Log in"';
+          linkEl.href = deepLinkUrl;
+          linkEl.style.display = '';
+          status.className = 'status status--ok';
+          status.textContent = 'Approval code ready. Click "Open in Nevermind" or enter the code manually.';
+          status.style.display = '';
+        } finally {
+          connectPending = false;
+        }
+      });
+    </script>
+  </div>
+
   <div class="section card stack">
     <div>
       <h3>Billing</h3>

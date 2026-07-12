@@ -1,0 +1,58 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Docs · Nevermind">
+  <nav class="nav">
+    <a href="/">Home</a>
+    <a href="/pricing">Pricing</a>
+    <a href="/docs" aria-current="page">Docs</a>
+  </nav>
+
+  <h1>Documentation</h1>
+
+  <div class="section card">
+    <h2>Getting Started</h2>
+    <p class="muted">Nevermind is an AI-native command palette for your desktop. Install the desktop app, sign in, and start using AI-powered commands.</p>
+    <h3>Installation</h3>
+    <p class="muted">Download the latest version from <a href="https://github.com/pablopunk/nvm/releases">GitHub Releases</a>. Available for macOS (Apple Silicon and Intel), Windows, and Linux.</p>
+  </div>
+
+  <div class="section card" style="margin-top:16px">
+    <h2>API Access</h2>
+    <p class="muted">Nevermind provides an OpenAI-compatible chat completions endpoint at <code>https://api.nvm.fyi/api/v1/chat/completions</code>.</p>
+    <h3>Authentication</h3>
+    <p class="muted">Use a Personal Access Token (PAT) from your <a href="/profile">profile page</a>. Pass it as a Bearer token:</p>
+    <pre><code>Authorization: Bearer nvm_pat_...</code></pre>
+    <h3>Example (curl)</h3>
+    <pre><code>curl https://api.nvm.fyi/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer nvm_pat_YOUR_TOKEN" \
+  -d '{
+    "model": "nevermind",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+    <h3>Supported Models</h3>
+    <p class="muted">The endpoint routes to the best available model automatically. Query <code>GET /api/v1/models</code> for the current model list.</p>
+  </div>
+
+  <div class="section card" style="margin-top:16px">
+    <h2>Rate Limits & Errors</h2>
+    <h3>Rate Limits</h3>
+    <p class="muted">Rate limits depend on your plan. The API returns <code>429 Too Many Requests</code> with a <code>Retry-After</code> header when you hit a limit.</p>
+    <h3>Error Codes</h3>
+    <table style="width:100%; margin-top:8px">
+      <tr><th style="text-align:left">Status</th><th style="text-align:left">Meaning</th></tr>
+      <tr><td>200</td><td>Success</td></tr>
+      <tr><td>401</td><td>Invalid or revoked PAT</td></tr>
+      <tr><td>402</td><td>Insufficient credits</td></tr>
+      <tr><td>429</td><td>Rate limited — wait and retry</td></tr>
+      <tr><td>503</td><td>Service temporarily unavailable</td></tr>
+    </table>
+  </div>
+
+  <div class="section card" style="margin-top:16px">
+    <h2>Device Authorization</h2>
+    <p class="muted">The desktop app authenticates using a device authorization flow (similar to OAuth device grant). Initiate from the app, approve in the browser, and the app receives a short-lived PAT.</p>
+    <p class="muted">When the protocol handler (<code>nvm://</code>) is unavailable, you can paste the device code manually into the app via the Command palette.</p>
+  </div>
+</Layout>
