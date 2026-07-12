@@ -93,6 +93,7 @@ const api: NevermindApi = {
     invokeMeasured('apps:running-paths', appPaths),
   setPaletteMode: (mode) => invokeMeasured('palette:set-mode', mode),
   hide: () => invokeMeasured('palette:hide'),
+  testInvoke: () => invokeMeasured('test:invoke'),
   quitApp: () => invokeMeasured('app:quit'),
   shortcutReady: () => invokeMeasured('palette:shortcut-ready'),
   requestCameraAccess: () => invokeMeasured('camera:request-access'),

@@ -161,6 +161,7 @@ export type NevermindApi = {
   getRunningAppPaths: (appPaths: string[]) => Promise<string[]>;
   setPaletteMode: (mode: PaletteMode) => Promise<void>;
   hide: () => Promise<void>;
+  testInvoke: () => Promise<unknown>;
   quitApp: () => Promise<{ ok: boolean }>;
   shortcutReady: () => Promise<void>;
   requestCameraAccess: () => Promise<{ ok: boolean; status: string }>;
