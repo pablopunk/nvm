@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { BillingConfigError, BillingEligibilityError, BillingRequestError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
+import { acquireCheckoutLock, releaseCheckoutLock } from '../../../lib/ratelimit';
 import { getSessionFromCookies } from '../../../lib/workos';
 
 export const POST: APIRoute = async ({ request }) => {
@@ -21,6 +22,16 @@ export const POST: APIRoute = async ({ request }) => {
   }
   const kind = body.kind;
 
+  if (kind === 'subscription') {
+    const lock = await acquireCheckoutLock(user.id);
+    if (!lock.ok) {
+      return Response.json(
+        { error: { type: 'checkout_in_flight', message: 'A checkout session is already in progress. Please wait and try again.' } },
+        { status: 409 },
+      );
+    }
+  }
+
   try {
     const checkout = await createBillingCheckout({ user, kind, priceId: body.priceId, tier: body.tier });
     return Response.json({ url: checkout.url });
@@ -38,5 +49,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     throw error;
+  } finally {
+    if (kind === 'subscription') {
+      await releaseCheckoutLock(user.id);
+    }
   }
 };
