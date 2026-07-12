@@ -15,7 +15,7 @@
     "test": "pnpm -C backend exec node --import tsx --test \"../src/**/*.test.ts\" \"../src/**/*.test.tsx\" && pnpm -C backend test",
     "verify": "pnpm check && pnpm build && node --check dist/main/main.js && node --check dist/preload/preload.cjs && node scripts/run-checks.cjs && pnpm typecheck && pnpm -C backend exec node --import tsx --test \"../src/**/*.test.ts\" \"../src/**/*.test.tsx\" && pnpm -C backend check && pnpm -C backend test",
     "check": "biome check",
-    "check:changed": "biome check --changed --since",
+    "check:changed": "node scripts/lint-changed.cjs",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",

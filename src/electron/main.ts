@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fsSync from 'node:fs';
@@ -53,15 +54,20 @@ import {
   verifyLocalFileToken,
 } from './file-utils';
 import {
+  getDefaultNevermindBaseUrl,
   getNevermindAuth,
+  nevermindEnvironmentForBaseUrl,
   signInToNevermind,
   signOutFromNevermind,
 } from './nevermind-auth';
 import {
+  checkNevermindCompatibility,
   currentNevermindCompatibilityManifest,
+  invalidateNevermindCompatibilityCache,
   onNevermindCompatibilityChanged,
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
+import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
 import { initSentry } from './sentry';
 
 initSentry();
@@ -359,6 +365,10 @@ let userState: AnyRecord = {
   settings: {},
   jobSettings: {},
   rateCache: {},
+  nevermindEnvironment: {
+    environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
+    baseUrl: getDefaultNevermindBaseUrl(),
+  },
 };
 
 clipboardService = createClipboardHistory({
@@ -1690,6 +1700,103 @@ function patchUpdatesView() {
 }
 
 let activeNevermindBaseUrl: string | null = null;
+
+const PRODUCTION_NEVERMIND_BASE_URL = 'https://api.nvm.fyi';
+const TRAILING_SLASH = /\/$/;
+
+function selectedNevermindEnvironment() {
+  const selected = userState.nevermindEnvironment;
+  if (!selected?.baseUrl) {
+    return {
+      environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
+      baseUrl: getDefaultNevermindBaseUrl(),
+    };
+  }
+  return selected;
+}
+
+async function signInToSelectedNevermindEnvironment() {
+  const selected = selectedNevermindEnvironment();
+  const result = await signInToNevermind({
+    baseUrl: selected.baseUrl,
+    environment: selected.environment,
+  });
+  if (result.ok) {
+    activeNevermindBaseUrl = result.auth.baseUrl;
+    warmNevermindCompatibilityCache(result.auth.baseUrl);
+  }
+  return result;
+}
+
+async function switchNevermindBackendEnvironment(input: {
+  environment: 'production' | 'pr_preview' | 'custom';
+  baseUrl?: string;
+}) {
+  const baseUrl =
+    input.environment === 'production'
+      ? PRODUCTION_NEVERMIND_BASE_URL
+      : String(input.baseUrl || '')
+          .trim()
+          .replace(TRAILING_SLASH, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    return { ok: false, message: 'Enter a valid backend URL.' };
+  }
+  if (parsed.protocol !== 'https:') {
+    return { ok: false, message: 'Backend URL must use HTTPS.' };
+  }
+  if (
+    app.isPackaged &&
+    (await resolvesToUnsafeNevermindAddress(parsed.hostname))
+  ) {
+    return {
+      ok: false,
+      message:
+        'Packaged Nevermind builds cannot use localhost or private network addresses.',
+    };
+  }
+
+  try {
+    await invalidateNevermindCompatibilityCache(baseUrl);
+    const manifest = await checkNevermindCompatibility(baseUrl);
+    if (!manifest) {
+      return {
+        ok: false,
+        message: 'That backend did not return a compatibility manifest.',
+      };
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error ? error.message : 'Backend validation failed.',
+    };
+  }
+
+  const previous = selectedNevermindEnvironment();
+  userState.nevermindEnvironment = {
+    environment: input.environment,
+    baseUrl,
+  };
+  scheduleSaveState();
+  await signOutFromNevermind();
+  await invalidateNevermindCompatibilityCache(previous.baseUrl);
+  const result = await signInToSelectedNevermindEnvironment();
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: `Sign-in failed: ${'error' in result ? result.error : 'unknown error'}`,
+    };
+  }
+  activeNevermindBaseUrl = result.auth.baseUrl;
+  warmNevermindCompatibilityCache(result.auth.baseUrl);
+  await nevermindAi?.disposeAllSessions?.();
+  invalidateExtensionRootItems();
+  broadcastAuthChanged({ authed: true, email: result.auth.email });
+  return { ok: true, message: `Connected to ${baseUrl}` };
+}
 
 function safeExternalUpdateUrl(raw?: string) {
   if (!raw) return null;
@@ -6245,6 +6352,8 @@ async function loadExtensions() {
         setActiveNevermindBaseUrl: (value) => {
           activeNevermindBaseUrl = value;
         },
+        switchNevermindBackendEnvironment,
+        signInToNevermind: signInToSelectedNevermindEnvironment,
         getPaletteHotkey,
         extensionShortcutRecords,
         patchKeyboardShortcutsView,
@@ -7148,6 +7257,12 @@ async function loadUserState() {
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},
+      nevermindEnvironment: loaded.nevermindEnvironment || {
+        environment: nevermindEnvironmentForBaseUrl(
+          getDefaultNevermindBaseUrl(),
+        ),
+        baseUrl: getDefaultNevermindBaseUrl(),
+      },
     };
   } catch {
     // First run.
@@ -7809,6 +7924,8 @@ app.whenReady().then(async () => {
     logInfo,
     logWarn,
   });
+  const storedNevermindAuth = await getNevermindAuth();
+  activeNevermindBaseUrl = storedNevermindAuth?.baseUrl || null;
   registerHostJobs();
   await loadExtensions();
   if (process.env.NVM_PALETTE_DEBUG) {
@@ -7865,7 +7982,7 @@ app.whenReady().then(async () => {
     warmNevermindCompatibilityCache,
     logInfo,
     userDataPath: () => app.getPath('userData'),
-    signInToNevermind,
+    signInToNevermind: signInToSelectedNevermindEnvironment,
     invalidateExtensionRootItems,
     broadcastAuthChanged,
     appIconCache,
