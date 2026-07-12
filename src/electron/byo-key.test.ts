@@ -21,6 +21,7 @@ function createFakeSafeStorage(): SafeStorageLike {
   };
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: test suite with multiple test cases
 describe('byo-key', () => {
   let testDir: string;
   let testFilePath: string;

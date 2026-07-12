@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const FILENAME = 'byo-key.json';
 
-type StoredByoKey = {
+interface StoredByoKey {
   encryptedApiKey?: string;
   apiKey?: string;
   providerId: string;
@@ -13,7 +13,7 @@ type StoredByoKey = {
   modelId: string;
   modelName: string;
   createdAt: string;
-};
+}
 
 type ByoKeySnapshot = {
   providerId: string;
@@ -25,24 +25,30 @@ type ByoKeySnapshot = {
   modelName: string;
 } | null;
 
-type SafeStorageLike = {
+interface SafeStorageLike {
   isEncryptionAvailable(): boolean;
   encryptString(v: string): Buffer;
   decryptString(b: Buffer): string;
-};
+}
 
 let safeStorageImpl: SafeStorageLike | null = null;
 let filePathOverride: string | null = null;
-let logWarn: (message: string, data?: unknown) => void = () => {};
+let logWarn: (message: string, data?: unknown) => void = () => {
+  /* no-op: overridden in tests */
+};
 
 function getSafeStorage(): SafeStorageLike {
-  if (safeStorageImpl) return safeStorageImpl;
+  if (safeStorageImpl) {
+    return safeStorageImpl;
+  }
   const { safeStorage } = require('electron');
   return safeStorage;
 }
 
 function byoKeyPath() {
-  if (filePathOverride) return filePathOverride;
+  if (filePathOverride) {
+    return filePathOverride;
+  }
   const { app } = require('electron');
   return path.join(app.getPath('userData'), FILENAME);
 }
@@ -53,8 +59,9 @@ function decryptApiKey(data: StoredByoKey): string | null {
     return storage.decryptString(Buffer.from(data.encryptedApiKey, 'base64'));
   }
   if (data.apiKey) {
-    if (!storage.isEncryptionAvailable())
+    if (!storage.isEncryptionAvailable()) {
       logWarn('safeStorage unavailable; reading plaintext BYO key');
+    }
     return Buffer.from(data.apiKey, 'base64').toString('utf8');
   }
   return null;
@@ -63,7 +70,9 @@ function decryptApiKey(data: StoredByoKey): string | null {
 let cached: ByoKeySnapshot = null;
 
 async function getByoKey(): Promise<ByoKeySnapshot> {
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   try {
     const raw = await fs.readFile(byoKeyPath(), 'utf8');
     const data = JSON.parse(raw) as StoredByoKey;
