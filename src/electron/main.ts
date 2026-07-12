@@ -7785,7 +7785,7 @@ app.whenReady().then(async () => {
     return;
   }
   initNevermindAi();
-  initExtensionContext({ nevermindAi } as any);
+  initExtensionContext({ nevermindAi });
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();
   registerActionShortcuts();

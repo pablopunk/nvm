@@ -50,6 +50,8 @@ export const extensionContext: {
   };
 } = {} as any;
 
-export function initExtensionContext(ctx: typeof extensionContext): void {
+export function initExtensionContext(
+  ctx: Partial<typeof extensionContext>,
+): void {
   Object.assign(extensionContext, ctx);
 }
