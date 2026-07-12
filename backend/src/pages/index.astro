@@ -36,9 +36,9 @@ import Layout from '../layouts/Layout.astro';
           <a class="button button--ghost" href="/docs">Read the docs →</a>
         </div>
         <form class="waitlist-form" id="waitlist-form">
-          <label for="waitlist-email">Join the cloud &amp; AI early-access waitlist</label>
+          <label for="waitlist-email">Join the AI waitlist</label>
           <div class="waitlist-form__row">
-            <input id="waitlist-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+            <input id="waitlist-email" name="email" type="email" class="input waitlist-form__input" autocomplete="email" required placeholder="you@example.com" />
             <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="waitlist-form__trap" />
             <button class="button" type="submit">Join waitlist</button>
           </div>
