@@ -1,6 +1,11 @@
+// biome-ignore-all lint/style/noMagicNumbers: ranking tests intentionally state their score inputs and expected boost.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compareRankedActions } from './action-ranking';
+import {
+  appResultMarker,
+  compareRankedActions,
+  priorityBoost,
+} from './action-ranking';
 import { scoreNormalized } from './search-utils';
 
 const EXACT_MATCH_SCORE = 100;
@@ -61,5 +66,55 @@ test('AI builder chat continuation title no longer exact-matches the prompt', ()
   assert.ok(
     scoreNormalized('Continue AI chat: quit all apps', query) <
       EXACT_MATCH_SCORE,
+  );
+});
+
+test('only marked application launch results receive the app boost', () => {
+  assert.equal(
+    priorityBoost({ isAppResult: true, score: 50, lastUsed: 0 }),
+    25,
+  );
+  assert.equal(priorityBoost({ kind: 'app', score: 50, lastUsed: 0 }), 0);
+  assert.equal(
+    priorityBoost({
+      kind: 'extension-root-item',
+      extensionId: 'nevermind.apps',
+      id: 'extension-root:nevermind.apps:force-quit-apps-command',
+      score: 50,
+      lastUsed: 0,
+    }),
+    0,
+  );
+});
+
+test('application launch results win equal relevance but not stronger relevance', () => {
+  const appResult = {
+    title: 'Calculator',
+    score: 50 + priorityBoost({ isAppResult: true, score: 50, lastUsed: 0 }),
+    lastUsed: 0,
+  };
+  const equalRelevance = { title: 'Calendar', score: 50, lastUsed: 0 };
+  assert.equal(
+    [equalRelevance, appResult].sort(compareRankedActions)[0],
+    appResult,
+  );
+
+  const strongerTextMatch = { title: 'Calculator', score: 100, lastUsed: 0 };
+  assert.equal(
+    [appResult, strongerTextMatch].sort(compareRankedActions)[0],
+    strongerTextMatch,
+  );
+});
+
+test('application launch marker survives root-item conversion data shaping', () => {
+  assert.deepEqual(appResultMarker({ isAppResult: true }), {
+    isAppResult: true,
+  });
+  assert.deepEqual(
+    appResultMarker({
+      id: 'force-quit-apps-command',
+      title: 'Force Quit Apps',
+    }),
+    {},
   );
 });

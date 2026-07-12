@@ -81,7 +81,11 @@ import { initSentry } from './sentry';
 initSentry();
 
 import { canCustomizeCommandAction } from '../model';
-import { compareRankedActions } from './action-ranking';
+import {
+  appResultMarker,
+  compareRankedActions,
+  priorityBoost,
+} from './action-ranking';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
@@ -1000,10 +1004,6 @@ function recentBoost(actionId: any) {
   if (!recent) return 0;
   const ageHours = Math.max(0, (Date.now() - recent.lastUsed) / 36e5);
   return Math.max(0, 20 - ageHours);
-}
-
-function priorityBoost(action: any) {
-  return action.kind === 'app' ? 25 : 0;
 }
 
 function defaultActionIdFor(action: any) {
@@ -2468,6 +2468,7 @@ function extensionRootActionFromItem(entry, item) {
     id: `extension-root:${entry.extension.id}:${item.id}`,
     kind: 'extension-root-item',
     extensionId: entry.extension.id,
+    ...appResultMarker(item),
     commandId: item.id,
     extensionFile: entry.extension.__filePath
       ? path.basename(entry.extension.__filePath)
