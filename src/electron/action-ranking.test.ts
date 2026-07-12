@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: ranking tests intentionally state their score inputs and expected boost.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {

@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noExplicitAny: the extension host currently exposes these callbacks without public types.
 import { extensionContext } from './_context';
 
 function appRootItem(item) {
@@ -46,6 +47,7 @@ function createForceQuitAppItem(app: any) {
   };
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: the extension definition is deliberately kept as one declarative object.
 export function createAppsExtension() {
   return {
     id: 'nevermind.apps',
@@ -71,11 +73,12 @@ export function createAppsExtension() {
               (app) =>
                 app.path && runningPaths.has(String(app.path).toLowerCase()),
             );
-          if (!apps.length)
+          if (apps.length === 0) {
             return ctx.ui.empty(
               'No running apps',
               'No running applications to force quit.',
             );
+          }
           return ctx.ui.list({
             id: 'force-quit-apps',
             title: 'Force Quit Apps',
@@ -129,8 +132,9 @@ export function createAppsExtension() {
           registeredActionId: 'force-quit-apps',
         },
       };
-      if (extensionContext.rankAction(forceQuitItem, query))
+      if (extensionContext.rankAction(forceQuitItem, query)) {
         return [forceQuitItem, ...items];
+      }
       return items;
     },
   };

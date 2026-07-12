@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: literal score bands make ranking assertions readable.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalize, scoreNormalized } from './electron/search-utils';
