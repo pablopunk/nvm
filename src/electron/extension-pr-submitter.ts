@@ -210,7 +210,8 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
       deps.logWarn('extension-pr-submitter.current-user-failed', { error });
       return {
         ok: false,
-        message: 'Failed to resolve GitHub account. Check your GitHub CLI setup.',
+        message:
+          'Failed to resolve GitHub account. Check your GitHub CLI setup.',
       };
     }
 

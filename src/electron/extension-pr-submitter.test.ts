@@ -221,9 +221,7 @@ test('submitExtensionPr happy path invokes correct gh commands', async () => {
 
     const forkCall = calls.find(
       ({ command, args }) =>
-        command === 'gh' &&
-        args[0] === 'repo' &&
-        args[1] === 'fork',
+        command === 'gh' && args[0] === 'repo' && args[1] === 'fork',
     );
     assert.deepStrictEqual(forkCall, {
       command: 'gh',
@@ -288,9 +286,7 @@ test('submitExtensionPr uses the upstream directly for its owner', async () => {
       'repository owner must not attempt to fork the upstream',
     );
     assert.ok(
-      calls.some(({ args }) =>
-        args.includes('repos/pablopunk/nvm/git/refs'),
-      ),
+      calls.some(({ args }) => args.includes('repos/pablopunk/nvm/git/refs')),
       'repository owner must create the branch on the upstream',
     );
     const prCreateCall = calls.find(
