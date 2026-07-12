@@ -1,8 +1,5 @@
-import {
-  getNevermindAuth,
-  signInToNevermind,
-  signOutFromNevermind,
-} from '../nevermind-auth';
+// biome-ignore-all lint: This extension follows the existing palette-extension API conventions.
+import { getNevermindAuth, signOutFromNevermind } from '../nevermind-auth';
 import { extensionContext } from './_context';
 
 export function createAccountExtension() {
@@ -53,7 +50,7 @@ export function createAccountExtension() {
         type: 'runExtensionAction',
         title: 'Log in',
         __handler: async () => {
-          const result = await signInToNevermind();
+          const result = await extensionContext.signInToNevermind();
           extensionContext.invalidateExtensionRootItems();
           if (result.ok)
             extensionContext.broadcastAuthChanged({
@@ -74,11 +71,102 @@ export function createAccountExtension() {
     };
   }
 
+  function backendEnvironmentItem() {
+    async function switchBackend(input: {
+      environment: 'production' | 'pr_preview' | 'custom';
+      baseUrl?: string;
+    }) {
+      const result =
+        await extensionContext.switchNevermindBackendEnvironment(input);
+      return {
+        toast: {
+          message: result.message,
+          tone: result.ok ? ('default' as const) : ('error' as const),
+        },
+      };
+    }
+    const productionAction = {
+      type: 'runExtensionAction',
+      title: 'Production',
+      __handler: async () =>
+        switchBackend({
+          environment: 'production',
+        }),
+    };
+    const customAction = {
+      type: 'promptAction',
+      title: 'Custom URL…',
+      fields: [
+        {
+          id: 'baseUrl',
+          type: 'text',
+          label: 'Backend URL',
+          placeholder: 'https://your-preview.vercel.app',
+          required: true,
+        },
+      ],
+      targetAction: {
+        type: 'runExtensionAction',
+        title: 'Use Custom URL',
+        __handler: async (
+          _ctx: unknown,
+          action: { formValues?: { baseUrl?: string } },
+        ) =>
+          switchBackend({
+            environment: 'custom',
+            baseUrl: action.formValues?.baseUrl,
+          }),
+      },
+    };
+    const choicesView = {
+      type: 'list',
+      title: 'Switch Backend Environment',
+      searchBarPlaceholder: 'Choose an environment',
+      items: [
+        {
+          id: 'account-switch-backend-production',
+          title: 'Production',
+          subtitle: 'https://api.nvm.fyi',
+          primaryAction: productionAction,
+        },
+        {
+          id: 'account-switch-backend-custom',
+          title: 'Custom URL…',
+          subtitle: 'Use a validated HTTPS backend URL',
+          primaryAction: customAction,
+        },
+      ],
+    };
+    return {
+      id: 'account-switch-backend',
+      actionId: 'account-switch-backend',
+      title: 'Nevermind: Switch Backend Environment',
+      subtitle: 'Choose Production or a validated custom backend URL',
+      icon: 'globe',
+      score: 20,
+      aliases: [
+        'backend',
+        'environment',
+        'production',
+        'preview',
+        'custom url',
+      ],
+      primaryAction: {
+        type: 'pushView',
+        title: 'Choose Backend Environment',
+        view: choicesView,
+      },
+      actionPanel: {
+        sections: [{ actions: [productionAction, customAction] }],
+      },
+    };
+  }
+
   return {
     id: extensionId,
     title: 'Nevermind Account',
     permissions: [] as const,
-    searchItems: async () => [await accountItem()],
-    rootItems: async () => [await accountItem()],
+    searchItems: async () => [await accountItem(), backendEnvironmentItem()],
+    rootItems: async () => [await accountItem(), backendEnvironmentItem()],
   };
 }
