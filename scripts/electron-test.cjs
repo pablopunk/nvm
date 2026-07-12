@@ -34,9 +34,15 @@ const { spawn } = require('node:child_process');
   });
   await fs.rm(userDataDir, { recursive: true, force: true });
   const cleaned = !(await fs.stat(userDataDir).catch(() => null));
+  let manifest = {};
+  try {
+    manifest = JSON.parse(
+      await fs.readFile(path.join(artifactDir, 'manifest.json'), 'utf8'),
+    );
+  } catch {}
   await fs.writeFile(
     path.join(artifactDir, 'manifest.json'),
-    `${JSON.stringify({ userDataDir, entry: 'dist/main/main.js', testMode: true, cleaned }, null, 2)}\n`,
+    `${JSON.stringify({ ...manifest, userDataDir, entry: 'dist/main/main.js', testMode: true, cleaned }, null, 2)}\n`,
   );
   if (!cleaned) process.exitCode = 1;
   if (exitCode !== 0) process.exitCode = exitCode;
