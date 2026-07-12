@@ -108,7 +108,10 @@ export function createAccountExtension() {
       targetAction: {
         type: 'runExtensionAction',
         title: 'Use Custom URL',
-        __handler: async (_ctx: any, action: any) =>
+        __handler: async (
+          _ctx: unknown,
+          action: { formValues?: { baseUrl?: string } },
+        ) =>
           switchBackend({
             environment: 'custom',
             baseUrl: action.formValues?.baseUrl,

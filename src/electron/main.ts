@@ -1698,6 +1698,7 @@ function patchUpdatesView() {
 let activeNevermindBaseUrl: string | null = null;
 
 const PRODUCTION_NEVERMIND_BASE_URL = 'https://api.nvm.fyi';
+const TRAILING_SLASH = /\/$/;
 
 function selectedNevermindEnvironment() {
   const selected = userState.nevermindEnvironment;
@@ -1742,29 +1743,32 @@ async function switchNevermindBackendEnvironment(input: {
       ? PRODUCTION_NEVERMIND_BASE_URL
       : String(input.baseUrl || '')
           .trim()
-          .replace(/\/$/, '');
+          .replace(TRAILING_SLASH, '');
   let parsed: URL;
   try {
     parsed = new URL(baseUrl);
   } catch {
     return { ok: false, message: 'Enter a valid backend URL.' };
   }
-  if (parsed.protocol !== 'https:')
+  if (parsed.protocol !== 'https:') {
     return { ok: false, message: 'Backend URL must use HTTPS.' };
-  if (app.isPackaged && loopbackNevermindUrl(baseUrl))
+  }
+  if (app.isPackaged && loopbackNevermindUrl(baseUrl)) {
     return {
       ok: false,
       message: 'Packaged Nevermind builds cannot use localhost.',
     };
+  }
 
   try {
     await invalidateNevermindCompatibilityCache(baseUrl);
     const manifest = await checkNevermindCompatibility(baseUrl);
-    if (!manifest)
+    if (!manifest) {
       return {
         ok: false,
         message: 'That backend did not return a compatibility manifest.',
       };
+    }
   } catch (error) {
     return {
       ok: false,
@@ -1782,11 +1786,12 @@ async function switchNevermindBackendEnvironment(input: {
   await signOutFromNevermind();
   await invalidateNevermindCompatibilityCache(previous.baseUrl);
   const result = await signInToSelectedNevermindEnvironment();
-  if (!result.ok)
+  if (!result.ok) {
     return {
       ok: false,
       message: `Sign-in failed: ${'error' in result ? result.error : 'unknown error'}`,
     };
+  }
   activeNevermindBaseUrl = result.auth.baseUrl;
   warmNevermindCompatibilityCache(result.auth.baseUrl);
   await nevermindAi?.disposeAllSessions?.();
