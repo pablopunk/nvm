@@ -12,12 +12,14 @@ function createDeps(
     stubs?: Record<string, string>;
     authOk?: boolean;
     ghMissing?: boolean;
+    currentUser?: string;
   } = {},
 ) {
   const calls: Array<{ command: string; args: string[] }> = [];
   const stubs = overrides.stubs || {};
   const authOk = overrides.authOk ?? true;
   const ghMissing = overrides.ghMissing ?? false;
+  const currentUser = overrides.currentUser ?? 'testuser';
 
   const execFileText = async (
     command: string,
@@ -34,6 +36,7 @@ function createDeps(
       if (!authOk) throw new Error('You are not logged into any GitHub hosts.');
       return '';
     }
+    if (key.startsWith('gh api user ')) return `${currentUser}\n`;
     if (key.startsWith('gh api repos/')) {
       if (key.includes('/branches/main')) return 'abc123def456';
       if (key.includes('/contents/')) {
@@ -49,7 +52,6 @@ function createDeps(
         }
         return '';
       }
-      if (key.includes('/user')) return 'testuser\n';
       if (key.includes('/git/refs')) return '';
       if (key.includes('/contents/')) return '';
       return JSON.stringify({ sha: 'test-sha' });
@@ -255,6 +257,49 @@ test('submitExtensionPr happy path invokes correct gh commands', async () => {
     assert.ok(
       joinedCalls.some((c) => c.startsWith('gh pr create')),
       'should create PR',
+    );
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('submitExtensionPr uses the upstream directly for its owner', async () => {
+  const { deps, calls } = createDeps({ currentUser: 'pablopunk' });
+  const submitter = createExtensionPrSubmitter(deps);
+  const tmpDir = path.join('/tmp/test-extensions');
+  await fs.mkdir(tmpDir, { recursive: true });
+  await fs.writeFile(
+    path.join(tmpDir, 'my-extension.ts'),
+    `export default { id: 'my-extension', title: 'My Extension' }`,
+  );
+
+  try {
+    const result = await submitter.submitExtensionPr({
+      targetAction: {
+        kind: 'extension-root-item',
+        removable: true,
+        extensionFile: 'my-extension.ts',
+        title: 'My Extension',
+      },
+    });
+    assert.strictEqual(result.ok, true);
+    assert.ok(
+      !calls.some(({ args }) => args[0] === 'repo' && args[1] === 'fork'),
+      'repository owner must not attempt to fork the upstream',
+    );
+    assert.ok(
+      calls.some(({ args }) =>
+        args.includes('repos/pablopunk/nvm/git/refs'),
+      ),
+      'repository owner must create the branch on the upstream',
+    );
+    const prCreateCall = calls.find(
+      ({ args }) => args[0] === 'pr' && args[1] === 'create',
+    );
+    assert.ok(prCreateCall);
+    assert.strictEqual(
+      prCreateCall.args[prCreateCall.args.indexOf('--head') + 1],
+      'submit-extension-my-extension',
     );
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });

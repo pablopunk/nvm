@@ -69,11 +69,11 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
   }
 
   async function fetchIndexTs(
-    forkOwner: string,
+    targetOwner: string,
   ): Promise<{ content: string; sha: string }> {
     const stdout = await deps.execFileText('gh', [
       'api',
-      `repos/${forkOwner}/nvm/contents/src/electron/extensions/index.ts`,
+      `repos/${targetOwner}/${deps.repoName}/contents/src/electron/extensions/index.ts`,
     ]);
     const parsed = JSON.parse(stdout as string);
     return {
@@ -197,35 +197,37 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
 
     const { repoOwner, repoName } = deps;
 
+    let targetOwner: string;
     try {
-      await deps.execFileText('gh', [
-        'repo',
-        'fork',
-        `${repoOwner}/${repoName}`,
-      ]);
-    } catch (error) {
-      deps.logWarn('extension-pr-submitter.fork-failed', { error });
-      return {
-        ok: false,
-        message: 'Failed to fork repository. Check your GitHub CLI setup.',
-      };
-    }
-
-    let forkOwner: string;
-    try {
-      const forkOwnerRaw = await deps.execFileText('gh', [
+      const currentUserRaw = await deps.execFileText('gh', [
         'api',
         'user',
         '--jq',
         '.login',
       ]);
-      forkOwner = (forkOwnerRaw as string).trim();
+      targetOwner = (currentUserRaw as string).trim();
     } catch (error) {
-      deps.logWarn('extension-pr-submitter.fork-owner-failed', { error });
+      deps.logWarn('extension-pr-submitter.current-user-failed', { error });
       return {
         ok: false,
-        message: 'Failed to resolve fork owner. Check your GitHub CLI setup.',
+        message: 'Failed to resolve GitHub account. Check your GitHub CLI setup.',
       };
+    }
+
+    if (targetOwner !== repoOwner) {
+      try {
+        await deps.execFileText('gh', [
+          'repo',
+          'fork',
+          `${repoOwner}/${repoName}`,
+        ]);
+      } catch (error) {
+        deps.logWarn('extension-pr-submitter.fork-failed', { error });
+        return {
+          ok: false,
+          message: 'Failed to fork repository. Check your GitHub CLI setup.',
+        };
+      }
     }
 
     let mainSha: string;
@@ -246,7 +248,7 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
         'api',
         '--method',
         'POST',
-        `repos/${forkOwner}/nvm/git/refs`,
+        `repos/${targetOwner}/${repoName}/git/refs`,
         '-f',
         `ref=refs/heads/${branchName}`,
         '-f',
@@ -265,7 +267,7 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
         'api',
         '--method',
         'PUT',
-        `repos/${forkOwner}/nvm/contents/src/electron/extensions/${slug}.ts`,
+        `repos/${targetOwner}/${repoName}/contents/src/electron/extensions/${slug}.ts`,
         '-f',
         `message=Add extension ${title}`,
         '-f',
@@ -286,7 +288,7 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
     let currentIndex: string;
     let indexSha: string;
     try {
-      const index = await fetchIndexTs(forkOwner);
+      const index = await fetchIndexTs(targetOwner);
       currentIndex = index.content;
       indexSha = index.sha;
     } catch (error) {
@@ -304,7 +306,7 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
         'api',
         '--method',
         'PUT',
-        `repos/${forkOwner}/nvm/contents/src/electron/extensions/index.ts`,
+        `repos/${targetOwner}/${repoName}/contents/src/electron/extensions/index.ts`,
         '-f',
         'message=Register extension in barrel',
         '-f',
@@ -330,7 +332,7 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
         '--repo',
         `${repoOwner}/${repoName}`,
         '--head',
-        `${forkOwner}:${branchName}`,
+        targetOwner === repoOwner ? branchName : `${targetOwner}:${branchName}`,
         '--title',
         `Add extension: ${title}`,
         '--body',
