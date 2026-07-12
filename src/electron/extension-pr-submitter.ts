@@ -202,7 +202,6 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
         'repo',
         'fork',
         `${repoOwner}/${repoName}`,
-        '--remote=false',
       ]);
     } catch (error) {
       deps.logWarn('extension-pr-submitter.fork-failed', { error });

@@ -217,6 +217,17 @@ test('submitExtensionPr happy path invokes correct gh commands', async () => {
     assert.strictEqual(result.ok, true);
     assert.ok(result.prUrl, 'should return a PR URL');
 
+    const forkCall = calls.find(
+      ({ command, args }) =>
+        command === 'gh' &&
+        args[0] === 'repo' &&
+        args[1] === 'fork',
+    );
+    assert.deepStrictEqual(forkCall, {
+      command: 'gh',
+      args: ['repo', 'fork', 'pablopunk/nvm'],
+    });
+
     const joinedCalls = calls.map((c) => `${c.command} ${c.args.join(' ')}`);
     assert.ok(
       joinedCalls.some((c) => c.includes('branches/main')),
