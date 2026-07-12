@@ -143,6 +143,26 @@ test('submitExtensionPr rejects when extensionFile is missing', async () => {
   assert.strictEqual(result.ok, false);
 });
 
+test('submitExtensionPr rejects path traversal outside extensions dir', async () => {
+  const { deps, calls } = createDeps({ authOk: true });
+  const submitter = createExtensionPrSubmitter(deps);
+
+  const result = await submitter.submitExtensionPr({
+    targetAction: {
+      kind: 'extension-root-item',
+      removable: true,
+      extensionFile: '../secret.ts',
+      title: 'Escape Attempt',
+    },
+  });
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(
+    calls.length,
+    0,
+    'should not invoke any gh commands for path traversal',
+  );
+});
+
 test('submitExtensionPr preflight fails when gh not authed', async () => {
   const { deps } = createDeps({ authOk: false });
   const submitter = createExtensionPrSubmitter(deps);

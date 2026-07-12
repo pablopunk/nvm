@@ -2096,15 +2096,12 @@ export function App() {
     !ghStatus.authed;
   async function submitExtensionPrAction() {
     if (!optionsFor) return;
-    const result = (await window.nvm.runViewAction({
+    setOptionsFor(null);
+    await runViewAction({
       type: 'submitExtensionPr',
       title: 'Submit as PR',
       targetAction: optionsFor,
-    })) as any;
-    showToast(
-      result?.toast?.message ?? 'Submitted',
-      result?.toast?.tone === 'error' ? 'error' : 'default',
-    );
+    } as ExtensionViewAction);
   }
   const canCustomizeAction = canCustomizeCommandAction(optionsFor);
   const canRemoveOptionsShortcut = Boolean(
@@ -2539,6 +2536,7 @@ export function App() {
           : 'Open a pull request adding this extension to Nevermind',
         onSelect: submitExtensionPrAction,
         show: canSubmitExtensionPr,
+        disabled: canSubmitExtensionPrHint,
       },
       {
         value: 'option:tweak',

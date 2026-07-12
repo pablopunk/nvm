@@ -272,6 +272,7 @@ export function CommandRow({
       value={value}
       className={itemClassName}
       data-foreground={appearance?.foreground}
+      disabled={disabled}
       data-disabled={disabled ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
       onSelect={() => {

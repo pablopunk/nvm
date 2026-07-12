@@ -33,9 +33,9 @@ function createFactoryFunctionName(slug: string): string {
   return `create${createExtensionNameFromSlug(slug)}Extension`;
 }
 
-function createExtensionModuleTitle(source: string): string {
+function createExtensionModuleTitle(source: string, slug: string): string {
   const match = source.match(/title:\s*["'`]([^"'`]+)/);
-  return match ? match[1] : sourceExtensionSlug(source);
+  return match ? match[1] : slug;
 }
 
 export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
@@ -101,7 +101,8 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
     const factoryFunc = createFactoryFunctionName(slug);
     const importLine = `import { ${factoryFunc} } from './${slug}';`;
 
-    if (new RegExp(`\\b${factoryFunc}\\b`).test(currentIndex)) {
+    const escapedFactoryFunc = factoryFunc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escapedFactoryFunc}\\b`).test(currentIndex)) {
       return { updated: currentIndex, importLine, factoryFunc };
     }
 
@@ -153,20 +154,31 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
     const extensionFile = targetAction?.extensionFile;
     if (!extensionFile) return { ok: false, message: 'Extension file not found' };
 
-    const filePath = path.join(deps.extensionsDir, extensionFile);
+    const resolvedExtensionsDir = path.resolve(deps.extensionsDir);
+    const filePath = path.resolve(
+      path.join(deps.extensionsDir, extensionFile),
+    );
+
+    if (!filePath.startsWith(resolvedExtensionsDir + path.sep)) {
+      return {
+        ok: false,
+        message: 'Extension must be inside extensions directory',
+      };
+    }
+
     let source: string;
     try {
       source = await fs.readFile(filePath, 'utf-8');
     } catch {
-      return { ok: false, message: `Cannot read extension file: ${extensionFile}` };
-    }
-
-    if (!filePath.startsWith(deps.extensionsDir)) {
-      return { ok: false, message: `Extension must be inside extensions directory` };
+      return {
+        ok: false,
+        message: `Cannot read extension file: ${extensionFile}`,
+      };
     }
 
     const slug = sourceExtensionSlug(filePath);
-    const title = targetAction.title || createExtensionModuleTitle(source);
+    const title =
+      targetAction.title || createExtensionModuleTitle(source, slug);
 
     try {
       await deps.execFileText('gh', ['auth', 'status']);
@@ -179,82 +191,154 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
 
     const { repoOwner, repoName } = deps;
 
-    await deps.execFileText('gh', [
-      'repo',
-      'fork',
-      `${repoOwner}/${repoName}`,
-      '--remote=false',
-    ]);
+    try {
+      await deps.execFileText('gh', [
+        'repo',
+        'fork',
+        `${repoOwner}/${repoName}`,
+        '--remote=false',
+      ]);
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.fork-failed', { error });
+      return {
+        ok: false,
+        message: 'Failed to fork repository. Check your GitHub CLI setup.',
+      };
+    }
 
-    const forkOwnerRaw = await deps.execFileText('gh', [
-      'api',
-      'user',
-      '--jq',
-      '.login',
-    ]);
-    const forkOwner = (forkOwnerRaw as string).trim();
+    let forkOwner: string;
+    try {
+      const forkOwnerRaw = await deps.execFileText('gh', [
+        'api',
+        'user',
+        '--jq',
+        '.login',
+      ]);
+      forkOwner = (forkOwnerRaw as string).trim();
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.fork-owner-failed', { error });
+      return {
+        ok: false,
+        message: 'Failed to resolve fork owner. Check your GitHub CLI setup.',
+      };
+    }
 
-    const mainSha = await getMainSha(repoOwner, repoName);
+    let mainSha: string;
+    try {
+      mainSha = await getMainSha(repoOwner, repoName);
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.main-sha-failed', { error });
+      return {
+        ok: false,
+        message: 'Failed to fetch repository metadata.',
+      };
+    }
+
     const branchName = `submit-extension-${slug}`;
 
-    await deps.execFileText('gh', [
-      'api',
-      '--method',
-      'POST',
-      `repos/${forkOwner}/nvm/git/refs`,
-      '-f',
-      `ref=refs/heads/${branchName}`,
-      '-f',
-      `sha=${mainSha}`,
-    ]);
+    try {
+      await deps.execFileText('gh', [
+        'api',
+        '--method',
+        'POST',
+        `repos/${forkOwner}/nvm/git/refs`,
+        '-f',
+        `ref=refs/heads/${branchName}`,
+        '-f',
+        `sha=${mainSha}`,
+      ]);
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.branch-failed', { error });
+      return {
+        ok: false,
+        message: `Failed to create branch. The branch "${branchName}" may already exist.`,
+      };
+    }
 
-    await deps.execFileText('gh', [
-      'api',
-      '--method',
-      'PUT',
-      `repos/${forkOwner}/nvm/contents/src/electron/extensions/${slug}.ts`,
-      '-f',
-      `message=Add extension ${title}`,
-      '-f',
-      `content=${Buffer.from(source).toString('base64')}`,
-      '-f',
-      `branch=${branchName}`,
-    ]);
+    try {
+      await deps.execFileText('gh', [
+        'api',
+        '--method',
+        'PUT',
+        `repos/${forkOwner}/nvm/contents/src/electron/extensions/${slug}.ts`,
+        '-f',
+        `message=Add extension ${title}`,
+        '-f',
+        `content=${Buffer.from(source).toString('base64')}`,
+        '-f',
+        `branch=${branchName}`,
+      ]);
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.extension-upload-failed', {
+        error,
+      });
+      return {
+        ok: false,
+        message: 'Failed to upload extension file.',
+      };
+    }
 
-    const { content: currentIndex, sha: indexSha } =
-      await fetchIndexTs(forkOwner);
+    let currentIndex: string;
+    let indexSha: string;
+    try {
+      const index = await fetchIndexTs(forkOwner);
+      currentIndex = index.content;
+      indexSha = index.sha;
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.index-fetch-failed', { error });
+      return {
+        ok: false,
+        message: 'Failed to fetch extension barrel index.',
+      };
+    }
 
     const { updated: updatedIndex } = spliceIntoIndexTs(currentIndex, slug);
 
-    await deps.execFileText('gh', [
-      'api',
-      '--method',
-      'PUT',
-      `repos/${forkOwner}/nvm/contents/src/electron/extensions/index.ts`,
-      '-f',
-      'message=Register extension in barrel',
-      '-f',
-      `content=${Buffer.from(updatedIndex).toString('base64')}`,
-      '-f',
-      `sha=${indexSha}`,
-      '-f',
-      `branch=${branchName}`,
-    ]);
+    try {
+      await deps.execFileText('gh', [
+        'api',
+        '--method',
+        'PUT',
+        `repos/${forkOwner}/nvm/contents/src/electron/extensions/index.ts`,
+        '-f',
+        'message=Register extension in barrel',
+        '-f',
+        `content=${Buffer.from(updatedIndex).toString('base64')}`,
+        '-f',
+        `sha=${indexSha}`,
+        '-f',
+        `branch=${branchName}`,
+      ]);
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.index-update-failed', { error });
+      return {
+        ok: false,
+        message: 'Failed to update extension barrel index.',
+      };
+    }
 
-    const prUrlRaw = await deps.execFileText('gh', [
-      'pr',
-      'create',
-      '--repo',
-      `${repoOwner}/${repoName}`,
-      '--head',
-      `${forkOwner}:${branchName}`,
-      '--title',
-      `Add extension: ${title}`,
-      '--body',
-      `Submitted from Nevermind. Adds the \`${title}\` extension under \`src/electron/extensions/${slug}.ts\`.`,
-    ]);
-
-    const prUrl = (prUrlRaw as string).trim();
+    let prUrl: string;
+    try {
+      const prUrlRaw = await deps.execFileText('gh', [
+        'pr',
+        'create',
+        '--repo',
+        `${repoOwner}/${repoName}`,
+        '--head',
+        `${forkOwner}:${branchName}`,
+        '--title',
+        `Add extension: ${title}`,
+        '--body',
+        `Submitted from Nevermind. Adds the \`${title}\` extension under \`src/electron/extensions/${slug}.ts\`.`,
+      ]);
+      prUrl = (prUrlRaw as string).trim();
+    } catch (error) {
+      deps.logWarn('extension-pr-submitter.pr-create-failed', { error });
+      return {
+        ok: false,
+        message: 'Failed to create pull request.',
+      };
+    }
 
     deps.logInfo(
       'extension-pr-submitter.success',
