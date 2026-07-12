@@ -91,8 +91,6 @@ function createFakeDedupDb(existingRows: DedupRow[] = []): {
   function createFakeDbObject() {
     let lastTable: unknown;
     let lastSetValues: Record<string, unknown> = {};
-    let lastWhereCol: string | null = null;
-    let lastWhereVal: unknown = null;
 
     function createSelectChain() {
       let whereFilter: (row: DedupRow) => boolean = () => true;
@@ -160,24 +158,28 @@ function createFakeDedupDb(existingRows: DedupRow[] = []): {
     }
 
     function createUpdateChain(table: unknown) {
+      let storedCond: unknown = null;
+
+      function applyAndReturn(): DedupRow[] {
+        const matchedRow = rows.find((r) => rowMatchesAllConditions(r, storedCond));
+        if (!matchedRow) return [];
+        Object.assign(matchedRow, lastSetValues);
+        updates.push({ table, setValues: { ...lastSetValues }, whereClause: { keyCol: 'id', keyVal: matchedRow.id } });
+        return [matchedRow];
+      }
+
       const chain: any = {
         set: (next: Record<string, unknown>) => {
           lastSetValues = next;
           return chain;
         },
         where: (cond: unknown) => {
-          const parsed = parseWhereCond(cond);
-          lastWhereCol = parsed.col;
-          lastWhereVal = parsed.val;
-          const idx = rows.findIndex((r) => (r as any)[lastWhereCol!] === lastWhereVal);
-          if (idx >= 0) {
-            Object.assign(rows[idx], lastSetValues);
-          }
-          updates.push({ table, setValues: { ...lastSetValues }, whereClause: { keyCol: lastWhereCol!, keyVal: lastWhereVal! } });
+          storedCond = cond;
           return chain;
         },
+        returning: () => Promise.resolve(applyAndReturn()),
         then: (fn: Parameters<Promise<unknown>['then']>[0], rj: Parameters<Promise<unknown>['then']>[1]) =>
-          Promise.resolve().then(fn, rj),
+          Promise.resolve(applyAndReturn()).then(fn, rj),
         catch: (fn: Parameters<Promise<unknown>['catch']>[0]) => Promise.resolve().catch(fn),
       };
       return chain;
@@ -205,6 +207,27 @@ function condMatches(row: DedupRow, cond: unknown): boolean {
 function parseWhereCond(cond: unknown): { col: string; val: unknown } {
   const clause = cond as { left: { name: string }; right: unknown };
   return { col: clause?.left?.name ?? '', val: clause?.right };
+}
+
+function extractAndConditions(cond: unknown): Array<{ col: string; val: unknown }> {
+  const andCond = cond as { queryChunks?: any[] };
+  if (!Array.isArray(andCond.queryChunks)) return [];
+  return andCond.queryChunks
+    .filter((chunk: any) => chunk && chunk.left && chunk.right !== undefined)
+    .map((chunk: any) => ({ col: chunk.left.name, val: chunk.right }));
+}
+
+function rowMatchesAllConditions(row: DedupRow, cond: unknown): boolean {
+  const eqCol = (cond as any)?.left?.name;
+  const eqVal = (cond as any)?.right;
+  if (eqCol) return (row as any)[eqCol] === eqVal;
+
+  const andClauses = extractAndConditions(cond);
+  if (andClauses.length > 0) {
+    return andClauses.every(({ col, val }) => (row as any)[col] === val);
+  }
+
+  return true;
 }
 
 afterEach(() => {
@@ -262,6 +285,33 @@ test('handleDedup reclaims stale in-flight row and returns undefined', async fun
   assert.equal(result, undefined);
   assert.ok(updates.length >= 1);
   assert.equal(updates[0].setValues.status, 'in_flight');
+});
+
+test('concurrent stale reclaim permits exactly one winner', async function concurrentStaleReclaimsOneWinner() {
+  const fiveMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+  const existingRow: DedupRow = {
+    id: 1,
+    userId: DUMMY_USER_ID,
+    idempotencyKey: DUMMY_KEY,
+    requestHash: null,
+    status: 'in_flight',
+    responseJson: null,
+    responseHeaders: null,
+    upstreamStatus: null,
+    requestId: 'old-req',
+    createdAt: fiveMinutesAgo,
+    completedAt: null,
+  };
+  const { db, updates } = createFakeDedupDb([existingRow]);
+  setDbForTests(db as any);
+
+  const result1 = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), 'winner-req');
+  assert.equal(result1, undefined, 'first caller reclaims stale row');
+  assert.ok(updates.length >= 1);
+
+  const result2 = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), 'loser-req');
+  assert.ok(result2 instanceof Response);
+  assert.equal(result2.status, 409, 'second caller gets idempotency conflict');
 });
 
 test('handleDedup replays completed non-streaming response', async function replaysCompletedNonStreaming() {
