@@ -3,6 +3,7 @@ import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { BillingEligibilityError, createBillingCheckout, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
+import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
 const user = {
@@ -193,6 +194,7 @@ function stripeEvent(type: string, object: Record<string, unknown>, id = `evt_${
 afterEach(() => {
   resetDbForTests();
   setStripeForTests(null);
+  setCheckoutLockForTests(null);
   delete process.env.STRIPE_SUBSCRIPTION_TIERS;
   delete process.env.STRIPE_TOP_UP_PACKS;
   delete process.env.STRIPE_WEBHOOK_SECRET;
@@ -453,4 +455,28 @@ test('webhook route rejects malformed or signature-invalid payloads', async () =
   assert.deepEqual(await response.json(), {
     error: { type: 'invalid_webhook', message: 'Invalid Stripe webhook signature or payload' },
   });
+});
+
+test('checkout lock prevents concurrent subscription sessions for the same user', async () => {
+  const locks = new Map<string, boolean>();
+  setCheckoutLockForTests({
+    acquire: (userId: string) => {
+      if (locks.has(userId)) return { ok: false };
+      locks.set(userId, true);
+      return { ok: true };
+    },
+    release: (userId: string) => {
+      locks.delete(userId);
+    },
+  });
+
+  assert.deepEqual(await acquireCheckoutLock(user.id), { ok: true });
+  assert.deepEqual(await acquireCheckoutLock(user.id), { ok: false });
+
+  releaseCheckoutLock(user.id);
+  assert.deepEqual(await acquireCheckoutLock(user.id), { ok: true });
+
+  assert.deepEqual(await acquireCheckoutLock('another_user'), { ok: true });
+
+  setCheckoutLockForTests(null);
 });

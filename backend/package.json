@@ -10,6 +10,7 @@
     "build": "tsx scripts/migrate.ts && astro build",
     "preview": "astro preview",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "check": "astro check",
     "astro": "astro",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",

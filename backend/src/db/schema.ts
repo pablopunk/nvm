@@ -143,6 +143,26 @@ export const providers = pgTable('providers', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const requestDedup = pgTable(
+  'request_dedup',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestHash: text('request_hash'),
+    status: text('status').notNull().default('in_flight'),
+    responseJson: jsonb('response_json'),
+    responseHeaders: jsonb('response_headers'),
+    upstreamStatus: integer('upstream_status'),
+    requestId: text('request_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('request_dedup_user_key_idx').on(t.userId, t.idempotencyKey),
+  ],
+);
+
 export const modelProviders = pgTable(
   'model_providers',
   {

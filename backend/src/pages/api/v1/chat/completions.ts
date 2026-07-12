@@ -43,4 +43,5 @@ export const POST: APIRoute = ({ request }) =>
     rewriteRequestBody: rewriteOpenAiModel,
     parseUsageFromJson: parseUsageFromOpenAiJson,
     parseUsageFromStreamChunk: parseUsageFromOpenAiStreamChunk,
+    idempotencyKey: request.headers.get('Idempotency-Key') ?? undefined,
   });
