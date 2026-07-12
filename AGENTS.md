@@ -41,8 +41,7 @@
 
 ## Verification
 
-* Run tests and verify core flows before committing API or palette changes.
-* For bug fixes, add a repro test and confirm red/green when practical; for streaming parsers, cover split-frame/chunk-boundary input.
-* Ensure new dependencies resolve correctly within the Electron `app.asar`.
-* Use `mise exec -- pnpm palette:debug` to trace provider output and ranking.
-* Verify navigation, action panels, shortcuts, and dismissal behavior for all changes.
+* **Bootstrap first.** Trust the checked-out `mise.toml` when prompted, then install with `mise exec -- pnpm install --frozen-lockfile` when dependencies or tools are missing. Treat absent dependencies, tools, or incomplete Electron setup as bootstrap/tooling failures before interpreting test failures; call a failure “pre-existing” only after it reproduces from this state or baseline/CI evidence corroborates it.
+* **Match checks to scope.** Backend-only changes run `mise exec -- pnpm -C backend check` and `mise exec -- pnpm -C backend test`. Desktop/shared changes run the relevant root checks, including `mise exec -- pnpm typecheck` and `mise exec -- pnpm test`; use `mise exec -- pnpm verify` for cross-cutting or release-sensitive changes when practical. For applicable palette or interaction changes, also use `mise exec -- pnpm palette:debug` and verify navigation, action panels, shortcuts, and dismissal behavior.
+* **Gate PR readiness.** Before pushing, run `mise exec -- pnpm check:changed <base-ref>`, where `<base-ref>` is the PR target/base SHA. Diagnostics in every touched file are blocking, including pre-existing lines surfaced by the changed-file policy; use behavior-preserving formatting or narrowly justified suppressions only when appropriate. This package command is the agent-facing default, not the exact CI changed-file implementation; claim CI parity only when using CI’s exact base-SHA diff, path filtering, and Biome options.
+* **Report external/deferred validation.** Final handoffs must list the exact commands actually run separately from credential, deployed-preview, packaged-app, or hardware checks that were deferred. Describe deferred coverage as outstanding validation, never as a full verification pass.
