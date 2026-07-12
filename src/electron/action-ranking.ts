@@ -5,10 +5,20 @@ interface RankedAction {
   score: number;
   lastUsed: number;
   title?: unknown;
+  isAppResult?: unknown;
 }
+
+const APP_RESULT_PRIORITY_BOOST = 25;
 
 const AI_BUILDER_CHAT_TIE_PRIORITY = -1;
 const DEFAULT_TIE_PRIORITY = 0;
+
+export function priorityBoost(action: RankedAction): number {
+  if (action.isAppResult === true) {
+    return APP_RESULT_PRIORITY_BOOST;
+  }
+  return 0;
+}
 
 export function rankedActionTiePriority(action: RankedAction): number {
   if (

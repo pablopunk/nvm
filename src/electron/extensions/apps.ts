@@ -4,6 +4,7 @@ function appRootItem(item) {
   const id = `app:${item.id}`;
   return {
     id,
+    isAppResult: true,
     title: item.name,
     subtitle: 'Launch application',
     aliases: extensionContext.actionAliases(

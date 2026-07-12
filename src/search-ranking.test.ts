@@ -11,14 +11,22 @@ test('scoreNormalizedNonEmpty exact match', () => {
 });
 
 test('scoreNormalizedNonEmpty startsWith', () => {
-  assert.equal(scoreNormalizedNonEmpty('hello world', 'hello'), 80);
+  assert.equal(scoreNormalizedNonEmpty('hello-world', 'hello'), 90);
   assert.equal(scoreNormalizedNonEmpty('abc', 'a'), 80);
   assert.equal(scoreNormalizedNonEmpty('nevermind', 'never'), 80);
 });
 
+test('scoreNormalizedNonEmpty whole-word matches before prefix and substring', () => {
+  assert.equal(scoreNormalizedNonEmpty('open terminal', 'terminal'), 90);
+  assert.equal(scoreNormalizedNonEmpty('open-terminal', 'terminal'), 90);
+  assert.equal(scoreNormalizedNonEmpty('terminal settings', 'terminal'), 90);
+  assert.equal(scoreNormalizedNonEmpty('party', 'art'), 50);
+  assert.equal(scoreNormalizedNonEmpty('terminally', 'terminal'), 80);
+});
+
 test('scoreNormalizedNonEmpty includes', () => {
-  assert.equal(scoreNormalizedNonEmpty('hello world', 'world'), 50);
-  assert.equal(scoreNormalizedNonEmpty('open settings', 'settings'), 50);
+  assert.equal(scoreNormalizedNonEmpty('hello world', 'world'), 90);
+  assert.equal(scoreNormalizedNonEmpty('open settings', 'settings'), 90);
   assert.equal(scoreNormalizedNonEmpty('abc123', '123'), 50);
 });
 
@@ -50,11 +58,11 @@ test('scoreText exact match', () => {
 });
 
 test('scoreText startsWith', () => {
-  assert.equal(scoreText('hello world', 'hello'), 80);
+  assert.equal(scoreText('hello world', 'hello'), 90);
 });
 
 test('scoreText includes', () => {
-  assert.equal(scoreText('hello world', 'world'), 50);
+  assert.equal(scoreText('hello world', 'world'), 90);
 });
 
 test('scoreText fuzzy', () => {
@@ -77,8 +85,8 @@ test('scoreText case insensitive via toLowerCase', () => {
 // ── scoreFuzzy (with character-set fallback) ─────────────────────────
 test('scoreFuzzy delegates to sequential bands', () => {
   assert.equal(scoreFuzzy('hello', 'hello'), 100);
-  assert.equal(scoreFuzzy('hello world', 'hello'), 80);
-  assert.equal(scoreFuzzy('hello world', 'world'), 50);
+  assert.equal(scoreFuzzy('hello world', 'hello'), 90);
+  assert.equal(scoreFuzzy('hello world', 'world'), 90);
   assert.equal(scoreFuzzy('settings', 'stng'), 20);
 });
 
@@ -114,11 +122,11 @@ test('scoreNormalized exact match', () => {
 });
 
 test('scoreNormalized startsWith', () => {
-  assert.equal(scoreNormalized('hello world', normalize('hello')), 80);
+  assert.equal(scoreNormalized('hello world', normalize('hello')), 90);
 });
 
 test('scoreNormalized includes', () => {
-  assert.equal(scoreNormalized('hello world', normalize('world')), 50);
+  assert.equal(scoreNormalized('hello world', normalize('world')), 90);
 });
 
 test('scoreNormalized fuzzy', () => {

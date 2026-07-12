@@ -4,8 +4,24 @@
  * Both arguments must already be lowercased and trimmed by the caller.
  * `query` must be non‑empty; wrappers guard that contract.
  */
+const WORD_CHARACTER = /[a-z0-9]/i;
+
 export function scoreNormalizedNonEmpty(text: string, query: string): number {
   if (text === query) return 100;
+  // Check this before startsWith so a leading complete word gets the same
+  // stronger word-match score as a word later in the title.
+  const isWordBoundary = (value: string | undefined) =>
+    value === undefined || !WORD_CHARACTER.test(value);
+  let start = text.indexOf(query);
+  while (start >= 0) {
+    if (
+      isWordBoundary(text[start - 1]) &&
+      isWordBoundary(text[start + query.length])
+    ) {
+      return 90;
+    }
+    start = text.indexOf(query, start + 1);
+  }
   if (text.startsWith(query)) return 80;
   if (text.includes(query)) return 50;
   let pos = 0;
@@ -30,6 +46,7 @@ export function scoreNormalizedNonEmpty(text: string, query: string): number {
  *
  * Score bands:
  *   100 — exact match
+ *    90 — whole-word match
  *    80 — starts with
  *    50 — contains (substring)
  *    20 — sequential character match (original fuzzy)
