@@ -280,7 +280,8 @@ export function CommandRow({
       }}
     >
       <span className="resultIcon">{icon}</span>
-      <span className="resultText">{disabled ? title : <strong>{title}</strong>}
+      <span className="resultText">
+        {disabled ? title : <strong>{title}</strong>}
         <small>{subtitle}</small>
       </span>
       <span className="resultTrailing">

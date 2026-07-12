@@ -93,9 +93,9 @@ import {
   markInternalExtension,
   permissionDeniedError,
 } from './extension-permissions';
+import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
-import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
 import { initExtensionContext } from './extensions/_context';
 import { createAiBuilderExtension } from './extensions/ai-builder';
@@ -2731,7 +2731,7 @@ async function runShellCommand(command, args = [], options: any = {}) {
     // Hard kill after timeout + 5s grace period. Node's spawn timeout sends
     // SIGTERM; if the process ignores it we escalate to SIGKILL.
     const killer = setTimeout(() => {
-      if (!settled && !child.killed) {
+      if (!(settled || child.killed)) {
         child.kill('SIGKILL');
         settle({
           stdout,
@@ -3107,7 +3107,7 @@ async function executeViewAction(action, launchContext?: any) {
         try {
           let timer: NodeJS.Timeout | undefined;
           const timedOut = new Promise<'timedOut'>((resolve) => {
-            timer = setTimeout(() => resolve('timedOut'), 10000);
+            timer = setTimeout(() => resolve('timedOut'), 10_000);
           });
           const outcome = await Promise.race([
             shell.trashItem(fullPath).then(() => 'ok' as const),
@@ -3335,15 +3335,16 @@ async function executeViewAction(action, launchContext?: any) {
     case 'submitExtensionPr': {
       if (!extensionPrSubmitter) {
         return {
-          toast: { message: 'Cannot submit extensions right now', tone: 'error' },
+          toast: {
+            message: 'Cannot submit extensions right now',
+            tone: 'error',
+          },
         };
       }
       const result = await extensionPrSubmitter.submitExtensionPr(action);
       return {
         toast: {
-          message: result.prUrl
-            ? `PR opened: ${result.prUrl}`
-            : result.message,
+          message: result.prUrl ? `PR opened: ${result.prUrl}` : result.message,
           tone: result.ok ? 'default' : 'error',
         },
       };
@@ -4055,7 +4056,11 @@ function quickLookPath(filePath) {
   child.unref();
 }
 
-function execFileText(command: string, args: string[] = [], options = {}): Promise<string> {
+function execFileText(
+  command: string,
+  args: string[] = [],
+  options = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (error, stdout) =>
       error ? reject(error) : resolve(stdout),
@@ -7876,7 +7881,9 @@ app.whenReady().then(async () => {
     logError,
     logWarn,
     loggerDebug,
-    probeGh: () => extensionPrSubmitter?.probe() ?? Promise.resolve({ installed: false, authed: false }),
+    probeGh: () =>
+      extensionPrSubmitter?.probe() ??
+      Promise.resolve({ installed: false, authed: false }),
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) => {

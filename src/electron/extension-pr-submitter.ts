@@ -101,7 +101,10 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
     const factoryFunc = createFactoryFunctionName(slug);
     const importLine = `import { ${factoryFunc} } from './${slug}';`;
 
-    const escapedFactoryFunc = factoryFunc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedFactoryFunc = factoryFunc.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      '\\$&',
+    );
     if (new RegExp(`\\b${escapedFactoryFunc}\\b`).test(currentIndex)) {
       return { updated: currentIndex, importLine, factoryFunc };
     }
@@ -143,21 +146,24 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
   async function submitExtensionPr(action: any): Promise<SubmitResult> {
     const targetAction = action.targetAction || action;
     if (
-      !['extension-root-item', 'extension-action'].includes(
-        targetAction?.kind,
-      ) ||
-      !targetAction?.removable
+      !(
+        ['extension-root-item', 'extension-action'].includes(
+          targetAction?.kind,
+        ) && targetAction?.removable
+      )
     ) {
-      return { ok: false, message: 'Only generated extensions can be submitted as PRs' };
+      return {
+        ok: false,
+        message: 'Only generated extensions can be submitted as PRs',
+      };
     }
 
     const extensionFile = targetAction?.extensionFile;
-    if (!extensionFile) return { ok: false, message: 'Extension file not found' };
+    if (!extensionFile)
+      return { ok: false, message: 'Extension file not found' };
 
     const resolvedExtensionsDir = path.resolve(deps.extensionsDir);
-    const filePath = path.resolve(
-      path.join(deps.extensionsDir, extensionFile),
-    );
+    const filePath = path.resolve(path.join(deps.extensionsDir, extensionFile));
 
     if (!filePath.startsWith(resolvedExtensionsDir + path.sep)) {
       return {
@@ -340,12 +346,9 @@ export function createExtensionPrSubmitter(deps: ExtensionPrSubmitterDeps) {
       };
     }
 
-    deps.logInfo(
-      'extension-pr-submitter.success',
-      { slug, title, prUrl },
-    );
+    deps.logInfo('extension-pr-submitter.success', { slug, title, prUrl });
 
-    return { ok: true, message: `PR opened`, prUrl };
+    return { ok: true, message: 'PR opened', prUrl };
   }
 
   return { submitExtensionPr, probe: probeGh };

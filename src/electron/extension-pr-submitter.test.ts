@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  type ExtensionPrSubmitterDeps,
   createExtensionPrSubmitter,
+  type ExtensionPrSubmitterDeps,
 } from './extension-pr-submitter';
 
 function createDeps(
@@ -26,21 +26,20 @@ function createDeps(
     const key = `${command} ${args.join(' ')}`;
     calls.push({ command, args });
     if (key.startsWith('gh --version')) {
-      if (ghMissing) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      if (ghMissing)
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
       return 'gh version 2.60.0';
     }
     if (key.startsWith('gh auth status')) {
-      if (!authOk)
-        throw new Error('You are not logged into any GitHub hosts.');
+      if (!authOk) throw new Error('You are not logged into any GitHub hosts.');
       return '';
     }
     if (key.startsWith('gh api repos/')) {
-      if (key.includes('/branches/main'))
-        return 'abc123def456';
+      if (key.includes('/branches/main')) return 'abc123def456';
       if (key.includes('/contents/')) {
         if (key.includes('index.ts')) {
           const slug = 'my-extension';
-          const factoryFunc = `createMyExtensionExtension`;
+          const factoryFunc = 'createMyExtensionExtension';
           return JSON.stringify({
             content: Buffer.from(
               `import { createSystemExtension } from './system';\nexport const INTERNAL_EXTENSION_FACTORIES = [\n  createSystemExtension,\n];\n`,
@@ -225,19 +224,20 @@ test('submitExtensionPr happy path invokes correct gh commands', async () => {
     );
     assert.ok(
       joinedCalls.some(
-        (c) => c.includes('git/refs') && c.includes('submit-extension-my-extension'),
+        (c) =>
+          c.includes('git/refs') && c.includes('submit-extension-my-extension'),
       ),
       'should create branch ref',
     );
     assert.ok(
-      joinedCalls.some(
-        (c) => c.includes('/contents/src/electron/extensions/my-extension.ts'),
+      joinedCalls.some((c) =>
+        c.includes('/contents/src/electron/extensions/my-extension.ts'),
       ),
       'should PUT extension file',
     );
     assert.ok(
-      joinedCalls.some(
-        (c) => c.includes('/contents/src/electron/extensions/index.ts'),
+      joinedCalls.some((c) =>
+        c.includes('/contents/src/electron/extensions/index.ts'),
       ),
       'should PUT index.ts barrel',
     );
