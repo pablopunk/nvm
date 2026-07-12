@@ -437,7 +437,7 @@ async function tryUpstreamProviders(
 }
 
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
-  let requestId = randomUUID();
+  let requestId: string = randomUUID();
   if (backendKillSwitchEnabled('ai_proxy')) return killSwitchResponse('ai_proxy', 'AI proxy is temporarily disabled.', requestId);
   const startedAt = Date.now();
   const client = desktopClientFromRequest(cfg.request);
