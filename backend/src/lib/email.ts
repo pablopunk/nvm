@@ -1,5 +1,6 @@
 import { createDecipheriv, createHash, randomUUID } from 'node:crypto';
 import { eq, inArray, sql } from 'drizzle-orm';
+import { Webhook } from 'svix';
 import { db } from '../db/client';
 import { emailOutbox, emailSuppressions, invites, providerEvents } from '../db/schema';
 import { env } from './env';
@@ -36,10 +37,18 @@ export async function sendOutboxBatch(limit = 10) {
   return { sent, skipped: false };
 }
 
-export function verifyProviderWebhook(raw: string, signature: string | null) {
+export function verifyProviderWebhook(raw: string, headers: { get(name: string): string | null }, now = Date.now()) {
   const secret = env('RESEND_WEBHOOK_SECRET');
-  if (!secret || !signature) return false;
-  return createHash('sha256').update(`${secret}.${raw}`).digest('hex') === signature;
+  const svixId = headers.get('svix-id');
+  const timestamp = headers.get('svix-timestamp');
+  const signatures = headers.get('svix-signature');
+  if (!secret || !svixId || !timestamp || !signatures || !/^\d+$/.test(timestamp)) return false;
+  const timestampMs = Number(timestamp) * 1000;
+  if (!Number.isSafeInteger(timestampMs) || Math.abs(now - timestampMs) > 5 * 60 * 1000) return false;
+  try {
+    new Webhook(secret).verify(raw, { 'svix-id': svixId, 'svix-timestamp': timestamp, 'svix-signature': signatures });
+    return true;
+  } catch { return false; }
 }
 
 export async function processProviderEvent(input: { id: string; type: string; email?: string; messageId?: string; raw: string }) {
