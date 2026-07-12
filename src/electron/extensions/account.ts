@@ -118,6 +118,25 @@ export function createAccountExtension() {
           }),
       },
     };
+    const choicesView = {
+      type: 'list',
+      title: 'Switch Backend Environment',
+      searchBarPlaceholder: 'Choose an environment',
+      items: [
+        {
+          id: 'account-switch-backend-production',
+          title: 'Production',
+          subtitle: 'https://api.nvm.fyi',
+          primaryAction: productionAction,
+        },
+        {
+          id: 'account-switch-backend-custom',
+          title: 'Custom URL…',
+          subtitle: 'Use a validated HTTPS backend URL',
+          primaryAction: customAction,
+        },
+      ],
+    };
     return {
       id: 'account-switch-backend',
       actionId: 'account-switch-backend',
@@ -132,6 +151,11 @@ export function createAccountExtension() {
         'preview',
         'custom url',
       ],
+      primaryAction: {
+        type: 'pushView',
+        title: 'Choose Backend Environment',
+        view: choicesView,
+      },
       actionPanel: {
         sections: [{ actions: [productionAction, customAction] }],
       },
