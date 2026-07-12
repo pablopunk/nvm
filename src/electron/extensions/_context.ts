@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This legacy context is incrementally typed and exposes heterogeneous extension data.
 export const extensionContext: {
   userState: Record<string, any>;
   fileIndex: any[];
@@ -30,6 +31,14 @@ export const extensionContext: {
   broadcastAuthChanged: (status: { authed: boolean; email?: string }) => void;
   activeNevermindBaseUrl: string | null;
   setActiveNevermindBaseUrl: (value: string | null) => void;
+  switchNevermindBackendEnvironment: (input: {
+    environment: 'production' | 'pr_preview' | 'custom';
+    baseUrl?: string;
+  }) => Promise<{ ok: boolean; message: string }>;
+  signInToNevermind: () => Promise<
+    | { ok: true; auth: { email: string; baseUrl: string } }
+    | { ok: false; error: string }
+  >;
   getPaletteHotkey: () => any;
   extensionShortcutRecords: () => any[];
   patchKeyboardShortcutsView: () => void;

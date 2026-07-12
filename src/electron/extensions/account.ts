@@ -1,9 +1,6 @@
-import {
-  getNevermindAuth,
-  signInToNevermind,
-  signOutFromNevermind,
-} from '../nevermind-auth';
-import { getByoKey, clearByoKey } from '../byo-key';
+// biome-ignore-all lint: This extension follows the existing palette-extension API conventions.
+import { getNevermindAuth, signOutFromNevermind } from '../nevermind-auth';
+import { clearByoKey, getByoKey } from '../byo-key';
 import { extensionContext } from './_context';
 
 export function createAccountExtension() {
@@ -11,7 +8,6 @@ export function createAccountExtension() {
 
   async function accountItem() {
     const existing = await getNevermindAuth();
-    const byo = await getByoKey();
     if (existing) {
       return {
         id: 'account-logout',
@@ -55,7 +51,7 @@ export function createAccountExtension() {
         type: 'runExtensionAction',
         title: 'Log in',
         __handler: async () => {
-          const result = await signInToNevermind();
+          const result = await extensionContext.signInToNevermind();
           extensionContext.invalidateExtensionRootItems();
           if (result.ok)
             extensionContext.broadcastAuthChanged({
@@ -76,34 +72,123 @@ export function createAccountExtension() {
     };
   }
 
-  async function byoKeyItem() {
-    const byo = await getByoKey();
-    if (byo) {
+  function backendEnvironmentItem() {
+    async function switchBackend(input: {
+      environment: 'production' | 'pr_preview' | 'custom';
+      baseUrl?: string;
+    }) {
+      const result =
+        await extensionContext.switchNevermindBackendEnvironment(input);
       return {
-        id: 'byo-key-clear',
-        actionId: 'byo-key-clear',
-        title: 'Clear BYO provider key',
-        subtitle: `Using own key for ${byo.provider} (${byo.modelName})`,
-        icon: 'key',
-        score: 4,
-        aliases: ['byo', 'own key', 'clear key'],
-        primaryAction: {
-          type: 'runExtensionAction',
-          title: 'Clear BYO Key',
-          __handler: async () => {
-            await clearByoKey();
-            extensionContext.invalidateExtensionRootItems();
-            return {
-              toast: {
-                message: 'BYO provider key cleared. Using Nevermind backend.',
-                tone: 'default' as const,
-              },
-            };
-          },
+        toast: {
+          message: result.message,
+          tone: result.ok ? ('default' as const) : ('error' as const),
         },
       };
     }
-    return null;
+    const productionAction = {
+      type: 'runExtensionAction',
+      title: 'Production',
+      __handler: async () =>
+        switchBackend({
+          environment: 'production',
+        }),
+    };
+    const customAction = {
+      type: 'promptAction',
+      title: 'Custom URL…',
+      fields: [
+        {
+          id: 'baseUrl',
+          type: 'text',
+          label: 'Backend URL',
+          placeholder: 'https://your-preview.vercel.app',
+          required: true,
+        },
+      ],
+      targetAction: {
+        type: 'runExtensionAction',
+        title: 'Use Custom URL',
+        __handler: async (
+          _ctx: unknown,
+          action: { formValues?: { baseUrl?: string } },
+        ) =>
+          switchBackend({
+            environment: 'custom',
+            baseUrl: action.formValues?.baseUrl,
+          }),
+      },
+    };
+    const choicesView = {
+      type: 'list',
+      title: 'Switch Backend Environment',
+      searchBarPlaceholder: 'Choose an environment',
+      items: [
+        {
+          id: 'account-switch-backend-production',
+          title: 'Production',
+          subtitle: 'https://api.nvm.fyi',
+          primaryAction: productionAction,
+        },
+        {
+          id: 'account-switch-backend-custom',
+          title: 'Custom URL…',
+          subtitle: 'Use a validated HTTPS backend URL',
+          primaryAction: customAction,
+        },
+      ],
+    };
+    return {
+      id: 'account-switch-backend',
+      actionId: 'account-switch-backend',
+      title: 'Nevermind: Switch Backend Environment',
+      subtitle: 'Choose Production or a validated custom backend URL',
+      icon: 'globe',
+      score: 20,
+      aliases: [
+        'backend',
+        'environment',
+        'production',
+        'preview',
+        'custom url',
+      ],
+      primaryAction: {
+        type: 'pushView',
+        title: 'Choose Backend Environment',
+        view: choicesView,
+      },
+      actionPanel: {
+        sections: [{ actions: [productionAction, customAction] }],
+      },
+    };
+  }
+
+  async function byoKeyItem() {
+    const byo = await getByoKey();
+    if (!byo) return null;
+    return {
+      id: 'byo-key-clear',
+      actionId: 'byo-key-clear',
+      title: 'Clear BYO provider key',
+      subtitle: `Using own key for ${byo.provider} (${byo.modelName})`,
+      icon: 'key',
+      score: 4,
+      aliases: ['byo', 'own key', 'clear key'],
+      primaryAction: {
+        type: 'runExtensionAction',
+        title: 'Clear BYO Key',
+        __handler: async () => {
+          await clearByoKey();
+          extensionContext.invalidateExtensionRootItems();
+          return {
+            toast: {
+              message: 'BYO provider key cleared. Using Nevermind backend.',
+              tone: 'default' as const,
+            },
+          };
+        },
+      },
+    };
   }
 
   return {
@@ -111,13 +196,13 @@ export function createAccountExtension() {
     title: 'Nevermind Account',
     permissions: [] as const,
     searchItems: async () => {
-      const items = [await accountItem()];
+      const items = [await accountItem(), backendEnvironmentItem()];
       const byo = await byoKeyItem();
       if (byo) items.push(byo);
       return items;
     },
     rootItems: async () => {
-      const items = [await accountItem()];
+      const items = [await accountItem(), backendEnvironmentItem()];
       const byo = await byoKeyItem();
       if (byo) items.push(byo);
       return items;

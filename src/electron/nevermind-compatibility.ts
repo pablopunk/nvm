@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This compatibility cache retains established Electron persistence conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
@@ -108,6 +109,17 @@ export function warmNevermindCompatibilityCache(baseUrl: string) {
   })().catch((error) =>
     logger.warn('nevermind.compatibility.warm.failed', error as Error),
   );
+}
+
+export async function invalidateNevermindCompatibilityCache(baseUrl?: string) {
+  await loadCompatibilityCache();
+  if (baseUrl) {
+    cachedManifests.delete(normalizeBaseUrl(baseUrl));
+  } else {
+    cachedManifests.clear();
+  }
+  await saveCompatibilityCache();
+  notifyCompatibilityChanged();
 }
 
 export async function checkNevermindCompatibility(baseUrl: string) {
