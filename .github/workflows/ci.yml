@@ -36,14 +36,8 @@ jobs:
             mise exec -- pnpm check:changed HEAD~1
           fi
 
-      - name: Biome check
-        run: mise exec -- pnpm check
-
-      - name: Test app
-        run: mise exec -- pnpm test
-
-      - name: Build app
-        run: mise exec -- pnpm run build
+      - name: Verify
+        run: mise exec -- pnpm verify
 
   release-mac:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
