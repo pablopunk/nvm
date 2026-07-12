@@ -32,7 +32,7 @@ jobs:
 
       - name: Biome check (changed files only)
         if: github.event_name == 'pull_request'
-        run: mise exec -- pnpm exec biome check --changed --since=${{ github.event.pull_request.base.sha }} --skip=suspicious --skip=style --skip=a11y --skip=performance --skip=complexity
+        run: mise exec -- pnpm exec biome check --changed --since=${{ github.event.pull_request.base.sha }} --skip=suspicious --skip=style --skip=a11y --skip=performance --skip=complexity --assist-enabled=false
 
       - name: Biome check
         if: github.event_name != 'pull_request'
