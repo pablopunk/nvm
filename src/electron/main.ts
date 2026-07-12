@@ -60,7 +60,7 @@ import {
   isSigningIn,
   nevermindEnvironmentForBaseUrl,
   signInToNevermind,
-  signOutFromNevermind,
+  setActiveNevermindAuthBaseUrl,
 } from './nevermind-auth';
 import {
   DEEP_LINK_SCHEME,
@@ -1740,6 +1740,7 @@ async function handleAuthDeepLink(parsed: ParsedAuthDeepLink) {
     const result = await consumeDeviceCode({ code: parsed.code, baseUrl });
     if (result.ok) {
       activeNevermindBaseUrl = result.auth.baseUrl;
+      setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
       warmNevermindCompatibilityCache(result.auth.baseUrl);
       invalidateExtensionRootItems();
       broadcastAuthChanged({ authed: true, email: result.auth.email });
@@ -1797,6 +1798,7 @@ async function signInToSelectedNevermindEnvironment() {
   });
   if (result.ok) {
     activeNevermindBaseUrl = result.auth.baseUrl;
+    setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
     warmNevermindCompatibilityCache(result.auth.baseUrl);
   }
   return result;
@@ -1855,9 +1857,12 @@ async function switchNevermindBackendEnvironment(input: {
     baseUrl,
   };
   scheduleSaveState();
-  await signOutFromNevermind();
+  setActiveNevermindAuthBaseUrl(baseUrl);
   await invalidateNevermindCompatibilityCache(previous.baseUrl);
-  const result = await signInToSelectedNevermindEnvironment();
+  const existing = await getNevermindAuth();
+  const result = existing
+    ? { ok: true as const, auth: existing }
+    : await signInToSelectedNevermindEnvironment();
   if (!result.ok) {
     return {
       ok: false,
@@ -1865,6 +1870,7 @@ async function switchNevermindBackendEnvironment(input: {
     };
   }
   activeNevermindBaseUrl = result.auth.baseUrl;
+  setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
   warmNevermindCompatibilityCache(result.auth.baseUrl);
   await nevermindAi?.disposeAllSessions?.();
   invalidateExtensionRootItems();
@@ -6426,6 +6432,7 @@ async function loadExtensions() {
         activeNevermindBaseUrl,
         setActiveNevermindBaseUrl: (value) => {
           activeNevermindBaseUrl = value;
+          setActiveNevermindAuthBaseUrl(value);
         },
         switchNevermindBackendEnvironment,
         signInToNevermind: signInToSelectedNevermindEnvironment,
@@ -8000,6 +8007,7 @@ app.whenReady().then(async () => {
     logInfo,
     logWarn,
   });
+  setActiveNevermindAuthBaseUrl(selectedNevermindEnvironment().baseUrl);
   const storedNevermindAuth = await getNevermindAuth();
   activeNevermindBaseUrl = storedNevermindAuth?.baseUrl || null;
   registerHostJobs();
@@ -8055,6 +8063,7 @@ app.whenReady().then(async () => {
     getNevermindAuth,
     setActiveNevermindBaseUrl: (baseUrl) => {
       activeNevermindBaseUrl = baseUrl;
+      setActiveNevermindAuthBaseUrl(baseUrl);
     },
     warmNevermindCompatibilityCache,
     logInfo,
