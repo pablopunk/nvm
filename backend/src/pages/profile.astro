@@ -85,7 +85,18 @@ const billingState = Astro.url.searchParams.get('billing');
       <input class="input" type="text" name="name" placeholder="Token name (e.g. My Mac)" required />
       <button class="button button--primary" type="submit">Create token</button>
     </form>
-    <pre id="new-token" style="display:none;"></pre>
+    <div id="new-token-panel" class="card stack" style="display:none;" role="region" aria-label="New API token">
+      <div>
+        <h3>Your new API token</h3>
+        <p class="muted" style="margin:0;">Save this token now — it will not be shown again.</p>
+      </div>
+      <pre class="token-value" id="new-token-value"></pre>
+      <div id="copy-status" aria-live="polite" class="status"></div>
+      <div class="row">
+        <button type="button" id="copy-token-btn" class="button button--primary">Copy</button>
+        <button type="button" id="close-token-btn" class="button">Close</button>
+      </div>
+    </div>
     <ul class="list-clean">
       {tokens.map((t) => (
         <li data-id={t.id}>
@@ -102,21 +113,101 @@ const billingState = Astro.url.searchParams.get('billing');
   </div>
 
   <script is:inline>
-    document.getElementById('create-token-form').addEventListener('submit', async (e) => {
+    const createTokenForm = document.getElementById('create-token-form');
+    const createTokenBtn = createTokenForm.querySelector('button[type="submit"]');
+    const createTokenInput = createTokenForm.querySelector('input[name="name"]');
+    const newTokenPanel = document.getElementById('new-token-panel');
+    const newTokenValue = document.getElementById('new-token-value');
+    const copyTokenBtn = document.getElementById('copy-token-btn');
+    const closeTokenBtn = document.getElementById('close-token-btn');
+    const copyStatus = document.getElementById('copy-status');
+
+    function setPanelVisible(visible) {
+      newTokenPanel.style.display = visible ? '' : 'none';
+      createTokenInput.disabled = visible;
+      createTokenBtn.disabled = visible;
+    }
+
+    let undisclosedToken = null;
+
+    function beforeUnloadHandler(e) {
       e.preventDefault();
+      e.returnValue = '';
+    }
+
+    function dismissTokenPanel() {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      undisclosedToken = null;
+      newTokenValue.textContent = '';
+      setPanelVisible(false);
+      location.reload();
+    }
+
+    function copyTokenToClipboard() {
+      if (!undisclosedToken) return;
+      copyStatus.textContent = '';
+      copyStatus.className = 'status';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(undisclosedToken).then(() => {
+          copyStatus.textContent = 'Copied to clipboard.';
+          copyStatus.className = 'status status--ok';
+        }).catch(() => {
+          fallbackCopyToken();
+        });
+      } else {
+        fallbackCopyToken();
+      }
+    }
+
+    function fallbackCopyToken() {
+      const ta = document.createElement('textarea');
+      ta.value = undisclosedToken;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        const copied = document.execCommand('copy');
+        if (copied) {
+          copyStatus.textContent = 'Copied to clipboard.';
+          copyStatus.className = 'status status--ok';
+        } else {
+          copyStatus.textContent = 'Could not copy automatically. Please select and copy the token manually.';
+          copyStatus.className = 'status status--err';
+        }
+      } catch {
+        copyStatus.textContent = 'Could not copy automatically. Please select and copy the token manually.';
+        copyStatus.className = 'status status--err';
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+
+    createTokenForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (undisclosedToken) return;
       const fd = new FormData(e.target);
       const res = await fetch('/api/tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: fd.get('name') }),
       });
-      if (!res.ok) return alert('Failed to create token');
+      if (!res.ok) {
+        alert('Failed to create token');
+        return;
+      }
       const data = await res.json();
-      const el = document.getElementById('new-token');
-      el.style.display = 'block';
-      el.textContent = `Save this token now — it will not be shown again:\n${data.token}`;
-      setTimeout(() => location.reload(), 100);
+      undisclosedToken = data.token;
+      newTokenValue.textContent = data.token;
+      setPanelVisible(true);
+      copyStatus.textContent = '';
+      copyStatus.className = 'status';
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+      copyTokenBtn.focus();
     });
+
+    copyTokenBtn.addEventListener('click', copyTokenToClipboard);
+    closeTokenBtn.addEventListener('click', dismissTokenPanel);
     const billingStatus = document.getElementById('billing-status');
     async function redirectFromBillingEndpoint(path, body) {
       billingStatus.textContent = 'Opening Stripe…';
