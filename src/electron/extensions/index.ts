@@ -10,6 +10,7 @@ import { createSettingsExtension } from './settings';
 import { createPlacesExtension, createSystemExtension } from './system';
 import { createUpdatesExtension } from './updates';
 import { createWebSearchExtension } from './web-search';
+import { createScreenshots26777431Extension } from './screenshots-26777431';
 
 export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createSystemExtension,
