@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-'use strict';
-
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -16,7 +14,6 @@ const source = [
 ].join('\n');
 
 function fail(message) {
-  // biome-ignore lint/suspicious/noConsole: CLI script
   console.error(`Clone-safety check failed: ${message}`);
   process.exit(1);
 }
@@ -81,5 +78,4 @@ if (!/ipcMain\.handle\('view:refresh',[\s\S]*refreshViewForIpc/.test(source)) {
   );
 }
 
-// biome-ignore lint/suspicious/noConsole: CLI script
 console.log('Clone-safety checks passed');
