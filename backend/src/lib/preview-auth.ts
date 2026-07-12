@@ -31,6 +31,10 @@ function stateKey(id: string) {
   return `nvm:preview-auth:${id}`;
 }
 
+function grantStoreKey(id: string) {
+  return `nvm:preview-grant:${id}`;
+}
+
 const redisUrl = env('UPSTASH_REDIS_REST_URL') ?? env('KV_REST_API_URL');
 const redisToken = env('UPSTASH_REDIS_REST_TOKEN') ?? env('KV_REST_API_TOKEN');
 const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
@@ -75,6 +79,30 @@ async function takeState(id: string): Promise<PreviewTarget | null> {
   }
 }
 
+async function putGrant(id: string) {
+  if (testStore) {
+    testStore.set(grantStoreKey(id), '1');
+    return true;
+  }
+  if (!redis) return false;
+  try {
+    await redis.set(grantStoreKey(id), '1', { ex: PREVIEW_GRANT_TTL_SECONDS });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function takeGrant(id: string) {
+  try {
+    const raw = testStore ? testStore.get(grantStoreKey(id)) : redis ? await redis.getdel<string>(grantStoreKey(id)) : null;
+    if (testStore) testStore.delete(grantStoreKey(id));
+    return raw === '1';
+  } catch {
+    return false;
+  }
+}
+
 export async function encodePreviewState(target: PreviewTarget): Promise<string | null> {
   if (!isVercelPreviewOrigin(target.origin)) return null;
   const id = randomBytes(32).toString('base64url');
@@ -101,8 +129,10 @@ function grantKey() {
   return stateKeyMaterial();
 }
 
-export async function createPreviewSessionGrant(target: PreviewTarget, sealedSession: string): Promise<string> {
-  return new EncryptJWT({ origin: target.origin, returnTo: target.returnTo, sealedSession })
+export async function createPreviewSessionGrant(target: PreviewTarget, sealedSession: string): Promise<string | null> {
+  const id = randomBytes(32).toString('base64url');
+  if (!(await putGrant(id))) return null;
+  return new EncryptJWT({ id, origin: target.origin, returnTo: target.returnTo, sealedSession })
     .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
     .setAudience(PREVIEW_AUDIENCE)
     .setIssuedAt()
@@ -114,7 +144,8 @@ export async function consumePreviewSessionGrant(grant: string, requestOrigin: s
   try {
     const { payload } = await jwtDecrypt(grant, grantKey(), { audience: PREVIEW_AUDIENCE });
     if (payload.origin !== requestOrigin || !isVercelPreviewOrigin(requestOrigin)) return null;
-    if (typeof payload.sealedSession !== 'string' || typeof payload.returnTo !== 'string') return null;
+    if (typeof payload.id !== 'string' || typeof payload.sealedSession !== 'string' || typeof payload.returnTo !== 'string') return null;
+    if (!(await takeGrant(payload.id))) return null;
     return { sealedSession: payload.sealedSession, returnTo: safeRelativeRedirectPath(payload.returnTo) };
   } catch {
     return null;

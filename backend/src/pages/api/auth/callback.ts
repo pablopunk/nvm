@@ -32,6 +32,7 @@ export const GET: APIRoute = async ({ url, request }) => {
   const headers = new Headers();
   if (previewTarget) {
     const grant = await createPreviewSessionGrant(previewTarget, sealedSession!);
+    if (!grant) return new Response('Preview authentication is temporarily unavailable.', { status: 503 });
     const exchangeUrl = new URL('/api/auth/preview-exchange', previewTarget.origin);
     exchangeUrl.searchParams.set('grant', grant);
     headers.set('Location', exchangeUrl.toString());

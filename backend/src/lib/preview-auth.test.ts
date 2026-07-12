@@ -16,8 +16,14 @@ test('creates preview state only for HTTPS Vercel preview domains', () => {
 test('round trips an encrypted preview session grant only on its target origin', async () => {
   const target = { origin: 'https://nvm-git-branch-team-pablo-varelas-projects-4f86af8b.vercel.app', returnTo: '/dashboard' };
   const grant = await createPreviewSessionGrant(target, 'sealed-session');
+  assert.ok(grant);
   assert.deepEqual(await consumePreviewSessionGrant(grant, target.origin), { sealedSession: 'sealed-session', returnTo: '/dashboard' });
-  assert.equal(await consumePreviewSessionGrant(grant, 'https://other-preview.vercel.app'), null);
+  assert.equal(await consumePreviewSessionGrant(grant, target.origin), null, 'grant is one-time');
+
+  const secondGrant = await createPreviewSessionGrant(target, 'sealed-session');
+  assert.ok(secondGrant);
+  assert.equal(await consumePreviewSessionGrant(secondGrant, 'https://other-preview.vercel.app'), null);
+  assert.deepEqual(await consumePreviewSessionGrant(secondGrant, target.origin), { sealedSession: 'sealed-session', returnTo: '/dashboard' });
 });
 
 test('rejects malformed preview state', async () => {
