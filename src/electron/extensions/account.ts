@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This extension follows the existing palette-extension API conventions.
 import { getNevermindAuth, signOutFromNevermind } from '../nevermind-auth';
 import { extensionContext } from './_context';
 

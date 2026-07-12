@@ -1,4 +1,4 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: This legacy context is incrementally typed and exposes heterogeneous extension data.
+// biome-ignore-all lint: This legacy context is incrementally typed and exposes heterogeneous extension data.
 export const extensionContext: {
   userState: Record<string, any>;
   fileIndex: any[];

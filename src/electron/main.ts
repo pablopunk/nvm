@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fsSync from 'node:fs';

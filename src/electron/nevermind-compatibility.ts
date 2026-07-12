@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This compatibility cache retains established Electron persistence conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';

@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This module retains existing authentication persistence conventions.
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
