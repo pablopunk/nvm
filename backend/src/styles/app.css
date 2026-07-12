@@ -34,6 +34,11 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  color: var(--text);
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -42,7 +47,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+.container { max-width: 960px; margin: 0 auto; padding: 0 24px; width: 100%; }
+main { flex: 1; }
 .container--wide { max-width: 1200px; }
 .container--narrow { max-width: 520px; }
 
