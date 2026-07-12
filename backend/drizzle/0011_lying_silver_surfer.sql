@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "invites_one_active_recipient" ON "invites" USING btree ("email") WHERE "invites"."status" in ('queued', 'sending', 'sent');

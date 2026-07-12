@@ -5,6 +5,7 @@ import { db } from '../../../db/client';
 import { waitlistEntries } from '../../../db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { env } from '../../../lib/env';
+import { requireSameOrigin } from '../../../lib/csrf';
 
 export const GET: APIRoute = async ({ request, url }) => {
   if (!await requireAdmin(request)) return new Response('Forbidden', { status: 403 });
@@ -12,6 +13,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
   const admin = await requireAdmin(request);
   if (!admin) return new Response('Forbidden', { status: 403 });
   let body: { email?: string; waitlistEntryId?: string; entryIds?: string[] };
@@ -29,6 +32,8 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 export const PUT: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
   const admin = await requireAdmin(request);
   if (!admin) return new Response('Forbidden', { status: 403 });
   let body: { id?: string; status?: string; note?: string };

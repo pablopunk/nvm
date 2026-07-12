@@ -32,12 +32,19 @@ export async function createInvite(input: { email: string; waitlistEntryId?: str
   const token = randomBytes(32).toString('base64url');
   const days = Number(env('INVITE_TTL_DAYS') || 7);
   const expiresAt = new Date(Date.now() + (Number.isFinite(days) ? days : 7) * 86400000);
-  return db.transaction(async (tx) => {
-    const [invite] = await tx.insert(invites).values({ email, waitlistEntryId: input.waitlistEntryId, createdBy: input.createdBy, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt }).returning();
-    await tx.insert(emailOutbox).values({ inviteId: invite.id, recipient: email, tokenCiphertext: encryptInviteToken(token), idempotencyKey: `invite/${invite.id}/v1` });
-    if (input.waitlistEntryId) await tx.update(waitlistEntries).set({ status: 'invited', reviewedAt: new Date(), reviewerId: input.createdBy }).where(eq(waitlistEntries.id, input.waitlistEntryId));
-    return { invite, token, existing: false };
-  });
+  try {
+    return await db.transaction(async (tx) => {
+      const [invite] = await tx.insert(invites).values({ email, waitlistEntryId: input.waitlistEntryId, createdBy: input.createdBy, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt }).returning();
+      await tx.insert(emailOutbox).values({ inviteId: invite.id, recipient: email, tokenCiphertext: encryptInviteToken(token), idempotencyKey: `invite/${invite.id}/v1` });
+      if (input.waitlistEntryId) await tx.update(waitlistEntries).set({ status: 'invited', reviewedAt: new Date(), reviewerId: input.createdBy }).where(eq(waitlistEntries.id, input.waitlistEntryId));
+      return { invite, token, existing: false };
+    });
+  } catch (error) {
+    if (!(error instanceof Error) || !/unique|duplicate/i.test(error.message)) throw error;
+    const [active] = await db.select().from(invites).where(and(eq(invites.email, email), inArray(invites.status, ['queued', 'sending', 'sent']))).limit(1);
+    if (!active) throw error;
+    return { invite: active, token: null, existing: true };
+  }
 }
 
 export async function redeemInvite(token: string, email: string) {

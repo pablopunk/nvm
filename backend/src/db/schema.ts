@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   jsonb,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -202,7 +203,9 @@ export const invites = pgTable('invites', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
-});
+}, (t) => [
+  uniqueIndex('invites_one_active_recipient').on(t.email).where(sql`${t.status} in ('queued', 'sending', 'sent')`),
+]);
 
 export const emailOutbox = pgTable('email_outbox', {
   id: uuid('id').primaryKey().defaultRandom(),
