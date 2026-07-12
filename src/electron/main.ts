@@ -67,6 +67,7 @@ import {
   onNevermindCompatibilityChanged,
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
+import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
 import { initSentry } from './sentry';
 
 initSentry();
@@ -1724,16 +1725,6 @@ async function signInToSelectedNevermindEnvironment() {
   return result;
 }
 
-function loopbackNevermindUrl(baseUrl: string) {
-  try {
-    return ['localhost', '127.0.0.1', '::1'].includes(
-      new URL(baseUrl).hostname,
-    );
-  } catch {
-    return false;
-  }
-}
-
 async function switchNevermindBackendEnvironment(input: {
   environment: 'production' | 'pr_preview' | 'custom';
   baseUrl?: string;
@@ -1753,10 +1744,14 @@ async function switchNevermindBackendEnvironment(input: {
   if (parsed.protocol !== 'https:') {
     return { ok: false, message: 'Backend URL must use HTTPS.' };
   }
-  if (app.isPackaged && loopbackNevermindUrl(baseUrl)) {
+  if (
+    app.isPackaged &&
+    (await resolvesToUnsafeNevermindAddress(parsed.hostname))
+  ) {
     return {
       ok: false,
-      message: 'Packaged Nevermind builds cannot use localhost.',
+      message:
+        'Packaged Nevermind builds cannot use localhost or private network addresses.',
     };
   }
 
