@@ -110,6 +110,14 @@ export function warmNevermindCompatibilityCache(baseUrl: string) {
   );
 }
 
+export async function invalidateNevermindCompatibilityCache(baseUrl?: string) {
+  await loadCompatibilityCache();
+  if (baseUrl) cachedManifests.delete(normalizeBaseUrl(baseUrl));
+  else cachedManifests.clear();
+  await saveCompatibilityCache();
+  notifyCompatibilityChanged();
+}
+
 export async function checkNevermindCompatibility(baseUrl: string) {
   const cached = await getCachedNevermindCompatibilityManifest(baseUrl);
   const manifest = await fetchCompatibilityManifest(baseUrl).catch((error) => {
