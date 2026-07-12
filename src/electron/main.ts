@@ -95,6 +95,7 @@ import {
 } from './extension-permissions';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
+import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
 import { initExtensionContext } from './extensions/_context';
 import { createAiBuilderExtension } from './extensions/ai-builder';
@@ -310,6 +311,8 @@ let statePath = '';
 let iconCacheDir = '';
 let clipboardImagesDir = '';
 let extensionsDir = '';
+let extensionPrSubmitter: ReturnType<typeof createExtensionPrSubmitter> | null =
+  null;
 let extensionStorageDir = '';
 let extensionCacheDir = '';
 let learningRulesPath = '';
@@ -3329,6 +3332,22 @@ async function executeViewAction(action, launchContext?: any) {
         ok: result.ok,
       };
     }
+    case 'submitExtensionPr': {
+      if (!extensionPrSubmitter) {
+        return {
+          toast: { message: 'Cannot submit extensions right now', tone: 'error' },
+        };
+      }
+      const result = await extensionPrSubmitter.submitExtensionPr(action);
+      return {
+        toast: {
+          message: result.prUrl
+            ? `PR opened: ${result.prUrl}`
+            : result.message,
+          tone: result.ok ? 'default' : 'error',
+        },
+      };
+    }
     case 'clearActionOverride': {
       const result = await clearOverride(action.targetAction || action.action);
       return {
@@ -4036,7 +4055,7 @@ function quickLookPath(filePath) {
   child.unref();
 }
 
-function execFileText(command, args, options = {}) {
+function execFileText(command: string, args: string[] = [], options = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (error, stdout) =>
       error ? reject(error) : resolve(stdout),
@@ -7777,6 +7796,14 @@ app.whenReady().then(async () => {
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
 
   await loadUserState();
+  extensionPrSubmitter = createExtensionPrSubmitter({
+    execFileText,
+    extensionsDir,
+    repoOwner: 'pablopunk',
+    repoName: 'nvm',
+    logInfo,
+    logWarn,
+  });
   registerHostJobs();
   await loadExtensions();
   if (process.env.NVM_PALETTE_DEBUG) {
@@ -7849,6 +7876,7 @@ app.whenReady().then(async () => {
     logError,
     logWarn,
     loggerDebug,
+    probeGh: () => extensionPrSubmitter?.probe() ?? Promise.resolve({ installed: false, authed: false }),
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) => {

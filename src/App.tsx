@@ -546,6 +546,10 @@ export function App() {
   const extensionViewBackStack = extensionNavigation.backStack;
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
+  const [ghStatus, setGhStatus] = useState<{
+    installed: boolean;
+    authed: boolean;
+  }>({ installed: false, authed: false });
   const [toast, setToast] = useState<{
     message: string;
     tone?: 'default' | 'error';
@@ -720,6 +724,9 @@ export function App() {
     let cancelled = false;
     window.nvm.getNevermindAuthStatus().then((status) => {
       if (!cancelled) setNevermindAuthed(status.authed);
+    });
+    window.nvm.getGhStatus().then((status) => {
+      if (!cancelled) setGhStatus(status);
     });
     const stop = window.nvm.onNevermindAuthChanged((status) =>
       setNevermindAuthed(status.authed),
@@ -2079,6 +2086,26 @@ export function App() {
       optionsFor?.kind || '',
     ) && optionsFor?.removable,
   );
+  const canSubmitExtensionPr = Boolean(
+    canDuplicateCreatedAction &&
+      ghStatus.installed,
+  );
+  const canSubmitExtensionPrHint =
+    canDuplicateCreatedAction &&
+    ghStatus.installed &&
+    !ghStatus.authed;
+  async function submitExtensionPrAction() {
+    if (!optionsFor) return;
+    const result = (await window.nvm.runViewAction({
+      type: 'submitExtensionPr',
+      title: 'Submit as PR',
+      targetAction: optionsFor,
+    })) as any;
+    showToast(
+      result?.toast?.message ?? 'Submitted',
+      result?.toast?.tone === 'error' ? 'error' : 'default',
+    );
+  }
   const canCustomizeAction = canCustomizeCommandAction(optionsFor);
   const canRemoveOptionsShortcut = Boolean(
     optionsFor &&
@@ -2502,6 +2529,16 @@ export function App() {
         subtitle: 'Change the display name of this extension',
         onSelect: renameExtensionAction,
         show: canTweakWithAi,
+      },
+      {
+        value: 'option:submit-pr',
+        icon: <Zap size={18} />,
+        title: 'Submit as PR',
+        subtitle: canSubmitExtensionPrHint
+          ? 'Requires GitHub CLI (gh auth login)'
+          : 'Open a pull request adding this extension to Nevermind',
+        onSelect: submitExtensionPrAction,
+        show: canSubmitExtensionPr,
       },
       {
         value: 'option:tweak',

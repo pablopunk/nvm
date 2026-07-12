@@ -71,6 +71,7 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     logError: (message) => calls.push(`error:${message}`),
     logWarn: (message) => calls.push(`warn:${message}`),
     loggerDebug: (message) => calls.push(`debug:${message}`),
+    probeGh: async () => ({ installed: true, authed: true }),
     ...overrides,
   };
   registerAppIpcHandlers(deps);

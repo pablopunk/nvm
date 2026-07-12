@@ -488,6 +488,11 @@ kbd {
   background: var(--surface-4);
 }
 
+.result[data-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .resultIcon {
   display: grid;
   place-items: center;

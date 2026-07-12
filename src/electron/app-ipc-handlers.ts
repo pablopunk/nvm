@@ -74,6 +74,7 @@ export type AppIpcHandlersDeps = {
   logError: (message: string, data?: unknown, context?: unknown) => unknown;
   logWarn: (message: string, data?: unknown, context?: unknown) => unknown;
   loggerDebug: (message: string, data?: unknown, context?: unknown) => unknown;
+  probeGh: () => Promise<{ installed: boolean; authed: boolean }>;
 };
 
 export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
@@ -221,6 +222,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       return { ok: false, status };
     return { ok: true, status };
   });
+  ipcHandleMeasured('gh:status', () => deps.probeGh());
   ipcHandleMeasured('extension-window:get-state', (_event, id) =>
     deps.extensionWindowManager.getState(String(id || '')),
   );

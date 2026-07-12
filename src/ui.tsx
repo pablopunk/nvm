@@ -35,6 +35,7 @@ export type CommandRowProps = {
   className?: string;
   appearance?: ItemAppearance;
   selectedOnlyShortcut?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 };
 export type CommandTileProps = {
@@ -142,6 +143,7 @@ export type ActionPanelRow = {
   shortcut?: string;
   className?: string;
   sectionHeader?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 };
 export type ActionPanelViewProps = {
@@ -243,6 +245,7 @@ export function CommandRow({
   className,
   appearance,
   selectedOnlyShortcut = false,
+  disabled,
   onSelect,
 }: CommandRowProps) {
   const keyHints = selectedOnlyShortcut ? (
@@ -269,11 +272,14 @@ export function CommandRow({
       value={value}
       className={itemClassName}
       data-foreground={appearance?.foreground}
-      onSelect={onSelect}
+      data-disabled={disabled ? 'true' : undefined}
+      aria-disabled={disabled ? 'true' : undefined}
+      onSelect={() => {
+        if (!disabled) onSelect();
+      }}
     >
       <span className="resultIcon">{icon}</span>
-      <span className="resultText">
-        <strong>{title}</strong>
+      <span className="resultText">{disabled ? title : <strong>{title}</strong>}
         <small>{subtitle}</small>
       </span>
       <span className="resultTrailing">
@@ -964,6 +970,7 @@ export function ActionPanelView({ rows, renderEmpty }: ActionPanelViewProps) {
             subtitle={row.subtitle}
             shortcut={row.shortcut}
             className={row.className}
+            disabled={row.disabled}
             onSelect={row.onSelect}
           />
         ),
