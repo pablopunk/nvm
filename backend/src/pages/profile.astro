@@ -25,26 +25,21 @@ const canBuyTopUps = hasActiveSubscription;
 const billingState = Astro.url.searchParams.get('billing');
 ---
 <Layout title="Nevermind · Profile">
-  <nav class="nav">
-    <a href="/profile" aria-current="page">Profile</a>
-    {isAdmin && <a href="/admin">Admin</a>}
-    <span class="spacer"></span>
-    <form method="post" action="/api/auth/signout"><button class="button" type="submit">Sign out</button></form>
-  </nav>
-
-  <h1>Profile</h1>
-  <p class="muted">Account, balance, and API tokens.</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:32px">
+    <div>
+      <h1 style="margin:0">Profile</h1>
+      <p class="muted" style="margin:0"><code>{user?.email}</code> · {user?.plan} plan</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      {isAdmin && <a class="button" href="/admin">Admin</a>}
+      <form method="post" action="/api/auth/signout" style="margin:0"><button class="button" type="submit">Sign out</button></form>
+    </div>
+  </div>
 
   <div class="section stat-grid">
     <div class="stat"><div class="v">{balances.total}</div><div class="l">Credits</div></div>
     <div class="stat"><div class="v">{balances.free}</div><div class="l">Free</div></div>
     <div class="stat"><div class="v">{balances.paid}</div><div class="l">Paid</div></div>
-    <div class="stat"><div class="v">{user?.plan}</div><div class="l">Plan</div></div>
-  </div>
-
-  <div class="section card">
-    <h3>Account</h3>
-    <p style="margin:0"><code>{user?.email}</code> · {user?.role}</p>
   </div>
 
   <div class="section card stack" id="connect-desktop">

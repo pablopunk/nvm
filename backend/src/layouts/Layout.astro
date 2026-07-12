@@ -4,9 +4,10 @@ import '../styles/app.css';
 interface Props {
   title: string;
   width?: 'default' | 'wide' | 'narrow';
+  showHeader?: boolean;
 }
 
-const { title, width = 'default' } = Astro.props;
+const { title, width = 'default', showHeader = true } = Astro.props;
 const containerClass = width === 'wide' ? 'container container--wide' : width === 'narrow' ? 'container container--narrow' : 'container';
 ---
 <html lang="en">
@@ -17,17 +18,38 @@ const containerClass = width === 'wide' ? 'container container--wide' : width ==
     <link rel="icon" type="image/png" href="/favicon.png" />
   </head>
   <body>
-    <main class={containerClass}>
+    {showHeader && (
+    <header class="site-header" aria-label="Main navigation">
+      <div class="site-header__inner">
+        <a class="site-header__brand" href="/" aria-label="Nevermind home">
+          <img src="/icon.png" alt="" />
+          <span>Nevermind</span>
+        </a>
+        <nav class="site-header__nav" aria-label="Product links">
+          <a href="/pricing">Pricing</a>
+          <a href="/docs">Docs</a>
+          <a href="https://github.com/pablopunk/nvm/releases">Releases</a>
+        </nav>
+        <div class="site-header__actions">
+          <slot name="header-actions">
+            <a class="button" href="/api/auth/signin">Sign in</a>
+          </slot>
+        </div>
+      </div>
+    </header>
+    )}
+
+    <main class={containerClass} style="padding-top:24px;padding-bottom:48px">
       <slot />
     </main>
-    <footer class="site-footer" style="text-align:center;padding:32px 16px;opacity:0.6;font-size:13px">
-      <nav style="display:flex;gap:16px;justify-content:center">
-        <a href="/terms">Terms</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/refund">Refunds</a>
-        <a href="https://github.com/pablopunk/nvm">GitHub</a>
-      </nav>
+
+    <footer class="site-footer">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/refund">Refunds</a>
+      <a href="https://github.com/pablopunk/nvm">GitHub</a>
     </footer>
+
     <script>
       document.addEventListener('click', (event) => {
         const target = event.target as Element;

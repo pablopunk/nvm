@@ -1,55 +1,108 @@
 ---
 import Layout from '../layouts/Layout.astro';
 ---
-<Layout title="Docs · Nevermind">
-  <nav class="nav">
-    <a href="/">Home</a>
-    <a href="/pricing">Pricing</a>
-    <a href="/docs" aria-current="page">Docs</a>
-  </nav>
+<Layout title="Documentation · Nevermind">
+  <section class="page-hero">
+    <h1>Documentation</h1>
+    <p>Everything you need to install Nevermind, connect your account, and use the API.</p>
+  </section>
 
-  <h1>Documentation</h1>
+  <div class="docs-layout">
+    <nav class="docs-sidebar" aria-label="Docs navigation">
+      <span class="docs-sidebar__section">Overview</span>
+      <a href="#getting-started">Getting started</a>
+      <a href="#installation">Installation</a>
+      <a href="#sign-in">Sign in &amp; connect</a>
 
-  <div class="section card">
-    <h2>Getting Started</h2>
-    <p class="muted">Nevermind is an AI-native command palette for your desktop. Install the desktop app, sign in, and start using AI-powered commands.</p>
-    <h3>Installation</h3>
-    <p class="muted">Download the latest version from <a href="https://github.com/pablopunk/nvm/releases">GitHub Releases</a>. Available for macOS (Apple Silicon and Intel), Windows, and Linux.</p>
-  </div>
+      <span class="docs-sidebar__section">API</span>
+      <a href="#api-auth">Authentication</a>
+      <a href="#chat-completions">Chat completions</a>
+      <a href="#models">Models</a>
 
-  <div class="section card" style="margin-top:16px">
-    <h2>API Access</h2>
-    <p class="muted">Nevermind provides an OpenAI-compatible chat completions endpoint at <code>https://api.nvm.fyi/api/v1/chat/completions</code>.</p>
-    <h3>Authentication</h3>
-    <p class="muted">Use a Personal Access Token (PAT) from your <a href="/profile">profile page</a>. Pass it as a Bearer token:</p>
-    <pre><code>Authorization: Bearer nvm_pat_...</code></pre>
-    <h3>Example (curl)</h3>
-    <pre><code>curl -sS https://api.nvm.fyi/api/v1/chat/completions \
+      <span class="docs-sidebar__section">Reference</span>
+      <a href="#credits-limits">Credits &amp; limits</a>
+      <a href="#errors">Error codes</a>
+      <a href="#device-auth">Device authorization</a>
+
+      <span class="docs-sidebar__section">Account</span>
+      <a href="#account-billing">Account &amp; billing</a>
+    </nav>
+
+    <article class="docs-article">
+      <h2 id="getting-started">Getting started</h2>
+      <p>Nevermind is an AI-native desktop command palette. Press <code>Alt+Space</code>, type what you want, and get instant actions. The desktop app also includes an AI builder that creates custom extensions from natural language descriptions.</p>
+
+      <h3 id="installation">Installation</h3>
+      <p>Download the latest version from <a href="https://github.com/pablopunk/nvm/releases">GitHub Releases</a>. Choose your platform:</p>
+      <ul>
+        <li><strong>macOS</strong> — <code>.zip</code> for Apple Silicon or Intel</li>
+        <li><strong>Windows</strong> — <code>.exe</code> installer or portable</li>
+        <li><strong>Linux</strong> — <code>.AppImage</code> or <code>.deb</code></li>
+      </ul>
+
+      <h3 id="sign-in">Sign in &amp; connect</h3>
+      <p>Open the palette (<code>Alt+Space</code>), type "Log in to Nevermind", and follow the browser prompt to authenticate. Once signed in, the app uses your Nevermind account for AI features and model access.</p>
+      <p>The app supports a <code>nvm://</code> protocol handler for one-click sign-in from the dashboard. If the protocol handler is unavailable, you can paste a device code manually from the app's sign-in flow.</p>
+
+      <hr />
+
+      <h2 id="api-auth">API Authentication</h2>
+      <p>Nevermind provides an OpenAI-compatible chat completions API. Authenticate using a Personal Access Token (PAT) created from your <a href="/profile">profile page</a>.</p>
+      <p>Pass the token as a Bearer header:</p>
+      <pre><code>Authorization: Bearer nvm_pat_YOUR_TOKEN</code></pre>
+      <p>Tokens are prefixed with <code>nvm_pat_</code> and can be revoked individually from the dashboard. Never share a token or commit it to version control.</p>
+
+      <h3 id="chat-completions">Chat completions</h3>
+      <p>
+        <span class="api-method api-method--post">POST</span>
+        <span class="endpoint">https://api.nvm.fyi/api/v1/chat/completions</span>
+      </p>
+      <p>Accepts standard OpenAI Chat Completions request bodies. Models are selected automatically based on availability and routing configuration.</p>
+      <pre><code>curl -sS https://api.nvm.fyi/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer nvm_pat_YOUR_TOKEN" \
-  -d '&#123;"model":"nevermind","messages":[&#123;"role":"user","content":"Hello!"&#125;]&#125;'</code></pre>
-    <h3>Supported Models</h3>
-    <p class="muted">The endpoint routes to the best available model automatically. Query <code>GET /api/v1/models</code> for the current model list.</p>
-  </div>
+  -d '&#123;
+    "model": "nevermind",
+    "messages": [
+      &#123;"role": "user", "content": "Explain how credits work"&#125;
+    ]
+  &#125;'</code></pre>
 
-  <div class="section card" style="margin-top:16px">
-    <h2>Rate Limits & Errors</h2>
-    <h3>Rate Limits</h3>
-    <p class="muted">Rate limits depend on your plan. The API returns <code>429 Too Many Requests</code> with a <code>Retry-After</code> header when you hit a limit.</p>
-    <h3>Error Codes</h3>
-    <table style="width:100%; margin-top:8px">
-      <tr><th style="text-align:left">Status</th><th style="text-align:left">Meaning</th></tr>
-      <tr><td>200</td><td>Success</td></tr>
-      <tr><td>401</td><td>Invalid or revoked PAT</td></tr>
-      <tr><td>402</td><td>Insufficient credits</td></tr>
-      <tr><td>429</td><td>Rate limited — wait and retry</td></tr>
-      <tr><td>503</td><td>Service temporarily unavailable</td></tr>
-    </table>
-  </div>
+      <h3 id="models">Models</h3>
+      <p>Nevermind routes requests across a pool of supported AI providers. The model you choose determines the provider path and capabilities. Model availability depends on your plan and the current backend configuration.</p>
+      <p>To discover the currently active model, the desktop app queries <span class="endpoint">GET /api/v1/active-model</span> after authentication. The response includes the model ID, context window size, and supported input types.</p>
 
-  <div class="section card" style="margin-top:16px">
-    <h2>Device Authorization</h2>
-    <p class="muted">The desktop app authenticates using a device authorization flow (similar to OAuth device grant). Initiate from the app, approve in the browser, and the app receives a short-lived PAT.</p>
-    <p class="muted">When the protocol handler (<code>nvm://</code>) is unavailable, you can paste the device code manually into the app via the Command palette.</p>
+      <hr />
+
+      <h2 id="credits-limits">Credits &amp; limits</h2>
+      <p>Every account includes free monthly credits. Paid plans add additional credits per billing cycle. See the <a href="/pricing">pricing page</a> for current plans and FAQ.</p>
+      <p>Rate limits depend on your plan. When you hit a limit, the API returns a <code>429</code> status with a <code>Retry-After</code> header.</p>
+
+      <h3 id="errors">Error codes</h3>
+      <table class="table">
+        <thead>
+          <tr><th>Status</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>200</code></td><td>Success — request completed normally</td></tr>
+          <tr><td><code>401</code></td><td>Missing, invalid, or revoked PAT</td></tr>
+          <tr><td><code>402</code></td><td>Insufficient credits — add credits or wait for monthly reset</td></tr>
+          <tr><td><code>403</code></td><td>Forbidden — cross-origin request rejected</td></tr>
+          <tr><td><code>426</code></td><td>Update required — your desktop app version is unsupported</td></tr>
+          <tr><td><code>429</code></td><td>Rate limited — wait and retry after the Retry-After window</td></tr>
+          <tr><td><code>503</code></td><td>Service unavailable — backend maintenance or overload</td></tr>
+        </tbody>
+      </table>
+
+      <hr />
+
+      <h2 id="device-auth">Device authorization</h2>
+      <p>The desktop app authenticates using a device authorization flow. The app requests a short-lived code, opens a browser verification URL for approval, and polls for a token exchange.</p>
+      <p>When using the <a href="/profile">Connect desktop app</a> feature from the dashboard, the <code>nvm://</code> deep link carries only the device code — never a PAT. If the protocol handler fails to open (common on sandboxed Linux browsers), a manual code copy fallback is shown.</p>
+
+      <h3 id="account-billing">Account &amp; billing</h3>
+      <p>Manage your subscription, view balances, and create API tokens from the <a href="/profile">profile dashboard</a>. Billing is handled securely by Stripe — Nevermind does not store payment details.</p>
+      <p>The <a href="/profile#connect-desktop">Connect desktop app</a> panel on the profile page generates a short-lived device code you can use to sign into the desktop app with one click.</p>
+    </article>
   </div>
 </Layout>

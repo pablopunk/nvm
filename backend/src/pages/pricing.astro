@@ -1,35 +1,37 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { billingCatalog, isActiveBillingSubscriptionStatus } from '../lib/billing';
+import { billingCatalog } from '../lib/billing';
 import { getSessionFromCookies } from '../lib/workos';
 
 const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
+const hasSubscriptions = catalog.subscriptions.length > 0;
+const hasTopUps = catalog.topUps.length > 0;
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 const isLoggedIn = Boolean(session);
+const recommendedTier = catalog.subscriptions[0] ?? null;
 ---
 <Layout title="Pricing · Nevermind">
-  <nav class="nav">
-    <a href="/">Home</a>
-    <a href="/pricing" aria-current="page">Pricing</a>
-    <span class="spacer"></span>
-    {isLoggedIn ? <a href="/profile">Dashboard</a> : <a href="/api/auth/signin">Sign in</a>}
-  </nav>
+  <section class="page-hero">
+    <h1>Pricing</h1>
+    <p>Every account includes free monthly credits. Upgrade when you need more — no hidden fees, cancel anytime.</p>
+  </section>
 
-  <h1>Pricing</h1>
-  <p class="muted">Simple, predictable pricing for AI features.</p>
-
-  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-top: 24px;">
-    <div class="card">
+  <div class="pricing-grid">
+    <div class="price-card">
       <h3>Free</h3>
-      <p class="muted">Every account starts with <strong>free monthly credits</strong> for trying the AI features and the desktop app. No credit card required.</p>
-      <p class="muted" style="font-size:13px;">Free credits renew each month and are applied automatically.</p>
+      <div><span class="price-card__credits">Free</span><span class="price-card__period">/ month</span></div>
+      <p class="price-card__desc">Includes free monthly credits to try the AI features in the desktop app. No credit card required. Credits reset each month.</p>
+      <a class="button" href="https://github.com/pablopunk/nvm/releases">Download the app</a>
     </div>
+
     {catalog.subscriptions.map((tier) => (
-      <div class="card">
+      <div class={`price-card${tier === recommendedTier ? ' price-card--recommended' : ''}`}>
+        {tier === recommendedTier && <span class="price-card__badge">Recommended</span>}
         <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
-        <p class="muted"><strong>{tier.credits} credits</strong> per month</p>
+        <div><span class="price-card__credits">{tier.credits}</span><span class="price-card__period">credits / month</span></div>
+        <p class="price-card__desc">Monthly credit allocation for heavier AI usage. Credits are consumed per AI operation, proportional to the model and prompt size.</p>
         {!isLoggedIn && (
           <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
         )}
@@ -38,22 +40,73 @@ const isLoggedIn = Boolean(session);
         )}
       </div>
     ))}
+
+    {!hasSubscriptions && (
+      <div class="price-card">
+        <h3>Pro</h3>
+        <div><span class="price-card__credits">—</span></div>
+        <p class="price-card__desc">Paid plans are not configured yet. Check back soon or <a href="https://github.com/pablopunk/nvm">star the repo</a> for updates.</p>
+      </div>
+    )}
   </div>
 
-  {catalog.topUps.length > 0 && (
-    <div class="section card" style="margin-top:24px">
-      <h3>Top-ups</h3>
-      <p class="muted">One-time credit packs for when you need more. Available after subscribing.</p>
-      <ul class="list-clean">
+  {hasTopUps && (
+    <div class="section">
+      <h2>Top-ups</h2>
+      <p class="muted">One-time credit packs for when you need more. Available with an active subscription.</p>
+      <div class="top-up-section">
         {catalog.topUps.map((pack) => (
-          <li><strong>{pack.credits} credits</strong></li>
+          <div class="top-up-card">
+            <div class="top-up-card__credits">{pack.credits}</div>
+            <div style="font-size:13px;color:var(--muted)">credits</div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   )}
 
-  <div class="section card" style="margin-top:24px">
-    <h3>How credits work</h3>
-    <p class="muted">Credits are Nevermind's usage unit. One credit covers approximately one AI operation depending on the model and prompt size. Free credits are consumed first, then paid credits. Unused credits expire at the end of your billing cycle.</p>
+  <div class="section">
+    <h2>How billing works</h2>
+    <div class="billing-flow">
+      <div class="billing-flow__step">
+        <div class="step-number">1</div>
+        <div>Monthly credits included</div>
+      </div>
+      <div class="billing-flow__step">
+        <div class="step-number">2</div>
+        <div>Usage charged in credits</div>
+      </div>
+      <div class="billing-flow__step">
+        <div class="step-number">3</div>
+        <div>Top up when you need more</div>
+      </div>
+      <div class="billing-flow__step">
+        <div class="step-number">4</div>
+        <div>Manage in Stripe portal</div>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:16px;text-align:center;font-size:13px">
+      Free credits are consumed first, then paid credits. Manage or cancel your subscription from the <a href="/profile">profile page</a>.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>FAQ</h2>
+    <div class="faq-item">
+      <h3>What is a credit?</h3>
+      <p>Credits are Nevermind's usage unit. One credit covers roughly one AI operation. Actual consumption depends on model, prompt size, and response length. Free credits are included monthly; paid credits are purchased through a subscription or top-up.</p>
+    </div>
+    <div class="faq-item">
+      <h3>Can I cancel anytime?</h3>
+      <p>Yes. Cancel your subscription from the billing portal and you keep access until the current period ends. No long-term commitment.</p>
+    </div>
+    <div class="faq-item">
+      <h3>Do unused credits roll over?</h3>
+      <p>Monthly subscription credits reset each billing cycle. Top-up credits are available until consumed or your subscription ends.</p>
+    </div>
+    <div class="faq-item">
+      <h3>What models are available?</h3>
+      <p>Nevermind routes to multiple AI providers automatically. You get the best model available at your credit level. See the <a href="/docs">docs</a> for API details.</p>
+    </div>
   </div>
 </Layout>
