@@ -173,7 +173,8 @@ export function createAccountExtension() {
         ? 'pr_preview'
         : status.backend?.environment;
     const mismatch =
-      Boolean(status.backend) && serverEnvironment !== status.active.environment;
+      Boolean(status.backend) &&
+      serverEnvironment !== status.active.environment;
     return {
       id: 'account-backend-status',
       actionId: 'account-backend-status',
