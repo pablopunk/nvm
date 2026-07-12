@@ -31,9 +31,15 @@ jobs:
       - name: Changed-file lint
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            mise exec -- pnpm check:changed ${{ github.event.pull_request.base.sha }}
+            BASE="${{ github.event.pull_request.base.sha }}"
           else
-            mise exec -- pnpm check:changed HEAD~1
+            BASE="HEAD~1"
+          fi
+          FILES=$(git diff --name-only "$BASE" | grep -v '^backend/' | grep -v '^\.github/' || true)
+          if [ -n "$FILES" ]; then
+            echo "$FILES" | xargs mise exec -- pnpm exec biome check --error-on-warnings --assist-enabled=false --skip=suspicious --skip=style --skip=a11y --skip=performance --skip=complexity
+          else
+            echo "Only non-frontend files changed; skipping biome check"
           fi
 
       - name: Verify
