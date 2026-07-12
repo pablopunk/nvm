@@ -5,7 +5,7 @@ import { lookupModelCost, resetPricingCacheForTests } from './pricing';
 let originalFetch: typeof globalThis.fetch;
 
 function mockFetch(json: unknown) {
-  return (async () => ({ ok: true, json: async () => json })) as typeof globalThis.fetch;
+  return (async () => ({ ok: true, json: async () => json })) as unknown as typeof globalThis.fetch;
 }
 
 before(() => {
