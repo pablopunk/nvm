@@ -15,6 +15,15 @@ Serves the dashboard at `nvm.fyi` and the API the desktop app talks to.
 3. `pnpm db:migrate` to apply migrations on Neon (idempotent; auto-bootstraps an existing DB)
 4. `pnpm dev` → http://localhost:4321
 
+## Axiom logs
+
+The backend always writes structured JSON to stdout. To also ingest production
+logs directly into Axiom (without a Vercel Log Drain), set `AXIOM_TOKEN` and
+`AXIOM_DATASET` in the Vercel project. Use an Axiom API token with ingest
+permission; set `AXIOM_EDGE` only when the dataset uses a non-default Axiom edge.
+The middleware flushes the SDK batch through Vercel's `waitUntil()` lifecycle
+hook, so ingestion does not delay responses.
+
 ## Migrations
 
 Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
