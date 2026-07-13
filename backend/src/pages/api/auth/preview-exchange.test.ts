@@ -22,6 +22,14 @@ function context(request: Request) {
   return { request, url: new URL(request.url) } as any;
 }
 
+async function assertSecureEmpty(response: Response, status: number) {
+  assert.equal(response.status, status);
+  assert.equal(await response.text(), '');
+  assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+  assert.equal(response.headers.get('Cache-Control'), 'no-store, private');
+  assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
+}
+
 test('preview exchange security headers prevent referrer, caching, indexing, and body rendering', async () => {
   const headers = previewExchangeSecurityHeaders();
   assert.equal(headers.get('Referrer-Policy'), 'no-referrer');
@@ -29,17 +37,25 @@ test('preview exchange security headers prevent referrer, caching, indexing, and
   assert.equal(headers.get('X-Robots-Tag'), 'noindex');
 
   const response = await GET(context(new Request('https://nvm-git-branch-team-pablo-varelas-projects-4f86af8b.vercel.app/api/auth/preview-exchange?grant=v2.invalid')));
-  assert.equal(response.status, 400);
-  assert.equal(await response.text(), 'Invalid or expired preview session grant');
-  assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
-  assert.equal(response.headers.get('Cache-Control'), 'no-store, private');
-  assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
+  await assertSecureEmpty(response, 400);
 });
 
 test('preview exchange rejects grant-bearing legacy query material with redaction-safe headers', async () => {
   assert.equal(redactAuthUrl('https://nvm.fyi/api/auth/preview-exchange?grant=secret&code=secret&safe=1'), '/api/auth/preview-exchange?safe=1');
   const response = await GET(context(new Request('https://nvm-git-branch-team-pablo-varelas-projects-4f86af8b.vercel.app/api/auth/preview-exchange?grant=v2.invalid&sealedSession=secret')));
-  assert.equal(response.status, 400);
-  assert.match(await response.text(), /Invalid preview session grant/);
-  assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+  await assertSecureEmpty(response, 400);
+});
+
+test('preview exchange applies security headers to missing-key, incomplete-config, and non-Preview failures', async () => {
+  await assertSecureEmpty(await GET(context(new Request('https://nvm-git-branch-team-pablo-varelas-projects-4f86af8b.vercel.app/api/auth/preview-exchange'))), 400);
+
+  const databaseUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  await assertSecureEmpty(await GET(context(new Request('https://nvm-git-branch-team-pablo-varelas-projects-4f86af8b.vercel.app/api/auth/preview-exchange?grant=v2.invalid'))), 503);
+  process.env.DATABASE_URL = databaseUrl;
+
+  const vercelEnv = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = 'production';
+  await assertSecureEmpty(await GET(context(new Request('https://nvm.fyi/api/auth/preview-exchange?grant=v2.invalid'))), 404);
+  process.env.VERCEL_ENV = vercelEnv;
 });

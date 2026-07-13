@@ -16,15 +16,17 @@ export function previewExchangeSecurityHeaders() {
 }
 
 export const GET: APIRoute = async ({ url, request }) => {
+  const responseHeaders = previewExchangeSecurityHeaders();
+  const emptyFailure = (status: number) => new Response(null, { status, headers: responseHeaders });
   log.debug('preview_exchange_request', { route: redactAuthUrl(url) });
-  if (process.env.VERCEL_ENV !== 'preview') return new Response('Not found', { status: 404 });
-  if (!previewAuthConfigured()) return new Response('Preview authentication is unavailable', { status: 503 });
-  if ([...url.searchParams.keys()].some((key) => key !== 'grant')) return new Response('Invalid preview session grant', { status: 400, headers: previewExchangeSecurityHeaders() });
+  if (process.env.VERCEL_ENV !== 'preview') return emptyFailure(404);
+  if (!previewAuthConfigured()) return emptyFailure(503);
+  if ([...url.searchParams.keys()].some((key) => key !== 'grant')) return emptyFailure(400);
   const grant = url.searchParams.get('grant');
-  if (!grant) return new Response('Missing preview session grant', { status: 400, headers: previewExchangeSecurityHeaders() });
+  if (!grant) return emptyFailure(400);
 
   const session = await consumePreviewSessionGrant(grant, url.origin);
-  if (!session) return new Response('Invalid or expired preview session grant', { status: 400, headers: previewExchangeSecurityHeaders() });
+  if (!session) return emptyFailure(400);
 
   try {
     const existing = await getUserByWorkosId(session.identity.id);
@@ -39,16 +41,16 @@ export const GET: APIRoute = async ({ url, request }) => {
     if (error instanceof InviteRequiredError) {
       const headers = new Headers({ Location: '/?invite=required' });
       headers.set('Set-Cookie', clearInviteIntentCookie(true));
-      for (const [key, value] of previewExchangeSecurityHeaders()) headers.set(key, value);
+      for (const [key, value] of responseHeaders) headers.set(key, value);
       return new Response(null, { status: 303, headers });
     }
-    if (error instanceof SignupsPolicyError) return new Response('Sign-up policy is temporarily unavailable.', { status: 503 });
-    throw error;
+    if (error instanceof SignupsPolicyError) return emptyFailure(503);
+    return emptyFailure(503);
   }
   const previewToken = await createPreviewSessionToken(session.identity);
-  if (!previewToken) return new Response('Preview authentication is unavailable', { status: 503 });
+  if (!previewToken) return emptyFailure(503);
 
-  const headers = previewExchangeSecurityHeaders();
+  const headers = responseHeaders;
   headers.append(
     'Set-Cookie',
     `${PREVIEW_SESSION_COOKIE}=${encodeURIComponent(previewToken)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
