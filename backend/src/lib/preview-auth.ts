@@ -11,7 +11,6 @@ const GRANT_NAMESPACE = 'nvm:preview:grant:v2';
 const PREVIEW_HOST_RE = /^nvm-[a-z0-9-]+-pablo-varelas-projects-4f86af8b\.vercel\.app$/;
 const TOKEN_PREFIX = 'v2.';
 
-export const PREVIEW_SESSION_COOKIE = 'nvm_preview_session';
 export const PREVIEW_GATEWAY_CAPABILITY = 'preview-auth-gateway-v2';
 export type PreviewTarget = { origin: string; returnTo: string };
 export type PreviewIdentity = { id: string; email: string };
@@ -55,13 +54,8 @@ function gatewayRedis() {
   return url && token ? new Redis({ url, token }) : null;
 }
 function grantWriterRedis() {
-  const url = env('PREVIEW_GRANT_REDIS_URL');
-  const token = env('PREVIEW_GRANT_REDIS_TOKEN');
-  return url && token ? new Redis({ url, token }) : null;
-}
-function previewRedis() {
-  const url = env('PREVIEW_REDIS_URL');
-  const token = env('PREVIEW_REDIS_TOKEN');
+  const url = env('UPSTASH_REDIS_REST_URL');
+  const token = env('UPSTASH_REDIS_REST_TOKEN');
   return url && token ? new Redis({ url, token }) : null;
 }
 
@@ -82,7 +76,7 @@ async function getDel(key: string, kind: 'state' | 'grant') {
     testStore.delete(key);
     return value ?? null;
   }
-  const redis = kind === 'state' ? gatewayRedis() : previewRedis();
+  const redis = kind === 'state' ? gatewayRedis() : grantWriterRedis();
   if (!redis) return null;
   try { return await redis.getdel<string>(key); } catch { return null; }
 }

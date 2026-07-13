@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { env } from '../lib/env';
-import { assertPreviewDatabaseBinding } from '../lib/auth-config';
 import { createNeonDb } from './neon';
 import { createPostgresDb } from './postgres';
 
@@ -8,7 +7,6 @@ export type Database = ReturnType<typeof createNeonDb>['db'];
 
 const testDbStorage = new AsyncLocalStorage<Database | undefined>();
 const driver = process.env.NVM_DB_DRIVER || 'neon';
-if (process.env.VERCEL_ENV === 'preview') assertPreviewDatabaseBinding();
 const connectionString = env('DATABASE_URL');
 type DatabaseConnection = { db: Database; pool: { end: () => Promise<void> } };
 const defaultConnection: DatabaseConnection =
