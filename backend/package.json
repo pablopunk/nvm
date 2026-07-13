@@ -10,6 +10,7 @@
     "build": "tsx scripts/migrate.ts && astro build",
     "preview": "astro preview",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test:postgres-integration": "NVM_DB_DRIVER=postgres node --import tsx scripts/postgres-integration.ts",
     "check": "astro check",
     "astro": "astro",
     "db:generate": "drizzle-kit generate",
@@ -28,14 +29,16 @@
     "astro": "^6.4.1",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.3",
+    "pg": "^8.22.0",
     "stripe": "^22.2.0",
-    "zod": "^3.25.0",
     "tom-select": "^2.6.1",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@types/node": "^25.9.1",
+    "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
