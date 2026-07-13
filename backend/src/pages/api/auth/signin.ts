@@ -2,22 +2,26 @@ import type { APIRoute } from 'astro';
 import { workos, WORKOS_CLIENT_ID } from '../../../lib/workos';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 import { env } from '../../../lib/env';
-import { safeRelativeRedirectPath } from '../../../lib/safe-redirect';
-import { encodePreviewState, previewTargetFromRequest } from '../../../lib/preview-auth';
+import { createProductionState, createPreviewStartIntent, previewTargetFromEnvironment } from '../../../lib/preview-auth';
+import { previewAuthConfigured } from '../../../lib/auth-config';
 
 export const GET: APIRoute = async ({ url, request, redirect }) => {
   const decision = await rateLimitIp('auth', clientIp(request), 30, '1 m');
   if (!decision.ok) return tooManyRequests(decision);
-  const previewTarget = previewTargetFromRequest(url, url.searchParams.get('return_to'));
-  const returnTo = previewTarget
-    ? await encodePreviewState(previewTarget)
-    : safeRelativeRedirectPath(url.searchParams.get('return_to'));
-  if (previewTarget && !returnTo) return new Response('Preview authentication is unavailable', { status: 503 });
+  if (env('VERCEL_ENV') === 'preview') {
+    const target = previewTargetFromEnvironment();
+    const gatewayOrigin = env('PREVIEW_GATEWAY_ORIGIN');
+    const intent = target && gatewayOrigin && previewAuthConfigured() ? await createPreviewStartIntent(target) : null;
+    if (!intent || !/^https:\/\/nvm\.fyi$/.test(gatewayOrigin ?? '')) return new Response('Preview authentication is unavailable', { status: 503 });
+    return redirect(`${gatewayOrigin}/api/auth/preview-start?intent=${encodeURIComponent(intent)}`);
+  }
+  const state = await createProductionState(url.searchParams.get('return_to'));
+  if (!state) return new Response('Authentication is temporarily unavailable', { status: 503 });
   const authorizationUrl = workos.userManagement.getAuthorizationUrl({
     provider: 'authkit',
     clientId: WORKOS_CLIENT_ID,
     redirectUri: env('WORKOS_REDIRECT_URI') as string,
-    state: returnTo ?? undefined,
+    state,
   });
   return redirect(authorizationUrl);
 };

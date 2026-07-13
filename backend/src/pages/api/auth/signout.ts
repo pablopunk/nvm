@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { SESSION_COOKIE } from '../../../lib/workos';
+import { SESSION_COOKIE, PREVIEW_SESSION_COOKIE } from '../../../lib/workos';
 import { requireSameOrigin } from '../../../lib/csrf';
 
 export const POST: APIRoute = ({ request, url }) => {
@@ -14,6 +14,10 @@ export const POST: APIRoute = ({ request, url }) => {
   headers.append(
     'Set-Cookie',
     `${SESSION_COOKIE}=; Path=/; HttpOnly; ${isHttps ? 'Secure; ' : ''}SameSite=Lax; Max-Age=0`,
+  );
+  headers.append(
+    'Set-Cookie',
+    `${PREVIEW_SESSION_COOKIE}=; Path=/; HttpOnly; ${isHttps ? 'Secure; ' : ''}SameSite=Lax; Max-Age=0`,
   );
   headers.set('Location', '/');
   return new Response(null, { status: 302, headers });
