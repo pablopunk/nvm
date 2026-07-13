@@ -1,3 +1,5 @@
+import { Axiom } from '@axiomhq/js';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 type LogFields = {
@@ -20,6 +22,18 @@ function serializeError(err: unknown) {
   return err;
 }
 
+const axiomToken = process.env.AXIOM_TOKEN;
+const axiomDataset = process.env.AXIOM_DATASET;
+const axiomEdge = process.env.AXIOM_EDGE || undefined;
+
+const axiom = axiomToken && axiomDataset
+  ? new Axiom({
+      token: axiomToken,
+      edge: axiomEdge,
+      onError: (error) => console.error('[axiom] failed to ingest logs', error),
+    })
+  : undefined;
+
 function emit(level: LogLevel, msg: string, fields: LogFields = {}) {
   const entry: Record<string, unknown> = {
     ts: new Date().toISOString(),
@@ -32,6 +46,20 @@ function emit(level: LogLevel, msg: string, fields: LogFields = {}) {
   if (level === 'error') console.error(line);
   else if (level === 'warn') console.warn(line);
   else console.log(line);
+
+  if (axiom && axiomDataset) axiom.ingest(axiomDataset, entry);
+}
+
+/**
+ * Flushes the Axiom client's in-memory batch. Call this from a request-lifetime
+ * hook so serverless invocations don't end before queued log events are sent.
+ */
+export async function flushLogs() {
+  try {
+    await axiom?.flush();
+  } catch (error) {
+    console.error('[axiom] failed to flush logs', error);
+  }
 }
 
 export const log = {
