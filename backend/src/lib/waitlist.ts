@@ -40,7 +40,13 @@ export async function createInvite(input: { email: string; waitlistEntryId?: str
       return { invite, token, existing: false };
     });
   } catch (error) {
-    if (!(error instanceof Error) || !/unique|duplicate/i.test(error.message)) throw error;
+    const details = error as { message?: unknown; cause?: { code?: unknown; message?: unknown } };
+    const isUniqueViolation =
+      details.cause?.code === '23505' ||
+      /unique|duplicate|23505/i.test(
+        `${details.message ?? ''} ${details.cause?.message ?? ''}`,
+      );
+    if (!isUniqueViolation) throw error;
     const [active] = await db.select().from(invites).where(and(eq(invites.email, email), inArray(invites.status, ['queued', 'sending', 'sent']))).limit(1);
     if (!active) throw error;
     return { invite: active, token: null, existing: true };

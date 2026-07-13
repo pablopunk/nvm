@@ -8,10 +8,16 @@ import {
   apiTokens,
   creditLedger,
   deviceCodes,
+  emailOutbox,
+  emailSuppressions,
+  invites,
   requestDedup,
   stripeEvents,
   users,
 } from '../src/db/schema';
+import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src/lib/waitlist';
+import { createUserFromInviteIntent, InviteRequiredError } from '../src/lib/users';
+import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { runPostgresMigrations } from './migrate-postgres';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
@@ -218,6 +224,81 @@ async function runAssertions() {
         [false, true],
         'concurrent device exchange must have one winner',
       );
+
+      const concurrentEmail = `concurrent-${databaseName}@example.test`;
+      const concurrentInvites = await Promise.all(
+        [1, 2].map(() => createInvite({ email: concurrentEmail })),
+      );
+      assert.equal(
+        (await db.select().from(invites).where(eq(invites.email, concurrentEmail))).length,
+        1,
+        'concurrent issuance must leave one active invite',
+      );
+      assert.equal(
+        concurrentInvites.filter((item) => !item.existing).length,
+        1,
+        'concurrent issuance must have one creator',
+      );
+
+      const leaseInvite = await createInvite({ email: `lease-${databaseName}@example.test` });
+      assert.ok(leaseInvite.invite);
+      const [leaseRow] = await db
+        .select()
+        .from(emailOutbox)
+        .where(eq(emailOutbox.inviteId, leaseInvite.invite.id));
+      assert.ok(leaseRow);
+      const expiredLease = new Date(Date.now() - 60_000);
+      await db.update(emailOutbox).set({
+        status: 'sending',
+        availableAt: expiredLease,
+        leaseExpiresAt: expiredLease,
+        leaseOwner: 'crashed-worker',
+      }).where(eq(emailOutbox.id, leaseRow.id));
+      const reclaimed = await leaseOutbox(10, crypto.randomUUID());
+      assert.equal(reclaimed.some((row) => row.id === leaseRow.id), true, 'expired sending lease must be reclaimable');
+      assert.ok(reclaimed.find((row) => row.id === leaseRow.id)?.leaseOwner);
+
+      for (const [index, eventType] of ['email.bounced', 'email.complained'].entries()) {
+        const recipient = `suppressed-${index}-${databaseName}@example.test`;
+        const issued = await createInvite({ email: recipient });
+        const [providerRow] = await db.select().from(emailOutbox).where(eq(emailOutbox.inviteId, issued.invite.id));
+        const [laterRow] = await db.insert(emailOutbox).values({
+          inviteId: issued.invite.id,
+          recipient,
+          tokenCiphertext: 'test-token',
+          idempotencyKey: `later/${databaseName}/${index}`,
+        }).returning();
+        await db.update(emailOutbox).set({ providerMessageId: `provider-${databaseName}-${index}` }).where(eq(emailOutbox.id, providerRow.id));
+        await processProviderEvent({
+          id: `provider-event-${databaseName}-${index}`,
+          type: eventType,
+          messageId: `provider-${databaseName}-${index}`,
+          raw: JSON.stringify({ type: eventType, data: { email_id: `provider-${databaseName}-${index}` } }),
+        });
+        assert.equal((await db.select().from(emailSuppressions).where(eq(emailSuppressions.email, recipient))).length, 1);
+        assert.equal((await db.select().from(emailOutbox).where(eq(emailOutbox.id, laterRow.id)))[0]?.status, 'cancelled');
+      }
+
+      const redemptionEmail = `redemption-${databaseName}@example.test`;
+      const redemptionInvite = await createInvite({ email: redemptionEmail });
+      const intent = await createInviteIntent(redemptionInvite.token!);
+      assert.ok(intent);
+      const cookie = readInviteIntentCookie(intent.cookie);
+      assert.ok(cookie);
+      const redeemedUser = await createUserFromInviteIntent({
+        intentId: cookie.id,
+        nonce: cookie.nonce,
+        workosUserId: `redemption-${databaseName}`,
+        email: redemptionEmail,
+      });
+      assert.equal(redeemedUser.email, redemptionEmail);
+      assert.equal((await db.select().from(invites).where(eq(invites.id, redemptionInvite.invite.id)))[0]?.status, 'redeemed');
+      assert.equal((await db.select().from(creditLedger).where(eq(creditLedger.userId, redeemedUser.id))).length, 1);
+      await assert.rejects(
+        () => createUserFromInviteIntent({ intentId: cookie.id, nonce: cookie.nonce, workosUserId: `second-${databaseName}`, email: redemptionEmail }),
+        (error: unknown) => error instanceof InviteRequiredError,
+        'invite intent must be one-time',
+      );
     });
   } finally {
     await pool.end();
@@ -258,6 +339,8 @@ try {
     firstMetadata,
     'second migration changed migration metadata',
   );
+  await targetPool.end();
+  targetPool = undefined;
   await runAssertions();
   result = {
     databaseName,
