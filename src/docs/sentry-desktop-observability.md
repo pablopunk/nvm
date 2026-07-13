@@ -17,6 +17,18 @@ error-reporting path or source maps.
 Release builds should set `SENTRY_DSN_DESKTOP` in their build environment so a
 DSN rotation does not require a source change.
 
+The configured production DSN targets Sentry project ID `4511502032502784`,
+which is the Electron (`nvm-app`) project. The main-process startup handlers
+explicitly send uncaught exceptions and unhandled rejections to that project.
+
+## Backend health monitor
+
+Sentry monitors the backend health endpoint at:
+
+`https://api.nvm.fyi/api/health`
+
+Monitor: [Backend API health](https://pablopunk.sentry.io/monitors/7795419/?project=4511502032502784&statsPeriod=14d)
+
 ## Source maps and renderer errors
 
 The Electron renderer build deliberately sets `sourcemap: false` in
