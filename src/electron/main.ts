@@ -13,9 +13,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // should be logged and contained, not silently kill the entire process.
 process.on('unhandledRejection', (reason) => {
   console.error('FATAL: unhandled rejection (would crash Electron):', reason);
+  captureException(reason, { source: 'unhandledRejection' });
 });
 process.on('uncaughtException', (error) => {
   console.error('FATAL: uncaught exception (would crash Electron):', error);
+  captureException(error, { source: 'uncaughtException' });
 });
 
 import {
@@ -76,7 +78,7 @@ import {
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
-import { initSentry } from './sentry';
+import { captureException, initSentry } from './sentry';
 import {
   configureNvmTestMode,
   installTestNetworkPolicy,

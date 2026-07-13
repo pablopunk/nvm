@@ -4,6 +4,37 @@ Verified skill search result: `getsentry/sentry-for-ai@sentry-workflow` (`https:
 
 Use this connector for Sentry alerts, issue URLs, event URLs, crash spikes, cron alert messages, and backend/desktop exceptions.
 
+## Desktop versus backend
+
+Do not treat the backend and the packaged Electron app as one integration.
+
+- **Backend:** verify `SENTRY_DSN` in the linked Vercel production environment.
+- **Desktop:** inspect `src/electron/sentry.ts` and the packaged release. The
+  desktop DSN is selected from `SENTRY_DSN_DESKTOP`, then
+  `NEVERMIND_SENTRY_DSN`, then its built-in fallback. It does not inherit the
+  backend Vercel runtime environment.
+
+When a desktop Sentry project has no events, establish these facts before
+calling it a DSN misconfiguration:
+
+1. Which Sentry project the selected desktop DSN targets (use dashboard or
+   trusted configuration evidence; do not guess from a project name).
+2. Whether `@sentry/electron/main` loaded in the packaged build. Loading is
+   best-effort, so a load failure can leave the app running with only a local
+   warning.
+3. Whether the symptom happened in the Electron main process or renderer. A
+   main-only SDK does not report renderer/UI errors.
+4. Whether the error was caught and handled locally. `console.error` and a
+   caught exception do not create a Sentry event unless code calls
+   `captureException`.
+5. The installed app version/release, environment, and the Sentry project’s
+   time window.
+
+For an end-to-end delivery check, first obtain explicit approval to trigger a
+controlled desktop test error. Verify the resulting event in the intended
+project with its release and environment tags; do not count SDK initialization
+or a present DSN as proof of delivery.
+
 ## Inputs accepted
 
 - Sentry issue URL, event URL, short id, issue id, event id.
