@@ -1,38 +1,46 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import * as Sentry from '@sentry/astro';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from 'ws';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { env } from '../lib/env';
-import { log } from '../lib/log';
-import * as schema from './schema';
+import { createNeonDb } from './neon';
+import { createPostgresDb } from './postgres';
 
-neonConfig.webSocketConstructor = ws;
+export type Database = ReturnType<typeof createNeonDb>['db'];
 
-const pool = new Pool({ connectionString: env('DATABASE_URL') });
+const testDbStorage = new AsyncLocalStorage<Database | undefined>();
+const driver = process.env.NVM_DB_DRIVER || 'neon';
+const connectionString = env('DATABASE_URL');
+type DatabaseConnection = { db: Database; pool: { end: () => Promise<void> } };
+const defaultConnection: DatabaseConnection =
+  driver === 'postgres'
+    ? (createPostgresDb(connectionString) as unknown as DatabaseConnection)
+    : createNeonDb(connectionString);
 
-function isNeonAdministrativeTermination(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  return error.message.includes('terminating connection due to administrator command');
+export const db = new Proxy(defaultConnection.db, {
+  get(_target, property, receiver) {
+    return Reflect.get(getDb(), property, receiver);
+  },
+}) as Database;
+
+export function getDb(): Database {
+  return testDbStorage.getStore() || defaultConnection.db;
 }
 
-pool.on('error', (error: unknown) => {
-  if (isNeonAdministrativeTermination(error)) {
-    log.warn('neon_idle_connection_terminated', { error });
-    return;
-  }
+export function withTestDb<T>(
+  database: Database,
+  callback: () => T | Promise<T>,
+) {
+  return testDbStorage.run(database, callback);
+}
 
-  log.error('neon_pool_error', { error });
-  Sentry.captureException(error);
-});
-
-const productionDb = drizzle(pool, { schema });
-
-export let db = productionDb;
-
-export function setDbForTests(nextDb: typeof productionDb) {
-  db = nextDb;
+// Compatibility for the existing fake-backed Node/tsx contract tests. This
+// enters the current async context instead of mutating a process-global db.
+export function setDbForTests(database: Database) {
+  testDbStorage.enterWith(database);
 }
 
 export function resetDbForTests() {
-  db = productionDb;
+  testDbStorage.enterWith(undefined);
+}
+
+export async function closeDefaultDb() {
+  await defaultConnection.pool.end();
 }
