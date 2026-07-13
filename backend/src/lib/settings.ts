@@ -1,6 +1,16 @@
 import { eq, sql, and } from 'drizzle-orm';
 import { db } from '../db/client';
 import { appSettings, modelProviders, providers } from '../db/schema';
+import { env } from './env';
+
+export const SIGNUPS_ENABLED_KEY = 'signups_enabled';
+
+export class SignupsPolicyError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'SignupsPolicyError';
+  }
+}
 
 const ACTIVE_MODEL_KEY = 'active_model';
 const FREE_MODEL_KEY = 'free_model';
@@ -26,6 +36,28 @@ export class ModelNotConfiguredError extends Error {
 async function getSetting(key: string): Promise<string | null> {
   const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key)).limit(1);
   return row?.value ?? null;
+}
+
+/**
+ * Release A compatibility reader. A persisted setting is authoritative; the
+ * legacy deployment flag is consulted only while the row is absent.
+ */
+export async function getSignupsEnabled(): Promise<boolean> {
+  let row: { value: string } | undefined;
+  try {
+    [row] = await db
+      .select({ value: appSettings.value })
+      .from(appSettings)
+      .where(eq(appSettings.key, SIGNUPS_ENABLED_KEY))
+      .limit(1);
+  } catch (error) {
+    throw new SignupsPolicyError('Sign-up policy is unavailable', { cause: error });
+  }
+
+  if (!row) return env('INVITE_GATE_ENABLED') !== 'true';
+  if (row.value === 'true') return true;
+  if (row.value === 'false') return false;
+  throw new SignupsPolicyError('Sign-up policy is malformed');
 }
 
 async function setSetting(key: string, value: string) {

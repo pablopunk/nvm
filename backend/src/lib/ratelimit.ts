@@ -90,7 +90,7 @@ function ipLimiter(scope: string, limit: number, window: `${number} ${'s' | 'm' 
 }
 
 export async function rateLimitIp(
-  scope: 'auth' | 'tokens',
+  scope: 'auth' | 'tokens' | 'waitlist',
   ip: string | null,
   limit = 30,
   window: `${number} ${'s' | 'm' | 'h' | 'd'}` = '1 m',

@@ -15,6 +15,14 @@ type LogFields = {
   [key: string]: unknown;
 };
 
+const SENSITIVE_AUTH_QUERY_KEYS = new Set(['code', 'state', 'intent', 'grant', 'sealedSession', 'return_to']);
+
+export function redactAuthUrl(input: URL | string) {
+  const url = new URL(input.toString());
+  for (const key of SENSITIVE_AUTH_QUERY_KEYS) url.searchParams.delete(key);
+  return `${url.pathname}${url.search}`;
+}
+
 function serializeError(err: unknown) {
   if (err instanceof Error) {
     return { name: err.name, message: err.message, stack: err.stack };

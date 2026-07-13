@@ -11,6 +11,8 @@ import {
   parseExtensionAiModelRole,
   parseModelRouteRef,
   setModelProviderChain,
+  getSignupsEnabled,
+  SignupsPolicyError,
 } from './settings';
 
 function promiseChain(result: unknown, onValues?: (v: unknown) => void) {
@@ -46,6 +48,41 @@ function fakeDb(selects: unknown[], onInsert?: (v: unknown) => void) {
 }
 
 afterEach(() => resetDbForTests());
+
+describe('getSignupsEnabled', () => {
+  const previous = process.env.INVITE_GATE_ENABLED;
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.INVITE_GATE_ENABLED;
+    else process.env.INVITE_GATE_ENABLED = previous;
+  });
+
+  test('uses the legacy open policy only when the setting row is absent', async () => {
+    process.env.INVITE_GATE_ENABLED = 'false';
+    setDbForTests(fakeDb([[]]));
+    assert.equal(await getSignupsEnabled(), true);
+
+    process.env.INVITE_GATE_ENABLED = 'true';
+    setDbForTests(fakeDb([[]]));
+    assert.equal(await getSignupsEnabled(), false);
+  });
+
+  test('treats a valid persisted policy as authoritative over the legacy flag', async () => {
+    process.env.INVITE_GATE_ENABLED = 'true';
+    setDbForTests(fakeDb([[{ value: 'true' }]]));
+    assert.equal(await getSignupsEnabled(), true);
+
+    process.env.INVITE_GATE_ENABLED = 'false';
+    setDbForTests(fakeDb([[{ value: 'false' }]]));
+    assert.equal(await getSignupsEnabled(), false);
+  });
+
+  test('fails closed for malformed persisted policy data', async () => {
+    process.env.INVITE_GATE_ENABLED = 'false';
+    setDbForTests(fakeDb([[{ value: 'not-a-boolean' }]]));
+    await assert.rejects(() => getSignupsEnabled(), SignupsPolicyError);
+  });
+});
 
 describe('parseModelRouteRef', () => {
   test('parses valid provider/model ref', () => {

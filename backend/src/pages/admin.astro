@@ -33,6 +33,12 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
 
   <h1>Admin</h1>
   <p class="muted">Provider routing, models, and usage.</p>
+  <div class="section card">
+    <h2>Early-access waitlist</h2>
+    <p class="muted">Review requests and queue invitations. Delivery is handled asynchronously and remains dormant until a sender is configured.</p>
+    <div class="row" style="margin-bottom:12px"><input class="input" id="manual-invite-email" type="email" placeholder="Manual invite email" /><button class="button" id="manual-invite">Queue invite</button><span id="waitlist-status" class="muted"></span></div>
+    <table class="table" id="waitlist-table"><thead><tr><th>Email</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table>
+  </div>
   <span id="admin-config" data-credit-usd={CREDIT_USD} hidden></span>
 
   <div class="section card">
@@ -125,6 +131,16 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
   </div>
 
   <script is:inline>
+    async function loadWaitlist() {
+      const response = await fetch('/api/admin/waitlist');
+      if (!response.ok) return;
+      const { entries } = await response.json();
+      document.querySelector('#waitlist-table tbody').innerHTML = entries.map((entry) => `<tr><td>${esc(entry.email)}</td><td>${esc(entry.status)}</td><td>${new Date(entry.submittedAt).toLocaleString()}</td><td><button class="button waitlist-invite" data-id="${entry.id}" data-email="${esc(entry.email)}">Invite</button> <button class="button waitlist-decline" data-id="${entry.id}">Decline</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No entries</td></tr>';
+      document.querySelectorAll('.waitlist-invite').forEach((button) => button.addEventListener('click', async () => { const response = await fetch('/api/admin/waitlist', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:button.dataset.email, waitlistEntryId:button.dataset.id})}); document.getElementById('waitlist-status').textContent = response.ok ? 'Invite queued.' : 'Unable to queue invite.'; loadWaitlist(); }));
+      document.querySelectorAll('.waitlist-decline').forEach((button) => button.addEventListener('click', async () => { await fetch('/api/admin/waitlist', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:button.dataset.id, status:'declined'})}); loadWaitlist(); }));
+    }
+    document.getElementById('manual-invite')?.addEventListener('click', async () => { const email = document.getElementById('manual-invite-email').value; const response = await fetch('/api/admin/waitlist', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email})}); document.getElementById('waitlist-status').textContent = response.ok ? 'Invite queued.' : 'Unable to queue invite.'; });
+    loadWaitlist();
     function esc(str) {
       if (!str) return '';
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');

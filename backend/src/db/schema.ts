@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   jsonb,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -178,3 +179,72 @@ export const modelProviders = pgTable(
     index('model_providers_route_model_idx').on(t.routeSlot, t.modelId),
   ],
 );
+
+export const waitlistEntries = pgTable('waitlist_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  status: text('status').notNull().default('pending'),
+  source: text('source').notNull().default('marketing'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewerId: uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewNote: text('review_note'),
+  ipHash: text('ip_hash'),
+});
+
+export const invites = pgTable('invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  waitlistEntryId: uuid('waitlist_entry_id').references(() => waitlistEntries.id, { onDelete: 'set null' }),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  status: text('status').notNull().default('queued'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
+}, (t) => [
+  uniqueIndex('invites_one_active_recipient').on(t.email).where(sql`${t.status} in ('queued', 'sending', 'sent')`),
+]);
+
+export const emailOutbox = pgTable('email_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  inviteId: uuid('invite_id').notNull().references(() => invites.id, { onDelete: 'cascade' }),
+  recipient: text('recipient').notNull(),
+  templateVersion: text('template_version').notNull().default('invite-v1'),
+  idempotencyKey: text('idempotency_key').notNull().unique(),
+  tokenCiphertext: text('token_ciphertext').notNull(),
+  status: text('status').notNull().default('queued'),
+  attempts: integer('attempts').notNull().default(0),
+  providerMessageId: text('provider_message_id'),
+  lastError: text('last_error'),
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+  leaseOwner: text('lease_owner'),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const providerEvents = pgTable('provider_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  provider: text('provider').notNull(),
+  eventId: text('event_id').notNull(),
+  eventType: text('event_type').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('provider_events_provider_event_idx').on(t.provider, t.eventId)]);
+
+export const emailSuppressions = pgTable('email_suppressions', {
+  email: text('email').primaryKey(),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const authIntents = pgTable('auth_intents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  inviteId: uuid('invite_id').notNull().references(() => invites.id, { onDelete: 'cascade' }),
+  nonceHash: text('nonce_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
