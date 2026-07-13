@@ -11,6 +11,7 @@ import {
   emailOutbox,
   emailSuppressions,
   invites,
+  appSettings,
   requestDedup,
   stripeEvents,
   users,
@@ -18,6 +19,7 @@ import {
 import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src/lib/waitlist';
 import { createUserFromInviteIntent, InviteRequiredError } from '../src/lib/users';
 import { leaseOutbox, processProviderEvent } from '../src/lib/email';
+import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { runPostgresMigrations } from './migrate-postgres';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
@@ -224,6 +226,19 @@ async function runAssertions() {
         [false, true],
         'concurrent device exchange must have one winner',
       );
+
+      await db.delete(appSettings).where(eq(appSettings.key, 'signups_enabled'));
+      process.env.INVITE_GATE_ENABLED = 'false';
+      assert.equal(await getSignupsEnabled(), true, 'absent policy row must preserve legacy open signups');
+      process.env.INVITE_GATE_ENABLED = 'true';
+      assert.equal(await getSignupsEnabled(), false, 'absent policy row must preserve legacy closed signups');
+      await db.insert(appSettings).values({ key: 'signups_enabled', value: 'true' });
+      process.env.INVITE_GATE_ENABLED = 'true';
+      assert.equal(await getSignupsEnabled(), true, 'persisted policy must override legacy flag');
+      await db.update(appSettings).set({ value: 'malformed' }).where(eq(appSettings.key, 'signups_enabled'));
+      await assert.rejects(() => getSignupsEnabled(), (error: unknown) => error instanceof SignupsPolicyError);
+      await db.delete(appSettings).where(eq(appSettings.key, 'signups_enabled'));
+      delete process.env.INVITE_GATE_ENABLED;
 
       const concurrentEmail = `concurrent-${databaseName}@example.test`;
       const concurrentInvites = await Promise.all(

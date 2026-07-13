@@ -4,7 +4,8 @@ import { upsertUserWithFreeGrant, createUserFromInviteIntent, getUserByWorkosId,
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 import { safeRelativeRedirectPath } from '../../../lib/safe-redirect';
 import { createPreviewSessionGrant, decodePreviewState } from '../../../lib/preview-auth';
-import { isInviteGateEnabled, readInviteIntentCookie, clearInviteIntentCookie } from '../../../lib/waitlist';
+import { readInviteIntentCookie, clearInviteIntentCookie } from '../../../lib/waitlist';
+import { getSignupsEnabled, SignupsPolicyError } from '../../../lib/settings';
 
 export const GET: APIRoute = async ({ url, request }) => {
   const decision = await rateLimitIp('auth', clientIp(request), 30, '1 m');
@@ -24,9 +25,18 @@ export const GET: APIRoute = async ({ url, request }) => {
   try {
     const existing = await getUserByWorkosId(user.id);
     if (existing) { /* Existing users retain access when the gate is enabled. */ }
-    else if (isInviteGateEnabled() && intent) await createUserFromInviteIntent({ intentId: intent.id, nonce: intent.nonce, workosUserId: user.id, email: user.email });
-    else if (isInviteGateEnabled()) throw new InviteRequiredError();
-    else await upsertUserWithFreeGrant({ workosUserId: user.id, email: user.email });
+    else {
+      let signupsEnabled: boolean;
+      try {
+        signupsEnabled = await getSignupsEnabled();
+      } catch (err) {
+        if (err instanceof SignupsPolicyError) return new Response('Sign-up policy is temporarily unavailable.', { status: 503 });
+        throw err;
+      }
+      if (!signupsEnabled && intent) await createUserFromInviteIntent({ intentId: intent.id, nonce: intent.nonce, workosUserId: user.id, email: user.email });
+      else if (!signupsEnabled) throw new InviteRequiredError();
+      else await upsertUserWithFreeGrant({ workosUserId: user.id, email: user.email });
+    }
   } catch (err) {
     if (err instanceof DisposableEmailError) {
       return new Response('Sign-up blocked: disposable email addresses are not allowed.', { status: 403 });
