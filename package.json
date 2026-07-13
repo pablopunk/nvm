@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.check.json",
     "postinstall": "pnpm -C backend install",
     "test": "pnpm -C backend exec node --experimental-test-module-mocks --import tsx --test \"../src/**/*.test.ts\" \"../src/**/*.test.tsx\" && pnpm -C backend test",
+    "test:electron": "node scripts/electron-test.cjs",
     "verify": "pnpm check && pnpm build && node --check dist/main/main.js && node --check dist/preload/preload.cjs && node scripts/run-checks.cjs && pnpm typecheck && pnpm -C backend exec node --experimental-test-module-mocks --import tsx --test \"../src/**/*.test.ts\" \"../src/**/*.test.tsx\" && pnpm -C backend check && pnpm -C backend test",
     "check": "biome check --assist-enabled=false --skip=suspicious --skip=style --skip=a11y --skip=performance --skip=complexity",
     "check:changed": "node scripts/lint-changed.cjs",
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@playwright/test": "^1.52.0",
     "@types/node": "^25.8.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -59,6 +61,7 @@
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "lucide-react": "^1.16.0",
+    "playwright": "^1.61.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",

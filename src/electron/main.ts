@@ -77,8 +77,15 @@ import {
 } from './nevermind-compatibility';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
 import { initSentry } from './sentry';
+import {
+  configureNvmTestMode,
+  installTestNetworkPolicy,
+  isNvmTestMode,
+  recordTestWindowEvent,
+} from './test-mode';
 
-initSentry();
+configureNvmTestMode();
+if (!isNvmTestMode) initSentry();
 
 import { canCustomizeCommandAction } from '../model';
 import {
@@ -198,7 +205,18 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 configureLogger(isDev);
 setDeepLinkLogger({ warn: logWarn });
 
-const updateManager = createUpdateManager(autoUpdater as any);
+const updateManager: any = isNvmTestMode
+  ? {
+      state: { status: 'unsupported' as const },
+      canUseAutoUpdates: () => false,
+      configure: () => {},
+      onStateChange: () => {},
+      checkForUpdates: async () => {},
+      downloadAvailableUpdate: async () => {},
+      quitAndInstall: () => false,
+      clearTimers: () => {},
+    }
+  : createUpdateManager(autoUpdater as any);
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -2033,6 +2051,20 @@ async function searchActions(query, options: any = {}) {
     async () => {
       const q = query.trim();
 
+      if (isNvmTestMode) {
+        const action = {
+          id: 'test:confirm-safe-action',
+          kind: 'test-action',
+          title: 'Test: Confirm safe action',
+          subtitle: 'In-memory deterministic Electron smoke action',
+          icon: 'check',
+          score: 100,
+        };
+        return q && !action.title.toLowerCase().includes(q.toLowerCase())
+          ? []
+          : [prepareRootActionForRenderer(action)];
+      }
+
       if (options.clipboardOnly) {
         return measureDebugPerformanceSync(
           'search.clipboard-only',
@@ -2157,8 +2189,14 @@ function runInBackground(task) {
 async function executeAction(action, options: any = {}) {
   if (!action) return;
   recordRecent(action);
+  let result;
 
   switch (action.kind) {
+    case 'test-action':
+      if (isNvmTestMode) {
+        result = { toast: { message: 'Safe action invoked' } };
+      }
+      break;
     case 'open-keyboard-settings':
       runInBackground(openSystemKeyboardSettings);
       break;
@@ -2175,7 +2213,12 @@ async function executeAction(action, options: any = {}) {
     }
   }
 
-  if (!options.keepPaletteOpen) paletteWindow.hidePalette();
+  if (!options.keepPaletteOpen) {
+    if (isNvmTestMode && action.kind === 'test-action')
+      setTimeout(() => paletteWindow.hidePalette(), 0).unref?.();
+    else paletteWindow.hidePalette();
+  }
+  return result;
 }
 
 function extensionActionEntryForAction(action) {
@@ -3202,6 +3245,39 @@ function runQuitCleanup() {
   extensionWindowManager.closeAll();
   appIndexService.closeWatchers();
   for (const watcher of extensionFileWatchers) watcher.close();
+}
+
+function registerTestModeIpcHandlers() {
+  const handle = (channel: string, handler: (...args: any[]) => unknown) =>
+    ipcMain.handle(channel, handler);
+  handle('actions:search', (_event, query, options) =>
+    searchActions(query, options),
+  );
+  handle('actions:execute', (_event, action) => executeActionForIpc(action));
+  handle('test:invoke', async () => {
+    const actions = await searchActions('Test: Confirm safe action');
+    void executeActionForIpc(actions[0]).catch((error) =>
+      console.error('test action failed', error),
+    );
+    return { found: actions.length > 0 };
+  });
+  handle('view-action:execute', (_event, action) =>
+    executeViewActionForIpc(action),
+  );
+  handle('nevermind:auth-status', () => ({ authed: false }));
+  handle('gh:status', () => ({ installed: false, authed: false }));
+  handle('settings:get', (_event, id) => getSetting(id));
+  handle('palette:set-mode', () => undefined);
+  handle('palette:hide', () => paletteWindow.hidePalette());
+  handle('palette:shortcut-ready', () => paletteWindow.revealPalette());
+  handle('actions:suspend-shortcuts', () => undefined);
+  handle('actions:resume-shortcuts', () => undefined);
+  handle('actions:get-shortcuts', () => []);
+  handle('logs:write', () => undefined);
+  handle('app:quit', () => {
+    requestQuitApp('test');
+    return { ok: true };
+  });
 }
 
 function requestQuitApp(reason = 'action') {
@@ -8008,6 +8084,14 @@ async function pickFormFieldPaths(event, input: any = {}) {
 
 app.whenReady().then(async () => {
   appReady = true;
+  if (isNvmTestMode) {
+    installTestNetworkPolicy();
+    await loadUserState();
+    registerTestModeIpcHandlers();
+    paletteWindow.createWindow();
+    paletteWindow.showPaletteWhenReady();
+    return;
+  }
   nativeTheme.themeSource = 'dark';
   prepareAppWindowPolicy();
   registerLocalFileProtocol();
@@ -8126,7 +8210,7 @@ app.on('will-quit', () => {
   runQuitCleanup();
 });
 
-if (!isDev) {
+if (!isDev && !isNvmTestMode) {
   const gotLock = app.requestSingleInstanceLock();
   if (gotLock) {
     app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);

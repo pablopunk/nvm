@@ -45,6 +45,39 @@ jobs:
       - name: Verify
         run: mise exec -- pnpm verify
 
+  electron-smoke:
+    if: github.event_name == 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build
+        run: mise exec -- pnpm build
+
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+
+      - name: Electron smoke
+        run: xvfb-run -a mise exec -- pnpm test:electron
+
+      - name: Upload Electron failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-smoke-artifacts
+          path: test-results/electron
+          if-no-files-found: warn
+
   release-mac:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: macos-26

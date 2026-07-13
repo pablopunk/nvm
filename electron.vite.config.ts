@@ -9,7 +9,7 @@ export default defineConfig({
       lib: {
         entry: 'src/electron/main.ts',
         formats: ['es'],
-        fileName: () => 'index.js',
+        fileName: () => 'main.js',
       },
     },
   },

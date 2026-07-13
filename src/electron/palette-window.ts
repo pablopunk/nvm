@@ -20,6 +20,7 @@ import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
 } from './window-navigation-policy';
+import { isNvmTestMode, recordTestWindowEvent } from './test-mode';
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview';
 
@@ -265,6 +266,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
           win.webContents.send('palette:shortcut-show');
         else win.webContents.send('palette:shown');
         win.show();
+        if (isNvmTestMode) recordTestWindowEvent('shown');
         win.moveTop();
         win.focus();
         win.webContents.focus();
@@ -307,8 +309,10 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         bounds: win.getBounds(),
         opacity: win.getOpacity(),
       });
+      if (isNvmTestMode) recordTestWindowEvent('hidden');
       win.webContents.send('palette:hidden');
       win.hide();
+      if (isNvmTestMode) setTimeout(() => showPalette(), 100).unref?.();
     });
   }
 
