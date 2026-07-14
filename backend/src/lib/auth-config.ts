@@ -20,3 +20,8 @@ export function assertPreviewAuthConfiguration() {
 export function previewAuthConfigured() {
   try { return assertPreviewAuthConfiguration(); } catch { return false; }
 }
+
+export function isProductionGatewayOrigin(origin: string) {
+  const configuredOrigin = env('PRODUCTION_ORIGIN') ?? 'https://nvm.fyi';
+  return origin === configuredOrigin || (configuredOrigin === 'https://nvm.fyi' && origin === 'https://www.nvm.fyi');
+}

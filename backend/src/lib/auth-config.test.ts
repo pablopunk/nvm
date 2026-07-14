@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertPreviewAuthConfiguration, AuthConfigurationError } from './auth-config';
+import { assertPreviewAuthConfiguration, AuthConfigurationError, isProductionGatewayOrigin } from './auth-config';
 
-const keys = ['VERCEL_ENV', 'DATABASE_URL', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'GATEWAY_STATE_KEY', 'GATEWAY_STATE_REDIS_URL', 'GATEWAY_STATE_REDIS_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'PREVIEW_SESSION_KEY', 'WORKOS_COOKIE_PASSWORD', 'WORKOS_CLIENT_ID'];
+const keys = ['VERCEL_ENV', 'PRODUCTION_ORIGIN', 'DATABASE_URL', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'GATEWAY_STATE_KEY', 'GATEWAY_STATE_REDIS_URL', 'GATEWAY_STATE_REDIS_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'PREVIEW_SESSION_KEY', 'WORKOS_COOKIE_PASSWORD', 'WORKOS_CLIENT_ID'];
 const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
 function valid() {
@@ -28,6 +28,13 @@ test('fails closed when the production database binding is absent', () => {
   valid();
   delete process.env.DATABASE_URL;
   assert.throws(assertPreviewAuthConfiguration, AuthConfigurationError);
+});
+
+test('accepts the Vercel www alias for the production preview gateway', () => {
+  process.env.PRODUCTION_ORIGIN = 'https://nvm.fyi';
+  assert.equal(isProductionGatewayOrigin('https://nvm.fyi'), true);
+  assert.equal(isProductionGatewayOrigin('https://www.nvm.fyi'), true);
+  assert.equal(isProductionGatewayOrigin('https://evil.example'), false);
 });
 
 test.after(() => {
