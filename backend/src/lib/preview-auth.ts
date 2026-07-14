@@ -17,6 +17,7 @@ export type PreviewIdentity = { id: string; email: string };
 export type GatewayState =
   | { v: 2; flow: 'production'; safeRelativeReturnPath: string; jti: string; exp: number }
   | { v: 2; flow: 'preview_gateway'; exactOrigin: string; deploymentId: string; jti: string; exp: number };
+type GatewayStateRejectionReason = 'signature' | 'shape' | 'production-payload' | 'preview-payload' | 'redis-empty' | 'stored-shape' | 'return-path' | 'preview-mismatch' | 'stored-json';
 
 let testStore: Map<string, string> | null = null;
 export function setPreviewAuthStoreForTests(store: Map<string, string> | null) { testStore = store; }
@@ -118,48 +119,52 @@ export async function createPreviewGatewayState(intent: string): Promise<{ state
   try { return { state: await signed(state, 'GATEWAY_STATE_KEY', 'nvm-gateway-state-v2', STATE_TTL), target: { origin: state.exactOrigin, returnTo: '/' } }; } catch { return null; }
 }
 
-export async function consumeGatewayState(token: string | null): Promise<GatewayState | null> {
+export async function consumeGatewayStateWithReason(token: string | null): Promise<{ state: GatewayState | null; reason: 'ok' | GatewayStateRejectionReason }> {
   const payload = await verified<GatewayState & { startJti?: string }>(token, 'GATEWAY_STATE_KEY', 'nvm-gateway-state-v2');
-  if (!payload) { console.error('preview_auth_gateway_state_rejected', 'signature'); return null; }
+  if (!payload) { console.error('preview_auth_gateway_state_rejected', 'signature'); return { state: null, reason: 'signature' }; }
   if (payload.v !== 2 || !payload.jti || (payload.flow !== 'production' && payload.flow !== 'preview_gateway')) {
     console.error('preview_auth_gateway_state_rejected', 'shape');
-    return null;
+    return { state: null, reason: 'shape' };
   }
   const standardClaims = new Set(['v', 'flow', 'jti', 'exp', 'aud', 'iat']);
   if (payload.flow === 'production' && (typeof payload.safeRelativeReturnPath !== 'string' || Object.keys(payload).some((key) => !standardClaims.has(key) && key !== 'safeRelativeReturnPath'))) {
     console.error('preview_auth_gateway_state_rejected', 'production-payload');
-    return null;
+    return { state: null, reason: 'production-payload' };
   }
   if (payload.flow === 'preview_gateway' && (!previewHost(payload.exactOrigin) || typeof payload.deploymentId !== 'string' || Object.keys(payload).some((key) => !standardClaims.has(key) && key !== 'exactOrigin' && key !== 'deploymentId'))) {
     console.error('preview_auth_gateway_state_rejected', 'preview-payload');
-    return null;
+    return { state: null, reason: 'preview-payload' };
   }
   const raw = await getDel(stateKey(payload.flow, payload.jti), 'state');
-  if (!raw) { console.error('preview_auth_gateway_state_rejected', 'redis-empty'); return null; }
+  if (!raw) { console.error('preview_auth_gateway_state_rejected', 'redis-empty'); return { state: null, reason: 'redis-empty' }; }
   try {
     const stored = JSON.parse(raw) as GatewayState;
     if (stored.v !== 2 || stored.flow !== payload.flow || stored.jti !== payload.jti) {
       console.error('preview_auth_gateway_state_rejected', 'stored-shape');
-      return null;
+      return { state: null, reason: 'stored-shape' };
     }
     if (payload.flow === 'production') {
       const production = stored as Extract<GatewayState, { flow: 'production' }>;
       if (production.safeRelativeReturnPath !== payload.safeRelativeReturnPath) {
         console.error('preview_auth_gateway_state_rejected', 'return-path');
-        return null;
+        return { state: null, reason: 'return-path' };
       }
-      return payload;
+      return { state: payload, reason: 'ok' };
     }
     const preview = stored as Extract<GatewayState, { flow: 'preview_gateway' }>;
     if (preview.exactOrigin !== payload.exactOrigin || preview.deploymentId !== payload.deploymentId) {
       console.error('preview_auth_gateway_state_rejected', 'preview-mismatch');
-      return null;
+      return { state: null, reason: 'preview-mismatch' };
     }
-    return payload;
+    return { state: payload, reason: 'ok' };
   } catch {
     console.error('preview_auth_gateway_state_rejected', 'stored-json');
-    return null;
+    return { state: null, reason: 'stored-json' };
   }
+}
+
+export async function consumeGatewayState(token: string | null): Promise<GatewayState | null> {
+  return (await consumeGatewayStateWithReason(token)).state;
 }
 
 export async function createPreviewSessionGrant(target: PreviewTarget, identity: PreviewIdentity): Promise<string | null> {
