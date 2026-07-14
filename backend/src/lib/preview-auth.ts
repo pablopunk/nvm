@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { env } from './env';
 import { safeRelativeRedirectPath } from './safe-redirect';
 
-const STATE_TTL = 120;
+const STATE_TTL = 10 * 60;
 const GRANT_TTL = 60;
 const STATE_NAMESPACE = 'nvm:gateway:state:v2';
 const GRANT_NAMESPACE = 'nvm:preview:grant:v2';
