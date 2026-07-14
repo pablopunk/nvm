@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { workos, WORKOS_CLIENT_ID, COOKIE_PASSWORD, SESSION_COOKIE } from '../../../lib/workos';
 import { upsertUserWithFreeGrant, createUserFromInviteIntent, getUserByWorkosId, DisposableEmailError, InviteRequiredError } from '../../../lib/users';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
-import { consumeGatewayStateWithReason, createPreviewSessionGrant } from '../../../lib/preview-auth';
+import { consumeGatewayState, createPreviewSessionGrant } from '../../../lib/preview-auth';
 import { readInviteIntentCookie, clearInviteIntentCookie } from '../../../lib/waitlist';
 import { getSignupsEnabled, SignupsPolicyError } from '../../../lib/settings';
 
@@ -11,9 +11,8 @@ export const GET: APIRoute = async ({ url, request }) => {
   if (!decision.ok) return tooManyRequests(decision);
   const code = url.searchParams.get('code');
   if (!code) return new Response('Missing code', { status: 400 });
-  const consumedState = await consumeGatewayStateWithReason(url.searchParams.get('state'));
-  if (!consumedState.state) return new Response('Sign-in expired; please restart.', { status: 400, headers: { 'X-Nevermind-Auth-Diagnostic': consumedState.reason } });
-  const state = consumedState.state;
+  const state = await consumeGatewayState(url.searchParams.get('state'));
+  if (!state) return new Response('Sign-in expired; please restart.', { status: 400 });
 
   const { user, sealedSession } = await workos.userManagement.authenticateWithCode({
     clientId: WORKOS_CLIENT_ID,
