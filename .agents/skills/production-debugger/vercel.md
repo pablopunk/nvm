@@ -25,5 +25,6 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 - To retrieve production env locally for debugging, use `umask 077` and `cd backend && vercel env pull .vercel/.env.production.local --environment=production --yes`; never print or commit the pulled file.
 - `vercel env ls production` shows `Encrypted`; it cannot prove pasted whitespace.
 - Env edits require redeploys.
+- A Ready production deployment does not prove custom domains serve it. Inspect its aliases and verify each public host before treating a release as live; confirm before reassigning an alias.
 - Confirm before env removals, secret changes, domain changes, project changes, or redeploys.
 - Compare `*.vercel.app`, `api.nvm.fyi`, `nvm.fyi`, and `www.nvm.fyi` when alias/domain behavior is suspect.
