@@ -90,7 +90,10 @@ export function createViewLoaderRegistry(deps: {
   normalizeItems: (items: any[], entry: any) => any[];
   warn?: (viewId: string, message: string) => void;
   readCache?: (extension: any) => Promise<Record<string, any>>;
-  writeCache?: (extension: any, data: Record<string, any>) => Promise<void>;
+  mutateCache?: (
+    extension: any,
+    update: (current: Record<string, any>) => Record<string, any>,
+  ) => Promise<void>;
 }) {
   const registry = new Map<string, ViewLoaderEntry>();
 
@@ -158,14 +161,12 @@ export function createViewLoaderRegistry(deps: {
       });
 
       // Update persistent cache fire-and-forget (non-blocking, non-fatal)
-      if (staleHandle && deps.writeCache && loader.entry?.extension) {
+      if (staleHandle && deps.mutateCache && loader.entry?.extension) {
         deps
-          .writeCache(loader.entry.extension, {
-            ...(await (deps.readCache
-              ? deps.readCache(loader.entry.extension).catch(() => ({}))
-              : {})),
+          .mutateCache(loader.entry.extension, (current) => ({
+            ...current,
             [staleHandle._cacheKey!]: { value: items, updatedAt: Date.now() },
-          })
+          }))
           .catch(() => {});
       }
       return { ok: true as const, items };
