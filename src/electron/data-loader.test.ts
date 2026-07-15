@@ -216,8 +216,8 @@ test('stale-while-revalidate registry hydrates stale cached items before loader'
     sendHydrate: (viewId, payload) => payloads.push({ viewId, payload }),
     normalizeItems: (items) => items,
     readCache: async () => cache,
-    writeCache: async (_ext, data) => {
-      Object.assign(cache, data);
+    mutateCache: async (_ext, update) => {
+      Object.assign(cache, update(cache));
     },
   });
 
@@ -255,6 +255,51 @@ test('stale-while-revalidate registry hydrates stale cached items before loader'
   // Cache should be updated with fresh items
   assert.ok(cache['swr-key']);
   assert.deepEqual(cache['swr-key'].value, [{ id: 'fresh' }]);
+});
+
+test('concurrent stale-while-revalidate hydrations retain every cache key', async () => {
+  const cache: Record<string, any> = {};
+  const cacheMutations: Promise<void>[] = [];
+  let mutationTail = Promise.resolve();
+  const registry = createViewLoaderRegistry({
+    sendHydrate: () => {},
+    normalizeItems: (items) => items,
+    readCache: async () => cache,
+    mutateCache: (_extension, update) => {
+      const mutation = mutationTail.then(() => {
+        Object.assign(cache, update(cache));
+      });
+      mutationTail = mutation;
+      cacheMutations.push(mutation);
+      return mutation;
+    },
+  });
+
+  registry.register(
+    'view:first',
+    createStaleWhileRevalidateHandle({
+      cacheKey: 'first',
+      loader: async () => [{ id: 'first' }],
+    }),
+    { extension: { id: 'test' } },
+  );
+  registry.register(
+    'view:second',
+    createStaleWhileRevalidateHandle({
+      cacheKey: 'second',
+      loader: async () => [{ id: 'second' }],
+    }),
+    { extension: { id: 'test' } },
+  );
+
+  await Promise.all([
+    registry.spawn('view:first'),
+    registry.spawn('view:second'),
+  ]);
+  await Promise.all(cacheMutations);
+
+  assert.deepEqual(cache.first.value, [{ id: 'first' }]);
+  assert.deepEqual(cache.second.value, [{ id: 'second' }]);
 });
 
 test('stale-while-revalidate fresh cache skips loader entirely', async () => {
