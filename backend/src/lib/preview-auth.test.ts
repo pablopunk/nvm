@@ -16,7 +16,7 @@ process.env.PREVIEW_START_KEY = 'preview-start-test-key';
 process.env.VERCEL_ENV = 'preview';
 process.env.VERCEL_URL = 'nvm-git-branch-team-pablo-varelas-projects-4f86af8b.vercel.app';
 const target = { origin: `https://${process.env.VERCEL_URL}`, returnTo: '/' };
-const store = new Map<string, string>();
+const store = new Map<string, unknown>();
 setPreviewAuthStoreForTests(store);
 
 test('derives only the canonical preview origin from Vercel environment', () => {
@@ -33,6 +33,19 @@ test('production v2 state is one-use and rejects legacy material', async () => {
   assert.equal((await consumeGatewayState(state))?.flow, 'production');
   assert.equal(await consumeGatewayState(state), null);
   assert.equal(await consumeGatewayState('preview:legacy-state'), null);
+  process.env.VERCEL_ENV = 'preview';
+});
+
+test('consumes state when Redis returns an already-deserialized JSON object', async () => {
+  process.env.VERCEL_ENV = 'production';
+  const state = await createProductionState('/dashboard');
+  assert.ok(state);
+  const stateKey = [...store.keys()].find((key) => key.startsWith('nvm:gateway:state:v2:production:'));
+  assert.ok(stateKey);
+  const raw = store.get(stateKey);
+  assert.equal(typeof raw, 'string');
+  store.set(stateKey, JSON.parse(raw as string));
+  assert.equal((await consumeGatewayState(state))?.flow, 'production');
   process.env.VERCEL_ENV = 'preview';
 });
 

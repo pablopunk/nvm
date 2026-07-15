@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { env } from './env';
 import { safeRelativeRedirectPath } from './safe-redirect';
 
-const STATE_TTL = 120;
+const STATE_TTL = 10 * 60;
 const GRANT_TTL = 60;
 const STATE_NAMESPACE = 'nvm:gateway:state:v2';
 const GRANT_NAMESPACE = 'nvm:preview:grant:v2';
@@ -18,8 +18,8 @@ export type GatewayState =
   | { v: 2; flow: 'production'; safeRelativeReturnPath: string; jti: string; exp: number }
   | { v: 2; flow: 'preview_gateway'; exactOrigin: string; deploymentId: string; jti: string; exp: number };
 
-let testStore: Map<string, string> | null = null;
-export function setPreviewAuthStoreForTests(store: Map<string, string> | null) { testStore = store; }
+let testStore: Map<string, unknown> | null = null;
+export function setPreviewAuthStoreForTests(store: Map<string, unknown> | null) { testStore = store; }
 
 function keyMaterial(name: string): Uint8Array {
   const value = env(name);
@@ -74,11 +74,16 @@ async function getDel(key: string, kind: 'state' | 'grant') {
   if (testStore) {
     const value = testStore.get(key);
     testStore.delete(key);
-    return value ?? null;
+    if (value === null || value === undefined) return null;
+    return typeof value === 'string' ? value : JSON.stringify(value);
   }
   const redis = kind === 'state' ? gatewayRedis() : grantWriterRedis();
   if (!redis) return null;
-  try { return await redis.getdel<string>(key); } catch { return null; }
+  try {
+    const value = await redis.getdel<unknown>(key);
+    if (value === null || value === undefined) return null;
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  } catch { return null; }
 }
 
 async function signed(payload: Record<string, unknown>, keyName: string, audience: string, ttl: number) {
