@@ -1,7 +1,11 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { billingCatalog } from '../lib/billing';
+import { billingCatalog, formatBillingPrice, type BillingCatalogItem } from '../lib/billing';
 import { getSessionFromCookies } from '../lib/workos';
+
+function displayPriceFor(item: BillingCatalogItem): string | null {
+  return item.displayPrice ? formatBillingPrice(item.displayPrice) : null;
+}
 
 const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
@@ -26,20 +30,27 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
       <a class="button" href="https://github.com/pablopunk/nvm/releases">Download the app</a>
     </div>
 
-    {catalog.subscriptions.map((tier) => (
-      <div class={`price-card${tier === recommendedTier ? ' price-card--recommended' : ''}`}>
-        {tier === recommendedTier && <span class="price-card__badge">Recommended</span>}
-        <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
-        <div><span class="price-card__credits">{tier.credits}</span><span class="price-card__period">credits / month</span></div>
-        <p class="price-card__desc">Monthly credit allocation for heavier AI usage. Credits are consumed per AI operation, proportional to the model and prompt size.</p>
-        {!isLoggedIn && (
-          <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
-        )}
-        {isLoggedIn && (
-          <a class="button button--primary" href="/profile">Manage subscription</a>
-        )}
-      </div>
-    ))}
+    {catalog.subscriptions.map((tier) => {
+      const displayPrice = displayPriceFor(tier);
+      return (
+        <div class={`price-card${tier === recommendedTier ? ' price-card--recommended' : ''}`}>
+          {tier === recommendedTier && <span class="price-card__badge">Recommended</span>}
+          <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
+          {displayPrice ? (
+            <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {tier.displayPrice?.interval}</span></div>
+          ) : (
+            <div><span class="price-card__credits">{tier.credits}</span><span class="price-card__period">credits / month</span></div>
+          )}
+          <p class="price-card__desc">{tier.credits} credits included each billing cycle. Credits are consumed per AI operation, proportional to the model and prompt size.</p>
+          {!isLoggedIn && (
+            <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
+          )}
+          {isLoggedIn && (
+            <a class="button button--primary" href="/profile">Manage subscription</a>
+          )}
+        </div>
+      );
+    })}
 
     {!hasSubscriptions && (
       <div class="price-card">
@@ -55,12 +66,15 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
       <h2>Top-ups</h2>
       <p class="muted">One-time credit packs for when you need more. Available with an active subscription.</p>
       <div class="top-up-section">
-        {catalog.topUps.map((pack) => (
-          <div class="top-up-card">
-            <div class="top-up-card__credits">{pack.credits}</div>
-            <div style="font-size:13px;color:var(--muted)">credits</div>
-          </div>
-        ))}
+        {catalog.topUps.map((pack) => {
+          const displayPrice = displayPriceFor(pack);
+          return (
+            <div class="top-up-card">
+              <div class="top-up-card__credits">{pack.credits}</div>
+              <div style="font-size:13px;color:var(--muted)">credits{displayPrice ? ` · ${displayPrice}` : ''}</div>
+            </div>
+          );
+        })}
       </div>
     </div>
   )}
