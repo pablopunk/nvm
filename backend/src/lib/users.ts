@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { authIntents, invites, users, creditLedger } from '../db/schema';
 import { createHash } from 'node:crypto';
@@ -53,18 +53,29 @@ async function findOrLinkUserByWorkosIdentity(tx: any, input: { workosUserId: st
 
 export async function createUserFromInviteIntent(input: { intentId: string; nonce: string; workosUserId: string; email: string }) {
   return db.transaction(async (tx) => {
-    const existing = await findOrLinkUserByWorkosIdentity(tx, input);
-    if (existing) return existing;
+    const [existingByWorkosId] = await tx.select().from(users).where(eq(users.workosUserId, input.workosUserId)).limit(1);
+    if (existingByWorkosId) return existingByWorkosId;
+
     const [intent] = await tx.select().from(authIntents).where(eq(authIntents.id, input.intentId)).limit(1);
     if (!intent || intent.consumedAt || intent.expiresAt <= new Date() || createHash('sha256').update(input.nonce).digest('hex') !== intent.nonceHash) throw new InviteRequiredError();
     const [invite] = await tx.select().from(invites).where(eq(invites.id, intent.inviteId)).limit(1);
     const email = canonicalEmail(input.email);
     if (!invite || invite.email !== email || invite.expiresAt <= new Date() || !['queued', 'sending', 'sent'].includes(invite.status)) throw new InviteRequiredError();
     if (isDisposableEmail(input.email)) throw new DisposableEmailError(input.email);
+
+    const [consumed] = await tx.update(authIntents).set({ consumedAt: new Date() })
+      .where(and(eq(authIntents.id, intent.id), eq(authIntents.nonceHash, intent.nonceHash), isNull(authIntents.consumedAt)))
+      .returning();
+    if (!consumed) throw new InviteRequiredError();
+
+    const existing = await findOrLinkUserByWorkosIdentity(tx, input);
+    if (existing) {
+      await tx.update(invites).set({ status: 'redeemed', redeemedAt: new Date() }).where(and(eq(invites.id, invite.id), inArray(invites.status, ['queued', 'sending', 'sent'])));
+      return existing;
+    }
+
     const [created] = await tx.insert(users).values({ workosUserId: input.workosUserId, email }).returning();
     await tx.insert(creditLedger).values({ userId: created.id, delta: MONTHLY_FREE_CREDITS, kind: 'free', reason: 'grant_free_monthly', refId: currentFreeCreditPeriod() });
-    const [consumed] = await tx.update(authIntents).set({ consumedAt: new Date() }).where(and(eq(authIntents.id, intent.id), eq(authIntents.nonceHash, intent.nonceHash))).returning();
-    if (!consumed) throw new InviteRequiredError();
     await tx.update(invites).set({ status: 'redeemed', redeemedAt: new Date() }).where(and(eq(invites.id, invite.id), inArray(invites.status, ['queued', 'sending', 'sent'])));
     return created;
   });

@@ -33,7 +33,7 @@ export type ProxyConfig = {
   buildUpstreamUrl: (cfg: { upstreamBaseUrl: string; activeModelId: string }) => string;
   rewriteRequestBody?: (bodyText: string, activeModelId: string) => string;
   parseUsageFromJson: (json: any) => UsageTokens | null;
-  parseUsageFromStreamChunk: (chunk: string, acc: StreamUsageAccumulator) => void;
+  parseUsageFromStreamChunk: (chunk: string, acc: StreamUsageAccumulator, finalize?: boolean) => void;
   idempotencyKey?: string;
 };
 
@@ -42,7 +42,28 @@ export type StreamUsageAccumulator = {
   outputTokens: number;
   finalized: boolean;
   pendingText?: string;
+  reportMalformedFrame?: (error: unknown) => void;
 };
+
+export function completeStreamLines(chunkText: string, acc: StreamUsageAccumulator, finalize = false): string[] {
+  const text = `${acc.pendingText ?? ''}${chunkText}`;
+  if (finalize) {
+    acc.pendingText = '';
+    return text ? text.split(/\r?\n/) : [];
+  }
+  const lines = text.split(/\r?\n/);
+  acc.pendingText = lines.pop() ?? '';
+  return lines;
+}
+
+export function parseStreamUsageJson(payload: string, acc: StreamUsageAccumulator): any | null {
+  try {
+    return JSON.parse(payload);
+  } catch (error) {
+    acc.reportMalformedFrame?.(error);
+    return null;
+  }
+}
 
 type BillContext = {
   user: { id: string };
@@ -612,24 +633,32 @@ function teeStreamAndBill(
   status: number,
   startedAt: number,
 ): ReadableStream<Uint8Array> {
-  const acc: StreamUsageAccumulator = { inputTokens: 0, outputTokens: 0, finalized: false };
+  function reportMalformedStreamUsageFrame(error: unknown) {
+    log.warn('stream_usage_frame_parse_failed', { request_id: billCtx.requestId, error });
+  }
+
+  function sniffStreamUsage(text: string, finalize = false) {
+    try {
+      cfg.parseUsageFromStreamChunk(text, acc, finalize);
+    } catch (error) {
+      log.warn('usage_sniffer_failed', { request_id: billCtx.requestId, error });
+    }
+  }
+
+  const acc: StreamUsageAccumulator = {
+    inputTokens: 0,
+    outputTokens: 0,
+    finalized: false,
+    reportMalformedFrame: reportMalformedStreamUsageFrame,
+  };
   const decoder = new TextDecoder('utf-8', { fatal: false });
   const transform = new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       controller.enqueue(chunk);
-      try {
-        const text = decoder.decode(chunk, { stream: true });
-        cfg.parseUsageFromStreamChunk(text, acc);
-      } catch (err) {
-        log.warn('usage_sniffer_failed', { request_id: billCtx.requestId, error: err });
-      }
+      sniffStreamUsage(decoder.decode(chunk, { stream: true }));
     },
     async flush() {
-      try {
-        const tail = decoder.decode();
-        if (tail) cfg.parseUsageFromStreamChunk(tail, acc);
-        if (acc.pendingText) cfg.parseUsageFromStreamChunk('\n', acc);
-      } catch {}
+      sniffStreamUsage(decoder.decode(), true);
       const latencyMs = Date.now() - startedAt;
       const streamTokens = resolveBillableTokens(
         billCtx,

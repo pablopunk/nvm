@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { requestDedup } from '../db/schema';
-import { resolveBillableTokens, handleDedup } from './proxy';
+import { completeStreamLines, resolveBillableTokens, handleDedup, type StreamUsageAccumulator } from './proxy';
 
 const DUMMY_USER_ID = '11111111-1111-1111-1111-111111111111';
 const DUMMY_KEY = 'test-idempotency-key-123';
@@ -26,6 +26,17 @@ const ctx = {
   client: { name: null, version: null, apiVersion: null, platform: null, arch: null },
   estimatedInputTokens: 50,
 };
+
+test('completeStreamLines buffers split CRLF and finalizes the trailing line once', function buffersCompleteLines() {
+  const acc: StreamUsageAccumulator = { inputTokens: 0, outputTokens: 0, finalized: false };
+
+  assert.deepEqual(completeStreamLines('data: first\r', acc), []);
+  assert.deepEqual(completeStreamLines('\ndata: second\r\ntrailing', acc), ['data: first', 'data: second']);
+  assert.equal(acc.pendingText, 'trailing');
+  assert.deepEqual(completeStreamLines('', acc, true), ['trailing']);
+  assert.equal(acc.pendingText, '');
+  assert.deepEqual(completeStreamLines('', acc, true), []);
+});
 
 test('passes through tokens when output is non-zero', function passesThroughWhenOutputNonZero() {
   const result = resolveBillableTokens(ctx, { inputTokens: 100, outputTokens: 50 }, 200);
