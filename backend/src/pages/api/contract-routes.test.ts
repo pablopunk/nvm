@@ -138,9 +138,13 @@ function authorizedGoogleRequest(body: unknown = { contents: [{ parts: [{ text: 
 
 function streamFromTextChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
+  return streamFromByteChunks(chunks.map((chunk) => encoder.encode(chunk)));
+}
+
+function streamFromByteChunks(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
-      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      for (const chunk of chunks) controller.enqueue(chunk);
       controller.close();
     },
   });
@@ -348,6 +352,72 @@ test('proxy route preserves streaming responses and records stream usage', async
   assert.equal(db.insertedValues.length, 2);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 2);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
+});
+
+test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  const frame = 'data: {"usage":{"prompt_tokens":12,"completion_tokens":4},"note":"é"}\r\n';
+  const encodedFrame = new TextEncoder().encode(frame);
+  const promptTokenSplit = new TextEncoder().encode(frame.slice(0, frame.indexOf('prompt_tokens') + 7)).byteLength;
+  const multibyteCharacterStart = new TextEncoder().encode(frame.slice(0, frame.indexOf('é'))).byteLength;
+  const chunks = [
+    encodedFrame.slice(0, 2),
+    encodedFrame.slice(2, promptTokenSplit),
+    encodedFrame.slice(promptTokenSplit, multibyteCharacterStart + 1),
+    encodedFrame.slice(multibyteCharacterStart + 1, -1),
+    encodedFrame.slice(-1),
+  ];
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    assert.equal(url, 'https://upstream.example/v1/chat/completions');
+    return new Response(streamFromByteChunks(chunks), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), encodedFrame);
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 4);
+});
+
+test('anthropic proxy records usage from a split final frame without a newline', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  const chunks = [
+    'da',
+    'ta: {"type":"message_delta","usage":{"input_to',
+    'kens":11,"output_tokens":5}}',
+  ];
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    assert.equal(url, 'https://upstream.example/v1/messages');
+    return new Response(streamFromTextChunks(chunks), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const response = await postMessages(routeContext(authorizedMessagesRequest()));
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), chunks.join(''));
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 11);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 5);
 });
 
 const splitGoogleUsageStream = [

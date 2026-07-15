@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { proxyAndBill, type StreamUsageAccumulator, type UsageTokens } from '../../../../lib/proxy';
+import { completeStreamLines, parseStreamUsageJson, proxyAndBill, type StreamUsageAccumulator, type UsageTokens } from '../../../../lib/proxy';
 
 export const config = { maxDuration: 300 };
 
@@ -19,32 +19,23 @@ function googleOutputTokens(usageMetadata: any): number {
   return (usageMetadata.candidatesTokenCount ?? 0) + (usageMetadata.thoughtsTokenCount ?? 0);
 }
 
-function completeStreamLines(chunkText: string, acc: StreamUsageAccumulator): string[] {
-  const text = `${acc.pendingText ?? ''}${chunkText}`;
-  const lines = text.split(/\r?\n/);
-  acc.pendingText = lines.pop() ?? '';
-  return lines;
-}
-
-function parseUsageFromGoogleStreamChunk(chunkText: string, acc: StreamUsageAccumulator): void {
-  for (const line of completeStreamLines(chunkText, acc)) {
+function parseUsageFromGoogleStreamChunk(chunkText: string, acc: StreamUsageAccumulator, finalize = false): void {
+  for (const line of completeStreamLines(chunkText, acc, finalize)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) continue;
     const payload = trimmed.slice(5).trim();
     if (!payload) continue;
-    try {
-      const obj = JSON.parse(payload);
-      const usage = obj?.usageMetadata;
-      if (!usage) continue;
-      if (typeof usage.promptTokenCount === 'number') {
-        acc.inputTokens = usage.promptTokenCount;
-      }
-      const outputTokens = googleOutputTokens(usage);
-      if (outputTokens > 0) {
-        acc.outputTokens = outputTokens;
-        acc.finalized = true;
-      }
-    } catch {}
+    const obj = parseStreamUsageJson(payload, acc);
+    const usage = obj?.usageMetadata;
+    if (!usage) continue;
+    if (typeof usage.promptTokenCount === 'number') {
+      acc.inputTokens = usage.promptTokenCount;
+    }
+    const outputTokens = googleOutputTokens(usage);
+    if (outputTokens > 0) {
+      acc.outputTokens = outputTokens;
+      acc.finalized = true;
+    }
   }
 }
 

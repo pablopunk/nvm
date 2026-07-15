@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { proxyAndBill, type StreamUsageAccumulator, type UsageTokens } from '../../../../lib/proxy';
+import { completeStreamLines, parseStreamUsageJson, proxyAndBill, type StreamUsageAccumulator, type UsageTokens } from '../../../../lib/proxy';
 
 export const config = { maxDuration: 300 };
 
@@ -16,20 +16,18 @@ function parseUsageFromOpenAiJson(json: any): UsageTokens | null {
   return { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 };
 }
 
-function parseUsageFromOpenAiStreamChunk(chunkText: string, acc: StreamUsageAccumulator): void {
-  for (const line of chunkText.split('\n')) {
+function parseUsageFromOpenAiStreamChunk(chunkText: string, acc: StreamUsageAccumulator, finalize = false): void {
+  for (const line of completeStreamLines(chunkText, acc, finalize)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) continue;
     const payload = trimmed.slice(5).trim();
     if (!payload || payload === '[DONE]') continue;
-    try {
-      const obj = JSON.parse(payload);
-      if (obj?.usage) {
-        acc.inputTokens = obj.usage.prompt_tokens ?? acc.inputTokens;
-        acc.outputTokens = obj.usage.completion_tokens ?? acc.outputTokens;
-        acc.finalized = true;
-      }
-    } catch {}
+    const obj = parseStreamUsageJson(payload, acc);
+    if (obj?.usage) {
+      acc.inputTokens = obj.usage.prompt_tokens ?? acc.inputTokens;
+      acc.outputTokens = obj.usage.completion_tokens ?? acc.outputTokens;
+      acc.finalized = true;
+    }
   }
 }
 
