@@ -8,3 +8,5 @@ release
 .plans/
 .tmp/
 .vercel
+.codex
+.multica
