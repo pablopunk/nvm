@@ -28,16 +28,40 @@ export class InviteRequiredError extends Error {
   constructor() { super('A valid invitation is required'); this.name = 'InviteRequiredError'; }
 }
 
+function canonicalEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+async function findOrLinkUserByWorkosIdentity(tx: any, input: { workosUserId: string; email: string }) {
+  const [existingByWorkosId] = await tx.select().from(users).where(eq(users.workosUserId, input.workosUserId)).limit(1);
+  if (existingByWorkosId) return existingByWorkosId;
+
+  const email = canonicalEmail(input.email);
+  const [existingByEmail] = await tx.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+  if (!existingByEmail) return null;
+
+  const [linked] = await tx.update(users)
+    .set({ workosUserId: input.workosUserId })
+    .where(and(eq(users.id, existingByEmail.id), eq(users.workosUserId, existingByEmail.workosUserId)))
+    .returning();
+  if (linked) return linked;
+
+  const [concurrentLink] = await tx.select().from(users).where(eq(users.workosUserId, input.workosUserId)).limit(1);
+  if (concurrentLink) return concurrentLink;
+  throw new Error('User identity changed while linking authenticated account');
+}
+
 export async function createUserFromInviteIntent(input: { intentId: string; nonce: string; workosUserId: string; email: string }) {
   return db.transaction(async (tx) => {
-    const existing = await tx.select().from(users).where(eq(users.workosUserId, input.workosUserId)).limit(1);
-    if (existing[0]) return existing[0];
+    const existing = await findOrLinkUserByWorkosIdentity(tx, input);
+    if (existing) return existing;
     const [intent] = await tx.select().from(authIntents).where(eq(authIntents.id, input.intentId)).limit(1);
     if (!intent || intent.consumedAt || intent.expiresAt <= new Date() || createHash('sha256').update(input.nonce).digest('hex') !== intent.nonceHash) throw new InviteRequiredError();
     const [invite] = await tx.select().from(invites).where(eq(invites.id, intent.inviteId)).limit(1);
-    if (!invite || invite.email !== input.email.trim().toLowerCase() || invite.expiresAt <= new Date() || !['queued', 'sending', 'sent'].includes(invite.status)) throw new InviteRequiredError();
+    const email = canonicalEmail(input.email);
+    if (!invite || invite.email !== email || invite.expiresAt <= new Date() || !['queued', 'sending', 'sent'].includes(invite.status)) throw new InviteRequiredError();
     if (isDisposableEmail(input.email)) throw new DisposableEmailError(input.email);
-    const [created] = await tx.insert(users).values({ workosUserId: input.workosUserId, email: input.email }).returning();
+    const [created] = await tx.insert(users).values({ workosUserId: input.workosUserId, email }).returning();
     await tx.insert(creditLedger).values({ userId: created.id, delta: MONTHLY_FREE_CREDITS, kind: 'free', reason: 'grant_free_monthly', refId: currentFreeCreditPeriod() });
     const [consumed] = await tx.update(authIntents).set({ consumedAt: new Date() }).where(and(eq(authIntents.id, intent.id), eq(authIntents.nonceHash, intent.nonceHash))).returning();
     if (!consumed) throw new InviteRequiredError();
@@ -51,18 +75,15 @@ export async function upsertUserWithFreeGrant(input: {
   email: string;
 }) {
   return db.transaction(async (tx) => {
-    const existing = await tx
-      .select()
-      .from(users)
-      .where(eq(users.workosUserId, input.workosUserId))
-      .limit(1);
-    if (existing[0]) return existing[0];
+    const existing = await findOrLinkUserByWorkosIdentity(tx, input);
+    if (existing) return existing;
 
     if (isDisposableEmail(input.email)) throw new DisposableEmailError(input.email);
+    const email = canonicalEmail(input.email);
 
     const [created] = await tx
       .insert(users)
-      .values({ workosUserId: input.workosUserId, email: input.email })
+      .values({ workosUserId: input.workosUserId, email })
       .returning();
 
     await tx.insert(creditLedger).values({

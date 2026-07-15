@@ -114,9 +114,11 @@ test('getBalances returns zeros on empty result', async () => {
 function createFlexibleFakeDb(
   selects: unknown[],
   userReturningValues?: unknown[],
+  updateReturningValues?: unknown[],
 ) {
   const remainingSelects = [...selects];
   const returningStack = [...(userReturningValues ?? [])];
+  const updateReturningStack = [...(updateReturningValues ?? [])];
   const insertedValues: unknown[] = [];
   let db: any;
 
@@ -127,6 +129,7 @@ function createFlexibleFakeDb(
       where: () => c,
       limit: () => p(),
       values: (v: unknown) => { onValues?.(v); return c; },
+      set: (v: unknown) => { onValues?.(v); return c; },
       returning: () => p(),
       onConflictDoNothing: () => c,
       then: (r: any, j: any) => p().then(r, j),
@@ -144,6 +147,7 @@ function createFlexibleFakeDb(
       const val = returningStack.shift() ?? [];
       return chain(val, (v) => insertedValues.push(v));
     },
+    update: () => chain(updateReturningStack.shift() ?? []),
     transaction: async (cb: (tx: any) => Promise<void>) => cb(db),
   };
 
@@ -166,7 +170,7 @@ test('upsertUserWithFreeGrant returns existing user without creating', async () 
 
 test('upsertUserWithFreeGrant creates user and grants free credits', async () => {
   const createdUser = { id: 'new-id', workosUserId: 'wos_2', email: 'new@legitdomain.com' };
-  const db = createFlexibleFakeDb([[]], [[createdUser]]);
+  const db = createFlexibleFakeDb([[], []], [[createdUser]]);
   setDbForTests(db as any);
 
   const result = await upsertUserWithFreeGrant({
@@ -180,6 +184,21 @@ test('upsertUserWithFreeGrant creates user and grants free credits', async () =>
   assert.strictEqual(creditValues.userId, 'new-id');
   assert.strictEqual(creditValues.kind, 'free');
   assert.strictEqual(creditValues.reason, 'grant_free_monthly');
+});
+
+test('upsertUserWithFreeGrant links a new WorkOS identity to an existing verified email account', async () => {
+  const existingUser = { id: 'existing-id', workosUserId: 'wos_old', email: 'existing@example.com' };
+  const linkedUser = { ...existingUser, workosUserId: 'wos_new' };
+  const db = createFlexibleFakeDb([[], [existingUser]], [], [[linkedUser]]);
+  setDbForTests(db as any);
+
+  const result = await upsertUserWithFreeGrant({
+    workosUserId: 'wos_new',
+    email: 'Existing@Example.com',
+  });
+
+  assert.deepEqual(result, linkedUser);
+  assert.strictEqual(db.insertedValues.length, 0);
 });
 
 test('DisposableEmailError is constructible', () => {
