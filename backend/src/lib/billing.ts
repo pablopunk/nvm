@@ -6,18 +6,27 @@ import { env } from './env';
 import { log } from './log';
 
 export type BillingKind = 'subscription' | 'top_up';
+export type BillingInterval = 'day' | 'week' | 'month' | 'year';
+
+export type BillingPriceDisplay = {
+  amount: number;
+  currency: string;
+  interval?: BillingInterval;
+};
 
 type SubscriptionTier = {
   kind: 'subscription';
   priceId: string;
   tier: string;
   credits: number;
+  displayPrice?: BillingPriceDisplay & { interval: BillingInterval };
 };
 
 type TopUpPack = {
   kind: 'top_up';
   priceId: string;
   credits: number;
+  displayPrice?: BillingPriceDisplay;
 };
 
 export type BillingCatalogItem = SubscriptionTier | TopUpPack;
@@ -68,6 +77,27 @@ function parsePositiveInt(value: string | undefined, fallback = 0): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseDisplayPrice(raw: Record<string, unknown>, requiresInterval: boolean): BillingPriceDisplay | null {
+  const amount = Number(raw.amount ?? raw.unitAmount ?? raw.unit_amount);
+  const currency = String(raw.currency ?? '').trim().toUpperCase();
+  if (!Number.isSafeInteger(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) return null;
+
+  const interval = String(raw.interval ?? raw.recurringInterval ?? raw.recurring_interval ?? '').trim().toLowerCase();
+  if (!requiresInterval) return { amount, currency };
+  if (interval !== 'day' && interval !== 'week' && interval !== 'month' && interval !== 'year') return null;
+  return { amount, currency, interval };
+}
+
+export function formatBillingPrice(price: BillingPriceDisplay): string | null {
+  try {
+    const formatter = new Intl.NumberFormat('en', { style: 'currency', currency: price.currency });
+    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+    return formatter.format(price.amount / 10 ** fractionDigits);
+  } catch {
+    return null;
+  }
+}
+
 function parseCatalogArray<T>(name: string, normalize: (raw: any) => T | null): T[] {
   const value = env(name);
   if (!value) return [];
@@ -85,12 +115,25 @@ export function billingCatalog(): BillingCatalog {
     const priceId = String(raw.priceId ?? raw.price_id ?? '').trim();
     const tier = String(raw.tier ?? raw.plan ?? '').trim();
     const credits = parsePositiveInt(String(raw.credits ?? ''), 0);
-    return priceId && tier && credits ? { kind: 'subscription', priceId, tier, credits } : null;
+    const displayPrice = parseDisplayPrice(raw, true);
+    return priceId && tier && credits ? {
+      kind: 'subscription',
+      priceId,
+      tier,
+      credits,
+      ...(displayPrice?.interval ? { displayPrice: { ...displayPrice, interval: displayPrice.interval } } : {}),
+    } : null;
   });
   const topUpsFromJson = parseCatalogArray<TopUpPack>('STRIPE_TOP_UP_PACKS', (raw) => {
     const priceId = String(raw.priceId ?? raw.price_id ?? '').trim();
     const credits = parsePositiveInt(String(raw.credits ?? ''), 0);
-    return priceId && credits ? { kind: 'top_up', priceId, credits } : null;
+    const displayPrice = parseDisplayPrice(raw, false);
+    return priceId && credits ? {
+      kind: 'top_up',
+      priceId,
+      credits,
+      ...(displayPrice ? { displayPrice } : {}),
+    } : null;
   });
 
   const fallbackSubscriptionPriceId = env('STRIPE_SUBSCRIPTION_PRICE_ID');

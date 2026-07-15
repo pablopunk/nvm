@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
-import { BillingEligibilityError, createBillingCheckout, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
+import { BillingEligibilityError, billingCatalog, createBillingCheckout, formatBillingPrice, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
 import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
@@ -198,6 +198,40 @@ afterEach(() => {
   delete process.env.STRIPE_SUBSCRIPTION_TIERS;
   delete process.env.STRIPE_TOP_UP_PACKS;
   delete process.env.STRIPE_WEBHOOK_SECRET;
+});
+
+test('billing catalog exposes validated display metadata from configured prices', () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{
+    priceId: 'price_pro', tier: 'pro', credits: 1000, amount: 2000, currency: 'usd', interval: 'month',
+  }]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{
+    priceId: 'price_topup', credits: 500, unit_amount: 500, currency: 'EUR',
+  }]);
+
+  assert.deepEqual(billingCatalog(), {
+    subscriptions: [{
+      kind: 'subscription', priceId: 'price_pro', tier: 'pro', credits: 1000,
+      displayPrice: { amount: 2000, currency: 'USD', interval: 'month' },
+    }],
+    topUps: [{
+      kind: 'top_up', priceId: 'price_topup', credits: 500,
+      displayPrice: { amount: 500, currency: 'EUR' },
+    }],
+  });
+  assert.equal(formatBillingPrice({ amount: 2000, currency: 'USD', interval: 'month' }), '$20.00');
+});
+
+test('billing catalog keeps billing items while omitting incomplete display metadata', () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{
+    priceId: 'price_pro', tier: 'pro', credits: 1000, amount: 2000, currency: 'usd',
+  }]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{
+    priceId: 'price_topup', credits: 500, amount: 500.5, currency: 'US',
+  }]);
+
+  const catalog = billingCatalog();
+  assert.deepEqual(catalog.subscriptions[0], { kind: 'subscription', priceId: 'price_pro', tier: 'pro', credits: 1000 });
+  assert.deepEqual(catalog.topUps[0], { kind: 'top_up', priceId: 'price_topup', credits: 500 });
 });
 
 test('checkout completion upserts subscription and grants initial paid credits once', async () => {
