@@ -107,6 +107,7 @@ import {
   normalizeLoaderItems,
   resolveLoaderEmptyView,
 } from './data-loader';
+import { createExtensionJsonStore } from './extension-json-store';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -377,7 +378,9 @@ const viewLoaderRegistry = createViewLoaderRegistry({
       { source: 'host', scope: 'extension' },
     ),
   readCache: (extension) => readExtensionCache(extension),
-  writeCache: (extension, data) => writeExtensionCache(extension, data),
+  mutateCache: async (extension, update) => {
+    await mutateExtensionCache(extension, update);
+  },
 });
 
 function spawnPendingViewLoaders(result: any) {
@@ -690,6 +693,7 @@ const extensionRootItemsCache = new Map<
 >();
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>();
 const extensionStorageRefreshes = new Map<string, Promise<any>>();
+const extensionJsonStore = createExtensionJsonStore();
 const extensionActionHandlers = new Map<string, any>();
 const viewActionExecutionRecords = new Map<
   string,
@@ -4539,33 +4543,24 @@ function extensionCachePath(extension) {
   );
 }
 
-async function readJsonFile(filePath) {
-  try {
-    return JSON.parse(await fs.readFile(filePath, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-async function writeJsonFile(filePath, data) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-}
-
 async function readExtensionStorage(extension) {
-  return readJsonFile(extensionStoragePath(extension));
+  return extensionJsonStore.read(extensionStoragePath(extension));
 }
 
-async function writeExtensionStorage(extension, data) {
-  await writeJsonFile(extensionStoragePath(extension), data);
+async function replaceExtensionStorage(extension, data) {
+  await extensionJsonStore.replace(extensionStoragePath(extension), data);
+}
+
+async function mutateExtensionStorage(extension, update) {
+  return extensionJsonStore.mutate(extensionStoragePath(extension), update);
 }
 
 async function readExtensionCache(extension) {
-  return readJsonFile(extensionCachePath(extension));
+  return extensionJsonStore.read(extensionCachePath(extension));
 }
 
-async function writeExtensionCache(extension, data) {
-  await writeJsonFile(extensionCachePath(extension), data);
+async function mutateExtensionCache(extension, update) {
+  return extensionJsonStore.mutate(extensionCachePath(extension), update);
 }
 
 function extensionStorageRefreshKey(extension, key) {
@@ -4586,18 +4581,21 @@ function createExtensionStorage(extension) {
       return Object.hasOwn(data, key) ? data[key] : fallback;
     },
     async set(key, value) {
-      const data = await readExtensionStorage(extension);
-      data[key] = value;
-      await writeExtensionStorage(extension, data);
+      await mutateExtensionStorage(extension, (current) => ({
+        ...current,
+        [key]: value,
+      }));
       return value;
     },
     async delete(key) {
-      const data = await readExtensionStorage(extension);
-      delete data[key];
-      await writeExtensionStorage(extension, data);
+      await mutateExtensionStorage(extension, (current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
     },
     async clear() {
-      await writeExtensionStorage(extension, {});
+      await replaceExtensionStorage(extension, {});
     },
     async memo(key, ttlMs, loader) {
       const data = await readExtensionCache(extension);
@@ -4609,8 +4607,10 @@ function createExtensionStorage(extension) {
       )
         return cached.value;
       const value = await loader();
-      data[key] = { value, updatedAt: Date.now() };
-      await writeExtensionCache(extension, data);
+      await mutateExtensionCache(extension, (current) => ({
+        ...current,
+        [key]: { value, updatedAt: Date.now() },
+      }));
       return value;
     },
     async memoStale(key, ttlMs, staleTtlMs, loader) {
@@ -4626,9 +4626,10 @@ function createExtensionStorage(extension) {
         extensionStorageRefreshes.get(refreshKey) ||
         (async () => {
           const value = await loader();
-          const latest = await readExtensionCache(extension);
-          latest[key] = { value, updatedAt: Date.now() };
-          await writeExtensionCache(extension, latest);
+          await mutateExtensionCache(extension, (current) => ({
+            ...current,
+            [key]: { value, updatedAt: Date.now() },
+          }));
           return value;
         })().finally(() => extensionStorageRefreshes.delete(refreshKey));
       extensionStorageRefreshes.set(refreshKey, refresh);
@@ -6650,9 +6651,10 @@ async function renameExtension(extension, command, metadata) {
     throw new Error(
       'rename requires a title, subtitle, commandTitle, or commandSubtitle',
     );
-  const data = await readExtensionStorage(extension);
-  data.__metadata = { ...(data.__metadata || {}), ...normalized };
-  await writeExtensionStorage(extension, data);
+  await mutateExtensionStorage(extension, (current) => ({
+    ...current,
+    __metadata: { ...(current.__metadata || {}), ...normalized },
+  }));
   applyExtensionMetadata(extension, normalized);
   if (command && normalized.commandTitle)
     command.title = normalized.commandTitle;
