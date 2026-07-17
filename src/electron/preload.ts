@@ -99,6 +99,8 @@ const api: NevermindApi = {
   testRunJob: (id) => invokeMeasured('test:run-job', id),
   testFailNextExtensionActivation: (phase) =>
     invokeMeasured('test:fail-next-extension-activation', phase),
+  testIsActionShortcutRegistered: (accelerator) =>
+    invokeMeasured('test:is-action-shortcut-registered', accelerator),
   quitApp: () => invokeMeasured('app:quit'),
   shortcutReady: () => invokeMeasured('palette:shortcut-ready'),
   requestCameraAccess: () => invokeMeasured('camera:request-access'),

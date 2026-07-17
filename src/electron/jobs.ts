@@ -162,7 +162,7 @@ export class JobRegistry {
     return { ...this.enabledOverrides };
   }
 
-  register(definition: JobDefinition) {
+  register(definition: JobDefinition, options: { skipStartup?: boolean } = {}) {
     const existing = this.records.get(definition.id);
     if (existing) this.clearTimers(existing);
     const override = this.enabledOverrides[definition.id];
@@ -196,7 +196,7 @@ export class JobRegistry {
     record.scheduledPayloads ||= new Map();
     record.history ||= [];
     this.records.set(definition.id, record);
-    this.installTriggers(record);
+    this.installTriggers(record, options);
     this.notify();
     return definition.id;
   }
@@ -391,6 +391,14 @@ export class JobRegistry {
     return structuredClone(snapshots);
   }
 
+  definitionsWhere(
+    predicate: (definition: JobDefinition) => boolean,
+  ): JobDefinition[] {
+    return Array.from(this.records.values())
+      .map((record) => record.definition)
+      .filter(predicate);
+  }
+
   onChange(listener: () => void) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -425,10 +433,13 @@ export class JobRegistry {
     ].slice(0, HISTORY_LIMIT);
   }
 
-  private installTriggers(record: JobRecord) {
+  private installTriggers(
+    record: JobRecord,
+    options: { skipStartup?: boolean } = {},
+  ) {
     if (!record.enabled) return;
     for (const trigger of record.definition.triggers || []) {
-      if (trigger.type === 'startup')
+      if (trigger.type === 'startup' && !options.skipStartup)
         this.schedule(record.definition.id, 'startup', trigger.delayMs || 0, {
           payload: trigger.payload,
         });

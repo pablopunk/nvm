@@ -81,6 +81,8 @@ async function updateManifest(patch: Record<string, unknown>) {
 
 function lifecycleExtensionSource(markerPath: string, version = 'v1') {
   const apiPath = `${markerPath}.apis.json`;
+  const directMarkerPath = `${markerPath}.direct.txt`;
+  const directScript = `printf '${version}\\n' >> ${JSON.stringify(directMarkerPath)}`;
   return `import { appendFile, writeFile } from 'node:fs/promises';
 
 export default {
@@ -94,24 +96,38 @@ export default {
       mode: 'background',
       triggers: [{ type: 'startup' }],
       run: async (ctx) => {
-        await writeFile(${JSON.stringify(apiPath)}, JSON.stringify({
-          ai: typeof ctx.ai === 'function',
-          attachments: typeof ctx.ai?.attachments?.file === 'function',
-          clipboardHistory: typeof ctx.clipboard?.history?.list === 'function',
-          ocr: typeof ctx.ocr?.image === 'function',
-          desktopApps: typeof ctx.desktop?.apps?.list === 'function',
-          desktopFiles: typeof ctx.desktop?.files?.find === 'function',
-          desktopClipboard: typeof ctx.desktop?.clipboard?.readText === 'function',
-          desktopShell: typeof ctx.desktop?.shell?.exec === 'function',
-          actionShell: typeof ctx.actions?.shellExec === 'function',
-          actionSystem: typeof ctx.actions?.system?.lockScreen === 'function',
-          actionUpdates: typeof ctx.actions?.updates?.check === 'function',
-          settings: typeof ctx.settings?.set === 'function',
-          shortcuts: typeof ctx.shortcuts?.list === 'function',
-          ownership: typeof ctx.extensions?.ownership?.ownerOf === 'function',
-          updates: typeof ctx.updates?.getState === 'function',
-        }));
-        await appendFile(${JSON.stringify(markerPath)}, '${version}\\n');
+        if (ctx.launch) {
+          await writeFile(${JSON.stringify(apiPath)}, JSON.stringify({
+            ai: typeof ctx.ai === 'function',
+            attachments: typeof ctx.ai?.attachments?.file === 'function',
+            clipboardHistory: typeof ctx.clipboard?.history?.list === 'function',
+            ocr: typeof ctx.ocr?.image === 'function',
+            desktopApps: typeof ctx.desktop?.apps?.list === 'function',
+            desktopFiles: typeof ctx.desktop?.files?.find === 'function',
+            desktopClipboard: typeof ctx.desktop?.clipboard?.readText === 'function',
+            desktopShell: typeof ctx.desktop?.shell?.exec === 'function',
+            actionShell: typeof ctx.actions?.shellExec === 'function',
+            actionSystem: typeof ctx.actions?.system?.lockScreen === 'function',
+            actionUpdates: typeof ctx.actions?.updates?.check === 'function',
+            settings: typeof ctx.settings?.set === 'function',
+            shortcuts: typeof ctx.shortcuts?.list === 'function',
+            ownership: typeof ctx.extensions?.ownership?.ownerOf === 'function',
+            updates: typeof ctx.updates?.getState === 'function',
+          }));
+          await appendFile(${JSON.stringify(markerPath)}, '${version}\\n');
+        }
+        return ctx.ui.list({
+          id: 'pab53-lifecycle-${version}',
+          title: 'PAB-53 Lifecycle ${version}',
+          items: [ctx.ui.item({
+            id: 'direct-${version}',
+            title: 'Direct action ${version}',
+            primaryAction: ctx.actions.shellScript(
+              'Run direct ${version}',
+              ${JSON.stringify(directScript)},
+            ),
+          })],
+        });
       },
     },
   ],
@@ -169,6 +185,26 @@ async function openExtensionsView(page: any) {
     if (!result?.view) throw new Error('Extensions view did not open');
     return result.view;
   });
+}
+
+async function lifecyclePaletteAction(page: any, version: string) {
+  return page.evaluate(async (expectedVersion: string) => {
+    const title = `PAB-53 Lifecycle ${expectedVersion}`;
+    const actions = await window.nvm.search(title);
+    const action = actions.find((candidate) => candidate.title === title);
+    if (!action) throw new Error(`${title} not found`);
+    return action;
+  }, version);
+}
+
+async function renderLifecycleDirectAction(page: any, version: string) {
+  const action = await lifecyclePaletteAction(page, version);
+  return page.evaluate(async (paletteAction) => {
+    const result = await window.nvm.execute(paletteAction);
+    const directAction = result.view?.items?.[0]?.primaryAction;
+    if (!directAction) throw new Error('Direct action was not rendered');
+    return directAction;
+  }, action);
 }
 
 async function launchTestApplication(testUserDataDir: string) {
@@ -347,6 +383,8 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
   const filename = 'pab53-lifecycle.ts';
   const draftFile = path.join(draftsDir, filename);
   const markerPath = path.join(lifecycleUserDataDir, 'trigger-runs.txt');
+  const directMarkerPath = `${markerPath}.direct.txt`;
+  const actionShortcut = 'CommandOrControl+Alt+9';
   const source = lifecycleExtensionSource(markerPath);
   await fs.mkdir(extensionsDir, { recursive: true });
   await fs.mkdir(draftsDir, { recursive: true });
@@ -424,6 +462,28 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
       })
       .toBe(true);
 
+    const v1PaletteAction = await lifecyclePaletteAction(page, 'v1');
+    expect(
+      await page.evaluate(
+        ([action, shortcut]) => window.nvm.setShortcut(action, shortcut),
+        [v1PaletteAction, actionShortcut] as const,
+      ),
+    ).toMatchObject({ ok: true });
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+          actionShortcut,
+        ),
+      )
+      .toEqual({ registered: true });
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).map(
+        (record) => record.action.title,
+      ),
+    ).toContain('PAB-53 Lifecycle v1');
+    const v1DirectAction = await renderLifecycleDirectAction(page, 'v1');
+
     const updateSource = lifecycleExtensionSource(markerPath, 'v2');
     await page.evaluate(
       ([name, proposal]) =>
@@ -431,10 +491,10 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
       [filename, updateSource] as const,
     );
     await page.evaluate(() =>
-      window.nvm.testFailNextExtensionActivation('after-persist'),
+      window.nvm.testFailNextExtensionActivation('state-persist'),
     );
     extensionsView = await openExtensionsView(page);
-    const apply = actionNamed(extensionsView, 'Apply Update');
+    let apply = actionNamed(extensionsView, 'Apply Update');
     await page.evaluate(
       async (action) => window.nvm.runViewAction(action),
       apply,
@@ -448,7 +508,7 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
     expect(await fs.readFile(path.join(extensionsDir, filename), 'utf8')).toBe(
       source,
     );
-    const rolledBackState = JSON.parse(
+    let rolledBackState = JSON.parse(
       await fs.readFile(path.join(lifecycleUserDataDir, 'state.json'), 'utf8'),
     );
     expect(rolledBackState.extensionManager.files[filename]).toEqual({
@@ -463,27 +523,144 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
     await expect
       .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
       .toBe('v1\nv1\n');
+    expect(
+      await page.evaluate(
+        (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+        actionShortcut,
+      ),
+    ).toEqual({ registered: true });
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).map(
+        (record) => record.action.title,
+      ),
+    ).toContain('PAB-53 Lifecycle v1');
 
+    await page.evaluate(() =>
+      window.nvm.testFailNextExtensionActivation('runtime-commit'),
+    );
     extensionsView = await openExtensionsView(page);
-    const discard = actionNamed(extensionsView, 'Discard Proposal');
+    apply = actionNamed(extensionsView, 'Apply Update');
     await page.evaluate(
       async (action) => window.nvm.runViewAction(action),
-      discard,
+      apply,
     );
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).toContain(
+      'PAB-53 Lifecycle v1',
+    );
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v2')).not.toContain(
+      'PAB-53 Lifecycle v2',
+    );
+    expect(await fs.readFile(path.join(extensionsDir, filename), 'utf8')).toBe(
+      source,
+    );
+    rolledBackState = JSON.parse(
+      await fs.readFile(path.join(lifecycleUserDataDir, 'state.json'), 'utf8'),
+    );
+    expect(rolledBackState.extensionManager.files[filename]).toEqual({
+      enabled: true,
+    });
+    expect(rolledBackState.extensionManager.proposals[filename]).toBeTruthy();
+    expect(
+      await page.evaluate(() =>
+        window.nvm.testRunJob('extension.pab53.lifecycle.command'),
+      ),
+    ).toEqual({ found: true });
+    await expect
+      .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
+      .toBe('v1\nv1\nv1\n');
+    expect(
+      await page.evaluate(
+        (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+        actionShortcut,
+      ),
+    ).toEqual({ registered: true });
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).map(
+        (record) => record.action.title,
+      ),
+    ).toContain('PAB-53 Lifecycle v1');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      v1DirectAction,
+    );
+    await expect
+      .poll(() => fs.readFile(directMarkerPath, 'utf8').catch(() => ''))
+      .toBe('v1\n');
+
+    extensionsView = await openExtensionsView(page);
+    apply = actionNamed(extensionsView, 'Apply Update');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      apply,
+    );
+    await expect
+      .poll(() => searchTitles(page, 'PAB-53 Lifecycle v2'))
+      .toContain('PAB-53 Lifecycle v2');
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).not.toContain(
+      'PAB-53 Lifecycle v1',
+    );
+    await expect
+      .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
+      .toBe('v1\nv1\nv1\nv2\n');
+    expect(
+      await page.evaluate(
+        (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+        actionShortcut,
+      ),
+    ).toEqual({ registered: true });
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).map(
+        (record) => record.action.title,
+      ),
+    ).toContain('PAB-53 Lifecycle v2');
+    expect(
+      await page.evaluate(
+        async (action) => window.nvm.runViewAction(action),
+        v1DirectAction,
+      ),
+    ).toMatchObject({ view: { id: 'action-failed' } });
+    expect(await fs.readFile(directMarkerPath, 'utf8')).toBe('v1\n');
+    const v2DirectAction = await renderLifecycleDirectAction(page, 'v2');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      v2DirectAction,
+    );
+    await expect
+      .poll(() => fs.readFile(directMarkerPath, 'utf8').catch(() => ''))
+      .toBe('v1\nv2\n');
+
     extensionsView = await openExtensionsView(page);
     const disable = actionNamed(extensionsView, 'Disable');
     await page.evaluate(
       async (action) => window.nvm.runViewAction(action),
       disable,
     );
-    expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).not.toContain(
-      'PAB-53 Lifecycle v1',
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v2')).not.toContain(
+      'PAB-53 Lifecycle v2',
     );
     expect(
       await page.evaluate(() =>
         window.nvm.testRunJob('extension.pab53.lifecycle.command'),
       ),
     ).toEqual({ found: false });
+    expect(
+      await page.evaluate(
+        (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+        actionShortcut,
+      ),
+    ).toEqual({ registered: false });
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).map(
+        (record) => record.action.title,
+      ),
+    ).not.toContain('PAB-53 Lifecycle v2');
+    expect(
+      await page.evaluate(
+        async (action) => window.nvm.runViewAction(action),
+        v2DirectAction,
+      ),
+    ).toMatchObject({ view: { id: 'action-failed' } });
+    expect(await fs.readFile(directMarkerPath, 'utf8')).toBe('v1\nv2\n');
 
     extensionsView = await openExtensionsView(page);
     const reEnable = actionNamed(extensionsView, 'Enable');
@@ -492,11 +669,30 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
       reEnable,
     );
     await expect
-      .poll(() => searchTitles(page, 'PAB-53 Lifecycle v1'))
-      .toContain('PAB-53 Lifecycle v1');
+      .poll(() => searchTitles(page, 'PAB-53 Lifecycle v2'))
+      .toContain('PAB-53 Lifecycle v2');
     await expect
       .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
-      .toBe('v1\nv1\nv1\n');
+      .toBe('v1\nv1\nv1\nv2\nv2\n');
+    expect(
+      await page.evaluate(
+        (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+        actionShortcut,
+      ),
+    ).toEqual({ registered: true });
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).map(
+        (record) => record.action.title,
+      ),
+    ).toContain('PAB-53 Lifecycle v2');
+    const reEnabledDirectAction = await renderLifecycleDirectAction(page, 'v2');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      reEnabledDirectAction,
+    );
+    await expect
+      .poll(() => fs.readFile(directMarkerPath, 'utf8').catch(() => ''))
+      .toBe('v1\nv2\nv2\n');
   } finally {
     if (app) {
       const closePromise = app.close().catch(() => {});

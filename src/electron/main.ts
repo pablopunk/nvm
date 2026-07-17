@@ -374,10 +374,11 @@ let learningRulesPath = '';
 let legacyLearningRulesPath = '';
 let learningTracesPath = '';
 let saveTimer: NodeJS.Timeout | undefined;
-let extensionFileWatchers: Array<{
+let stateWriteQueue: Promise<void> = Promise.resolve();
+type ExtensionFileWatcher = PreparedFileWatcher & {
   close: () => unknown;
-  extensionId?: string;
-}> = [];
+};
+let extensionFileWatchers: ExtensionFileWatcher[] = [];
 type PreparedFileWatcher = {
   extensionId: string;
   event: string;
@@ -391,6 +392,17 @@ type PreparedExtensionRuntime = {
   handlers: Map<string, any>;
   viewActions: Map<string, any>;
   rootActions: Map<string, any>;
+  viewRefreshes: Map<string, any>;
+  jobs: JobDefinition[];
+  fileWatchers: PreparedFileWatcher[];
+};
+type LiveExtensionRuntimeSnapshot = {
+  extensionIds: Set<string>;
+  modules: Map<string, any>;
+  actions: Map<string, any>;
+  handlers: Map<string, any>;
+  viewActions: Map<string, ExtensionExecutionRecord>;
+  rootActions: Map<string, ExtensionExecutionRecord>;
   viewRefreshes: Map<string, any>;
   jobs: JobDefinition[];
   fileWatchers: PreparedFileWatcher[];
@@ -747,14 +759,14 @@ const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>();
 const extensionStorageRefreshes = new Map<string, Promise<any>>();
 const extensionJsonStore = createExtensionJsonStore();
 const extensionActionHandlers = new Map<string, any>();
-const viewActionExecutionRecords = new Map<
-  string,
-  { action: any; createdAt: number }
->();
-const rootActionExecutionRecords = new Map<
-  string,
-  { action: any; createdAt: number }
->();
+type ExtensionExecutionRecord = {
+  action: any;
+  createdAt: number;
+  extensionId?: string;
+  extensionFile?: string;
+};
+const viewActionExecutionRecords = new Map<string, ExtensionExecutionRecord>();
+const rootActionExecutionRecords = new Map<string, ExtensionExecutionRecord>();
 const viewRefreshRecords = new Map<
   string,
   {
@@ -850,7 +862,26 @@ function pruneExecutionRecords(store: Map<string, { createdAt: number }>) {
   }
 }
 
-function registerViewActionForRenderer(action) {
+function extensionExecutionOwner(action, entry?: any) {
+  const inheritedRecord = action?.executionId
+    ? viewActionExecutionRecords.get(String(action.executionId)) ||
+      rootActionExecutionRecords.get(String(action.executionId))
+    : undefined;
+  const extensionId =
+    entry?.extension?.id || action?.extensionId || inheritedRecord?.extensionId;
+  const extensionPath =
+    entry?.extension?.__filePath ||
+    action?.extensionFile ||
+    inheritedRecord?.extensionFile ||
+    '';
+  const extensionFile = extensionPath ? path.basename(extensionPath) : '';
+  return {
+    ...(extensionId ? { extensionId: String(extensionId) } : {}),
+    ...(extensionFile ? { extensionFile } : {}),
+  };
+}
+
+function registerViewActionForRenderer(action, entry?: any) {
   if (!action || typeof action !== 'object') return action;
   if (RENDERER_ONLY_VIEW_ACTION_TYPES.has(String(action.type || '')))
     return action;
@@ -860,6 +891,7 @@ function registerViewActionForRenderer(action) {
   viewActionExecutionRecords.set(executionId, {
     action: stored,
     createdAt: Date.now(),
+    ...extensionExecutionOwner(action, entry),
   });
   return { ...action, executionId };
 }
@@ -872,6 +904,7 @@ function registerRootActionForRenderer(action) {
   rootActionExecutionRecords.set(executionId, {
     action: stored,
     createdAt: Date.now(),
+    ...extensionExecutionOwner(action),
   });
   return { ...action, executionId };
 }
@@ -2189,7 +2222,7 @@ function broadcastAuthChanged(status: { authed: boolean; email?: string }) {
   paletteWindow.win?.webContents.send('nevermind:auth-changed', status);
 }
 
-function prepareActionPanelForRenderer(panel) {
+function prepareActionPanelForRenderer(panel, entry?: any) {
   if (!panel?.sections) return panel;
   return {
     ...panel,
@@ -2198,7 +2231,7 @@ function prepareActionPanelForRenderer(panel) {
       return {
         ...rest,
         actions: [...(section.actions || []), ...(section.lazyActions || [])]
-          .map((action) => normalizeViewAction(action, null))
+          .map((action) => normalizeViewAction(action, entry))
           .filter(Boolean),
       };
     }),
@@ -2207,11 +2240,14 @@ function prepareActionPanelForRenderer(panel) {
 
 function prepareRootActionForRenderer(action) {
   if (!action || typeof action !== 'object') return action;
+  const entry = action.kind?.startsWith('extension-')
+    ? extensionEntryForAction(action)
+    : null;
   return registerRootActionForRenderer({
     ...action,
-    primaryAction: normalizeViewAction(action.primaryAction, null),
-    rootAction: normalizeViewAction(action.rootAction, null),
-    actionPanel: prepareActionPanelForRenderer(action.actionPanel),
+    primaryAction: normalizeViewAction(action.primaryAction, entry),
+    rootAction: normalizeViewAction(action.rootAction, entry),
+    actionPanel: prepareActionPanelForRenderer(action.actionPanel, entry),
   });
 }
 
@@ -2316,11 +2352,11 @@ function extensionModuleForAction(action) {
 function currentActionForStoredShortcut(action) {
   if (action?.kind === 'extension-command') {
     const entry = extensionActionEntryForAction(action);
-    return entry ? extensionActionFromContribution(entry) : action;
+    return entry ? extensionActionFromContribution(entry) : null;
   }
   if (action?.kind === 'extension-action') {
     const entry = extensionActionEntryForAction(action);
-    return entry ? extensionActionFromContribution(entry) : action;
+    return entry ? extensionActionFromContribution(entry) : null;
   }
   return action;
 }
@@ -2927,28 +2963,37 @@ function normalizeViewAction(action, entry) {
       normalized.type === 'replaceView') &&
     normalized.view
   ) {
-    return registerViewActionForRenderer({
-      ...normalized,
-      view: normalizeView(normalized.view, entry),
-    });
+    return registerViewActionForRenderer(
+      {
+        ...normalized,
+        view: normalizeView(normalized.view, entry),
+      },
+      entry,
+    );
   }
   if (normalized.type === 'promptAction' && normalized.targetAction) {
-    return registerViewActionForRenderer({
-      ...normalized,
-      targetAction: normalizeViewAction(normalized.targetAction, entry),
-    });
+    return registerViewActionForRenderer(
+      {
+        ...normalized,
+        targetAction: normalizeViewAction(normalized.targetAction, entry),
+      },
+      entry,
+    );
   }
   if (
     (normalized.type === 'createWindow' ||
       normalized.type === 'toggleWindow') &&
     normalized.view
   ) {
-    return registerViewActionForRenderer({
-      ...normalized,
-      view: normalizeView(normalized.view, entry),
-    });
+    return registerViewActionForRenderer(
+      {
+        ...normalized,
+        view: normalizeView(normalized.view, entry),
+      },
+      entry,
+    );
   }
-  return registerViewActionForRenderer(normalized);
+  return registerViewActionForRenderer(normalized, entry);
 }
 
 let cachedUserShellPathPromise: Promise<string> | null = null;
@@ -3324,8 +3369,19 @@ function registerTestModeIpcHandlers() {
     testExtensionActivationFailurePhase = String(phase || 'after-persist');
     return { armed: true };
   });
+  handle('test:is-action-shortcut-registered', (_event, accelerator) => {
+    const normalized = normalizeAccelerator(String(accelerator || ''));
+    return {
+      registered:
+        registeredActionAccelerators.has(normalized) &&
+        globalShortcut.isRegistered(normalized),
+    };
+  });
   handle('view-action:execute', (_event, action) =>
     executeViewActionForIpc(action),
+  );
+  handle('actions:set-shortcut', (_event, action, shortcut) =>
+    setShortcut(action, shortcut),
   );
   handle('nevermind:auth-status', () => ({ authed: false }));
   handle('gh:status', () => ({ installed: false, authed: false }));
@@ -3335,7 +3391,7 @@ function registerTestModeIpcHandlers() {
   handle('palette:shortcut-ready', () => paletteWindow.revealPalette());
   handle('actions:suspend-shortcuts', () => undefined);
   handle('actions:resume-shortcuts', () => undefined);
-  handle('actions:get-shortcuts', () => []);
+  handle('actions:get-shortcuts', () => getShortcuts());
   handle('logs:write', () => undefined);
   handle('app:quit', () => {
     requestQuitApp('test');
@@ -6607,7 +6663,7 @@ async function stageExtensionProposal(filename: string, source: string) {
     provenance: 'ai',
     updatedAt: Date.now(),
   };
-  await saveUserState();
+  await persistUserState();
   return { draftFile };
 }
 
@@ -6618,6 +6674,17 @@ function replaceMapContents(target: Map<any, any>, source: Map<any, any>) {
 
 function runtimeEntryFilename(entry: any) {
   return path.basename(entry?.extension?.__filePath || '');
+}
+
+function executionRecordBelongsToExtension(
+  record: ExtensionExecutionRecord,
+  filename: string,
+  extensionIds: Set<string>,
+) {
+  return (
+    record.extensionFile === filename ||
+    Boolean(record.extensionId && extensionIds.has(record.extensionId))
+  );
 }
 
 async function prepareManagedExtensionRuntime(
@@ -6710,6 +6777,12 @@ function detachManagedExtensionRuntime(filename: string) {
       extensionIds.has(record?.entry?.extension?.id)
     )
       viewRefreshRecords.delete(key);
+  for (const [key, record] of viewActionExecutionRecords)
+    if (executionRecordBelongsToExtension(record, filename, extensionIds))
+      viewActionExecutionRecords.delete(key);
+  for (const [key, record] of rootActionExecutionRecords)
+    if (executionRecordBelongsToExtension(record, filename, extensionIds))
+      rootActionExecutionRecords.delete(key);
   jobRegistry.unregisterWhere(
     (job) => job.owner === 'extension' && extensionIds.has(job.scope || ''),
   );
@@ -6727,6 +6800,79 @@ function detachManagedExtensionRuntime(filename: string) {
     if (path.basename(cacheKey) === filename)
       extensionRootItemsRefreshes.delete(cacheKey);
   return extensionIds;
+}
+
+function captureManagedExtensionRuntime(
+  filename: string,
+): LiveExtensionRuntimeSnapshot {
+  const extensionIds = new Set(
+    Array.from(extensionModules.entries())
+      .filter(
+        ([, extension]) =>
+          path.basename(extension?.__filePath || '') === filename,
+      )
+      .map(([extensionId]) => extensionId),
+  );
+  return {
+    extensionIds,
+    modules: new Map(extensionModules),
+    actions: new Map(extensionActionRegistry),
+    handlers: new Map(extensionActionHandlers),
+    viewActions: new Map(viewActionExecutionRecords),
+    rootActions: new Map(rootActionExecutionRecords),
+    viewRefreshes: new Map(viewRefreshRecords),
+    jobs: jobRegistry.definitionsWhere(
+      (job) => job.owner === 'extension' && extensionIds.has(job.scope || ''),
+    ),
+    fileWatchers: Array.from(
+      new Map(
+        extensionFileWatchers
+          .filter((watcher) => extensionIds.has(watcher.extensionId))
+          .map(({ trigger, event, extensionId }) => [
+            `${extensionId}:${event}`,
+            { trigger, event, extensionId },
+          ]),
+      ).values(),
+    ),
+  };
+}
+
+function removeManagedExtensionSideEffects(extensionIds: Set<string>) {
+  jobRegistry.unregisterWhere(
+    (job) => job.owner === 'extension' && extensionIds.has(job.scope || ''),
+  );
+  const retainedWatchers: ExtensionFileWatcher[] = [];
+  for (const watcher of extensionFileWatchers) {
+    if (extensionIds.has(watcher.extensionId)) watcher.close();
+    else retainedWatchers.push(watcher);
+  }
+  extensionFileWatchers = retainedWatchers;
+}
+
+function restoreManagedExtensionRuntime(
+  snapshot: LiveExtensionRuntimeSnapshot,
+  candidate: PreparedExtensionRuntime,
+) {
+  removeManagedExtensionSideEffects(
+    new Set([...snapshot.extensionIds, ...candidate.extensionIds]),
+  );
+  replaceMapContents(extensionModules, snapshot.modules);
+  replaceMapContents(extensionActionRegistry, snapshot.actions);
+  replaceMapContents(extensionActionHandlers, snapshot.handlers);
+  replaceMapContents(viewActionExecutionRecords, snapshot.viewActions);
+  replaceMapContents(rootActionExecutionRecords, snapshot.rootActions);
+  replaceMapContents(viewRefreshRecords, snapshot.viewRefreshes);
+  for (const watcher of snapshot.fileWatchers)
+    attachExtensionFileTrigger(
+      watcher.trigger,
+      watcher.event,
+      watcher.extensionId,
+    );
+  for (const job of snapshot.jobs)
+    jobRegistry.register(job, { skipStartup: true });
+  syncFrontmostAppPolling();
+  registerActionShortcuts();
+  invalidateExtensionRootItems();
 }
 
 function commitPreparedExtensionRuntime(runtime: PreparedExtensionRuntime) {
@@ -6749,6 +6895,7 @@ function commitPreparedExtensionRuntime(runtime: PreparedExtensionRuntime) {
       watcher.extensionId,
     );
   for (const job of runtime.jobs) jobRegistry.register(job);
+  failTestExtensionActivationAt('runtime-commit');
   syncFrontmostAppPolling();
   registerActionShortcuts();
   invalidateExtensionRootItems();
@@ -6772,6 +6919,7 @@ async function activateManagedExtension(filename: string) {
   const previousFileState = manager.files[safeName]
     ? { ...manager.files[safeName] }
     : undefined;
+  const previousProposal = proposal ? { ...proposal } : undefined;
   // Candidate evaluation and host runtime preparation happen once against
   // isolated registries. Jobs, watchers, and shortcuts are attached only by
   // the synchronous commit below.
@@ -6781,36 +6929,52 @@ async function activateManagedExtension(filename: string) {
     activeFile,
     preparedCandidate,
   );
+  let previousRuntime: LiveExtensionRuntimeSnapshot | undefined;
+  let runtimeCommitStarted = false;
   try {
     if (proposal) {
-      await fs.mkdir(extensionsDir, { recursive: true });
-      await fs.copyFile(candidateFile, activeFile);
+      const candidateSource = await fs.readFile(candidateFile);
+      await atomicWriteFile(activeFile, candidateSource);
     }
     manager.files[safeName] = { enabled: true };
-    await saveUserState();
+    if (proposal) delete manager.proposals[safeName];
+    failTestExtensionActivationAt('state-persist');
+    await persistUserState();
     failTestExtensionActivationAt('after-persist');
+    previousRuntime = captureManagedExtensionRuntime(safeName);
+    runtimeCommitStarted = true;
     commitPreparedExtensionRuntime(preparedRuntime);
   } catch (error) {
-    if (proposal) {
-      if (previousSource === null) await fs.unlink(activeFile).catch(() => {});
-      else await fs.writeFile(activeFile, previousSource);
-    }
+    if (runtimeCommitStarted && previousRuntime)
+      restoreManagedExtensionRuntime(previousRuntime, preparedRuntime);
     if (previousFileState) manager.files[safeName] = previousFileState;
     else delete manager.files[safeName];
-    await saveUserState();
+    if (previousProposal) manager.proposals[safeName] = previousProposal;
+    else delete manager.proposals[safeName];
+    if (proposal) {
+      if (previousSource === null) await fs.unlink(activeFile).catch(() => {});
+      else await atomicWriteFile(activeFile, previousSource);
+    }
+    await persistUserState();
     throw error;
   }
-  if (proposal) {
-    delete manager.proposals[safeName];
-    await saveUserState();
-    await fs.unlink(candidateFile).catch(() => {});
-  }
+  if (proposal) await fs.unlink(candidateFile).catch(() => {});
 }
 
 async function disableManagedExtension(filename: string) {
   const safeName = path.basename(filename);
-  extensionManagerState().files[safeName] = { enabled: false };
-  await saveUserState();
+  const manager = extensionManagerState();
+  const previousFileState = manager.files[safeName]
+    ? { ...manager.files[safeName] }
+    : undefined;
+  manager.files[safeName] = { enabled: false };
+  try {
+    await persistUserState();
+  } catch (error) {
+    if (previousFileState) manager.files[safeName] = previousFileState;
+    else delete manager.files[safeName];
+    throw error;
+  }
   detachManagedExtensionRuntime(safeName);
   syncFrontmostAppPolling();
   registerActionShortcuts();
@@ -6823,7 +6987,7 @@ async function discardManagedExtensionProposal(filename: string) {
   if (!proposal) return;
   await fs.unlink(proposal.draftFile).catch(() => {});
   delete extensionManagerState().proposals[safeName];
-  await saveUserState();
+  await persistUserState();
 }
 
 async function managedExtensionEntries() {
@@ -7236,6 +7400,8 @@ function attachExtensionFileTrigger(
       extensionFileWatchers.push({
         close: () => watcher.close(),
         extensionId,
+        trigger,
+        event,
       });
     } catch {}
   }
@@ -7912,17 +8078,40 @@ function scheduleSaveState() {
 }
 
 async function saveUserState() {
+  try {
+    await persistUserState();
+  } catch (error) {
+    logError('state.save.failed', error, { source: 'host', scope: 'state' });
+  }
+}
+
+async function atomicWriteFile(
+  targetPath: string,
+  contents: string | Uint8Array,
+) {
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  const temporaryPath = `${targetPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temporaryPath, contents);
+    await fs.rename(temporaryPath, targetPath);
+  } finally {
+    await fs.unlink(temporaryPath).catch(() => {});
+  }
+}
+
+function persistUserState() {
+  const write = stateWriteQueue.then(writeCurrentUserState);
+  stateWriteQueue = write.catch(() => {});
+  return write;
+}
+
+async function writeCurrentUserState() {
   userState.clipboardHistory = clipboardHistory;
   userState.jobSettings = {
     ...(userState.jobSettings || {}),
     enabled: jobRegistry.enabledOverridesSnapshot(),
   };
-  await fs.mkdir(path.dirname(statePath), { recursive: true });
-  await fs
-    .writeFile(statePath, JSON.stringify(userState, null, 2))
-    .catch((error) => {
-      logError('state.save.failed', error, { source: 'host', scope: 'state' });
-    });
+  await atomicWriteFile(statePath, JSON.stringify(userState, null, 2));
 }
 
 function pollClipboardChange() {

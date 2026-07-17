@@ -168,8 +168,11 @@ export type NevermindApi = {
   ) => Promise<{ draftFile: string }>;
   testRunJob: (id: string) => Promise<{ found: boolean }>;
   testFailNextExtensionActivation: (
-    phase: 'after-persist',
+    phase: 'state-persist' | 'after-persist' | 'runtime-commit',
   ) => Promise<{ armed: boolean }>;
+  testIsActionShortcutRegistered: (
+    accelerator: string,
+  ) => Promise<{ registered: boolean }>;
   quitApp: () => Promise<{ ok: boolean }>;
   shortcutReady: () => Promise<void>;
   requestCameraAccess: () => Promise<{ ok: boolean; status: string }>;
