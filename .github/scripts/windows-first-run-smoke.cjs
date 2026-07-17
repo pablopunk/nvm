@@ -5,9 +5,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { env } = require('node:process');
+const { stripVTControlCharacters } = require('node:util');
 
 const root = path.resolve(__dirname, '..', '..');
-const pnpmExecutable = process.env.PNPM_STANDALONE_PATH;
+const pnpmExecutable = env.PNPM_STANDALONE_PATH;
+const maximumCapturedOutputLength = 250_000;
+const startupStabilityMilliseconds = 5000;
+const startupTimeoutMilliseconds = 120_000;
 const startupMarkers = [
   'Electron executable ready:',
   'electron main process built successfully',
@@ -23,10 +28,102 @@ function resolveElectronExecutable() {
 }
 
 function stopProcessTree(pid) {
-  if (!pid) return;
+  if (!pid) {
+    return;
+  }
   spawnSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
     stdio: 'inherit',
   });
+}
+
+function finishDevelopmentProcess({ child, error, reject, resolve, state }) {
+  if (state.settled) {
+    return;
+  }
+  state.settled = true;
+  clearTimeout(state.timeout);
+  clearTimeout(state.startupTimer);
+  stopProcessTree(child.pid);
+  if (error) {
+    reject(error);
+  } else {
+    resolve();
+  }
+}
+
+function verifyStableElectronStartup(finish) {
+  try {
+    const electronExecutable = resolveElectronExecutable();
+    assert.equal(
+      path.basename(electronExecutable).toLowerCase(),
+      'electron.exe',
+    );
+    assert.equal(fs.statSync(electronExecutable).isFile(), true);
+    process.stdout.write(
+      `Windows first-run Electron startup passed: ${electronExecutable}\n`,
+    );
+    finish();
+  } catch (error) {
+    finish(error);
+  }
+}
+
+function captureDevelopmentOutput({ chunk, finish, state, target }) {
+  target.write(chunk);
+  state.output += stripVTControlCharacters(chunk.toString());
+  if (state.output.length > maximumCapturedOutputLength) {
+    state.output = state.output.slice(-maximumCapturedOutputLength);
+  }
+  if (
+    !state.startupTimer &&
+    startupMarkers.every((marker) => state.output.includes(marker))
+  ) {
+    state.startupTimer = setTimeout(
+      () => verifyStableElectronStartup(finish),
+      startupStabilityMilliseconds,
+    );
+  }
+}
+
+function timeoutDevelopmentStartup(state, finish) {
+  const missingMarkers = startupMarkers.filter(
+    (marker) => !state.output.includes(marker),
+  );
+  finish(
+    new Error(
+      `pnpm run dev did not reach startup within 120 seconds; missing: ${missingMarkers.join(', ')}`,
+    ),
+  );
+}
+
+function monitorDevelopmentStartup(resolve, reject) {
+  const child = spawn(pnpmExecutable, ['run', 'dev'], {
+    cwd: root,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const state = { output: '', settled: false };
+  const finish = (error) =>
+    finishDevelopmentProcess({ child, error, reject, resolve, state });
+  const inspectOutput = (chunk, target) =>
+    captureDevelopmentOutput({ chunk, finish, state, target });
+
+  child.stdout.on('data', (chunk) => inspectOutput(chunk, process.stdout));
+  child.stderr.on('data', (chunk) => inspectOutput(chunk, process.stderr));
+  child.on('error', finish);
+  child.on('exit', (code, signal) => {
+    if (!state.settled) {
+      finish(
+        new Error(
+          `pnpm run dev exited before a stable startup (code=${code}, signal=${signal}).`,
+        ),
+      );
+    }
+  });
+  state.timeout = setTimeout(
+    () => timeoutDevelopmentStartup(state, finish),
+    startupTimeoutMilliseconds,
+  );
 }
 
 async function runFirstDevelopmentStartup() {
@@ -43,83 +140,10 @@ async function runFirstDevelopmentStartup() {
     resolveElectronExecutable,
     'The install fixture must begin without an Electron executable.',
   );
-
-  await new Promise((resolve, reject) => {
-    const child = spawn(pnpmExecutable, ['run', 'dev'], {
-      cwd: root,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let output = '';
-    let settled = false;
-    let startupTimer;
-    let timeout;
-
-    const finish = (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      clearTimeout(startupTimer);
-      stopProcessTree(child.pid);
-      if (error) reject(error);
-      else resolve();
-    };
-
-    const inspectOutput = (chunk, target) => {
-      target.write(chunk);
-      output += chunk.toString().replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '');
-      if (output.length > 250_000) output = output.slice(-250_000);
-
-      if (
-        !startupTimer &&
-        startupMarkers.every((marker) => output.includes(marker))
-      ) {
-        startupTimer = setTimeout(() => {
-          try {
-            const electronExecutable = resolveElectronExecutable();
-            assert.equal(
-              path.basename(electronExecutable).toLowerCase(),
-              'electron.exe',
-            );
-            assert.equal(fs.statSync(electronExecutable).isFile(), true);
-            console.log(
-              `Windows first-run Electron startup passed: ${electronExecutable}`,
-            );
-            finish();
-          } catch (error) {
-            finish(error);
-          }
-        }, 5_000);
-      }
-    };
-
-    child.stdout.on('data', (chunk) => inspectOutput(chunk, process.stdout));
-    child.stderr.on('data', (chunk) => inspectOutput(chunk, process.stderr));
-    child.on('error', finish);
-    child.on('exit', (code, signal) => {
-      if (!settled) {
-        finish(
-          new Error(
-            `pnpm run dev exited before a stable startup (code=${code}, signal=${signal}).`,
-          ),
-        );
-      }
-    });
-
-    timeout = setTimeout(() => {
-      const missingMarkers = startupMarkers.filter(
-        (marker) => !output.includes(marker),
-      );
-      finish(
-        new Error(
-          `pnpm run dev did not reach startup within 120 seconds; missing: ${missingMarkers.join(', ')}`,
-        ),
-      );
-    }, 120_000);
-  });
+  await new Promise(monitorDevelopmentStartup);
 }
 
 runFirstDevelopmentStartup().catch((error) => {
-  console.error(error instanceof Error ? error.stack : error);
+  process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
   process.exitCode = 1;
 });
