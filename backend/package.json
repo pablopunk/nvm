@@ -11,6 +11,7 @@
     "preview": "astro preview",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "test:postgres-integration": "NVM_DB_DRIVER=postgres node --import tsx scripts/postgres-integration.ts",
+    "smoke:deployed": "node --import tsx scripts/deployed-smoke.ts",
     "check": "astro check",
     "astro": "astro",
     "db:generate": "drizzle-kit generate",

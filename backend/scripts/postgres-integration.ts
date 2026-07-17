@@ -6,6 +6,7 @@ import type { Database } from '../src/db/client';
 import { createPostgresDb } from '../src/db/postgres';
 import {
   apiTokens,
+  authIntents,
   creditLedger,
   deviceCodes,
   emailOutbox,
@@ -313,6 +314,210 @@ async function runAssertions() {
         () => createUserFromInviteIntent({ intentId: cookie.id, nonce: cookie.nonce, workosUserId: `second-${databaseName}`, email: redemptionEmail }),
         (error: unknown) => error instanceof InviteRequiredError,
         'invite intent must be one-time',
+      );
+
+      assert.equal(
+        await createInviteIntent(`unknown-${databaseName}`),
+        null,
+        'unknown invite tokens must be rejected',
+      );
+
+      const expiredEmail = `expired-${databaseName}@example.test`;
+      const expiredInvite = await createInvite({ email: expiredEmail });
+      await db
+        .update(invites)
+        .set({ expiresAt: new Date(Date.now() - 60_000) })
+        .where(eq(invites.id, expiredInvite.invite.id));
+      assert.equal(
+        await createInviteIntent(expiredInvite.token!),
+        null,
+        'expired invite tokens must be rejected',
+      );
+
+      const disabledEmail = `disabled-${databaseName}@example.test`;
+      const disabledInvite = await createInvite({ email: disabledEmail });
+      await db
+        .update(invites)
+        .set({ status: 'cancelled' })
+        .where(eq(invites.id, disabledInvite.invite.id));
+      assert.equal(
+        await createInviteIntent(disabledInvite.token!),
+        null,
+        'disabled invite tokens must be rejected',
+      );
+
+      const wrongEmail = `wrong-email-${databaseName}@example.test`;
+      const wrongEmailInvite = await createInvite({ email: wrongEmail });
+      const wrongEmailIntent = await createInviteIntent(wrongEmailInvite.token!);
+      assert.ok(wrongEmailIntent);
+      const wrongEmailCookie = readInviteIntentCookie(wrongEmailIntent.cookie);
+      assert.ok(wrongEmailCookie);
+      await assert.rejects(
+        () =>
+          createUserFromInviteIntent({
+            intentId: wrongEmailCookie.id,
+            nonce: wrongEmailCookie.nonce,
+            workosUserId: `wrong-email-${databaseName}`,
+            email: `different-${databaseName}@example.test`,
+          }),
+        (error: unknown) => error instanceof InviteRequiredError,
+        'an invite must not grant a different email access',
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(authIntents)
+            .where(eq(authIntents.id, wrongEmailCookie.id))
+        )[0]?.consumedAt,
+        null,
+      );
+
+      const redeemedStatusEmail = `redeemed-status-${databaseName}@example.test`;
+      const redeemedStatusInvite = await createInvite({
+        email: redeemedStatusEmail,
+      });
+      const redeemedStatusIntent = await createInviteIntent(
+        redeemedStatusInvite.token!,
+      );
+      assert.ok(redeemedStatusIntent);
+      const redeemedStatusCookie = readInviteIntentCookie(
+        redeemedStatusIntent.cookie,
+      );
+      assert.ok(redeemedStatusCookie);
+      await db
+        .update(invites)
+        .set({ status: 'redeemed', redeemedAt: new Date() })
+        .where(eq(invites.id, redeemedStatusInvite.invite.id));
+      await assert.rejects(
+        () =>
+          createUserFromInviteIntent({
+            intentId: redeemedStatusCookie.id,
+            nonce: redeemedStatusCookie.nonce,
+            workosUserId: `redeemed-status-${databaseName}`,
+            email: redeemedStatusEmail,
+          }),
+        (error: unknown) => error instanceof InviteRequiredError,
+        'an already-redeemed invite must not grant another user access',
+      );
+
+      const raceEmail = `redemption-race-${databaseName}@example.test`;
+      const raceInvite = await createInvite({ email: raceEmail });
+      const raceIntents = await Promise.all([
+        createInviteIntent(raceInvite.token!),
+        createInviteIntent(raceInvite.token!),
+      ]);
+      const raceCookies = raceIntents.map((item) =>
+        readInviteIntentCookie(item?.cookie || null),
+      );
+      assert.ok(raceCookies.every(Boolean));
+      const raceResults = await Promise.allSettled(
+        raceCookies.map((item, index) =>
+          createUserFromInviteIntent({
+            intentId: item!.id,
+            nonce: item!.nonce,
+            workosUserId: `redemption-race-${index}-${databaseName}`,
+            email: raceEmail,
+          }),
+        ),
+      );
+      assert.equal(
+        raceResults.filter((result) => result.status === 'fulfilled').length,
+        1,
+        'concurrent redemption of one invite must have one winner',
+      );
+      assert.equal(
+        raceResults.filter(
+          (result) =>
+            result.status === 'rejected' &&
+            result.reason instanceof InviteRequiredError,
+        ).length,
+        1,
+        'the losing concurrent redemption must be rejected cleanly',
+      );
+      const [raceUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, raceEmail));
+      assert.ok(raceUser);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(creditLedger)
+            .where(eq(creditLedger.userId, raceUser.id))
+        ).length,
+        1,
+        'concurrent redemption must grant credits once',
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(authIntents)
+            .where(eq(authIntents.inviteId, raceInvite.invite.id))
+        ).filter((item) => item.consumedAt).length,
+        1,
+        'concurrent redemption must consume one intent',
+      );
+
+      const rollbackEmail = `redemption-rollback-${databaseName}@example.test`;
+      const rollbackInvite = await createInvite({ email: rollbackEmail });
+      const rollbackIntent = await createInviteIntent(rollbackInvite.token!);
+      assert.ok(rollbackIntent);
+      const rollbackCookie = readInviteIntentCookie(rollbackIntent.cookie);
+      assert.ok(rollbackCookie);
+      await pool.query(`
+        CREATE FUNCTION nvm_test_fail_credit_grant() RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'forced credit grant failure';
+        END;
+        $$ LANGUAGE plpgsql;
+        CREATE TRIGGER nvm_test_fail_credit_grant
+        BEFORE INSERT ON credit_ledger
+        FOR EACH ROW EXECUTE FUNCTION nvm_test_fail_credit_grant();
+      `);
+      try {
+        await assert.rejects(() =>
+          createUserFromInviteIntent({
+            intentId: rollbackCookie.id,
+            nonce: rollbackCookie.nonce,
+            workosUserId: `redemption-rollback-${databaseName}`,
+            email: rollbackEmail,
+          }),
+        );
+      } finally {
+        await pool.query(`
+          DROP TRIGGER nvm_test_fail_credit_grant ON credit_ledger;
+          DROP FUNCTION nvm_test_fail_credit_grant();
+        `);
+      }
+      assert.equal(
+        (
+          await db.select().from(users).where(eq(users.email, rollbackEmail))
+        ).length,
+        0,
+        'failed redemption must roll back the user grant',
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(authIntents)
+            .where(eq(authIntents.id, rollbackCookie.id))
+        )[0]?.consumedAt,
+        null,
+        'failed redemption must roll back intent consumption',
+      );
+      assert.notEqual(
+        (
+          await db
+            .select()
+            .from(invites)
+            .where(eq(invites.id, rollbackInvite.invite.id))
+        )[0]?.status,
+        'redeemed',
+        'failed redemption must leave the invite available',
       );
     });
   } finally {

@@ -10,6 +10,10 @@ export type NevermindCompatibilityManifest = {
     environment?: string;
     version?: string;
   };
+  api?: {
+    currentVersion?: number;
+    supportedVersions?: number[];
+  };
   client?: {
     compatible?: boolean;
     unsupportedReason?: string | null;
@@ -163,7 +167,10 @@ async function fetchCompatibilityManifest(baseUrl: string) {
   const manifest = (await res
     .json()
     .catch(() => null)) as NevermindCompatibilityManifest | null;
-  if (!manifest) return null;
+  if (!isNevermindCompatibilityManifest(manifest)) {
+    logger.warn('nevermind.compatibility.invalid_manifest');
+    return null;
+  }
   await cacheCompatibilityManifest(trimmed, manifest);
   return manifest;
 }
@@ -191,7 +198,7 @@ async function loadCompatibilityCache() {
       ) as CompatibilityCacheFile;
       cachedManifests.clear();
       for (const [baseUrl, entry] of Object.entries(data.manifests || {})) {
-        if (entry?.manifest)
+        if (isNevermindCompatibilityManifest(entry?.manifest))
           cachedManifests.set(normalizeBaseUrl(baseUrl), {
             ...entry,
             baseUrl: normalizeBaseUrl(entry.baseUrl || baseUrl),
@@ -230,6 +237,44 @@ function compatibilityCachePath() {
 
 function normalizeBaseUrl(baseUrl: string) {
   return String(baseUrl || '').replace(/\/$/, '');
+}
+
+export function isNevermindCompatibilityManifest(
+  value: unknown,
+): value is NevermindCompatibilityManifest {
+  if (!isRecord(value)) return false;
+  const backend = value.backend;
+  const api = value.api;
+  const desktop = value.desktop;
+  const client = value.client;
+  const features = value.features;
+  return (
+    isRecord(backend) &&
+    isNonEmptyString(backend.environment) &&
+    isNonEmptyString(backend.version) &&
+    isRecord(api) &&
+    Number.isInteger(api.currentVersion) &&
+    Array.isArray(api.supportedVersions) &&
+    api.supportedVersions.every((version) => Number.isInteger(version)) &&
+    isRecord(desktop) &&
+    isNonEmptyString(desktop.minimumSupportedVersion) &&
+    (desktop.latestVersion === null ||
+      desktop.latestVersion === undefined ||
+      isNonEmptyString(desktop.latestVersion)) &&
+    isNonEmptyString(desktop.updateUrl) &&
+    isRecord(client) &&
+    typeof client.compatible === 'boolean' &&
+    isRecord(features) &&
+    Object.values(features).every((enabled) => typeof enabled === 'boolean')
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function notifyCompatibilityChanged() {
