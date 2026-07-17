@@ -45,6 +45,29 @@ if ('pnpm' in manifest) {
     'package.json must not contain pnpm build-script settings; pnpm reads them from pnpm-workspace.yaml.',
   );
 }
+const electronRepairScript = path.join(root, 'scripts', 'ensure-electron.cjs');
+if (manifest.scripts.predev !== 'node scripts/ensure-electron.cjs') {
+  throw new Error(
+    'package.json predev must run the conditional Electron repair script.',
+  );
+}
+if (!fs.existsSync(electronRepairScript)) {
+  throw new Error('The Electron repair script must exist.');
+}
+const electronRepair = require(electronRepairScript);
+for (const functionName of [
+  'cleanElectronGeneratedPayload',
+  'ensureElectronAvailable',
+  'pnpmRebuildInvocation',
+  'rebuildElectron',
+  'resolveInstalledElectronExecutable',
+]) {
+  if (typeof electronRepair[functionName] !== 'function') {
+    throw new Error(
+      `The Electron repair script must export ${functionName}().`,
+    );
+  }
+}
 
 const rootDependencies = [
   '@google/genai',
