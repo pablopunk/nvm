@@ -19,7 +19,6 @@ import {
 } from '../src/db/schema';
 import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src/lib/waitlist';
 import { createUserFromInviteIntent, InviteRequiredError, upsertUserWithFreeGrant } from '../src/lib/users';
-import { createCallbackHandler } from '../src/pages/api/auth/callback';
 import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { runPostgresMigrations } from './migrate-postgres';
@@ -86,6 +85,13 @@ async function expectUniqueViolation(action: () => Promise<unknown>) {
 
 async function runAssertions() {
   process.env.DATABASE_URL = databaseUrl(databaseName);
+  const existingWorkosApiKey = process.env.WORKOS_API_KEY;
+  if (!existingWorkosApiKey)
+    process.env.WORKOS_API_KEY = 'sk_test_postgres_integration';
+  const { createCallbackHandler } = await import(
+    '../src/pages/api/auth/callback'
+  );
+  if (!existingWorkosApiKey) delete process.env.WORKOS_API_KEY;
   const { withTestDb, closeDefaultDb } = await import('../src/db/client');
   const { db, pool } = createPostgresDb(databaseUrl(databaseName));
   try {
