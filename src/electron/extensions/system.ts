@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { settingsTitle } from '../os';
+import { systemSettingsEntries } from '../system-settings';
 import { extensionContext } from './_context';
 
 function systemItems(ctx) {
@@ -56,7 +57,23 @@ function systemItems(ctx) {
   ];
 }
 
-export function createSystemExtension() {
+async function systemSettingsSearchItems(ctx, query) {
+  const items = (await systemSettingsEntries()).map((entry) => ({
+    id: `system-settings:${entry.id}`,
+    title: entry.title,
+    subtitle: 'System Settings',
+    aliases: entry.aliases,
+    icon: 'settings',
+    score: 18,
+    dismissAfterRun: 'auto',
+    primaryAction: ctx.actions.system.openSystemSettings(entry.title, {
+      paneId: entry.id,
+    }),
+  }));
+  return items.filter((item) => extensionContext.rankAction(item, query));
+}
+
+function createSystemExtension() {
   const extension = {
     id: 'nevermind.system',
     title: 'System',
@@ -69,10 +86,11 @@ export function createSystemExtension() {
     ...extension,
     commands,
     rootItems: (ctx) => systemItems(ctx),
+    searchItems: systemSettingsSearchItems,
   };
 }
 
-export function createPlacesExtension() {
+function createPlacesExtension() {
   return {
     id: 'nevermind.places',
     title: 'Places',
@@ -128,3 +146,5 @@ function placesItems() {
     },
   ];
 }
+
+export { createPlacesExtension, createSystemExtension };
