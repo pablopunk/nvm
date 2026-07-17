@@ -6,28 +6,33 @@ const path = require('node:path');
 
 const root = process.cwd();
 
-function configuredBuildDependencies(directory) {
+function configuredBuildDependencies(directory, key) {
   const configPath = path.join(directory, 'pnpm-workspace.yaml');
   const config = fs.readFileSync(configPath, 'utf8');
-  const dependencies = config.match(
-    /^onlyBuiltDependencies:\n((?:\s+-\s+.+\n?)+)$/m,
+  const entries = config.match(
+    new RegExp(`^${key}:\\n((?:[ \\t]+.+\\n?)+)$`, 'm'),
   )?.[1];
-  if (!dependencies) {
-    throw new Error(`${configPath} must configure onlyBuiltDependencies.`);
+  if (!entries) {
+    throw new Error(`${configPath} must configure ${key}.`);
   }
-  return dependencies
+  return entries
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      return line.replace(/^\s+-\s+/, '').replace(/^'|'$/g, '');
+      const match = line.match(
+        key === 'allowBuilds' ? /^\s+('?[^':]+'?): true$/ : /^\s+-\s+(.+)$/,
+      );
+      if (!match)
+        throw new Error(`${configPath} must explicitly allow builds.`);
+      return match[1].replace(/^'|'$/g, '');
     });
 }
 
-function assertDependencies(directory, expected) {
-  const actual = configuredBuildDependencies(directory);
+function assertDependencies(directory, key, expected) {
+  const actual = configuredBuildDependencies(directory, key);
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
-      `${path.relative(root, directory) || '.'} onlyBuiltDependencies must be ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
+      `${path.relative(root, directory) || '.'} ${key} must be ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
     );
   }
 }
@@ -37,21 +42,35 @@ const manifest = JSON.parse(
 );
 if ('pnpm' in manifest) {
   throw new Error(
-    'package.json must not contain pnpm build-script settings; pnpm 10 reads them from pnpm-workspace.yaml.',
+    'package.json must not contain pnpm build-script settings; pnpm reads them from pnpm-workspace.yaml.',
   );
 }
 
-assertDependencies(root, [
+const rootDependencies = [
   '@google/genai',
+  '@sentry/cli',
   'electron',
   'electron-winstaller',
   'esbuild',
   'protobufjs',
-]);
-assertDependencies(path.join(root, 'backend'), [
-  '@sentry/cli',
-  'esbuild',
   'sharp',
-]);
+];
+const rootLegacyDependencies = rootDependencies.filter(
+  (dependency) => dependency !== '@sentry/cli' && dependency !== 'sharp',
+);
+const backendDependencies = ['@sentry/cli', 'esbuild', 'sharp'];
+
+assertDependencies(root, 'allowBuilds', rootDependencies);
+assertDependencies(root, 'onlyBuiltDependencies', rootLegacyDependencies);
+assertDependencies(
+  path.join(root, 'backend'),
+  'allowBuilds',
+  backendDependencies,
+);
+assertDependencies(
+  path.join(root, 'backend'),
+  'onlyBuiltDependencies',
+  backendDependencies,
+);
 
 console.log('pnpm build-script policy checks passed');
