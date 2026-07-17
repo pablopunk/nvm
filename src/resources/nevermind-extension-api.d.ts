@@ -239,7 +239,7 @@ export type ExtensionWindowOptions = {
 
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
 export type ExtensionToastResult = {
-  toast: { message: string; tone?: 'default' | 'error' };
+  toast: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
 };
 
 /** In-place list/grid update returned from an action handler. */
@@ -395,6 +395,8 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   appearance?: ExtensionItemAppearance;
+  /** Show contextual information without making it selectable. */
+  disabled?: boolean;
   /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
   detail?: ExtensionDetail;
   shortcut?: string;
@@ -1140,7 +1142,7 @@ export type ExtensionContext = {
     }): ExtensionAction;
     toast(input?: {
       message?: string;
-      tone?: 'default' | 'error';
+      tone?: 'default' | 'info' | 'success' | 'error';
     }): ExtensionToastResult;
     /** Sandboxed HTML/JS iframe with no Node access. Use only when host-owned primitives do not fit. */
     webview(view: ExtensionView): ExtensionView;

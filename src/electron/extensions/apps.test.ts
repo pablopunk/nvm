@@ -174,7 +174,15 @@ test('Uninstall form defaults to the app, confirms host snapshot paths, and reje
     false,
   );
   const empty = form.submitAction.__handler(null, { formValues: {} });
-  assert.equal(empty.toast.tone, 'error');
+  assert.equal(empty.title, 'Uninstall Example');
+  assert.equal(
+    empty.fields.find((field: any) => field.id === 'app-id').error,
+    'Select at least one item to move to Trash',
+  );
+  assert.equal(
+    empty.fields.find((field: any) => field.id === 'app-id').value,
+    false,
+  );
   const confirmation = form.submitAction.__handler(null, {
     formValues: { 'app-id': true, ignored: true },
   });
@@ -182,4 +190,5 @@ test('Uninstall form defaults to the app, confirms host snapshot paths, and reje
   assert.equal(confirmation.onConfirm.requiresConfirmation, undefined);
   const complete = await confirmation.onConfirm.__handler();
   assert.equal(complete.toast.message, '1 item moved to Trash');
+  assert.equal(complete.toast.tone, 'success');
 });

@@ -91,7 +91,8 @@ import {
 configureNvmTestMode();
 if (!isNvmTestMode) initSentry();
 
-import { canCustomizeCommandAction } from '../model';
+import { feedbackView } from '../feedback';
+import { canCustomizeCommandAction, type CommandAction } from '../model';
 import {
   appResultMarker,
   compareRankedActions,
@@ -2623,13 +2624,7 @@ async function executeActionForIpc(action) {
           const entry = extensionActionEntryForAction(action);
           if (entry) return { view: extensionErrorView(entry, error) };
         }
-        return {
-          view: {
-            type: 'preview',
-            title: 'Action failed',
-            content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\``,
-          },
-        };
+        return { view: actionFailedFeedbackView() };
       }
     },
   );
@@ -2647,15 +2642,28 @@ function extensionErrorView(entry, error) {
   const title =
     (entry?.command?.title || entry?.extension?.title || 'Extension') +
     ' failed';
+  const fixWithAi = extensionErrorAiAction(entry, message);
+  const actions: CommandAction[] = [{ type: 'popView', title: 'Back' }];
+  if (fixWithAi) actions.unshift(fixWithAi as CommandAction);
   return normalizeView(
-    {
-      type: 'preview',
+    feedbackView({
+      id: 'extension-action-error',
       title,
-      content: `# Something went wrong\n\n\`\`\`\n${message}\n\`\`\``,
-      actions: [extensionErrorAiAction(entry, message)].filter(Boolean),
-    },
+      message: 'The action could not be completed. Try again.',
+      tone: 'error',
+      actions,
+    }),
     entry,
   );
+}
+
+function actionFailedFeedbackView() {
+  return feedbackView({
+    id: 'action-failed',
+    title: 'Action failed',
+    message: 'The action could not be completed. Try again.',
+    tone: 'error',
+  });
 }
 
 function extensionErrorAiAction(entry, message) {
@@ -3171,11 +3179,7 @@ async function executeViewActionForIpc(action) {
             navigation: 'push',
           };
         return {
-          view: {
-            type: 'preview',
-            title: 'Action failed',
-            content: `# Something went wrong\n\n\`\`\`\n${extensionErrorMessage(error)}\n\`\`\``,
-          },
+          view: actionFailedFeedbackView(),
           navigation: 'push',
         };
       }

@@ -154,7 +154,7 @@ class ExtensionRenderBoundary extends React.Component<
       <EmptyState
         icon={<Square size={24} />}
         title="Extension view failed to render"
-        subtitle={this.state.error}
+        subtitle="Close this view and try again."
       />
     );
   }
@@ -684,6 +684,7 @@ function ListExtensionView({
                 )?.shortcut
           }
           appearance={item.appearance}
+          disabled={item.disabled}
           onSelect={() => runDefaultAction(item)}
         />
       )}

@@ -1,3 +1,5 @@
+import { feedbackView } from '../feedback';
+
 export type ExtensionUiApiDeps = {
   buildPreviewItemAction: (item: unknown) => unknown;
   progressView: (input?: unknown) => unknown;
@@ -68,10 +70,12 @@ export function createExtensionUiApi({
       content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}`,
     }),
     loading: (title = 'Loading…') => progressView({ title, label: title }),
-    error: (title = 'Something went wrong', message = '') => ({
-      type: 'preview',
-      title,
-      content: `# ${title}${message ? `\n\n${message}` : ''}`,
-    }),
+    error: (title = 'Something went wrong', message = '') =>
+      feedbackView({
+        id: 'extension-error',
+        title,
+        message: message || 'Try again.',
+        tone: 'error',
+      }),
   };
 }

@@ -168,7 +168,18 @@ input,
   pointer-events: none;
 }
 
-.toastError {
+.toast-info {
+  border-color: rgba(127, 182, 255, 0.3);
+  color: var(--accent);
+}
+
+.toast-success {
+  border-color: rgba(112, 220, 158, 0.3);
+  color: var(--success-text, #8fe5af);
+  background: rgba(19, 53, 37, 0.92);
+}
+
+.toast-error {
   border-color: rgba(255, 120, 120, 0.26);
   color: var(--danger-text);
   background: rgba(55, 23, 30, 0.92);
