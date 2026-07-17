@@ -121,10 +121,8 @@ import {
   summarizeDebugValue,
 } from './debug-performance';
 import { createExtensionJsonStore } from './extension-json-store';
+import { filterWebviewPermissionsForExtension } from './extension-capabilities';
 import {
-  extensionPermissionCapabilities,
-  filterWebviewPermissionsForExtension,
-  hasExtensionPermission,
   markInternalExtension,
   permissionDeniedError,
 } from './extension-permissions';
@@ -415,6 +413,7 @@ let userState: AnyRecord = {
   settings: {},
   jobSettings: {},
   rateCache: {},
+  extensionManager: { schemaVersion: 1, files: {}, proposals: {} },
   nevermindEnvironment: {
     environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
     baseUrl: getDefaultNevermindBaseUrl(),
@@ -4829,11 +4828,8 @@ function createExtensionAi(extension) {
   const extensionKey = path
     .basename(extension.__filePath || extension.id || 'extension')
     .replace(/[^a-zA-Z0-9._-]/g, '-');
-  const capabilities = {
-    files: hasExtensionPermission(extension, 'desktop.files'),
-    clipboard: hasExtensionPermission(extension, 'clipboard.history'),
-    ocr: hasExtensionPermission(extension, 'ocr'),
-  };
+  // Trusted local extensions are not sandboxed by their declarations.
+  const capabilities = { files: true, clipboard: true, ocr: true };
   const enforceAiQuota = () => {
     if (!checkAiRateLimit(extension))
       throw Object.assign(new Error('AI rate limit exceeded'), {
@@ -5376,18 +5372,18 @@ async function expandTextTemplate(
 }
 
 function createExtensionContext(extension, command, launchContext?: any) {
-  const {
-    canUseDesktopApps,
-    canUseDesktopFiles,
-    canUseClipboard,
-    canUseSystem,
-    canUseOcr,
-    canUseUpdates,
-    canUseShortcuts,
-    canUseAi,
-    canWriteSettings,
-    canManageExtensionOwnership,
-  } = extensionPermissionCapabilities(extension);
+  // The enable decision is the trust boundary. Manifest capabilities are review
+  // declarations, not runtime privileges.
+  const canUseDesktopApps = true;
+  const canUseDesktopFiles = true;
+  const canUseClipboard = true;
+  const canUseSystem = true;
+  const canUseOcr = true;
+  const canUseUpdates = true;
+  const canUseShortcuts = true;
+  const canUseAi = true;
+  const canWriteSettings = true;
+  const canManageExtensionOwnership = true;
   const denyShortcut = (name: string) => () => {
     throw permissionDeniedError(`shortcuts (${name})`);
   };
@@ -6222,6 +6218,7 @@ async function initNevermindAi() {
       userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
     markGeneratedExtension: (filePath, chatId) =>
       markGeneratedExtensionForActiveChat(filePath, chatId),
+    stageExtensionProposal,
     canWriteExtension: (filename, chatId) =>
       chatCanWriteExtension(filename, chatId),
     removeExtension: (filename, chatId) =>
@@ -6470,7 +6467,134 @@ async function loadExtensionModule(fullPath) {
   return imported.default || imported;
 }
 
-async function loadExtensions() {
+async function initializeExtensionManager() {
+  const manager = userState.extensionManager;
+  if (manager?.schemaVersion === 1) return;
+  const entries = await fs
+    .readdir(extensionsDir, { withFileTypes: true })
+    .catch(() => []);
+  userState.extensionManager = {
+    schemaVersion: 1,
+    files: Object.fromEntries(
+      entries
+        .filter((entry) => isExtensionSourceFile(entry.name))
+        .map((entry) => [entry.name, { enabled: true }]),
+    ),
+    proposals: manager?.proposals || {},
+  };
+  // Persist before the first import so an upgrade cannot accidentally run a
+  // later-discovered file on the next restart.
+  await saveUserState();
+}
+
+function extensionFileIsEnabled(filename: string) {
+  return userState.extensionManager?.files?.[filename]?.enabled === true;
+}
+
+function extensionDraftsDir() {
+  return path.join(path.dirname(extensionsDir), 'extension-drafts');
+}
+
+function extensionManagerState() {
+  return (userState.extensionManager ||= {
+    schemaVersion: 1,
+    files: {},
+    proposals: {},
+  });
+}
+
+async function stageExtensionProposal(filename: string, source: string) {
+  const safeName = path.basename(filename);
+  const draftFile = path.join(extensionDraftsDir(), safeName);
+  await fs.mkdir(extensionDraftsDir(), { recursive: true });
+  await fs.writeFile(draftFile, source);
+  extensionManagerState().proposals[safeName] = {
+    draftFile,
+    provenance: 'ai',
+    updatedAt: Date.now(),
+  };
+  await saveUserState();
+  return { draftFile };
+}
+
+async function activateManagedExtension(filename: string) {
+  const safeName = path.basename(filename);
+  const manager = extensionManagerState();
+  const proposal = manager.proposals?.[safeName];
+  const activeFile = path.join(extensionsDir, safeName);
+  const candidateFile = proposal?.draftFile || activeFile;
+  const previousSource = await fs
+    .readFile(activeFile, 'utf8')
+    .catch(() => null);
+  const previousFileState = manager.files[safeName];
+  // This is the sole path that evaluates a proposal. A failed evaluation leaves
+  // both the active source and persisted enabled state untouched.
+  const preparedCandidate = await loadExtensionModule(candidateFile);
+  try {
+    if (proposal) {
+      await fs.mkdir(extensionsDir, { recursive: true });
+      await fs.copyFile(candidateFile, activeFile);
+    }
+    manager.files[safeName] = { enabled: true };
+    await saveUserState();
+    await loadExtensions(new Map([[activeFile, preparedCandidate]]));
+    if (proposal) {
+      await fs.unlink(candidateFile).catch(() => {});
+      delete manager.proposals[safeName];
+      await saveUserState();
+    }
+  } catch (error) {
+    if (proposal) {
+      if (previousSource === null) await fs.unlink(activeFile).catch(() => {});
+      else await fs.writeFile(activeFile, previousSource);
+    }
+    if (previousFileState) manager.files[safeName] = previousFileState;
+    else delete manager.files[safeName];
+    await saveUserState();
+    await loadExtensions();
+    throw error;
+  }
+}
+
+async function disableManagedExtension(filename: string) {
+  const safeName = path.basename(filename);
+  extensionManagerState().files[safeName] = { enabled: false };
+  await saveUserState();
+  await loadExtensions();
+}
+
+async function discardManagedExtensionProposal(filename: string) {
+  const safeName = path.basename(filename);
+  const proposal = extensionManagerState().proposals?.[safeName];
+  if (!proposal) return;
+  await fs.unlink(proposal.draftFile).catch(() => {});
+  delete extensionManagerState().proposals[safeName];
+  await saveUserState();
+}
+
+async function managedExtensionEntries() {
+  const manager = extensionManagerState();
+  const names = new Set(Object.keys(manager.files || {}));
+  for (const name of Object.keys(manager.proposals || {})) names.add(name);
+  const entries = [] as any[];
+  for (const filename of Array.from(names).sort()) {
+    const proposal = manager.proposals?.[filename];
+    const activeFile = path.join(extensionsDir, filename);
+    const source = await fs.readFile(activeFile, 'utf8').catch(() => '');
+    entries.push({
+      filename,
+      enabled: extensionFileIsEnabled(filename),
+      proposal: Boolean(proposal),
+      source,
+      proposalSource: proposal
+        ? await fs.readFile(proposal.draftFile, 'utf8').catch(() => '')
+        : undefined,
+    });
+  }
+  return entries;
+}
+
+async function loadExtensions(preparedExtensions = new Map<string, any>()) {
   await measureDebugPerformance(
     'extensions.load-all',
     { alwaysLog: true },
@@ -6532,6 +6656,12 @@ async function loadExtensions() {
         settingsItems,
         buildRecordShortcutAction,
         buildRemoveShortcutAction,
+        extensionManager: {
+          list: managedExtensionEntries,
+          enable: activateManagedExtension,
+          disable: disableManagedExtension,
+          discard: discardManagedExtensionProposal,
+        },
         paletteWindow,
       });
       registerInternalExtensions();
@@ -6542,18 +6672,22 @@ async function loadExtensions() {
 
       await fs.mkdir(extensionsDir, { recursive: true });
       await ensureExtensionTypeDefinitions();
+      await initializeExtensionManager();
       const entries = await fs
         .readdir(extensionsDir, { withFileTypes: true })
         .catch(() => []);
       for (const entry of entries) {
         if (!isExtensionSourceFile(entry.name)) continue;
+        if (!extensionFileIsEnabled(entry.name)) continue;
         const fullPath = path.join(extensionsDir, entry.name);
         try {
           await measureDebugPerformance(
             'extension.load-file',
             { file: entry.name },
             async () => {
-              const extension = await loadExtensionModule(fullPath);
+              const extension =
+                preparedExtensions.get(fullPath) ||
+                (await loadExtensionModule(fullPath));
               extension.__filePath = fullPath;
               extension.__generated = true;
               await applyExtensionMetadataOverrides(extension);
@@ -6779,13 +6913,8 @@ function durationMs(value: any) {
   return Math.max(1000, Math.round(amount * multiplier));
 }
 
-function triggerPermission(extension, trigger: any) {
-  if (trigger?.type === 'clipboard.changed')
-    return hasExtensionPermission(extension, 'clipboard.history');
-  if (trigger?.type === 'files.changed')
-    return hasExtensionPermission(extension, 'desktop.files');
-  if (trigger?.type === 'app.frontmost.changed')
-    return hasExtensionPermission(extension, 'desktop.apps');
+function triggerPermission(_extension, _trigger: any) {
+  // Host trigger registration is not a capability-enforcement boundary.
   return true;
 }
 
@@ -7437,6 +7566,11 @@ async function loadUserState() {
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},
+      extensionManager: loaded.extensionManager || {
+        schemaVersion: 0,
+        files: {},
+        proposals: {},
+      },
       nevermindEnvironment: loaded.nevermindEnvironment || {
         environment: nevermindEnvironmentForBaseUrl(
           getDefaultNevermindBaseUrl(),

@@ -63,6 +63,12 @@ export const extensionContext: {
   settingsItems: () => any[];
   buildRecordShortcutAction: (input: any, options: any) => any;
   buildRemoveShortcutAction: (input: any, options: any) => any;
+  extensionManager: {
+    list: () => Promise<any[]>;
+    enable: (filename: string) => Promise<void>;
+    disable: (filename: string) => Promise<void>;
+    discard: (filename: string) => Promise<void>;
+  };
   paletteWindow: {
     win?: {
       webContents: { send: (channel: string, ...args: any[]) => void };

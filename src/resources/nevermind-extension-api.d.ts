@@ -18,7 +18,7 @@
  * export default {
  *   id: 'my.images',
  *   title: 'My Images',
- *   permissions: ['desktop.files'],
+ *   capabilities: ['desktop.files'],
  *   commands: [{
  *     id: 'recent-images',
  *     title: 'Recent Images',
@@ -42,8 +42,8 @@
  * ```
  */
 
-/** Capabilities an extension must declare before the host exposes matching `ctx.*` surfaces. */
-export type ExtensionPermission =
+/** Intent an extension declares for review; it does not restrict enabled local code. */
+export type ExtensionCapability =
   | 'desktop.apps'
   | 'desktop.files'
   | 'clipboard.history'
@@ -58,6 +58,9 @@ export type ExtensionPermission =
   | 'camera'
   /** Required for `ctx.ocr` image/screen/region text recognition helpers. */
   | 'ocr';
+
+/** @deprecated Use `ExtensionCapability`; retained for existing source files. */
+export type ExtensionPermission = ExtensionCapability;
 
 /** Action panels can be visible, menu-only, or hidden while still allowing shortcuts. */
 export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden';
@@ -1603,6 +1606,9 @@ export type NevermindExtension = {
   id: string;
   title: string;
   subtitle?: string;
+  /** Review metadata only; an enabled local extension still has full local access. */
+  capabilities?: ExtensionCapability[];
+  /** @deprecated Use `capabilities`. Used only when `capabilities` is absent. */
   permissions?: ExtensionPermission[];
   /** Shorthand for search-visible durable actions with imperative `run(ctx)`. */
   commands?: ExtensionCommand[];

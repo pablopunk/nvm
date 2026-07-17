@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import type { CommandAction } from '../model';
 import {
@@ -17,6 +16,7 @@ import {
   requireNevermindCompatibilityFeature,
 } from './nevermind-compatibility';
 import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
+import { inspectExtensionManifest } from './extension-manifest';
 
 type AiEvent = {
   type: string;
@@ -84,6 +84,10 @@ type NevermindAiOptions = {
   getActiveChat?: () => ActiveChat | null;
   getChat?: (chatId: string) => ActiveChat | null;
   markGeneratedExtension?: (filePath: string, chatId?: string) => void;
+  stageExtensionProposal?: (
+    filename: string,
+    source: string,
+  ) => Promise<{ draftFile: string }>;
   canWriteExtension?: (filename: string, chatId?: string) => boolean;
   removeExtension?: (
     filename: string,
@@ -480,6 +484,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getActiveChat,
       getChat,
       markGeneratedExtension,
+      stageExtensionProposal,
       canWriteExtension,
       removeExtension,
       addAliasForChat,
@@ -541,6 +546,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
       markGeneratedExtension: (filePath) =>
         markGeneratedExtension?.(filePath, chatId),
+      stageExtensionProposal,
       canWriteExtension: (filename) =>
         canWriteExtension?.(filename, chatId) ?? true,
       removeExtension: (filename) =>
@@ -976,6 +982,7 @@ function createTools(
     getExtensionRuntimeState,
     getActiveChat,
     markGeneratedExtension,
+    stageExtensionProposal,
     canWriteExtension,
     removeExtension,
     addAliasForChat,
@@ -991,6 +998,7 @@ function createTools(
     | 'getExtensionRuntimeState'
     | 'getActiveChat'
     | 'markGeneratedExtension'
+    | 'stageExtensionProposal'
     | 'canWriteExtension'
     | 'removeExtension'
     | 'addAliasForChat'
@@ -1308,39 +1316,41 @@ function createTools(
             throw new Error(
               `Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`,
             );
-          const previous = exists ? await fs.readFile(filePath, 'utf8') : null;
-          await fs.writeFile(filePath, params.code);
+          const draftsDir = path.join(
+            path.dirname(extensionsDir),
+            'extension-drafts',
+          );
+          const draftPath = safeExtensionPath(draftsDir, filename);
+          await fs.mkdir(draftsDir, { recursive: true });
+          await fs.writeFile(draftPath, params.code);
           try {
             await validateTypeScriptExtension(
-              filePath,
+              draftPath,
               extensionTypesPath,
               extensionsDir,
             );
           } catch (error) {
-            if (previous === null) await fs.unlink(filePath).catch(() => {});
-            else await fs.writeFile(filePath, previous);
+            await fs.unlink(draftPath).catch(() => {});
             throw error;
           }
-          markGeneratedExtension?.(filePath);
-          await reloadExtensions();
-          const runtime = runtimeDetails(filename);
-          if (!runtime.loaded) {
-            if (previous === null) await fs.unlink(filePath).catch(() => {});
-            else await fs.writeFile(filePath, previous);
-            await reloadExtensions();
-            throw new Error(
-              `Extension ${filename} was written to ${filePath} but did not load. Check read_app_logs for extension.load.failed.`,
-            );
-          }
-          if (chat?.id) addAliasForChat?.(chat.id);
+          const staged = stageExtensionProposal
+            ? await stageExtensionProposal(filename, params.code)
+            : { draftFile: draftPath };
+          if (staged.draftFile !== draftPath)
+            await fs.unlink(draftPath).catch(() => {});
           return {
             content: [
               {
                 type: 'text',
-                text: `Installed ${filename} from ${filePath}${runtime.commandIds.length ? ` with commands: ${runtime.commandIds.join(', ')}` : ''}`,
+                text: `Staged ${filename} for review. It has not been imported or enabled; review and apply it from Extensions.`,
               },
             ],
-            details: { filePath, extensionsDir, ...runtime },
+            details: {
+              filePath,
+              draftPath: staged.draftFile,
+              extensionsDir,
+              staged: true,
+            },
           };
         },
       ),
@@ -1412,27 +1422,20 @@ function createTools(
       name: 'install_extension',
       label: 'Install Extension',
       description:
-        'No-op compatibility tool. write_extension already installs/replaces the active generated extension idempotently.',
+        'No-op compatibility tool. write_extension stages a proposal that requires user review and enablement.',
       parameters: Type.Object({ filename: Type.String() }),
       execute: observedTool(
         'install_extension',
         async (_toolCallId: string, params: { filename: string }) => {
           const filePath = safeExtensionPath(extensionsDir, params.filename);
-          markGeneratedExtension?.(filePath);
-          await reloadExtensions();
-          const runtime = runtimeDetails(path.basename(filePath));
-          if (!runtime.loaded)
-            throw new Error(
-              `Extension ${path.basename(filePath)} exists at ${filePath} but is not loaded. Check read_app_logs for extension.load.failed.`,
-            );
           return {
             content: [
               {
                 type: 'text',
-                text: `${path.basename(filePath)} is active from ${filePath}`,
+                text: `${path.basename(filePath)} remains staged until the user reviews and enables it in Extensions.`,
               },
             ],
-            details: { filePath, extensionsDir, ...runtime },
+            details: { filePath, extensionsDir, staged: true },
           };
         },
       ),
@@ -1552,36 +1555,40 @@ function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
   throw new Error(`TypeScript validation failed:\n${plain}`);
 }
 
-async function importExtensionForValidation(filePath: string) {
-  const url = pathToFileURL(filePath);
-  url.searchParams.set('validate', String(Date.now()));
-  const imported = await import(url.href);
-  const extension = imported.default || imported;
-  if (!(extension?.id && extension?.title))
-    throw new Error('Extension must export an object with id and title');
-  if (extension.commands !== undefined && !Array.isArray(extension.commands))
-    throw new Error('Extension commands must be an array');
-  if (
-    extension.actions !== undefined &&
-    typeof extension.actions !== 'function'
-  )
-    throw new Error('Extension actions must be a function');
-  return extension;
-}
-
-function validateExtensionPermissions(extension: any, source: string) {
-  const permissions = new Set(
-    Array.isArray(extension?.permissions)
-      ? extension.permissions.map(String)
-      : [],
-  );
-  const usesSystemShell =
-    /ctx\.desktop\.shell\b/.test(source) ||
-    /ctx\.actions\.(?:shellExec|shellScript|system)\b/.test(source);
-  if (usesSystemShell && !permissions.has('system')) {
+function validateExtensionCapabilities(source: string) {
+  const manifest = inspectExtensionManifest(source);
+  if (!manifest.id || !manifest.title)
     throw new Error(
-      "Extension uses shell or system helpers but does not declare the 'system' permission. Add `permissions: ['system']` to the extension manifest.",
+      'Extension must statically declare literal id and title values',
     );
+  const capabilities = new Set(manifest.capabilities);
+  const declarations = [
+    [
+      'system',
+      /ctx\.desktop\.shell\b|ctx\.actions\.(?:shellExec|shellScript|system)\b/,
+    ],
+    ['desktop.files', /ctx\.desktop\.files\b|ctx\.desktop\.selection\.files\b/],
+    ['desktop.apps', /ctx\.desktop\.apps\b/],
+    [
+      'clipboard.history',
+      /ctx\.clipboard\.history\b|ctx\.desktop\.clipboard\b/,
+    ],
+    ['ocr', /ctx\.ocr\b/],
+    ['ai', /ctx\.ai\b/],
+    ['settings.write', /ctx\.settings\.(?:set|toggle)\b/],
+    [
+      'shortcuts',
+      /ctx\.shortcuts\b|ctx\.actions\.(?:recordShortcut|removeShortcut|setPaletteShortcut)\b/,
+    ],
+    ['updates', /ctx\.updates\b|ctx\.actions\.updates\b/],
+    ['extensions.ownership', /ctx\.extensions\.ownership\b/],
+  ] as const;
+  for (const [capability, pattern] of declarations) {
+    if (pattern.test(source) && !capabilities.has(capability)) {
+      throw new Error(
+        `Extension uses ${capability} helpers but does not declare the '${capability}' capability. Add it to capabilities so reviewers understand its intent.`,
+      );
+    }
   }
 }
 
@@ -1595,17 +1602,14 @@ async function validateTypeScriptExtension(
     filePath,
     path.join(extensionsDir, 'nevermind-extension-api.d.ts'),
   );
-  const [source, extension] = await Promise.all([
-    fs.readFile(filePath, 'utf8'),
-    importExtensionForValidation(filePath),
-  ]);
-  validateExtensionPermissions(extension, source);
+  const source = await fs.readFile(filePath, 'utf8');
+  validateExtensionCapabilities(source);
 }
 
 function capabilities() {
   return {
     extensionExports: [
-      'export default { id, title, permissions, actions, commands, rootItems, searchItems } satisfies NevermindExtension',
+      'export default { id, title, capabilities, actions, commands, rootItems, searchItems } satisfies NevermindExtension',
     ],
     rootContributions: [
       'actions(ctx) returns persistent shortcutable actions; commands are shorthand durable actions; put appearance on the durable action/command instead of duplicating it in rootItems/searchItems for styling; use ctx.actions.ref(id) inside views to reference a durable action; rootItems(ctx) returns high-signal dynamic/status items; searchItems(ctx, query) returns query-aware dynamic items',
@@ -1880,7 +1884,7 @@ validate_extension typechecks changed extension files and verifies they load wit
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
-Declare permissions explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls.
+Declare capabilities explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls. These declarations describe intent for the user's review; they do not restrict an enabled local extension's access.
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use actions(ctx) for persistent shortcut-worthy variants such as “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippet actions; these are searchable, aliasable, and global-shortcutable without opening a view. When a view row should run one of those durable actions, set primaryAction: ctx.actions.ref('action-id') instead of duplicating inline logic. Use rootItems(ctx) for high-signal empty-query dynamic/status contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
