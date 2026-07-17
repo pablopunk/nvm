@@ -41,6 +41,12 @@ import { createNevermindAi } from './ai';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
 import {
+  DEEP_LINK_SCHEME,
+  type ParsedAuthDeepLink,
+  parseAuthDeepLink,
+  setDeepLinkLogger,
+} from './deep-link';
+import {
   configureLocalFileUrlSecret,
   expandUserPath,
   extensionForPath,
@@ -61,15 +67,10 @@ import {
   getNevermindAuth,
   isSigningIn,
   nevermindEnvironmentForBaseUrl,
-  signInToNevermind,
   setActiveNevermindAuthBaseUrl,
+  signInToNevermind,
 } from './nevermind-auth';
-import {
-  DEEP_LINK_SCHEME,
-  parseAuthDeepLink,
-  setDeepLinkLogger,
-  type ParsedAuthDeepLink,
-} from './deep-link';
+import { switchNevermindBackendEnvironment as switchBackendEnvironment } from './nevermind-backend-environment';
 import {
   checkNevermindCompatibility,
   currentNevermindCompatibilityManifest,
@@ -78,7 +79,6 @@ import {
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
-import { switchNevermindBackendEnvironment as switchBackendEnvironment } from './nevermind-backend-environment';
 import { captureException, initSentry } from './sentry';
 import {
   configureNvmTestMode,
@@ -108,13 +108,13 @@ import {
   normalizeLoaderItems,
   resolveLoaderEmptyView,
 } from './data-loader';
-import { createExtensionJsonStore } from './extension-json-store';
 import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
   summarizeDebugValue,
 } from './debug-performance';
+import { createExtensionJsonStore } from './extension-json-store';
 import {
   extensionPermissionCapabilities,
   filterWebviewPermissionsForExtension,
@@ -196,6 +196,7 @@ import {
 } from './settings';
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils';
+import { systemSettingsPaneUrl } from './system-settings';
 import { createUpdateManager } from './update-manager';
 import { openExternalUrl } from './url-utils';
 import { isNewerVersion as isVersionNewerThan } from './version-utils';
@@ -3433,9 +3434,12 @@ async function executeViewAction(action, launchContext?: any) {
       );
       break;
     case 'openSystemSettings':
-      runInBackground(() =>
-        executeSystemBuiltin({ builtin: 'settings' }, () => {}),
-      );
+      runInBackground(() => {
+        const paneUrl = systemSettingsPaneUrl(action.paneId);
+        return paneUrl
+          ? shell.openExternal(paneUrl)
+          : executeSystemBuiltin({ builtin: 'settings' }, () => {});
+      });
       break;
     case 'openKeyboardSettings':
       runInBackground(openSystemKeyboardSettings);
