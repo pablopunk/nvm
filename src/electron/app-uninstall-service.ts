@@ -6,8 +6,14 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const PLUTIL = '/usr/bin/plutil';
+export const PLUTIL_PATH = '/usr/bin/plutil';
+export const PLUTIL_OPTIONS = {
+  shell: false,
+  timeout: 5_000,
+  maxBuffer: 4_096,
+} as const;
 const MAX_BUNDLE_ID_BYTES = 255;
+export const NEVERMIND_BUNDLE_ID = 'com.pablopunk.nvm';
 
 type Stat = {
   dev: number;
@@ -140,20 +146,30 @@ export function validateBundleId(value: unknown): string | null {
   return value;
 }
 
-async function productionPlistReader(appPath: string): Promise<unknown> {
-  const result = await execFileAsync(
-    PLUTIL,
-    [
-      '-extract',
-      'CFBundleIdentifier',
-      'raw',
-      '-o',
-      '-',
-      path.join(appPath, 'Contents', 'Info.plist'),
-    ],
-    { shell: false, timeout: 5_000, maxBuffer: 4_096 },
-  );
-  return String(result.stdout).trim();
+type PlistExecutor = (
+  command: string,
+  arguments_: string[],
+  options: typeof PLUTIL_OPTIONS,
+) => Promise<{ stdout: unknown }>;
+
+export function createProductionPlistReader(
+  execute: PlistExecutor = execFileAsync as PlistExecutor,
+) {
+  return async (appPath: string): Promise<unknown> => {
+    const result = await execute(
+      PLUTIL_PATH,
+      [
+        '-extract',
+        'CFBundleIdentifier',
+        'raw',
+        '-o',
+        '-',
+        path.join(appPath, 'Contents', 'Info.plist'),
+      ],
+      PLUTIL_OPTIONS,
+    );
+    return String(result.stdout).trim();
+  };
 }
 
 export function createProductionAppUninstallService(
@@ -170,7 +186,7 @@ export function createProductionAppUninstallService(
     lstat: (value) => fs.lstat(value) as Promise<Stat>,
     realpath: (value) => fs.realpath(value),
     access: (value, mode) => fs.access(value, mode),
-    readBundleId: productionPlistReader,
+    readBundleId: createProductionPlistReader(),
     trashItem: input.trashItem,
     nevermindAppPath: input.nevermindAppPath,
     nevermindBundleId: input.nevermindBundleId,
@@ -540,15 +556,33 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
         })),
         notes: [],
       };
+    const preflightFailures = new Map<
+      string,
+      { code: string; message: string }
+    >();
+    for (const candidate of ordered) {
+      const checked = await revalidateCandidate(snapshot, candidate);
+      if (!('canonical' in checked))
+        preflightFailures.set(candidate.id, checked);
+    }
     for (let index = 0; index < ordered.length; index += 1) {
       const candidate = ordered[index];
-      const global = await globalFailure();
-      if (global) {
+      const preflightFailure = preflightFailures.get(candidate.id);
+      if (preflightFailure) {
+        untouched.push({
+          path: candidate.path,
+          code: preflightFailure.code,
+          message: preflightFailure.message,
+        });
+        continue;
+      }
+      const app = await checkApp(snapshot.appPath, snapshot);
+      if (!('canonical' in app)) {
         untouched.push(
           ...ordered.slice(index).map((item) => ({
             path: item.path,
-            code: global.code,
-            message: global.message,
+            code: app.code,
+            message: app.message,
           })),
         );
         break;
@@ -561,6 +595,17 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
           message: checked.message,
         });
         continue;
+      }
+      const running = await checkNotRunning(app.canonical);
+      if (running) {
+        untouched.push(
+          ...ordered.slice(index).map((item) => ({
+            path: item.path,
+            code: running.code,
+            message: running.message,
+          })),
+        );
+        break;
       }
       try {
         await deps.trashItem(candidate.path);

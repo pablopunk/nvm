@@ -100,7 +100,10 @@ import {
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
-import { createProductionAppUninstallService } from './app-uninstall-service';
+import {
+  createProductionAppUninstallService,
+  NEVERMIND_BUNDLE_ID,
+} from './app-uninstall-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
   createDataLoaderHandle,
@@ -698,7 +701,7 @@ const nevermindBundlePath =
 const appUninstallService = createProductionAppUninstallService({
   trashItem: (itemPath) => shell.trashItem(itemPath),
   nevermindAppPath: nevermindBundlePath,
-  nevermindBundleId: app.getName(),
+  nevermindBundleId: NEVERMIND_BUNDLE_ID,
   runningAppPaths: (appPath) =>
     detectRunningAppPaths([
       ...appIndexService.get(),
