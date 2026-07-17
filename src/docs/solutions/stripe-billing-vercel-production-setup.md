@@ -30,7 +30,8 @@ Several operational details are easy to miss:
 - Stripe live-mode prices must be paired with live-mode API keys and webhooks; Stripe test cards require separate test-mode prices, keys, and webhook secret.
 - Vercel env changes do not affect an existing deployment until production is redeployed.
 - `vercel env ls production` only proves a variable name exists; encrypted values cannot confirm whitespace or the exact pasted secret.
-- The public apex host may redirect. In this case, `nvm.fyi` redirected to `www.nvm.fyi`, while `api.nvm.fyi` directly served the backend API.
+- The public apex host may redirect. `nvm.fyi` is a compatibility alias that redirects to `www.nvm.fyi`; browser billing stays on the non-redirecting `www` origin, while `api.nvm.fyi` directly serves the backend API.
+- Configure Stripe with the direct endpoint `https://api.nvm.fyi/api/billing/webhook`. The API setting is origin-only (`https://api.nvm.fyi`); never configure `/api` into the base or rely on redirects.
 - Git worktrees do not inherit ignored local files such as `backend/.env` or `.vercel/` from the canonical checkout.
 
 ## Fix / working procedure

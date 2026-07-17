@@ -171,7 +171,7 @@ test('device auth initiate returns the desktop-v1 initiation contract', async ()
 
   assert.equal(response.status, 200);
   assert.equal(typeof body.code, 'string');
-  assert.equal(body.verifyUrl, `https://api.nvm.fyi/auth/device?code=${body.code}`);
+  assert.equal(body.verifyUrl, `https://www.nvm.fyi/auth/device?code=${body.code}`);
   assert.match(body.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(body.pollIntervalMs, 2000);
   assert.equal((db.insertedValues[0] as any).deviceLabel, 'Pablo Mac');

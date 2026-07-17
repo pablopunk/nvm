@@ -43,6 +43,8 @@ For hosted environments, prefer the direct API host:
 
 ```text
 https://api.nvm.fyi/api/billing/webhook
+
+This is intentionally a direct API-host destination with no redirect. The configured API base is `https://api.nvm.fyi` (origin only), while browser checkout and portal return URLs use `https://www.nvm.fyi` or the exact trusted Preview origin.
 ```
 
 Avoid redirecting hosts for webhooks unless Stripe delivery has been verified end-to-end.

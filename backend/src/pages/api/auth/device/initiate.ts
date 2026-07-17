@@ -6,6 +6,8 @@ import { deviceCodes } from '../../../../db/schema';
 import { killSwitchResponse, backendKillSwitchEnabled, requestIdFromHeaders } from '../../../../lib/compatibility';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../../lib/ratelimit';
 import { safeJsonBody } from '../../../../lib/validation';
+import { env } from '../../../../lib/env';
+import { parsePublicOrigin } from '../../../../../../src/shared/public-origin';
 
 const TTL_MS = 5 * 60 * 1000;
 
@@ -21,11 +23,20 @@ export const POST: APIRoute = async ({ request, url }) => {
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
   const deviceLabel = (parsed.data.label ?? '').trim() || 'Desktop';
 
+  let verifyOrigin: string;
+  try {
+    verifyOrigin = env('VERCEL_ENV') === 'preview'
+      ? parsePublicOrigin(url.origin, 'smoke')
+      : parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+  } catch {
+    return new Response('Public web origin is unavailable', { status: 503 });
+  }
+
   const code = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + TTL_MS);
   await db.insert(deviceCodes).values({ code, deviceLabel, expiresAt });
 
-  const verifyUrl = new URL('/auth/device', url);
+  const verifyUrl = new URL('/auth/device', verifyOrigin);
   verifyUrl.searchParams.set('code', code);
 
   return Response.json({

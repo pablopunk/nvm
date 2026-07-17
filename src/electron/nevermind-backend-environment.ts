@@ -3,6 +3,7 @@ import type {
   NevermindEnvironment,
 } from './nevermind-auth';
 import type { NevermindCompatibilityManifest } from './nevermind-compatibility';
+import { parsePublicOrigin } from '../shared/public-origin';
 
 export const PRODUCTION_NEVERMIND_BASE_URL = 'https://api.nvm.fyi';
 
@@ -48,9 +49,30 @@ export async function switchNevermindBackendEnvironment(
       : String(input.baseUrl || '').trim();
   let parsed: URL;
   try {
-    parsed = new URL(rawBaseUrl);
+    const normalized =
+      input.environment === 'production'
+        ? parsePublicOrigin(rawBaseUrl, 'production_api')
+        : parsePublicOrigin(rawBaseUrl, 'smoke');
+    parsed = new URL(normalized);
   } catch {
-    return { ok: false as const, message: 'Enter a valid backend URL.' };
+    try {
+      const candidate = new URL(rawBaseUrl);
+      if (candidate.protocol !== 'https:') {
+        return { ok: false as const, message: 'Backend URL must use HTTPS.' };
+      }
+      if (candidate.username || candidate.password) {
+        return {
+          ok: false as const,
+          message: 'Backend URL must not include credentials.',
+        };
+      }
+    } catch {
+      return { ok: false as const, message: 'Enter a valid backend URL.' };
+    }
+    return {
+      ok: false as const,
+      message: 'Backend URL must be a valid origin without a path.',
+    };
   }
   if (parsed.protocol !== 'https:') {
     return { ok: false as const, message: 'Backend URL must use HTTPS.' };
@@ -61,7 +83,7 @@ export async function switchNevermindBackendEnvironment(
       message: 'Backend URL must not include credentials.',
     };
   }
-  const baseUrl = parsed.href.replace(/\/$/, '');
+  const baseUrl = parsed.origin;
   if (
     deps.isPackaged &&
     (await deps.resolvesToUnsafeAddress(parsed.hostname))

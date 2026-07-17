@@ -7,7 +7,7 @@ const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
 function valid() {
   Object.assign(process.env, {
-    DATABASE_URL: 'postgres://production', PREVIEW_GATEWAY_ORIGIN: 'https://nvm.fyi', PREVIEW_START_KEY: 'preview-start', GATEWAY_STATE_KEY: 'gateway-state', GATEWAY_STATE_REDIS_URL: 'https://gateway', GATEWAY_STATE_REDIS_TOKEN: 'gateway-acl',
+    DATABASE_URL: 'postgres://production', PREVIEW_GATEWAY_ORIGIN: 'https://www.nvm.fyi', PREVIEW_START_KEY: 'preview-start', GATEWAY_STATE_KEY: 'gateway-state', GATEWAY_STATE_REDIS_URL: 'https://gateway', GATEWAY_STATE_REDIS_TOKEN: 'gateway-acl',
     UPSTASH_REDIS_REST_URL: 'https://production-redis', UPSTASH_REDIS_REST_TOKEN: 'production-acl', PREVIEW_SESSION_KEY: 'preview-session',
     WORKOS_COOKIE_PASSWORD: 'production-session', WORKOS_CLIENT_ID: 'prod-client', VERCEL_ENV: 'preview',
   });
@@ -30,9 +30,9 @@ test('fails closed when the production database binding is absent', () => {
   assert.throws(assertPreviewAuthConfiguration, AuthConfigurationError);
 });
 
-test('accepts the Vercel www alias for the production preview gateway', () => {
-  process.env.PRODUCTION_ORIGIN = 'https://nvm.fyi';
-  assert.equal(isProductionGatewayOrigin('https://nvm.fyi'), true);
+test('accepts only the canonical production web gateway', () => {
+  process.env.PRODUCTION_ORIGIN = 'https://www.nvm.fyi';
+  assert.equal(isProductionGatewayOrigin('https://nvm.fyi'), false);
   assert.equal(isProductionGatewayOrigin('https://www.nvm.fyi'), true);
   assert.equal(isProductionGatewayOrigin('https://evil.example'), false);
 });

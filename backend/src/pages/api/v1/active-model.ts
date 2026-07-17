@@ -4,17 +4,20 @@ import { getModelRoute, ModelNotConfiguredError, parseExtensionAiModelRole } fro
 import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
 import { lookupModelCost, lookupModelDescriptor } from '../../../lib/pricing';
 import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
-import { selectApiForModel, type UpstreamApi } from '../../../lib/upstream';
+import { selectApiForModel } from '../../../lib/upstream';
 import { estimatePromptCredits } from '../../../lib/limits';
+import { env } from '../../../lib/env';
+import { joinPublicApiUrl, parsePublicOrigin } from '../../../../../src/shared/public-origin';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
 
-function backendBaseUrlForApi(requestUrl: URL, api: UpstreamApi): string {
-  const origin = `${requestUrl.protocol}//${requestUrl.host}`;
-  return api === 'anthropic-messages' ? `${origin}/api` : `${origin}/api/v1`;
-}
-
 export const GET: APIRoute = async ({ request }) => {
+  let configuredApiOrigin: string;
+  try {
+    configuredApiOrigin = parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
+  } catch {
+    return Response.json({ error: { type: 'configuration_error', message: 'Public API origin is unavailable.' } }, { status: 503 });
+  }
   const user = await getUserFromBearer(request.headers.get('authorization'));
   if (!user) return new Response('Unauthorized', { status: 401 });
   await ensureMonthlyFreeCredits(user.id);
@@ -48,7 +51,9 @@ export const GET: APIRoute = async ({ request }) => {
   }
 
   const api = selectApiForModel(provider, modelId);
-  const baseUrl = backendBaseUrlForApi(new URL(request.url), api);
+  const baseUrl = api === 'anthropic-messages'
+    ? joinPublicApiUrl(configuredApiOrigin, '/api')
+    : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
 
   const CHARS_PER_TOKEN = 4;
   const inputTokensQ = url.searchParams.get('inputTokens');

@@ -3,12 +3,12 @@ import { Redis } from '@upstash/redis';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from './env';
 import { safeRelativeRedirectPath } from './safe-redirect';
+import { parsePublicOrigin } from '../../../src/shared/public-origin';
 
 const STATE_TTL = 10 * 60;
 const GRANT_TTL = 60;
 const STATE_NAMESPACE = 'nvm:gateway:state:v2';
 const GRANT_NAMESPACE = 'nvm:preview:grant:v2';
-const PREVIEW_HOST_RE = /^nvm-[a-z0-9-]+-pablo-varelas-projects-4f86af8b\.vercel\.app$/;
 const TOKEN_PREFIX = 'v2.';
 
 export const PREVIEW_GATEWAY_CAPABILITY = 'preview-auth-gateway-v2';
@@ -28,10 +28,7 @@ function keyMaterial(name: string): Uint8Array {
 }
 
 function previewHost(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && url.pathname === '/' && !url.search && !url.hash && !url.port && PREVIEW_HOST_RE.test(url.hostname);
-  } catch { return false; }
+  try { parsePublicOrigin(value, 'preview', value); return true; } catch (error) { return false; }
 }
 
 export function previewTargetFromEnvironment(): PreviewTarget | null {

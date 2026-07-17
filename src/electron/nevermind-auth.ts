@@ -7,6 +7,10 @@ import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import { checkNevermindCompatibility } from './nevermind-compatibility';
 import { openExternalUrl } from './url-utils';
+import {
+  migrateLegacyDesktopOrigin,
+  parsePublicOrigin,
+} from '../shared/public-origin';
 
 const FILENAME = 'nevermind-auth.json';
 const STORE_FILENAME = 'nevermind-auth-by-origin.json';
@@ -65,14 +69,23 @@ function isLoopbackBaseUrl(baseUrl: string) {
 }
 
 function normalizedBaseUrl(baseUrl: string) {
-  const trimmed = baseUrl.replace(/\/$/, '');
+  const trimmed = baseUrl.trim().replace(/\/$/, '');
+  const migrated = migrateLegacyDesktopOrigin(trimmed);
   if (
-    shouldUseProductionBaseUrl() &&
-    (['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed) ||
-      isLoopbackBaseUrl(trimmed))
+    migrated &&
+    (shouldUseProductionBaseUrl() || migrated === PRODUCTION_BASE_URL)
   )
+    return migrated;
+  if (shouldUseProductionBaseUrl() && isLoopbackBaseUrl(trimmed))
     return PRODUCTION_BASE_URL;
-  return trimmed;
+  try {
+    return parsePublicOrigin(
+      trimmed,
+      isLoopbackBaseUrl(trimmed) ? 'local' : 'smoke',
+    );
+  } catch {
+    return trimmed;
+  }
 }
 
 export function nevermindEnvironmentForBaseUrl(

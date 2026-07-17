@@ -2,7 +2,14 @@
 
 Astro (SSR) + Vercel + Neon Postgres (Drizzle) + WorkOS AuthKit.
 
-Serves the dashboard at `nvm.fyi` and the API the desktop app talks to.
+Serves the dashboard at `www.nvm.fyi` and the API the desktop app talks to.
+
+The machine API base is the origin-only `https://api.nvm.fyi`; callers append
+exactly one `/api/...`. Browser routes use relative `/api/...` paths on
+`https://www.nvm.fyi`, which is not an API base. `PUBLIC_API_ORIGIN` and
+`PRODUCTION_ORIGIN` are strict, validated production settings. Preview URLs
+must be the exact protected deployment origin; missing or mismatched origins
+fail closed.
 
 ## Setup
 
@@ -34,7 +41,7 @@ Versioned via drizzle-kit. SQL lives in `backend/drizzle/`.
 
 ## Deploy
 
-Push to GitHub, import in Vercel, set env vars, and point `nvm.fyi` + `api.nvm.fyi` at it. `WORKOS_REDIRECT_URI` remains the production callback (`https://nvm.fyi/api/auth/callback`). Release v2 uses disjoint, one-use `v:2` production and Preview-gateway states; legacy state, grants, sealed sessions, and `nvm_session` material are rejected immediately.
+Push to GitHub, import in Vercel, set env vars, and point `www.nvm.fyi` + `api.nvm.fyi` at it. `WORKOS_REDIRECT_URI` is the non-redirecting production callback (`https://www.nvm.fyi/api/auth/callback`). Release v2 uses disjoint, one-use `v:2` production and Preview-gateway states; legacy state, grants, sealed sessions, and `nvm_session` material are rejected immediately.
 
 Preview sign-in is fail-closed until the production gateway capability is configured. Trusted Preview deployments require `VERCEL_ENV=preview`, an exact `VERCEL_URL` matching `nvm-<deployment-token>-pablo-varelas-projects-4f86af8b.vercel.app`, `PREVIEW_GATEWAY_ORIGIN=https://nvm.fyi`, `PREVIEW_START_KEY`, `GATEWAY_STATE_KEY`, `GATEWAY_STATE_REDIS_URL/TOKEN`, production `UPSTASH_REDIS_REST_URL/TOKEN`, and `PREVIEW_SESSION_KEY`. Preview deliberately uses the production WorkOS client, `DATABASE_URL`, Redis, settings, and email; there are no separate Preview DB/Redis/WorkOS/email variables. The callback writes no local production data for Preview flows, while the exchange completes against the same production-backed runtime and mints only the host-scoped `nvm_preview_session`.
 

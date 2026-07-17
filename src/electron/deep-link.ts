@@ -11,6 +11,10 @@ const PRODUCTION_BASE_URL = 'https://api.nvm.fyi';
 const LOCAL_BASE_URL = 'http://localhost:4321';
 const PAT_PREFIX = 'nvm_';
 const JWT_PATTERN = /^eyJ/;
+import {
+  migrateLegacyDesktopOrigin,
+  parsePublicOrigin,
+} from '../shared/public-origin';
 
 let logWarn: (message: string, data?: unknown) => void = () => {};
 
@@ -79,9 +83,22 @@ function parseAuthDeepLink(
       logWarn('deep_link_unparsable_base_url', { encoded: encodedBaseUrl });
     }
     if (decoded) {
+      const migrated = migrateLegacyDesktopOrigin(decoded);
+      if (migrated) decoded = migrated;
       const allowedOrigins = [PRODUCTION_BASE_URL, LOCAL_BASE_URL];
       if (
-        allowedOrigins.includes(decoded) ||
+        (allowedOrigins.includes(decoded) &&
+          (() => {
+            try {
+              parsePublicOrigin(
+                decoded,
+                decoded === LOCAL_BASE_URL ? 'local' : 'production_api',
+              );
+              return true;
+            } catch {
+              return false;
+            }
+          })()) ||
         decoded === activeBaseUrl.replace(/\/$/, '')
       ) {
         resolvedBaseUrl = decoded;

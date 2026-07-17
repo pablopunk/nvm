@@ -1,4 +1,5 @@
 import { env } from './env';
+import { parsePublicOrigin, PublicOriginError } from '../../../src/shared/public-origin';
 
 export class AuthConfigurationError extends Error {
   constructor(message: string) {
@@ -11,7 +12,18 @@ export function assertPreviewAuthConfiguration() {
   const required = ['DATABASE_URL', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'GATEWAY_STATE_KEY', 'GATEWAY_STATE_REDIS_URL', 'GATEWAY_STATE_REDIS_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'PREVIEW_SESSION_KEY'];
   const missing = required.filter((key) => !env(key));
   if (missing.length) throw new AuthConfigurationError(`Preview auth configuration is incomplete: ${missing.join(',')}`);
-  if (env('PREVIEW_GATEWAY_ORIGIN') !== 'https://nvm.fyi') throw new AuthConfigurationError('Preview gateway origin is not production canonical');
+  try {
+    const production = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+    const gateway = parsePublicOrigin(env('PREVIEW_GATEWAY_ORIGIN') ?? production, 'production_web');
+    const dashboard = env('PUBLIC_DASHBOARD_URL');
+    if (dashboard && !/^https?:\/\/localhost(?::\d+)?\/?$/.test(dashboard) && parsePublicOrigin(dashboard, 'production_web') !== production) {
+      throw new AuthConfigurationError('Dashboard origin does not match production canonical origin');
+    }
+    if (gateway !== production) throw new AuthConfigurationError('Preview gateway origin is not production canonical');
+  } catch (error) {
+    if (error instanceof AuthConfigurationError) throw error;
+    throw new AuthConfigurationError(error instanceof PublicOriginError ? error.message : 'Invalid public origin configuration');
+  }
   if (env('PREVIEW_SESSION_KEY') === env('WORKOS_COOKIE_PASSWORD')) throw new AuthConfigurationError('Preview and production session keys must differ');
   if (env('GATEWAY_STATE_REDIS_TOKEN') === env('UPSTASH_REDIS_REST_TOKEN')) throw new AuthConfigurationError('Gateway and production Redis ACL identities must differ');
   return true;
@@ -22,6 +34,9 @@ export function previewAuthConfigured() {
 }
 
 export function isProductionGatewayOrigin(origin: string) {
-  const configuredOrigin = env('PRODUCTION_ORIGIN') ?? 'https://nvm.fyi';
-  return origin === configuredOrigin || (configuredOrigin === 'https://nvm.fyi' && origin === 'https://www.nvm.fyi');
+  try {
+    return parsePublicOrigin(origin, 'production_web') === parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+  } catch {
+    return false;
+  }
 }

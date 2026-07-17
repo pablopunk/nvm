@@ -13,6 +13,7 @@ Do not start by reading code. Start from the alert/log source, collect productio
 
 - App backend: Astro SSR on Vercel.
 - Public hosts: `nvm.fyi`, `www.nvm.fyi`, `api.nvm.fyi`, plus Vercel deployment URLs.
+- API configuration is origin-only: use `https://api.nvm.fyi` and append one `/api/...`; never configure `https://api.nvm.fyi/api`. Dashboard/auth uses the non-redirecting `https://www.nvm.fyi` origin.
 - Runtime logs: Vercel drains to Axiom; Axiom is the primary log backend.
 - Error tracking: Sentry for backend and desktop.
 - Database: Neon serverless Postgres with Drizzle migrations.

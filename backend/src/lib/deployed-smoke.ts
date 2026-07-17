@@ -1,4 +1,5 @@
 type JsonRecord = Record<string, unknown>;
+import { parsePublicOrigin } from '../../../src/shared/public-origin';
 
 type CompatibilityManifest = {
   backend: { environment: string; version: string };
@@ -136,7 +137,11 @@ export function normalizeSmokeTarget(rawBaseUrl: string | undefined) {
   if (parsed.search || parsed.hash) {
     throw new Error('NVM_SMOKE_BASE_URL must not include a query or fragment');
   }
-  return parsed.href.replace(/\/$/, '');
+  try {
+    return parsePublicOrigin(rawBaseUrl.trim(), isLoopback ? 'local' : 'smoke');
+  } catch (error) {
+    throw new Error(`NVM_SMOKE_BASE_URL is invalid: ${error instanceof Error ? error.message : 'unknown error'}`);
+  }
 }
 
 async function requestJson(
@@ -150,6 +155,7 @@ async function requestJson(
   try {
     response = await fetchImplementation(url, {
       headers,
+      redirect: 'manual',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
@@ -158,6 +164,9 @@ async function requestJson(
     );
   }
   const body = await response.text();
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`${url} returned an unexpected redirect (${response.status})`);
+  }
   if (!response.ok) {
     throw new Error(
       `${url} returned ${response.status}: ${redactResponseBody(body)}`,

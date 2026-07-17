@@ -19,7 +19,7 @@ The backend stores one-use OAuth state in Upstash Redis, exchanges the WorkOS ca
 - Normalize Redis `GETDEL` values to JSON text before validation and give OAuth state a ten-minute lifetime.
 - For an authenticated WorkOS identity, first look up the local user by WorkOS ID; if missing, find the same canonical email and atomically replace only its stale WorkOS ID. If no local email exists, create the user and its initial grant as usual. The authenticated WorkOS email is suitable for this reconciliation because AuthKit verifies email ownership and prevents unsafe identity linking.
 - Emit redacted callback-stage logs without codes, states, cookies, or email addresses.
-- Before live validation, inspect the deployment aliases and verify `nvm.fyi`, `www.nvm.fyi`, and `api.nvm.fyi` resolve to the target deployment.
+- Before live validation, inspect the deployment aliases and verify `nvm.fyi`, `www.nvm.fyi`, and `api.nvm.fyi` resolve to the target deployment. Use `https://www.nvm.fyi/api/auth/callback` as the non-redirecting production WorkOS callback; retain the apex callback only during migration.
 
 ## What did not prove the fix
 

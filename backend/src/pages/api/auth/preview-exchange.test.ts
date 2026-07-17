@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 process.env.VERCEL_ENV = 'preview';
-process.env.PREVIEW_GATEWAY_ORIGIN = 'https://nvm.fyi';
+process.env.PREVIEW_GATEWAY_ORIGIN = 'https://www.nvm.fyi';
 process.env.PREVIEW_START_KEY = 'preview-start-test-key';
 process.env.GATEWAY_STATE_KEY = 'gateway-state-test-key';
 process.env.GATEWAY_STATE_REDIS_URL = 'https://gateway-state';

@@ -12,7 +12,7 @@ export const GET: APIRoute = async ({ url, request, redirect }) => {
     const target = previewTargetFromEnvironment();
     const gatewayOrigin = env('PREVIEW_GATEWAY_ORIGIN');
     const intent = target && gatewayOrigin && previewAuthConfigured() ? await createPreviewStartIntent(target) : null;
-    if (!intent || !/^https:\/\/nvm\.fyi$/.test(gatewayOrigin ?? '')) return new Response('Preview authentication is unavailable', { status: 503 });
+    if (!intent || !/^https:\/\/www\.nvm\.fyi$/.test(gatewayOrigin ?? '')) return new Response('Preview authentication is unavailable', { status: 503 });
     return redirect(`${gatewayOrigin}/api/auth/preview-start?intent=${encodeURIComponent(intent)}`);
   }
   const state = await createProductionState(url.searchParams.get('return_to'));
