@@ -233,6 +233,35 @@ test('production plist reader resolves a contained Wrapper app when the top-leve
   assert.equal((received[1] as string[]).at(-1), innerPlistPath);
 });
 
+test('production plist reader rejects Wrapper metadata that canonically escapes the selected app', async () => {
+  const wrapperPath = path.join(appPath, 'Wrapper');
+  const innerPlistPath = path.join(wrapperPath, 'ios_prod.app', 'Info.plist');
+  const reader = createProductionPlistReader(
+    () => Promise.resolve({ stdout: bundleId }),
+    plistFileSystem(
+      {
+        [appPath]: appPath,
+        [innerPlistPath]: '/private/tmp/escaped-Info.plist',
+      },
+      {
+        [wrapperPath]: [
+          {
+            name: 'ios_prod.app',
+            isDirectory: () => true,
+            isSymbolicLink: () => false,
+          },
+        ],
+      },
+    ),
+  );
+  const unavailable = fixture({ readBundleId: reader });
+  const result = await unavailable.service.discover(appPath);
+  assert.equal(result.status, 'unavailable');
+  if (result.status === 'unavailable') {
+    assert.equal(result.reasonCode, 'plist');
+  }
+});
+
 test('unsupported missing-top-level-plist layouts produce concise actionable text', async () => {
   const reader = createProductionPlistReader(
     () => Promise.resolve({ stdout: bundleId }),
