@@ -43,3 +43,143 @@ test('force quit paints its view before running the OS process scan', async () =
     ['Notes'],
   );
 });
+
+test('app root/search work stays synchronous while Uninstall is a macOS-only lazy secondary action', async () => {
+  let discoveries = 0;
+  const app = {
+    id: 'example',
+    name: 'Example',
+    path: '/Applications/Example.app',
+  };
+  initExtensionContext({
+    appIndexService: { get: () => [app] },
+    hasCapability: (capability) => capability === 'app-uninstall',
+    appUninstallService: {
+      discover: async () => {
+        discoveries += 1;
+        return {
+          status: 'unavailable' as const,
+          message: 'Unavailable in this test',
+        };
+      },
+      selected: () => [],
+      trash: async () => ({
+        status: 'failed',
+        moved: [],
+        untouched: [],
+        notes: [],
+      }),
+    },
+    actionAliases: () => [],
+    rankAction: () => true,
+  });
+  const ctx = {
+    desktop: { apps: { list: () => [app] } },
+    actions: {
+      run: (title, handler, options = {}) => ({
+        title,
+        __handler: handler,
+        ...options,
+      }),
+    },
+    ui: { error: (title, message) => ({ type: 'preview', title, message }) },
+  };
+  const extension = createAppsExtension();
+  const root = extension.rootItems(ctx as any);
+  const appItem = root.find((item: any) => item.id === 'app:example') as any;
+  assert.equal(discoveries, 0);
+  assert.equal(appItem.primaryAction.title, 'Open Example');
+  assert.equal(appItem.actions[0].title, 'Uninstall Example…');
+  await appItem.actions[0].__handler();
+  assert.equal(discoveries, 1);
+
+  initExtensionContext({
+    hasCapability: () => false,
+    appUninstallService: null,
+  });
+  const unsupported = createAppsExtension().rootItems(ctx as any);
+  assert.equal(
+    (unsupported.find((item: any) => item.id === 'app:example') as any).actions
+      .length,
+    0,
+  );
+});
+
+test('Uninstall form defaults to the app, confirms host snapshot paths, and rejects zero selection', async () => {
+  const app = {
+    id: 'example',
+    name: 'Example',
+    path: '/Applications/Example.app',
+  };
+  const candidates = [
+    { id: 'app-id', kind: 'app', path: app.path },
+    {
+      id: 'cache-id',
+      kind: 'associated',
+      path: '/Users/tester/Library/Caches/com.example.App',
+    },
+  ];
+  const snapshot = { candidates };
+  initExtensionContext({
+    appIndexService: { get: () => [app] },
+    hasCapability: (capability) => capability === 'app-uninstall',
+    appUninstallService: {
+      discover: async () => ({
+        status: 'ready' as const,
+        snapshot,
+        candidates,
+        notes: [
+          { code: 'missing-associated', message: 'Some locations missing' },
+        ],
+      }),
+      selected: (_snapshot, values = {}) =>
+        candidates.filter((candidate) => values[candidate.id] === true),
+      trash: async () => ({
+        status: 'complete',
+        moved: [app.path],
+        untouched: [],
+        notes: [],
+      }),
+    },
+    actionAliases: () => [],
+    rankAction: () => true,
+  });
+  const ctx = {
+    desktop: { apps: { list: () => [app] } },
+    actions: {
+      run: (title, handler, options = {}) => ({
+        title,
+        __handler: handler,
+        ...options,
+      }),
+    },
+    ui: {
+      form: (input) => input,
+      confirm: (input) => input,
+      toast: (input) => ({ toast: input }),
+      preview: (input) => input,
+      error: (title, message) => ({ type: 'preview', title, message }),
+    },
+  };
+  const root = createAppsExtension().rootItems(ctx as any);
+  const action = (root.find((item: any) => item.id === 'app:example') as any)
+    .actions[0];
+  const form = await action.__handler();
+  assert.equal(
+    form.fields.find((field: any) => field.id === 'app-id').value,
+    true,
+  );
+  assert.equal(
+    form.fields.find((field: any) => field.id === 'cache-id').value,
+    false,
+  );
+  const empty = form.submitAction.__handler(null, { formValues: {} });
+  assert.equal(empty.toast.tone, 'error');
+  const confirmation = form.submitAction.__handler(null, {
+    formValues: { 'app-id': true, ignored: true },
+  });
+  assert.equal(confirmation.message, app.path);
+  assert.equal(confirmation.onConfirm.requiresConfirmation, undefined);
+  const complete = await confirmation.onConfirm.__handler();
+  assert.equal(complete.toast.message, '1 item moved to Trash');
+});

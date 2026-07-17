@@ -14,6 +14,12 @@ export const extensionContext: {
   };
   appIndexService: { get: () => any[] };
   runningAppStatus: { refresh: (reason: string) => Promise<Set<string>> };
+  hasCapability: (capability: string) => boolean;
+  appUninstallService: {
+    discover: (appPath: string) => Promise<any>;
+    selected: (snapshot: any, values?: Record<string, unknown>) => any[];
+    trash: (snapshot: any, values?: Record<string, unknown>) => Promise<any>;
+  } | null;
   FILE_RESULT_LIMIT: number;
   usageBoost: (actionId: any) => number;
   recentBoost: (actionId: any) => number;
