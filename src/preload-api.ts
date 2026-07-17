@@ -162,6 +162,11 @@ export type NevermindApi = {
   setPaletteMode: (mode: PaletteMode) => Promise<void>;
   hide: () => Promise<void>;
   testInvoke: () => Promise<unknown>;
+  testStageExtensionProposal: (
+    filename: string,
+    source: string,
+  ) => Promise<{ draftFile: string }>;
+  testRunJob: (id: string) => Promise<{ found: boolean }>;
   quitApp: () => Promise<{ ok: boolean }>;
   shortcutReady: () => Promise<void>;
   requestCameraAccess: () => Promise<{ ok: boolean; status: string }>;

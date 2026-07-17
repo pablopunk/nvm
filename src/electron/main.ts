@@ -89,6 +89,8 @@ import {
 } from './test-mode';
 
 configureNvmTestMode();
+if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
+  app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
 if (!isNvmTestMode) initSentry();
 
 import { feedbackView } from '../feedback';
@@ -1157,14 +1159,14 @@ function visibleExtensionActionEntries() {
 function searchableExtensions() {
   const extensions = visibleExtensions();
   return isNvmTestMode
-    ? extensions.filter((extension) => extension.id === 'nevermind.system')
+    ? extensions.filter((extension) => testModeExtensionIsSafe(extension.id))
     : extensions;
 }
 
 function searchableExtensionActionEntries() {
   const entries = visibleExtensionActionEntries();
   return isNvmTestMode
-    ? entries.filter((entry) => entry.extension.id === 'nevermind.system')
+    ? entries.filter((entry) => testModeExtensionIsSafe(entry.extension.id))
     : entries;
 }
 
@@ -2134,13 +2136,20 @@ function testModeSafeAction() {
   };
 }
 
+function testModeExtensionIsSafe(extensionId: string) {
+  return [
+    'nevermind.system',
+    'nevermind.extensions',
+    'pab53.lifecycle',
+  ].includes(extensionId);
+}
+
 function testModePaletteActionIsSafe(action) {
   if (!isNvmTestMode) return true;
   return (
     action.kind === 'test-action' ||
     (action.kind === 'extension-action' &&
-      action.extensionId === 'nevermind.system' &&
-      action.commandId === 'builtin:settings')
+      testModeExtensionIsSafe(action.extensionId))
   );
 }
 
@@ -3263,7 +3272,7 @@ function registerTestModeIpcHandlers() {
     searchActions(query, options),
   );
   handle('actions:execute', (_event, action) => {
-    if (action?.kind !== 'test-action')
+    if (!testModePaletteActionIsSafe(action))
       return {
         toast: { message: 'Production actions are disabled in test mode' },
       };
@@ -3275,6 +3284,14 @@ function registerTestModeIpcHandlers() {
       console.error('test action failed', error),
     );
     return { found: actions.length > 0 };
+  });
+  handle('test:stage-extension-proposal', (_event, filename, source) =>
+    stageExtensionProposal(filename, source),
+  );
+  handle('test:run-job', async (_event, id) => {
+    if (!jobRegistry.has(id)) return { found: false };
+    await jobRegistry.run(id, 'electron-smoke');
+    return { found: true };
   });
   handle('view-action:execute', (_event, action) =>
     executeViewActionForIpc(action),

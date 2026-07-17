@@ -79,6 +79,63 @@ async function updateManifest(patch: Record<string, unknown>) {
   );
 }
 
+function lifecycleExtensionSource(markerPath: string) {
+  return `import { appendFile } from 'node:fs/promises';
+
+export default {
+  id: 'pab53.lifecycle',
+  title: 'PAB-53 Lifecycle',
+  capabilities: [],
+  commands: [
+    {
+      id: 'command',
+      title: 'PAB-53 Lifecycle v1',
+      mode: 'background',
+      triggers: [{ type: 'startup' }],
+      run: async () => {
+        await appendFile(${JSON.stringify(markerPath)}, 'v1\\n');
+      },
+    },
+  ],
+};
+`;
+}
+
+function actionNamed(view: any, title: string) {
+  for (const item of view?.items || []) {
+    for (const section of item.actionPanel?.sections || []) {
+      const action = section.actions?.find(
+        (candidate: any) => candidate.title === title,
+      );
+      if (action) return action;
+    }
+  }
+  throw new Error(`Missing ${title} action in Extensions view`);
+}
+
+async function searchTitles(page: any, query: string) {
+  return page.evaluate(
+    async (value: string) =>
+      (await window.nvm.search(value)).map((action) => action.title),
+    query,
+  );
+}
+
+async function openExtensionsView(page: any) {
+  return page.evaluate(async () => {
+    const actions = await window.nvm.search('Extensions');
+    const extensions = actions.find(
+      (action) =>
+        action.extensionId === 'nevermind.extensions' &&
+        action.commandId === 'extensions',
+    );
+    if (!extensions) throw new Error('Extensions command not found');
+    const result = await window.nvm.execute(extensions);
+    if (!result?.view) throw new Error('Extensions view did not open');
+    return result.view;
+  });
+}
+
 test('searches and invokes the safe built-in action, then hides and shows', async () => {
   await fs.mkdir(artifactDir, { recursive: true });
   await fs.writeFile(
@@ -97,7 +154,11 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
         path.join(root, 'dist/main/main.js'),
         `--user-data-dir=${userDataDir}`,
       ],
-      env: { ...process.env, NVM_TEST_MODE: '1' },
+      env: {
+        ...process.env,
+        NVM_TEST_MODE: '1',
+        NVM_TEST_USER_DATA_DIR: userDataDir,
+      },
       timeout: 20_000,
     });
     const childProcess = app.process();
@@ -207,4 +268,149 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
     }
   }
   if (cleanupError) throw cleanupError;
+});
+
+test('proposal activation, rollback, disable, and re-enable are transactional', async () => {
+  const lifecycleUserDataDir = path.join(userDataDir, 'pab53-lifecycle');
+  const extensionsDir = path.join(lifecycleUserDataDir, 'extensions');
+  const draftsDir = path.join(lifecycleUserDataDir, 'extension-drafts');
+  const filename = 'pab53-lifecycle.ts';
+  const draftFile = path.join(draftsDir, filename);
+  const markerPath = path.join(lifecycleUserDataDir, 'trigger-runs.txt');
+  const source = lifecycleExtensionSource(markerPath);
+  await fs.mkdir(extensionsDir, { recursive: true });
+  await fs.mkdir(draftsDir, { recursive: true });
+  await fs.writeFile(draftFile, source);
+  await fs.writeFile(
+    path.join(lifecycleUserDataDir, 'state.json'),
+    `${JSON.stringify(
+      {
+        extensionManager: {
+          schemaVersion: 1,
+          files: {},
+          proposals: {
+            [filename]: {
+              draftFile,
+              provenance: 'ai',
+              updatedAt: Date.now(),
+            },
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  let app: ElectronApplication | undefined;
+  let trackedPids: number[] = [];
+  try {
+    app = await electron.launch({
+      executablePath: require('electron') as string,
+      args: [
+        path.join(root, 'dist/main/main.js'),
+        `--user-data-dir=${lifecycleUserDataDir}`,
+      ],
+      env: {
+        ...process.env,
+        NVM_TEST_MODE: '1',
+        NVM_TEST_USER_DATA_DIR: lifecycleUserDataDir,
+      },
+      timeout: 20_000,
+    });
+    trackedPids = await processTree(app.process().pid);
+    const page = await app.firstWindow();
+    await expect(page.locator('input[placeholder]').first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).not.toContain(
+      'PAB-53 Lifecycle v1',
+    );
+    await expect.poll(() => fs.stat(markerPath).catch(() => null)).toBeNull();
+
+    let extensionsView = await openExtensionsView(page);
+    await fs.writeFile(
+      path.join(artifactDir, 'extension-lifecycle-view.json'),
+      `${JSON.stringify(extensionsView, null, 2)}\n`,
+    );
+    const enable = actionNamed(extensionsView, 'Enable');
+    extensionsView = await page.evaluate(
+      async (action) => (await window.nvm.runViewAction(action)).view,
+      enable,
+    );
+    await expect
+      .poll(() => searchTitles(page, 'PAB-53 Lifecycle v1'))
+      .toContain('PAB-53 Lifecycle v1');
+    await expect
+      .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
+      .toBe('v1\n');
+
+    await page.evaluate(
+      ([name, proposal]) =>
+        window.nvm.testStageExtensionProposal(name, proposal),
+      [filename, 'export default {'] as const,
+    );
+    extensionsView = await openExtensionsView(page);
+    const apply = actionNamed(extensionsView, 'Apply Update');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      apply,
+    );
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).toContain(
+      'PAB-53 Lifecycle v1',
+    );
+    expect(
+      await page.evaluate(() =>
+        window.nvm.testRunJob('extension.pab53.lifecycle.command'),
+      ),
+    ).toEqual({ found: true });
+    await expect
+      .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
+      .toBe('v1\nv1\n');
+
+    extensionsView = await openExtensionsView(page);
+    const discard = actionNamed(extensionsView, 'Discard Proposal');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      discard,
+    );
+    extensionsView = await openExtensionsView(page);
+    const disable = actionNamed(extensionsView, 'Disable');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      disable,
+    );
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).not.toContain(
+      'PAB-53 Lifecycle v1',
+    );
+    expect(
+      await page.evaluate(() =>
+        window.nvm.testRunJob('extension.pab53.lifecycle.command'),
+      ),
+    ).toEqual({ found: false });
+
+    extensionsView = await openExtensionsView(page);
+    const reEnable = actionNamed(extensionsView, 'Enable');
+    await page.evaluate(
+      async (action) => window.nvm.runViewAction(action),
+      reEnable,
+    );
+    await expect
+      .poll(() => searchTitles(page, 'PAB-53 Lifecycle v1'))
+      .toContain('PAB-53 Lifecycle v1');
+    await expect
+      .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
+      .toBe('v1\nv1\nv1\n');
+  } finally {
+    if (app) {
+      const closePromise = app.close().catch(() => {});
+      await Promise.race([
+        closePromise,
+        new Promise((resolve) => setTimeout(resolve, 2_000)),
+      ]);
+      const survivors = await waitForProcessesToExit(trackedPids, 500);
+      if (survivors.length) terminateTrackedProcesses(survivors, 'SIGKILL');
+    }
+  }
 });
