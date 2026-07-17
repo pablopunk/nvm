@@ -55,3 +55,8 @@ Do not provision or copy these secrets, ACLs, databases, WorkOS settings, or Ver
 Only enable preview auth for trusted internal branches. In Vercel Project Settings → Environment Variables, scope WorkOS, cookie, database, and Redis secrets to the approved Preview branches rather than all previews. Keep Security → Git Fork Protection enabled so fork PR deployments cannot receive those variables. If fork or untrusted preview builds must run, use a separate non-production WorkOS client, cookie/state secret, Redis namespace, and isolated dependencies instead of production-equivalent credentials. Environment changes require a new deployment.
 
 When working from a git worktree, ignored local env files are not inherited. Run `pnpm worktree:env:copy` from the worktree to copy env files from the canonical checkout without printing secrets; use `--dry-run` to preview and `--force` only when you intend to overwrite local env files. If `.vercel/project.json` is still missing, run `vercel link` before Vercel deploy commands; never commit `.env*` or `.vercel/` files.
+
+After an approved production deployment, follow the
+[production auth and proxy billing smoke](../src/docs/production-auth-proxy-smoke.md)
+to verify the real WorkOS callback, packaged device handoff, structured tool
+calling, billing debit, and non-zero Google usage telemetry.

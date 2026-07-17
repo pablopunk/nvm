@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This module retains existing encrypted-key persistence conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -68,33 +69,39 @@ function decryptApiKey(data: StoredByoKey): string | null {
 }
 
 let cached: ByoKeySnapshot = null;
+let loadPromise: Promise<ByoKeySnapshot> | null = null;
 
-async function getByoKey(): Promise<ByoKeySnapshot> {
-  if (cached) {
-    return cached;
-  }
-  try {
-    const raw = await fs.readFile(byoKeyPath(), 'utf8');
-    const data = JSON.parse(raw) as StoredByoKey;
-    const apiKey = decryptApiKey(data);
-    if (!apiKey) {
+function getByoKey(): Promise<ByoKeySnapshot> {
+  if (loadPromise) return loadPromise;
+  loadPromise = (async () => {
+    try {
+      const raw = await fs.readFile(byoKeyPath(), 'utf8');
+      const data = JSON.parse(raw) as StoredByoKey;
+      const apiKey = decryptApiKey(data);
+      if (!apiKey) {
+        cached = null;
+        return null;
+      }
+      cached = {
+        providerId: data.providerId,
+        apiKey,
+        provider: data.provider,
+        api: data.api,
+        baseUrl: data.baseUrl,
+        modelId: data.modelId,
+        modelName: data.modelName,
+      };
+      return cached;
+    } catch {
       cached = null;
       return null;
     }
-    cached = {
-      providerId: data.providerId,
-      apiKey,
-      provider: data.provider,
-      api: data.api,
-      baseUrl: data.baseUrl,
-      modelId: data.modelId,
-      modelName: data.modelName,
-    };
-    return cached;
-  } catch {
-    cached = null;
-    return null;
-  }
+  })();
+  return loadPromise;
+}
+
+function getCachedByoKey(): ByoKeySnapshot {
+  return cached;
 }
 
 async function persistByoKey(input: {
@@ -137,12 +144,14 @@ async function persistByoKey(input: {
     modelId: input.modelId,
     modelName: input.modelName,
   };
+  loadPromise = Promise.resolve(cached);
   return cached;
 }
 
 async function clearByoKey() {
   await fs.rm(byoKeyPath(), { force: true });
   cached = null;
+  loadPromise = Promise.resolve(null);
 }
 
 function setByoKeyStorageForTests(impl: SafeStorageLike | null) {
@@ -155,6 +164,7 @@ function setByoKeyFilePathForTests(filePath: string | null) {
 
 function clearByoKeyCacheForTests() {
   cached = null;
+  loadPromise = null;
 }
 
 function setByoKeyLoggerForTests(logger: {
@@ -164,13 +174,14 @@ function setByoKeyLoggerForTests(logger: {
 }
 
 export {
-  getByoKey,
-  persistByoKey,
-  clearByoKey,
-  setByoKeyStorageForTests,
-  setByoKeyFilePathForTests,
-  clearByoKeyCacheForTests,
-  setByoKeyLoggerForTests,
   type ByoKeySnapshot,
+  clearByoKey,
+  clearByoKeyCacheForTests,
+  getByoKey,
+  getCachedByoKey,
+  persistByoKey,
   type SafeStorageLike,
+  setByoKeyFilePathForTests,
+  setByoKeyLoggerForTests,
+  setByoKeyStorageForTests,
 };

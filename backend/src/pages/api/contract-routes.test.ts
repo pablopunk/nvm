@@ -232,6 +232,91 @@ test('device auth exchange returns pending and missing-code contracts', async ()
   assert.deepEqual(await pending.json(), { status: 'pending' });
 });
 
+test('device auth exchange returns terminal expired and consumed contracts', async function returnsTerminalDeviceContracts() {
+  installDb(createFakeDb({ selects: [[]] }));
+  const expired = await exchangeDeviceAuth(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/auth/device/exchange', {
+        method: 'POST',
+        body: JSON.stringify({ code: 'expired_code' }),
+      }),
+    ),
+  );
+  assert.equal(expired.status, 410);
+  assert.deepEqual(await expired.json(), { status: 'expired' });
+
+  installDb(
+    createFakeDb({
+      selects: [
+        [
+          {
+            code: 'consumed_code',
+            approvedAt: new Date(),
+            consumedAt: new Date(),
+            userId: 'user_1',
+          },
+        ],
+      ],
+    }),
+  );
+  const consumed = await exchangeDeviceAuth(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/auth/device/exchange', {
+        method: 'POST',
+        body: JSON.stringify({ code: 'consumed_code' }),
+      }),
+    ),
+  );
+  assert.equal(consumed.status, 410);
+  assert.deepEqual(await consumed.json(), { status: 'consumed' });
+});
+
+test('approved device auth exchange consumes the code and returns a scoped token', async function exchangesApprovedDeviceCode() {
+  const db = installDb(
+    createFakeDb({
+      selects: [
+        [
+          {
+            code: 'approved_code',
+            approvedAt: new Date(),
+            consumedAt: null,
+            userId: 'user_1',
+            deviceLabel: 'Pablo Mac',
+          },
+        ],
+        [{ id: 'user_1', email: 'pablo@example.com', role: 'user' }],
+      ],
+      updates: [[{ code: 'approved_code' }]],
+      inserts: [
+        [
+          {
+            id: 'token_1',
+            prefix: 'nvm_pat_test',
+            name: 'Pablo Mac',
+            createdAt: new Date(),
+          },
+        ],
+      ],
+    }),
+  );
+  const response = await exchangeDeviceAuth(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/auth/device/exchange', {
+        method: 'POST',
+        body: JSON.stringify({ code: 'approved_code' }),
+      }),
+    ),
+  );
+  const body = (await response.json()) as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, 'ok');
+  assert.match(body.token, /^nvm_pat_/);
+  assert.deepEqual(body.user, { email: 'pablo@example.com', role: 'user' });
+  assert.equal((db.insertedValues[0] as any).name, 'Pablo Mac');
+  assert.notEqual((db.insertedValues[0] as any).tokenHash, body.token);
+});
+
 test('active-model route returns descriptor contract with compatibility headers', async () => {
   installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects() }));
@@ -395,6 +480,90 @@ test('proxy route honors extension smart/fast model selection headers', async ()
   assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
 });
 
+test('proxy preserves structured tool calls and debits the successful request', async function proxiesAndBillsToolCall() {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(
+    createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }),
+  );
+  const tool = {
+    type: 'function',
+    function: {
+      name: 'lookup_weather',
+      description: 'Look up the weather',
+      parameters: {
+        type: 'object',
+        properties: { city: { type: 'string' } },
+        required: ['city'],
+      },
+    },
+  };
+  const toolCall = {
+    id: 'call_weather_1',
+    type: 'function',
+    function: { name: 'lookup_weather', arguments: '{"city":"Madrid"}' },
+  };
+  let forwardedBody = '';
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    }
+    assert.equal(url, 'https://upstream.example/v1/chat/completions');
+    forwardedBody = String(init?.body);
+    return Response.json({
+      choices: [
+        {
+          finish_reason: 'tool_calls',
+          message: { role: 'assistant', content: null, tool_calls: [toolCall] },
+        },
+      ],
+      usage: { prompt_tokens: 9, completion_tokens: 4 },
+    });
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        model: 'placeholder',
+        messages: [{ role: 'user', content: 'What is the weather in Madrid?' }],
+        tools: [tool],
+        tool_choice: 'auto',
+      }),
+    ),
+  );
+  const body = (await response.json()) as any;
+  const forwarded = JSON.parse(forwardedBody);
+  const requestId = response.headers.get('x-request-id');
+
+  assert.equal(response.status, 200);
+  assert.equal(forwarded.model, 'gemini-3-flash');
+  assert.deepEqual(forwarded.tools, [tool]);
+  assert.equal(forwarded.tool_choice, 'auto');
+  assert.deepEqual(body.choices[0].message.tool_calls, [toolCall]);
+  assert.deepEqual(db.insertedValues[0], {
+    userId: 'user_1',
+    delta: -1,
+    kind: 'paid',
+    reason: 'ai_usage',
+    refId: requestId,
+  });
+  assert.equal((db.insertedValues[1] as any).inputTokens, 9);
+  assert.equal((db.insertedValues[1] as any).outputTokens, 4);
+  assert.equal((db.insertedValues[1] as any).costCredits, 1);
+  assert.equal((db.insertedValues[1] as any).requestId, requestId);
+});
+
 test('proxy route returns the rate-limit contract', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
@@ -538,7 +707,13 @@ test('google proxy records split streaming usage metadata', async () => {
   assert.equal(response.status, 200);
   assert.equal(text, splitGoogleUsageStream.join(''));
   assert.equal(db.insertedValues.length, 2);
-  assert.equal((db.insertedValues[0] as any).kind, 'paid');
+  assert.deepEqual(db.insertedValues[0], {
+    userId: 'user_1',
+    delta: -1,
+    kind: 'paid',
+    reason: 'ai_usage',
+    refId: response.headers.get('x-request-id'),
+  });
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
   assert.equal((db.insertedValues.at(-1) as any).costCredits, 1);

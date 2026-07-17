@@ -6,6 +6,13 @@ import { BillingConfigError, BillingEligibilityError, billingCatalog, createBill
 import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
+Object.assign(process.env, {
+  VERCEL_ENV: 'production',
+  PRODUCTION_ORIGIN: 'https://www.nvm.fyi',
+  PUBLIC_DASHBOARD_URL: 'https://www.nvm.fyi',
+  PREVIEW_GATEWAY_ORIGIN: 'https://www.nvm.fyi',
+});
+
 const user = {
   id: '11111111-1111-1111-1111-111111111111',
   workosUserId: 'workos_1',

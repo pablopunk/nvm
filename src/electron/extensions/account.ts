@@ -1,13 +1,16 @@
 // biome-ignore-all lint: This extension follows the existing palette-extension API conventions.
-import { getNevermindAuth, signOutFromNevermind } from '../nevermind-auth';
-import { clearByoKey, getByoKey } from '../byo-key';
+import { clearByoKey, getCachedByoKey } from '../byo-key';
+import {
+  getCachedNevermindAuth,
+  signOutFromNevermind,
+} from '../nevermind-auth';
 import { extensionContext } from './_context';
 
 export function createAccountExtension() {
   const extensionId = 'nevermind.account';
 
-  async function accountItem() {
-    const existing = await getNevermindAuth();
+  function accountItem() {
+    const existing = getCachedNevermindAuth();
     if (existing) {
       return {
         id: 'account-logout',
@@ -163,7 +166,7 @@ export function createAccountExtension() {
     };
   }
 
-  async function backendStatusItem() {
+  function backendStatusItem() {
     const status = extensionContext.getNevermindDebugStatus();
     const backend = status.backend
       ? `${status.backend.environment} (${status.backend.version})`
@@ -186,8 +189,8 @@ export function createAccountExtension() {
     };
   }
 
-  async function byoKeyItem() {
-    const byo = await getByoKey();
+  function byoKeyItem() {
+    const byo = getCachedByoKey();
     if (!byo) return null;
     return {
       id: 'byo-key-clear',
@@ -218,23 +221,23 @@ export function createAccountExtension() {
     id: extensionId,
     title: 'Nevermind Account',
     permissions: [] as const,
-    searchItems: async () => {
+    searchItems: () => {
       const items = [
-        await accountItem(),
+        accountItem(),
         backendEnvironmentItem(),
-        await backendStatusItem(),
+        backendStatusItem(),
       ];
-      const byo = await byoKeyItem();
+      const byo = byoKeyItem();
       if (byo) items.push(byo);
       return items;
     },
-    rootItems: async () => {
+    rootItems: () => {
       const items = [
-        await accountItem(),
+        accountItem(),
         backendEnvironmentItem(),
-        await backendStatusItem(),
+        backendStatusItem(),
       ];
-      const byo = await byoKeyItem();
+      const byo = byoKeyItem();
       if (byo) items.push(byo);
       return items;
     },

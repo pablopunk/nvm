@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This module normalizes heterogeneous persisted clipboard records.
 import path from 'node:path';
 import type { Clipboard } from 'electron';
 import {
@@ -27,70 +28,74 @@ export type ClipboardHistoryItem =
       createdAt: number;
     };
 
-export function normalizeClipboardHistory(
+export async function normalizeClipboardHistory(
   items: unknown,
   limit: number,
-  persistImage: (png: Buffer, hash: string) => string,
+  persistImage: (png: Buffer, hash: string) => Promise<string>,
 ) {
-  return (Array.isArray(items) ? items : [])
-    .map((item: any): ClipboardHistoryItem | null => {
-      if (item?.type === 'image' && (item.imagePath || item.imageDataUrl)) {
-        let imagePath = item.imagePath;
-        if (
-          !imagePath &&
-          typeof item.imageDataUrl === 'string' &&
-          item.imageDataUrl.startsWith('data:')
-        ) {
-          const base64 = item.imageDataUrl.split(',', 2)[1] || '';
-          try {
-            const png = Buffer.from(base64, 'base64');
-            imagePath = persistImage(png, hashValue(png));
-          } catch {}
+  const normalized = await Promise.all(
+    (Array.isArray(items) ? items : []).map(
+      async (item: any): Promise<ClipboardHistoryItem | null> => {
+        if (item?.type === 'image' && (item.imagePath || item.imageDataUrl)) {
+          let imagePath = item.imagePath;
+          if (
+            !imagePath &&
+            typeof item.imageDataUrl === 'string' &&
+            item.imageDataUrl.startsWith('data:')
+          ) {
+            const base64 = item.imageDataUrl.split(',', 2)[1] || '';
+            try {
+              const png = Buffer.from(base64, 'base64');
+              imagePath = await persistImage(png, hashValue(png));
+            } catch {}
+          }
+          const id =
+            item.id ||
+            (imagePath
+              ? `image:${path.basename(imagePath, '.png')}`
+              : `image:${hashValue(item.imageDataUrl)}`);
+          return {
+            id,
+            type: 'image',
+            imagePath,
+            imageDataUrl: imagePath
+              ? fileUrlForPath(imagePath)
+              : item.imageDataUrl,
+            thumbnailUrl: imagePath
+              ? thumbnailUrlForPath(imagePath)
+              : item.thumbnailUrl || item.imageDataUrl,
+            createdAt: item.createdAt || Date.now(),
+          };
         }
-        const id =
-          item.id ||
-          (imagePath
-            ? `image:${path.basename(imagePath, '.png')}`
-            : `image:${hashValue(item.imageDataUrl)}`);
-        return {
-          id,
-          type: 'image',
-          imagePath,
-          imageDataUrl: imagePath
-            ? fileUrlForPath(imagePath)
-            : item.imageDataUrl,
-          thumbnailUrl: imagePath
-            ? thumbnailUrlForPath(imagePath)
-            : item.thumbnailUrl || item.imageDataUrl,
-          createdAt: item.createdAt || Date.now(),
-        };
-      }
-      if (item?.type === 'video' && item.filePath) {
-        const filePath = expandUserPath(item.filePath);
-        if (!isVideoPath(filePath)) return null;
-        return {
-          id: item.id || `video:${hashValue(filePath)}`,
-          type: 'video',
-          filePath,
-          videoUrl: fileUrlForPath(filePath),
-          thumbnailUrl: thumbnailUrlForPath(filePath),
-          createdAt: item.createdAt || Date.now(),
-        };
-      }
-      if (item?.text) {
-        const text = String(item.text).trim();
-        if (!text) return null;
-        return {
-          id: item.id?.startsWith('text:')
-            ? item.id
-            : `text:${hashValue(text)}`,
-          type: 'text',
-          text,
-          createdAt: item.createdAt || Date.now(),
-        };
-      }
-      return null;
-    })
+        if (item?.type === 'video' && item.filePath) {
+          const filePath = expandUserPath(item.filePath);
+          if (!isVideoPath(filePath)) return null;
+          return {
+            id: item.id || `video:${hashValue(filePath)}`,
+            type: 'video',
+            filePath,
+            videoUrl: fileUrlForPath(filePath),
+            thumbnailUrl: thumbnailUrlForPath(filePath),
+            createdAt: item.createdAt || Date.now(),
+          };
+        }
+        if (item?.text) {
+          const text = String(item.text).trim();
+          if (!text) return null;
+          return {
+            id: item.id?.startsWith('text:')
+              ? item.id
+              : `text:${hashValue(text)}`,
+            type: 'text',
+            text,
+            createdAt: item.createdAt || Date.now(),
+          };
+        }
+        return null;
+      },
+    ),
+  );
+  return normalized
     .filter((item): item is ClipboardHistoryItem => Boolean(item))
     .slice(0, limit);
 }

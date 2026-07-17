@@ -3,11 +3,12 @@ import test from 'node:test';
 import { createPreviewStartIntent, setPreviewAuthStoreForTests } from '../../../lib/preview-auth';
 import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../../lib/ratelimit';
 
-const keys = ['VERCEL_ENV', 'PRODUCTION_ORIGIN', 'WORKOS_REDIRECT_URI', 'GATEWAY_STATE_KEY', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'WORKOS_API_KEY', 'WORKOS_CLIENT_ID'];
+const keys = ['VERCEL_ENV', 'PRODUCTION_ORIGIN', 'PUBLIC_DASHBOARD_URL', 'WORKOS_REDIRECT_URI', 'WORKOS_COOKIE_PASSWORD', 'GATEWAY_STATE_KEY', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'WORKOS_API_KEY', 'WORKOS_CLIENT_ID'];
 const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 Object.assign(process.env, {
   WORKOS_API_KEY: 'sk_test_redirect_config',
   WORKOS_CLIENT_ID: 'client_redirect_config',
+  WORKOS_COOKIE_PASSWORD: 'redirect-config-cookie-password-with-32-characters',
   GATEWAY_STATE_KEY: 'gateway-state-test',
   PREVIEW_START_KEY: 'preview-start-test',
   PREVIEW_GATEWAY_ORIGIN: 'https://www.nvm.fyi',
@@ -28,7 +29,11 @@ function noSideEffectResponse(response: Response) {
 
 function validAuthRedirectConfiguration() {
   process.env.PRODUCTION_ORIGIN = 'https://www.nvm.fyi';
+  process.env.PUBLIC_DASHBOARD_URL = 'https://www.nvm.fyi';
+  process.env.WORKOS_API_KEY = 'sk_test_redirect_config';
+  process.env.WORKOS_CLIENT_ID = 'client_redirect_config';
   process.env.WORKOS_REDIRECT_URI = 'https://www.nvm.fyi/api/auth/callback';
+  process.env.WORKOS_COOKIE_PASSWORD = 'redirect-config-cookie-password-with-32-characters';
   process.env.PREVIEW_GATEWAY_ORIGIN = 'https://www.nvm.fyi';
   process.env.PREVIEW_START_KEY = 'preview-start-test';
 }

@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import fsSync from 'node:fs';
+import { createReadStream, watch } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -38,8 +38,15 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
+import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
+import {
+  DEEP_LINK_SCHEME,
+  type ParsedAuthDeepLink,
+  parseAuthDeepLink,
+  setDeepLinkLogger,
+} from './deep-link';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -61,15 +68,10 @@ import {
   getNevermindAuth,
   isSigningIn,
   nevermindEnvironmentForBaseUrl,
-  signInToNevermind,
   setActiveNevermindAuthBaseUrl,
+  signInToNevermind,
 } from './nevermind-auth';
-import {
-  DEEP_LINK_SCHEME,
-  parseAuthDeepLink,
-  setDeepLinkLogger,
-  type ParsedAuthDeepLink,
-} from './deep-link';
+import { switchNevermindBackendEnvironment as switchBackendEnvironment } from './nevermind-backend-environment';
 import {
   checkNevermindCompatibility,
   currentNevermindCompatibilityManifest,
@@ -78,7 +80,6 @@ import {
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
-import { switchNevermindBackendEnvironment as switchBackendEnvironment } from './nevermind-backend-environment';
 import { captureException, initSentry } from './sentry';
 import {
   configureNvmTestMode,
@@ -108,13 +109,13 @@ import {
   normalizeLoaderItems,
   resolveLoaderEmptyView,
 } from './data-loader';
-import { createExtensionJsonStore } from './extension-json-store';
 import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
   summarizeDebugValue,
 } from './debug-performance';
+import { createExtensionJsonStore } from './extension-json-store';
 import {
   extensionPermissionCapabilities,
   filterWebviewPermissionsForExtension,
@@ -135,6 +136,7 @@ import {
   selectFindFiles,
   sortFoundFiles,
 } from './file-index-sorting';
+import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 import { JobRegistry, type JobSnapshot } from './jobs';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
@@ -196,6 +198,7 @@ import {
 } from './settings';
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils';
+import { systemSettingsPaneUrl } from './system-settings';
 import { createUpdateManager } from './update-manager';
 import { openExternalUrl } from './url-utils';
 import { isNewerVersion as isVersionNewerThan } from './version-utils';
@@ -305,6 +308,8 @@ const EXTENSION_REFRESH_BURST_WINDOW_MS = 2000;
 const EXTENSION_AI_CALLS_PER_MINUTE = 30;
 const EXTENSION_AI_RATE_WINDOW_MS = 60_000;
 const EXTENSION_TYPES_FILENAME = 'nevermind-extension-api.d.ts';
+const FRONTMOST_APP_CHANGED_EVENT = 'app.frontmost.changed';
+const FRONTMOST_APP_POLL_JOB_ID = 'frontmost-app.poll';
 const LEARNING_RULES_FILENAME = 'ai-learnings.md';
 const LEGACY_LEARNING_RULES_FILENAME = 'ai-learnings.json';
 const LEARNING_TRACES_FILENAME = 'ai-learning-traces.json';
@@ -326,7 +331,7 @@ type NevermindApp = typeof app & { isQuiting?: boolean };
 
 const nevermindApp = app as NevermindApp;
 
-function bundledResourcePath(...relativePath) {
+async function bundledResourcePath(...relativePath) {
   const candidates = [
     path.join(app.getAppPath(), 'src', 'resources', ...relativePath),
     path.join(
@@ -338,10 +343,13 @@ function bundledResourcePath(...relativePath) {
     ),
     path.join(process.resourcesPath, 'src', 'resources', ...relativePath),
   ];
-  return (
-    candidates.find((candidate) => fsSync.existsSync(candidate)) ||
-    candidates[0]
-  );
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {}
+  }
+  return candidates[0];
 }
 
 let fileIndex: any[] = [];
@@ -3433,9 +3441,12 @@ async function executeViewAction(action, launchContext?: any) {
       );
       break;
     case 'openSystemSettings':
-      runInBackground(() =>
-        executeSystemBuiltin({ builtin: 'settings' }, () => {}),
-      );
+      runInBackground(() => {
+        const paneUrl = systemSettingsPaneUrl(action.paneId);
+        return paneUrl
+          ? shell.openExternal(paneUrl)
+          : executeSystemBuiltin({ builtin: 'settings' }, () => {});
+      });
       break;
     case 'openKeyboardSettings':
       runInBackground(openSystemKeyboardSettings);
@@ -3904,9 +3915,7 @@ async function localFileResponse(requestPath: string, request: Request) {
 
   headers.set('content-length', String(Math.max(0, end - start + 1)));
   return new Response(
-    Readable.toWeb(
-      fsSync.createReadStream(requestPath, { start, end }),
-    ) as BodyInit,
+    Readable.toWeb(createReadStream(requestPath, { start, end })) as BodyInit,
     { status, headers },
   );
 }
@@ -6162,18 +6171,18 @@ function createExtensionViewsApi(extension, command) {
   };
 }
 
-function initNevermindAi() {
+async function initNevermindAi() {
+  const [extensionTypesPath, skillPath] = await Promise.all([
+    bundledResourcePath(EXTENSION_TYPES_FILENAME),
+    bundledResourcePath('skills', 'nevermind-extension-builder', 'SKILL.md'),
+  ]);
   nevermindAi = createNevermindAi({
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
-    extensionApiPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
-    extensionTypesPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
-    skillPath: bundledResourcePath(
-      'skills',
-      'nevermind-extension-builder',
-      'SKILL.md',
-    ),
+    extensionApiPath: extensionTypesPath,
+    extensionTypesPath,
+    skillPath,
     reloadExtensions: loadExtensions,
     getShortcuts: () => extensionShortcutRecords(),
     getPaletteShortcut: () => ({
@@ -6385,7 +6394,7 @@ function addAliasForGeneratedAction(chatId) {
 }
 
 async function sendAiChatMessage(message, chatId) {
-  if (!nevermindAi) initNevermindAi();
+  if (!nevermindAi) await initNevermindAi();
   activeAiChatId = chatId || activeAiChatId;
   if (activeAiChatId?.startsWith('draft:')) promoteDraftAiChat(activeAiChatId);
   const prompt = activeAiChatId
@@ -6411,7 +6420,7 @@ async function noteAiChatExited(chatId) {
 
 async function ensureExtensionTypeDefinitions() {
   if (!extensionsDir) return;
-  const sourcePath = bundledResourcePath(EXTENSION_TYPES_FILENAME);
+  const sourcePath = await bundledResourcePath(EXTENSION_TYPES_FILENAME);
   const targetPath = path.join(extensionsDir, EXTENSION_TYPES_FILENAME);
   await fs.copyFile(sourcePath, targetPath).catch((error) => {
     logWarn(
@@ -6456,6 +6465,7 @@ async function loadExtensions() {
       rootActionExecutionRecords.clear();
       viewRefreshRecords.clear();
       jobRegistry.unregisterWhere((job) => job.owner === 'extension');
+      stopFrontmostAppPolling();
       for (const watcher of extensionFileWatchers) watcher.close();
       extensionFileWatchers = [];
       initExtensionContext({
@@ -6540,6 +6550,7 @@ async function loadExtensions() {
         extensionCount: extensionModules.size,
         actionCount: extensionActionRegistry.size,
       });
+      syncFrontmostAppPolling();
     },
   );
 }
@@ -6795,9 +6806,8 @@ function fileWatchPathMatches(filePath: string, trigger: any) {
 function watchExtensionFileTrigger(trigger: any, event: string) {
   const normalized = normalizedFileTrigger(trigger);
   for (const root of normalized.roots) {
-    if (!fsSync.existsSync(root)) continue;
     try {
-      const watcher = fsSync.watch(
+      const watcher = watch(
         root,
         {
           recursive:
@@ -6894,7 +6904,7 @@ function jobTriggersFromExtensionTriggers(
       if (trigger?.type === 'app.frontmost.changed')
         return {
           type: 'event' as const,
-          event: 'app.frontmost.changed',
+          event: FRONTMOST_APP_CHANGED_EVENT,
           debounceMs: trigger.debounceMs || 0,
           payload: { trigger: extensionTriggerForLaunch(trigger) },
         };
@@ -7264,7 +7274,30 @@ async function pollFrontmostAppChange() {
   const currentId = current?.bundleId || current?.path || current?.name || '';
   if (!currentId || currentId === frontmostWatcherLastId) return;
   frontmostWatcherLastId = currentId;
-  jobRegistry.emit('app.frontmost.changed');
+  jobRegistry.emit(FRONTMOST_APP_CHANGED_EVENT);
+}
+
+function stopFrontmostAppPolling() {
+  jobRegistry.unregister(FRONTMOST_APP_POLL_JOB_ID);
+  frontmostWatcherLastId = '';
+}
+
+function syncFrontmostAppPolling() {
+  const hasSubscriber = hasEnabledExtensionEventSubscriber(
+    jobRegistry.snapshot(),
+    FRONTMOST_APP_CHANGED_EVENT,
+  );
+  if (!hasSubscriber) return stopFrontmostAppPolling();
+  if (jobRegistry.has(FRONTMOST_APP_POLL_JOB_ID)) return;
+  jobRegistry.register({
+    id: FRONTMOST_APP_POLL_JOB_ID,
+    title: 'Frontmost App Poll',
+    owner: 'host',
+    scope: 'apps',
+    triggers: [{ type: 'interval', everyMs: 5000, delayMs: 5000 }],
+    timeoutMs: 3000,
+    run: pollFrontmostAppChange,
+  });
 }
 
 function registerHostJobs() {
@@ -7300,15 +7333,6 @@ function registerHostJobs() {
     triggers: [{ type: 'startup', delayMs: 200 }],
     timeoutMs: 30_000,
     run: indexFiles,
-  });
-  jobRegistry.register({
-    id: 'frontmost-app.poll',
-    title: 'Frontmost App Poll',
-    owner: 'host',
-    scope: 'apps',
-    triggers: [{ type: 'interval', everyMs: 5000, delayMs: 5000 }],
-    timeoutMs: 3000,
-    run: pollFrontmostAppChange,
   });
   jobRegistry.register({
     id: 'cache.app-icons',
@@ -7403,16 +7427,16 @@ async function loadUserState() {
   }
 
   migrateAiChats();
-  clipboardHistory = normalizeClipboardHistory(
+  clipboardHistory = await normalizeClipboardHistory(
     userState.clipboardHistory,
     CLIPBOARD_LIMIT,
-    (png, hash) => {
+    async (png, hash) => {
       const imagePath = path.join(clipboardImagesDir, `${hash}.png`);
       try {
-        fsSync.mkdirSync(clipboardImagesDir, { recursive: true });
-        fsSync.writeFileSync(imagePath, png);
+        await fs.mkdir(clipboardImagesDir, { recursive: true });
+        await fs.writeFile(imagePath, png);
       } catch {
-        // migrate with sync I/O; runtime writes use async
+        // Keep the legacy item even when its image cannot be migrated.
       }
       return imagePath;
     },
@@ -8068,16 +8092,20 @@ app.whenReady().then(async () => {
     logWarn,
   });
   setActiveNevermindAuthBaseUrl(selectedNevermindEnvironment().baseUrl);
-  const storedNevermindAuth = await getNevermindAuth();
+  const [storedNevermindAuth] = await Promise.all([
+    getNevermindAuth(),
+    getByoKey(),
+  ]);
   activeNevermindBaseUrl = storedNevermindAuth?.baseUrl || null;
   registerHostJobs();
+  jobRegistry.onChange(syncFrontmostAppPolling);
   await loadExtensions();
   if (process.env.NVM_PALETTE_DEBUG) {
     await runPaletteDebugCli();
     app.quit();
     return;
   }
-  initNevermindAi();
+  await initNevermindAi();
   initExtensionContext({ nevermindAi });
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();

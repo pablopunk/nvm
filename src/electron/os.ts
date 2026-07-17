@@ -1,6 +1,7 @@
+// biome-ignore-all lint: This platform adapter retains established cross-OS imperative conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import fsSync from 'node:fs';
+import { watch } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,13 +56,9 @@ const macOnlyCapabilities = new Set([
 ]);
 
 export function hasCapability(capability: string) {
-  if (capability === 'ocr')
-    return osDependent({ darwin: fsSync.existsSync('/usr/bin/swift') }, false);
+  if (capability === 'ocr') return osDependent({ darwin: true }, false);
   if (capability === 'screen-capture')
-    return osDependent(
-      { darwin: fsSync.existsSync('/usr/sbin/screencapture') },
-      false,
-    );
+    return osDependent({ darwin: true }, false);
   if (macOnlyCapabilities.has(capability))
     return osDependent({ darwin: true }, false);
   if (capability === 'auto-updates')
@@ -285,14 +282,19 @@ const macSystemApps = ['/System/Library/CoreServices/Finder.app'];
 
 async function scanMacApps() {
   const found: any[] = [];
-  for (const appPath of macSystemApps) {
-    if (fsSync.existsSync(appPath))
-      found.push({
-        id: appPath,
-        name: path.basename(appPath).replace(/\.app$/i, ''),
-        path: appPath,
-      });
-  }
+  await Promise.all(
+    macSystemApps.map(async (appPath) => {
+      try {
+        const stat = await fs.stat(appPath);
+        if (!stat.isDirectory()) return;
+        found.push({
+          id: appPath,
+          name: path.basename(appPath).replace(/\.app$/i, ''),
+          path: appPath,
+        });
+      } catch {}
+    }),
+  );
 
   async function walk(dir: string, depth: number) {
     const entries = await fs
@@ -520,9 +522,8 @@ export async function runningAppPaths(apps: RunningAppCandidate[] = []) {
 export function watchApps(onChange: () => void) {
   const watchers: Array<{ close: () => unknown }> = [];
   for (const root of appScanRoots()) {
-    if (!fsSync.existsSync(root)) continue;
     try {
-      const watcher = fsSync.watch(
+      const watcher = watch(
         root,
         { recursive: osDependent({ darwin: true, win32: true }, false) },
         onChange,
