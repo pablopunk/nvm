@@ -46,6 +46,7 @@ jobs:
         run: mise exec -- pnpm verify
 
   electron-smoke:
+    name: Linux Electron smoke
     if: github.event_name == 'pull_request'
     needs: check
     runs-on: ubuntu-latest
@@ -263,6 +264,12 @@ jobs:
           else
             cp release/latest-linux.yml linux-artifacts/latest-linux-arm64.yml
           fi
+
+      - name: Validate Linux updater metadata
+        run: >-
+          mise exec -- node scripts/validate-linux-updater-metadata.cjs
+          linux-artifacts/latest-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
+          linux-artifacts
 
       - name: Upload Linux dry-run artifacts
         if: github.event_name == 'workflow_dispatch'

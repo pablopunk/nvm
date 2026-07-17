@@ -2034,17 +2034,34 @@ async function searchActions(query, options: any = {}) {
       const q = query.trim();
 
       if (isNvmTestMode) {
-        const action = {
-          id: 'test:confirm-safe-action',
-          kind: 'test-action',
-          title: 'Test: Confirm safe action',
-          subtitle: 'In-memory deterministic Electron smoke action',
-          icon: 'check',
-          score: 100,
-        };
-        return q && !action.title.toLowerCase().includes(q.toLowerCase())
-          ? []
-          : [prepareRootActionForRenderer(action)];
+        const actions = [
+          {
+            id: 'test:confirm-safe-action',
+            kind: 'test-action',
+            title: 'Test: Confirm safe action',
+            subtitle: 'In-memory deterministic Electron smoke action',
+            icon: 'check',
+            score: 100,
+          },
+          ...(osLabel() === 'Linux'
+            ? [
+                {
+                  id: 'test:linux-open-settings',
+                  kind: 'test-action',
+                  title: settingsTitle(),
+                  subtitle: 'Linux system settings action',
+                  icon: 'settings',
+                  score: 99,
+                },
+              ]
+            : []),
+        ];
+        return actions
+          .filter(
+            (action) =>
+              !q || action.title.toLowerCase().includes(q.toLowerCase()),
+          )
+          .map(prepareRootActionForRenderer);
       }
 
       if (options.clipboardOnly) {

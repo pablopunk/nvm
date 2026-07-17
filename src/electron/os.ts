@@ -367,17 +367,14 @@ async function scanLinuxApps() {
           if (!(entry.isFile() && entry.name.endsWith('.desktop'))) return;
           const fullPath = path.join(root, entry.name);
           const body = await fs.readFile(fullPath, 'utf8').catch(() => '');
-          if (/^(NoDisplay|Hidden)=true$/im.test(body)) return;
-          const name = body.match(/^Name=(.+)$/m)?.[1];
-          const exec = body.match(/^Exec=(.+)$/m)?.[1];
-          const wmClass = body.match(/^StartupWMClass=(.+)$/m)?.[1];
-          if (!(name && exec)) return;
+          const desktopEntry = parseLinuxDesktopEntry(body);
+          if (!desktopEntry) return;
           found.push({
             id: fullPath,
-            name,
+            name: desktopEntry.name,
             path: fullPath,
-            command: exec.replace(/\s*%[fFuUdDnNickvm]/g, '').trim(),
-            wmClass,
+            command: desktopEntry.command,
+            wmClass: desktopEntry.wmClass,
           });
         }),
       );
@@ -400,6 +397,18 @@ type RunningAppCandidate = {
   command?: string;
   wmClass?: string;
 };
+
+export function parseLinuxDesktopEntry(body: string) {
+  if (/^(NoDisplay|Hidden)=true$/im.test(body)) return null;
+  const name = body.match(/^Name=(.+)$/m)?.[1];
+  const exec = body.match(/^Exec=(.+)$/m)?.[1];
+  if (!(name && exec)) return null;
+  return {
+    name,
+    command: exec.replace(/\s*%[fFuUdDnNickvm]/g, '').trim(),
+    wmClass: body.match(/^StartupWMClass=(.+)$/m)?.[1],
+  };
+}
 
 function normalizedRunningPath(value: unknown) {
   const text = String(value || '').trim();
@@ -474,6 +483,23 @@ function executableNameForLinuxCommand(command: unknown) {
   return words[0] ? path.basename(words[0]).toLowerCase() : '';
 }
 
+export function linuxAppMatchesProcessNames(
+  item: Pick<RunningAppCandidate, 'command' | 'wmClass'>,
+  processNames: Iterable<string>,
+) {
+  const names = new Set(
+    Array.from(processNames, (name) => name.trim().toLowerCase()).filter(
+      Boolean,
+    ),
+  );
+  return [
+    executableNameForLinuxCommand(item.command),
+    String(item.wmClass || '').toLowerCase(),
+  ]
+    .filter(Boolean)
+    .some((candidate) => names.has(candidate));
+}
+
 async function linuxProcessNames() {
   const names = new Set<string>();
   const entries = await fs
@@ -500,11 +526,7 @@ async function runningLinuxAppPaths(apps: RunningAppCandidate[] = []) {
   const processNames = await linuxProcessNames();
   const running = new Set<string>();
   for (const item of apps) {
-    const candidates = [
-      executableNameForLinuxCommand(item.command),
-      String(item.wmClass || '').toLowerCase(),
-    ].filter(Boolean);
-    if (candidates.some((candidate) => processNames.has(candidate)))
+    if (linuxAppMatchesProcessNames(item, processNames))
       running.add(normalizedRunningPath(item.path || item.id));
   }
   return running;
