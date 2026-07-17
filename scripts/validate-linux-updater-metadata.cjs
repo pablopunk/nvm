@@ -20,15 +20,25 @@ function requiredMatch(body, expression, description) {
 
 async function main() {
   const metadata = await fs.readFile(metadataPath, 'utf8');
-  const appImageNames = (await fs.readdir(artifactDirectory)).filter((name) =>
+  const artifactNames = await fs.readdir(artifactDirectory);
+  const appImageNames = artifactNames.filter((name) =>
     name.endsWith('.AppImage'),
   );
+  const debNames = artifactNames.filter((name) => name.endsWith('.deb'));
   if (appImageNames.length !== 1)
     throw new Error(
       `Expected exactly one AppImage in ${artifactDirectory}, found ${appImageNames.length}`,
     );
+  if (debNames.length !== 1)
+    throw new Error(
+      `Expected exactly one deb in ${artifactDirectory}, found ${debNames.length}`,
+    );
 
   const appImageName = appImageNames[0];
+  const blockmapPath = path.join(artifactDirectory, `${appImageName}.blockmap`);
+  const blockmap = await fs.stat(blockmapPath).catch(() => null);
+  if (!(blockmap?.isFile() && blockmap.size > 0))
+    throw new Error(`Missing non-empty blockmap for ${appImageName}`);
   const pathValue = requiredMatch(
     metadata,
     /^path:\s*(.+)$/m,
@@ -63,7 +73,9 @@ async function main() {
     .digest('base64');
   if (actualSha512 !== sha512)
     throw new Error(`Metadata sha512 does not match ${appImageName}`);
-  console.log(`Validated updater metadata for ${appImageName}`);
+  console.log(
+    `Validated Linux artifacts and updater metadata for ${appImageName}`,
+  );
 }
 
 void main();

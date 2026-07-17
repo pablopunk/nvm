@@ -121,9 +121,11 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       await expect(
         page.getByText('Open Settings', { exact: true }),
       ).toBeVisible();
+      await input.fill('Open System Settings');
       await expect(
         page.getByText('Open System Settings', { exact: true }),
       ).toHaveCount(0);
+      await input.fill('Start at Login');
       await expect(
         page.getByText('Start at Login', { exact: true }),
       ).toHaveCount(0);
