@@ -45,6 +45,11 @@ if ('pnpm' in manifest) {
     'package.json must not contain pnpm build-script settings; pnpm reads them from pnpm-workspace.yaml.',
   );
 }
+if (manifest.scripts.predev !== 'pnpm rebuild electron') {
+  throw new Error(
+    'package.json predev must rebuild Electron so pnpm run dev repairs a skipped binary automatically.',
+  );
+}
 
 const rootDependencies = [
   '@google/genai',
