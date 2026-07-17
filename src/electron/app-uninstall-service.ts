@@ -3,9 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
 export const PLUTIL_PATH = '/usr/bin/plutil';
 export const PLUTIL_OPTIONS = {
   shell: false,
@@ -152,8 +150,21 @@ type PlistExecutor = (
   options: typeof PLUTIL_OPTIONS,
 ) => Promise<{ stdout: unknown }>;
 
+function executePlist(
+  command: string,
+  arguments_: string[],
+  options: typeof PLUTIL_OPTIONS,
+): Promise<{ stdout: unknown }> {
+  return new Promise((resolve, reject) => {
+    execFile(command, arguments_, options, (error, stdout) => {
+      if (error) return reject(error);
+      resolve({ stdout });
+    });
+  });
+}
+
 export function createProductionPlistReader(
-  execute: PlistExecutor = execFileAsync as PlistExecutor,
+  execute: PlistExecutor = executePlist,
 ) {
   return async (appPath: string): Promise<unknown> => {
     const result = await execute(
@@ -353,7 +364,11 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     try {
       bundleId = validateBundleId(await deps.readBundleId(checked.canonical));
     } catch (error) {
-      return { code: 'plist', message: safeMessage(error) };
+      return {
+        code: 'plist',
+        message:
+          'Could not read this app’s bundle identifier. Choose a standard macOS app bundle or try again.',
+      };
     }
     if (!bundleId)
       return {

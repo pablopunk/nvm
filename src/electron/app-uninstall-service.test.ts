@@ -24,6 +24,7 @@ function fixture(
     isRunning?: () => boolean;
     nevermindBundleId?: string;
     canonicalPath?: (value: string) => string;
+    plistFailure?: boolean;
   } = {},
 ) {
   const present = new Set<string>();
@@ -71,7 +72,10 @@ function fixture(
     },
     realpath: async (value) => options.canonicalPath?.(value) || value,
     access: async () => {},
-    readBundleId: async () => currentBundleId,
+    readBundleId: async () => {
+      if (options.plistFailure) throw new Error('raw plutil process output');
+      return currentBundleId;
+    },
     trashItem: async (value) => {
       calls.push(`trash:${value}`);
       if (value === options.failTrashAt) throw new Error('Trash denied');
@@ -129,7 +133,8 @@ test('production plist reader uses a fixed absolute command with bounded executi
     received = input;
     return { stdout: 'com.example.App\n' };
   });
-  assert.equal(await reader(appPath), bundleId);
+  const spacedAppPath = '/Applications/Play Console.app';
+  assert.equal(await reader(spacedAppPath), bundleId);
   assert.equal(received[0], PLUTIL_PATH);
   assert.deepEqual(received[2], PLUTIL_OPTIONS);
   assert.deepEqual((received[1] as string[]).slice(0, 5), [
@@ -139,6 +144,28 @@ test('production plist reader uses a fixed absolute command with bounded executi
     '-o',
     '-',
   ]);
+  assert.deepEqual(received[1], [
+    '-extract',
+    'CFBundleIdentifier',
+    'raw',
+    '-o',
+    '-',
+    '/Applications/Play Console.app/Contents/Info.plist',
+  ]);
+});
+
+test('plist process failures produce concise actionable text instead of raw command output', async () => {
+  const unavailable = fixture({ plistFailure: true });
+  const result = await unavailable.service.discover(appPath);
+  assert.equal(result.status, 'unavailable');
+  if (result.status === 'unavailable') {
+    assert.equal(result.reasonCode, 'plist');
+    assert.equal(
+      result.message,
+      'Could not read this app’s bundle identifier. Choose a standard macOS app bundle or try again.',
+    );
+    assert.equal(result.message.includes('plutil'), false);
+  }
 });
 
 test('non-macOS discovery performs no host work and the trusted production ID rejects another Nevermind copy', async () => {
