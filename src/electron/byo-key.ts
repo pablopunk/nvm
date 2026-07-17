@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This module retains existing encrypted-key persistence conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -70,7 +71,7 @@ function decryptApiKey(data: StoredByoKey): string | null {
 let cached: ByoKeySnapshot = null;
 let loadPromise: Promise<ByoKeySnapshot> | null = null;
 
-async function getByoKey(): Promise<ByoKeySnapshot> {
+function getByoKey(): Promise<ByoKeySnapshot> {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     try {
@@ -173,14 +174,14 @@ function setByoKeyLoggerForTests(logger: {
 }
 
 export {
-  getCachedByoKey,
-  getByoKey,
-  persistByoKey,
-  clearByoKey,
-  setByoKeyStorageForTests,
-  setByoKeyFilePathForTests,
-  clearByoKeyCacheForTests,
-  setByoKeyLoggerForTests,
   type ByoKeySnapshot,
+  clearByoKey,
+  clearByoKeyCacheForTests,
+  getByoKey,
+  getCachedByoKey,
+  persistByoKey,
   type SafeStorageLike,
+  setByoKeyFilePathForTests,
+  setByoKeyLoggerForTests,
+  setByoKeyStorageForTests,
 };

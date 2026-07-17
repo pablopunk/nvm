@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This platform adapter retains established cross-OS imperative conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import { watch } from 'node:fs';

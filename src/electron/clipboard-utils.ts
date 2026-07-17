@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This module normalizes heterogeneous persisted clipboard records.
 import path from 'node:path';
 import type { Clipboard } from 'electron';
 import {

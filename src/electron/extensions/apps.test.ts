@@ -12,9 +12,9 @@ test('force quit paints its view before running the OS process scan', async () =
       ],
     },
     runningAppStatus: {
-      refresh: async () => {
+      refresh: () => {
         refreshCount += 1;
-        return new Set(['/applications/notes.app']);
+        return Promise.resolve(new Set(['/applications/notes.app']));
       },
     },
   });
@@ -39,7 +39,7 @@ test('force quit paints its view before running the OS process scan', async () =
   const items = await loader();
   assert.equal(refreshCount, 1);
   assert.deepEqual(
-    items.map((item: any) => item.title),
+    items.map((item) => (item as { title: string }).title),
     ['Notes'],
   );
 });
