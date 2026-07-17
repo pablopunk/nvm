@@ -1,5 +1,5 @@
 import { env } from './env';
-import { parsePublicOrigin, PublicOriginError } from '../../../src/shared/public-origin';
+import { parsePublicOrigin, PRODUCTION_WEB_ORIGIN, PublicOriginError } from '../../../src/shared/public-origin';
 
 export class AuthConfigurationError extends Error {
   constructor(message: string) {
@@ -9,7 +9,7 @@ export class AuthConfigurationError extends Error {
 }
 
 export function productionWebOrigin(): string {
-  const production = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+  const production = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? PRODUCTION_WEB_ORIGIN, 'production_web');
   for (const aliasName of ['PUBLIC_DASHBOARD_URL', 'PREVIEW_GATEWAY_ORIGIN']) {
     const alias = env(aliasName);
     if (!alias || /^https?:\/\/localhost(?::\d+)?\/?$/.test(alias)) continue;
@@ -18,6 +18,25 @@ export function productionWebOrigin(): string {
     }
   }
   return production;
+}
+
+export function resolveAuthRedirectConfiguration(): { productionOrigin: string; redirectUri: string } {
+  try {
+    const configuredProduction = env('PRODUCTION_ORIGIN');
+    if (!configuredProduction) throw new AuthConfigurationError('PRODUCTION_ORIGIN is required');
+    const productionOrigin = productionWebOrigin();
+    if (productionOrigin !== PRODUCTION_WEB_ORIGIN) {
+      throw new AuthConfigurationError('Production origin is not canonical');
+    }
+    const redirectUri = env('WORKOS_REDIRECT_URI');
+    if (redirectUri !== `${PRODUCTION_WEB_ORIGIN}/api/auth/callback`) {
+      throw new AuthConfigurationError('WORKOS_REDIRECT_URI is not the canonical production callback');
+    }
+    return { productionOrigin, redirectUri };
+  } catch (error) {
+    if (error instanceof AuthConfigurationError) throw error;
+    throw new AuthConfigurationError(error instanceof PublicOriginError ? error.message : 'Invalid auth redirect configuration');
+  }
 }
 
 export function assertPreviewAuthConfiguration() {

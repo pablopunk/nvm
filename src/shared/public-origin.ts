@@ -5,6 +5,8 @@ export type PublicOriginPolicy =
   | 'local'
   | 'smoke';
 
+export const PRODUCTION_WEB_ORIGIN = 'https://www.nvm.fyi';
+
 export class PublicOriginError extends Error {
   constructor(message: string) {
     super(message);

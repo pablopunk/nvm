@@ -3,7 +3,7 @@ import { workos, WORKOS_CLIENT_ID } from '../../../lib/workos';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 import { env } from '../../../lib/env';
 import { createProductionState, createPreviewStartIntent, previewOriginMatchesRequest, previewTargetFromEnvironment } from '../../../lib/preview-auth';
-import { previewAuthConfigured } from '../../../lib/auth-config';
+import { previewAuthConfigured, resolveAuthRedirectConfiguration } from '../../../lib/auth-config';
 
 export const GET: APIRoute = async ({ url, request, redirect }) => {
   const decision = await rateLimitIp('auth', clientIp(request), 30, '1 m');
@@ -16,12 +16,18 @@ export const GET: APIRoute = async ({ url, request, redirect }) => {
     if (!intent || !/^https:\/\/www\.nvm\.fyi$/.test(gatewayOrigin ?? '')) return new Response('Preview authentication is unavailable', { status: 503 });
     return redirect(`${gatewayOrigin}/api/auth/preview-start?intent=${encodeURIComponent(intent)}`);
   }
+  let redirectUri: string;
+  try {
+    ({ redirectUri } = resolveAuthRedirectConfiguration());
+  } catch {
+    return new Response('Authentication is temporarily unavailable', { status: 503 });
+  }
   const state = await createProductionState(url.searchParams.get('return_to'));
   if (!state) return new Response('Authentication is temporarily unavailable', { status: 503 });
   const authorizationUrl = workos.userManagement.getAuthorizationUrl({
     provider: 'authkit',
     clientId: WORKOS_CLIENT_ID,
-    redirectUri: env('WORKOS_REDIRECT_URI') as string,
+    redirectUri,
     state,
   });
   return redirect(authorizationUrl);

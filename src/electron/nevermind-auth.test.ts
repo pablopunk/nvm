@@ -139,13 +139,37 @@ test('uses production by default for packaged builds and localhost for developme
   assert.equal(
     resolveDefaultNevermindBaseUrl(
       {
-        NEVERMIND_BASE_URL: 'https://explicit.example',
+        NEVERMIND_BASE_URL: 'https://explicit.example/api?bad=1',
         ELECTRON_RENDERER_URL: 'http://localhost:5173',
       },
       true,
     ),
-    'https://explicit.example',
+    production,
   );
+});
+
+test('invalid stored bases fall back to the canonical origin and never become store keys', async () => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(production);
+  await fs.writeFile(
+    storePath,
+    JSON.stringify({
+      [production]: storedAuth('https://example.test/api?bad=1', 'safe-token'),
+    }),
+  );
+  const auth = await getNevermindAuth();
+  assert.equal(auth?.baseUrl, production);
+  assert.equal(
+    Object.keys(JSON.parse(await fs.readFile(storePath, 'utf8'))).includes(
+      'https://example.test/api?bad=1',
+    ),
+    false,
+  );
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
 });
 
 test('auth calls use the active origin and clearing it preserves other origins', async (t) => {

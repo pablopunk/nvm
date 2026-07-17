@@ -8,13 +8,20 @@ import { selectApiForModel } from '../../../lib/upstream';
 import { estimatePromptCredits } from '../../../lib/limits';
 import { env } from '../../../lib/env';
 import { joinPublicApiUrl, parsePublicOrigin } from '../../../../../src/shared/public-origin';
+import { previewTargetFromEnvironment } from '../../../lib/preview-auth';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
 
 export const GET: APIRoute = async ({ request }) => {
+  const requestOrigin = new URL(request.url).origin;
+  const previewTarget = env('VERCEL_ENV') === 'preview' ? previewTargetFromEnvironment() : null;
+  if (env('VERCEL_ENV') === 'preview' && (!previewTarget || previewTarget.origin !== requestOrigin)) {
+    return Response.json({ error: { type: 'configuration_error', message: 'Preview API origin is unavailable.' } }, { status: 503 });
+  }
+
   let configuredApiOrigin: string;
   try {
-    configuredApiOrigin = parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
+    configuredApiOrigin = previewTarget?.origin ?? parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
   } catch {
     return Response.json({ error: { type: 'configuration_error', message: 'Public API origin is unavailable.' } }, { status: 503 });
   }
@@ -52,8 +59,8 @@ export const GET: APIRoute = async ({ request }) => {
 
   const api = selectApiForModel(provider, modelId);
   const baseUrl = api === 'anthropic-messages'
-    ? joinPublicApiUrl(configuredApiOrigin, '/api')
-    : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
+    ? previewTarget ? `${configuredApiOrigin}/api` : joinPublicApiUrl(configuredApiOrigin, '/api')
+    : previewTarget ? `${configuredApiOrigin}/api/v1` : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
 
   const CHARS_PER_TOKEN = 4;
   const inputTokensQ = url.searchParams.get('inputTokens');
@@ -89,3 +96,5 @@ export const GET: APIRoute = async ({ request }) => {
     ...(costEstimate !== undefined ? { costEstimate } : {}),
   }, { headers: compatibilityHeaders(requestId) });
 };
+
+export const OPTIONS: APIRoute = async () => new Response(null, { status: 404 });

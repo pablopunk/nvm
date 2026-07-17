@@ -146,7 +146,7 @@ test('renders deprecation-warning UI with dashboard fallback action', () => {
           message:
             'This API contract will sunset soon. Review the migration path.',
           actionTitle: 'Review migration',
-          dashboardUrl: 'https://nvm.fyi/dashboard',
+          dashboardUrl: 'https://www.nvm.fyi/dashboard',
         }}
         runAction={() => {}}
       />

@@ -45,12 +45,21 @@ export function resolveDefaultNevermindBaseUrl(
   > = process.env,
   isPackaged = app.isPackaged,
 ) {
-  return (
+  const candidate =
     environment.NEVERMIND_BASE_URL ||
     (!isPackaged && environment.ELECTRON_RENDERER_URL
       ? 'http://localhost:4321'
-      : PRODUCTION_BASE_URL)
-  );
+      : PRODUCTION_BASE_URL);
+  const migrated = migrateLegacyDesktopOrigin(candidate);
+  if (migrated) return migrated;
+  try {
+    return parsePublicOrigin(
+      candidate,
+      candidate.startsWith('http://localhost') ? 'local' : 'smoke',
+    );
+  } catch {
+    return PRODUCTION_BASE_URL;
+  }
 }
 
 const DEFAULT_BASE_URL = resolveDefaultNevermindBaseUrl();
@@ -84,7 +93,10 @@ function normalizedBaseUrl(baseUrl: string) {
       isLoopbackBaseUrl(trimmed) ? 'local' : 'smoke',
     );
   } catch {
-    return trimmed;
+    logger.warn('rejected invalid Nevermind auth base URL', {
+      baseUrl: trimmed,
+    });
+    return PRODUCTION_BASE_URL;
   }
 }
 

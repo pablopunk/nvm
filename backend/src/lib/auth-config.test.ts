@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertPreviewAuthConfiguration, AuthConfigurationError, isProductionGatewayOrigin } from './auth-config';
+import { assertPreviewAuthConfiguration, AuthConfigurationError, isProductionGatewayOrigin, resolveAuthRedirectConfiguration } from './auth-config';
 
-const keys = ['VERCEL_ENV', 'PRODUCTION_ORIGIN', 'DATABASE_URL', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'GATEWAY_STATE_KEY', 'GATEWAY_STATE_REDIS_URL', 'GATEWAY_STATE_REDIS_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'PREVIEW_SESSION_KEY', 'WORKOS_COOKIE_PASSWORD', 'WORKOS_CLIENT_ID'];
+const keys = ['VERCEL_ENV', 'PRODUCTION_ORIGIN', 'WORKOS_REDIRECT_URI', 'DATABASE_URL', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'GATEWAY_STATE_KEY', 'GATEWAY_STATE_REDIS_URL', 'GATEWAY_STATE_REDIS_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'PREVIEW_SESSION_KEY', 'WORKOS_COOKIE_PASSWORD', 'WORKOS_CLIENT_ID'];
 const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
 function valid() {
@@ -35,6 +35,19 @@ test('accepts only the canonical production web gateway', () => {
   assert.equal(isProductionGatewayOrigin('https://nvm.fyi'), false);
   assert.equal(isProductionGatewayOrigin('https://www.nvm.fyi'), true);
   assert.equal(isProductionGatewayOrigin('https://evil.example'), false);
+});
+
+test('resolves only the canonical production auth callback', () => {
+  process.env.PRODUCTION_ORIGIN = 'https://www.nvm.fyi';
+  process.env.WORKOS_REDIRECT_URI = 'https://www.nvm.fyi/api/auth/callback';
+  assert.deepEqual(resolveAuthRedirectConfiguration(), {
+    productionOrigin: 'https://www.nvm.fyi',
+    redirectUri: 'https://www.nvm.fyi/api/auth/callback',
+  });
+  process.env.WORKOS_REDIRECT_URI = 'https://nvm.fyi/api/auth/callback';
+  assert.throws(resolveAuthRedirectConfiguration, AuthConfigurationError);
+  process.env.WORKOS_REDIRECT_URI = 'https://www.nvm.fyi/api/auth/callback/path';
+  assert.throws(resolveAuthRedirectConfiguration, AuthConfigurationError);
 });
 
 test.after(() => {
