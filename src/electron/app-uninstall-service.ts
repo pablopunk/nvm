@@ -1,50 +1,63 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: the private service keeps its snapshot lifecycle closed over injected host dependencies.
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: every branch is a separate destructive-path safety check.
+// biome-ignore-all lint/performance/noAwaitInLoops: component and candidate checks must complete in deterministic safety order.
+// biome-ignore-all lint/style/useExportsLast: public capability constants are intentionally grouped with their private execution options.
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
+const execFileAsync = promisify(execFile);
 export const PLUTIL_PATH = '/usr/bin/plutil';
 export const PLUTIL_OPTIONS = {
   shell: false,
-  timeout: 5_000,
-  maxBuffer: 4_096,
+  timeout: 5000,
+  maxBuffer: 4096,
 } as const;
 const MAX_BUNDLE_ID_BYTES = 255;
+const BUNDLE_ID_COMPONENT = /^[A-Za-z0-9-]+$/;
+const ASCII_DELETE = 0x7f;
+const ASCII_SPACE = 0x20;
 export const NEVERMIND_BUNDLE_ID = 'com.pablopunk.nvm';
 
-type Stat = {
+interface Stat {
   dev: number;
   ino: number;
   uid: number;
   isDirectory: () => boolean;
   isSymbolicLink: () => boolean;
-};
+}
 
 type Identity = Pick<Stat, 'dev' | 'ino' | 'uid'> & {
   type: 'directory' | 'file';
 };
 
-export type AppUninstallCandidate = {
+export interface AppUninstallCandidate {
   id: string;
   path: string;
   kind: 'app' | 'associated';
   slot: string;
-};
+}
 
 type SnapshotCandidate = AppUninstallCandidate & {
   identity: Identity;
   root: string;
 };
 
-export type AppUninstallSnapshot = {
+export interface AppUninstallSnapshot {
   appPath: string;
   appBundleId: string;
   appIdentity: Identity;
   candidates: SnapshotCandidate[];
-};
+}
 
-export type AppUninstallNote = { code: string; message: string };
+export interface AppUninstallNote {
+  code: string;
+  message: string;
+}
 
 export type DiscoveryResult =
   | { status: 'unavailable'; reasonCode: string; message: string }
@@ -55,14 +68,14 @@ export type DiscoveryResult =
       notes: AppUninstallNote[];
     };
 
-export type TrashResult = {
+export interface TrashResult {
   status: 'complete' | 'partial' | 'failed';
   moved: string[];
   untouched: Array<{ path: string; code: string; message: string }>;
   notes: AppUninstallNote[];
-};
+}
 
-export type AppUninstallDependencies = {
+export interface AppUninstallDependencies {
   platform: string;
   homeDirectory: string;
   currentUid: number;
@@ -75,14 +88,14 @@ export type AppUninstallDependencies = {
   nevermindBundleId?: string | null;
   runningAppPaths: (appPath: string) => Promise<Set<string>>;
   randomId?: () => string;
-};
+}
 
-type CandidateSpec = {
+interface CandidateSpec {
   slot: string;
   path: string;
   root: string;
   kind: 'app' | 'associated';
-};
+}
 
 function isMissing(error: unknown) {
   return Boolean(
@@ -99,7 +112,9 @@ function safeMessage(error: unknown) {
 }
 
 function statType(stat: Stat): Identity['type'] | null {
-  if (stat.isSymbolicLink()) return null;
+  if (stat.isSymbolicLink()) {
+    return null;
+  }
   return stat.isDirectory() ? 'directory' : 'file';
 }
 
@@ -128,19 +143,35 @@ function normalizeBundleId(value: string) {
   return value.toLowerCase();
 }
 
+function hasUnsafeBundleCharacters(value: string) {
+  return Array.from(value).some((character) => {
+    const code = character.codePointAt(0) || 0;
+    return (
+      code <= ASCII_SPACE ||
+      code === ASCII_DELETE ||
+      character === '/' ||
+      character === '\\'
+    );
+  });
+}
+
 export function validateBundleId(value: unknown): string | null {
   if (
     typeof value !== 'string' ||
     Buffer.byteLength(value, 'utf8') > MAX_BUNDLE_ID_BYTES
-  )
+  ) {
     return null;
-  if (!value || /[\x00-\x20\x7f/\\]/.test(value)) return null;
+  }
+  if (!value || hasUnsafeBundleCharacters(value)) {
+    return null;
+  }
   const components = value.split('.');
   if (
-    !components.length ||
-    components.some((part) => !/^[A-Za-z0-9-]+$/.test(part))
-  )
+    components.length === 0 ||
+    components.some((part) => !BUNDLE_ID_COMPONENT.test(part))
+  ) {
     return null;
+  }
   return value;
 }
 
@@ -150,33 +181,74 @@ type PlistExecutor = (
   options: typeof PLUTIL_OPTIONS,
 ) => Promise<{ stdout: unknown }>;
 
-function executePlist(
-  command: string,
-  arguments_: string[],
-  options: typeof PLUTIL_OPTIONS,
-): Promise<{ stdout: unknown }> {
-  return new Promise((resolve, reject) => {
-    execFile(command, arguments_, options, (error, stdout) => {
-      if (error) return reject(error);
-      resolve({ stdout });
-    });
-  });
+interface PlistDirectoryEntry {
+  name: string;
+  isDirectory: () => boolean;
+  isSymbolicLink: () => boolean;
+}
+
+interface PlistFileSystem {
+  realpath: (value: string) => Promise<string>;
+  readdir: (value: string) => Promise<PlistDirectoryEntry[]>;
+}
+
+const productionPlistFileSystem: PlistFileSystem = {
+  realpath: (value) => fs.realpath(value),
+  readdir: (value) =>
+    fs.readdir(value, { withFileTypes: true }) as Promise<
+      PlistDirectoryEntry[]
+    >,
+};
+
+async function resolveProductionPlistPath(
+  appPath: string,
+  fileSystem: PlistFileSystem,
+) {
+  const canonicalAppPath = await fileSystem.realpath(appPath);
+  const directPlistPath = path.join(appPath, 'Contents', 'Info.plist');
+  try {
+    const canonicalPlistPath = await fileSystem.realpath(directPlistPath);
+    if (!isWithin(canonicalAppPath, canonicalPlistPath)) {
+      throw new Error('App metadata is outside the selected app bundle');
+    }
+    return canonicalPlistPath;
+  } catch (error) {
+    if (!isMissing(error)) {
+      throw error;
+    }
+  }
+
+  const wrapperPath = path.join(appPath, 'Wrapper');
+  const wrappedApps = (await fileSystem.readdir(wrapperPath)).filter(
+    (entry) =>
+      entry.name.endsWith('.app') &&
+      entry.isDirectory() &&
+      !entry.isSymbolicLink(),
+  );
+  if (wrappedApps.length !== 1) {
+    throw new Error('App has no supported bundle metadata');
+  }
+  const wrappedPlistPath = path.join(
+    wrapperPath,
+    wrappedApps[0].name,
+    'Info.plist',
+  );
+  const canonicalPlistPath = await fileSystem.realpath(wrappedPlistPath);
+  if (!isWithin(canonicalAppPath, canonicalPlistPath)) {
+    throw new Error('App metadata is outside the selected app bundle');
+  }
+  return canonicalPlistPath;
 }
 
 export function createProductionPlistReader(
-  execute: PlistExecutor = executePlist,
+  execute: PlistExecutor = execFileAsync as PlistExecutor,
+  fileSystem: PlistFileSystem = productionPlistFileSystem,
 ) {
   return async (appPath: string): Promise<unknown> => {
+    const plistPath = await resolveProductionPlistPath(appPath, fileSystem);
     const result = await execute(
       PLUTIL_PATH,
-      [
-        '-extract',
-        'CFBundleIdentifier',
-        'raw',
-        '-o',
-        '-',
-        path.join(appPath, 'Contents', 'Info.plist'),
-      ],
+      ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', plistPath],
       PLUTIL_OPTIONS,
     );
     return String(result.stdout).trim();
@@ -192,7 +264,7 @@ export function createProductionAppUninstallService(
 ) {
   return createAppUninstallService({
     platform: input.platform || process.platform,
-    homeDirectory: input.homeDirectory || process.env.HOME || '',
+    homeDirectory: input.homeDirectory || os.homedir(),
     currentUid: input.currentUid ?? process.getuid?.() ?? -1,
     lstat: (value) => fs.lstat(value) as Promise<Stat>,
     realpath: (value) => fs.realpath(value),
@@ -231,17 +303,19 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
           message: safeMessage(error),
         };
       }
-      if (stat.isSymbolicLink())
+      if (stat.isSymbolicLink()) {
         return {
           code: 'symlink',
           message: `Refusing symbolic-link path component: ${current}`,
         };
+      }
     }
     try {
       const stat = await deps.lstat(value);
       const itemIdentity = identity(stat);
-      if (!itemIdentity)
+      if (!itemIdentity) {
         return { code: 'symlink', message: `Refusing symbolic link: ${value}` };
+      }
       return { canonical: await deps.realpath(value), identity: itemIdentity };
     } catch (error) {
       return {
@@ -261,13 +335,18 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
       inspectPath(spec.root),
       inspectPath(spec.path),
     ]);
-    if (!('canonical' in root)) return root;
-    if (!('canonical' in target)) return target;
-    if (!isWithin(root.canonical, target.canonical))
+    if (!('canonical' in root)) {
+      return root;
+    }
+    if (!('canonical' in target)) {
+      return target;
+    }
+    if (!isWithin(root.canonical, target.canonical)) {
       return {
         code: 'outside-allowlist',
         message: `Refusing path outside ${spec.root}`,
       };
+    }
     return target;
   }
 
@@ -344,42 +423,50 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     };
     for (const candidate of appSpecs(appPath)) {
       checked = await inspectAllowed(candidate);
-      if ('canonical' in checked) break;
+      if ('canonical' in checked) {
+        break;
+      }
     }
-    if (!('canonical' in checked)) return checked;
+    if (!('canonical' in checked)) {
+      return checked;
+    }
     if (
       !checked.canonical.endsWith('.app') ||
       checked.identity.type !== 'directory'
-    )
+    ) {
       return {
         code: 'invalid-app',
         message: 'Selected item is not an application bundle',
       };
+    }
     if (deps.nevermindAppPath) {
       const self = await inspectPath(deps.nevermindAppPath);
-      if ('canonical' in self && self.canonical === checked.canonical)
+      if ('canonical' in self && self.canonical === checked.canonical) {
         return { code: 'self', message: 'Nevermind cannot uninstall itself' };
+      }
     }
     let bundleId: string | null;
     try {
       bundleId = validateBundleId(await deps.readBundleId(checked.canonical));
-    } catch (error) {
+    } catch {
       return {
         code: 'plist',
         message:
-          'Could not read this app’s bundle identifier. Choose a standard macOS app bundle or try again.',
+          'Could not read this app’s bundle identifier. Choose a supported app bundle or try again.',
       };
     }
-    if (!bundleId)
+    if (!bundleId) {
       return {
         code: 'bundle-id',
         message: 'The app has no safe bundle identifier',
       };
+    }
     if (
       deps.nevermindBundleId &&
       normalizeBundleId(bundleId) === normalizeBundleId(deps.nevermindBundleId)
-    )
+    ) {
       return { code: 'self', message: 'Nevermind cannot uninstall itself' };
+    }
     try {
       await deps.access(path.dirname(checked.canonical), constants.W_OK);
     } catch (error) {
@@ -390,11 +477,12 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
       (!sameIdentity(checked.identity, expected.appIdentity) ||
         checked.canonical !== expected.appPath ||
         normalizeBundleId(bundleId) !== normalizeBundleId(expected.appBundleId))
-    )
+    ) {
       return {
         code: 'app-changed',
         message: 'The application changed after this uninstall view was opened',
       };
+    }
     return { ...checked, bundleId };
   }
 
@@ -408,35 +496,39 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
           (deps.platform === 'darwin' ? candidate.toLowerCase() : candidate) ===
           expected,
       )
-    )
+    ) {
       return {
         code: 'running',
         message: 'Quit this application before uninstalling it',
       };
+    }
     return null;
   }
 
   async function discover(appPath: string): Promise<DiscoveryResult> {
-    if (deps.platform !== 'darwin')
+    if (deps.platform !== 'darwin') {
       return {
         status: 'unavailable',
         reasonCode: 'unsupported-platform',
         message: 'Uninstall is available on macOS only',
       };
+    }
     const app = await checkApp(appPath);
-    if (!('canonical' in app))
+    if (!('canonical' in app)) {
       return {
         status: 'unavailable',
         reasonCode: app.code,
         message: app.message,
       };
+    }
     const running = await checkNotRunning(app.canonical);
-    if (running)
+    if (running) {
       return {
         status: 'unavailable',
         reasonCode: running.code,
         message: running.message,
       };
+    }
     const appRoot = isWithin('/Applications', app.canonical)
       ? '/Applications'
       : path.join(deps.homeDirectory, 'Applications');
@@ -455,12 +547,14 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     for (const spec of associatedSpecs(app.bundleId)) {
       const checked = await inspectAllowed(spec);
       if (!('canonical' in checked)) {
-        if (checked.code === 'missing') missing += 1;
-        else
+        if (checked.code === 'missing') {
+          missing += 1;
+        } else {
           notes.push({
             code: `${spec.slot}-${checked.code}`,
             message: `${spec.slot}: ${checked.message}`,
           });
+        }
         continue;
       }
       if (checked.identity.uid !== deps.currentUid) {
@@ -470,8 +564,11 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
         });
         continue;
       }
-      if (candidates.some((candidate) => candidate.path === checked.canonical))
+      if (
+        candidates.some((candidate) => candidate.path === checked.canonical)
+      ) {
         continue;
+      }
       candidates.push({
         id: randomId(),
         path: checked.canonical,
@@ -481,11 +578,12 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
         identity: checked.identity,
       });
     }
-    if (missing)
+    if (missing) {
       notes.unshift({
         code: 'missing-associated',
         message: `${missing} conventional associated location${missing === 1 ? ' was' : 's were'} not present.`,
       });
+    }
     const snapshot: AppUninstallSnapshot = {
       appPath: app.canonical,
       appBundleId: app.bundleId,
@@ -514,20 +612,24 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
       root: candidate.root,
       kind: candidate.kind,
     });
-    if (!('canonical' in checked)) return checked;
+    if (!('canonical' in checked)) {
+      return checked;
+    }
     if (
       checked.canonical !== candidate.path ||
       !sameIdentity(checked.identity, candidate.identity)
-    )
+    ) {
       return { code: 'changed', message: 'Item changed after confirmation' };
+    }
     if (
       candidate.kind === 'associated' &&
       checked.identity.uid !== deps.currentUid
-    )
+    ) {
       return {
         code: 'owner',
         message: 'Item is no longer owned by the current user',
       };
+    }
     return checked;
   }
 
@@ -536,7 +638,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     values: Record<string, unknown> = {},
   ): Promise<TrashResult> {
     const selection = selected(snapshot, values);
-    if (!selection.length)
+    if (selection.length === 0) {
       return {
         status: 'failed',
         moved: [],
@@ -548,6 +650,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
           },
         ],
       };
+    }
     const ordered = [
       ...selection.filter((item) => item.kind !== 'app'),
       ...selection.filter((item) => item.kind === 'app'),
@@ -556,11 +659,13 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     const untouched: TrashResult['untouched'] = [];
     const globalFailure = async () => {
       const app = await checkApp(snapshot.appPath, snapshot);
-      if (!('canonical' in app)) return app;
+      if (!('canonical' in app)) {
+        return app;
+      }
       return checkNotRunning(app.canonical);
     };
     const initial = await globalFailure();
-    if (initial)
+    if (initial) {
       return {
         status: 'failed',
         moved,
@@ -571,14 +676,16 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
         })),
         notes: [],
       };
+    }
     const preflightFailures = new Map<
       string,
       { code: string; message: string }
     >();
     for (const candidate of ordered) {
       const checked = await revalidateCandidate(snapshot, candidate);
-      if (!('canonical' in checked))
+      if (!('canonical' in checked)) {
         preflightFailures.set(candidate.id, checked);
+      }
     }
     for (let index = 0; index < ordered.length; index += 1) {
       const candidate = ordered[index];
@@ -634,11 +741,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
       }
     }
     return {
-      status: untouched.length
-        ? moved.length
-          ? 'partial'
-          : 'failed'
-        : 'complete',
+      status: trashStatus(moved, untouched),
       moved,
       untouched,
       notes: [],
@@ -646,4 +749,14 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
   }
 
   return { discover, selected, trash };
+}
+
+function trashStatus(
+  moved: string[],
+  untouched: TrashResult['untouched'],
+): TrashResult['status'] {
+  if (untouched.length === 0) {
+    return 'complete';
+  }
+  return moved.length > 0 ? 'partial' : 'failed';
 }
