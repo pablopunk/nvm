@@ -1,0 +1,31 @@
+name: Deployed smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS origin to verify after an approved deployment
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Verify deployed health and compatibility
+        env:
+          NVM_SMOKE_BASE_URL: ${{ inputs.base_url }}
+        run: mise exec -- pnpm smoke:deployed

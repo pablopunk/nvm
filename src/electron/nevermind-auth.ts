@@ -23,7 +23,7 @@ type StoredAuth = {
   connectedAt: string;
 };
 type AuthStore = Record<string, StoredAuth>;
-type AuthSnapshot = {
+export type NevermindAuthSnapshot = {
   token: string;
   email: string;
   role: string;
@@ -31,15 +31,25 @@ type AuthSnapshot = {
   environment: NevermindEnvironment;
 } | null;
 type SignInResult =
-  | { ok: true; auth: NonNullable<AuthSnapshot> }
+  | { ok: true; auth: NonNullable<NevermindAuthSnapshot> }
   | { ok: false; error: string };
 
 const PRODUCTION_BASE_URL = 'https://api.nvm.fyi';
-const DEFAULT_BASE_URL =
-  process.env.NEVERMIND_BASE_URL ||
-  (process.env.ELECTRON_RENDERER_URL
-    ? 'http://localhost:4321'
-    : PRODUCTION_BASE_URL);
+export function resolveDefaultNevermindBaseUrl(
+  environment: Partial<
+    Pick<NodeJS.ProcessEnv, 'NEVERMIND_BASE_URL' | 'ELECTRON_RENDERER_URL'>
+  > = process.env,
+  isPackaged = app.isPackaged,
+) {
+  return (
+    environment.NEVERMIND_BASE_URL ||
+    (!isPackaged && environment.ELECTRON_RENDERER_URL
+      ? 'http://localhost:4321'
+      : PRODUCTION_BASE_URL)
+  );
+}
+
+const DEFAULT_BASE_URL = resolveDefaultNevermindBaseUrl();
 
 function shouldUseProductionBaseUrl() {
   return app.isPackaged && !process.env.NEVERMIND_BASE_URL;
@@ -94,8 +104,8 @@ function legacyAuthPath() {
     : authPath();
 }
 
-let cached: AuthSnapshot = null;
-let loadPromise: Promise<AuthSnapshot> | null = null;
+let cached: NevermindAuthSnapshot = null;
+let loadPromise: Promise<NevermindAuthSnapshot> | null = null;
 let activeSignIn: Promise<SignInResult> | null = null;
 
 function decryptToken(data: StoredAuth): string | null {
@@ -117,7 +127,7 @@ function decryptToken(data: StoredAuth): string | null {
   return null;
 }
 
-function authFromStored(data: StoredAuth): AuthSnapshot {
+function authFromStored(data: StoredAuth): NevermindAuthSnapshot {
   const token = decryptToken(data);
   if (!token) return null;
   const baseUrl = normalizedBaseUrl(data.baseUrl);
@@ -155,7 +165,7 @@ async function readStore(): Promise<AuthStore | null> {
   }
 }
 
-async function migrateLegacyAuthFile(): Promise<AuthSnapshot> {
+async function migrateLegacyAuthFile(): Promise<NevermindAuthSnapshot> {
   try {
     const raw = await fs.readFile(legacyAuthPath(), 'utf8');
     const data = JSON.parse(raw) as AuthStore | StoredAuth;
@@ -175,7 +185,7 @@ async function migrateLegacyAuthFile(): Promise<AuthSnapshot> {
   }
 }
 
-async function readFromDisk(): Promise<AuthSnapshot> {
+async function readFromDisk(): Promise<NevermindAuthSnapshot> {
   let store: AuthStore | null;
   try {
     store = await readStore();
@@ -209,7 +219,7 @@ async function load() {
   return loadPromise;
 }
 
-export async function getNevermindAuth(): Promise<AuthSnapshot> {
+export async function getNevermindAuth(): Promise<NevermindAuthSnapshot> {
   return load();
 }
 

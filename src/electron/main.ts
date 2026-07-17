@@ -78,6 +78,7 @@ import {
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
+import { switchNevermindBackendEnvironment as switchBackendEnvironment } from './nevermind-backend-environment';
 import { captureException, initSentry } from './sentry';
 import {
   configureNvmTestMode,
@@ -1800,9 +1801,6 @@ function flushBufferedDeepLinks() {
   for (const link of links) processBufferedDeepLink(link);
 }
 
-const PRODUCTION_NEVERMIND_BASE_URL = 'https://api.nvm.fyi';
-const TRAILING_SLASH = /\/$/;
-
 function selectedNevermindEnvironment() {
   const selected = userState.nevermindEnvironment;
   if (!selected?.baseUrl) {
@@ -1852,74 +1850,27 @@ async function switchNevermindBackendEnvironment(input: {
   environment: 'production' | 'pr_preview' | 'custom';
   baseUrl?: string;
 }) {
-  const baseUrl =
-    input.environment === 'production'
-      ? PRODUCTION_NEVERMIND_BASE_URL
-      : String(input.baseUrl || '')
-          .trim()
-          .replace(TRAILING_SLASH, '');
-  let parsed: URL;
-  try {
-    parsed = new URL(baseUrl);
-  } catch {
-    return { ok: false, message: 'Enter a valid backend URL.' };
-  }
-  if (parsed.protocol !== 'https:') {
-    return { ok: false, message: 'Backend URL must use HTTPS.' };
-  }
-  if (
-    app.isPackaged &&
-    (await resolvesToUnsafeNevermindAddress(parsed.hostname))
-  ) {
-    return {
-      ok: false,
-      message:
-        'Packaged Nevermind builds cannot use localhost or private network addresses.',
-    };
-  }
-
-  try {
-    await invalidateNevermindCompatibilityCache(baseUrl);
-    const manifest = await checkNevermindCompatibility(baseUrl);
-    if (!manifest) {
-      return {
-        ok: false,
-        message: 'That backend did not return a compatibility manifest.',
-      };
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      message:
-        error instanceof Error ? error.message : 'Backend validation failed.',
-    };
-  }
-
-  const previous = selectedNevermindEnvironment();
-  userState.nevermindEnvironment = {
-    environment: input.environment,
-    baseUrl,
-  };
-  scheduleSaveState();
-  setActiveNevermindAuthBaseUrl(baseUrl);
-  await invalidateNevermindCompatibilityCache(previous.baseUrl);
-  const existing = await getNevermindAuth();
-  const result = existing
-    ? { ok: true as const, auth: existing }
-    : await signInToSelectedNevermindEnvironment();
-  if (!result.ok) {
-    return {
-      ok: false,
-      message: `Sign-in failed: ${'error' in result ? result.error : 'unknown error'}`,
-    };
-  }
-  activeNevermindBaseUrl = result.auth.baseUrl;
-  setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
-  warmNevermindCompatibilityCache(result.auth.baseUrl);
-  await nevermindAi?.disposeAllSessions?.();
-  invalidateExtensionRootItems();
-  broadcastAuthChanged({ authed: true, email: result.auth.email });
-  return { ok: true, message: `Connected to ${baseUrl}` };
+  return switchBackendEnvironment(input, {
+    isPackaged: app.isPackaged,
+    selectedEnvironment: selectedNevermindEnvironment,
+    resolvesToUnsafeAddress: resolvesToUnsafeNevermindAddress,
+    invalidateCompatibilityCache: invalidateNevermindCompatibilityCache,
+    checkCompatibility: checkNevermindCompatibility,
+    setSelectedEnvironment: (selection) => {
+      userState.nevermindEnvironment = selection;
+    },
+    scheduleSaveState,
+    setActiveAuthBaseUrl: setActiveNevermindAuthBaseUrl,
+    getAuth: getNevermindAuth,
+    signIn: signInToSelectedNevermindEnvironment,
+    setActiveBaseUrl: (baseUrl) => {
+      activeNevermindBaseUrl = baseUrl;
+    },
+    warmCompatibilityCache: warmNevermindCompatibilityCache,
+    disposeAiSessions: () => nevermindAi?.disposeAllSessions?.(),
+    invalidateExtensionRootItems,
+    broadcastAuthChanged,
+  });
 }
 
 function safeExternalUpdateUrl(raw?: string) {

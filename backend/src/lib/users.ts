@@ -58,7 +58,12 @@ export async function createUserFromInviteIntent(input: { intentId: string; nonc
 
     const [intent] = await tx.select().from(authIntents).where(eq(authIntents.id, input.intentId)).limit(1);
     if (!intent || intent.consumedAt || intent.expiresAt <= new Date() || createHash('sha256').update(input.nonce).digest('hex') !== intent.nonceHash) throw new InviteRequiredError();
-    const [invite] = await tx.select().from(invites).where(eq(invites.id, intent.inviteId)).limit(1);
+    const [invite] = await tx
+      .select()
+      .from(invites)
+      .where(eq(invites.id, intent.inviteId))
+      .limit(1)
+      .for('update');
     const email = canonicalEmail(input.email);
     if (!invite || invite.email !== email || invite.expiresAt <= new Date() || !['queued', 'sending', 'sent'].includes(invite.status)) throw new InviteRequiredError();
     if (isDisposableEmail(input.email)) throw new DisposableEmailError(input.email);
