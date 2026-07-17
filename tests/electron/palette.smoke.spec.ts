@@ -121,6 +121,9 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       await expect(
         page.getByText('Open Settings', { exact: true }),
       ).toBeVisible();
+      await page.screenshot({
+        path: path.join(artifactDir, 'linux-palette.png'),
+      });
       await input.fill('Open System Settings');
       await expect(
         page.getByText('Open System Settings', { exact: true }),

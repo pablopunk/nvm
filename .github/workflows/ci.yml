@@ -71,6 +71,15 @@ jobs:
       - name: Electron smoke
         run: xvfb-run -a mise exec -- pnpm test:electron
 
+      - name: Upload Linux palette screenshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-palette-screenshot
+          path: test-results/electron/linux-palette.png
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload Electron failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

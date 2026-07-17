@@ -1,0 +1,170 @@
+name: Report Linux palette screenshot
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+jobs:
+  report:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Download passing Linux palette screenshot
+        uses: actions/download-artifact@v5
+        with:
+          name: linux-palette-screenshot
+          path: ${{ runner.temp }}/linux-palette-screenshot
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish screenshot and update pull request comment
+        uses: actions/github-script@v8
+        env:
+          SCREENSHOT_PATH: ${{ runner.temp }}/linux-palette-screenshot/linux-palette.png
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+
+            const marker = '<!-- linux-palette-smoke -->';
+            const storageBranch = 'ci-screenshots';
+            const prNumber = Number(process.env.PR_NUMBER);
+            const runHeadSha = process.env.RUN_HEAD_SHA;
+            const runUrl = process.env.RUN_URL;
+            if (!Number.isInteger(prNumber) || prNumber < 1)
+              throw new Error(`Invalid PR number: ${process.env.PR_NUMBER}`);
+            if (!/^[0-9a-f]{40}$/i.test(runHeadSha))
+              throw new Error(`Invalid workflow head SHA: ${runHeadSha}`);
+            if (!/^https:\/\/github\.com\//.test(runUrl))
+              throw new Error(`Invalid workflow URL: ${runUrl}`);
+
+            const screenshotPath = path.resolve(process.env.SCREENSHOT_PATH);
+            const screenshotStats = fs.lstatSync(screenshotPath);
+            if (!screenshotStats.isFile() || screenshotStats.isSymbolicLink())
+              throw new Error('Downloaded screenshot must be a regular file');
+            const screenshot = fs.readFileSync(screenshotPath);
+            const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+            if (screenshot.length < pngSignature.length || screenshot.length > 5 * 1024 * 1024)
+              throw new Error(`Unexpected screenshot size: ${screenshot.length}`);
+            if (!screenshot.subarray(0, pngSignature.length).equals(pngSignature))
+              throw new Error('Downloaded artifact is not a PNG');
+
+            const { owner, repo } = context.repo;
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            if (pullRequest.base.repo?.full_name !== `${owner}/${repo}`)
+              throw new Error('Pull request does not target this repository');
+            if (pullRequest.head.sha !== runHeadSha) {
+              core.notice('Skipping a stale screenshot run');
+              return;
+            }
+
+            const { data: repository } = await github.rest.repos.get({ owner, repo });
+            try {
+              await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${storageBranch}`,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              const { data: defaultBranch } = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${repository.default_branch}`,
+              });
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/heads/${storageBranch}`,
+                  sha: defaultBranch.object.sha,
+                });
+              } catch (createError) {
+                if (createError.status !== 422) throw createError;
+              }
+            }
+
+            const screenshotFile = `pr-${prNumber}/linux-palette.png`;
+            let existingSha;
+            try {
+              const { data: existing } = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: screenshotFile,
+                ref: storageBranch,
+              });
+              if (!Array.isArray(existing)) existingSha = existing.sha;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              branch: storageBranch,
+              path: screenshotFile,
+              message: `CI: update Linux palette screenshot for PR #${prNumber}`,
+              content: screenshot.toString('base64'),
+              sha: existingSha,
+            });
+
+            const imageUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${storageBranch}/${screenshotFile}?sha=${runHeadSha}`;
+            const body = [
+              marker,
+              '## Linux palette smoke',
+              '',
+              `![Passing Linux palette smoke](${imageUrl})`,
+              '',
+              `Captured from [passing CI run](${runUrl}) at \`${runHeadSha}\`.`,
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const reportComments = comments.filter(
+              (comment) =>
+                comment.user?.login === 'github-actions[bot]' &&
+                comment.body?.includes(marker),
+            );
+            if (reportComments.length) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: reportComments[0].id,
+                body,
+              });
+              for (const comment of reportComments.slice(1)) {
+                await github.rest.issues.deleteComment({
+                  owner,
+                  repo,
+                  comment_id: comment.id,
+                });
+              }
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
