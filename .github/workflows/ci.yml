@@ -104,6 +104,48 @@ jobs:
           path: test-results/electron
           if-no-files-found: warn
 
+  windows-first-run:
+    name: Windows first-run Electron
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install standalone pnpm 11.13.0
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'pnpm-win32-x64.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'pnpm-standalone'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/pnpm/pnpm/releases/download/v11.13.0/pnpm-win32-x64.zip' `
+            -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $destination
+          $pnpm = Join-Path $destination 'pnpm.exe'
+          $destination | Out-File `
+            -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PNPM_STANDALONE_PATH=$pnpm" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $pnpm --version
+
+      - name: Root pnpm install with Electron payload skipped
+        shell: pwsh
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: '& $env:PNPM_STANDALONE_PATH install --frozen-lockfile'
+
+      - name: Root pnpm run dev repairs Electron and starts the app
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: node .github/scripts/windows-first-run-smoke.cjs
+
   postgres-integration:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
