@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - '@google/genai'
+  - electron
+  - electron-winstaller
+  - esbuild
+  - protobufjs
