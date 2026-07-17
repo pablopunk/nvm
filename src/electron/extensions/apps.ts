@@ -62,31 +62,31 @@ export function createAppsExtension() {
         icon: 'stop-circle',
         score: 14,
         appearance: { foreground: 'red' as const },
-        run: async (ctx: any) => {
-          const runningPaths =
-            await extensionContext.runningAppStatus.refresh(
-              'force-quit-command',
-            );
-          const apps = extensionContext.appIndexService
-            .get()
-            .filter(
-              (app) =>
-                app.path && runningPaths.has(String(app.path).toLowerCase()),
-            );
-          if (apps.length === 0) {
-            return ctx.ui.empty(
-              'No running apps',
-              'No running applications to force quit.',
-            );
-          }
-          return ctx.ui.list({
+        run: (ctx: any) =>
+          ctx.ui.list({
             id: 'force-quit-apps',
             title: 'Force Quit Apps',
             presentation: 'root',
             searchBarPlaceholder: 'Search running apps',
-            items: apps.map(createForceQuitAppItem),
-          });
-        },
+            items: ctx.data.loader(async () => {
+              const runningPaths =
+                await extensionContext.runningAppStatus.refresh(
+                  'force-quit-command',
+                );
+              return extensionContext.appIndexService
+                .get()
+                .filter(
+                  (app) =>
+                    app.path &&
+                    runningPaths.has(String(app.path).toLowerCase()),
+                )
+                .map(createForceQuitAppItem);
+            }),
+            emptyView: {
+              title: 'No running apps',
+              subtitle: 'No running applications to force quit.',
+            },
+          }),
       },
     ],
     rootItems(ctx) {

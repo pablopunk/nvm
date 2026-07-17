@@ -223,6 +223,10 @@ export async function getNevermindAuth(): Promise<NevermindAuthSnapshot> {
   return load();
 }
 
+export function getCachedNevermindAuth(): NevermindAuthSnapshot {
+  return cached;
+}
+
 export function setActiveNevermindAuthBaseUrl(baseUrl: string | null) {
   activeBaseUrl = normalizedBaseUrl(baseUrl || DEFAULT_BASE_URL);
   cached = null;
