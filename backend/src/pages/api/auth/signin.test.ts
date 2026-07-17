@@ -12,6 +12,13 @@ const keys = [
   'WORKOS_REDIRECT_URI',
   'WORKOS_COOKIE_PASSWORD',
   'GATEWAY_STATE_KEY',
+  'GATEWAY_STATE_REDIS_URL',
+  'GATEWAY_STATE_REDIS_TOKEN',
+  'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN',
+  'PREVIEW_START_KEY',
+  'PREVIEW_SESSION_KEY',
+  'DATABASE_URL',
 ];
 const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
@@ -61,6 +68,31 @@ test('production sign-in hands a one-use state and canonical callback to WorkOS'
     'https://www.nvm.fyi/api/auth/callback',
   );
   assert.ok(location.searchParams.get('state'));
+  const [cookie] = response.headers.getSetCookie();
+  assert.ok(cookie);
+  assert.match(cookie, /nvm_auth_state=/);
+  assert.match(cookie, /Path=\/api\/auth\/callback/);
+  assert.match(cookie, /Secure/);
+  assert.equal(
+    decodeURIComponent(cookie.split(';', 1)[0]!.split('=', 2)[1]!),
+    location.searchParams.get('state'),
+  );
+});
+
+test('local HTTP sign-in uses the callback host without a Secure attribute', async () => {
+  validProduction();
+  delete process.env.VERCEL_ENV;
+  process.env.WORKOS_REDIRECT_URI = 'http://localhost:4321/api/auth/callback';
+  setPreviewAuthStoreForTests(new Map());
+  const response = await GET(
+    context('http://localhost:4321/api/auth/signin?return_to=/profile'),
+  );
+
+  assert.equal(response.status, 302);
+  const [cookie] = response.headers.getSetCookie();
+  assert.ok(cookie);
+  assert.doesNotMatch(cookie, /Secure/);
+  assert.doesNotMatch(cookie, /Domain=/i);
 });
 
 test('production sign-in fails closed before creating state when WorkOS config is missing', async () => {
@@ -85,6 +117,32 @@ test('Preview sign-in rejects a mismatched request origin before signing or redi
   assert.equal(response.status, 503);
   assert.equal(response.headers.has('location'), false);
   assert.equal(response.headers.has('set-cookie'), false);
+});
+
+test('Preview sign-in redirects to the gateway without setting a Preview-host cookie', async () => {
+  validProduction();
+  process.env.VERCEL_ENV = 'preview';
+  process.env.VERCEL_URL =
+    'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  process.env.PREVIEW_START_KEY = 'preview-start-test-key';
+  process.env.GATEWAY_STATE_REDIS_URL = 'https://gateway-state';
+  process.env.GATEWAY_STATE_REDIS_TOKEN = 'gateway-state-token';
+  process.env.UPSTASH_REDIS_REST_URL = 'https://production-state';
+  process.env.UPSTASH_REDIS_REST_TOKEN = 'production-state-token';
+  process.env.PREVIEW_SESSION_KEY = 'preview-session-test-key';
+  process.env.DATABASE_URL = 'postgres://preview-test';
+  const response = await GET(
+    context(
+      'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/auth/signin',
+    ),
+  );
+
+  assert.equal(response.status, 302);
+  assert.match(
+    response.headers.get('location') ?? '',
+    /^https:\/\/www\.nvm\.fyi\/api\/auth\/preview-start\?intent=/,
+  );
+  assert.deepEqual(response.headers.getSetCookie(), []);
 });
 
 test.after(() => {
