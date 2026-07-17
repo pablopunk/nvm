@@ -1,13 +1,23 @@
 ---
 name: production-debugger
-description: Use when production breaks or alerts fire for Nevermind — Sentry alerts, Vercel/Axiom logs, backend 5xx, auth failures, Neon/Upstash incidents, upstream AI provider failures, GitHub release failures, desktop prod logs, or any "check prod" request. This is an index skill for vendor-specific operational connectors.
+description: Use for Nevermind production incidents, external configuration, or deployed-flow verification — Sentry alerts, Vercel/Axiom logs, backend 5xx, auth failures, Neon/Upstash incidents, upstream AI provider failures, GitHub release failures, desktop prod logs, or any "check prod" request. This is an index skill for vendor-specific operational connectors.
 ---
 
 # Production Debugger
 
-This is the production incident router. It keeps app-specific stack knowledge here, then sends the agent to vendor-specific playbooks that act like MCP connectors: Sentry, Axiom, Vercel, Neon, WorkOS, Upstash, Stripe, GitHub, OpenRouter, and OpenCode.
+This is the production operations router. It keeps app-specific stack knowledge here, then sends the agent to vendor-specific playbooks that act like MCP connectors: Sentry, Axiom, Vercel, Neon, WorkOS, Upstash, Stripe, GitHub, OpenRouter, and OpenCode.
 
 Do not start by reading code. Start from the alert/log source, collect production evidence, and only inspect code after a vendor signal points to a code path.
+
+## Capability and scope preflight
+
+For configuration or verification work, read the relevant vendor playbook before
+classifying the task as dashboard-only or owner-only. Use its safe read-only
+commands to establish installed-tool support, authentication, and the intended
+project, team, environment, host, or dataset. A missing local config file or
+unlinked worktree does not establish that the runtime lacks access. Only then
+separate safe CLI work from actions that need explicit confirmation and steps
+that are genuinely dashboard or human only.
 
 ## Nevermind production stack
 
