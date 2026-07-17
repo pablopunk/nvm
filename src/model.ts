@@ -514,6 +514,8 @@ export type CommandItem = {
   actionPanel?: CommandActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   appearance?: CommandItemAppearance;
+  /** Visible context only; disabled items are skipped by keyboard selection. */
+  disabled?: boolean;
   className?: string;
   detail?: CommandDetail;
 };

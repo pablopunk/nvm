@@ -77,7 +77,7 @@ export type ViewActionResult = {
   view?: CommandView;
   patch?: CommandViewPatch;
   navigation?: 'root' | 'push' | 'replace' | 'pop';
-  toast?: { message: string; tone?: 'default' | 'error' };
+  toast?: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
   skipped?: boolean;
 };
 

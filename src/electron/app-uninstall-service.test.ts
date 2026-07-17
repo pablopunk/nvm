@@ -57,6 +57,7 @@ function fixture(
     isRunning?: () => boolean;
     nevermindBundleId?: string;
     canonicalPath?: (value: string) => string;
+    readBundleIdError?: Error;
     readBundleId?: (value: string) => Promise<unknown>;
   } = {},
 ) {
@@ -105,10 +106,14 @@ function fixture(
       });
     },
     realpath: async (value) => options.canonicalPath?.(value) || value,
-    access: () => Promise.resolve(),
-    readBundleId:
-      options.readBundleId || (() => Promise.resolve(currentBundleId)),
-    trashItem: (value) => {
+    access: async () => {},
+    readBundleId: async (value) => {
+      if (options.readBundleIdError) throw options.readBundleIdError;
+      return options.readBundleId
+        ? options.readBundleId(value)
+        : currentBundleId;
+    },
+    trashItem: async (value) => {
       calls.push(`trash:${value}`);
       if (value === options.failTrashAt) {
         throw new Error('Trash denied');
@@ -272,12 +277,24 @@ test('unsupported missing-top-level-plist layouts produce concise actionable tex
   assert.equal(result.status, 'unavailable');
   if (result.status === 'unavailable') {
     assert.equal(result.reasonCode, 'plist');
-    assert.equal(
-      result.message,
-      'Could not read this app’s bundle identifier. Choose a supported app bundle or try again.',
-    );
+    assert.equal(result.message, 'This app’s metadata could not be read');
     assert.equal(result.message.includes('plutil'), false);
   }
+});
+
+test('redacts process failures when app metadata cannot be read', async () => {
+  const { service } = fixture({
+    readBundleIdError: new Error(
+      'Command failed: /usr/bin/plutil -extract CFBundleIdentifier',
+    ),
+  });
+  const result = await service.discover(appPath);
+
+  assert.equal(result.status, 'unavailable');
+  if (result.status !== 'unavailable') return;
+  assert.equal(result.reasonCode, 'plist');
+  assert.equal(result.message, 'This app’s metadata could not be read');
+  assert.doesNotMatch(result.message, /plutil|\/usr\/bin/);
 });
 
 test('non-macOS discovery performs no host work and the trusted production ID rejects another Nevermind copy', async () => {

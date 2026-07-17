@@ -106,9 +106,9 @@ function isMissing(error: unknown) {
 }
 
 function safeMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : String(error || 'unavailable');
+  return isMissing(error)
+    ? 'This item is no longer available'
+    : 'This item cannot be accessed safely';
 }
 
 function statType(stat: Stat): Identity['type'] | null {
@@ -451,8 +451,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     } catch {
       return {
         code: 'plist',
-        message:
-          'Could not read this app’s bundle identifier. Choose a supported app bundle or try again.',
+        message: 'This app’s metadata could not be read',
       };
     }
     if (!bundleId) {
@@ -469,8 +468,11 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     }
     try {
       await deps.access(path.dirname(checked.canonical), constants.W_OK);
-    } catch (error) {
-      return { code: 'app-parent-not-writable', message: safeMessage(error) };
+    } catch {
+      return {
+        code: 'app-parent-not-writable',
+        message: 'This app cannot be moved to Trash from its current folder',
+      };
     }
     if (
       expected &&
@@ -732,11 +734,11 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
       try {
         await deps.trashItem(candidate.path);
         moved.push(candidate.path);
-      } catch (error) {
+      } catch {
         untouched.push({
           path: candidate.path,
           code: 'trash-failed',
-          message: safeMessage(error),
+          message: 'Could not move this item to Trash',
         });
       }
     }

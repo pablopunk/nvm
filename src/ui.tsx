@@ -56,7 +56,11 @@ export type EmptyStateProps = {
   subtitle?: string;
   action?: ActionPanelRow;
 };
-export type ToastProps = { message: string; tone?: 'default' | 'error' };
+export type ToastTone = 'default' | 'info' | 'success' | 'error';
+export type ToastProps = {
+  message: string;
+  tone?: ToastTone;
+};
 export type PreviewViewProps = {
   content?: ReactNode;
   image?: CommandImage;
@@ -393,11 +397,11 @@ export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
 }
 
 export function Toast({ message, tone }: ToastProps) {
+  const resolvedTone = tone || 'default';
   return (
     <div
-      className={`toast ${tone === 'error' ? 'toastError' : ''}`}
-      role="status"
-      aria-live={tone === 'error' ? 'assertive' : 'polite'}
+      className={`toast toast-${resolvedTone}`}
+      role={resolvedTone === 'error' ? 'alert' : 'status'}
     >
       {message}
     </div>
@@ -551,6 +555,10 @@ function normalizedFormValue(value: FormValue | undefined) {
   return value === undefined ? '' : value;
 }
 
+function formFieldErrorId(field: FormField) {
+  return `form-field-error-${field.id}`;
+}
+
 function formFieldControl(
   field: FormField,
   value: FormValue,
@@ -636,6 +644,8 @@ function formFieldControl(
           checked={Boolean(value)}
           required={field.required}
           type="checkbox"
+          aria-invalid={field.error ? true : undefined}
+          aria-describedby={field.error ? formFieldErrorId(field) : undefined}
           onChange={(event) =>
             onChange?.(field.id, event.currentTarget.checked)
           }
@@ -648,6 +658,8 @@ function formFieldControl(
       <select
         value={String(value)}
         required={field.required}
+        aria-invalid={field.error ? true : undefined}
+        aria-describedby={field.error ? formFieldErrorId(field) : undefined}
         onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
       >
         {field.placeholder ? (
@@ -672,6 +684,8 @@ function formFieldControl(
         multiple={true}
         value={selected}
         required={field.required}
+        aria-invalid={field.error ? true : undefined}
+        aria-describedby={field.error ? formFieldErrorId(field) : undefined}
         onChange={(event) =>
           onChange?.(
             field.id,
@@ -695,6 +709,8 @@ function formFieldControl(
       placeholder={field.placeholder}
       required={field.required}
       type={type}
+      aria-invalid={field.error ? true : undefined}
+      aria-describedby={field.error ? formFieldErrorId(field) : undefined}
       onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
     />
   );
@@ -733,7 +749,9 @@ export function FormView({
               {formFieldControl(field, value, onChange)}
               {field.description ? <small>{field.description}</small> : null}
               {field.error ? (
-                <small className="formFieldError">{field.error}</small>
+                <small id={formFieldErrorId(field)} className="formFieldError">
+                  {field.error}
+                </small>
               ) : null}
             </div>
           );
@@ -744,7 +762,9 @@ export function FormView({
               {formFieldControl(field, value, onChange)}
               {field.description ? <small>{field.description}</small> : null}
               {field.error ? (
-                <small className="formFieldError">{field.error}</small>
+                <small id={formFieldErrorId(field)} className="formFieldError">
+                  {field.error}
+                </small>
               ) : null}
             </div>
           );
@@ -754,7 +774,9 @@ export function FormView({
             {formFieldControl(field, value, onChange)}
             {field.description ? <small>{field.description}</small> : null}
             {field.error ? (
-              <small className="formFieldError">{field.error}</small>
+              <small id={formFieldErrorId(field)} className="formFieldError">
+                {field.error}
+              </small>
             ) : null}
           </label>
         );
@@ -860,7 +882,9 @@ export function ListView<T>({
   return (
     <>
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {isLoading && hasItems && <div className="viewLoadingBar" />}
+      {isLoading && hasItems && (
+        <div className="viewLoadingBar" role="status" aria-label="Loading" />
+      )}
 
       {hasItems ? (
         visibleSections.map((section, index) => (
@@ -902,7 +926,9 @@ export function GridView<T>({
   return (
     <div className="extensionView">
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {isLoading && hasItems && <div className="viewLoadingBar" />}
+      {isLoading && hasItems && (
+        <div className="viewLoadingBar" role="status" aria-label="Loading" />
+      )}
 
       {hasItems ? (
         visibleSections.map((section, index) => (

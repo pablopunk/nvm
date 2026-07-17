@@ -194,4 +194,5 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
   assert.equal(confirmation.onConfirm.requiresConfirmation, undefined);
   const complete = await confirmation.onConfirm.__handler();
   assert.equal(complete.toast.message, '1 item moved to Trash');
+  assert.equal(complete.toast.tone, 'success');
 });

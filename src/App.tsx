@@ -34,6 +34,7 @@ import {
   measureDebugPerformanceSync,
 } from './debug-performance';
 import { ExtensionViewRenderer } from './extension-view';
+import { feedbackView } from './feedback';
 import {
   allViewItems,
   filterCommandItems,
@@ -79,6 +80,7 @@ import {
   setShortcutLabelHyperKey,
   shortcutLabel,
   Toast,
+  type ToastTone,
 } from './ui';
 import { useAiChat } from './use-ai-chat';
 import { useExtensionNavigation } from './use-extension-navigation';
@@ -278,7 +280,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [toast, setToast] = useState<{
     message: string;
-    tone?: 'default' | 'error';
+    tone?: ToastTone;
   } | null>(null);
 
   useEffect(() => {
@@ -334,7 +336,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       view?: ExtensionView;
       patch?: CommandViewPatch;
       navigation?: 'root' | 'push' | 'replace' | 'pop';
-      toast?: { message: string; tone?: 'default' | 'error' };
+      toast?: { message: string; tone?: ToastTone };
     } | void,
   ) {
     if (!result) return;
@@ -552,7 +554,7 @@ export function App() {
   }>({ installed: false, authed: false });
   const [toast, setToast] = useState<{
     message: string;
-    tone?: 'default' | 'error';
+    tone?: ToastTone;
   } | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(
     SEARCH_PLACEHOLDERS.length - 1,
@@ -868,15 +870,13 @@ export function App() {
           title: 'Dismiss',
         };
         showExtensionView(
-          {
-            type: 'preview',
-            title: 'Something went wrong',
-            content: `# Failed to load items\n\n\`\`\`\n${payload.error.message}\n\`\`\``,
+          feedbackView({
+            id: `view-hydrate-error:${payload.viewId || 'current'}`,
+            title: 'Could not load items',
+            message: 'Try again or go back.',
+            tone: 'error',
             actions: [...(retryAction ? [retryAction] : []), dismissAction],
-            ...(retryAction
-              ? { actionPanel: { sections: [{ actions: [retryAction] }] } }
-              : {}),
-          },
+          }),
           'replace',
         );
         return;
@@ -1333,7 +1333,7 @@ export function App() {
     if (shouldReveal) setPendingShortcutReveal(true);
   }
 
-  function showToast(message: string, tone: 'default' | 'error' = 'default') {
+  function showToast(message: string, tone: ToastTone = 'default') {
     setToast({ message, tone });
     const duration = tone === 'error' ? 4000 : 2200;
     window.setTimeout(
@@ -1465,7 +1465,7 @@ export function App() {
       view?: ExtensionView;
       patch?: CommandViewPatch;
       navigation?: 'root' | 'push' | 'replace' | 'pop';
-      toast?: { message: string; tone?: 'default' | 'error' };
+      toast?: { message: string; tone?: ToastTone };
     } | void,
     fallbackNavigation: 'push' | 'replace' | 'root' = 'push',
   ) {

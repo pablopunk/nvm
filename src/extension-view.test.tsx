@@ -11,6 +11,7 @@ import {
   extensionWebviewAllow,
   NevermindLimitGate,
 } from './extension-view';
+import { feedbackView } from './feedback';
 import type { CommandAction, CommandView } from './model';
 import {
   nextNavigationState,
@@ -77,6 +78,22 @@ test('renders unsupported-client update UI with structured updater action', () =
   assert.match(html, /This version is no longer supported by the backend\./);
   assert.match(html, /Check for Update/);
   assert.doesNotMatch(html, /Open Dashboard/);
+});
+
+test('renders feedback as a cmdk list with an accessible recovery action', () => {
+  const html = renderExtensionView(
+    feedbackView({
+      id: 'uninstall-unavailable',
+      title: 'Uninstall unavailable',
+      message: 'This app cannot be uninstalled safely.',
+      tone: 'error',
+    }),
+  );
+
+  assert.match(html, /Uninstall unavailable/);
+  assert.match(html, /This app cannot be uninstalled safely\./);
+  assert.match(html, /Back/);
+  assert.match(html, /aria-disabled="true"/);
 });
 
 test('nested navigation preserves the parent view when pushing a child', () => {

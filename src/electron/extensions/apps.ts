@@ -1,22 +1,32 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: the extension host currently exposes these callbacks without public types.
+import { feedbackView } from '../../feedback';
 import { extensionContext } from './_context';
 
 function uninstallResult(ctx: any, result: any) {
   if (result.status === 'complete') {
     return ctx.ui.toast({
       message: `${result.moved.length} item${result.moved.length === 1 ? '' : 's'} moved to Trash`,
+      tone: 'success',
     });
   }
-  const untouched = result.untouched
-    .map((item: any) => `- ${item.path}: ${item.message}`)
-    .join('\n');
-  return ctx.ui.preview({
+  const details = result.untouched.length
+    ? result.untouched.map((item: any) => ({
+        title: item.path,
+        subtitle: item.message,
+      }))
+    : result.notes.map((note: any) => ({ title: note.message }));
+  return feedbackView({
+    id: 'uninstall-result',
     title:
       result.status === 'partial'
         ? 'Uninstall partially completed'
         : 'Nothing was moved to Trash',
-    content: `# ${result.status === 'partial' ? 'Some selected items were left untouched' : 'Selected items were left untouched'}\n\n${untouched || result.notes.map((note: any) => `- ${note.message}`).join('\n')}`,
-    appearance: { foreground: 'red' },
+    message:
+      result.status === 'partial'
+        ? 'Some selected items were left untouched.'
+        : 'Selected items were left untouched.',
+    tone: 'error',
+    details,
   });
 }
 
