@@ -135,6 +135,7 @@ import {
   selectFindFiles,
   sortFoundFiles,
 } from './file-index-sorting';
+import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 import { JobRegistry, type JobSnapshot } from './jobs';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
@@ -306,6 +307,8 @@ const EXTENSION_REFRESH_BURST_WINDOW_MS = 2000;
 const EXTENSION_AI_CALLS_PER_MINUTE = 30;
 const EXTENSION_AI_RATE_WINDOW_MS = 60_000;
 const EXTENSION_TYPES_FILENAME = 'nevermind-extension-api.d.ts';
+const FRONTMOST_APP_CHANGED_EVENT = 'app.frontmost.changed';
+const FRONTMOST_APP_POLL_JOB_ID = 'frontmost-app.poll';
 const LEARNING_RULES_FILENAME = 'ai-learnings.md';
 const LEGACY_LEARNING_RULES_FILENAME = 'ai-learnings.json';
 const LEARNING_TRACES_FILENAME = 'ai-learning-traces.json';
@@ -6460,6 +6463,7 @@ async function loadExtensions() {
       rootActionExecutionRecords.clear();
       viewRefreshRecords.clear();
       jobRegistry.unregisterWhere((job) => job.owner === 'extension');
+      stopFrontmostAppPolling();
       for (const watcher of extensionFileWatchers) watcher.close();
       extensionFileWatchers = [];
       initExtensionContext({
@@ -6544,6 +6548,7 @@ async function loadExtensions() {
         extensionCount: extensionModules.size,
         actionCount: extensionActionRegistry.size,
       });
+      syncFrontmostAppPolling();
     },
   );
 }
@@ -6898,7 +6903,7 @@ function jobTriggersFromExtensionTriggers(
       if (trigger?.type === 'app.frontmost.changed')
         return {
           type: 'event' as const,
-          event: 'app.frontmost.changed',
+          event: FRONTMOST_APP_CHANGED_EVENT,
           debounceMs: trigger.debounceMs || 0,
           payload: { trigger: extensionTriggerForLaunch(trigger) },
         };
@@ -7268,7 +7273,30 @@ async function pollFrontmostAppChange() {
   const currentId = current?.bundleId || current?.path || current?.name || '';
   if (!currentId || currentId === frontmostWatcherLastId) return;
   frontmostWatcherLastId = currentId;
-  jobRegistry.emit('app.frontmost.changed');
+  jobRegistry.emit(FRONTMOST_APP_CHANGED_EVENT);
+}
+
+function stopFrontmostAppPolling() {
+  jobRegistry.unregister(FRONTMOST_APP_POLL_JOB_ID);
+  frontmostWatcherLastId = '';
+}
+
+function syncFrontmostAppPolling() {
+  const hasSubscriber = hasEnabledExtensionEventSubscriber(
+    jobRegistry.snapshot(),
+    FRONTMOST_APP_CHANGED_EVENT,
+  );
+  if (!hasSubscriber) return stopFrontmostAppPolling();
+  if (jobRegistry.has(FRONTMOST_APP_POLL_JOB_ID)) return;
+  jobRegistry.register({
+    id: FRONTMOST_APP_POLL_JOB_ID,
+    title: 'Frontmost App Poll',
+    owner: 'host',
+    scope: 'apps',
+    triggers: [{ type: 'interval', everyMs: 5000, delayMs: 5000 }],
+    timeoutMs: 3000,
+    run: pollFrontmostAppChange,
+  });
 }
 
 function registerHostJobs() {
@@ -7304,15 +7332,6 @@ function registerHostJobs() {
     triggers: [{ type: 'startup', delayMs: 200 }],
     timeoutMs: 30_000,
     run: indexFiles,
-  });
-  jobRegistry.register({
-    id: 'frontmost-app.poll',
-    title: 'Frontmost App Poll',
-    owner: 'host',
-    scope: 'apps',
-    triggers: [{ type: 'interval', everyMs: 5000, delayMs: 5000 }],
-    timeoutMs: 3000,
-    run: pollFrontmostAppChange,
   });
   jobRegistry.register({
     id: 'cache.app-icons',
@@ -8075,6 +8094,7 @@ app.whenReady().then(async () => {
   const storedNevermindAuth = await getNevermindAuth();
   activeNevermindBaseUrl = storedNevermindAuth?.baseUrl || null;
   registerHostJobs();
+  jobRegistry.onChange(syncFrontmostAppPolling);
   await loadExtensions();
   if (process.env.NVM_PALETTE_DEBUG) {
     await runPaletteDebugCli();
