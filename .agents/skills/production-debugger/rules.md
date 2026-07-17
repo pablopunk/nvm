@@ -5,6 +5,8 @@
 - Do not run destructive Vercel, Sentry, Neon, WorkOS, Upstash, GitHub, or release operations without confirming first.
 - Do not commit `.env`, `.vercel/`, tokens, DSNs with secret keys, cookies, authorization headers, raw user prompts/responses, or production data dumps.
 - Do not paste raw secret values into chat output; say which var/service was checked and whether it matched expected shape.
+- Before declaring external work inaccessible, read its vendor playbook and use safe read-only checks to establish installed-tool support, authentication, and the exact project/team/environment. Missing worktree-local config alone is not evidence of missing access.
+- Before configuration or deployment changes, name the target host/environment and terminal acceptance state; prefer preview/test, confirm destructive, security-sensitive, billing, release, or live changes, then verify the intended public aliases before exercising the real user flow.
 - After any fix, verify the exact failing endpoint/flow again and correlate the new result with logs/Sentry/request id.
 - After two symptom patches in the same code path, stop and audit the architecture.
 
