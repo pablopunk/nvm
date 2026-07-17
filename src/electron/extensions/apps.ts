@@ -228,7 +228,7 @@ export function createAppsExtension() {
   return {
     id: 'nevermind.apps',
     title: 'Applications',
-    permissions: ['desktop.apps'] as const,
+    capabilities: ['desktop.apps'] as const,
     commands: [
       {
         id: 'force-quit-apps',

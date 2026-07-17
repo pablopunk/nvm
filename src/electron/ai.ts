@@ -2,11 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
 import type { CommandAction } from '../model';
+import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
+import { type ByoKeySnapshot, getByoKey } from './byo-key';
 import {
   markDebugPerformance,
   measureDebugPerformance,
 } from './debug-performance';
-import { getByoKey, type ByoKeySnapshot } from './byo-key';
+import { inspectExtensionManifest } from './extension-manifest';
 import * as logger from './logger';
 import { type LogLevel, type LogSource, readRecentLogs } from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
@@ -15,8 +17,6 @@ import {
   checkNevermindCompatibility,
   requireNevermindCompatibilityFeature,
 } from './nevermind-compatibility';
-import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
-import { inspectExtensionManifest } from './extension-manifest';
 
 type AiEvent = {
   type: string;
@@ -1303,41 +1303,18 @@ function createTools(
           _toolCallId: string,
           params: { filename: string; code: string },
         ) => {
-          const filePath = safeExtensionPath(extensionsDir, params.filename);
-          const filename = path.basename(filePath);
-          const chat = getActiveChat?.();
-          const exists = await fileExists(filePath);
-          const focused = currentExtensionFile(chat) === filename;
-          if (exists && !canWriteExtension?.(filename))
-            throw new Error(
-              `Refusing to overwrite ${filename}: this AI chat does not own that extension.`,
+          const { filePath, filename, draftPath } =
+            await stageAiGeneratedExtension(
+              {
+                extensionsDir,
+                extensionTypesPath,
+                stageExtensionProposal,
+                canWriteExtension,
+                currentExtensionFile: currentExtensionFile(getActiveChat?.()),
+                readFiles,
+              },
+              params,
             );
-          if (exists && !focused && !readFiles.has(filename))
-            throw new Error(
-              `Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`,
-            );
-          const draftsDir = path.join(
-            path.dirname(extensionsDir),
-            'extension-drafts',
-          );
-          const draftPath = safeExtensionPath(draftsDir, filename);
-          await fs.mkdir(draftsDir, { recursive: true });
-          await fs.writeFile(draftPath, params.code);
-          try {
-            await validateTypeScriptExtension(
-              draftPath,
-              extensionTypesPath,
-              extensionsDir,
-            );
-          } catch (error) {
-            await fs.unlink(draftPath).catch(() => {});
-            throw error;
-          }
-          const staged = stageExtensionProposal
-            ? await stageExtensionProposal(filename, params.code)
-            : { draftFile: draftPath };
-          if (staged.draftFile !== draftPath)
-            await fs.unlink(draftPath).catch(() => {});
           return {
             content: [
               {
@@ -1347,7 +1324,7 @@ function createTools(
             ],
             details: {
               filePath,
-              draftPath: staged.draftFile,
+              draftPath,
               extensionsDir,
               staged: true,
             },
@@ -1441,6 +1418,57 @@ function createTools(
       ),
     }),
   ];
+}
+
+export async function stageAiGeneratedExtension(
+  options: {
+    extensionsDir: string;
+    extensionTypesPath: string;
+    stageExtensionProposal?: NevermindAiOptions['stageExtensionProposal'];
+    canWriteExtension?: NevermindAiOptions['canWriteExtension'];
+    currentExtensionFile?: string;
+    readFiles?: ReadonlySet<string>;
+  },
+  params: { filename: string; code: string },
+) {
+  const filePath = safeExtensionPath(options.extensionsDir, params.filename);
+  const filename = path.basename(filePath);
+  const exists = await fileExists(filePath);
+  if (exists && !options.canWriteExtension?.(filename))
+    throw new Error(
+      `Refusing to overwrite ${filename}: this AI chat does not own that extension.`,
+    );
+  if (
+    exists &&
+    options.currentExtensionFile !== filename &&
+    !options.readFiles?.has(filename)
+  )
+    throw new Error(
+      `Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`,
+    );
+  const draftsDir = path.join(
+    path.dirname(options.extensionsDir),
+    'extension-drafts',
+  );
+  const draftPath = safeExtensionPath(draftsDir, filename);
+  await fs.mkdir(draftsDir, { recursive: true });
+  await fs.writeFile(draftPath, params.code);
+  try {
+    await validateTypeScriptExtension(
+      draftPath,
+      options.extensionTypesPath,
+      options.extensionsDir,
+    );
+  } catch (error) {
+    await fs.unlink(draftPath).catch(() => {});
+    throw error;
+  }
+  const staged = options.stageExtensionProposal
+    ? await options.stageExtensionProposal(filename, params.code)
+    : { draftFile: draftPath };
+  if (staged.draftFile !== draftPath)
+    await fs.unlink(draftPath).catch(() => {});
+  return { filePath, filename, draftPath: staged.draftFile };
 }
 
 function summarizedToolInput(params: unknown) {
@@ -1557,7 +1585,7 @@ function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
 
 function validateExtensionCapabilities(source: string) {
   const manifest = inspectExtensionManifest(source);
-  if (!manifest.id || !manifest.title)
+  if (!(manifest.id && manifest.title))
     throw new Error(
       'Extension must statically declare literal id and title values',
     );
@@ -1597,10 +1625,13 @@ async function validateTypeScriptExtension(
   extensionTypesPath: string,
   extensionsDir: string,
 ) {
-  await ensureExtensionTypeDefinitions(extensionsDir, extensionTypesPath);
+  const validationDir = path.dirname(filePath);
+  await ensureExtensionTypeDefinitions(validationDir, extensionTypesPath);
+  if (validationDir !== extensionsDir)
+    await ensureExtensionTypeDefinitions(extensionsDir, extensionTypesPath);
   typecheckExtension(
     filePath,
-    path.join(extensionsDir, 'nevermind-extension-api.d.ts'),
+    path.join(validationDir, 'nevermind-extension-api.d.ts'),
   );
   const source = await fs.readFile(filePath, 'utf8');
   validateExtensionCapabilities(source);
@@ -1693,8 +1724,8 @@ function capabilities() {
       'replace',
       'pop',
       'run',
-      'shellExec (requires system permission)',
-      'shellScript (requires system permission)',
+      'shellExec (declare the system capability for review)',
+      'shellScript (declare the system capability for review)',
       'durable actions/commands may declare mode and triggers for host-managed background jobs',
     ],
     namespaces: [
@@ -1718,7 +1749,7 @@ function capabilities() {
       'ctx.desktop.files.metadata(path) returns canonical metadata and host-safe URLs; thumbnail(path) returns a thumbnail URL; indexedRoots(), indexSnapshot(options), searchIndex(query, options), and reindex(options) provide bounded host file-index controls',
     ],
     ocr: [
-      "requires ocr permission; ctx.ocr.image(pathOrFileOrDataUrl), ctx.ocr.screen(options), and ctx.ocr.region(rect, options) return recognized text plus blocks/confidence; check ctx.system.capabilities.has('ocr') and render graceful unavailable states",
+      "declare the ocr capability for review; ctx.ocr.image(pathOrFileOrDataUrl), ctx.ocr.screen(options), and ctx.ocr.region(rect, options) return recognized text plus blocks/confidence; check ctx.system.capabilities.has('ocr') and render graceful unavailable states",
     ],
     text: [
       'template(input, variablesOrOptions) expands {name}/{{name}} placeholders plus date, time, datetime, uuid, selectedText, clipboard, cursor, {argument:name}, and {calculator:1 + 2}; pass { variables, returnCursor/returnResult, includeClipboard, includeSelectedText, promptMissing } for cursor/missing-variable results',
@@ -1777,7 +1808,7 @@ function capabilities() {
         'searchIndex',
       ],
       shell: [
-        'requires system permission',
+        'declare the system capability for review',
         'openExternal',
         'exec',
         'script',

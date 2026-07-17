@@ -50,13 +50,13 @@ export type ExtensionCapability =
   | 'ai'
   | 'extensions.ownership'
   | 'shortcuts'
-  /** Required for shell execution, system actions, and `ctx.desktop.shell`. */
+  /** Declares intent to use shell execution, system actions, or `ctx.desktop.shell`. */
   | 'system'
   | 'places'
   | 'updates'
   | 'settings.write'
   | 'camera'
-  /** Required for `ctx.ocr` image/screen/region text recognition helpers. */
+  /** Declares intent to use `ctx.ocr` image/screen/region text recognition helpers. */
   | 'ocr';
 
 /** @deprecated Use `ExtensionCapability`; retained for existing source files. */
@@ -104,7 +104,7 @@ export type ExtensionBackgroundMode = 'view' | 'noView' | 'background';
 export type ExtensionBackgroundTrigger =
   | { type: 'startup'; delayMs?: number }
   | { type: 'interval'; every: string | number; delayMs?: number }
-  /** Requires `desktop.files`; roots are watched by the host with debouncing, no-overlap, and bounded launch context. The host resolves `~` and `~/...` paths to absolute paths so use `~/Desktop`, `~/Downloads`, etc. directly without manual resolution. */
+  /** Declare `desktop.files` for review; roots are watched by the host with debouncing, no-overlap, and bounded launch context. The host resolves `~` and `~/...` paths to absolute paths so use `~/Desktop`, `~/Downloads`, etc. directly without manual resolution. */
   | {
       type: 'files.changed';
       roots: string | string[];
@@ -114,9 +114,9 @@ export type ExtensionBackgroundTrigger =
       kind?: 'file' | 'image' | 'video' | 'media';
       ignore?: string[];
     }
-  /** Requires `clipboard.history`; fires after Nevermind records a changed clipboard item. */
+  /** Declare `clipboard.history` for review; fires after Nevermind records a changed clipboard item. */
   | { type: 'clipboard.changed'; debounceMs?: number }
-  /** Requires `desktop.apps`; backed by a host frontmost-app poller. */
+  /** Declare `desktop.apps` for review; backed by a host frontmost-app poller. */
   | { type: 'app.frontmost.changed'; debounceMs?: number }
   | { type: 'wake' | 'login' };
 
@@ -161,7 +161,7 @@ export type ExtensionActionContribution = {
   placement?: ExtensionActionPlacement[];
   /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode;
-  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, no-overlap, backoff, and diagnostics. */
+  /** Declarative host-owned trigger intents. The host owns scheduling, enablement, no-overlap, backoff, and diagnostics. */
   triggers?: ExtensionBackgroundTrigger[];
   /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
   action?: ExtensionAction;
@@ -785,7 +785,7 @@ export type ExtensionAiOptions = {
   /** Admin-defined backend model route. `smart` favors capability; `fast` favors latency/cost. */
   model?: ExtensionAiModel;
   system?: string;
-  /** Text, file, image, selected, clipboard, or OCR context. File/image attachments require `desktop.files`; clipboard helpers require `clipboard.history`; OCR requires `ocr`. */
+  /** Text, file, image, selected, clipboard, or OCR context. Declare the matching capabilities for review; declarations do not gate attachment helpers. */
   attachments?:
     | ExtensionAiResolvableAttachment
     | ExtensionAiResolvableAttachment[];
@@ -858,10 +858,10 @@ export type ExtensionData = {
 };
 
 export type ExtensionAi = {
-  /** Easy one-shot AI call. Quota-limited per extension; declare `ai` permission. Smart/fast routes are configured by the backend admin. */
+  /** Easy one-shot AI call. Quota-limited per extension; declare the `ai` capability for review. Smart/fast routes are configured by the backend admin. */
   (prompt: string, model?: ExtensionAiModel): Promise<string>;
   (prompt: string, options?: ExtensionAiOptions): Promise<string>;
-  /** One-shot AI call. Quota-limited per extension; declare `ai` permission. Supports attachments and AbortController signals. */
+  /** One-shot AI call. Quota-limited per extension; declare the `ai` capability for review. Supports attachments and AbortController signals. */
   ask(prompt: string, model?: ExtensionAiModel): Promise<string>;
   ask(prompt: string, options?: ExtensionAiOptions): Promise<string>;
   /** Streaming AI call. Use `onDelta`/`onEvent` for incremental updates and await `result` for the final text. */
@@ -1033,7 +1033,7 @@ export type ExtensionClipboardEntry = {
   createdAt?: number;
 };
 
-/** Clipboard history access. Requires the `clipboard.history` permission. Destructive helpers are host-managed and return counts. */
+/** Clipboard history access for enabled trusted extensions. Declare `clipboard.history` as review metadata. Destructive helpers are host-managed and return counts. */
 export type ExtensionClipboardHistory = {
   list(options?: {
     limit?: number;
@@ -1261,14 +1261,14 @@ export type ExtensionContext = {
       ) => ExtensionActionResult | Promise<ExtensionActionResult>,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** Run a shell command. Requires the `system` permission. */
+    /** Run a shell command. Declare the `system` capability for review. */
     shellExec(
       title: string,
       command: string,
       args?: string[],
       options?: ExtensionShellOptions,
     ): ExtensionAction;
-    /** Run a shell script through `/bin/bash -lc` by default. Requires the `system` permission. */
+    /** Run a shell script through `/bin/bash -lc` by default. Declare the `system` capability for review. */
     shellScript(
       title: string,
       script: string,
@@ -1301,7 +1301,7 @@ export type ExtensionContext = {
       nativeAction: unknown,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** OS-owned system actions. Requires the `system` permission. Titles default to OS-appropriate labels. */
+    /** OS-owned system actions. Declare the `system` capability for review. Titles default to OS-appropriate labels. */
     system: Record<
       | 'lockScreen'
       | 'sleep'
@@ -1311,7 +1311,7 @@ export type ExtensionContext = {
       | 'quit',
       (title?: string, options?: Record<string, unknown>) => ExtensionAction
     >;
-    /** App update actions. Requires the `updates` permission. */
+    /** App update actions. Declare the `updates` capability for review. */
     updates: Record<
       'check' | 'download' | 'install',
       (title?: string, options?: Record<string, unknown>) => ExtensionAction
@@ -1376,10 +1376,10 @@ export type ExtensionContext = {
     ): ExtensionAction;
   };
 
-  /** Clipboard history. `history` is present only with the `clipboard.history` permission. */
+  /** Clipboard history. Enabled trusted extensions receive this API regardless of declarations. */
   clipboard: { history?: ExtensionClipboardHistory };
 
-  /** OCR helpers. Present only with the `ocr` permission; check `ctx.system.capabilities.has('ocr')` for OS support. */
+  /** OCR helpers. Declarations do not gate this API; check `ctx.system.capabilities.has('ocr')` for OS support. */
   ocr?: {
     /** Recognize text in an image path, file URL, data URL, or `ExtensionFile`. */
     image(
@@ -1422,7 +1422,7 @@ export type ExtensionContext = {
     run(action: ExtensionAction): { action: ExtensionAction };
   };
 
-  /** Desktop capabilities. Optional namespaces require matching top-level permissions. */
+  /** Desktop APIs for enabled trusted extensions. Capability declarations are review metadata and do not gate namespaces. */
   desktop: {
     keyboard: {
       /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
@@ -1527,7 +1527,7 @@ export type ExtensionContext = {
         options?: ExtensionFileIndexOptions,
       ): ExtensionIndexedFile[];
     };
-    /** Shell and process helpers. Present only with the `system` permission. */
+    /** Shell and process helpers. Declare the `system` capability for review. */
     shell?: {
       openExternal(url: string): unknown;
       exec(
@@ -1559,7 +1559,7 @@ export type ExtensionContext = {
   cache: ExtensionRuntimeCache;
   /** Current-view helpers. `refresh()` may be placed in `view.refresh.action`; the host converts it to an opaque refresh handle before IPC. */
   views: { refresh(): ExtensionAction; invalidate(): void };
-  /** App update state. Present only with the `updates` permission. Pair with `ctx.actions.updates.*`. */
+  /** App update state. Declare the `updates` capability for review and pair with `ctx.actions.updates.*`. */
   updates?: { getState(): ExtensionUpdateState };
   state: Record<string, unknown>;
   /** Lazy data fetching. Use `ctx.data.loader(fn)` so the view skeleton paints immediately while the loader runs in the background. */
@@ -1587,7 +1587,7 @@ export type ExtensionCommand = {
   background?: boolean;
   /** Execution lifecycle. `background`/`noView` commands are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode;
-  /** Declarative host-owned trigger intents. The host owns scheduling, permissions, no-overlap, backoff, and diagnostics. */
+  /** Declarative host-owned trigger intents. The host owns scheduling, enablement, no-overlap, backoff, and diagnostics. */
   triggers?: ExtensionBackgroundTrigger[];
   dismissAfterRun?: 'auto';
   run(

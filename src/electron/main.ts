@@ -94,7 +94,7 @@ if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
 if (!isNvmTestMode) initSentry();
 
 import { feedbackView } from '../feedback';
-import { canCustomizeCommandAction, type CommandAction } from '../model';
+import { type CommandAction, canCustomizeCommandAction } from '../model';
 import {
   appResultMarker,
   compareRankedActions,
@@ -103,11 +103,11 @@ import {
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
+import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
   createProductionAppUninstallService,
   NEVERMIND_BUNDLE_ID,
 } from './app-uninstall-service';
-import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
   createDataLoaderHandle,
   createStaleWhileRevalidateHandle,
@@ -122,12 +122,8 @@ import {
   measureDebugPerformanceSync,
   summarizeDebugValue,
 } from './debug-performance';
-import { createExtensionJsonStore } from './extension-json-store';
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
-import {
-  markInternalExtension,
-  permissionDeniedError,
-} from './extension-permissions';
+import { createExtensionJsonStore } from './extension-json-store';
 import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
@@ -142,7 +138,8 @@ import {
   sortFoundFiles,
 } from './file-index-sorting';
 import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
-import { JobRegistry, type JobSnapshot } from './jobs';
+import { markInternalExtension } from './internal-extension';
+import { type JobDefinition, JobRegistry, type JobSnapshot } from './jobs';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
   configureLogger,
@@ -315,6 +312,10 @@ const EXTENSION_AI_RATE_WINDOW_MS = 60_000;
 const EXTENSION_TYPES_FILENAME = 'nevermind-extension-api.d.ts';
 const FRONTMOST_APP_CHANGED_EVENT = 'app.frontmost.changed';
 const FRONTMOST_APP_POLL_JOB_ID = 'frontmost-app.poll';
+
+function trustedExtensionApiUnavailable(capability: string) {
+  return new Error(`Trusted extension API is unavailable: ${capability}`);
+}
 const LEARNING_RULES_FILENAME = 'ai-learnings.md';
 const LEGACY_LEARNING_RULES_FILENAME = 'ai-learnings.json';
 const LEARNING_TRACES_FILENAME = 'ai-learning-traces.json';
@@ -373,7 +374,31 @@ let learningRulesPath = '';
 let legacyLearningRulesPath = '';
 let learningTracesPath = '';
 let saveTimer: NodeJS.Timeout | undefined;
-let extensionFileWatchers: Array<{ close: () => unknown }> = [];
+let extensionFileWatchers: Array<{
+  close: () => unknown;
+  extensionId?: string;
+}> = [];
+type PreparedFileWatcher = {
+  extensionId: string;
+  event: string;
+  trigger: any;
+};
+type PreparedExtensionRuntime = {
+  filename: string;
+  extensionIds: Set<string>;
+  modules: Map<string, any>;
+  actions: Map<string, any>;
+  handlers: Map<string, any>;
+  viewActions: Map<string, any>;
+  rootActions: Map<string, any>;
+  viewRefreshes: Map<string, any>;
+  jobs: JobDefinition[];
+  fileWatchers: PreparedFileWatcher[];
+};
+let extensionRuntimePreparation:
+  | Pick<PreparedExtensionRuntime, 'jobs' | 'fileWatchers'>
+  | undefined;
+let testExtensionActivationFailurePhase: string | undefined;
 let frontmostWatcherLastId = '';
 const jobRegistry = new JobRegistry();
 let nevermindAi: any;
@@ -2141,6 +2166,8 @@ function testModeExtensionIsSafe(extensionId: string) {
     'nevermind.system',
     'nevermind.extensions',
     'pab53.lifecycle',
+    'pab53.legacy',
+    'pab53.discovered',
   ].includes(extensionId);
 }
 
@@ -3292,6 +3319,10 @@ function registerTestModeIpcHandlers() {
     if (!jobRegistry.has(id)) return { found: false };
     await jobRegistry.run(id, 'electron-smoke');
     return { found: true };
+  });
+  handle('test:fail-next-extension-activation', (_event, phase) => {
+    testExtensionActivationFailurePhase = String(phase || 'after-persist');
+    return { armed: true };
   });
   handle('view-action:execute', (_event, action) =>
     executeViewActionForIpc(action),
@@ -4812,11 +4843,12 @@ async function normalizeExtensionAiAttachments(
       else if (String(source || '').startsWith('data:'))
         images.push(extensionAiDataUrlImage(source));
       else {
-        if (!capabilities.files) throw permissionDeniedError('desktop.files');
+        if (!capabilities.files)
+          throw trustedExtensionApiUnavailable('desktop.files');
         images.push(await extensionAiPathImage(source));
       }
       if (attachment.ocr) {
-        if (!capabilities.ocr) throw permissionDeniedError('ocr');
+        if (!capabilities.ocr) throw trustedExtensionApiUnavailable('ocr');
         textSections.push(
           `### ${attachment.title || 'OCR'}\n${limitedOutput(extensionAiOcrText(await ocrImage(source)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`,
         );
@@ -4824,7 +4856,8 @@ async function normalizeExtensionAiAttachments(
       continue;
     }
     if (type === 'file') {
-      if (!capabilities.files) throw permissionDeniedError('desktop.files');
+      if (!capabilities.files)
+        throw trustedExtensionApiUnavailable('desktop.files');
       const filePath =
         attachment.path || attachment.file?.path || attachment.filePath;
       if (!filePath) continue;
@@ -4844,7 +4877,7 @@ async function normalizeExtensionAiAttachments(
           await extensionAiFileContext(resolvedPath, attachment),
         );
       if (attachment.ocr || attachment.as === 'ocr') {
-        if (!capabilities.ocr) throw permissionDeniedError('ocr');
+        if (!capabilities.ocr) throw trustedExtensionApiUnavailable('ocr');
         textSections.push(
           `### ${attachment.title || `OCR ${path.basename(resolvedPath)}`}\n${limitedOutput(extensionAiOcrText(await ocrImage(resolvedPath)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`,
         );
@@ -4994,7 +5027,8 @@ function createExtensionAi(extension) {
       text: await selectedText(),
     }),
     selectedFiles: async (options: any = {}) => {
-      if (!capabilities.files) throw permissionDeniedError('desktop.files');
+      if (!capabilities.files)
+        throw trustedExtensionApiUnavailable('desktop.files');
       return (await selectedExtensionFiles()).map((file) => ({
         ...options,
         type: 'file',
@@ -5003,7 +5037,7 @@ function createExtensionAi(extension) {
     },
     clipboard: async (options: any = {}) => {
       if (!capabilities.clipboard)
-        throw permissionDeniedError('clipboard.history');
+        throw trustedExtensionApiUnavailable('clipboard.history');
       const item: any = await readDesktopClipboard();
       if (item.type === 'text')
         return {
@@ -5023,7 +5057,7 @@ function createExtensionAi(extension) {
       return null;
     },
     ocrImage: async (input, options: any = {}) => {
-      if (!capabilities.ocr) throw permissionDeniedError('ocr');
+      if (!capabilities.ocr) throw trustedExtensionApiUnavailable('ocr');
       return {
         type: 'text',
         title: options.title || 'OCR Text',
@@ -5433,7 +5467,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
   const canWriteSettings = true;
   const canManageExtensionOwnership = true;
   const denyShortcut = (name: string) => () => {
-    throw permissionDeniedError(`shortcuts (${name})`);
+    throw trustedExtensionApiUnavailable(`shortcuts (${name})`);
   };
   const context = {
     extension: createExtensionRuntimeMetadata(extension, command),
@@ -5571,7 +5605,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
             requiresConfirmation: options.requiresConfirmation ?? true,
           })
         : () => {
-            throw permissionDeniedError('system');
+            throw trustedExtensionApiUnavailable('system');
           },
       shellScript: canUseSystem
         ? (title, script, options: any = {}) => ({
@@ -5583,7 +5617,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
             requiresConfirmation: options.requiresConfirmation ?? true,
           })
         : () => {
-            throw permissionDeniedError('system');
+            throw trustedExtensionApiUnavailable('system');
           },
       toggleSetting: canWriteSettings
         ? (settingId, title = 'Toggle', options: any = {}) => ({
@@ -5992,7 +6026,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
             return value;
           }
         : () => {
-            throw permissionDeniedError('settings.write');
+            throw trustedExtensionApiUnavailable('settings.write');
           },
       toggle: canWriteSettings
         ? (id) => {
@@ -6004,7 +6038,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
             return next;
           }
         : () => {
-            throw permissionDeniedError('settings.write');
+            throw trustedExtensionApiUnavailable('settings.write');
           },
     },
     shortcuts: canUseShortcuts
@@ -6517,22 +6551,34 @@ async function loadExtensionModule(fullPath) {
 
 async function initializeExtensionManager() {
   const manager = userState.extensionManager;
-  if (manager?.schemaVersion === 1) return;
   const entries = await fs
     .readdir(extensionsDir, { withFileTypes: true })
     .catch(() => []);
-  userState.extensionManager = {
-    schemaVersion: 1,
-    files: Object.fromEntries(
-      entries
-        .filter((entry) => isExtensionSourceFile(entry.name))
-        .map((entry) => [entry.name, { enabled: true }]),
-    ),
-    proposals: manager?.proposals || {},
-  };
-  // Persist before the first import so an upgrade cannot accidentally run a
-  // later-discovered file on the next restart.
-  await saveUserState();
+  const sourceFiles = entries
+    .filter((entry) => isExtensionSourceFile(entry.name))
+    .map((entry) => entry.name);
+  if (manager?.schemaVersion !== 1) {
+    userState.extensionManager = {
+      schemaVersion: 1,
+      files: Object.fromEntries(
+        sourceFiles.map((filename) => [filename, { enabled: true }]),
+      ),
+      proposals: manager?.proposals || {},
+    };
+    // Existing extensions stay enabled on first upgrade. Persist the complete
+    // inventory before the first import so later discoveries cannot run by
+    // merely appearing on disk.
+    await saveUserState();
+    return;
+  }
+  let discovered = false;
+  for (const filename of sourceFiles) {
+    if (manager.files?.[filename]) continue;
+    manager.files ||= {};
+    manager.files[filename] = { enabled: false };
+    discovered = true;
+  }
+  if (discovered) await saveUserState();
 }
 
 function extensionFileIsEnabled(filename: string) {
@@ -6565,6 +6611,155 @@ async function stageExtensionProposal(filename: string, source: string) {
   return { draftFile };
 }
 
+function replaceMapContents(target: Map<any, any>, source: Map<any, any>) {
+  target.clear();
+  for (const [key, value] of source) target.set(key, value);
+}
+
+function runtimeEntryFilename(entry: any) {
+  return path.basename(entry?.extension?.__filePath || '');
+}
+
+async function prepareManagedExtensionRuntime(
+  filename: string,
+  activeFile: string,
+  extension: any,
+): Promise<PreparedExtensionRuntime> {
+  extension.__filePath = activeFile;
+  extension.__generated = true;
+  await applyExtensionMetadataOverrides(extension);
+
+  const live = {
+    modules: new Map(extensionModules),
+    actions: new Map(extensionActionRegistry),
+    handlers: new Map(extensionActionHandlers),
+    viewActions: new Map(viewActionExecutionRecords),
+    rootActions: new Map(rootActionExecutionRecords),
+    viewRefreshes: new Map(viewRefreshRecords),
+  };
+  const jobs: JobDefinition[] = [];
+  const fileWatchers: PreparedFileWatcher[] = [];
+  try {
+    extensionModules.clear();
+    extensionActionRegistry.clear();
+    extensionActionHandlers.clear();
+    viewActionExecutionRecords.clear();
+    rootActionExecutionRecords.clear();
+    viewRefreshRecords.clear();
+    extensionRuntimePreparation = { jobs, fileWatchers };
+    registerExtension(extension);
+    if (!extensionModules.size)
+      throw new Error(`Extension ${filename} does not export a valid id`);
+    const extensionIds = new Set(extensionModules.keys());
+    for (const extensionId of extensionIds) {
+      const existing = live.modules.get(extensionId);
+      if (existing && path.basename(existing.__filePath || '') !== filename)
+        throw new Error(
+          `Extension id ${extensionId} is already owned by another file`,
+        );
+    }
+    return {
+      filename,
+      extensionIds,
+      modules: new Map(extensionModules),
+      actions: new Map(extensionActionRegistry),
+      handlers: new Map(extensionActionHandlers),
+      viewActions: new Map(viewActionExecutionRecords),
+      rootActions: new Map(rootActionExecutionRecords),
+      viewRefreshes: new Map(viewRefreshRecords),
+      jobs,
+      fileWatchers,
+    };
+  } finally {
+    extensionRuntimePreparation = undefined;
+    replaceMapContents(extensionModules, live.modules);
+    replaceMapContents(extensionActionRegistry, live.actions);
+    replaceMapContents(extensionActionHandlers, live.handlers);
+    replaceMapContents(viewActionExecutionRecords, live.viewActions);
+    replaceMapContents(rootActionExecutionRecords, live.rootActions);
+    replaceMapContents(viewRefreshRecords, live.viewRefreshes);
+  }
+}
+
+function detachManagedExtensionRuntime(filename: string) {
+  const extensionIds = new Set(
+    Array.from(extensionModules.entries())
+      .filter(([, extension]) =>
+        filename
+          ? path.basename(extension?.__filePath || '') === filename
+          : false,
+      )
+      .map(([extensionId]) => extensionId),
+  );
+  for (const extensionId of extensionIds) extensionModules.delete(extensionId);
+  for (const [key, entry] of extensionActionRegistry)
+    if (
+      runtimeEntryFilename(entry) === filename ||
+      extensionIds.has(entry?.extension?.id)
+    )
+      extensionActionRegistry.delete(key);
+  for (const [key, record] of extensionActionHandlers)
+    if (
+      runtimeEntryFilename(record?.entry) === filename ||
+      extensionIds.has(record?.entry?.extension?.id)
+    )
+      extensionActionHandlers.delete(key);
+  for (const [key, record] of viewRefreshRecords)
+    if (
+      runtimeEntryFilename(record?.entry) === filename ||
+      extensionIds.has(record?.entry?.extension?.id)
+    )
+      viewRefreshRecords.delete(key);
+  jobRegistry.unregisterWhere(
+    (job) => job.owner === 'extension' && extensionIds.has(job.scope || ''),
+  );
+  const retainedWatchers = [] as typeof extensionFileWatchers;
+  for (const watcher of extensionFileWatchers) {
+    if (watcher.extensionId && extensionIds.has(watcher.extensionId))
+      watcher.close();
+    else retainedWatchers.push(watcher);
+  }
+  extensionFileWatchers = retainedWatchers;
+  for (const cacheKey of extensionRootItemsCache.keys())
+    if (path.basename(cacheKey) === filename)
+      extensionRootItemsCache.delete(cacheKey);
+  for (const cacheKey of extensionRootItemsRefreshes.keys())
+    if (path.basename(cacheKey) === filename)
+      extensionRootItemsRefreshes.delete(cacheKey);
+  return extensionIds;
+}
+
+function commitPreparedExtensionRuntime(runtime: PreparedExtensionRuntime) {
+  detachManagedExtensionRuntime(runtime.filename);
+  for (const [key, value] of runtime.modules) extensionModules.set(key, value);
+  for (const [key, value] of runtime.actions)
+    extensionActionRegistry.set(key, value);
+  for (const [key, value] of runtime.handlers)
+    extensionActionHandlers.set(key, value);
+  for (const [key, value] of runtime.viewActions)
+    viewActionExecutionRecords.set(key, value);
+  for (const [key, value] of runtime.rootActions)
+    rootActionExecutionRecords.set(key, value);
+  for (const [key, value] of runtime.viewRefreshes)
+    viewRefreshRecords.set(key, value);
+  for (const watcher of runtime.fileWatchers)
+    attachExtensionFileTrigger(
+      watcher.trigger,
+      watcher.event,
+      watcher.extensionId,
+    );
+  for (const job of runtime.jobs) jobRegistry.register(job);
+  syncFrontmostAppPolling();
+  registerActionShortcuts();
+  invalidateExtensionRootItems();
+}
+
+function failTestExtensionActivationAt(phase: string) {
+  if (testExtensionActivationFailurePhase !== phase) return;
+  testExtensionActivationFailurePhase = undefined;
+  throw new Error(`Injected extension activation failure at ${phase}`);
+}
+
 async function activateManagedExtension(filename: string) {
   const safeName = path.basename(filename);
   const manager = extensionManagerState();
@@ -6574,10 +6769,18 @@ async function activateManagedExtension(filename: string) {
   const previousSource = await fs
     .readFile(activeFile, 'utf8')
     .catch(() => null);
-  const previousFileState = manager.files[safeName];
-  // This is the sole path that evaluates a proposal. A failed evaluation leaves
-  // both the active source and persisted enabled state untouched.
+  const previousFileState = manager.files[safeName]
+    ? { ...manager.files[safeName] }
+    : undefined;
+  // Candidate evaluation and host runtime preparation happen once against
+  // isolated registries. Jobs, watchers, and shortcuts are attached only by
+  // the synchronous commit below.
   const preparedCandidate = await loadExtensionModule(candidateFile);
+  const preparedRuntime = await prepareManagedExtensionRuntime(
+    safeName,
+    activeFile,
+    preparedCandidate,
+  );
   try {
     if (proposal) {
       await fs.mkdir(extensionsDir, { recursive: true });
@@ -6585,12 +6788,8 @@ async function activateManagedExtension(filename: string) {
     }
     manager.files[safeName] = { enabled: true };
     await saveUserState();
-    await loadExtensions(new Map([[activeFile, preparedCandidate]]));
-    if (proposal) {
-      await fs.unlink(candidateFile).catch(() => {});
-      delete manager.proposals[safeName];
-      await saveUserState();
-    }
+    failTestExtensionActivationAt('after-persist');
+    commitPreparedExtensionRuntime(preparedRuntime);
   } catch (error) {
     if (proposal) {
       if (previousSource === null) await fs.unlink(activeFile).catch(() => {});
@@ -6599,8 +6798,12 @@ async function activateManagedExtension(filename: string) {
     if (previousFileState) manager.files[safeName] = previousFileState;
     else delete manager.files[safeName];
     await saveUserState();
-    await loadExtensions();
     throw error;
+  }
+  if (proposal) {
+    delete manager.proposals[safeName];
+    await saveUserState();
+    await fs.unlink(candidateFile).catch(() => {});
   }
 }
 
@@ -6608,7 +6811,10 @@ async function disableManagedExtension(filename: string) {
   const safeName = path.basename(filename);
   extensionManagerState().files[safeName] = { enabled: false };
   await saveUserState();
-  await loadExtensions();
+  detachManagedExtensionRuntime(safeName);
+  syncFrontmostAppPolling();
+  registerActionShortcuts();
+  invalidateExtensionRootItems();
 }
 
 async function discardManagedExtensionProposal(filename: string) {
@@ -7002,7 +7208,11 @@ function fileWatchPathMatches(filePath: string, trigger: any) {
   return true;
 }
 
-function watchExtensionFileTrigger(trigger: any, event: string) {
+function attachExtensionFileTrigger(
+  trigger: any,
+  event: string,
+  extensionId: string,
+) {
   const normalized = normalizedFileTrigger(trigger);
   for (const root of normalized.roots) {
     try {
@@ -7023,9 +7233,28 @@ function watchExtensionFileTrigger(trigger: any, event: string) {
         },
       );
       watcher.on('error', () => {});
-      extensionFileWatchers.push(watcher);
+      extensionFileWatchers.push({
+        close: () => watcher.close(),
+        extensionId,
+      });
     } catch {}
   }
+}
+
+function watchExtensionFileTrigger(
+  trigger: any,
+  event: string,
+  extensionId: string,
+) {
+  if (extensionRuntimePreparation) {
+    extensionRuntimePreparation.fileWatchers.push({
+      trigger,
+      event,
+      extensionId,
+    });
+    return;
+  }
+  attachExtensionFileTrigger(trigger, event, extensionId);
 }
 
 function normalizedFileTriggerForLaunch(trigger: any) {
@@ -7109,7 +7338,7 @@ function jobTriggersFromExtensionTriggers(
         };
       if (trigger?.type === 'files.changed') {
         const event = `files.changed:${jobId}:${index}`;
-        watchExtensionFileTrigger(trigger, event);
+        watchExtensionFileTrigger(trigger, event, extension.id);
         return {
           type: 'event' as const,
           event,
@@ -7157,7 +7386,7 @@ function registerExtensionBackgroundJob(entry, item) {
     id,
   );
   if (mode === 'view' && triggers.length === 0) return;
-  jobRegistry.register({
+  const definition: JobDefinition = {
     id,
     title: item.title,
     owner: 'extension',
@@ -7181,7 +7410,10 @@ function registerExtensionBackgroundJob(entry, item) {
           },
         );
     },
-  });
+  };
+  if (extensionRuntimePreparation)
+    extensionRuntimePreparation.jobs.push(definition);
+  else jobRegistry.register(definition);
 }
 
 function assertInternalExtensionsRegistered() {

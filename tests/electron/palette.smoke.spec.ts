@@ -1,10 +1,10 @@
-import fs from 'node:fs/promises';
 import { execFile as execFileCallback } from 'node:child_process';
+import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { test, expect } from '@playwright/test';
-import { _electron as electron, type ElectronApplication } from 'playwright';
+import { expect, test } from '@playwright/test';
+import { type ElectronApplication, _electron as electron } from 'playwright';
 
 const root = process.cwd();
 const require = createRequire(import.meta.url);
@@ -20,7 +20,7 @@ async function processTree(rootPid: number) {
     const [pidText, parentText] = line.trim().split(/\s+/);
     const pid = Number(pidText);
     const parent = Number(parentText);
-    if (!Number.isInteger(pid) || !Number.isInteger(parent)) continue;
+    if (!(Number.isInteger(pid) && Number.isInteger(parent))) continue;
     const siblings = children.get(parent) || [];
     siblings.push(pid);
     children.set(parent, siblings);
@@ -79,8 +79,9 @@ async function updateManifest(patch: Record<string, unknown>) {
   );
 }
 
-function lifecycleExtensionSource(markerPath: string) {
-  return `import { appendFile } from 'node:fs/promises';
+function lifecycleExtensionSource(markerPath: string, version = 'v1') {
+  const apiPath = `${markerPath}.apis.json`;
+  return `import { appendFile, writeFile } from 'node:fs/promises';
 
 export default {
   id: 'pab53.lifecycle',
@@ -89,14 +90,48 @@ export default {
   commands: [
     {
       id: 'command',
-      title: 'PAB-53 Lifecycle v1',
+      title: 'PAB-53 Lifecycle ${version}',
       mode: 'background',
       triggers: [{ type: 'startup' }],
-      run: async () => {
-        await appendFile(${JSON.stringify(markerPath)}, 'v1\\n');
+      run: async (ctx) => {
+        await writeFile(${JSON.stringify(apiPath)}, JSON.stringify({
+          ai: typeof ctx.ai === 'function',
+          attachments: typeof ctx.ai?.attachments?.file === 'function',
+          clipboardHistory: typeof ctx.clipboard?.history?.list === 'function',
+          ocr: typeof ctx.ocr?.image === 'function',
+          desktopApps: typeof ctx.desktop?.apps?.list === 'function',
+          desktopFiles: typeof ctx.desktop?.files?.find === 'function',
+          desktopClipboard: typeof ctx.desktop?.clipboard?.readText === 'function',
+          desktopShell: typeof ctx.desktop?.shell?.exec === 'function',
+          actionShell: typeof ctx.actions?.shellExec === 'function',
+          actionSystem: typeof ctx.actions?.system?.lockScreen === 'function',
+          actionUpdates: typeof ctx.actions?.updates?.check === 'function',
+          settings: typeof ctx.settings?.set === 'function',
+          shortcuts: typeof ctx.shortcuts?.list === 'function',
+          ownership: typeof ctx.extensions?.ownership?.ownerOf === 'function',
+          updates: typeof ctx.updates?.getState === 'function',
+        }));
+        await appendFile(${JSON.stringify(markerPath)}, '${version}\\n');
       },
     },
   ],
+};
+`;
+}
+
+function migrationExtensionSource(
+  id: string,
+  title: string,
+  importMarkerPath: string,
+) {
+  return `import { appendFile } from 'node:fs/promises';
+
+await appendFile(${JSON.stringify(importMarkerPath)}, ${JSON.stringify(`${id}\n`)});
+
+export default {
+  id: ${JSON.stringify(id)},
+  title: ${JSON.stringify(title)},
+  commands: [{ id: 'open', title: ${JSON.stringify(title)}, run: () => undefined }],
 };
 `;
 }
@@ -134,6 +169,41 @@ async function openExtensionsView(page: any) {
     if (!result?.view) throw new Error('Extensions view did not open');
     return result.view;
   });
+}
+
+async function launchTestApplication(testUserDataDir: string) {
+  const app = await electron.launch({
+    executablePath: require('electron') as string,
+    args: [
+      path.join(root, 'dist/main/main.js'),
+      `--user-data-dir=${testUserDataDir}`,
+    ],
+    env: {
+      ...process.env,
+      NVM_TEST_MODE: '1',
+      NVM_TEST_USER_DATA_DIR: testUserDataDir,
+    },
+    timeout: 20_000,
+  });
+  const trackedPids = await processTree(app.process().pid);
+  const page = await app.firstWindow();
+  await expect(page.locator('input[placeholder]').first()).toBeVisible({
+    timeout: 10_000,
+  });
+  return { app, page, trackedPids };
+}
+
+async function closeTestApplication(
+  app: ElectronApplication,
+  trackedPids: number[],
+) {
+  const closePromise = app.close().catch(() => {});
+  await Promise.race([
+    closePromise,
+    new Promise((resolve) => setTimeout(resolve, 2000)),
+  ]);
+  const survivors = await waitForProcessesToExit(trackedPids, 500);
+  if (survivors.length) terminateTrackedProcesses(survivors, 'SIGKILL');
 }
 
 test('searches and invokes the safe built-in action, then hides and shows', async () => {
@@ -227,12 +297,12 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       const closeCompleted = await Promise.race([
         closePromise.then(() => true),
         new Promise<boolean>((resolve) =>
-          setTimeout(() => resolve(false), 5_000),
+          setTimeout(() => resolve(false), 5000),
         ),
       ]);
       const survivorsAfterClose = await waitForProcessesToExit(
         trackedPids,
-        1_000,
+        1000,
       );
       let fallbackUsed = false;
       let survivorsAfterFallback = survivorsAfterClose;
@@ -241,13 +311,13 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
         terminateTrackedProcesses(survivorsAfterClose, 'SIGTERM');
         survivorsAfterFallback = await waitForProcessesToExit(
           survivorsAfterClose,
-          2_000,
+          2000,
         );
         if (survivorsAfterFallback.length) {
           terminateTrackedProcesses(survivorsAfterFallback, 'SIGKILL');
           survivorsAfterFallback = await waitForProcessesToExit(
             survivorsAfterFallback,
-            1_000,
+            1000,
           );
         }
       }
@@ -345,11 +415,23 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
     await expect
       .poll(() => fs.readFile(markerPath, 'utf8').catch(() => ''))
       .toBe('v1\n');
+    await expect
+      .poll(async () => {
+        const value = await fs
+          .readFile(`${markerPath}.apis.json`, 'utf8')
+          .catch(() => '{}');
+        return Object.values(JSON.parse(value)).every(Boolean);
+      })
+      .toBe(true);
 
+    const updateSource = lifecycleExtensionSource(markerPath, 'v2');
     await page.evaluate(
       ([name, proposal]) =>
         window.nvm.testStageExtensionProposal(name, proposal),
-      [filename, 'export default {'] as const,
+      [filename, updateSource] as const,
+    );
+    await page.evaluate(() =>
+      window.nvm.testFailNextExtensionActivation('after-persist'),
     );
     extensionsView = await openExtensionsView(page);
     const apply = actionNamed(extensionsView, 'Apply Update');
@@ -360,6 +442,19 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
     expect(await searchTitles(page, 'PAB-53 Lifecycle v1')).toContain(
       'PAB-53 Lifecycle v1',
     );
+    expect(await searchTitles(page, 'PAB-53 Lifecycle v2')).not.toContain(
+      'PAB-53 Lifecycle v2',
+    );
+    expect(await fs.readFile(path.join(extensionsDir, filename), 'utf8')).toBe(
+      source,
+    );
+    const rolledBackState = JSON.parse(
+      await fs.readFile(path.join(lifecycleUserDataDir, 'state.json'), 'utf8'),
+    );
+    expect(rolledBackState.extensionManager.files[filename]).toEqual({
+      enabled: true,
+    });
+    expect(rolledBackState.extensionManager.proposals[filename]).toBeTruthy();
     expect(
       await page.evaluate(() =>
         window.nvm.testRunJob('extension.pab53.lifecycle.command'),
@@ -407,10 +502,94 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
       const closePromise = app.close().catch(() => {});
       await Promise.race([
         closePromise,
-        new Promise((resolve) => setTimeout(resolve, 2_000)),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
       ]);
       const survivors = await waitForProcessesToExit(trackedPids, 500);
       if (survivors.length) terminateTrackedProcesses(survivors, 'SIGKILL');
     }
+  }
+});
+
+test('first upgrade, restart persistence, and later file discovery stay compatible', async () => {
+  test.setTimeout(45_000);
+  const migrationUserDataDir = path.join(userDataDir, 'pab53-migration');
+  const extensionsDir = path.join(migrationUserDataDir, 'extensions');
+  const legacyFile = 'legacy-local.ts';
+  const legacyImportMarker = path.join(
+    migrationUserDataDir,
+    'legacy-imports.txt',
+  );
+  const discoveredFile = 'discovered-later.ts';
+  const discoveredImportMarker = path.join(
+    migrationUserDataDir,
+    'discovered-imports.txt',
+  );
+  await fs.mkdir(extensionsDir, { recursive: true });
+  await fs.writeFile(
+    path.join(extensionsDir, legacyFile),
+    migrationExtensionSource(
+      'pab53.legacy',
+      'PAB-53 Legacy Extension',
+      legacyImportMarker,
+    ),
+  );
+  await fs.writeFile(
+    path.join(migrationUserDataDir, 'state.json'),
+    `${JSON.stringify({
+      extensionManager: { schemaVersion: 0, files: {}, proposals: {} },
+    })}\n`,
+  );
+
+  let launched = await launchTestApplication(migrationUserDataDir);
+  expect(
+    await searchTitles(launched.page, 'PAB-53 Legacy Extension'),
+  ).toContain('PAB-53 Legacy Extension');
+  await expect
+    .poll(() => fs.readFile(legacyImportMarker, 'utf8').catch(() => ''))
+    .toBe('pab53.legacy\n');
+  let persisted = JSON.parse(
+    await fs.readFile(path.join(migrationUserDataDir, 'state.json'), 'utf8'),
+  );
+  expect(persisted.extensionManager.files[legacyFile]).toEqual({
+    enabled: true,
+  });
+  await closeTestApplication(launched.app, launched.trackedPids);
+
+  launched = await launchTestApplication(migrationUserDataDir);
+  expect(
+    await searchTitles(launched.page, 'PAB-53 Legacy Extension'),
+  ).toContain('PAB-53 Legacy Extension');
+  await expect
+    .poll(() => fs.readFile(legacyImportMarker, 'utf8').catch(() => ''))
+    .toBe('pab53.legacy\npab53.legacy\n');
+  await closeTestApplication(launched.app, launched.trackedPids);
+
+  await fs.writeFile(
+    path.join(extensionsDir, discoveredFile),
+    migrationExtensionSource(
+      'pab53.discovered',
+      'PAB-53 Discovered Extension',
+      discoveredImportMarker,
+    ),
+  );
+  launched = await launchTestApplication(migrationUserDataDir);
+  try {
+    expect(
+      await searchTitles(launched.page, 'PAB-53 Discovered Extension'),
+    ).not.toContain('PAB-53 Discovered Extension');
+    await expect
+      .poll(() => fs.stat(discoveredImportMarker).catch(() => null))
+      .toBeNull();
+    persisted = JSON.parse(
+      await fs.readFile(path.join(migrationUserDataDir, 'state.json'), 'utf8'),
+    );
+    expect(persisted.extensionManager.files[discoveredFile]).toEqual({
+      enabled: false,
+    });
+    expect(persisted.extensionManager.files[legacyFile]).toEqual({
+      enabled: true,
+    });
+  } finally {
+    await closeTestApplication(launched.app, launched.trackedPids);
   }
 });
