@@ -37,7 +37,9 @@ async function getPreviewSession(cookie: string) {
   } catch { return null; }
 }
 
-export async function getSessionFromCookies(cookieHeader: string | null) {
+type SessionUserManagement = Pick<typeof workos.userManagement, 'loadSealedSession'>;
+
+export async function getSessionFromCookies(cookieHeader: string | null, userManagement: SessionUserManagement = workos.userManagement) {
   if (!cookieHeader) return null;
   const parts = cookieHeader.split(/;\s*/);
   const preview = parts.find((c) => c.startsWith(`${PREVIEW_SESSION_COOKIE}=`));
@@ -51,7 +53,7 @@ export async function getSessionFromCookies(cookieHeader: string | null) {
   if (!match) return null;
   const sealed = decodeURIComponent(match.slice(SESSION_COOKIE.length + 1));
   try {
-    const session = workos.userManagement.loadSealedSession({
+    const session = userManagement.loadSealedSession({
       sessionData: sealed,
       cookiePassword: COOKIE_PASSWORD,
     });

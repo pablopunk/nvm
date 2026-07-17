@@ -4,6 +4,9 @@ Astro (SSR) + Vercel + Neon Postgres (Drizzle) + WorkOS AuthKit.
 
 Serves the dashboard at `nvm.fyi` and the API the desktop app talks to.
 
+Protected real-provider testing is documented in
+[`docs/workos-magic-auth-e2e.md`](docs/workos-magic-auth-e2e.md).
+
 ## Setup
 
 1. `cp .env.example .env` and fill in:
@@ -40,7 +43,7 @@ Preview sign-in is fail-closed until the production gateway capability is config
 
 Required Redis identities and ACL boundaries:
 
-- `gateway_state`: `GATEWAY_STATE_REDIS_URL/TOKEN`, key pattern `~nvm:gateway:state:v2:*`; only state `SET NX EX` and atomic consume (`GETDEL`).
+- `gateway_state`: `GATEWAY_STATE_REDIS_URL/TOKEN`, key pattern `~nvm:gateway:state:v2:*` by default; only state `SET NX EX` and atomic consume (`GETDEL`). Protected staging E2E must override `GATEWAY_STATE_NAMESPACE` with its isolated `nvm:magic-auth-e2e:<environment>:v1` namespace and use a non-production Redis resource.
 - `prod_runtime`: the current production-faithful Preview gateway uses the broad production `UPSTASH_REDIS_REST_URL/TOKEN` credential for grant writes/atomic consumption and the Preview runtime. This credential does not enforce grant-only key-level isolation; do not claim `NOPERM` or a separate grant-writer ACL in this release. The opaque grant namespace and v2 protocol still provide one-use separation, while protected trusted-branch secret scoping is the deployment control.
 
 Do not provision or copy these secrets, ACLs, databases, WorkOS settings, or Vercel configuration as part of a code change. Verify the gateway capability at authenticated `/api/health/deployment` before enabling Preview sign-in. Vercel access logs, analytics, tracing, and observability pipelines must redact `grant`, `state`, `intent`, and `code` query values; the exchange route emits no full URL telemetry. Scope production-equivalent secrets only to protected trusted branches and keep fork protection enabled. Rollback disables Preview gateway sign-in and requires a fresh login; it never restores the legacy parser or shared sealed-session handoff.

@@ -18,7 +18,8 @@ import {
   users,
 } from '../src/db/schema';
 import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src/lib/waitlist';
-import { createUserFromInviteIntent, InviteRequiredError } from '../src/lib/users';
+import { createUserFromInviteIntent, InviteRequiredError, upsertUserWithFreeGrant } from '../src/lib/users';
+import { createCallbackHandler } from '../src/pages/api/auth/callback';
 import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { runPostgresMigrations } from './migrate-postgres';
@@ -240,6 +241,65 @@ async function runAssertions() {
       await assert.rejects(() => getSignupsEnabled(), (error: unknown) => error instanceof SignupsPolicyError);
       await db.delete(appSettings).where(eq(appSettings.key, 'signups_enabled'));
       delete process.env.INVITE_GATE_ENABLED;
+
+      const magicAuthEmail = `magic-auth-${databaseName}@example.test`;
+      const firstMagicAuthUser = await upsertUserWithFreeGrant({
+        workosUserId: `magic-auth-old-${databaseName}`,
+        email: magicAuthEmail,
+      });
+      const repeatedMagicAuthUser = await upsertUserWithFreeGrant({
+        workosUserId: `magic-auth-old-${databaseName}`,
+        email: magicAuthEmail,
+      });
+      const relinkedMagicAuthUser = await upsertUserWithFreeGrant({
+        workosUserId: `magic-auth-new-${databaseName}`,
+        email: magicAuthEmail.toUpperCase(),
+      });
+      assert.equal(repeatedMagicAuthUser.id, firstMagicAuthUser.id, 'repeat Magic Auth must reuse the local user');
+      assert.equal(relinkedMagicAuthUser.id, firstMagicAuthUser.id, 'a stale WorkOS ID must relink by verified email');
+      const magicAuthUsers = await db.select().from(users).where(eq(users.email, magicAuthEmail));
+      assert.equal(magicAuthUsers.length, 1, 'repeat Magic Auth and relinking must leave one local user');
+      assert.equal(magicAuthUsers[0]?.workosUserId, `magic-auth-new-${databaseName}`);
+      assert.equal(
+        (await db.select().from(creditLedger).where(eq(creditLedger.userId, firstMagicAuthUser.id))).length,
+        1,
+        'repeat Magic Auth and relinking must grant initial credits once',
+      );
+
+      const rowsBeforeRejectedCallbacks = (await db.select().from(users)).length;
+      const baseCallbackDependencies = {
+        rateLimit: async () => ({ ok: true as const }),
+        readInviteIntent: () => null,
+        clearInviteIntent: () => '',
+        getExistingUser: async () => null,
+        getSignupsEnabled: async () => true,
+        createUserFromInvite: async () => { throw new Error('must not provision'); },
+        upsertUser: async () => { throw new Error('must not provision'); },
+        createPreviewGrant: async () => null,
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+      };
+      const rejectedStateHandler = createCallbackHandler({
+        ...baseCallbackDependencies,
+        consumeState: async () => null,
+        authenticate: async () => { throw new Error('must not exchange'); },
+      });
+      const rejectedStateResponse = await rejectedStateHandler({
+        request: new Request('https://auth-staging.example.test/api/auth/callback?code=hidden&state=invalid'),
+        url: new URL('https://auth-staging.example.test/api/auth/callback?code=hidden&state=invalid'),
+      } as any);
+      assert.equal(rejectedStateResponse.status, 400);
+
+      const exchangeFailureHandler = createCallbackHandler({
+        ...baseCallbackDependencies,
+        consumeState: async () => ({ v: 2, flow: 'production', safeRelativeReturnPath: '/', jti: 'integration', exp: Math.floor(Date.now() / 1000) + 60 }),
+        authenticate: async () => { throw new Error('provider unavailable'); },
+      });
+      const exchangeFailureResponse = await exchangeFailureHandler({
+        request: new Request('https://auth-staging.example.test/api/auth/callback?code=hidden&state=valid'),
+        url: new URL('https://auth-staging.example.test/api/auth/callback?code=hidden&state=valid'),
+      } as any);
+      assert.equal(exchangeFailureResponse.status, 502);
+      assert.equal((await db.select().from(users)).length, rowsBeforeRejectedCallbacks, 'rejected state/exchange must not write users');
 
       const concurrentEmail = `concurrent-${databaseName}@example.test`;
       const concurrentInvites = await Promise.all(

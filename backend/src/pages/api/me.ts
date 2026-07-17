@@ -8,21 +8,35 @@ import { recordAudit } from '../../lib/audit';
 import { log } from '../../lib/log';
 import { setStripeForTests } from '../../lib/billing';
 
-export const GET: APIRoute = async ({ request }) => {
-  const session = await getSessionFromCookies(request.headers.get('cookie'));
+type MeDependencies = {
+  getSession: typeof getSessionFromCookies;
+  getUser: (workosUserId: string) => Promise<any>;
+  ensureCredits: typeof ensureMonthlyFreeCredits;
+  getBalance: typeof getBalance;
+  getRecentUsage: (userId: string) => Promise<any[]>;
+};
+
+export function createMeHandler(overrides: Partial<MeDependencies> = {}): APIRoute {
+  const dependencies: MeDependencies = {
+    getSession: getSessionFromCookies,
+    getUser: async (workosUserId) => (await db.select().from(users).where(eq(users.workosUserId, workosUserId)).limit(1))[0],
+    ensureCredits: ensureMonthlyFreeCredits,
+    getBalance,
+    getRecentUsage: (userId) => db.select().from(usage).where(eq(usage.userId, userId)).orderBy(desc(usage.createdAt)).limit(10),
+    ...overrides,
+  };
+
+  return async ({ request }) => {
+  const session = await dependencies.getSession(request.headers.get('cookie'));
   if (!session) return new Response('Unauthorized', { status: 401 });
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.workosUserId, session.user.id))
-    .limit(1);
+  const user = await dependencies.getUser(session.user.id);
   if (!user) return new Response('Unknown user', { status: 404 });
-  await ensureMonthlyFreeCredits(user.id);
+  await dependencies.ensureCredits(user.id);
 
   const [balance, recentUsage] = await Promise.all([
-    getBalance(user.id),
-    db.select().from(usage).where(eq(usage.userId, user.id)).orderBy(desc(usage.createdAt)).limit(10),
+    dependencies.getBalance(user.id),
+    dependencies.getRecentUsage(user.id),
   ]);
 
   return Response.json({
@@ -31,7 +45,10 @@ export const GET: APIRoute = async ({ request }) => {
     balance,
     recentUsage,
   });
-};
+  };
+}
+
+export const GET = createMeHandler();
 
 function stripeClientForDelete() {
   const key = process.env.STRIPE_SECRET_KEY;

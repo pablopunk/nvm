@@ -6,7 +6,7 @@ import { safeRelativeRedirectPath } from './safe-redirect';
 
 const STATE_TTL = 10 * 60;
 const GRANT_TTL = 60;
-const STATE_NAMESPACE = 'nvm:gateway:state:v2';
+const DEFAULT_STATE_NAMESPACE = 'nvm:gateway:state:v2';
 const GRANT_NAMESPACE = 'nvm:preview:grant:v2';
 const PREVIEW_HOST_RE = /^nvm-[a-z0-9-]+-pablo-varelas-projects-4f86af8b\.vercel\.app$/;
 const TOKEN_PREFIX = 'v2.';
@@ -45,8 +45,9 @@ export function previewTargetFromRequest(url: URL, returnTo: string | null): Pre
   return { origin: url.origin, returnTo: safeRelativeRedirectPath(returnTo) };
 }
 
-function stateKey(flow: GatewayState['flow'], jti: string) { return `${STATE_NAMESPACE}:${flow}:${jti}`; }
-function startKey(jti: string) { return `${STATE_NAMESPACE}:preview_start:${jti}`; }
+function stateNamespace() { return env('GATEWAY_STATE_NAMESPACE') ?? DEFAULT_STATE_NAMESPACE; }
+function stateKey(flow: GatewayState['flow'], jti: string) { return `${stateNamespace()}:${flow}:${jti}`; }
+function startKey(jti: string) { return `${stateNamespace()}:preview_start:${jti}`; }
 function grantKey(id: string) { return `${GRANT_NAMESPACE}:${id}`; }
 function gatewayRedis() {
   const url = env('GATEWAY_STATE_REDIS_URL');

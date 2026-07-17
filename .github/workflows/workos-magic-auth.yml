@@ -1,0 +1,69 @@
+name: WorkOS Magic Auth staging E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workos-magic-auth-staging
+  cancel-in-progress: false
+
+jobs:
+  magic-auth:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: workos-staging
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: mise exec -- pnpm exec playwright install --with-deps chromium
+
+      - name: Verify protected staging configuration is present
+        env:
+          NVM_MAGIC_AUTH_BASE_URL: ${{ vars.NVM_MAGIC_AUTH_BASE_URL }}
+          NVM_MAGIC_AUTH_CALLBACK_URL: ${{ vars.NVM_MAGIC_AUTH_CALLBACK_URL }}
+          NVM_MAGIC_AUTH_ENVIRONMENT_ID: ${{ vars.NVM_MAGIC_AUTH_ENVIRONMENT_ID }}
+          NVM_MAGIC_AUTH_REDIS_NAMESPACE: ${{ vars.NVM_MAGIC_AUTH_REDIS_NAMESPACE }}
+          NVM_MAGIC_AUTH_WORKOS_ENV: ${{ vars.NVM_MAGIC_AUTH_WORKOS_ENV }}
+          NVM_MAGIC_AUTH_DATABASE_URL: ${{ secrets.NVM_MAGIC_AUTH_DATABASE_URL }}
+          NVM_MAGIC_AUTH_PROBE_SECRET: ${{ secrets.NVM_MAGIC_AUTH_PROBE_SECRET }}
+          WORKOS_API_KEY: ${{ secrets.WORKOS_API_KEY }}
+          MAILSLURP_API_KEY: ${{ secrets.MAILSLURP_API_KEY }}
+        run: |
+          set -euo pipefail
+          required=(NVM_MAGIC_AUTH_BASE_URL NVM_MAGIC_AUTH_CALLBACK_URL NVM_MAGIC_AUTH_ENVIRONMENT_ID NVM_MAGIC_AUTH_REDIS_NAMESPACE NVM_MAGIC_AUTH_WORKOS_ENV NVM_MAGIC_AUTH_DATABASE_URL NVM_MAGIC_AUTH_PROBE_SECRET WORKOS_API_KEY MAILSLURP_API_KEY)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required staging configuration: $name"
+              exit 1
+            fi
+          done
+
+      - name: Run hosted Magic Auth journey twice
+        env:
+          NVM_MAGIC_AUTH_BASE_URL: ${{ vars.NVM_MAGIC_AUTH_BASE_URL }}
+          NVM_MAGIC_AUTH_CALLBACK_URL: ${{ vars.NVM_MAGIC_AUTH_CALLBACK_URL }}
+          NVM_MAGIC_AUTH_ENVIRONMENT_ID: ${{ vars.NVM_MAGIC_AUTH_ENVIRONMENT_ID }}
+          NVM_MAGIC_AUTH_REDIS_NAMESPACE: ${{ vars.NVM_MAGIC_AUTH_REDIS_NAMESPACE }}
+          NVM_MAGIC_AUTH_WORKOS_ENV: ${{ vars.NVM_MAGIC_AUTH_WORKOS_ENV }}
+          NVM_MAGIC_AUTH_DATABASE_URL: ${{ secrets.NVM_MAGIC_AUTH_DATABASE_URL }}
+          NVM_MAGIC_AUTH_PROBE_SECRET: ${{ secrets.NVM_MAGIC_AUTH_PROBE_SECRET }}
+          WORKOS_API_KEY: ${{ secrets.WORKOS_API_KEY }}
+          MAILSLURP_API_KEY: ${{ secrets.MAILSLURP_API_KEY }}
+        run: mise exec -- pnpm -C backend test:magic-auth-e2e
