@@ -1,6 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { randomBytes, createHash } from 'node:crypto';
-import { db } from '../db/client';
+import { db, type Database } from '../db/client';
 import { apiTokens, users } from '../db/schema';
 
 const TOKEN_PREFIX = 'nvm_pat_';
@@ -15,9 +15,15 @@ export function generateToken() {
   return { token, prefix: token.slice(0, TOKEN_PREFIX.length + 6), hash: hashToken(token) };
 }
 
-export async function createApiToken(userId: string, name: string) {
+type TokenWriter = Pick<Database, 'insert'>;
+
+export async function createApiToken(
+  userId: string,
+  name: string,
+  writer: TokenWriter = db,
+) {
   const { token, prefix, hash } = generateToken();
-  const [row] = await db
+  const [row] = await writer
     .insert(apiTokens)
     .values({ userId, tokenHash: hash, prefix, name })
     .returning({ id: apiTokens.id, prefix: apiTokens.prefix, name: apiTokens.name, createdAt: apiTokens.createdAt });

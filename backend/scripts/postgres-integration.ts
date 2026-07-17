@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Pool } from 'pg';
 import type { Database } from '../src/db/client';
 import { createPostgresDb } from '../src/db/postgres';
@@ -21,6 +21,8 @@ import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src
 import { createUserFromInviteIntent, InviteRequiredError } from '../src/lib/users';
 import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
+import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
+import { createApiToken } from '../src/lib/tokens';
 import { runPostgresMigrations } from './migrate-postgres';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
@@ -122,6 +124,11 @@ async function runAssertions() {
         1,
         'token_hash uniqueness must leave one row',
       );
+      async function countTokensWithName(name: string) {
+        return (
+          await db.select().from(apiTokens).where(eq(apiTokens.name, name))
+        ).length;
+      }
 
       const duplicateEvent = `evt-${databaseName}`;
       const firstEvent = await db
@@ -200,32 +207,148 @@ async function runAssertions() {
         0,
       );
 
-      const code = `device-${databaseName}`;
+      const missingUserCode = `device-missing-user-${databaseName}`;
       await db.insert(deviceCodes).values({
-        code,
-        userId: user.id,
-        deviceLabel: 'integration',
+        code: missingUserCode,
+        userId: null,
+        deviceLabel: `missing-user-${databaseName}`,
         approvedAt: new Date(),
         expiresAt: new Date(Date.now() + 60_000),
       });
-      const exchanges = await Promise.all(
-        [1, 2].map(() =>
-          db.transaction(async (tx) => {
-            const updated = await tx
-              .update(deviceCodes)
-              .set({ consumedAt: new Date() })
-              .where(
-                and(eq(deviceCodes.code, code), isNull(deviceCodes.consumedAt)),
-              )
-              .returning({ code: deviceCodes.code });
-            return updated.length === 1;
-          }),
-        ),
-      );
       assert.deepEqual(
-        exchanges.sort(),
-        [false, true],
+        await exchangeApprovedDeviceCode(missingUserCode),
+        { status: 'missing_user' },
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(deviceCodes)
+            .where(eq(deviceCodes.code, missingUserCode))
+        )[0]?.consumedAt,
+        null,
+      );
+      assert.equal(
+        await countTokensWithName(`missing-user-${databaseName}`),
+        0,
+      );
+
+      const pendingCode = `device-pending-${databaseName}`;
+      await db.insert(deviceCodes).values({
+        code: pendingCode,
+        deviceLabel: `pending-${databaseName}`,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      assert.deepEqual(await exchangeApprovedDeviceCode(pendingCode), {
+        status: 'pending',
+      });
+      assert.equal(await countTokensWithName(`pending-${databaseName}`), 0);
+
+      const expiredConsumedCode = `device-expired-consumed-${databaseName}`;
+      await db.insert(deviceCodes).values({
+        code: expiredConsumedCode,
+        userId: user.id,
+        deviceLabel: `expired-consumed-${databaseName}`,
+        approvedAt: new Date(),
+        consumedAt: new Date(),
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+      assert.deepEqual(
+        await exchangeApprovedDeviceCode(expiredConsumedCode),
+        { status: 'expired' },
+      );
+      assert.equal(
+        await countTokensWithName(`expired-consumed-${databaseName}`),
+        0,
+      );
+
+      const consumedCode = `device-consumed-${databaseName}`;
+      await db.insert(deviceCodes).values({
+        code: consumedCode,
+        userId: user.id,
+        deviceLabel: `consumed-${databaseName}`,
+        approvedAt: new Date(),
+        consumedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      assert.deepEqual(await exchangeApprovedDeviceCode(consumedCode), {
+        status: 'consumed',
+      });
+      assert.equal(await countTokensWithName(`consumed-${databaseName}`), 0);
+
+      const rollbackCode = `device-rollback-${databaseName}`;
+      const rollbackLabel = `rollback-${databaseName}`;
+      await db.insert(deviceCodes).values({
+        code: rollbackCode,
+        userId: user.id,
+        deviceLabel: rollbackLabel,
+        approvedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await assert.rejects(
+        exchangeApprovedDeviceCode(rollbackCode, {
+          createTokenInTransaction: async (tx, userId, name) => {
+            await createApiToken(userId, name, tx);
+            throw new Error('forced device token failure after insert');
+          },
+        }),
+        /forced device token failure after insert/,
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(deviceCodes)
+            .where(eq(deviceCodes.code, rollbackCode))
+        )[0]?.consumedAt,
+        null,
+        'failed token creation must roll back code consumption',
+      );
+      assert.equal(
+        await countTokensWithName(rollbackLabel),
+        0,
+        'failed token creation must roll back the inserted token',
+      );
+      assert.equal(
+        (await exchangeApprovedDeviceCode(rollbackCode)).status,
+        'ok',
+        'a rolled-back code must remain retryable',
+      );
+      assert.equal(
+        await countTokensWithName(rollbackLabel),
+        1,
+      );
+
+      const concurrentCode = `device-concurrent-${databaseName}`;
+      const concurrentLabel = `concurrent-${databaseName}`;
+      await db.insert(deviceCodes).values({
+        code: concurrentCode,
+        userId: user.id,
+        deviceLabel: concurrentLabel,
+        approvedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      const exchanges = await Promise.all([
+        exchangeApprovedDeviceCode(concurrentCode),
+        exchangeApprovedDeviceCode(concurrentCode),
+      ]);
+      assert.deepEqual(
+        exchanges.map((result) => result.status).sort(),
+        ['consumed', 'ok'],
         'concurrent device exchange must have one winner',
+      );
+      assert.equal(
+        await countTokensWithName(concurrentLabel),
+        1,
+        'concurrent exchange must persist one token',
+      );
+      assert.ok(
+        (
+          await db
+            .select()
+            .from(deviceCodes)
+            .where(eq(deviceCodes.code, concurrentCode))
+        )[0]?.consumedAt,
       );
 
       await db.delete(appSettings).where(eq(appSettings.key, 'signups_enabled'));
