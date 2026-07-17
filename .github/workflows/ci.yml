@@ -15,6 +15,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      electron_smoke_changed: ${{ steps.app-changes.outputs.changed }}
 
     steps:
       - name: Checkout
@@ -24,6 +26,18 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v2
+
+      - name: Classify Electron smoke changes
+        id: app-changes
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="HEAD~1"
+          fi
+          changed="$(git diff --name-only "$BASE" HEAD | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
@@ -47,7 +61,9 @@ jobs:
 
   electron-smoke:
     name: Linux Electron smoke
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.check.outputs.electron_smoke_changed == 'true'
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
