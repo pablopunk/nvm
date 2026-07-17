@@ -13,7 +13,9 @@ process.env.PREVIEW_SESSION_KEY = 'preview-session-test-key';
 process.env.DATABASE_URL = 'postgres://production-preview-test';
 process.env.WORKOS_API_KEY = 'sk_test_preview_exchange';
 process.env.WORKOS_CLIENT_ID = 'client_preview_exchange';
-process.env.WORKOS_COOKIE_PASSWORD = 'workos-cookie-password';
+process.env.WORKOS_COOKIE_PASSWORD =
+  'workos-cookie-password-with-32-characters';
+process.env.WORKOS_REDIRECT_URI = 'https://nvm.fyi/api/auth/callback';
 
 const { GET, previewExchangeSecurityHeaders } = await import('./preview-exchange');
 const { redactAuthUrl } = await import('../../../lib/log');

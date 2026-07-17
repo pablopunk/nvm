@@ -1,11 +1,19 @@
 import type { APIRoute } from 'astro';
 import { createPreviewGatewayState } from '../../../lib/preview-auth';
 import { env } from '../../../lib/env';
-import { isProductionGatewayOrigin } from '../../../lib/auth-config';
+import {
+  isProductionGatewayOrigin,
+  productionAuthConfigured,
+} from '../../../lib/auth-config';
 import { workos, WORKOS_CLIENT_ID } from '../../../lib/workos';
 
 export const GET: APIRoute = async ({ url, redirect }) => {
   if (!isProductionGatewayOrigin(url.origin)) return new Response('Not found', { status: 404 });
+  if (!productionAuthConfigured()) {
+    return new Response('Preview authentication is unavailable', {
+      status: 503,
+    });
+  }
   const created = await createPreviewGatewayState(url.searchParams.get('intent') ?? '');
   if (!created) return new Response('Preview authentication is unavailable', { status: 503 });
   const authorizationUrl = workos.userManagement.getAuthorizationUrl({

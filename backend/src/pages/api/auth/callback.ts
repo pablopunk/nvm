@@ -6,6 +6,7 @@ import { consumeGatewayState, createPreviewSessionGrant } from '../../../lib/pre
 import { readInviteIntentCookie, clearInviteIntentCookie } from '../../../lib/waitlist';
 import { getSignupsEnabled, SignupsPolicyError } from '../../../lib/settings';
 import { log, redactAuthUrl } from '../../../lib/log';
+import { productionAuthConfigured } from '../../../lib/auth-config';
 
 export const GET: APIRoute = async ({ url, request }) => {
   const requestId = request.headers.get('x-vercel-id') ?? request.headers.get('x-request-id') ?? undefined;
@@ -13,6 +14,11 @@ export const GET: APIRoute = async ({ url, request }) => {
   if (!decision.ok) return tooManyRequests(decision);
   const code = url.searchParams.get('code');
   if (!code) return new Response('Missing code', { status: 400 });
+  if (!productionAuthConfigured()) {
+    return new Response('Authentication is temporarily unavailable', {
+      status: 503,
+    });
+  }
   log.info('auth_callback_started', { request_id: requestId, route: redactAuthUrl(url), has_code: true, has_state: Boolean(url.searchParams.get('state')) });
   const state = await consumeGatewayState(url.searchParams.get('state'));
   if (!state) {
