@@ -94,6 +94,13 @@ const api: NevermindApi = {
   setPaletteMode: (mode) => invokeMeasured('palette:set-mode', mode),
   hide: () => invokeMeasured('palette:hide'),
   testInvoke: () => invokeMeasured('test:invoke'),
+  testStageExtensionProposal: (filename, source) =>
+    invokeMeasured('test:stage-extension-proposal', filename, source),
+  testRunJob: (id) => invokeMeasured('test:run-job', id),
+  testFailNextExtensionActivation: (phase) =>
+    invokeMeasured('test:fail-next-extension-activation', phase),
+  testIsActionShortcutRegistered: (accelerator) =>
+    invokeMeasured('test:is-action-shortcut-registered', accelerator),
   quitApp: () => invokeMeasured('app:quit'),
   shortcutReady: () => invokeMeasured('palette:shortcut-ready'),
   requestCameraAccess: () => invokeMeasured('camera:request-access'),

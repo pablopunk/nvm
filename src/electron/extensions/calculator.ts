@@ -142,7 +142,7 @@ export function createCalculatorExtension() {
   return {
     id: 'nevermind.calculator',
     title: 'Calculator',
-    permissions: [] as const,
+    capabilities: [] as const,
     commands: [],
     searchItems(_ctx, query) {
       const result = query ? calculateDetailed(query) : null;

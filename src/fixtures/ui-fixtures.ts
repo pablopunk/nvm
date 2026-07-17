@@ -426,7 +426,7 @@ function clipboardView(ctx: ExtensionContext) {
     title: 'Dev UI · Clipboard',
     subtitle: clipboardApi
       ? 'Read/write text, HTML, files, and generic paste content'
-      : 'clipboard.history permission missing',
+      : 'Clipboard history host API unavailable',
     items: [
       ctx.ui.item({
         id: 'write-html',
@@ -615,7 +615,7 @@ function fileIndexControlsAction(ctx: ExtensionContext) {
     if (!files)
       return innerCtx.ui.preview({
         title: 'File Index Unavailable',
-        content: 'The `desktop.files` permission is not available.',
+        content: 'The `desktop.files` host API is not available.',
       });
     const roots = files.indexedRoots();
     const snapshot = files.indexSnapshot({
@@ -627,7 +627,7 @@ function fileIndexControlsAction(ctx: ExtensionContext) {
     return innerCtx.ui.preview({
       title: 'File Index Snapshot',
       content: [
-        `# File Index Snapshot`,
+        '# File Index Snapshot',
         '',
         `Default roots: ${roots.join(', ')}`,
         '',
@@ -646,7 +646,7 @@ function reindexDownloadsAction(ctx: ExtensionContext) {
     if (!files)
       return innerCtx.ui.preview({
         title: 'File Index Unavailable',
-        content: 'The `desktop.files` permission is not available.',
+        content: 'The `desktop.files` host API is not available.',
       });
     const result = await files.reindex({
       roots: ['~/Downloads'],
@@ -823,7 +823,7 @@ function ocrResultMarkdown(result: ExtensionOcrResult, source: string) {
       ? `${Math.round(result.confidence * 100)}%`
       : 'unknown';
   return [
-    `# OCR Result`,
+    '# OCR Result',
     '',
     `- Source: ${source}`,
     `- Confidence: ${confidence}`,
@@ -839,7 +839,7 @@ function ocrUnavailableView(ctx: ExtensionContext) {
   return ctx.ui.preview({
     title: 'OCR Unavailable',
     content:
-      '# OCR Unavailable\n\nDeclare the `ocr` permission and check `ctx.system.capabilities.has("ocr")` before using OCR helpers.',
+      '# OCR Unavailable\n\nDeclare the `ocr` capability for review and check `ctx.system.capabilities.has("ocr")` before using OCR helpers.',
   });
 }
 
@@ -855,7 +855,7 @@ async function runOcrImage(
   input: string | ExtensionFile,
   source: string,
 ) {
-  if (!ctx.ocr || !ctx.system.capabilities.has('ocr'))
+  if (!(ctx.ocr && ctx.system.capabilities.has('ocr')))
     return ocrUnavailableView(ctx);
   try {
     const result = await ctx.ocr.image(input);
@@ -911,7 +911,7 @@ function ocrFixtureView(ctx: ExtensionContext) {
     return runOcrImage(innerCtx, file, file.displayPath || file.path);
   });
   const screenOcr = ctx.actions.run('OCR Screen', async (innerCtx) => {
-    if (!innerCtx.ocr || !innerCtx.system.capabilities.has('ocr'))
+    if (!(innerCtx.ocr && innerCtx.system.capabilities.has('ocr')))
       return ocrUnavailableView(innerCtx);
     try {
       const result = await innerCtx.ocr.screen();
@@ -924,7 +924,7 @@ function ocrFixtureView(ctx: ExtensionContext) {
     }
   });
   const regionOcr = ctx.actions.run('OCR Top-left Region', async (innerCtx) => {
-    if (!innerCtx.ocr || !innerCtx.system.capabilities.has('ocr'))
+    if (!(innerCtx.ocr && innerCtx.system.capabilities.has('ocr')))
       return ocrUnavailableView(innerCtx);
     try {
       const result = await innerCtx.ocr.region({
@@ -1177,7 +1177,7 @@ const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
   title: 'Dev UI Fixtures',
   subtitle: 'Dev-only extension API fixtures',
-  permissions: [
+  capabilities: [
     'camera',
     'desktop.files',
     'desktop.apps',

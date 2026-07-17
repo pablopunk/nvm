@@ -84,7 +84,7 @@ export function createFilesExtension() {
   return {
     id: 'nevermind.files',
     title: 'Files',
-    permissions: ['desktop.files'] as const,
+    capabilities: ['desktop.files'] as const,
     commands: [],
     rootItems(ctx) {
       return ctx.desktop.files

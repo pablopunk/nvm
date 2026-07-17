@@ -4,7 +4,7 @@ export function createSettingsExtension() {
   return {
     id: 'nevermind.settings',
     title: 'Settings',
-    permissions: ['settings.write'] as const,
+    capabilities: ['settings.write'] as const,
     commands: [
       {
         id: 'app-settings',

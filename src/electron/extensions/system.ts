@@ -77,7 +77,7 @@ function createSystemExtension() {
   const extension = {
     id: 'nevermind.system',
     title: 'System',
-    permissions: ['system'] as const,
+    capabilities: ['system'] as const,
   };
   const commands = systemItems(
     extensionContext.createExtensionContext(extension, null),
@@ -94,7 +94,7 @@ function createPlacesExtension() {
   return {
     id: 'nevermind.places',
     title: 'Places',
-    permissions: ['places'] as const,
+    capabilities: ['places'] as const,
     commands: placesItems().map(extensionContext.commandFromItem),
     rootItems: () => placesItems(),
   };

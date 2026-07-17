@@ -32,7 +32,7 @@ export function createAiBuilderExtension() {
   return {
     id: AI_BUILDER_EXTENSION_ID,
     title: 'AI Builder',
-    permissions: ['ai', 'extensions.ownership'] as const,
+    capabilities: ['ai', 'extensions.ownership'] as const,
     commands: [
       {
         id: 'ai-chats',

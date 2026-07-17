@@ -29,7 +29,7 @@ export function createKeyboardShortcutsExtension() {
   return {
     id: 'nevermind.shortcuts',
     title: 'Keyboard Shortcuts',
-    permissions: ['shortcuts'] as const,
+    capabilities: ['shortcuts'] as const,
     commands: [
       {
         id: 'keyboard-shortcuts',

@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import ts from 'typescript';
+import { inspectExtensionManifest } from './extension-manifest';
 
 export type ExtensionPrSubmitterDeps = {
   execFileText: (
@@ -25,47 +25,15 @@ type ParsedSource = {
 };
 
 function parseExtensionSource(source: string): ParsedSource | null {
-  const file = ts.createSourceFile(
-    'extension.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  let parsed: ParsedSource | null = null;
-  for (const statement of file.statements) {
-    if (
-      !ts.isExportAssignment(statement) ||
-      statement.isExportEquals ||
-      !ts.isObjectLiteralExpression(statement.expression)
-    )
-      continue;
-    if (parsed) return null;
-    const properties = statement.expression.properties;
-    let id: ts.PropertyAssignment | undefined;
-    let title: ts.PropertyAssignment | undefined;
-    for (const property of properties) {
-      if (!ts.isPropertyAssignment(property) || property.name === undefined)
-        continue;
-      if (property.name.kind !== ts.SyntaxKind.Identifier) continue;
-      const name = property.name.getText(file);
-      if (name === 'id') {
-        if (id || !ts.isStringLiteral(property.initializer)) return null;
-        id = property;
-      } else {
-        if (title || !ts.isStringLiteral(property.initializer)) return null;
-        title = property;
-      }
-    }
-    if (!id || !title) return null;
-    parsed = {
-      id: (id.initializer as ts.StringLiteral).text,
-      title: (title.initializer as ts.StringLiteral).text,
-      idStart: id.initializer.getStart(file),
-      idEnd: id.initializer.getEnd(),
-    };
-  }
-  return parsed;
+  const manifest = inspectExtensionManifest(source);
+  if (!manifest.id || !manifest.title || !manifest.idStart || !manifest.idEnd)
+    return null;
+  return {
+    id: manifest.id,
+    title: manifest.title,
+    idStart: manifest.idStart,
+    idEnd: manifest.idEnd,
+  };
 }
 
 export function extensionSlug(title: string): string | null {

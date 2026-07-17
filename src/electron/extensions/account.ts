@@ -220,7 +220,7 @@ export function createAccountExtension() {
   return {
     id: extensionId,
     title: 'Nevermind Account',
-    permissions: [] as const,
+    capabilities: [] as const,
     searchItems: () => {
       const items = [
         accountItem(),

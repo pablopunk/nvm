@@ -308,7 +308,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   // ── history view / UI builders ──────────────────────────
 
-  const CLIPBOARD_ITEM_APPEARANCE = { foreground: 'blue' } as const;
+  const ClipboardItemAppearance = { foreground: 'blue' } as const;
 
   function clipboardPreviewAction(item: any) {
     return deps.buildPreviewItemAction({
@@ -406,7 +406,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       image: item.thumbnailUrl,
       score: 60,
       lastUsed: item.createdAt || 0,
-      appearance: CLIPBOARD_ITEM_APPEARANCE,
+      appearance: ClipboardItemAppearance,
       primaryAction: clipboardCopyAction(item),
       actionPanel: {
         sections: [
@@ -448,7 +448,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         isImage ? 'image photo picture screenshot' : '',
         isVideo ? 'video movie recording' : '',
       ].filter(Boolean),
-      appearance: CLIPBOARD_ITEM_APPEARANCE,
+      appearance: ClipboardItemAppearance,
       primaryAction: copyAction,
       actionPanel: {
         sections: [
@@ -541,7 +541,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     return value ? `text:${deps.hashValue(value)}` : '';
   }
 
-  function suppressClipboardHistoryId(id: string, durationMs = 2_000) {
+  function suppressClipboardHistoryId(id: string, durationMs = 2000) {
     if (id) deps.getSuppressedItemIds().set(id, Date.now() + durationMs);
   }
 
@@ -561,7 +561,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     if (restoreClipboard && snapshot) {
       const delay = Math.max(
         50,
-        Math.min(5_000, Number(action.restoreDelayMs || 250)),
+        Math.min(5000, Number(action.restoreDelayMs || 250)),
       );
       setTimeout(() => {
         suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text));
@@ -714,7 +714,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     if (restoreClipboard && snapshot) {
       const delay = Math.max(
         50,
-        Math.min(5_000, Number(action.restoreDelayMs || 250)),
+        Math.min(5000, Number(action.restoreDelayMs || 250)),
       );
       setTimeout(() => restoreClipboardSnapshot(snapshot), delay).unref?.();
     }
@@ -745,7 +745,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     return {
       id: 'nevermind.clipboard',
       title: 'Clipboard',
-      permissions: ['clipboard.history'] as const,
+      capabilities: ['clipboard.history'] as const,
       commands: [
         {
           id: 'clipboard-history',
@@ -787,7 +787,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
           delayMs: deps.CLIPBOARD_POLL_INTERVAL_MS,
         },
       ],
-      timeoutMs: 2_000,
+      timeoutMs: 2000,
       run: () => pollClipboardChange(),
     };
   }

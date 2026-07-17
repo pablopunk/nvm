@@ -1,4 +1,4 @@
-import { type JobSnapshot } from '../jobs';
+import type { JobSnapshot } from '../jobs';
 import { extensionContext } from './_context';
 
 function jobTime(value?: number) {
@@ -161,7 +161,7 @@ export function createBackgroundTasksExtension() {
   return {
     id: 'nevermind.background-tasks',
     title: 'Background Tasks',
-    permissions: [] as const,
+    capabilities: [] as const,
     commands: [
       {
         id: 'background-tasks',

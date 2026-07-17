@@ -5,7 +5,7 @@ export function createWebSearchExtension() {
   return {
     id: 'nevermind.web',
     title: 'Web',
-    permissions: [] as const,
+    capabilities: [] as const,
     commands: [],
     searchItems(_ctx, query) {
       const q = String(query || '').trim();

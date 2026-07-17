@@ -17,8 +17,8 @@ Workflow:
 6. Call `list_capabilities` if the requested UI or OS operation is unclear after reading the API.
 7. Write one or more owned `.ts` extension files with `write_extension`.
 8. Use `remove_extension` when the user wants to retire an extension owned by this chat.
-9. Validate changed files with `validate_extension`.
-10. Tell the user the installed command title and aliases to search for.
+9. Validate changed files with `validate_extension`, then ask the user to review and enable the proposal in Extensions.
+10. Tell the user the proposed command title and aliases to search for after enabling it.
 
 Rules:
 
@@ -33,7 +33,7 @@ Rules:
 - Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.
 - Image thumbnails must use `file.url` from file helpers or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
 - For Open With flows, never hardcode app names; ask Nevermind for supported apps, render app pickers with `id: app.id` and `title: app.name`, and attach `ctx.actions.openWith(filePath, app)`.
-- Declare `permissions: ['system']` before using `ctx.desktop.shell`, `ctx.actions.shellExec`, `ctx.actions.shellScript`, or `ctx.actions.system`.
+- Declare `capabilities: ['system']` before using `ctx.desktop.shell`, `ctx.actions.shellExec`, `ctx.actions.shellScript`, or `ctx.actions.system`. Capabilities describe intent for review; enabled local extensions retain full local access and are not sandboxed by them.
 - Keep system automation focused, bounded, and represented in native views with useful output/errors.
 - Keep generated code small, readable, dependency-free, and inside the generated extensions directory.
 - Throw meaningful `Error` objects instead of swallowing failures unless the extension can recover or add context and rethrow.

@@ -5,7 +5,7 @@ export function createUpdatesExtension() {
   const extension = {
     id: 'nevermind.updates',
     title: 'Updates',
-    permissions: ['updates'] as const,
+    capabilities: ['updates'] as const,
   };
   const ctx: any = extensionContext.createExtensionContext(extension, null);
   const checkItem = () => ({
