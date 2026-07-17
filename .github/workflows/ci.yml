@@ -129,6 +129,8 @@ jobs:
             -OutFile $archive
           Expand-Archive -Path $archive -DestinationPath $destination
           $pnpm = Join-Path $destination 'pnpm.exe'
+          $destination | Out-File `
+            -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "PNPM_STANDALONE_PATH=$pnpm" | Out-File `
             -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $pnpm --version
