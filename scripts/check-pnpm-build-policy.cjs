@@ -58,6 +58,8 @@ const electronRepair = require(electronRepairScript);
 for (const functionName of [
   'cleanElectronGeneratedPayload',
   'ensureElectronAvailable',
+  'pnpmRebuildInvocation',
+  'rebuildElectron',
   'resolveInstalledElectronExecutable',
 ]) {
   if (typeof electronRepair[functionName] !== 'function') {

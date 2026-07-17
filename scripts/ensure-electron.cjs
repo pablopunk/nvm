@@ -36,14 +36,54 @@ function cleanElectronGeneratedPayload(electronPackageDirectory) {
   fs.rmSync(path.join(electronPackageDirectory, 'path.txt'), { force: true });
 }
 
-function rebuildElectron() {
-  const pnpmEntryPoint = process.env.npm_execpath;
-  const command = pnpmEntryPoint ? process.execPath : 'pnpm';
-  const commandArguments = pnpmEntryPoint
-    ? [pnpmEntryPoint, 'rebuild', 'electron']
-    : ['rebuild', 'electron'];
-  const result = spawnSync(command, commandArguments, {
+function pnpmRebuildInvocation({
+  npmExecPath = process.env.npm_execpath,
+  nodeExecutable = process.execPath,
+  platform = process.platform,
+} = {}) {
+  const rebuildArguments = ['rebuild', 'electron'];
+  if (!npmExecPath) {
+    return platform === 'win32'
+      ? {
+          command: 'pnpm.cmd',
+          commandArguments: rebuildArguments,
+          shell: true,
+        }
+      : {
+          command: 'pnpm',
+          commandArguments: rebuildArguments,
+          shell: false,
+        };
+  }
+
+  const extension = path.extname(npmExecPath).toLowerCase();
+  if (['.js', '.cjs', '.mjs'].includes(extension)) {
+    return {
+      command: nodeExecutable,
+      commandArguments: [npmExecPath, ...rebuildArguments],
+      shell: false,
+    };
+  }
+  if (extension === '.cmd' || extension === '.bat') {
+    return {
+      command: npmExecPath,
+      commandArguments: rebuildArguments,
+      shell: platform === 'win32',
+    };
+  }
+  return {
+    command: npmExecPath,
+    commandArguments: rebuildArguments,
+    shell: false,
+  };
+}
+
+function rebuildElectron({ spawn = spawnSync, ...invocationOptions } = {}) {
+  const { command, commandArguments, shell } =
+    pnpmRebuildInvocation(invocationOptions);
+  const result = spawn(command, commandArguments, {
     cwd: path.join(__dirname, '..'),
+    shell,
     stdio: 'inherit',
   });
 
@@ -85,6 +125,7 @@ if (require.main === module) {
 module.exports = {
   cleanElectronGeneratedPayload,
   ensureElectronAvailable,
+  pnpmRebuildInvocation,
   rebuildElectron,
   resolveInstalledElectronExecutable,
 };

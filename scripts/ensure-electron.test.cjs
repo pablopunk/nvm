@@ -6,7 +6,11 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { ensureElectronAvailable } = require('./ensure-electron.cjs');
+const {
+  ensureElectronAvailable,
+  pnpmRebuildInvocation,
+  rebuildElectron,
+} = require('./ensure-electron.cjs');
 
 function createElectronFixture(t) {
   const electronPackageDirectory = fs.mkdtempSync(
@@ -105,5 +109,66 @@ test('fails when rebuilding does not produce an executable', (t) => {
         rebuild: () => {},
       }),
     /without a usable executable/,
+  );
+});
+
+test('runs a standalone Windows pnpm executable directly', () => {
+  let invocation;
+
+  rebuildElectron({
+    npmExecPath: 'C:\\Program Files\\pnpm\\pnpm.exe',
+    nodeExecutable: 'C:\\Program Files\\nodejs\\node.exe',
+    platform: 'win32',
+    spawn: (command, commandArguments, options) => {
+      invocation = { command, commandArguments, options };
+      return { status: 0 };
+    },
+  });
+
+  assert.deepEqual(invocation, {
+    command: 'C:\\Program Files\\pnpm\\pnpm.exe',
+    commandArguments: ['rebuild', 'electron'],
+    options: {
+      cwd: path.join(__dirname, '..'),
+      shell: false,
+      stdio: 'inherit',
+    },
+  });
+});
+
+test('runs JavaScript pnpm entrypoints through Node', () => {
+  assert.deepEqual(
+    pnpmRebuildInvocation({
+      npmExecPath: 'C:\\pnpm\\pnpm.cjs',
+      nodeExecutable: 'C:\\nodejs\\node.exe',
+      platform: 'win32',
+    }),
+    {
+      command: 'C:\\nodejs\\node.exe',
+      commandArguments: ['C:\\pnpm\\pnpm.cjs', 'rebuild', 'electron'],
+      shell: false,
+    },
+  );
+});
+
+test('runs Windows pnpm command shims through a shell', () => {
+  assert.deepEqual(
+    pnpmRebuildInvocation({
+      npmExecPath: 'C:\\pnpm\\pnpm.cmd',
+      platform: 'win32',
+    }),
+    {
+      command: 'C:\\pnpm\\pnpm.cmd',
+      commandArguments: ['rebuild', 'electron'],
+      shell: true,
+    },
+  );
+  assert.deepEqual(
+    pnpmRebuildInvocation({ npmExecPath: '', platform: 'win32' }),
+    {
+      command: 'pnpm.cmd',
+      commandArguments: ['rebuild', 'electron'],
+      shell: true,
+    },
   );
 });
