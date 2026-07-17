@@ -16,6 +16,7 @@ import {
   checkNevermindCompatibility,
   requireNevermindCompatibilityFeature,
 } from './nevermind-compatibility';
+import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
 
 type AiEvent = {
   type: string;
@@ -42,7 +43,7 @@ type AiLimitNotice = {
   retryAfterSec?: number;
 };
 
-const NEVERMIND_DASHBOARD_URL = 'https://nvm.fyi/dashboard';
+const NEVERMIND_DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 const NEVERMIND_UPDATE_URL = 'https://github.com/pablopunk/nvm/releases/latest';
 
 type ActiveChat = {
@@ -260,7 +261,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       options.onEvent?.({
         type: 'credit_warning',
         chatId,
-        message: `Low credit balance: ${credit.credits.total} credits remaining. Consider adding credits at nvm.fyi/dashboard.`,
+        message: `Low credit balance: ${credit.credits.total} credits remaining. Consider adding credits at www.nvm.fyi/dashboard.`,
       });
     }
     options.onEvent?.({ type: 'start', chatId });

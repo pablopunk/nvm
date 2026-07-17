@@ -6,12 +6,14 @@ import {
   AuthConfigurationError,
   isProductionGatewayOrigin,
   productionAuthConfigured,
+  resolveAuthRedirectConfiguration,
 } from './auth-config';
 
 const keys = [
   'NODE_ENV',
   'VERCEL_ENV',
   'PRODUCTION_ORIGIN',
+  'PUBLIC_DASHBOARD_URL',
   'DATABASE_URL',
   'PREVIEW_GATEWAY_ORIGIN',
   'PREVIEW_START_KEY',
@@ -31,10 +33,11 @@ const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 function validProduction() {
   Object.assign(process.env, {
     VERCEL_ENV: 'production',
-    PRODUCTION_ORIGIN: 'https://nvm.fyi',
+    PRODUCTION_ORIGIN: 'https://www.nvm.fyi',
+    PUBLIC_DASHBOARD_URL: 'https://www.nvm.fyi',
     WORKOS_API_KEY: 'sk_test_production',
     WORKOS_CLIENT_ID: 'client_test_production',
-    WORKOS_REDIRECT_URI: 'https://nvm.fyi/api/auth/callback',
+    WORKOS_REDIRECT_URI: 'https://www.nvm.fyi/api/auth/callback',
     WORKOS_COOKIE_PASSWORD: 'production-session-key-with-32-characters',
   });
 }
@@ -44,7 +47,7 @@ function validPreview() {
   Object.assign(process.env, {
     VERCEL_ENV: 'preview',
     DATABASE_URL: 'postgres://production',
-    PREVIEW_GATEWAY_ORIGIN: 'https://nvm.fyi',
+    PREVIEW_GATEWAY_ORIGIN: 'https://www.nvm.fyi',
     PREVIEW_START_KEY: 'preview-start',
     GATEWAY_STATE_KEY: 'gateway-state',
     GATEWAY_STATE_REDIS_URL: 'https://gateway',
@@ -55,13 +58,17 @@ function validPreview() {
   });
 }
 
-test('accepts complete production WorkOS configuration', function acceptsProductionConfiguration() {
+test('accepts complete canonical production WorkOS configuration', () => {
   validProduction();
   assert.equal(assertProductionAuthConfiguration(), true);
   assert.equal(productionAuthConfigured(), true);
+  assert.deepEqual(resolveAuthRedirectConfiguration(), {
+    productionOrigin: 'https://www.nvm.fyi',
+    redirectUri: 'https://www.nvm.fyi/api/auth/callback',
+  });
 });
 
-test('fails closed when production WorkOS values are missing', function rejectsMissingProductionValues() {
+test('fails closed when production WorkOS values are missing', () => {
   for (const key of [
     'WORKOS_API_KEY',
     'WORKOS_CLIENT_ID',
@@ -75,17 +82,19 @@ test('fails closed when production WorkOS values are missing', function rejectsM
   }
 });
 
-test('rejects weak cookie material and unsafe callback URLs', function rejectsUnsafeProductionValues() {
+test('rejects weak cookie material and unsafe or stale callback URLs', () => {
   validProduction();
   process.env.WORKOS_COOKIE_PASSWORD = 'too-short';
   assert.throws(assertProductionAuthConfiguration, AuthConfigurationError);
 
   for (const redirectUri of [
     'not-a-url',
-    'http://nvm.fyi/api/auth/callback',
+    'http://www.nvm.fyi/api/auth/callback',
     'https://evil.example/api/auth/callback',
-    'https://nvm.fyi/api/auth/callback?code=leak',
-    'https://nvm.fyi/wrong-path',
+    'https://nvm.fyi/api/auth/callback',
+    'https://www.nvm.fyi/api/auth/callback?code=leak',
+    'https://www.nvm.fyi/wrong-path',
+    'https://user:pass@www.nvm.fyi/api/auth/callback',
   ]) {
     validProduction();
     process.env.WORKOS_REDIRECT_URI = redirectUri;
@@ -93,63 +102,65 @@ test('rejects weak cookie material and unsafe callback URLs', function rejectsUn
   }
 
   validProduction();
-  process.env.PRODUCTION_ORIGIN = 'not-an-origin';
+  process.env.PRODUCTION_ORIGIN = 'https://nvm.fyi';
   assert.throws(assertProductionAuthConfiguration, AuthConfigurationError);
 
   validProduction();
   process.env.WORKOS_REDIRECT_URI =
-    'https://nvm.fyi/api/auth/callback ';
+    'https://www.nvm.fyi/api/auth/callback ';
   assert.throws(assertProductionAuthConfiguration, AuthConfigurationError);
 });
 
-test('allows the documented localhost callback during local development', function acceptsLocalCallback() {
+test('allows documented loopback callbacks only during local development', () => {
   validProduction();
   process.env.NODE_ENV = 'development';
   delete process.env.VERCEL_ENV;
   process.env.WORKOS_REDIRECT_URI = 'http://localhost:4321/api/auth/callback';
   assert.equal(assertProductionAuthConfiguration(), true);
+
+  validProduction();
+  process.env.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4321/api/auth/callback';
+  assert.throws(assertProductionAuthConfiguration, AuthConfigurationError);
 });
 
-test('rejects a localhost callback outside development', function rejectsProductionLocalCallback() {
+test('rejects loopback callbacks in deployed runtimes', () => {
   validProduction();
-  delete process.env.VERCEL_ENV;
-  process.env.NODE_ENV = 'production';
   process.env.WORKOS_REDIRECT_URI = 'http://localhost:4321/api/auth/callback';
   assert.throws(assertProductionAuthConfiguration, AuthConfigurationError);
 });
 
-test('accepts production-faithful Preview auth configuration', function acceptsPreviewConfiguration() {
+test('accepts production-faithful Preview auth configuration', () => {
   validPreview();
   assert.equal(assertPreviewAuthConfiguration(), true);
 });
 
-test('rejects equal Preview and production trust material', function rejectsSharedSessionKeys() {
+test('rejects equal Preview and production trust material', () => {
   validPreview();
   process.env.PREVIEW_SESSION_KEY = process.env.WORKOS_COOKIE_PASSWORD;
   assert.throws(assertPreviewAuthConfiguration, AuthConfigurationError);
 });
 
-test('rejects duplicate gateway and production Redis ACL credentials', function rejectsSharedRedisCredentials() {
+test('rejects duplicate gateway and production Redis ACL credentials', () => {
   validPreview();
   process.env.UPSTASH_REDIS_REST_TOKEN =
     process.env.GATEWAY_STATE_REDIS_TOKEN;
   assert.throws(assertPreviewAuthConfiguration, AuthConfigurationError);
 });
 
-test('fails closed when the production database binding is absent', function rejectsMissingDatabase() {
+test('fails closed when the production database binding is absent', () => {
   validPreview();
   delete process.env.DATABASE_URL;
   assert.throws(assertPreviewAuthConfiguration, AuthConfigurationError);
 });
 
-test('accepts the Vercel www alias for the production preview gateway', function acceptsProductionAlias() {
-  process.env.PRODUCTION_ORIGIN = 'https://nvm.fyi';
-  assert.equal(isProductionGatewayOrigin('https://nvm.fyi'), true);
+test('accepts only the canonical production web gateway', () => {
+  validProduction();
+  assert.equal(isProductionGatewayOrigin('https://nvm.fyi'), false);
   assert.equal(isProductionGatewayOrigin('https://www.nvm.fyi'), true);
   assert.equal(isProductionGatewayOrigin('https://evil.example'), false);
 });
 
-test.after(function restoreEnvironment() {
+test.after(() => {
   for (const key of keys) {
     if (original[key] === undefined) delete process.env[key];
     else process.env[key] = original[key];

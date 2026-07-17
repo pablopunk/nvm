@@ -1,6 +1,7 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { log } from './log';
+import { PRODUCTION_WEB_ORIGIN } from '../../../src/shared/public-origin';
 
 function isProduction(): boolean {
   const vercelEnv = process.env.VERCEL_ENV;
@@ -11,7 +12,7 @@ function isProduction(): boolean {
 const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
-const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
+const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
 const redis = url && token ? new Redis({ url, token }) : null;
 if (!redis && isProduction()) {

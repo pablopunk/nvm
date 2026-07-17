@@ -7,6 +7,10 @@ import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import { checkNevermindCompatibility } from './nevermind-compatibility';
 import { openExternalUrl } from './url-utils';
+import {
+  migrateLegacyDesktopOrigin,
+  parsePublicOrigin,
+} from '../shared/public-origin';
 
 const FILENAME = 'nevermind-auth.json';
 const STORE_FILENAME = 'nevermind-auth-by-origin.json';
@@ -35,18 +39,38 @@ type SignInResult =
   | { ok: false; error: string };
 
 const PRODUCTION_BASE_URL = 'https://api.nvm.fyi';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function publicOriginPolicy(baseUrl: string): 'local' | 'smoke' {
+  try {
+    const parsed = new URL(baseUrl);
+    return parsed.protocol === 'http:' &&
+      LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase())
+      ? 'local'
+      : 'smoke';
+  } catch {
+    return 'smoke';
+  }
+}
+
 export function resolveDefaultNevermindBaseUrl(
   environment: Partial<
     Pick<NodeJS.ProcessEnv, 'NEVERMIND_BASE_URL' | 'ELECTRON_RENDERER_URL'>
   > = process.env,
   isPackaged = app.isPackaged,
 ) {
-  return (
+  const candidate =
     environment.NEVERMIND_BASE_URL ||
     (!isPackaged && environment.ELECTRON_RENDERER_URL
       ? 'http://localhost:4321'
-      : PRODUCTION_BASE_URL)
-  );
+      : PRODUCTION_BASE_URL);
+  const migrated = migrateLegacyDesktopOrigin(candidate);
+  if (migrated) return migrated;
+  try {
+    return parsePublicOrigin(candidate, publicOriginPolicy(candidate));
+  } catch {
+    return PRODUCTION_BASE_URL;
+  }
 }
 
 const DEFAULT_BASE_URL = resolveDefaultNevermindBaseUrl();
@@ -56,23 +80,30 @@ function shouldUseProductionBaseUrl() {
 }
 
 function isLoopbackBaseUrl(baseUrl: string) {
-  try {
-    const host = new URL(baseUrl).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  } catch {
-    return false;
-  }
+  return publicOriginPolicy(baseUrl) === 'local';
 }
 
 function normalizedBaseUrl(baseUrl: string) {
-  const trimmed = baseUrl.replace(/\/$/, '');
+  const trimmed = baseUrl.trim().replace(/\/$/, '');
+  const migrated = migrateLegacyDesktopOrigin(trimmed);
   if (
-    shouldUseProductionBaseUrl() &&
-    (['https://nvm.fyi', 'https://www.nvm.fyi'].includes(trimmed) ||
-      isLoopbackBaseUrl(trimmed))
+    migrated &&
+    (shouldUseProductionBaseUrl() || migrated === PRODUCTION_BASE_URL)
   )
+    return migrated;
+  if (shouldUseProductionBaseUrl() && isLoopbackBaseUrl(trimmed))
     return PRODUCTION_BASE_URL;
-  return trimmed;
+  try {
+    return parsePublicOrigin(
+      trimmed,
+      isLoopbackBaseUrl(trimmed) ? 'local' : 'smoke',
+    );
+  } catch {
+    logger.warn('rejected invalid Nevermind auth base URL', {
+      baseUrl: trimmed,
+    });
+    return PRODUCTION_BASE_URL;
+  }
 }
 
 export function nevermindEnvironmentForBaseUrl(

@@ -18,8 +18,9 @@ import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } 
 import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
 import * as Sentry from '@sentry/astro';
+import { PRODUCTION_WEB_ORIGIN } from '../../../src/shared/public-origin';
 
-const DASHBOARD_URL = 'https://nvm.fyi/dashboard';
+const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
 const CREDIT_GRACE_THRESHOLD = Math.max(0, Number(process.env.CREDIT_GRACE_THRESHOLD ?? 100));
 

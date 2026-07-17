@@ -28,3 +28,4 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 - A Ready production deployment does not prove custom domains serve it. Inspect its aliases and verify each public host before treating a release as live; confirm before reassigning an alias.
 - Confirm before env removals, secret changes, domain changes, project changes, or redeploys.
 - Compare `*.vercel.app`, `api.nvm.fyi`, `nvm.fyi`, and `www.nvm.fyi` when alias/domain behavior is suspect.
+- Keep `PUBLIC_API_ORIGIN=https://api.nvm.fyi` and `PRODUCTION_ORIGIN=https://www.nvm.fyi` as origin-only values. Do not add an API rewrite to `backend/vercel.json`; apex-to-`www` is the only browser compatibility redirect.

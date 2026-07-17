@@ -171,10 +171,34 @@ test('device auth initiate returns the desktop-v1 initiation contract', async ()
 
   assert.equal(response.status, 200);
   assert.equal(typeof body.code, 'string');
-  assert.equal(body.verifyUrl, `https://api.nvm.fyi/auth/device?code=${body.code}`);
+  assert.equal(body.verifyUrl, `https://www.nvm.fyi/auth/device?code=${body.code}`);
   assert.match(body.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(body.pollIntervalMs, 2000);
   assert.equal((db.insertedValues[0] as any).deviceLabel, 'Pablo Mac');
+});
+
+test('Preview device auth rejects a mismatched request origin before creating a code', async () => {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  const previousUrl = process.env.VERCEL_URL;
+  process.env.VERCEL_ENV = 'preview';
+  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  const db = installDb(createFakeDb());
+  try {
+    const response = await initiateDeviceAuth(routeContext(new Request('https://attacker.invalid/api/auth/device/initiate', {
+      method: 'POST',
+      body: '{}',
+    })));
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.has('location'), false);
+    assert.equal(response.headers.has('set-cookie'), false);
+    assert.equal((db.insertedValues as unknown[]).length, 0);
+    assert.equal((await response.text()).includes('verifyUrl'), false);
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+    if (previousUrl === undefined) delete process.env.VERCEL_URL;
+    else process.env.VERCEL_URL = previousUrl;
+  }
 });
 
 test('device auth kill switch returns service-unavailable contract', async () => {
@@ -326,6 +350,70 @@ test('active-model route resolves admin-defined extension model roles', async ()
   assert.equal(body.provider, 'nevermind');
 });
 
+test('Preview active-model advertises the exact deployment origin', async () => {
+  const previousEnv = process.env.VERCEL_ENV;
+  const previousUrl = process.env.VERCEL_URL;
+  process.env.VERCEL_ENV = 'preview';
+  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  try {
+    installModelsDevFetch();
+    installDb(createFakeDb({ selects: proxySelects() }));
+    const response = await getActiveModel(routeContext(new Request('https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1/active-model', {
+      headers: { authorization: 'Bearer nvm_pat_test' },
+    })));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).baseUrl, 'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1');
+  } finally {
+    if (previousEnv === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = previousEnv;
+    if (previousUrl === undefined) delete process.env.VERCEL_URL; else process.env.VERCEL_URL = previousUrl;
+  }
+});
+
+test('Preview active-model rejects a mismatched origin before auth or DB work', async () => {
+  const previousEnv = process.env.VERCEL_ENV;
+  const previousUrl = process.env.VERCEL_URL;
+  process.env.VERCEL_ENV = 'preview';
+  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  try {
+    installDb({ select: () => { throw new Error('DB touched'); } } as any);
+    const response = await getActiveModel(routeContext(new Request('https://attacker.invalid/api/v1/active-model')));
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.has('location'), false);
+    assert.equal(response.headers.has('set-cookie'), false);
+  } finally {
+    if (previousEnv === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = previousEnv;
+    if (previousUrl === undefined) delete process.env.VERCEL_URL; else process.env.VERCEL_URL = previousUrl;
+  }
+});
+
+test('Preview active-model fails closed when Vercel deployment state is missing', async () => {
+  const previousEnv = process.env.VERCEL_ENV;
+  const previousUrl = process.env.VERCEL_URL;
+  process.env.VERCEL_ENV = 'preview';
+  delete process.env.VERCEL_URL;
+  try {
+    installDb({ select: () => { throw new Error('DB touched'); } } as any);
+    const response = await getActiveModel(routeContext(new Request('https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1/active-model')));
+    assert.equal(response.status, 503);
+  } finally {
+    if (previousEnv === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = previousEnv;
+    if (previousUrl === undefined) delete process.env.VERCEL_URL; else process.env.VERCEL_URL = previousUrl;
+  }
+});
+
+test('API and webhook unrelated-origin OPTIONS requests are denied without CORS headers', async () => {
+  const apiOptions = await (await import('./v1/active-model')).OPTIONS({ request: new Request('https://api.nvm.fyi/api/v1/active-model', { method: 'OPTIONS', headers: { origin: 'https://evil.example', 'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization' } }) } as any);
+  const webhookOptions = await (await import('./billing/webhook')).OPTIONS({ request: new Request('https://api.nvm.fyi/api/billing/webhook', { method: 'OPTIONS', headers: { origin: 'https://evil.example', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' } }) } as any);
+  for (const response of [apiOptions, webhookOptions]) {
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.has('location'), false);
+    assert.equal(response.headers.has('access-control-allow-origin'), false);
+    assert.equal(response.headers.has('access-control-allow-credentials'), false);
+    assert.equal(response.headers.has('access-control-allow-methods'), false);
+    assert.equal(response.headers.has('access-control-allow-headers'), false);
+  }
+});
+
 test('proxy route kill switch returns service-unavailable contract', async () => {
   process.env.NEVERMIND_KILL_SWITCHES = 'ai_proxy';
   const response = await postChatCompletion(routeContext(authorizedChatRequest()));
@@ -347,7 +435,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   const noCredits = await postChatCompletion(routeContext(authorizedChatRequest()));
   assert.equal(noCredits.status, 402);
   assert.deepEqual(await noCredits.json(), {
-    error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: 'https://nvm.fyi/dashboard' },
+    error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: 'https://www.nvm.fyi/dashboard' },
   });
 
   installDb(createFakeDb({ selects: proxySelects({ model: null }) }));
@@ -486,7 +574,7 @@ test('proxy route returns the rate-limit contract', async () => {
   assert.equal(response.status, 429);
   assert.equal(response.headers.get('Retry-After'), '7');
   assert.deepEqual(await response.json(), {
-    error: { type: 'rate_limited', message: 'Rate limit exceeded (chat:free:minute)', retry_after: 7, dashboard_url: 'https://nvm.fyi/dashboard' },
+    error: { type: 'rate_limited', message: 'Rate limit exceeded (chat:free:minute)', retry_after: 7, dashboard_url: 'https://www.nvm.fyi/dashboard' },
   });
 });
 

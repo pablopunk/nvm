@@ -8,7 +8,7 @@ const sentryDsn = process.env.SENTRY_DSN;
 export default defineConfig({
   output: 'server',
   adapter: vercel(),
-  site: 'https://nvm.fyi',
+  site: 'https://www.nvm.fyi',
   integrations: sentryDsn
     ? [
         sentry({

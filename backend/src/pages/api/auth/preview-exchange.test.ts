@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 process.env.VERCEL_ENV = 'preview';
-process.env.PREVIEW_GATEWAY_ORIGIN = 'https://nvm.fyi';
+process.env.PRODUCTION_ORIGIN = 'https://www.nvm.fyi';
+process.env.PUBLIC_DASHBOARD_URL = 'https://www.nvm.fyi';
+process.env.PREVIEW_GATEWAY_ORIGIN = 'https://www.nvm.fyi';
 process.env.PREVIEW_START_KEY = 'preview-start-test-key';
 process.env.GATEWAY_STATE_KEY = 'gateway-state-test-key';
 process.env.GATEWAY_STATE_REDIS_URL = 'https://gateway-state';
@@ -15,7 +17,7 @@ process.env.WORKOS_API_KEY = 'sk_test_preview_exchange';
 process.env.WORKOS_CLIENT_ID = 'client_preview_exchange';
 process.env.WORKOS_COOKIE_PASSWORD =
   'workos-cookie-password-with-32-characters';
-process.env.WORKOS_REDIRECT_URI = 'https://nvm.fyi/api/auth/callback';
+process.env.WORKOS_REDIRECT_URI = 'https://www.nvm.fyi/api/auth/callback';
 
 const { GET, previewExchangeSecurityHeaders } = await import('./preview-exchange');
 const { redactAuthUrl } = await import('../../../lib/log');

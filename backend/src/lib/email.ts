@@ -4,8 +4,13 @@ import { Webhook } from 'svix';
 import { db } from '../db/client';
 import { emailOutbox, emailSuppressions, invites, providerEvents } from '../db/schema';
 import { env } from './env';
+import { PRODUCTION_WEB_ORIGIN } from '../../../src/shared/public-origin';
 
 function decryptInviteToken(value: string) { const [iv, tag, encrypted] = value.split('.'); const key = createHash('sha256').update(env('INVITE_INTENT_SECRET') || env('WORKOS_COOKIE_PASSWORD') || 'development-only-invite-secret').digest(); const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url')); decipher.setAuthTag(Buffer.from(tag, 'base64url')); return Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString(); }
+
+export function inviteUrl(token: string) {
+  return `${env('PUBLIC_SITE_URL') || PRODUCTION_WEB_ORIGIN}/invite#${token}`;
+}
 
 export async function leaseOutbox(limit = 10, owner = randomUUID()) {
   const expiry = new Date(Date.now() + 5 * 60 * 1000);
@@ -30,7 +35,7 @@ export async function sendOutboxBatch(limit = 10) {
       const invite = (await db.select().from(invites).where(eq(invites.id, row.inviteId)).limit(1))[0];
       if (!invite) { await failOutbox(row, 'invite_missing'); continue; }
       const token = decryptInviteToken(row.tokenCiphertext);
-      const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Idempotency-Key': row.idempotencyKey }, body: JSON.stringify({ from, to: [row.recipient], subject: 'Your Nevermind invite', html: `<p>Welcome to Nevermind.</p><p><a href="${env('PUBLIC_SITE_URL') || 'https://nvm.fyi'}/invite#${token}">Continue to Nevermind</a></p>` }) });
+      const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Idempotency-Key': row.idempotencyKey }, body: JSON.stringify({ from, to: [row.recipient], subject: 'Your Nevermind invite', html: `<p>Welcome to Nevermind.</p><p><a href="${inviteUrl(token)}">Continue to Nevermind</a></p>` }) });
       const body = await response.json().catch(() => ({})) as { id?: string; message?: string };
       if (response.ok) { await db.update(emailOutbox).set({ status: 'sent', providerMessageId: body.id, leaseOwner: null, leaseExpiresAt: null }).where(eq(emailOutbox.id, row.id)); await db.update(invites).set({ status: 'sent', sentAt: new Date() }).where(eq(invites.id, invite.id)); sent++; }
       else await failOutbox(row, body.message || `provider_${response.status}`);

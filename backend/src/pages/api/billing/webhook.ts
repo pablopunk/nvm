@@ -4,6 +4,8 @@ import { log } from '../../../lib/log';
 
 export const prerender = false;
 
+export const OPTIONS: APIRoute = async () => new Response(null, { status: 404 });
+
 export const POST: APIRoute = async ({ request }) => {
   const payload = await request.text();
 

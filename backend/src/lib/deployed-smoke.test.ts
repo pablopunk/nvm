@@ -122,4 +122,21 @@ test('requires an explicit safe target', async () => {
     () => runDeployedSmoke('http://example.com'),
     /must use HTTPS/,
   );
+  await assert.rejects(
+    () => runDeployedSmoke('https://api.nvm.fyi/api'),
+    /must not include a path/,
+  );
+});
+
+test('fails instead of following a redirect', async () => {
+  await fixtureServer(
+    (_request, response) => {
+      response.statusCode = 308;
+      response.setHeader('location', 'https://api.nvm.fyi/api/health');
+      response.end();
+    },
+    async (baseUrl) => {
+      await assert.rejects(() => runDeployedSmoke(baseUrl), /unexpected redirect/);
+    },
+  );
 });

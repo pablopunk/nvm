@@ -25,7 +25,7 @@ explicitly send uncaught exceptions and unhandled rejections to that project.
 
 Sentry monitors the backend health endpoint at:
 
-`https://api.nvm.fyi/api/health`
+`https://api.nvm.fyi/api/health` (the API base is the origin `https://api.nvm.fyi`; browser clients use relative `/api/...` paths on `https://www.nvm.fyi`).
 
 Monitor: [Backend API health](https://pablopunk.sentry.io/monitors/7795419/?project=4511502032502784&statsPeriod=14d)
 

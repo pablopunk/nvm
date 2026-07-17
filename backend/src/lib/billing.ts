@@ -4,6 +4,8 @@ import { db } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { env } from './env';
 import { log } from './log';
+import { parsePublicOrigin } from '../../../src/shared/public-origin';
+import { productionWebOrigin } from './auth-config';
 
 export type BillingKind = 'subscription' | 'top_up';
 export type BillingInterval = 'day' | 'week' | 'month' | 'year';
@@ -175,8 +177,22 @@ function findItemByPriceId(priceId: string | null | undefined): BillingCatalogIt
 }
 
 function publicUrl(path: string): string {
-  const base = env('PUBLIC_DASHBOARD_URL') ?? 'http://localhost:4321';
-  return new URL(path, base).toString();
+  try {
+    const configured = env('VERCEL_ENV') === 'preview'
+      ? (env('VERCEL_URL') ? `https://${env('VERCEL_URL')}` : '')
+      : env('VERCEL_ENV') === 'production' || env('NODE_ENV') === 'production'
+        ? productionWebOrigin()
+        : env('PUBLIC_DASHBOARD_URL')?.match(/^https?:\/\/localhost(?::\d+)?\/?$/)
+          ? env('PUBLIC_DASHBOARD_URL')!
+          : productionWebOrigin();
+    const policy = env('VERCEL_ENV') === 'preview' ? 'preview' : configured.startsWith('http://localhost') ? 'local' : 'production_web';
+    const base = policy === 'preview'
+      ? parsePublicOrigin(configured, 'preview', configured)
+      : parsePublicOrigin(configured, policy);
+    return new URL(path, `${base}/`).toString();
+  } catch {
+    throw new BillingConfigError('Public web origin configuration is invalid');
+  }
 }
 
 export function rejectCrossOriginBillingPost(request: Request): Response | null {
@@ -214,6 +230,8 @@ async function userHasActiveSubscription(database: BillingDb, userId: string): P
 }
 
 export async function createBillingCheckout(input: { user: typeof users.$inferSelect; kind: BillingKind; priceId?: string; tier?: string }) {
+  const successUrl = publicUrl('/profile?billing=success');
+  const cancelUrl = publicUrl('/profile?billing=canceled');
   const item = findCatalogItem(input);
   if (!item) {
     if (input.priceId || input.tier) throw new BillingRequestError('unknown_price', 'Unknown Stripe billing price.');
@@ -240,8 +258,8 @@ export async function createBillingCheckout(input: { user: typeof users.$inferSe
     customer,
     client_reference_id: input.user.id,
     line_items: [{ price: item.priceId, quantity: 1 }],
-    success_url: publicUrl('/profile?billing=success'),
-    cancel_url: publicUrl('/profile?billing=canceled'),
+    success_url: successUrl,
+    cancel_url: cancelUrl,
     metadata,
     ...(item.kind === 'subscription' ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }),
   });

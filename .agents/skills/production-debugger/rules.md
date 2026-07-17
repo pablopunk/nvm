@@ -12,7 +12,8 @@
 
 - OAuth callback URLs must target the canonical non-redirecting host. If apex redirects to `www`, register the redirected-to host with WorkOS; OAuth servers do not follow 308s with state cookies.
 - WorkOS redirect URI management is dashboard-only.
-- `WORKOS_REDIRECT_URI`, `PUBLIC_DASHBOARD_URL`, and packaged desktop `PRODUCTION_BASE_URL` must agree with the actual host split.
+- `PUBLIC_API_ORIGIN` is the origin-only machine base (`https://api.nvm.fyi`); browser `/api/...` paths are same-origin routes on `https://www.nvm.fyi`.
+- `PRODUCTION_ORIGIN`, `WORKOS_REDIRECT_URI`, and packaged desktop `PRODUCTION_BASE_URL` must use their explicit canonical hosts. `PUBLIC_DASHBOARD_URL` and `PREVIEW_GATEWAY_ORIGIN` may only be retained when they normalize equal to `PRODUCTION_ORIGIN`.
 - `SENTRY_DSN` missing means no backend Sentry integration; absence of Sentry events is evidence only after checking env/integration.
 - Vercel production env can be pulled with `cd backend && vercel env pull .vercel/.env.production.local --environment=production --yes`; keep the file under `.vercel/`, set restrictive permissions, and never print values.
 - A Sentry project event endpoint can work with an event id while issue/group endpoints return 403 for project-scoped tokens; prefer `/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/events/$EVENT_ID/` for alert emails containing an event id.
