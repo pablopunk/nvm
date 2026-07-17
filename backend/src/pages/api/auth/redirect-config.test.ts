@@ -107,6 +107,106 @@ test('Preview gateway does not persist state or call WorkOS when the signing key
   assert.equal(store.size, 0);
 });
 
+test('production sign-in rejects a missing WorkOS client ID without persisting state', async (t) => {
+  const store = new Map<string, unknown>();
+  setPreviewAuthStoreForTests(store);
+  validAuthRedirectConfiguration();
+  process.env.GATEWAY_STATE_KEY = 'gateway-state-test';
+  delete process.env.WORKOS_CLIENT_ID;
+  let providerCalls = 0;
+  t.mock.method(workos.userManagement as any, 'getAuthorizationUrl', () => {
+    providerCalls += 1;
+    return 'https://workos.example/authorization';
+  });
+  setRateLimitOverridesForTests({ ip: async () => ({ ok: true }) });
+  try {
+    noSideEffectResponse(await productionSignIn({
+      url: new URL('https://www.nvm.fyi/api/auth/signin'),
+      request: new Request('https://www.nvm.fyi/api/auth/signin'),
+      redirect: (location: string) => Response.redirect(location),
+    } as any));
+  } finally {
+    resetRateLimitOverridesForTests();
+  }
+  assert.equal(providerCalls, 0);
+  assert.equal(store.size, 0);
+});
+
+test('Preview gateway rejects a missing WorkOS client ID without persisting state', async (t) => {
+  const store = new Map<string, unknown>();
+  setPreviewAuthStoreForTests(store);
+  validAuthRedirectConfiguration();
+  process.env.GATEWAY_STATE_KEY = 'gateway-state-test';
+  delete process.env.WORKOS_CLIENT_ID;
+  const intent = await createPreviewStartIntent({
+    origin: 'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app',
+    returnTo: '/',
+  });
+  assert.ok(intent);
+  let providerCalls = 0;
+  t.mock.method(workos.userManagement as any, 'getAuthorizationUrl', () => {
+    providerCalls += 1;
+    return 'https://workos.example/authorization';
+  });
+  noSideEffectResponse(await previewStart({
+    url: new URL(`https://www.nvm.fyi/api/auth/preview-start?intent=${encodeURIComponent(intent)}`),
+    request: new Request(`https://www.nvm.fyi/api/auth/preview-start?intent=${encodeURIComponent(intent)}`),
+    redirect: (location: string) => Response.redirect(location),
+  } as any));
+  assert.equal(providerCalls, 0);
+  assert.equal(store.size, 0);
+});
+
+test('production sign-in catches authorization URL generation failures before persisting state', async (t) => {
+  const store = new Map<string, unknown>();
+  setPreviewAuthStoreForTests(store);
+  validAuthRedirectConfiguration();
+  process.env.GATEWAY_STATE_KEY = 'gateway-state-test';
+  process.env.WORKOS_CLIENT_ID = 'client_redirect_config';
+  let providerCalls = 0;
+  t.mock.method(workos.userManagement as any, 'getAuthorizationUrl', () => {
+    providerCalls += 1;
+    throw new Error('WorkOS unavailable');
+  });
+  setRateLimitOverridesForTests({ ip: async () => ({ ok: true }) });
+  try {
+    noSideEffectResponse(await productionSignIn({
+      url: new URL('https://www.nvm.fyi/api/auth/signin'),
+      request: new Request('https://www.nvm.fyi/api/auth/signin'),
+      redirect: (location: string) => Response.redirect(location),
+    } as any));
+  } finally {
+    resetRateLimitOverridesForTests();
+  }
+  assert.equal(providerCalls, 1);
+  assert.equal(store.size, 0);
+});
+
+test('Preview gateway catches authorization URL generation failures before persisting state', async (t) => {
+  const store = new Map<string, unknown>();
+  setPreviewAuthStoreForTests(store);
+  validAuthRedirectConfiguration();
+  process.env.GATEWAY_STATE_KEY = 'gateway-state-test';
+  process.env.WORKOS_CLIENT_ID = 'client_redirect_config';
+  const intent = await createPreviewStartIntent({
+    origin: 'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app',
+    returnTo: '/',
+  });
+  assert.ok(intent);
+  let providerCalls = 0;
+  t.mock.method(workos.userManagement as any, 'getAuthorizationUrl', () => {
+    providerCalls += 1;
+    throw new Error('WorkOS unavailable');
+  });
+  noSideEffectResponse(await previewStart({
+    url: new URL(`https://www.nvm.fyi/api/auth/preview-start?intent=${encodeURIComponent(intent)}`),
+    request: new Request(`https://www.nvm.fyi/api/auth/preview-start?intent=${encodeURIComponent(intent)}`),
+    redirect: (location: string) => Response.redirect(location),
+  } as any));
+  assert.equal(providerCalls, 1);
+  assert.equal(store.size, 0);
+});
+
 test.after(() => {
   setPreviewAuthStoreForTests(null);
   resetRateLimitOverridesForTests();

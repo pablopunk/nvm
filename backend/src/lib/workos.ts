@@ -10,6 +10,21 @@ export const COOKIE_PASSWORD = env('WORKOS_COOKIE_PASSWORD') as string;
 export const SESSION_COOKIE = 'nvm_session';
 export const PREVIEW_SESSION_COOKIE = 'nvm_preview_session';
 
+export function authorizationUrlForState(state: string, redirectUri: string): string | null {
+  const clientId = env('WORKOS_CLIENT_ID')?.trim();
+  if (!clientId) return null;
+  try {
+    return workos.userManagement.getAuthorizationUrl({
+      provider: 'authkit',
+      clientId,
+      redirectUri,
+      state,
+    });
+  } catch {
+    return null;
+  }
+}
+
 function previewSessionKey() {
   const value = env('PREVIEW_SESSION_KEY');
   return value ? new TextEncoder().encode(value) : null;

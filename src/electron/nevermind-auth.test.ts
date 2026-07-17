@@ -146,6 +146,23 @@ test('uses production by default for packaged builds and localhost for developme
     ),
     production,
   );
+  for (const [input, expected] of [
+    ['http://localhost', 'http://localhost'],
+    ['http://localhost:80', 'http://localhost'],
+    ['http://localhost:4321', 'http://localhost:4321'],
+    ['http://127.0.0.1', 'http://127.0.0.1'],
+    ['http://127.0.0.1:80', 'http://127.0.0.1'],
+    ['http://127.0.0.1:4321', 'http://127.0.0.1:4321'],
+    ['http://[::1]', 'http://[::1]'],
+    ['http://[::1]:80', 'http://[::1]'],
+    ['http://[::1]:4321', 'http://[::1]:4321'],
+    ['HTTP://LOCALHOST:4321', 'http://localhost:4321'],
+  ]) {
+    assert.equal(
+      resolveDefaultNevermindBaseUrl({ NEVERMIND_BASE_URL: input }, true),
+      expected,
+    );
+  }
 });
 
 test('invalid stored bases fall back to the canonical origin and never become store keys', async () => {

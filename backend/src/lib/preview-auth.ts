@@ -14,6 +14,7 @@ const TOKEN_PREFIX = 'v2.';
 export const PREVIEW_GATEWAY_CAPABILITY = 'preview-auth-gateway-v2';
 export type PreviewTarget = { origin: string; returnTo: string };
 export type PreviewIdentity = { id: string; email: string };
+export type PendingGatewayState = { state: string; commit: () => Promise<boolean> };
 export type GatewayState =
   | { v: 2; flow: 'production'; safeRelativeReturnPath: string; jti: string; exp: number }
   | { v: 2; flow: 'preview_gateway'; exactOrigin: string; deploymentId: string; jti: string; exp: number };
@@ -109,12 +110,19 @@ async function verified<T extends Record<string, unknown>>(token: string | null,
   } catch { return null; }
 }
 
-export async function createProductionState(returnTo: string | null): Promise<string | null> {
+export async function prepareProductionState(returnTo: string | null): Promise<PendingGatewayState | null> {
   const state: GatewayState = { v: 2, flow: 'production', safeRelativeReturnPath: safeRelativeRedirectPath(returnTo), jti: randomUUID(), exp: Math.floor(Date.now() / 1000) + STATE_TTL };
   let token: string;
   try { token = await signed(state, 'GATEWAY_STATE_KEY', 'nvm-gateway-state-v2', STATE_TTL); } catch { return null; }
-  if (!(await setNx(stateKey(state.flow, state.jti), JSON.stringify(state), STATE_TTL, 'state'))) return null;
-  return token;
+  return {
+    state: token,
+    commit: () => setNx(stateKey(state.flow, state.jti), JSON.stringify(state), STATE_TTL, 'state'),
+  };
+}
+
+export async function createProductionState(returnTo: string | null): Promise<string | null> {
+  const pending = await prepareProductionState(returnTo);
+  return pending && await pending.commit() ? pending.state : null;
 }
 
 export async function createPreviewStartIntent(target: PreviewTarget): Promise<string | null> {
@@ -124,18 +132,27 @@ export async function createPreviewStartIntent(target: PreviewTarget): Promise<s
   } catch { return null; }
 }
 
-export async function createPreviewGatewayState(intent: string): Promise<{ state: string; target: PreviewTarget } | null> {
+export async function preparePreviewGatewayState(intent: string): Promise<(PendingGatewayState & { target: PreviewTarget }) | null> {
   const payload = await verified<{ v: 2; flow: 'preview_start'; exactOrigin: string; deploymentId?: string; jti: string }>(intent, 'PREVIEW_START_KEY', 'nvm-preview-start-v2');
   if (!payload || payload.v !== 2 || payload.flow !== 'preview_start' || !payload.jti || !previewHost(payload.exactOrigin)) return null;
   const state: GatewayState = { v: 2, flow: 'preview_gateway', exactOrigin: payload.exactOrigin, deploymentId: payload.deploymentId ?? '', jti: randomUUID(), exp: Math.floor(Date.now() / 1000) + STATE_TTL };
   let token: string;
   try { token = await signed(state, 'GATEWAY_STATE_KEY', 'nvm-gateway-state-v2', STATE_TTL); } catch { return null; }
-  if (!(await setNx(startKey(payload.jti), '1', STATE_TTL, 'state'))) return null;
-  if (!(await setNx(stateKey(state.flow, state.jti), JSON.stringify(state), STATE_TTL, 'state'))) {
-    await deleteKey(startKey(payload.jti), 'state');
-    return null;
-  }
-  return { state: token, target: { origin: state.exactOrigin, returnTo: '/' } };
+  return {
+    state: token,
+    target: { origin: state.exactOrigin, returnTo: '/' },
+    commit: async () => {
+      if (!(await setNx(startKey(payload.jti), '1', STATE_TTL, 'state'))) return false;
+      if (await setNx(stateKey(state.flow, state.jti), JSON.stringify(state), STATE_TTL, 'state')) return true;
+      await deleteKey(startKey(payload.jti), 'state');
+      return false;
+    },
+  };
+}
+
+export async function createPreviewGatewayState(intent: string): Promise<{ state: string; target: PreviewTarget } | null> {
+  const pending = await preparePreviewGatewayState(intent);
+  return pending && await pending.commit() ? { state: pending.state, target: pending.target } : null;
 }
 
 export async function consumeGatewayState(token: string | null): Promise<GatewayState | null> {

@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
-import { workos, WORKOS_CLIENT_ID } from '../../../lib/workos';
+import { authorizationUrlForState } from '../../../lib/workos';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 import { env } from '../../../lib/env';
-import { createProductionState, createPreviewStartIntent, previewOriginMatchesRequest, previewTargetFromEnvironment } from '../../../lib/preview-auth';
+import { createPreviewStartIntent, prepareProductionState, previewOriginMatchesRequest, previewTargetFromEnvironment } from '../../../lib/preview-auth';
 import { previewAuthConfigured, resolveAuthRedirectConfiguration } from '../../../lib/auth-config';
 
 export const GET: APIRoute = async ({ url, request, redirect }) => {
@@ -22,13 +22,12 @@ export const GET: APIRoute = async ({ url, request, redirect }) => {
   } catch {
     return new Response('Authentication is temporarily unavailable', { status: 503 });
   }
-  const state = await createProductionState(url.searchParams.get('return_to'));
-  if (!state) return new Response('Authentication is temporarily unavailable', { status: 503 });
-  const authorizationUrl = workos.userManagement.getAuthorizationUrl({
-    provider: 'authkit',
-    clientId: WORKOS_CLIENT_ID,
-    redirectUri,
-    state,
-  });
-  return redirect(authorizationUrl);
+  const pending = await prepareProductionState(url.searchParams.get('return_to'));
+  if (!pending) return new Response('Authentication is temporarily unavailable', { status: 503 });
+  const authorizationUrl = authorizationUrlForState(pending.state, redirectUri);
+  if (!authorizationUrl) return new Response('Authentication is temporarily unavailable', { status: 503 });
+  let response: Response;
+  try { response = redirect(authorizationUrl); } catch { return new Response('Authentication is temporarily unavailable', { status: 503 }); }
+  if (!(await pending.commit())) return new Response('Authentication is temporarily unavailable', { status: 503 });
+  return response;
 };

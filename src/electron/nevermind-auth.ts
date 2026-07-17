@@ -39,6 +39,20 @@ type SignInResult =
   | { ok: false; error: string };
 
 const PRODUCTION_BASE_URL = 'https://api.nvm.fyi';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function publicOriginPolicy(baseUrl: string): 'local' | 'smoke' {
+  try {
+    const parsed = new URL(baseUrl);
+    return parsed.protocol === 'http:' &&
+      LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase())
+      ? 'local'
+      : 'smoke';
+  } catch {
+    return 'smoke';
+  }
+}
+
 export function resolveDefaultNevermindBaseUrl(
   environment: Partial<
     Pick<NodeJS.ProcessEnv, 'NEVERMIND_BASE_URL' | 'ELECTRON_RENDERER_URL'>
@@ -53,10 +67,7 @@ export function resolveDefaultNevermindBaseUrl(
   const migrated = migrateLegacyDesktopOrigin(candidate);
   if (migrated) return migrated;
   try {
-    return parsePublicOrigin(
-      candidate,
-      candidate.startsWith('http://localhost') ? 'local' : 'smoke',
-    );
+    return parsePublicOrigin(candidate, publicOriginPolicy(candidate));
   } catch {
     return PRODUCTION_BASE_URL;
   }
@@ -69,12 +80,7 @@ function shouldUseProductionBaseUrl() {
 }
 
 function isLoopbackBaseUrl(baseUrl: string) {
-  try {
-    const host = new URL(baseUrl).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  } catch {
-    return false;
-  }
+  return publicOriginPolicy(baseUrl) === 'local';
 }
 
 function normalizedBaseUrl(baseUrl: string) {
