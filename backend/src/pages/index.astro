@@ -22,28 +22,23 @@ import Layout from '../layouts/Layout.astro';
 
     <section class="landing-hero">
       <div class="landing-hero__copy">
+        <div class="landing-platforms" aria-label="Supported platforms">
+          <span class="landing-platforms__pill"><img src="/platforms/apple.svg" alt="" /> macOS</span>
+          <span class="landing-platforms__pill"><img src="/platforms/windows.svg" alt="" /> Windows</span>
+          <span class="landing-platforms__pill"><img src="/platforms/linux.svg" alt="" /> Linux</span>
+        </div>
         <h1 class="landing-hero__title">
           <img src="/wordmark.png" alt="Nevermind" class="landing-wordmark" />
         </h1>
-        <p class="landing-hero__eyebrow">AI-native command palette for macOS, Windows & Linux</p>
         <p class="landing-hero__lede">
-          A command palette that builds itself. Tell it what you need — a screenshot tool, a camera overlay, a clipboard search — and it writes the extension on the spot. Free to use. No coding required.
+          A command palette that extends itself. Really.
         </p>
         <div class="landing-actions">
           <a class="button button--primary button--lg" href="https://github.com/pablopunk/nvm/releases">
-            <Download size={16} /> Download for free
+            <Download size={16} />Download for free
           </a>
           <a class="button button--ghost" href="/docs">Read the docs →</a>
         </div>
-        <form class="waitlist-form" id="waitlist-form">
-          <label for="waitlist-email">Join the AI waitlist</label>
-          <div class="waitlist-form__row">
-            <input id="waitlist-email" name="email" type="email" class="input waitlist-form__input" autocomplete="email" required placeholder="you@example.com" />
-            <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="waitlist-form__trap" />
-            <button class="button" type="submit">Join waitlist</button>
-          </div>
-          <small id="waitlist-status" class="muted">We’ll email you if access opens up.</small>
-        </form>
       </div>
 
       <figure class="landing-screenshot">
@@ -52,6 +47,17 @@ import Layout from '../layouts/Layout.astro';
           The screenshot and camera tools above were created by telling Nevermind what to build — not by writing code.
         </figcaption>
       </figure>
+    </section>
+    <section class="landing-waitlist" aria-labelledby="waitlist-title">
+      <form class="waitlist-form" id="waitlist-form">
+        <label id="waitlist-title" for="waitlist-email">Join to build with AI</label>
+        <div class="waitlist-form__row">
+          <input id="waitlist-email" name="email" type="email" class="input waitlist-form__input" autocomplete="email" required placeholder="you@example.com" />
+          <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="waitlist-form__trap" />
+          <button class="button" type="submit">Join waitlist</button>
+        </div>
+        <small id="waitlist-status" class="muted">We’ll email you if access opens up.</small>
+      </form>
     </section>
   </div>
   <script is:inline>
