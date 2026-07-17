@@ -53,6 +53,7 @@ const macOnlyCapabilities = new Set([
   'keyboard-settings',
   'window-panel-policy',
   'file-date-added',
+  'app-uninstall',
 ]);
 
 export function hasCapability(capability: string) {

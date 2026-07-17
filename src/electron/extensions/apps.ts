@@ -1,7 +1,96 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: the extension host currently exposes these callbacks without public types.
 import { extensionContext } from './_context';
 
-function appRootItem(item) {
+function uninstallResult(ctx: any, result: any) {
+  if (result.status === 'complete')
+    return ctx.ui.toast({
+      message: `${result.moved.length} item${result.moved.length === 1 ? '' : 's'} moved to Trash`,
+    });
+  const untouched = result.untouched
+    .map((item: any) => `- ${item.path}: ${item.message}`)
+    .join('\n');
+  return ctx.ui.preview({
+    title:
+      result.status === 'partial'
+        ? 'Uninstall partially completed'
+        : 'Nothing was moved to Trash',
+    content: `# ${result.status === 'partial' ? 'Some selected items were left untouched' : 'Selected items were left untouched'}\n\n${untouched || result.notes.map((note: any) => `- ${note.message}`).join('\n')}`,
+    appearance: { foreground: 'red' },
+  });
+}
+
+function uninstallAction(item: any, ctx: any) {
+  if (
+    !extensionContext.hasCapability?.('app-uninstall') ||
+    !extensionContext.appUninstallService ||
+    String(item.path || '').startsWith('/System/')
+  )
+    return null;
+  return ctx.actions.run(
+    `Uninstall ${item.name}…`,
+    async () => {
+      const service = extensionContext.appUninstallService;
+      const discovery = await service.discover(String(item.path));
+      if (discovery.status !== 'ready')
+        return ctx.ui.error('Uninstall unavailable', discovery.message);
+      return ctx.ui.form({
+        id: `uninstall:${item.id}`,
+        title: `Uninstall ${item.name}`,
+        subtitle: 'Choose items to move to Trash. Associated data is optional.',
+        fields: [
+          ...discovery.notes.map((note: any) => ({
+            id: `note:${note.code}`,
+            type: 'description',
+            description: note.message,
+          })),
+          ...discovery.candidates.map((candidate: any) => ({
+            id: candidate.id,
+            type: 'checkbox',
+            label: candidate.path,
+            description:
+              candidate.kind === 'app'
+                ? 'Application bundle'
+                : 'Conventional associated data',
+            value: candidate.kind === 'app',
+          })),
+        ],
+        submitAction: ctx.actions.run(
+          'Review selected items',
+          (_inner: any, action: any) => {
+            const selection = service.selected(
+              discovery.snapshot,
+              action.formValues,
+            );
+            if (!selection.length)
+              return ctx.ui.toast({
+                message: 'Select at least one item to move to Trash',
+                tone: 'error',
+              });
+            const selectedPaths = selection.map(
+              (candidate: any) => candidate.path,
+            );
+            return ctx.ui.confirm({
+              title: `Move ${selectedPaths.length} item${selectedPaths.length === 1 ? '' : 's'} to Trash`,
+              message: selectedPaths.join('\n'),
+              confirmLabel: 'Move to Trash',
+              cancelLabel: 'Cancel',
+              destructive: true,
+              onConfirm: ctx.actions.run('Move to Trash', async () =>
+                uninstallResult(
+                  ctx,
+                  await service.trash(discovery.snapshot, action.formValues),
+                ),
+              ),
+            });
+          },
+        ),
+      });
+    },
+    { style: 'destructive', icon: 'trash-2' },
+  );
+}
+
+function appRootItem(item, ctx: any) {
   const id = `app:${item.id}`;
   return {
     id,
@@ -22,6 +111,7 @@ function appRootItem(item) {
       path: item.path,
       dismissAfterRun: 'auto',
     },
+    actions: [uninstallAction(item, ctx)].filter(Boolean),
   };
 }
 
@@ -90,7 +180,9 @@ export function createAppsExtension() {
       },
     ],
     rootItems(ctx) {
-      const items = ctx.desktop.apps.list().map(appRootItem);
+      const items = ctx.desktop.apps
+        .list()
+        .map((item) => appRootItem(item, ctx));
       return [
         {
           id: 'force-quit-apps-command',
@@ -114,7 +206,7 @@ export function createAppsExtension() {
     searchItems(ctx, query) {
       const items = ctx.desktop.apps
         .list()
-        .map(appRootItem)
+        .map((item) => appRootItem(item, ctx))
         .filter((item: any) => extensionContext.rankAction(item, query));
       const forceQuitItem = {
         id: 'force-quit-apps-command',

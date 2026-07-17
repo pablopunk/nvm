@@ -100,6 +100,7 @@ import {
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
+import { createProductionAppUninstallService } from './app-uninstall-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
   createDataLoaderHandle,
@@ -691,6 +692,18 @@ const runningAppStatus = createRunningAppStatusService({
       source: 'host',
       scope: 'apps',
     }),
+});
+const nevermindBundlePath =
+  process.execPath.match(/^(.*\.app)(?:\/|$)/)?.[1] || null;
+const appUninstallService = createProductionAppUninstallService({
+  trashItem: (itemPath) => shell.trashItem(itemPath),
+  nevermindAppPath: nevermindBundlePath,
+  nevermindBundleId: app.getName(),
+  runningAppPaths: (appPath) =>
+    detectRunningAppPaths([
+      ...appIndexService.get(),
+      { id: `uninstall:${appPath}`, path: appPath },
+    ]),
 });
 const pendingThumbnailPaths = new Map<string, string>();
 const extensionActionRegistry = new Map<string, any>();
@@ -6478,6 +6491,8 @@ async function loadExtensions() {
         jobRegistry,
         appIndexService,
         runningAppStatus,
+        hasCapability,
+        appUninstallService,
         FILE_RESULT_LIMIT,
         usageBoost,
         recentBoost,

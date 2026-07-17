@@ -43,3 +43,64 @@ test('force quit paints its view before running the OS process scan', async () =
     ['Notes'],
   );
 });
+
+test('app root/search work stays synchronous while Uninstall is a macOS-only lazy secondary action', async () => {
+  let discoveries = 0;
+  const app = {
+    id: 'example',
+    name: 'Example',
+    path: '/Applications/Example.app',
+  };
+  initExtensionContext({
+    appIndexService: { get: () => [app] },
+    hasCapability: (capability) => capability === 'app-uninstall',
+    appUninstallService: {
+      discover: async () => {
+        discoveries += 1;
+        return {
+          status: 'unavailable' as const,
+          message: 'Unavailable in this test',
+        };
+      },
+      selected: () => [],
+      trash: async () => ({
+        status: 'failed',
+        moved: [],
+        untouched: [],
+        notes: [],
+      }),
+    },
+    actionAliases: () => [],
+    rankAction: () => true,
+  });
+  const ctx = {
+    desktop: { apps: { list: () => [app] } },
+    actions: {
+      run: (title, handler, options = {}) => ({
+        title,
+        __handler: handler,
+        ...options,
+      }),
+    },
+    ui: { error: (title, message) => ({ type: 'preview', title, message }) },
+  };
+  const extension = createAppsExtension();
+  const root = extension.rootItems(ctx as any);
+  const appItem = root.find((item: any) => item.id === 'app:example') as any;
+  assert.equal(discoveries, 0);
+  assert.equal(appItem.primaryAction.title, 'Open Example');
+  assert.equal(appItem.actions[0].title, 'Uninstall Example…');
+  await appItem.actions[0].__handler();
+  assert.equal(discoveries, 1);
+
+  initExtensionContext({
+    hasCapability: () => false,
+    appUninstallService: null,
+  });
+  const unsupported = createAppsExtension().rootItems(ctx as any);
+  assert.equal(
+    (unsupported.find((item: any) => item.id === 'app:example') as any).actions
+      .length,
+    0,
+  );
+});
