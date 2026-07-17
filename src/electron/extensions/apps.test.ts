@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noExplicitAny: built-in extension contexts are intentionally untyped at this bridge boundary.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { initExtensionContext } from './_context';
@@ -55,12 +56,12 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
     appIndexService: { get: () => [app] },
     hasCapability: (capability) => capability === 'app-uninstall',
     appUninstallService: {
-      discover: async () => {
+      discover: () => {
         discoveries += 1;
-        return {
+        return Promise.resolve({
           status: 'unavailable' as const,
           message: 'Unavailable in this test',
-        };
+        });
       },
       selected: () => [],
       trash: async () => ({
@@ -105,7 +106,8 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
   );
 });
 
-test('Uninstall form defaults to the app, confirms host snapshot paths, and rejects zero selection', async () => {
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: this scenario exercises the complete destructive-action journey.
+test('Uninstall candidate list defaults to the app, patches selection, and confirms host snapshot paths', async () => {
   const app = {
     id: 'example',
     name: 'Example',
@@ -154,7 +156,8 @@ test('Uninstall form defaults to the app, confirms host snapshot paths, and reje
       }),
     },
     ui: {
-      form: (input) => input,
+      item: (input) => input,
+      list: (input) => input,
       confirm: (input) => input,
       toast: (input) => ({ toast: input }),
       preview: (input) => input,
@@ -164,28 +167,29 @@ test('Uninstall form defaults to the app, confirms host snapshot paths, and reje
   const root = createAppsExtension().rootItems(ctx as any);
   const action = (root.find((item: any) => item.id === 'app:example') as any)
     .actions[0];
-  const form = await action.__handler();
+  const list = await action.__handler();
+  assert.equal(list.id, 'uninstall:example');
+  const candidateItems = list.sections[1].items;
   assert.equal(
-    form.fields.find((field: any) => field.id === 'app-id').value,
-    true,
+    candidateItems.find((candidate: any) => candidate.id === 'app-id')
+      .accessories[0].text,
+    'Selected',
   );
   assert.equal(
-    form.fields.find((field: any) => field.id === 'cache-id').value,
-    false,
+    candidateItems.find((candidate: any) => candidate.id === 'cache-id')
+      .accessories[0].text,
+    'Optional',
   );
-  const empty = form.submitAction.__handler(null, { formValues: {} });
-  assert.equal(empty.title, 'Uninstall Example');
-  assert.equal(
-    empty.fields.find((field: any) => field.id === 'app-id').error,
-    'Select at least one item to move to Trash',
-  );
-  assert.equal(
-    empty.fields.find((field: any) => field.id === 'app-id').value,
-    false,
-  );
-  const confirmation = form.submitAction.__handler(null, {
-    formValues: { 'app-id': true, ignored: true },
-  });
+  const deselected = candidateItems
+    .find((candidate: any) => candidate.id === 'app-id')
+    .primaryAction.__handler();
+  assert.equal(deselected.patch.items[0].accessories[0].text, 'Optional');
+  const review = list.sections[0].items[0].primaryAction;
+  const empty = review.__handler();
+  assert.equal(empty.toast.tone, 'error');
+  const selected = deselected.patch.items[0].primaryAction.__handler();
+  assert.equal(selected.patch.items[0].accessories[0].text, 'Selected');
+  const confirmation = review.__handler();
   assert.equal(confirmation.message, app.path);
   assert.equal(confirmation.onConfirm.requiresConfirmation, undefined);
   const complete = await confirmation.onConfirm.__handler();

@@ -36,6 +36,7 @@
 * Keep `AGENTS.md` concise. Move detailed guides to `src/docs/`. Document intention, NEVER implementation.
 * Before debugging recurring architecture issues, search `src/docs/solutions/` for prior root causes and verification notes.
 * Treat `src/resources/nevermind-extension-api.d.ts` as the self-documenting source of truth for the app's extension platform: runtime contract, validation types, author guidance, and AI builder context. Update its types/TSDoc with every API change and do not recreate API reference markdown.
+* For selectable or multi-item extension and fixture UI, follow the list-first rule in `src/docs/list-first-extension-ui.md`; only use its documented exceptions.
 * Every extension API endpoint that renders UI must have a dev-only fixture under `src/fixtures/`; use `.agents/skills/extensions-ui-test/SKILL.md` for dogfooding and see `src/docs/extension-api-ui-fixtures.md`.
 * Use CSS variables from `src/styles.css` (e.g., `--accent-*`, `--radius-*`). Avoid hardcoded colors or radii.
 

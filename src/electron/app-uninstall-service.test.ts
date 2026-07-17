@@ -1,6 +1,7 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: the shared host-service fixture deliberately exposes all security seams.
 import assert from 'node:assert/strict';
-import test from 'node:test';
 import path from 'node:path';
+import test from 'node:test';
 import {
   createAppUninstallService,
   createProductionPlistReader,
@@ -13,6 +14,38 @@ import {
 const home = '/Users/tester';
 const appPath = '/Applications/Example.app';
 const bundleId = 'com.example.App';
+const currentUid = 501;
+const maxBundleIdBytes = 255;
+const replacementInode = 9999;
+
+function missingError() {
+  return Object.assign(new Error('missing'), { code: 'ENOENT' });
+}
+
+function plistFileSystem(
+  paths: Record<string, string>,
+  directories: Record<
+    string,
+    Array<{
+      name: string;
+      isDirectory: () => boolean;
+      isSymbolicLink: () => boolean;
+    }>
+  > = {},
+) {
+  return {
+    realpath: (value: string) => {
+      const canonical = paths[value];
+      return canonical
+        ? Promise.resolve(canonical)
+        : Promise.reject(missingError());
+    },
+    readdir: (value: string) =>
+      directories[value]
+        ? Promise.resolve(directories[value])
+        : Promise.reject(missingError()),
+  };
+}
 
 function fixture(
   options: {
@@ -25,6 +58,7 @@ function fixture(
     nevermindBundleId?: string;
     canonicalPath?: (value: string) => string;
     readBundleIdError?: Error;
+    readBundleId?: (value: string) => Promise<unknown>;
   } = {},
 ) {
   const present = new Set<string>();
@@ -52,42 +86,50 @@ function fixture(
   const service = createAppUninstallService({
     platform: 'darwin',
     homeDirectory: home,
-    currentUid: 501,
-    lstat: async (value) => {
+    currentUid,
+    lstat: (value) => {
       calls.push(`lstat:${value}`);
       options.onLstat?.(value);
       if (!present.has(value)) {
-        const error = Object.assign(new Error('missing'), { code: 'ENOENT' });
-        throw error;
+        throw missingError();
       }
       const ino = ids.get(value) || nextIno++;
       ids.set(value, ino);
-      return {
+      return Promise.resolve({
         dev: 1,
         ino,
-        uid: value.includes('Caches') ? (options.owner ?? 501) : 501,
+        uid: value.includes('Caches')
+          ? (options.owner ?? currentUid)
+          : currentUid,
         isDirectory: () => !value.endsWith('.plist'),
         isSymbolicLink: () => value === symlink,
-      };
+      });
     },
     realpath: async (value) => options.canonicalPath?.(value) || value,
     access: async () => {},
-    readBundleId: async () => {
+    readBundleId: async (value) => {
       if (options.readBundleIdError) throw options.readBundleIdError;
-      return currentBundleId;
+      return options.readBundleId
+        ? options.readBundleId(value)
+        : currentBundleId;
     },
     trashItem: async (value) => {
       calls.push(`trash:${value}`);
-      if (value === options.failTrashAt) throw new Error('Trash denied');
+      if (value === options.failTrashAt) {
+        throw new Error('Trash denied');
+      }
       trashed.push(value);
       present.delete(value);
+      return Promise.resolve();
     },
     nevermindAppPath: '/Applications/Nevermind.app',
     nevermindBundleId: options.nevermindBundleId || 'com.nevermind.app',
-    runningAppPaths: async (value) => {
+    runningAppPaths: (value) => {
       runningCalls += 1;
       calls.push(`running:${runningCalls}`);
-      return running || options.isRunning?.() ? new Set([value]) : new Set();
+      return Promise.resolve(
+        running || options.isRunning?.() ? new Set([value]) : new Set(),
+      );
     },
     randomId: (() => {
       let number = 0;
@@ -121,28 +163,123 @@ test('rejects unsafe bundle IDs before any associated path is constructed', () =
     'com.example. ',
     'com.example\napp',
     'com.example..',
-    'a'.repeat(256),
-  ])
+    'a'.repeat(maxBundleIdBytes + 1),
+  ]) {
     assert.equal(validateBundleId(value), null);
+  }
   assert.equal(validateBundleId(bundleId), bundleId);
 });
 
-test('production plist reader uses a fixed absolute command with bounded execution', async () => {
+test('production plist reader uses a fixed direct-bundle command with bounded execution', async () => {
   let received: unknown[] = [];
-  const reader = createProductionPlistReader(async (...input) => {
-    received = input;
-    return { stdout: 'com.example.App\n' };
-  });
-  assert.equal(await reader(appPath), bundleId);
+  const spacedAppPath = '/Applications/Visual Studio Code.app';
+  const directPlistPath = path.join(spacedAppPath, 'Contents', 'Info.plist');
+  const reader = createProductionPlistReader(
+    (...input) => {
+      received = input;
+      return Promise.resolve({ stdout: 'com.example.App\n' });
+    },
+    plistFileSystem({
+      [spacedAppPath]: spacedAppPath,
+      [directPlistPath]: directPlistPath,
+    }),
+  );
+  assert.equal(await reader(spacedAppPath), bundleId);
   assert.equal(received[0], PLUTIL_PATH);
   assert.deepEqual(received[2], PLUTIL_OPTIONS);
-  assert.deepEqual((received[1] as string[]).slice(0, 5), [
+  assert.deepEqual((received[1] as string[]).slice(0, -1), [
     '-extract',
     'CFBundleIdentifier',
     'raw',
     '-o',
     '-',
   ]);
+  assert.deepEqual(received[1], [
+    '-extract',
+    'CFBundleIdentifier',
+    'raw',
+    '-o',
+    '-',
+    directPlistPath,
+  ]);
+});
+
+test('production plist reader resolves a contained Wrapper app when the top-level plist is missing', async () => {
+  let received: unknown[] = [];
+  const wrappedAppPath = appPath;
+  const wrapperPath = path.join(wrappedAppPath, 'Wrapper');
+  const innerAppPath = path.join(wrapperPath, 'ios_prod.app');
+  const innerPlistPath = path.join(innerAppPath, 'Info.plist');
+  const reader = createProductionPlistReader(
+    (...input) => {
+      received = input;
+      return Promise.resolve({ stdout: `${bundleId}\n` });
+    },
+    plistFileSystem(
+      {
+        [wrappedAppPath]: wrappedAppPath,
+        [innerPlistPath]: innerPlistPath,
+      },
+      {
+        [wrapperPath]: [
+          {
+            name: 'ios_prod.app',
+            isDirectory: () => true,
+            isSymbolicLink: () => false,
+          },
+        ],
+      },
+    ),
+  );
+  const wrapped = fixture({ readBundleId: reader });
+  const result = await wrapped.service.discover(appPath);
+  assert.equal(result.status, 'ready');
+  assert.equal(await reader(wrappedAppPath), bundleId);
+  assert.equal((received[1] as string[]).at(-1), innerPlistPath);
+});
+
+test('production plist reader rejects Wrapper metadata that canonically escapes the selected app', async () => {
+  const wrapperPath = path.join(appPath, 'Wrapper');
+  const innerPlistPath = path.join(wrapperPath, 'ios_prod.app', 'Info.plist');
+  const reader = createProductionPlistReader(
+    () => Promise.resolve({ stdout: bundleId }),
+    plistFileSystem(
+      {
+        [appPath]: appPath,
+        [innerPlistPath]: '/private/tmp/escaped-Info.plist',
+      },
+      {
+        [wrapperPath]: [
+          {
+            name: 'ios_prod.app',
+            isDirectory: () => true,
+            isSymbolicLink: () => false,
+          },
+        ],
+      },
+    ),
+  );
+  const unavailable = fixture({ readBundleId: reader });
+  const result = await unavailable.service.discover(appPath);
+  assert.equal(result.status, 'unavailable');
+  if (result.status === 'unavailable') {
+    assert.equal(result.reasonCode, 'plist');
+  }
+});
+
+test('unsupported missing-top-level-plist layouts produce concise actionable text', async () => {
+  const reader = createProductionPlistReader(
+    () => Promise.resolve({ stdout: bundleId }),
+    plistFileSystem({ [appPath]: appPath }),
+  );
+  const unavailable = fixture({ readBundleId: reader });
+  const result = await unavailable.service.discover(appPath);
+  assert.equal(result.status, 'unavailable');
+  if (result.status === 'unavailable') {
+    assert.equal(result.reasonCode, 'plist');
+    assert.equal(result.message, 'This app’s metadata could not be read');
+    assert.equal(result.message.includes('plutil'), false);
+  }
 });
 
 test('redacts process failures when app metadata cannot be read', async () => {
@@ -165,23 +302,24 @@ test('non-macOS discovery performs no host work and the trusted production ID re
   const unsupported = createAppUninstallService({
     platform: 'linux',
     homeDirectory: home,
-    currentUid: 501,
-    lstat: async () => {
+    currentUid,
+    lstat: () => {
       calls += 1;
       throw new Error('must not run');
     },
     realpath: async () => '',
-    access: async () => {},
-    readBundleId: async () => {
+    access: () => Promise.resolve(),
+    readBundleId: () => {
       calls += 1;
-      return bundleId;
+      return Promise.resolve(bundleId);
     },
-    trashItem: async () => {
+    trashItem: () => {
       calls += 1;
+      return Promise.resolve();
     },
-    runningAppPaths: async () => {
+    runningAppPaths: () => {
       calls += 1;
-      return new Set();
+      return Promise.resolve(new Set());
     },
   });
   assert.equal((await unsupported.discover(appPath)).status, 'unavailable');
@@ -191,14 +329,18 @@ test('non-macOS discovery performs no host work and the trusted production ID re
   selfCopy.setBundleId(NEVERMIND_BUNDLE_ID);
   const result = await selfCopy.service.discover(appPath);
   assert.equal(result.status, 'unavailable');
-  if (result.status === 'unavailable') assert.equal(result.reasonCode, 'self');
+  if (result.status === 'unavailable') {
+    assert.equal(result.reasonCode, 'self');
+  }
 });
 
 test('discovers only exact bundle-ID paths, reports missing locations, and keeps the app selected by default', async () => {
   const { service } = fixture();
   const result = await service.discover(appPath);
   assert.equal(result.status, 'ready');
-  if (result.status !== 'ready') return;
+  if (result.status !== 'ready') {
+    return;
+  }
   assert.deepEqual(
     result.candidates.map((item) => item.path),
     [
@@ -221,31 +363,34 @@ test('rejects symlinks and ownership mismatches without treating them as deletab
   const symlinked = fixture({ symlink: cachePath });
   const symlinkResult = await symlinked.service.discover(appPath);
   assert.equal(symlinkResult.status, 'ready');
-  if (symlinkResult.status === 'ready')
+  if (symlinkResult.status === 'ready') {
     assert.equal(
       symlinkResult.candidates.some((item) => item.path === cachePath),
       false,
     );
+  }
 
   const wrongOwner = fixture({ owner: 502 });
   const ownerResult = await wrongOwner.service.discover(appPath);
   assert.equal(ownerResult.status, 'ready');
-  if (ownerResult.status === 'ready')
+  if (ownerResult.status === 'ready') {
     assert.equal(
       ownerResult.candidates.some((item) => item.path === cachePath),
       false,
     );
+  }
 
   const rootSymlink = fixture({
     symlink: path.join(home, 'Library', 'Caches'),
   });
   const rootResult = await rootSymlink.service.discover(appPath);
   assert.equal(rootResult.status, 'ready');
-  if (rootResult.status === 'ready')
+  if (rootResult.status === 'ready') {
     assert.equal(
       rootResult.candidates.some((item) => item.path === cachePath),
       false,
     );
+  }
 
   const escaped = fixture({
     canonicalPath: (value) =>
@@ -253,18 +398,21 @@ test('rejects symlinks and ownership mismatches without treating them as deletab
   });
   const escapedResult = await escaped.service.discover(appPath);
   assert.equal(escapedResult.status, 'ready');
-  if (escapedResult.status === 'ready')
+  if (escapedResult.status === 'ready') {
     assert.equal(
       escapedResult.candidates.some((item) => item.path === cachePath),
       false,
     );
+  }
 });
 
 test('binds Trash to snapshot IDs, ignores injected input, revalidates identities, and moves app last', async () => {
   const { service, trashed, ids } = fixture();
   const discovery = await service.discover(appPath);
   assert.equal(discovery.status, 'ready');
-  if (discovery.status !== 'ready') return;
+  if (discovery.status !== 'ready') {
+    return;
+  }
   const [app, cache, preferences] = discovery.candidates;
   const complete = await service.trash(discovery.snapshot, {
     [app.id]: true,
@@ -277,11 +425,14 @@ test('binds Trash to snapshot IDs, ignores injected input, revalidates identitie
   const second = fixture();
   const stale = await second.service.discover(appPath);
   assert.equal(stale.status, 'ready');
-  if (stale.status !== 'ready') return;
+  if (stale.status !== 'ready') {
+    return;
+  }
   const staleCache = stale.candidates.find(
     (item) => item.kind === 'associated',
-  )!;
-  second.ids.set(staleCache.path, 9999);
+  );
+  assert.ok(staleCache);
+  second.ids.set(staleCache.path, replacementInode);
   const partial = await second.service.trash(stale.snapshot, {
     [staleCache.id]: true,
   });
@@ -295,7 +446,9 @@ test('does not probe or trash on zero selection and stops safely when an app bec
   const item = fixture();
   const discovery = await item.service.discover(appPath);
   assert.equal(discovery.status, 'ready');
-  if (discovery.status !== 'ready') return;
+  if (discovery.status !== 'ready') {
+    return;
+  }
   const empty = await item.service.trash(discovery.snapshot, {});
   assert.equal(empty.status, 'failed');
   assert.equal(item.trashed.length, 0);
@@ -313,16 +466,21 @@ test('preflights every selected item before the first move and reports partial T
   });
   const discovery = await item.service.discover(appPath);
   assert.equal(discovery.status, 'ready');
-  if (discovery.status !== 'ready') return;
+  if (discovery.status !== 'ready') {
+    return;
+  }
   const app = discovery.candidates.find(
     (candidate) => candidate.kind === 'app',
-  )!;
+  );
   const cache = discovery.candidates.find(
     (candidate) => candidate.slot === 'caches',
-  )!;
+  );
   const preferences = discovery.candidates.find(
     (candidate) => candidate.slot === 'preferences',
-  )!;
+  );
+  assert.ok(app);
+  assert.ok(cache);
+  assert.ok(preferences);
   const result = await item.service.trash(discovery.snapshot, {
     [app.id]: true,
     [cache.id]: true,
@@ -342,7 +500,9 @@ test('rejects app bundle changes and a running transition after candidate revali
   const replaced = fixture();
   const stale = await replaced.service.discover(appPath);
   assert.equal(stale.status, 'ready');
-  if (stale.status !== 'ready') return;
+  if (stale.status !== 'ready') {
+    return;
+  }
   replaced.setBundleId('com.example.Replaced');
   const changed = await replaced.service.trash(stale.snapshot, {
     [stale.candidates[0].id]: true,
@@ -356,16 +516,20 @@ test('rejects app bundle changes and a running transition after candidate revali
   const running = fixture({
     isRunning: () => becameRunning,
     onLstat: (value) => {
-      if (armed && value === path.join(home, 'Library', 'Caches', bundleId))
+      if (armed && value === path.join(home, 'Library', 'Caches', bundleId)) {
         becameRunning = true;
+      }
     },
   });
   const ready = await running.service.discover(appPath);
   assert.equal(ready.status, 'ready');
-  if (ready.status !== 'ready') return;
+  if (ready.status !== 'ready') {
+    return;
+  }
   const cache = ready.candidates.find(
     (candidate) => candidate.slot === 'caches',
-  )!;
+  );
+  assert.ok(cache);
   armed = true;
   const stopped = await running.service.trash(ready.snapshot, {
     [cache.id]: true,
