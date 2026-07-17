@@ -13,6 +13,7 @@ const checks = [
   'check-backend-contract-fixtures.cjs',
   'check-extension-fixture-coverage.cjs',
   'check-os-platform-boundaries.cjs',
+  'check-runtime-nonblocking.cjs',
   'check-window-config.cjs',
   'check-appearance-contract.cjs',
   'check-logging.cjs',

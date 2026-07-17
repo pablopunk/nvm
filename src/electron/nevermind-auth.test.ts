@@ -21,6 +21,7 @@ mock.module('electron', {
 const {
   clearNevermindAuth,
   clearNevermindAuthCacheForTests,
+  getCachedNevermindAuth,
   getNevermindAuth,
   resolveDefaultNevermindBaseUrl,
   setActiveNevermindAuthBaseUrl,
@@ -119,6 +120,8 @@ test('isolates auth snapshots by active backend origin', async () => {
 
   setActiveNevermindAuthBaseUrl(preview);
   assert.equal((await getNevermindAuth())?.token, 'preview-token');
+  setActiveNevermindAuthBaseUrl(preview);
+  assert.equal(getCachedNevermindAuth()?.token, 'preview-token');
   setActiveNevermindAuthBaseUrl(production);
   assert.equal((await getNevermindAuth())?.token, 'production-token');
 

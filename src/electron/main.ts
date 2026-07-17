@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import fsSync from 'node:fs';
+import { createReadStream, watch } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -38,6 +38,7 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
+import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
 import {
@@ -330,7 +331,7 @@ type NevermindApp = typeof app & { isQuiting?: boolean };
 
 const nevermindApp = app as NevermindApp;
 
-function bundledResourcePath(...relativePath) {
+async function bundledResourcePath(...relativePath) {
   const candidates = [
     path.join(app.getAppPath(), 'src', 'resources', ...relativePath),
     path.join(
@@ -342,10 +343,13 @@ function bundledResourcePath(...relativePath) {
     ),
     path.join(process.resourcesPath, 'src', 'resources', ...relativePath),
   ];
-  return (
-    candidates.find((candidate) => fsSync.existsSync(candidate)) ||
-    candidates[0]
-  );
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {}
+  }
+  return candidates[0];
 }
 
 let fileIndex: any[] = [];
@@ -3911,9 +3915,7 @@ async function localFileResponse(requestPath: string, request: Request) {
 
   headers.set('content-length', String(Math.max(0, end - start + 1)));
   return new Response(
-    Readable.toWeb(
-      fsSync.createReadStream(requestPath, { start, end }),
-    ) as BodyInit,
+    Readable.toWeb(createReadStream(requestPath, { start, end })) as BodyInit,
     { status, headers },
   );
 }
@@ -6169,18 +6171,18 @@ function createExtensionViewsApi(extension, command) {
   };
 }
 
-function initNevermindAi() {
+async function initNevermindAi() {
+  const [extensionTypesPath, skillPath] = await Promise.all([
+    bundledResourcePath(EXTENSION_TYPES_FILENAME),
+    bundledResourcePath('skills', 'nevermind-extension-builder', 'SKILL.md'),
+  ]);
   nevermindAi = createNevermindAi({
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
-    extensionApiPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
-    extensionTypesPath: bundledResourcePath(EXTENSION_TYPES_FILENAME),
-    skillPath: bundledResourcePath(
-      'skills',
-      'nevermind-extension-builder',
-      'SKILL.md',
-    ),
+    extensionApiPath: extensionTypesPath,
+    extensionTypesPath,
+    skillPath,
     reloadExtensions: loadExtensions,
     getShortcuts: () => extensionShortcutRecords(),
     getPaletteShortcut: () => ({
@@ -6392,7 +6394,7 @@ function addAliasForGeneratedAction(chatId) {
 }
 
 async function sendAiChatMessage(message, chatId) {
-  if (!nevermindAi) initNevermindAi();
+  if (!nevermindAi) await initNevermindAi();
   activeAiChatId = chatId || activeAiChatId;
   if (activeAiChatId?.startsWith('draft:')) promoteDraftAiChat(activeAiChatId);
   const prompt = activeAiChatId
@@ -6418,7 +6420,7 @@ async function noteAiChatExited(chatId) {
 
 async function ensureExtensionTypeDefinitions() {
   if (!extensionsDir) return;
-  const sourcePath = bundledResourcePath(EXTENSION_TYPES_FILENAME);
+  const sourcePath = await bundledResourcePath(EXTENSION_TYPES_FILENAME);
   const targetPath = path.join(extensionsDir, EXTENSION_TYPES_FILENAME);
   await fs.copyFile(sourcePath, targetPath).catch((error) => {
     logWarn(
@@ -6804,9 +6806,8 @@ function fileWatchPathMatches(filePath: string, trigger: any) {
 function watchExtensionFileTrigger(trigger: any, event: string) {
   const normalized = normalizedFileTrigger(trigger);
   for (const root of normalized.roots) {
-    if (!fsSync.existsSync(root)) continue;
     try {
-      const watcher = fsSync.watch(
+      const watcher = watch(
         root,
         {
           recursive:
@@ -7426,16 +7427,16 @@ async function loadUserState() {
   }
 
   migrateAiChats();
-  clipboardHistory = normalizeClipboardHistory(
+  clipboardHistory = await normalizeClipboardHistory(
     userState.clipboardHistory,
     CLIPBOARD_LIMIT,
-    (png, hash) => {
+    async (png, hash) => {
       const imagePath = path.join(clipboardImagesDir, `${hash}.png`);
       try {
-        fsSync.mkdirSync(clipboardImagesDir, { recursive: true });
-        fsSync.writeFileSync(imagePath, png);
+        await fs.mkdir(clipboardImagesDir, { recursive: true });
+        await fs.writeFile(imagePath, png);
       } catch {
-        // migrate with sync I/O; runtime writes use async
+        // Keep the legacy item even when its image cannot be migrated.
       }
       return imagePath;
     },
@@ -8091,7 +8092,10 @@ app.whenReady().then(async () => {
     logWarn,
   });
   setActiveNevermindAuthBaseUrl(selectedNevermindEnvironment().baseUrl);
-  const storedNevermindAuth = await getNevermindAuth();
+  const [storedNevermindAuth] = await Promise.all([
+    getNevermindAuth(),
+    getByoKey(),
+  ]);
   activeNevermindBaseUrl = storedNevermindAuth?.baseUrl || null;
   registerHostJobs();
   jobRegistry.onChange(syncFrontmostAppPolling);
@@ -8101,7 +8105,7 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
-  initNevermindAi();
+  await initNevermindAi();
   initExtensionContext({ nevermindAi });
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();
