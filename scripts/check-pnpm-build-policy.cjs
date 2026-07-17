@@ -57,9 +57,9 @@ if (!fs.existsSync(electronRepairScript)) {
 const electronRepair = require(electronRepairScript);
 for (const functionName of [
   'cleanElectronGeneratedPayload',
+  'electronInstallerEnvironment',
   'ensureElectronAvailable',
-  'pnpmRebuildInvocation',
-  'rebuildElectron',
+  'installElectronBinary',
   'resolveInstalledElectronExecutable',
 ]) {
   if (typeof electronRepair[functionName] !== 'function') {

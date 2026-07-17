@@ -36,78 +36,59 @@ function cleanElectronGeneratedPayload(electronPackageDirectory) {
   fs.rmSync(path.join(electronPackageDirectory, 'path.txt'), { force: true });
 }
 
-function pnpmRebuildInvocation({
-  npmExecPath = process.env.npm_execpath,
-  nodeExecutable = process.execPath,
-  platform = process.platform,
-} = {}) {
-  const rebuildArguments = ['rebuild', 'electron'];
-  if (!npmExecPath) {
-    return platform === 'win32'
-      ? {
-          command: 'pnpm.cmd',
-          commandArguments: rebuildArguments,
-          shell: true,
-        }
-      : {
-          command: 'pnpm',
-          commandArguments: rebuildArguments,
-          shell: false,
-        };
+function electronInstallerEnvironment(environment = process.env) {
+  const installerEnvironment = {};
+  for (const [name, value] of Object.entries(environment)) {
+    const normalizedName = name.toUpperCase();
+    if (
+      normalizedName !== 'ELECTRON_SKIP_BINARY_DOWNLOAD' &&
+      normalizedName !== 'FORCE_NO_CACHE'
+    ) {
+      installerEnvironment[name] = value;
+    }
   }
-
-  const extension = path.extname(npmExecPath).toLowerCase();
-  if (['.js', '.cjs', '.mjs'].includes(extension)) {
-    return {
-      command: nodeExecutable,
-      commandArguments: [npmExecPath, ...rebuildArguments],
-      shell: false,
-    };
-  }
-  if (extension === '.cmd' || extension === '.bat') {
-    return {
-      command: npmExecPath,
-      commandArguments: rebuildArguments,
-      shell: platform === 'win32',
-    };
-  }
-  return {
-    command: npmExecPath,
-    commandArguments: rebuildArguments,
-    shell: false,
-  };
+  installerEnvironment.force_no_cache = 'true';
+  return installerEnvironment;
 }
 
-function rebuildElectron({ spawn = spawnSync, ...invocationOptions } = {}) {
-  const { command, commandArguments, shell } =
-    pnpmRebuildInvocation(invocationOptions);
-  const result = spawn(command, commandArguments, {
-    cwd: path.join(__dirname, '..'),
-    shell,
+function installElectronBinary({
+  electronPackageDirectory = resolveElectronPackageDirectory(),
+  environment = process.env,
+  nodeExecutable = process.execPath,
+  spawn = spawnSync,
+} = {}) {
+  const installScript = path.join(electronPackageDirectory, 'install.js');
+  const result = spawn(nodeExecutable, [installScript], {
+    cwd: electronPackageDirectory,
+    env: electronInstallerEnvironment(environment),
     stdio: 'inherit',
   });
 
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`Electron rebuild failed with exit code ${result.status}.`);
+    throw new Error(
+      `Electron installer failed with exit code ${result.status}.`,
+    );
   }
 }
 
 function ensureElectronAvailable({
   electronPackageDirectory = resolveElectronPackageDirectory(),
   resolveExecutable = resolveInstalledElectronExecutable,
-  rebuild = rebuildElectron,
+  install = installElectronBinary,
 } = {}) {
   const existingExecutable = resolveExecutable();
   if (existingExecutable) return existingExecutable;
 
   console.log('Electron binary is missing or invalid; repairing it...');
   cleanElectronGeneratedPayload(electronPackageDirectory);
-  rebuild();
+  install({ electronPackageDirectory });
 
   const repairedExecutable = resolveExecutable();
   if (!repairedExecutable) {
-    throw new Error('Electron rebuild completed without a usable executable.');
+    throw new Error(
+      'Electron installer completed without a usable executable.',
+    );
   }
   return repairedExecutable;
 }
@@ -124,8 +105,8 @@ if (require.main === module) {
 
 module.exports = {
   cleanElectronGeneratedPayload,
+  electronInstallerEnvironment,
   ensureElectronAvailable,
-  pnpmRebuildInvocation,
-  rebuildElectron,
+  installElectronBinary,
   resolveInstalledElectronExecutable,
 };

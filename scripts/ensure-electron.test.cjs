@@ -7,9 +7,9 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {
+  electronInstallerEnvironment,
   ensureElectronAvailable,
-  pnpmRebuildInvocation,
-  rebuildElectron,
+  installElectronBinary,
 } = require('./ensure-electron.cjs');
 
 function createElectronFixture(t) {
@@ -43,20 +43,20 @@ function resolveFakeElectron(electronPackageDirectory) {
   return fs.existsSync(executablePath) ? executablePath : undefined;
 }
 
-test('keeps a healthy Electron payload without rebuilding', (t) => {
+test('keeps a healthy Electron payload without reinstalling', (t) => {
   const electronPackageDirectory = createElectronFixture(t);
   const executablePath = installFakeElectron(electronPackageDirectory);
 
   const actual = ensureElectronAvailable({
     electronPackageDirectory,
     resolveExecutable: () => resolveFakeElectron(electronPackageDirectory),
-    rebuild: () => assert.fail('healthy Electron must not be rebuilt'),
+    install: () => assert.fail('healthy Electron must not be reinstalled'),
   });
 
   assert.equal(actual, executablePath);
 });
 
-test('cleans stale dist when only path.txt is missing before rebuilding', (t) => {
+test('cleans stale dist when only path.txt is missing before installing', (t) => {
   const electronPackageDirectory = createElectronFixture(t);
   const stalePayload = path.join(
     electronPackageDirectory,
@@ -65,40 +65,40 @@ test('cleans stale dist when only path.txt is missing before rebuilding', (t) =>
   );
   fs.mkdirSync(path.dirname(stalePayload), { recursive: true });
   fs.writeFileSync(stalePayload, 'stale payload');
-  let rebuilds = 0;
+  let installs = 0;
 
   const executablePath = ensureElectronAvailable({
     electronPackageDirectory,
     resolveExecutable: () => resolveFakeElectron(electronPackageDirectory),
-    rebuild: () => {
-      rebuilds += 1;
+    install: () => {
+      installs += 1;
       assert.equal(fs.existsSync(path.dirname(stalePayload)), false);
       installFakeElectron(electronPackageDirectory);
     },
   });
 
-  assert.equal(rebuilds, 1);
+  assert.equal(installs, 1);
   assert.equal(fs.existsSync(executablePath), true);
 });
 
 test('repairs a completely skipped Electron payload', (t) => {
   const electronPackageDirectory = createElectronFixture(t);
-  let rebuilds = 0;
+  let installs = 0;
 
   const executablePath = ensureElectronAvailable({
     electronPackageDirectory,
     resolveExecutable: () => resolveFakeElectron(electronPackageDirectory),
-    rebuild: () => {
-      rebuilds += 1;
+    install: () => {
+      installs += 1;
       installFakeElectron(electronPackageDirectory);
     },
   });
 
-  assert.equal(rebuilds, 1);
+  assert.equal(installs, 1);
   assert.equal(fs.existsSync(executablePath), true);
 });
 
-test('fails when rebuilding does not produce an executable', (t) => {
+test('fails when installing does not produce an executable', (t) => {
   const electronPackageDirectory = createElectronFixture(t);
 
   assert.throws(
@@ -106,19 +106,24 @@ test('fails when rebuilding does not produce an executable', (t) => {
       ensureElectronAvailable({
         electronPackageDirectory,
         resolveExecutable: () => undefined,
-        rebuild: () => {},
+        install: () => {},
       }),
     /without a usable executable/,
   );
 });
 
-test('runs a standalone Windows pnpm executable directly', () => {
+test('runs Electron installer directly through Node with download enabled', (t) => {
+  const electronPackageDirectory = createElectronFixture(t);
   let invocation;
 
-  rebuildElectron({
-    npmExecPath: 'C:\\Program Files\\pnpm\\pnpm.exe',
+  installElectronBinary({
+    electronPackageDirectory,
+    environment: {
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1',
+      FORCE_NO_CACHE: 'false',
+      PATH: 'test-path',
+    },
     nodeExecutable: 'C:\\Program Files\\nodejs\\node.exe',
-    platform: 'win32',
     spawn: (command, commandArguments, options) => {
       invocation = { command, commandArguments, options };
       return { status: 0 };
@@ -126,49 +131,29 @@ test('runs a standalone Windows pnpm executable directly', () => {
   });
 
   assert.deepEqual(invocation, {
-    command: 'C:\\Program Files\\pnpm\\pnpm.exe',
-    commandArguments: ['rebuild', 'electron'],
+    command: 'C:\\Program Files\\nodejs\\node.exe',
+    commandArguments: [path.join(electronPackageDirectory, 'install.js')],
     options: {
-      cwd: path.join(__dirname, '..'),
-      shell: false,
+      cwd: electronPackageDirectory,
+      env: {
+        PATH: 'test-path',
+        force_no_cache: 'true',
+      },
       stdio: 'inherit',
     },
   });
 });
 
-test('runs JavaScript pnpm entrypoints through Node', () => {
+test('removes case-insensitive skip flags from the installer environment', () => {
   assert.deepEqual(
-    pnpmRebuildInvocation({
-      npmExecPath: 'C:\\pnpm\\pnpm.cjs',
-      nodeExecutable: 'C:\\nodejs\\node.exe',
-      platform: 'win32',
+    electronInstallerEnvironment({
+      electron_skip_binary_download: 'true',
+      Force_No_Cache: 'false',
+      PATH: 'test-path',
     }),
     {
-      command: 'C:\\nodejs\\node.exe',
-      commandArguments: ['C:\\pnpm\\pnpm.cjs', 'rebuild', 'electron'],
-      shell: false,
-    },
-  );
-});
-
-test('runs Windows pnpm command shims through a shell', () => {
-  assert.deepEqual(
-    pnpmRebuildInvocation({
-      npmExecPath: 'C:\\pnpm\\pnpm.cmd',
-      platform: 'win32',
-    }),
-    {
-      command: 'C:\\pnpm\\pnpm.cmd',
-      commandArguments: ['rebuild', 'electron'],
-      shell: true,
-    },
-  );
-  assert.deepEqual(
-    pnpmRebuildInvocation({ npmExecPath: '', platform: 'win32' }),
-    {
-      command: 'pnpm.cmd',
-      commandArguments: ['rebuild', 'electron'],
-      shell: true,
+      PATH: 'test-path',
+      force_no_cache: 'true',
     },
   );
 });
