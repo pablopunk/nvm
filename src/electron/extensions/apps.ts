@@ -2,10 +2,11 @@
 import { extensionContext } from './_context';
 
 function uninstallResult(ctx: any, result: any) {
-  if (result.status === 'complete')
+  if (result.status === 'complete') {
     return ctx.ui.toast({
       message: `${result.moved.length} item${result.moved.length === 1 ? '' : 's'} moved to Trash`,
     });
+  }
   const untouched = result.untouched
     .map((item: any) => `- ${item.path}: ${item.message}`)
     .join('\n');
@@ -19,72 +20,147 @@ function uninstallResult(ctx: any, result: any) {
   });
 }
 
+function selectedCandidateValues(candidates: any[], selectedIds: Set<string>) {
+  return Object.fromEntries(
+    candidates.map((candidate) => [
+      candidate.id,
+      selectedIds.has(candidate.id),
+    ]),
+  );
+}
+
+function uninstallCandidateItem(
+  ctx: any,
+  candidate: any,
+  selectedIds: Set<string>,
+) {
+  const selected = selectedIds.has(candidate.id);
+  const toggle = ctx.actions.run(
+    `${selected ? 'Deselect' : 'Select'} ${candidate.path}`,
+    () => {
+      if (selectedIds.has(candidate.id)) {
+        selectedIds.delete(candidate.id);
+      } else {
+        selectedIds.add(candidate.id);
+      }
+      return {
+        patch: {
+          items: [uninstallCandidateItem(ctx, candidate, selectedIds)],
+        },
+      };
+    },
+  );
+  return ctx.ui.item({
+    id: candidate.id,
+    title: candidate.path,
+    subtitle:
+      candidate.kind === 'app'
+        ? 'Application bundle'
+        : 'Conventional associated data',
+    icon: candidate.kind === 'app' ? 'app-window' : 'folder',
+    accessories: [
+      {
+        text: selected ? 'Selected' : 'Optional',
+        tone: selected ? 'success' : 'muted',
+      },
+    ],
+    primaryAction: toggle,
+    actions: [toggle],
+  });
+}
+
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: the chooser keeps its selection closure and review action together.
+function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
+  const selectedIds = new Set<string>(
+    discovery.candidates
+      .filter((candidate: any) => candidate.kind === 'app')
+      .map((candidate: any) => candidate.id),
+  );
+  const review = ctx.actions.run('Review selected items', () => {
+    const values = selectedCandidateValues(discovery.candidates, selectedIds);
+    const selection = extensionContext.appUninstallService.selected(
+      discovery.snapshot,
+      values,
+    );
+    if (selection.length === 0) {
+      return ctx.ui.toast({
+        message: 'Select at least one item to move to Trash',
+        tone: 'error',
+      });
+    }
+    const selectedPaths = selection.map((candidate: any) => candidate.path);
+    return ctx.ui.confirm({
+      title: `Move ${selectedPaths.length} item${selectedPaths.length === 1 ? '' : 's'} to Trash`,
+      message: selectedPaths.join('\n'),
+      confirmLabel: 'Move to Trash',
+      cancelLabel: 'Cancel',
+      destructive: true,
+      onConfirm: ctx.actions.run('Move to Trash', async () =>
+        uninstallResult(
+          ctx,
+          await extensionContext.appUninstallService.trash(
+            discovery.snapshot,
+            values,
+          ),
+        ),
+      ),
+    });
+  });
+  const notes = discovery.notes.map((note: any) => note.message).join(' ');
+  return ctx.ui.list({
+    id: `uninstall:${item.id}`,
+    title: `Uninstall ${item.name}`,
+    subtitle: [
+      'Press Enter to select or deselect an item, then review your selection.',
+      notes,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    searchBarPlaceholder: 'Filter items to move to Trash',
+    sections: [
+      {
+        title: 'Next step',
+        items: [
+          ctx.ui.item({
+            id: 'review-uninstall-selection',
+            title: 'Review selected items',
+            subtitle: 'Confirm the items to move to Trash',
+            icon: 'trash-2',
+            appearance: { foreground: 'red' },
+            primaryAction: review,
+            actions: [review],
+          }),
+        ],
+      },
+      {
+        title: 'Items to move to Trash',
+        items: discovery.candidates.map((candidate: any) =>
+          uninstallCandidateItem(ctx, candidate, selectedIds),
+        ),
+      },
+    ],
+  });
+}
+
 function uninstallAction(item: any, ctx: any) {
   if (
-    !extensionContext.hasCapability?.('app-uninstall') ||
-    !extensionContext.appUninstallService ||
+    !(
+      extensionContext.hasCapability?.('app-uninstall') &&
+      extensionContext.appUninstallService
+    ) ||
     String(item.path || '').startsWith('/System/')
-  )
+  ) {
     return null;
+  }
   return ctx.actions.run(
     `Uninstall ${item.name}…`,
     async () => {
       const service = extensionContext.appUninstallService;
       const discovery = await service.discover(String(item.path));
-      if (discovery.status !== 'ready')
+      if (discovery.status !== 'ready') {
         return ctx.ui.error('Uninstall unavailable', discovery.message);
-      return ctx.ui.form({
-        id: `uninstall:${item.id}`,
-        title: `Uninstall ${item.name}`,
-        subtitle: 'Choose items to move to Trash. Associated data is optional.',
-        fields: [
-          ...discovery.notes.map((note: any) => ({
-            id: `note:${note.code}`,
-            type: 'description',
-            description: note.message,
-          })),
-          ...discovery.candidates.map((candidate: any) => ({
-            id: candidate.id,
-            type: 'checkbox',
-            label: candidate.path,
-            description:
-              candidate.kind === 'app'
-                ? 'Application bundle'
-                : 'Conventional associated data',
-            value: candidate.kind === 'app',
-          })),
-        ],
-        submitAction: ctx.actions.run(
-          'Review selected items',
-          (_inner: any, action: any) => {
-            const selection = service.selected(
-              discovery.snapshot,
-              action.formValues,
-            );
-            if (!selection.length)
-              return ctx.ui.toast({
-                message: 'Select at least one item to move to Trash',
-                tone: 'error',
-              });
-            const selectedPaths = selection.map(
-              (candidate: any) => candidate.path,
-            );
-            return ctx.ui.confirm({
-              title: `Move ${selectedPaths.length} item${selectedPaths.length === 1 ? '' : 's'} to Trash`,
-              message: selectedPaths.join('\n'),
-              confirmLabel: 'Move to Trash',
-              cancelLabel: 'Cancel',
-              destructive: true,
-              onConfirm: ctx.actions.run('Move to Trash', async () =>
-                uninstallResult(
-                  ctx,
-                  await service.trash(discovery.snapshot, action.formValues),
-                ),
-              ),
-            });
-          },
-        ),
-      });
+      }
+      return uninstallCandidateChooser(ctx, item, discovery);
     },
     { style: 'destructive', icon: 'trash-2' },
   );
