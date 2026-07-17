@@ -2139,7 +2139,8 @@ function testModePaletteActionIsSafe(action) {
   if (!isNvmTestMode) return true;
   return (
     action.kind === 'test-action' ||
-    (action.extensionId === 'nevermind.system' &&
+    (action.kind === 'extension-action' &&
+      action.extensionId === 'nevermind.system' &&
       action.commandId === 'builtin:settings')
   );
 }
