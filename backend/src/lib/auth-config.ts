@@ -8,17 +8,25 @@ export class AuthConfigurationError extends Error {
   }
 }
 
+export function productionWebOrigin(): string {
+  const production = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+  for (const aliasName of ['PUBLIC_DASHBOARD_URL', 'PREVIEW_GATEWAY_ORIGIN']) {
+    const alias = env(aliasName);
+    if (!alias || /^https?:\/\/localhost(?::\d+)?\/?$/.test(alias)) continue;
+    if (parsePublicOrigin(alias, 'production_web') !== production) {
+      throw new AuthConfigurationError(`${aliasName} does not match production canonical origin`);
+    }
+  }
+  return production;
+}
+
 export function assertPreviewAuthConfiguration() {
   const required = ['DATABASE_URL', 'PREVIEW_GATEWAY_ORIGIN', 'PREVIEW_START_KEY', 'GATEWAY_STATE_KEY', 'GATEWAY_STATE_REDIS_URL', 'GATEWAY_STATE_REDIS_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'PREVIEW_SESSION_KEY'];
   const missing = required.filter((key) => !env(key));
   if (missing.length) throw new AuthConfigurationError(`Preview auth configuration is incomplete: ${missing.join(',')}`);
   try {
-    const production = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+    const production = productionWebOrigin();
     const gateway = parsePublicOrigin(env('PREVIEW_GATEWAY_ORIGIN') ?? production, 'production_web');
-    const dashboard = env('PUBLIC_DASHBOARD_URL');
-    if (dashboard && !/^https?:\/\/localhost(?::\d+)?\/?$/.test(dashboard) && parsePublicOrigin(dashboard, 'production_web') !== production) {
-      throw new AuthConfigurationError('Dashboard origin does not match production canonical origin');
-    }
     if (gateway !== production) throw new AuthConfigurationError('Preview gateway origin is not production canonical');
   } catch (error) {
     if (error instanceof AuthConfigurationError) throw error;
@@ -35,7 +43,7 @@ export function previewAuthConfigured() {
 
 export function isProductionGatewayOrigin(origin: string) {
   try {
-    return parsePublicOrigin(origin, 'production_web') === parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+    return parsePublicOrigin(origin, 'production_web') === productionWebOrigin();
   } catch {
     return false;
   }

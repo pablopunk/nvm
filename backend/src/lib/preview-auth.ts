@@ -37,8 +37,12 @@ export function previewTargetFromEnvironment(): PreviewTarget | null {
   return previewHost(origin) ? { origin, returnTo: '/' } : null;
 }
 
+export function previewOriginMatchesRequest(origin: string): boolean {
+  return previewTargetFromEnvironment()?.origin === origin;
+}
+
 export function previewTargetFromRequest(url: URL, returnTo: string | null): PreviewTarget | null {
-  if (env('VERCEL_ENV') !== 'preview' || url.origin !== `https://${env('VERCEL_URL')}` || !previewHost(url.origin)) return null;
+  if (env('VERCEL_ENV') !== 'preview' || !previewOriginMatchesRequest(url.origin)) return null;
   return { origin: url.origin, returnTo: safeRelativeRedirectPath(returnTo) };
 }
 

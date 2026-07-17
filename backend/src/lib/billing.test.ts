@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
-import { BillingEligibilityError, billingCatalog, createBillingCheckout, formatBillingPrice, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
+import { BillingConfigError, BillingEligibilityError, billingCatalog, createBillingCheckout, formatBillingPrice, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
 import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
@@ -219,6 +219,28 @@ test('billing catalog exposes validated display metadata from configured prices'
     }],
   });
   assert.equal(formatBillingPrice({ amount: 2000, currency: 'USD', interval: 'month' }), '$20.00');
+});
+
+test('production billing rejects stale dashboard aliases as configuration without calling Stripe', async () => {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  const previousProduction = process.env.PRODUCTION_ORIGIN;
+  const previousDashboard = process.env.PUBLIC_DASHBOARD_URL;
+  process.env.VERCEL_ENV = 'production';
+  delete process.env.PRODUCTION_ORIGIN;
+  process.env.PUBLIC_DASHBOARD_URL = 'https://nvm.fyi';
+  try {
+    await assert.rejects(
+      () => createBillingCheckout({ user, kind: 'subscription' }),
+      (error: unknown) => error instanceof BillingConfigError && /origin configuration is invalid/.test(error.message),
+    );
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+    if (previousProduction === undefined) delete process.env.PRODUCTION_ORIGIN;
+    else process.env.PRODUCTION_ORIGIN = previousProduction;
+    if (previousDashboard === undefined) delete process.env.PUBLIC_DASHBOARD_URL;
+    else process.env.PUBLIC_DASHBOARD_URL = previousDashboard;
+  }
 });
 
 test('billing catalog keeps billing items while omitting incomplete display metadata', () => {

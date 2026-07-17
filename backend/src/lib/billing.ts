@@ -5,6 +5,7 @@ import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { env } from './env';
 import { log } from './log';
 import { parsePublicOrigin } from '../../../src/shared/public-origin';
+import { productionWebOrigin } from './auth-config';
 
 export type BillingKind = 'subscription' | 'top_up';
 export type BillingInterval = 'day' | 'week' | 'month' | 'year';
@@ -176,14 +177,22 @@ function findItemByPriceId(priceId: string | null | undefined): BillingCatalogIt
 }
 
 function publicUrl(path: string): string {
-  const configured = env('VERCEL_ENV') === 'preview'
-    ? (env('VERCEL_URL') ? `https://${env('VERCEL_URL')}` : '')
-    : env('PRODUCTION_ORIGIN') ?? (env('PUBLIC_DASHBOARD_URL') ?? 'http://localhost:4321');
-  const policy = env('VERCEL_ENV') === 'preview' ? 'preview' : configured.startsWith('http://localhost') ? 'local' : 'production_web';
-  const base = policy === 'preview'
-    ? parsePublicOrigin(configured, 'preview', configured)
-    : parsePublicOrigin(configured, policy);
-  return new URL(path, `${base}/`).toString();
+  try {
+    const configured = env('VERCEL_ENV') === 'preview'
+      ? (env('VERCEL_URL') ? `https://${env('VERCEL_URL')}` : '')
+      : env('VERCEL_ENV') === 'production' || env('NODE_ENV') === 'production'
+        ? productionWebOrigin()
+        : env('PUBLIC_DASHBOARD_URL')?.match(/^https?:\/\/localhost(?::\d+)?\/?$/)
+          ? env('PUBLIC_DASHBOARD_URL')!
+          : productionWebOrigin();
+    const policy = env('VERCEL_ENV') === 'preview' ? 'preview' : configured.startsWith('http://localhost') ? 'local' : 'production_web';
+    const base = policy === 'preview'
+      ? parsePublicOrigin(configured, 'preview', configured)
+      : parsePublicOrigin(configured, policy);
+    return new URL(path, `${base}/`).toString();
+  } catch {
+    throw new BillingConfigError('Public web origin configuration is invalid');
+  }
 }
 
 export function rejectCrossOriginBillingPost(request: Request): Response | null {

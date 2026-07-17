@@ -177,6 +177,30 @@ test('device auth initiate returns the desktop-v1 initiation contract', async ()
   assert.equal((db.insertedValues[0] as any).deviceLabel, 'Pablo Mac');
 });
 
+test('Preview device auth rejects a mismatched request origin before creating a code', async () => {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  const previousUrl = process.env.VERCEL_URL;
+  process.env.VERCEL_ENV = 'preview';
+  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  const db = installDb(createFakeDb());
+  try {
+    const response = await initiateDeviceAuth(routeContext(new Request('https://attacker.invalid/api/auth/device/initiate', {
+      method: 'POST',
+      body: '{}',
+    })));
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.has('location'), false);
+    assert.equal(response.headers.has('set-cookie'), false);
+    assert.equal((db.insertedValues as unknown[]).length, 0);
+    assert.equal((await response.text()).includes('verifyUrl'), false);
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+    if (previousUrl === undefined) delete process.env.VERCEL_URL;
+    else process.env.VERCEL_URL = previousUrl;
+  }
+});
+
 test('device auth kill switch returns service-unavailable contract', async () => {
   process.env.NEVERMIND_KILL_SWITCHES = 'auth_device';
   const response = await initiateDeviceAuth(routeContext(new Request('https://api.nvm.fyi/api/auth/device/initiate', {

@@ -8,6 +8,7 @@ import { clientIp, rateLimitIp, tooManyRequests } from '../../../../lib/ratelimi
 import { safeJsonBody } from '../../../../lib/validation';
 import { env } from '../../../../lib/env';
 import { parsePublicOrigin } from '../../../../../../src/shared/public-origin';
+import { previewOriginMatchesRequest } from '../../../../lib/preview-auth';
 
 const TTL_MS = 5 * 60 * 1000;
 
@@ -25,9 +26,12 @@ export const POST: APIRoute = async ({ request, url }) => {
 
   let verifyOrigin: string;
   try {
-    verifyOrigin = env('VERCEL_ENV') === 'preview'
-      ? parsePublicOrigin(url.origin, 'smoke')
-      : parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+    if (env('VERCEL_ENV') === 'preview') {
+      if (!previewOriginMatchesRequest(url.origin)) throw new Error('Preview request origin does not match deployment');
+      verifyOrigin = url.origin;
+    } else {
+      verifyOrigin = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
+    }
   } catch {
     return new Response('Public web origin is unavailable', { status: 503 });
   }
