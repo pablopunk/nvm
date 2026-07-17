@@ -5,6 +5,8 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 
 const checks = [
+  'check-pnpm-build-policy.cjs',
+  'ensure-electron.test.cjs',
   'check-packaged-runtime-imports.cjs',
   'check-design-system.cjs',
   'check-internal-extensions.cjs',

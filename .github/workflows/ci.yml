@@ -15,6 +15,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      electron_smoke_changed: ${{ steps.app-changes.outputs.changed }}
 
     steps:
       - name: Checkout
@@ -24,6 +26,18 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v2
+
+      - name: Classify Electron smoke changes
+        id: app-changes
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="HEAD~1"
+          fi
+          changed="$(git diff --name-only "$BASE" HEAD | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
@@ -46,7 +60,10 @@ jobs:
         run: mise exec -- pnpm verify
 
   electron-smoke:
-    if: github.event_name == 'pull_request'
+    name: Linux Electron smoke
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.check.outputs.electron_smoke_changed == 'true'
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -69,6 +86,15 @@ jobs:
 
       - name: Electron smoke
         run: xvfb-run -a mise exec -- pnpm test:electron
+
+      - name: Upload Linux palette screenshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-palette-screenshot
+          path: test-results/electron/linux-palette.png
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Electron failure artifacts
         if: failure()
@@ -241,28 +267,55 @@ jobs:
       - name: Build Linux release
         run: mise exec -- pnpm run dist:linux:${{ matrix.arch }}
 
-      - name: Collect Linux artifacts
+      - name: Generate Linux AppImage blockmap
         run: |
-          mkdir -p linux-artifacts
-          shopt -s nullglob
-          files=(
-            release/Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage
-            release/Nevermind-*-linux-${{ matrix.deb-arch }}.deb
-            release/Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage.blockmap
-          )
-          if (( ${#files[@]} == 0 )); then
-            find release -maxdepth 1 -type f -print
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name 'Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage' -print)
+          if (( ${#appimages[@]} != 1 )); then
+            printf 'Expected one AppImage, found %s\n' "${#appimages[@]}" >&2
+            find release -maxdepth 1 -type f -print >&2
             exit 1
           fi
-          cp "${files[@]}" linux-artifacts/
+          mise exec -- node scripts/generate-linux-appimage-blockmap.cjs "${appimages[0]}"
+
+      - name: Collect Linux artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p linux-artifacts
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name 'Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage' -print)
+          mapfile -t debs < <(find release -maxdepth 1 -type f -name 'Nevermind-*-linux-${{ matrix.deb-arch }}.deb' -print)
+          mapfile -t blockmaps < <(find release -maxdepth 1 -type f -name 'Nevermind-*-linux-${{ matrix.appimage-arch }}.AppImage.blockmap' -print)
+          for artifact in appimages debs blockmaps; do
+            declare -n files="$artifact"
+            if (( ${#files[@]} != 1 )); then
+              printf 'Expected one %s, found %s\n' "$artifact" "${#files[@]}" >&2
+              find release -maxdepth 1 -type f -print >&2
+              exit 1
+            fi
+            [[ -s "${files[0]}" ]]
+          done
+          cp "${appimages[0]}" "${debs[0]}" "${blockmaps[0]}" linux-artifacts/
 
           if [[ "${{ matrix.arch }}" == "x64" ]]; then
-            cp release/latest-linux.yml linux-artifacts/
+            metadata=release/latest-linux.yml
+            destination=linux-artifacts/latest-linux.yml
           elif [[ -f release/latest-linux-arm64.yml ]]; then
-            cp release/latest-linux-arm64.yml linux-artifacts/
+            metadata=release/latest-linux-arm64.yml
+            destination=linux-artifacts/latest-linux-arm64.yml
           else
-            cp release/latest-linux.yml linux-artifacts/latest-linux-arm64.yml
+            metadata=release/latest-linux.yml
+            destination=linux-artifacts/latest-linux-arm64.yml
           fi
+          [[ -s "$metadata" ]]
+          cp "$metadata" "$destination"
+          [[ "$(find linux-artifacts -maxdepth 1 -type f -print | wc -l | tr -d ' ')" == 4 ]]
+          find linux-artifacts -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Validate Linux updater metadata
+        run: >-
+          mise exec -- node scripts/validate-linux-updater-metadata.cjs
+          linux-artifacts/latest-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
+          linux-artifacts
 
       - name: Upload Linux dry-run artifacts
         if: github.event_name == 'workflow_dispatch'

@@ -116,6 +116,23 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       timeout: 10_000,
     });
     const input = page.locator('input[placeholder]').first();
+    if (process.platform === 'linux') {
+      await input.fill('Open Settings');
+      await expect(
+        page.getByText('Open Settings', { exact: true }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: path.join(artifactDir, 'linux-palette.png'),
+      });
+      await input.fill('Open System Settings');
+      await expect(
+        page.getByText('Open System Settings', { exact: true }),
+      ).toHaveCount(0);
+      await input.fill('Start at Login');
+      await expect(
+        page.getByText('Start at Login', { exact: true }),
+      ).toHaveCount(0);
+    }
     await input.fill('Test: Confirm safe action');
     const action = page.getByText('Test: Confirm safe action', { exact: true });
     await expect(action).toBeVisible();

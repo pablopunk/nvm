@@ -1154,6 +1154,20 @@ function visibleExtensionActionEntries() {
   );
 }
 
+function searchableExtensions() {
+  const extensions = visibleExtensions();
+  return isNvmTestMode
+    ? extensions.filter((extension) => extension.id === 'nevermind.system')
+    : extensions;
+}
+
+function searchableExtensionActionEntries() {
+  const entries = visibleExtensionActionEntries();
+  return isNvmTestMode
+    ? entries.filter((entry) => entry.extension.id === 'nevermind.system')
+    : entries;
+}
+
 function extensionCommandActionId(extension, command) {
   return `extension:${extension.id}:${command.id}`;
 }
@@ -2032,20 +2046,6 @@ async function searchActions(query, options: any = {}) {
     async () => {
       const q = query.trim();
 
-      if (isNvmTestMode) {
-        const action = {
-          id: 'test:confirm-safe-action',
-          kind: 'test-action',
-          title: 'Test: Confirm safe action',
-          subtitle: 'In-memory deterministic Electron smoke action',
-          icon: 'check',
-          score: 100,
-        };
-        return q && !action.title.toLowerCase().includes(q.toLowerCase())
-          ? []
-          : [prepareRootActionForRenderer(action)];
-      }
-
       if (options.clipboardOnly) {
         return measureDebugPerformanceSync(
           'search.clipboard-only',
@@ -2064,15 +2064,21 @@ async function searchActions(query, options: any = {}) {
         );
       }
 
-      const results = [];
+      const testAction = isNvmTestMode
+        ? rankAction(testModeSafeAction(), q)
+        : null;
+      const results = testAction ? [testAction] : [];
       const contributedItems = await measureDebugPerformance(
         q ? 'search.extensions.query' : 'search.extensions.root',
         {
           queryLength: q.length,
-          extensionCount: visibleExtensions().length,
+          extensionCount: searchableExtensions().length,
           alwaysLog: true,
         },
-        () => (q ? extensionSearchActions(q) : extensionRootActions()),
+        () =>
+          q
+            ? extensionSearchActions(q, searchableExtensions())
+            : extensionRootActions(searchableExtensions()),
       );
       for (const item of contributedItems) {
         const ranked = item.__ranked
@@ -2081,7 +2087,7 @@ async function searchActions(query, options: any = {}) {
         if (ranked) results.push(ranked);
       }
 
-      const entries = visibleExtensionActionEntries();
+      const entries = searchableExtensionActionEntries();
       measureDebugPerformanceSync(
         'search.rank-registered-actions',
         { queryLength: q.length, actionCount: entries.length },
@@ -2101,6 +2107,7 @@ async function searchActions(query, options: any = {}) {
         { queryLength: q.length, resultCount: results.length },
         () =>
           results
+            .filter(testModePaletteActionIsSafe)
             .sort(compareRankedActions)
             .slice(0, 30)
             .map(prepareRootActionForRenderer),
@@ -2113,6 +2120,27 @@ async function searchActions(query, options: any = {}) {
       });
       return sorted;
     },
+  );
+}
+
+function testModeSafeAction() {
+  return {
+    id: 'test:confirm-safe-action',
+    kind: 'test-action',
+    title: 'Test: Confirm safe action',
+    subtitle: 'In-memory deterministic Electron smoke action',
+    icon: 'check',
+    score: 100,
+  };
+}
+
+function testModePaletteActionIsSafe(action) {
+  if (!isNvmTestMode) return true;
+  return (
+    action.kind === 'test-action' ||
+    (action.kind === 'extension-action' &&
+      action.extensionId === 'nevermind.system' &&
+      action.commandId === 'builtin:settings')
   );
 }
 
@@ -2328,17 +2356,14 @@ async function executeExtensionRootItem(action) {
   );
 }
 
-async function extensionRootActions() {
+async function extensionRootActions(extensions = visibleExtensions()) {
   const actionGroups = await Promise.all(
-    visibleExtensions().map((extension) =>
-      extensionRootActionsForExtension(extension),
-    ),
+    extensions.map((extension) => extensionRootActionsForExtension(extension)),
   );
   return actionGroups.flat();
 }
 
-async function extensionSearchActions(query) {
-  const extensions = visibleExtensions();
+async function extensionSearchActions(query, extensions = visibleExtensions()) {
   const actionGroups = await measureDebugPerformance(
     'extension.search.all',
     {
@@ -3237,7 +3262,13 @@ function registerTestModeIpcHandlers() {
   handle('actions:search', (_event, query, options) =>
     searchActions(query, options),
   );
-  handle('actions:execute', (_event, action) => executeActionForIpc(action));
+  handle('actions:execute', (_event, action) => {
+    if (action?.kind !== 'test-action')
+      return {
+        toast: { message: 'Production actions are disabled in test mode' },
+      };
+    return executeActionForIpc(action);
+  });
   handle('test:invoke', async () => {
     const actions = await searchActions('Test: Confirm safe action');
     void executeActionForIpc(actions[0]).catch((error) =>
@@ -8222,6 +8253,7 @@ app.whenReady().then(async () => {
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
+    await loadExtensions();
     registerTestModeIpcHandlers();
     paletteWindow.createWindow();
     paletteWindow.showPaletteWhenReady();

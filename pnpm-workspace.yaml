@@ -1,0 +1,14 @@
+allowBuilds:
+  '@google/genai': true
+  '@sentry/cli': true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  protobufjs: true
+  sharp: true
+onlyBuiltDependencies:
+  - '@google/genai'
+  - electron
+  - electron-winstaller
+  - esbuild
+  - protobufjs

@@ -65,8 +65,11 @@ win:
   target:
     - nsis
     - portable
-  nsis:
-    perMachine: false
-    protocol: nvm
   artifactName: '${productName}-${version}-win-${arch}.${ext}'
+  protocols:
+    - name: nvm
+      schemes:
+        - nvm
+nsis:
+  perMachine: false
 electronUpdaterCompatibility: '>=2.16'
