@@ -4,6 +4,9 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {
+  normalizeRepositoryPath,
+} = require('../../scripts/check-os-platform-boundaries.cjs');
 const { isWindowsPackageRelevantPath } = require('./windows-package-paths.cjs');
 
 function section(source, start, end) {
@@ -54,6 +57,13 @@ test('tracked text stays LF on Windows so aggregate verification is host-indepen
   assert.equal(
     fs.readFileSync('.gitattributes', 'utf8'),
     '* text=auto eol=lf\n',
+  );
+});
+
+test('platform boundary allowlists use host-independent repository paths', () => {
+  assert.equal(
+    normalizeRepositoryPath('src\\electron\\os.ts'),
+    'src/electron/os.ts',
   );
 });
 

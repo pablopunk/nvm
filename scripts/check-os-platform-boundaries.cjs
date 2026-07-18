@@ -48,8 +48,12 @@ function fail(message) {
   process.exitCode = 1;
 }
 
+function normalizeRepositoryPath(filePath) {
+  return filePath.replaceAll('\\', '/');
+}
+
 function relative(filePath) {
-  return path.relative(ROOT, filePath);
+  return normalizeRepositoryPath(path.relative(ROOT, filePath));
 }
 
 function isElectronFile(filePath) {
@@ -157,4 +161,6 @@ function main() {
   console.log(`  Files scanned: ${files.length}`);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { normalizeRepositoryPath };
