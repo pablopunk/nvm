@@ -379,6 +379,8 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
 
 test('dismisses transient alias UI and flushes scheduled state before quit', async () => {
   const stateSafetyUserDataDir = path.join(userDataDir, 'pab4-state-safety');
+  const settingsTitle =
+    process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings';
   let firstLaunch:
     | Awaited<ReturnType<typeof launchTestApplication>>
     | undefined;
@@ -388,11 +390,9 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
   try {
     firstLaunch = await launchTestApplication(stateSafetyUserDataDir);
     const input = firstLaunch.page.locator('input[placeholder]').first();
-    await input.fill('Open System Settings');
+    await input.fill(settingsTitle);
     await expect(
-      firstLaunch.page
-        .getByText('Open System Settings', { exact: true })
-        .first(),
+      firstLaunch.page.getByText(settingsTitle, { exact: true }).first(),
     ).toBeVisible();
 
     await firstLaunch.page.keyboard.press('Control+K');
@@ -408,11 +408,9 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     await expect(aliasInput).toHaveCount(0);
     await expect(input).toBeVisible();
 
-    const scheduledShortcut = await firstLaunch.page.evaluate(async () => {
-      const actions = await window.nvm.search('Open System Settings');
-      const action = actions.find(
-        (candidate) => candidate.title === 'Open System Settings',
-      );
+    const scheduledShortcut = await firstLaunch.page.evaluate(async (title) => {
+      const actions = await window.nvm.search(title);
+      const action = actions.find((candidate) => candidate.title === title);
       if (!action) throw new Error('System Settings action not found');
       const result = await window.nvm.setShortcut(
         action,
@@ -424,7 +422,7 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
       );
       if (!record) throw new Error('Scheduled shortcut not found');
       return { actionId: action.id, accelerator: record.accelerator };
-    });
+    }, settingsTitle);
 
     await firstLaunch.page
       .evaluate(() => window.nvm.quitApp())
