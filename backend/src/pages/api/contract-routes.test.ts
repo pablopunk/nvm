@@ -13,6 +13,7 @@ import { POST as postGoogleModel } from './v1/models/[...path]';
 
 type FakeDb = {
   insertedValues: unknown[];
+  updatedValues: unknown[];
   select: () => ReturnType<typeof createChain>;
   insert: () => ReturnType<typeof createChain>;
   update: () => ReturnType<typeof createChain>;
@@ -30,7 +31,7 @@ function fixture(name: string) {
   );
 }
 
-function createChain(result: unknown, onValues?: (values: unknown) => void) {
+function createChain(result: unknown, onValues?: (values: unknown) => void, onSet?: (values: unknown) => void, valuesError?: Error) {
   const promise = () => Promise.resolve(result);
   const chain = {
     from: () => chain,
@@ -39,8 +40,12 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
     limit: () => chain,
     for: () => promise(),
     orderBy: () => promise(),
-    set: () => chain,
+    set: (values: unknown) => {
+      onSet?.(values);
+      return chain;
+    },
     values: (values: unknown) => {
+      if (valuesError) throw valuesError;
       onValues?.(values);
       return chain;
     },
@@ -52,17 +57,24 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
   return chain;
 }
 
-function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates?: unknown[] } = {}): FakeDb {
+function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates?: unknown[]; failInsertAt?: number } = {}): FakeDb {
   const selects = [...(input.selects ?? [])];
   const inserts = [...(input.inserts ?? [])];
   const updates = [...(input.updates ?? [])];
   const insertedValues: unknown[] = [];
+  const updatedValues: unknown[] = [];
+  let insertCalls = 0;
   let db: FakeDb;
   db = {
     insertedValues,
+    updatedValues,
     select: () => createChain(selects.shift() ?? []),
-    insert: () => createChain(inserts.shift() ?? [], (values) => insertedValues.push(values)),
-    update: () => createChain(updates.shift() ?? []),
+    insert: () => {
+      insertCalls += 1;
+      const valuesError = insertCalls === input.failInsertAt ? new Error('forced settlement insert failure') : undefined;
+      return createChain(inserts.shift() ?? [], (values) => insertedValues.push(values), undefined, valuesError);
+    },
+    update: () => createChain(updates.shift() ?? [], undefined, (values) => updatedValues.push(values)),
     transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db),
   };
   return db;
@@ -118,6 +130,7 @@ function proxySelects(options: { free?: number; paid?: number; model?: string | 
     [{ balance: (options.paid ?? 0) > 0 ? options.paid ?? 0 : options.free ?? 10 }],
     [{ reserved: 0 }],
     [],
+    [{ id: 'user_1' }],
     [{ requestId: 'test-reservation', userId: 'user_1', kind: (options.paid ?? 0) > 0 ? 'paid' : 'free', reservedCredits: 1, status: 'pending' }],
   ];
 }
@@ -134,6 +147,21 @@ function authorizedChatRequest(body: unknown = { model: 'placeholder', messages:
       ...extraHeaders,
     },
     body: JSON.stringify(body),
+  });
+}
+
+function authorizedRawChatRequest(body: string, extraHeaders: Record<string, string> = {}) {
+  return new Request('https://api.nvm.fyi/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer nvm_pat_test',
+      'content-type': 'application/json',
+      'x-nevermind-client': 'desktop',
+      'x-nevermind-client-version': '0.6.2',
+      'x-nevermind-api-version': '1',
+      ...extraHeaders,
+    },
+    body,
   });
 }
 
@@ -165,6 +193,21 @@ function streamFromByteChunks(chunks: Uint8Array[]): ReadableStream<Uint8Array> 
   });
 }
 
+function installOpenAiFetch(upstreamResponse: () => Response) {
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 }, limit: { output: 8192 } } } } });
+    }
+    assert.equal(url, 'https://upstream.example/v1/chat/completions');
+    return upstreamResponse();
+  };
+}
+
+function countTerminalUpdates(db: FakeDb, status: 'settled' | 'released') {
+  return db.updatedValues.filter((values) => (values as { status?: unknown }).status === status).length;
+}
+
 afterEach(() => {
   resetDbForTests();
   resetRateLimitOverridesForTests();
@@ -172,6 +215,14 @@ afterEach(() => {
   delete process.env.OPENCODE_API_KEY;
   delete process.env.OPENCODE_BASE_URL;
   delete process.env.NEVERMIND_KILL_SWITCHES;
+});
+
+test('credit reservation reconciliation is scheduled every five minutes', () => {
+  const vercelConfig = JSON.parse(readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'));
+  assert.deepEqual(
+    vercelConfig.crons.find((cron: { path: string }) => cron.path === '/api/cron/credit-reservations'),
+    { path: '/api/cron/credit-reservations', schedule: '*/5 * * * *' },
+  );
 });
 
 test('device auth initiate returns the desktop-v1 initiation contract', async () => {
@@ -676,6 +727,171 @@ test('proxy route preserves streaming responses and records stream usage', async
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
 });
 
+test('proxy releases a committed reservation when request rewriting throws', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const selects = proxySelects({ free: 1000 });
+  selects.splice(8, 1); // Rewriting fails before provider-chain lookup.
+  const db = installDb(createFakeDb({ selects }));
+
+  await assert.rejects(
+    async () => postChatCompletion(routeContext(authorizedRawChatRequest('{"model":'))),
+    SyntaxError,
+  );
+
+  assert.equal(countTerminalUpdates(db, 'released'), 1);
+  assert.equal(countTerminalUpdates(db, 'settled'), 0);
+  assert.equal(db.insertedValues.length, 1, 'only the reservation is inserted');
+});
+
+test('proxy releases a committed reservation when buffered upstream reading fails', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  installOpenAiFetch(() => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) { controller.error(new Error('forced buffered body failure')); },
+  }), { headers: { 'content-type': 'application/json' } }));
+
+  await assert.rejects(
+    async () => (await postChatCompletion(routeContext(authorizedChatRequest()))).arrayBuffer(),
+    /forced buffered body failure/,
+  );
+
+  assert.equal(countTerminalUpdates(db, 'released'), 1);
+  assert.equal(countTerminalUpdates(db, 'settled'), 0);
+});
+
+test('proxy retries release when settlement throws after reservation', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const selects = proxySelects({ free: 1000 });
+  selects.push(
+    [{ id: 'user_1' }],
+    [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+  );
+  const db = installDb(createFakeDb({ selects, failInsertAt: 2 }));
+  installOpenAiFetch(() => Response.json({
+    choices: [{ message: { content: 'hello' } }],
+    usage: { prompt_tokens: 5, completion_tokens: 2 },
+  }));
+
+  await assert.rejects(
+    async () => postChatCompletion(routeContext(authorizedChatRequest())),
+    /forced settlement insert failure/,
+  );
+
+  assert.equal(countTerminalUpdates(db, 'released'), 1);
+  assert.equal(countTerminalUpdates(db, 'settled'), 0);
+});
+
+test('stream cancellation before output releases exactly once without charge or usage', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  let upstreamCancelCount = 0;
+  installOpenAiFetch(() => new Response(new ReadableStream<Uint8Array>({
+    pull() {},
+    cancel() { upstreamCancelCount += 1; },
+  }), { headers: { 'content-type': 'text/event-stream' } }));
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  await response.body!.cancel('client disconnected before output');
+
+  assert.equal(upstreamCancelCount, 1);
+  assert.equal(countTerminalUpdates(db, 'released'), 1);
+  assert.equal(countTerminalUpdates(db, 'settled'), 0);
+  assert.equal(db.insertedValues.length, 1, 'cancellation before output records no charge or usage');
+});
+
+test('stream cancellation after a delivered chunk settles conservative usage exactly once', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  const encodedChunk = new TextEncoder().encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n');
+  let emitted = false;
+  installOpenAiFetch(() => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (!emitted) {
+        emitted = true;
+        controller.enqueue(encodedChunk);
+      }
+    },
+  }), { headers: { 'content-type': 'text/event-stream' } }));
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const reader = response.body!.getReader();
+  assert.deepEqual((await reader.read()).value, encodedChunk);
+  await reader.cancel('client disconnected after content');
+
+  assert.equal(countTerminalUpdates(db, 'settled'), 1);
+  assert.equal(countTerminalUpdates(db, 'released'), 0);
+  assert.equal(db.insertedValues.length, 3, 'delivered output records one conservative charge and usage row');
+  assert.ok((db.insertedValues.at(-1) as any).inputTokens > 0);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 1);
+});
+
+test('stream cancellation after observed usage settles exactly one charge and usage row', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  const encodedUsage = new TextEncoder().encode('data: {"usage":{"prompt_tokens":7,"completion_tokens":3}}\n\n');
+  let emitted = false;
+  installOpenAiFetch(() => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (!emitted) {
+        emitted = true;
+        controller.enqueue(encodedUsage);
+      }
+    },
+  }), { headers: { 'content-type': 'text/event-stream' } }));
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const reader = response.body!.getReader();
+  assert.deepEqual((await reader.read()).value, encodedUsage);
+  await reader.cancel('client disconnected after output');
+
+  assert.equal(countTerminalUpdates(db, 'settled'), 1);
+  assert.equal(countTerminalUpdates(db, 'released'), 0);
+  assert.equal(db.insertedValues.length, 3, 'reservation, one ledger charge, and one usage row are inserted');
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 7);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
+});
+
+test('stream reader failure releases exactly once when no output was observed', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  installOpenAiFetch(() => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) { controller.error(new Error('forced upstream reader failure')); },
+  }), { headers: { 'content-type': 'text/event-stream' } }));
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  await assert.rejects(response.arrayBuffer(), /forced upstream reader failure/);
+
+  assert.equal(countTerminalUpdates(db, 'released'), 1);
+  assert.equal(countTerminalUpdates(db, 'settled'), 0);
+  assert.equal(db.insertedValues.length, 1);
+});
+
+test('malformed stream usage reaches one conservative settlement on natural completion', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  installOpenAiFetch(() => new Response('data: {not-json}\n\ndata: [DONE]\n\n', {
+    headers: { 'content-type': 'text/event-stream' },
+  }));
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  await response.text();
+
+  assert.equal(countTerminalUpdates(db, 'settled'), 1);
+  assert.equal(countTerminalUpdates(db, 'released'), 0);
+  assert.equal(db.insertedValues.length, 3, 'parser failure still produces exactly one conservative charge and usage row');
+  assert.ok((db.insertedValues.at(-1) as any).inputTokens > 0);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 1);
+});
+
 test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
@@ -803,6 +1019,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
       [{ balance: 1000 }],
       [{ reserved: 0 }],
       providerChain,
+      [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
     ],
   }));
@@ -858,6 +1075,7 @@ test('proxy failover: when all providers fail, last error passes through', async
       [{ balance: 1000 }],
       [{ reserved: 0 }],
       providerChain,
+      [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
@@ -897,6 +1115,7 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
       [{ balance: 1000 }],
       [{ reserved: 0 }],
       providerChain,
+      [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
@@ -937,6 +1156,7 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
       [],
       [{ balance: 1000 }],
       [{ reserved: 0 }],
+      [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
       [],
     ],
@@ -980,6 +1200,7 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
       [{ balance: 1000 }],
       [{ reserved: 0 }],
       providerChain,
+      [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
@@ -1049,6 +1270,7 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
       [{ balance: 1000 }],
       [{ reserved: 0 }],
       [],
+      [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));

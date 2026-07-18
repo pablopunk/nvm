@@ -119,6 +119,23 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
   });
 }
 
+async function releaseReservationAfterError(requestId: string, error: unknown) {
+  try {
+    await finalizeReservation({ requestId, outcome: 'release' });
+  } catch (releaseError) {
+    log.error('reservation_error_release_failed', { request_id: requestId, error, release_error: releaseError });
+  }
+}
+
+async function markDedupFailed(ctx: Pick<BillContext, 'user' | 'requestId' | 'dedupIdempotencyKey'>) {
+  if (!ctx.dedupIdempotencyKey) return;
+  await db.update(requestDedup).set({ status: 'failed', completedAt: new Date() }).where(and(
+    eq(requestDedup.userId, ctx.user.id),
+    eq(requestDedup.idempotencyKey, ctx.dedupIdempotencyKey),
+    eq(requestDedup.requestId, ctx.requestId),
+  ));
+}
+
 type ResolvedRouting = {
   user: { id: string };
   provider: string;
@@ -451,7 +468,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const idempotencyKey = cfg.idempotencyKey;
   const dedupEnabled = idempotencyKey && !backendKillSwitchEnabled('idempotency_dedup');
   if (dedupEnabled) {
-    requestId = createHash('sha256').update(`${routing.user.id}:${idempotencyKey}`).digest('hex');
     const dedupResult = await handleDedup(idempotencyKey, routing.user.id, cfg.request, requestId);
     if (dedupResult instanceof Response) return dedupResult;
   }
@@ -462,9 +478,11 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     return withRequestId(tooManyRequests(rateDecision), requestId);
   }
 
-  let forwardBody: BodyInit | undefined;
-  let estimatedInputTokens = 0;
-  if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
+  let reservationCommitted = false;
+  try {
+    let forwardBody: BodyInit | undefined;
+    let estimatedInputTokens = 0;
+    if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
     const text = await cfg.request.text();
     estimatedInputTokens = estimateInputTokensFromBody(text);
     if (estimatedInputTokens > MAX_INPUT_TOKENS) {
@@ -489,7 +507,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       kind: routing.kind,
       credits: estimatedCredits,
     });
-    if (!reservation.ok && routing.kind === 'paid') {
+    if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.kind === 'paid') {
       const freeRouting = await resolveModelRouting(parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'free');
       if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
       maxOutputTokens = await maxOutputFor(freeRouting);
@@ -501,13 +519,21 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         reservation = freeReservation;
       }
     }
+    if (!reservation.ok && reservation.reason === 'request_already_reserved') {
+      return withRequestId(Response.json(
+        { error: { type: 'idempotency_conflict', message: 'Request execution was already finalized or is still in progress' } },
+        { status: 409 },
+      ), requestId);
+    }
     if (!reservation.ok) {
       const available = reservation.balance - reservation.reserved;
       return withRequestId(Response.json(
         { error: { type: 'insufficient_credits', message: 'Request cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: available, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
       ), requestId);
-    } else if (estimatedCredits + reservation.reserved > reservation.balance) {
+    }
+    reservationCommitted = true;
+    if (estimatedCredits + reservation.reserved > reservation.balance) {
       log.warn('credit_grace_used', {
         request_id: requestId,
         user_id: routing.user.id,
@@ -519,9 +545,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
     if (dedupEnabled) {
       const bodyHash = createHash('sha256').update(`${text}|${routing.activeModelId}`).digest('hex');
-      db.update(requestDedup).set({ requestHash: bodyHash }).where(
-        and(eq(requestDedup.userId, routing.user.id), eq(requestDedup.idempotencyKey, idempotencyKey)),
-      ).catch((err) => {
+      db.update(requestDedup).set({ requestHash: bodyHash }).where(and(
+        eq(requestDedup.userId, routing.user.id),
+        eq(requestDedup.idempotencyKey, idempotencyKey),
+        eq(requestDedup.requestId, requestId),
+      ))
+      .catch((err) => {
         log.warn('dedup_hash_update_failed', { request_id: requestId, error: err });
       });
     }
@@ -529,9 +558,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   const result = await tryUpstreamProviders(cfg, routing, forwardBody, requestId);
   if (result instanceof Response) {
-    await finalizeReservation({ requestId, outcome: 'release' }).catch((err) => {
-      log.error('reservation_release_failed', { request_id: requestId, error: err });
-    });
+    await finalizeReservation({ requestId, outcome: 'release' });
     return result;
   }
 
@@ -557,9 +584,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   if (!upstreamResponse.ok) {
     const latencyMs = Date.now() - startedAt;
-    await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs).catch((err) => {
-      log.error('record_usage_failed', { request_id: requestId, error: err });
-    });
+    await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs);
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
@@ -569,9 +594,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   if (isStreamingContentType(upstreamResponse.headers.get('content-type'))) {
     if (backendKillSwitchEnabled('ai_streaming')) {
-      await finalizeReservation({ requestId, outcome: 'release' }).catch((err) => {
-        log.error('reservation_release_failed', { request_id: requestId, error: err });
-      });
+      await finalizeReservation({ requestId, outcome: 'release' });
       return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
     }
     const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
@@ -604,9 +627,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       responseHeaders: headersObj,
       upstreamStatus: upstreamResponse.status,
       completedAt: new Date(),
-    }).where(
-      and(eq(requestDedup.userId, routing.user.id), eq(requestDedup.idempotencyKey, idempotencyKey)),
-    ).catch((err) => {
+    }).where(and(
+      eq(requestDedup.userId, routing.user.id),
+      eq(requestDedup.idempotencyKey, idempotencyKey),
+      eq(requestDedup.requestId, requestId),
+    ))
+    .catch((err) => {
       log.error('dedup_complete_update_failed', { request_id: requestId, error: err });
     });
   }
@@ -615,6 +641,14 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,
   });
+  } catch (error) {
+    if (reservationCommitted) await releaseReservationAfterError(requestId, error);
+    if (dedupEnabled) {
+      await markDedupFailed({ user: routing.user, requestId, dedupIdempotencyKey: idempotencyKey })
+        .catch((dedupError) => log.error('dedup_failed_update_failed', { request_id: requestId, error: dedupError }));
+    }
+    throw error;
+  }
 }
 
 function stripHopByHop(input: Headers): Headers {
@@ -653,21 +687,33 @@ function teeStreamAndBill(
   };
   const decoder = new TextDecoder('utf-8', { fatal: false });
   let terminal = false;
+  let deliveredOutput = false;
   async function finish(naturalCompletion: boolean) {
     if (terminal) return;
     terminal = true;
     if (naturalCompletion) {
       sniffStreamUsage(decoder.decode(), true);
     }
-    const observedOutput = acc.outputTokens > 0;
-    const streamTokens = naturalCompletion
+    const observedOutput = acc.outputTokens > 0 || deliveredOutput;
+    const streamTokens = naturalCompletion || deliveredOutput
       ? resolveBillableTokens(billCtx, { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens }, status)
       : { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens };
-    await recordUsage(billCtx, streamTokens, observedOutput || naturalCompletion ? status : 499, Date.now() - startedAt);
+    try {
+      await recordUsage(billCtx, streamTokens, observedOutput || naturalCompletion ? status : 499, Date.now() - startedAt);
+    } catch (error) {
+      await releaseReservationAfterError(billCtx.requestId, error);
+      throw error;
+    }
     if (naturalCompletion && billCtx.dedupIdempotencyKey) {
       db.update(requestDedup).set({ status: 'completed', upstreamStatus: status, completedAt: new Date() }).where(
-        and(eq(requestDedup.userId, billCtx.user.id), eq(requestDedup.idempotencyKey, billCtx.dedupIdempotencyKey)),
+        and(
+          eq(requestDedup.userId, billCtx.user.id),
+          eq(requestDedup.idempotencyKey, billCtx.dedupIdempotencyKey),
+          eq(requestDedup.requestId, billCtx.requestId),
+        ),
       ).catch((err) => log.error('dedup_stream_complete_update_failed', { request_id: billCtx.requestId, error: err }));
+    } else if (!naturalCompletion) {
+      await markDedupFailed(billCtx);
     }
   }
 
@@ -683,6 +729,7 @@ function teeStreamAndBill(
         }
         if (value) {
           sniffStreamUsage(decoder.decode(value, { stream: true }));
+          if (value.byteLength > 0) deliveredOutput = true;
           controller.enqueue(value);
         }
       } catch (error) {
@@ -691,8 +738,13 @@ function teeStreamAndBill(
       }
     },
     async cancel(reason) {
+      // Claim the terminal transition before cancelling the upstream reader:
+      // reader.cancel() resolves a pending read as done, which must not race
+      // cancellation into the natural-completion billing policy.
+      const finalization = finish(false)
+        .catch((error) => log.error('stream_cancel_finalize_failed', { request_id: billCtx.requestId, error }));
       await reader.cancel(reason).catch(() => undefined);
-      await finish(false).catch((error) => log.error('stream_cancel_finalize_failed', { request_id: billCtx.requestId, error }));
+      await finalization;
     },
   });
 }

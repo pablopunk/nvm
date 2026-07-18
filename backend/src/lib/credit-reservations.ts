@@ -10,7 +10,7 @@ const RESERVATION_TTL_MS = Math.max(60_000, Number(process.env.CREDIT_RESERVATIO
 export type CreditKind = 'free' | 'paid';
 export type ReservationResult =
   | { ok: true; reservation: typeof creditReservations.$inferSelect; balance: number; reserved: number }
-  | { ok: false; balance: number; reserved: number };
+  | { ok: false; reason: 'insufficient_credits' | 'request_already_reserved'; balance: number; reserved: number };
 
 export async function reserveCredits(input: {
   requestId: string;
@@ -33,7 +33,7 @@ export async function reserveCredits(input: {
       if (existing.userId !== input.userId || existing.kind !== input.kind || existing.reservedCredits !== credits) {
         throw new Error('Reservation request ID was reused with different billing parameters');
       }
-      return { ok: true, reservation: existing, balance: 0, reserved: existing.reservedCredits };
+      return { ok: false, reason: 'request_already_reserved', balance: 0, reserved: existing.reservedCredits };
     }
 
     const [ledger] = await tx.select({
@@ -50,7 +50,7 @@ export async function reserveCredits(input: {
     const reserved = active?.reserved ?? 0;
     if (credits + reserved > balance + CREDIT_GRACE_THRESHOLD) {
       log.warn('credit_reservation_rejected', { request_id: input.requestId, user_id: input.userId, kind: input.kind, credits, balance, reserved });
-      return { ok: false, balance, reserved };
+      return { ok: false, reason: 'insufficient_credits', balance, reserved };
     }
 
     const [reservation] = await tx.insert(creditReservations).values({
@@ -76,12 +76,32 @@ export type ReservationFinalization = {
   latencyMs?: number;
 };
 
+async function lockReservationAfterUser(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  requestId: string,
+): Promise<typeof creditReservations.$inferSelect> {
+  const [user] = await tx.select({ id: users.id }).from(users)
+    .where(sql`${users.id} = (
+      select ${creditReservations.userId}
+      from ${creditReservations}
+      where ${creditReservations.requestId} = ${requestId}
+      limit 1
+    )`).limit(1).for('update');
+  if (!user) throw new Error(`Missing user for credit reservation ${requestId}`);
+
+  const [reservation] = await tx.select().from(creditReservations)
+    .where(eq(creditReservations.requestId, requestId)).limit(1).for('update');
+  if (!reservation) throw new Error(`Missing credit reservation ${requestId}`);
+  return reservation;
+}
+
 /** Finalize exactly once. Terminal rows are intentionally no-ops on retries. */
 export async function finalizeReservation(input: ReservationFinalization): Promise<'settled' | 'released' | 'already_terminal'> {
   return db.transaction(async (tx) => {
-    const [reservation] = await tx.select().from(creditReservations)
-      .where(eq(creditReservations.requestId, input.requestId)).limit(1).for('update');
-    if (!reservation) throw new Error(`Missing credit reservation ${input.requestId}`);
+    // Every reservation transition takes row locks in the same order: parent
+    // user first, reservation second. This matches admission and prevents a
+    // same-request admission/finalization cycle through the FK-backed rows.
+    const reservation = await lockReservationAfterUser(tx, input.requestId);
     if (reservation.status !== 'pending') return 'already_terminal';
     const now = new Date();
     if (input.outcome === 'release') {
