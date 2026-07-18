@@ -103,11 +103,11 @@ function finishDebugPerformanceMeasure(measurement: {
   const durationMs = performance.now() - measurement.startedAt;
   markPerformance(endMark, measurement.detail);
   try {
-    performance.measure(
-      `nvm:${measurement.name}`,
-      measurement.startMark,
-      endMark,
-    );
+    performance.measure(`nvm:${measurement.name}`, {
+      start: measurement.startMark,
+      end: endMark,
+      detail: measurement.detail,
+    });
   } catch {}
   performance.clearMarks(measurement.startMark);
   performance.clearMarks(endMark);

@@ -197,6 +197,60 @@ async function searchTitles(page: any, query: string) {
   }, query);
 }
 
+interface RendererSearchMeasure {
+  duration: number;
+  generation: number;
+  phase: 'initial' | 'final';
+  queryLength?: number;
+}
+
+async function rendererSearchMeasure(
+  page: any,
+  expected: {
+    generation?: number;
+    phase: RendererSearchMeasure['phase'];
+    queryLength?: number;
+  },
+) {
+  const readMatchingMeasure = () =>
+    page.evaluate((criteria) => {
+      const matches = performance
+        .getEntriesByName('nvm:search.renderer-to-results')
+        .flatMap((entry) => {
+          const detail = (entry as PerformanceMeasure).detail as
+            | Partial<RendererSearchMeasure>
+            | undefined;
+          return detail?.phase === criteria.phase &&
+            (criteria.queryLength === undefined ||
+              detail.queryLength === criteria.queryLength) &&
+            (criteria.generation === undefined ||
+              detail.generation === criteria.generation)
+            ? [
+                {
+                  duration: entry.duration,
+                  generation: Number(detail.generation),
+                  phase: detail.phase,
+                  queryLength:
+                    typeof detail.queryLength === 'number'
+                      ? detail.queryLength
+                      : undefined,
+                },
+              ]
+            : [];
+        });
+      return matches.at(-1) || null;
+    }, expected);
+
+  await expect.poll(readMatchingMeasure).not.toBeNull();
+  const measure = await readMatchingMeasure();
+  if (!measure) {
+    throw new Error(
+      `Missing ${expected.phase} renderer search measure for generation ${expected.generation || 'next'}`,
+    );
+  }
+  return measure as RendererSearchMeasure;
+}
+
 async function openExtensionsView(page: any) {
   return page.evaluate(async () => {
     const state = window as typeof window & { testSearchGeneration?: number };
@@ -358,28 +412,34 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       localStorage.setItem('nvm.debugPerformance', 'true');
       performance.clearMeasures('nvm:search.renderer-to-results');
     });
-    await input.fill('PAB-85 Immediate Search Alpha');
+    const progressiveQuery = 'PAB-85 Immediate Search Alpha';
+    await input.fill(progressiveQuery);
     const immediate = page.getByText('PAB-85 Immediate Search', {
       exact: true,
     });
     await expect(immediate).toBeVisible();
-    const initialSearchDurationMs = await page.evaluate(
-      () =>
-        performance.getEntriesByName('nvm:search.renderer-to-results')[0]
-          ?.duration,
-    );
-    expect(initialSearchDurationMs).toBeLessThan(75);
+    const initialSearchMeasure = await rendererSearchMeasure(page, {
+      phase: 'initial',
+      queryLength: progressiveQuery.length,
+    });
+    expect(initialSearchMeasure.duration).toBeLessThan(75);
     await expect(
       page.getByText('PAB-85 Delayed Provider: PAB-85 Immediate Search Alpha', {
         exact: true,
       }),
     ).toBeVisible({ timeout: 1000 });
-    const searchDurationsMs = await page.evaluate(() =>
-      performance
-        .getEntriesByName('nvm:search.renderer-to-results')
-        .map((entry) => entry.duration),
-    );
-    expect(Math.max(...searchDurationsMs)).toBeGreaterThanOrEqual(450);
+    const finalSearchMeasure = await rendererSearchMeasure(page, {
+      generation: initialSearchMeasure.generation,
+      phase: 'final',
+    });
+    expect(finalSearchMeasure.duration).toBeGreaterThanOrEqual(450);
+    await updateManifest({
+      progressiveSearchPerformance: {
+        finalDurationMs: finalSearchMeasure.duration,
+        generation: initialSearchMeasure.generation,
+        initialDurationMs: initialSearchMeasure.duration,
+      },
+    });
     await expect(
       page.locator('[cmdk-item][data-selected="true"]'),
     ).toContainText('PAB-85 Immediate Search');

@@ -95,11 +95,7 @@ if (!isNvmTestMode) initSentry();
 
 import { feedbackView } from '../feedback';
 import { type CommandAction, canCustomizeCommandAction } from '../model';
-import {
-  appResultMarker,
-  compareRankedActions,
-  priorityBoost,
-} from './action-ranking';
+import { appResultMarker, priorityBoost } from './action-ranking';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
@@ -193,9 +189,14 @@ import {
 import { createRunningAppStatusService } from './running-app-status';
 import {
   createSearchCoordinator,
-  createStableSearchResultPreparer,
   searchResultsFingerprint,
 } from './search-coordinator';
+import {
+  createSearchSnapshotAssembler,
+  rankSearchProviderContributions,
+  searchActionIsVisibleInTestMode,
+  searchProviderDescriptors,
+} from './search-snapshot';
 import { createProgressiveSearchTestExtension } from './search-test-extension';
 import {
   calculate,
@@ -329,7 +330,6 @@ const APP_REINDEX_DEBOUNCE_MS = 1000;
 const THUMBNAIL_SIZE = 512;
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000;
 const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000;
-const EXTENSION_ITEMS_PER_PROVIDER_LIMIT = 20;
 const ITEM_FOREGROUND_COLORS = new Set([
   'yellow',
   'blue',
@@ -2172,10 +2172,14 @@ function localSearchContributions(query) {
 }
 
 function createSearchSnapshotBuilder(query, localItems, providerKeys) {
-  const prepareRows = createStableSearchResultPreparer<any, any>({
-    logicalKey: (action) =>
-      `${action.extensionId || action.kind || 'action'}:${action.id}`,
+  const assemble = createSearchSnapshotAssembler<any, any>({
+    isVisible: testModePaletteActionIsSafe,
+    localItems,
     prepare: prepareRootActionForRenderer,
+    providerKeys,
+    query,
+    rankAction,
+    withShortcutHint,
   });
   return (resultsByProvider: ReadonlyMap<string, any[]>) =>
     measureDebugPerformanceSync(
@@ -2189,30 +2193,8 @@ function createSearchSnapshotBuilder(query, localItems, providerKeys) {
             0,
           ),
       },
-      () => {
-        const results = [...localItems];
-        for (const key of providerKeys) {
-          for (const item of resultsByProvider.get(key) || []) {
-            const ranked = item.__ranked
-              ? withShortcutHint(item)
-              : rankAction(withShortcutHint(item), query);
-            if (ranked) results.push(ranked);
-          }
-        }
-        const prepared = prepareRows(
-          results
-            .filter(testModePaletteActionIsSafe)
-            .sort(compareRankedActions)
-            .slice(0, 30),
-        );
-        structuredClone(prepared);
-        return prepared;
-      },
+      () => assemble(resultsByProvider),
     );
-}
-
-function providerKey(extension, index) {
-  return `${index}:${extension.__filePath || extension.id}`;
 }
 
 function validCachedRootActions(extension) {
@@ -2248,43 +2230,37 @@ function createProgressiveSearchWork(input) {
     () => {
       const extensions = searchableExtensions();
       const localItems = localSearchContributions(query);
-      const providerKeys = extensions
-        .map(providerKey)
-        .filter((key, index) =>
-          query
-            ? typeof extensions[index].searchItems === 'function'
-            : typeof extensions[index].rootItems === 'function',
-        );
+      const providerDescriptors = searchProviderDescriptors(extensions, query);
+      const providerKeys = providerDescriptors.map(({ key }) => key);
       const initialProviderResults = new Map<string, any[]>();
-      const providers = extensions.flatMap((extension, index) => {
-        const key = providerKey(extension, index);
-        if (query) {
-          if (typeof extension.searchItems !== 'function') return [];
+      const providers = providerDescriptors.flatMap(
+        ({ extension, key, kind }) => {
+          if (kind === 'query') {
+            return [
+              {
+                key,
+                run: (signal) =>
+                  extensionSearchActionsForExtension(extension, query, signal),
+              },
+            ];
+          }
+          const cached = validCachedRootActions(extension);
+          if (cached) {
+            initialProviderResults.set(key, cached);
+            return [];
+          }
           return [
             {
               key,
-              run: (signal) =>
-                extensionSearchActionsForExtension(extension, query, signal),
+              run: () =>
+                refreshExtensionRootActions(
+                  extension,
+                  extension.__filePath || extension.id,
+                ),
             },
           ];
-        }
-        if (typeof extension.rootItems !== 'function') return [];
-        const cached = validCachedRootActions(extension);
-        if (cached) {
-          initialProviderResults.set(key, cached);
-          return [];
-        }
-        return [
-          {
-            key,
-            run: () =>
-              refreshExtensionRootActions(
-                extension,
-                extension.__filePath || extension.id,
-              ),
-          },
-        ];
-      });
+        },
+      );
       const buildSnapshot = createSearchSnapshotBuilder(
         query,
         localItems,
@@ -2372,13 +2348,8 @@ async function searchActions(query, options: any = {}) {
     },
     async () => {
       const extensions = searchableExtensions();
-      const providerKeys = extensions
-        .map(providerKey)
-        .filter((key, index) =>
-          q
-            ? typeof extensions[index].searchItems === 'function'
-            : typeof extensions[index].rootItems === 'function',
-        );
+      const providerDescriptors = searchProviderDescriptors(extensions, q);
+      const providerKeys = providerDescriptors.map(({ key }) => key);
       const groups = await measureDebugPerformance(
         'extension.search.all',
         {
@@ -2388,23 +2359,17 @@ async function searchActions(query, options: any = {}) {
         },
         () =>
           Promise.all(
-            extensions.flatMap((extension) => {
-              if (q)
-                return typeof extension.searchItems === 'function'
-                  ? [extensionSearchActionsForExtension(extension, q)]
-                  : [];
-              return typeof extension.rootItems === 'function'
-                ? [
-                    Promise.resolve(
-                      validCachedRootActions(extension) ||
-                        refreshExtensionRootActions(
-                          extension,
-                          extension.__filePath || extension.id,
-                        ),
-                    ),
-                  ]
-                : [];
-            }),
+            providerDescriptors.map(({ extension, kind }) =>
+              kind === 'query'
+                ? extensionSearchActionsForExtension(extension, q)
+                : Promise.resolve(
+                    validCachedRootActions(extension) ||
+                      refreshExtensionRootActions(
+                        extension,
+                        extension.__filePath || extension.id,
+                      ),
+                  ),
+            ),
           ),
       );
       const providerResults = new Map<string, any[]>();
@@ -2443,14 +2408,11 @@ function testModeExtensionIsSafe(extensionId: string) {
 }
 
 function testModePaletteActionIsSafe(action) {
-  if (!isNvmTestMode) return true;
-  return (
-    action.kind === 'test-action' ||
-    (action.kind === 'extension-action' &&
-      testModeExtensionIsSafe(action.extensionId)) ||
-    (action.kind === 'extension-root-item' &&
-      action.extensionId === 'pab85.search-progressive')
-  );
+  return searchActionIsVisibleInTestMode(action, {
+    isSafeExtension: testModeExtensionIsSafe,
+    progressiveRootExtensionId: 'pab85.search-progressive',
+    testMode: isNvmTestMode,
+  });
 }
 
 function invalidateExtensionRootItems() {
@@ -2669,19 +2631,7 @@ async function executeExtensionRootItem(action) {
 }
 
 function rankContributionActions(actions, query) {
-  return actions
-    .map((action) => {
-      const ranked = rankAction(action, query);
-      return ranked ? { ...ranked, __ranked: true } : null;
-    })
-    .filter(Boolean)
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        b.lastUsed - a.lastUsed ||
-        a.title.localeCompare(b.title),
-    )
-    .slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT);
+  return rankSearchProviderContributions(actions, query, rankAction);
 }
 
 async function extensionSearchActionsForExtension(extension, query, signal?) {
