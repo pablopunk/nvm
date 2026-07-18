@@ -85,6 +85,7 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
     "'NotSigned'",
     'latest.yml',
     'updaterMetadata = $updaterMetadata',
+    '([uint64]$bytes[$Offset] * 16777216)',
     'NativeResourceCounter',
     'schemaVersion = 1',
     'nsis = [ordered]@{',

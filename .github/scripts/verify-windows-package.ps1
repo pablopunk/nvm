@@ -48,7 +48,12 @@ function Assert-Unsigned([IO.FileInfo]$Artifact) {
 function Read-PngDimension([string]$Path, [int]$Offset) {
   $bytes = [IO.File]::ReadAllBytes($Path)
   Assert-Condition ($bytes.Length -ge 24) "Configured icon is not a complete PNG."
-  return [uint32]($bytes[$Offset] -shl 24 -bor $bytes[$Offset + 1] -shl 16 -bor $bytes[$Offset + 2] -shl 8 -bor $bytes[$Offset + 3])
+  return [uint32](
+    ([uint64]$bytes[$Offset] * 16777216) +
+    ([uint64]$bytes[$Offset + 1] * 65536) +
+    ([uint64]$bytes[$Offset + 2] * 256) +
+    [uint64]$bytes[$Offset + 3]
+  )
 }
 
 if (-not ('NativeResourceCounter' -as [type])) {
