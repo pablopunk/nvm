@@ -2446,9 +2446,10 @@ function testModePaletteActionIsSafe(action) {
   if (!isNvmTestMode) return true;
   return (
     action.kind === 'test-action' ||
-    ((action.kind === 'extension-action' ||
-      action.kind === 'extension-root-item') &&
-      testModeExtensionIsSafe(action.extensionId))
+    (action.kind === 'extension-action' &&
+      testModeExtensionIsSafe(action.extensionId)) ||
+    (action.kind === 'extension-root-item' &&
+      action.extensionId === 'pab85.search-progressive')
   );
 }
 
