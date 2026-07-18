@@ -14,11 +14,13 @@ const SHORTCUT_SYMBOLS: Record<string, string> = {
   Tab: 'Tab',
 };
 
-export function formatShortcut(accelerator: unknown) {
-  return String(accelerator || '')
-    .split('+')
-    .map((part) => SHORTCUT_SYMBOLS[part] || part)
-    .join('');
+export function formatShortcut(
+  accelerator: unknown,
+  processPlatform: NodeJS.Platform = process.platform,
+) {
+  const parts = normalizeAccelerator(accelerator).split('+').filter(Boolean);
+  if (processPlatform !== 'darwin') return parts.join('+');
+  return parts.map((part) => SHORTCUT_SYMBOLS[part] || part).join('');
 }
 
 export function normalizeAccelerator(value: unknown) {

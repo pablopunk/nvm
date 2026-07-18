@@ -7,6 +7,7 @@ import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import { checkNevermindCompatibility } from './nevermind-compatibility';
 import { openExternalUrl } from './url-utils';
+import { writePrivateFile } from './private-file';
 import {
   migrateLegacyDesktopOrigin,
   parsePublicOrigin,
@@ -203,10 +204,7 @@ async function migrateLegacyAuthFile(): Promise<NevermindAuthSnapshot> {
     if (!isLegacyAuth(data)) return null;
     const baseUrl = normalizedBaseUrl(data.baseUrl);
     const store: AuthStore = { [baseUrl]: { ...data, baseUrl } };
-    await fs.writeFile(currentAuthPath(), JSON.stringify(store, null, 2), {
-      mode: 0o600,
-    });
-    if (process.platform !== 'win32') await fs.chmod(currentAuthPath(), 0o600);
+    await writePrivateFile(currentAuthPath(), JSON.stringify(store, null, 2));
     await fs.rename(legacyAuthPath(), `${legacyAuthPath()}.bak`);
     return authFromStored(store[baseUrl]);
   } catch (err) {
@@ -298,10 +296,7 @@ async function persist({
   }
   const store = await readOrMigrateStore();
   store[normalizedBaseUrl(baseUrl)] = payload;
-  await fs.writeFile(currentAuthPath(), JSON.stringify(store, null, 2), {
-    mode: 0o600,
-  });
-  if (process.platform !== 'win32') await fs.chmod(currentAuthPath(), 0o600);
+  await writePrivateFile(currentAuthPath(), JSON.stringify(store, null, 2));
   cached = { token, email, role, baseUrl, environment };
   loadPromise = Promise.resolve(cached);
   return cached;
@@ -310,10 +305,7 @@ async function persist({
 export async function clearNevermindAuth() {
   const store = await readOrMigrateStore();
   delete store[activeBaseUrl];
-  await fs.writeFile(currentAuthPath(), JSON.stringify(store, null, 2), {
-    mode: 0o600,
-  });
-  if (process.platform !== 'win32') await fs.chmod(currentAuthPath(), 0o600);
+  await writePrivateFile(currentAuthPath(), JSON.stringify(store, null, 2));
   cached = null;
   loadPromise = Promise.resolve(null);
 }

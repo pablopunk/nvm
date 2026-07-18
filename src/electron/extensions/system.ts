@@ -1,7 +1,8 @@
-import os from 'node:os';
-import path from 'node:path';
-
-import { settingsTitle } from '../os';
+import {
+  knownUserFolderPath,
+  settingsTitle,
+  systemSettingsLabel,
+} from '../os';
 import { systemSettingsEntries } from '../system-settings';
 import { extensionContext } from './_context';
 
@@ -61,7 +62,7 @@ async function systemSettingsSearchItems(ctx, query) {
   const items = (await systemSettingsEntries()).map((entry) => ({
     id: `system-settings:${entry.id}`,
     title: entry.title,
-    subtitle: 'System Settings',
+    subtitle: systemSettingsLabel(),
     aliases: entry.aliases,
     icon: 'settings',
     score: 18,
@@ -112,7 +113,7 @@ function placesItems() {
       primaryAction: {
         type: 'openPath',
         title: 'Open Downloads',
-        path: path.join(os.homedir(), 'Downloads'),
+        path: knownUserFolderPath('Downloads'),
         dismissAfterRun: 'auto',
       },
     },
@@ -126,7 +127,7 @@ function placesItems() {
       primaryAction: {
         type: 'openPath',
         title: 'Open Documents',
-        path: path.join(os.homedir(), 'Documents'),
+        path: knownUserFolderPath('Documents'),
         dismissAfterRun: 'auto',
       },
     },
@@ -140,7 +141,7 @@ function placesItems() {
       primaryAction: {
         type: 'openPath',
         title: 'Open Desktop',
-        path: path.join(os.homedir(), 'Desktop'),
+        path: knownUserFolderPath('Desktop'),
         dismissAfterRun: 'auto',
       },
     },
