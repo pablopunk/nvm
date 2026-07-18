@@ -50,7 +50,22 @@ async function invokeMeasured<T>(
 }
 
 const api: NevermindApi = {
-  search: (query, options) => invokeMeasured('actions:search', query, options),
+  search: (query, options) =>
+    invokeMeasured('actions:search', { query, ...options }),
+  cancelSearch: (generation) =>
+    ipcRenderer.send('actions:search:cancel', { generation }),
+  onSearchUpdate: (callback) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      snapshot: Parameters<NevermindApi['onSearchUpdate']>[0] extends (
+        snapshot: infer Snapshot,
+      ) => void
+        ? Snapshot
+        : never,
+    ) => callback(snapshot);
+    ipcRenderer.on('actions:search:update', listener);
+    return () => ipcRenderer.removeListener('actions:search:update', listener);
+  },
   execute: (action) => invokeMeasured('actions:execute', action),
   runViewAction: (action) => invokeMeasured('view-action:execute', action),
   refreshView: (input) => invokeMeasured('view:refresh', input),

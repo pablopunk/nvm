@@ -2,51 +2,84 @@ import { useEffect, useRef, useState } from 'react';
 import {
   markDebugPerformance,
   measureDebugPerformance,
+  recordDebugPerformance,
 } from './debug-performance';
+import {
+  createSearchSession,
+  type SearchSessionTransport,
+} from './search-session';
 
 export function useSearchResults<T>(
-  search: (query: string) => Promise<T[]>,
+  transport: SearchSessionTransport<T>,
   query: string,
   refreshNonce: number,
 ) {
   const [results, setResults] = useState<T[]>([]);
-  const requestIdRef = useRef(0);
+  const sessionRef = useRef<ReturnType<typeof createSearchSession<T>> | null>(
+    null,
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    const requestId = ++requestIdRef.current;
+    sessionRef.current = createSearchSession({
+      transport: {
+        ...transport,
+        search: (nextQuery, options) =>
+          measureDebugPerformance(
+            'search.renderer-to-results',
+            {
+              generation: options.generation,
+              queryLength: nextQuery.length,
+              phase: 'initial',
+              alwaysLog: true,
+            },
+            () => transport.search(nextQuery, options),
+          ),
+      },
+      onSnapshot: (snapshot, timing) => {
+        if (snapshot.complete)
+          recordDebugPerformance(
+            'search.renderer-to-results',
+            timing.elapsedMs,
+            {
+              generation: snapshot.generation,
+              revision: snapshot.revision,
+              resultCount: snapshot.results.length,
+              phase: 'final',
+              alwaysLog: true,
+            },
+          );
+        markDebugPerformance('search.set-results', {
+          generation: snapshot.generation,
+          revision: snapshot.revision,
+          resultCount: snapshot.results.length,
+          complete: snapshot.complete,
+        });
+        setResults(snapshot.results);
+      },
+      onError: (_error, generation) =>
+        markDebugPerformance('search.failed', { generation }),
+    });
+    return () => {
+      sessionRef.current?.dispose();
+      sessionRef.current = null;
+    };
+  }, [transport]);
+
+  useEffect(() => {
+    let generation: number | undefined;
     markDebugPerformance('search.schedule', {
-      requestId,
       queryLength: query.length,
       refreshNonce,
     });
-    const timer = window.setTimeout(async () => {
-      const next = await measureDebugPerformance(
-        'search.renderer-to-results',
-        { requestId, queryLength: query.length, refreshNonce, alwaysLog: true },
-        () => search(query),
-      );
-      if (cancelled) {
-        markDebugPerformance('search.drop-stale', {
-          requestId,
-          queryLength: query.length,
-          resultCount: next.length,
-        });
-        return;
-      }
-      markDebugPerformance('search.set-results', {
-        requestId,
-        queryLength: query.length,
-        resultCount: next.length,
-      });
-      setResults(next);
+    const timer = window.setTimeout(() => {
+      generation = sessionRef.current?.start(query);
     }, 20);
 
     return () => {
-      cancelled = true;
       window.clearTimeout(timer);
+      if (generation !== undefined) sessionRef.current?.cancel(generation);
     };
-  }, [search, query, refreshNonce]);
+  }, [query, refreshNonce]);
 
   return [results, setResults] as const;
 }

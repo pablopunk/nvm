@@ -120,6 +120,7 @@ import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
+  recordDebugPerformance,
   summarizeDebugValue,
 } from './debug-performance';
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
@@ -142,6 +143,17 @@ import {
 import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 import { markInternalExtension } from './internal-extension';
 import { type JobDefinition, JobRegistry, type JobSnapshot } from './jobs';
+import {
+  isPromiseAbortError,
+  isPromiseTimeoutError,
+  withAbortableTimeout,
+} from './promise-timeout';
+import {
+  createStableSearchResultPreparer,
+  createSearchCoordinator,
+  searchResultsFingerprint,
+} from './search-coordinator';
+import { createProgressiveSearchTestExtension } from './search-test-extension';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
   configureLogger,
@@ -2119,90 +2131,291 @@ function updatePromptAction() {
   return null;
 }
 
-async function searchActions(query, options: any = {}) {
-  return measureDebugPerformance(
-    'search.actions',
-    {
-      queryLength: String(query || '').length,
-      clipboardOnly: Boolean(options.clipboardOnly),
-      alwaysLog: true,
-    },
-    async () => {
-      const q = query.trim();
+function clipboardSearchActions(query) {
+  return measureDebugPerformanceSync(
+    'search.clipboard-only',
+    { queryLength: query.length, clipboardCount: clipboardHistory.length },
+    () =>
+      clipboardHistory
+        .map(clipboardRootItem)
+        .filter((item) => (query ? rankAction(item, query) : true))
+        .sort((a, b) =>
+          query
+            ? b.score - a.score || b.lastUsed - a.lastUsed
+            : b.lastUsed - a.lastUsed,
+        )
+        .slice(0, CLIPBOARD_LIMIT)
+        .map(prepareRootActionForRenderer),
+  );
+}
 
-      if (options.clipboardOnly) {
-        return measureDebugPerformanceSync(
-          'search.clipboard-only',
-          { queryLength: q.length, clipboardCount: clipboardHistory.length },
-          () =>
-            clipboardHistory
-              .map(clipboardRootItem)
-              .filter((item) => (q ? rankAction(item, q) : true))
-              .sort((a, b) =>
-                q
-                  ? b.score - a.score || b.lastUsed - a.lastUsed
-                  : b.lastUsed - a.lastUsed,
-              )
-              .slice(0, CLIPBOARD_LIMIT)
-              .map(prepareRootActionForRenderer),
-        );
-      }
-
-      const testAction = isNvmTestMode
-        ? rankAction(testModeSafeAction(), q)
-        : null;
-      const results = testAction ? [testAction] : [];
-      const contributedItems = await measureDebugPerformance(
-        q ? 'search.extensions.query' : 'search.extensions.root',
-        {
-          queryLength: q.length,
-          extensionCount: searchableExtensions().length,
-          alwaysLog: true,
-        },
-        () =>
-          q
-            ? extensionSearchActions(q, searchableExtensions())
-            : extensionRootActions(searchableExtensions()),
-      );
-      for (const item of contributedItems) {
-        const ranked = item.__ranked
-          ? withShortcutHint(item)
-          : rankAction(withShortcutHint(item), q);
+function localSearchContributions(query) {
+  const testAction = isNvmTestMode
+    ? rankAction(testModeSafeAction(), query)
+    : null;
+  const results = testAction ? [testAction] : [];
+  const entries = searchableExtensionActionEntries();
+  measureDebugPerformanceSync(
+    'search.rank-registered-actions',
+    { queryLength: query.length, actionCount: entries.length },
+    () => {
+      for (const entry of entries) {
+        const action = extensionActionFromContribution(entry);
+        const ranked = action
+          ? rankAction(withShortcutHint(action), query)
+          : null;
         if (ranked) results.push(ranked);
       }
+    },
+  );
+  return results;
+}
 
-      const entries = searchableExtensionActionEntries();
-      measureDebugPerformanceSync(
-        'search.rank-registered-actions',
-        { queryLength: q.length, actionCount: entries.length },
-        () => {
-          for (const entry of entries) {
-            const action = extensionActionFromContribution(entry);
-            const ranked = action
-              ? rankAction(withShortcutHint(action), q)
-              : null;
+function createSearchSnapshotBuilder(query, localItems, providerKeys) {
+  const prepareRows = createStableSearchResultPreparer<any, any>({
+    logicalKey: (action) =>
+      `${action.extensionId || action.kind || 'action'}:${action.id}`,
+    prepare: prepareRootActionForRenderer,
+  });
+  return (resultsByProvider: ReadonlyMap<string, any[]>) =>
+    measureDebugPerformanceSync(
+      'search.sort-prepare',
+      {
+        queryLength: query.length,
+        resultCount:
+          localItems.length +
+          providerKeys.reduce(
+            (count, key) => count + (resultsByProvider.get(key)?.length || 0),
+            0,
+          ),
+      },
+      () => {
+        const results = [...localItems];
+        for (const key of providerKeys) {
+          for (const item of resultsByProvider.get(key) || []) {
+            const ranked = item.__ranked
+              ? withShortcutHint(item)
+              : rankAction(withShortcutHint(item), query);
             if (ranked) results.push(ranked);
           }
-        },
-      );
-
-      const sorted = measureDebugPerformanceSync(
-        'search.sort-prepare',
-        { queryLength: q.length, resultCount: results.length },
-        () =>
+        }
+        const prepared = prepareRows(
           results
             .filter(testModePaletteActionIsSafe)
             .sort(compareRankedActions)
-            .slice(0, 30)
-            .map(prepareRootActionForRenderer),
-      );
-      markDebugPerformance('search.actions.result', {
-        queryLength: q.length,
-        contributedCount: contributedItems.length,
-        rankedCount: results.length,
-        resultCount: sorted.length,
+            .slice(0, 30),
+        );
+        structuredClone(prepared);
+        return prepared;
+      },
+    );
+}
+
+function providerKey(extension, index) {
+  return `${index}:${extension.__filePath || extension.id}`;
+}
+
+function validCachedRootActions(extension) {
+  const cacheKey = extension.__filePath || extension.id;
+  const cached = extensionRootItemsCache.get(cacheKey);
+  return cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS
+    ? cached.items
+    : null;
+}
+
+function createProgressiveSearchWork(input) {
+  const query = String(input.query || '').trim();
+  const startedAt = performance.now();
+  if (input.clipboardOnly) {
+    const initialResults = clipboardSearchActions(query);
+    return {
+      initialResults,
+      providers: [],
+      buildResults: () => initialResults,
+      completeImmediately: true,
+    };
+  }
+
+  return measureDebugPerformanceSync(
+    'search.actions',
+    {
+      queryLength: query.length,
+      clipboardOnly: false,
+      generation: input.generation,
+      phase: 'initial',
+      alwaysLog: true,
+    },
+    () => {
+      const extensions = searchableExtensions();
+      const localItems = localSearchContributions(query);
+      const providerKeys = extensions
+        .map(providerKey)
+        .filter((key, index) =>
+          query
+            ? typeof extensions[index].searchItems === 'function'
+            : typeof extensions[index].rootItems === 'function',
+        );
+      const initialProviderResults = new Map<string, any[]>();
+      const providers = extensions.flatMap((extension, index) => {
+        const key = providerKey(extension, index);
+        if (query) {
+          if (typeof extension.searchItems !== 'function') return [];
+          return [
+            {
+              key,
+              run: (signal) =>
+                extensionSearchActionsForExtension(extension, query, signal),
+            },
+          ];
+        }
+        if (typeof extension.rootItems !== 'function') return [];
+        const cached = validCachedRootActions(extension);
+        if (cached) {
+          initialProviderResults.set(key, cached);
+          return [];
+        }
+        return [
+          {
+            key,
+            run: () =>
+              refreshExtensionRootActions(
+                extension,
+                extension.__filePath || extension.id,
+              ),
+          },
+        ];
       });
-      return sorted;
+      const buildSnapshot = createSearchSnapshotBuilder(
+        query,
+        localItems,
+        providerKeys,
+      );
+      function buildResults(resultsByProvider) {
+        const combined = new Map(initialProviderResults);
+        for (const [key, value] of resultsByProvider) combined.set(key, value);
+        return buildSnapshot(combined);
+      }
+      const initialResults = buildResults(new Map());
+      markDebugPerformance('search.actions.result', {
+        queryLength: query.length,
+        generation: input.generation,
+        phase: 'initial',
+        providerCount: providers.length,
+        resultCount: initialResults.length,
+      });
+      return {
+        initialResults,
+        providers,
+        buildResults,
+        onProvidersLaunched: (durationMs) =>
+          recordDebugPerformance('extension.search.all', durationMs, {
+            generation: input.generation,
+            extensionCount: providers.length,
+            queryLength: query.length,
+            phase: 'launch',
+          }),
+        onComplete: () => {
+          const durationMs = performance.now() - startedAt;
+          recordDebugPerformance('extension.search.all', durationMs, {
+            generation: input.generation,
+            extensionCount: providers.length,
+            queryLength: query.length,
+            phase: 'final',
+            alwaysLog: true,
+          });
+          recordDebugPerformance('search.actions', durationMs, {
+            generation: input.generation,
+            queryLength: query.length,
+            phase: 'final',
+            alwaysLog: true,
+          });
+        },
+      };
+    },
+  );
+}
+
+const progressiveSearchCoordinator = createSearchCoordinator<any>({
+  createWork: createProgressiveSearchWork,
+  fingerprint: searchResultsFingerprint,
+});
+
+function normalizedProgressiveSearchInput(input: any = {}) {
+  return {
+    query: String(input.query || ''),
+    generation: Number(input.generation),
+    clipboardOnly: Boolean(input.clipboardOnly),
+  };
+}
+
+function startProgressiveSearch(sender, input) {
+  return progressiveSearchCoordinator.search(
+    sender,
+    normalizedProgressiveSearchInput(input),
+  );
+}
+
+function cancelProgressiveSearch(sender, input) {
+  progressiveSearchCoordinator.cancel(sender, Number(input?.generation));
+}
+
+async function searchActions(query, options: any = {}) {
+  const q = String(query || '').trim();
+  if (options.clipboardOnly) return clipboardSearchActions(q);
+  return measureDebugPerformance(
+    'search.actions',
+    {
+      queryLength: q.length,
+      clipboardOnly: false,
+      phase: 'final',
+      alwaysLog: true,
+    },
+    async () => {
+      const extensions = searchableExtensions();
+      const providerKeys = extensions
+        .map(providerKey)
+        .filter((key, index) =>
+          q
+            ? typeof extensions[index].searchItems === 'function'
+            : typeof extensions[index].rootItems === 'function',
+        );
+      const groups = await measureDebugPerformance(
+        'extension.search.all',
+        {
+          extensionCount: providerKeys.length,
+          queryLength: q.length,
+          phase: 'final',
+        },
+        () =>
+          Promise.all(
+            extensions.flatMap((extension) => {
+              if (q)
+                return typeof extension.searchItems === 'function'
+                  ? [extensionSearchActionsForExtension(extension, q)]
+                  : [];
+              return typeof extension.rootItems === 'function'
+                ? [
+                    Promise.resolve(
+                      validCachedRootActions(extension) ||
+                        refreshExtensionRootActions(
+                          extension,
+                          extension.__filePath || extension.id,
+                        ),
+                    ),
+                  ]
+                : [];
+            }),
+          ),
+      );
+      const providerResults = new Map<string, any[]>();
+      providerKeys.forEach((key, index) =>
+        providerResults.set(key, groups[index] || []),
+      );
+      return createSearchSnapshotBuilder(
+        q,
+        localSearchContributions(q),
+        providerKeys,
+      )(providerResults);
     },
   );
 }
@@ -2225,6 +2438,7 @@ function testModeExtensionIsSafe(extensionId: string) {
     'pab53.lifecycle',
     'pab53.legacy',
     'pab53.discovered',
+    'pab85.search-progressive',
   ].includes(extensionId);
 }
 
@@ -2232,7 +2446,8 @@ function testModePaletteActionIsSafe(action) {
   if (!isNvmTestMode) return true;
   return (
     action.kind === 'test-action' ||
-    (action.kind === 'extension-action' &&
+    ((action.kind === 'extension-action' ||
+      action.kind === 'extension-root-item') &&
       testModeExtensionIsSafe(action.extensionId))
   );
 }
@@ -2452,30 +2667,6 @@ async function executeExtensionRootItem(action) {
   );
 }
 
-async function extensionRootActions(extensions = visibleExtensions()) {
-  const actionGroups = await Promise.all(
-    extensions.map((extension) => extensionRootActionsForExtension(extension)),
-  );
-  return actionGroups.flat();
-}
-
-async function extensionSearchActions(query, extensions = visibleExtensions()) {
-  const actionGroups = await measureDebugPerformance(
-    'extension.search.all',
-    {
-      extensionCount: extensions.length,
-      queryLength: String(query || '').length,
-    },
-    () =>
-      Promise.all(
-        extensions.map((extension) =>
-          extensionSearchActionsForExtension(extension, query),
-        ),
-      ),
-  );
-  return actionGroups.flat();
-}
-
 function rankContributionActions(actions, query) {
   return actions
     .map((action) => {
@@ -2492,20 +2683,38 @@ function rankContributionActions(actions, query) {
     .slice(0, EXTENSION_ITEMS_PER_PROVIDER_LIMIT);
 }
 
-async function extensionSearchActionsForExtension(extension, query) {
+async function extensionSearchActionsForExtension(extension, query, signal?) {
   if (typeof extension.searchItems !== 'function') return [];
   return measureDebugPerformance(
     'extension.search.provider',
-    { extensionId: extension.id, queryLength: String(query || '').length },
+    {
+      extensionId: extension.id,
+      queryLength: String(query || '').length,
+      phase: 'final',
+    },
     async () => {
       try {
         const entry = {
           extension,
           command: { id: 'search', title: extension.title || extension.id },
         };
-        const items = await withTimeout(
-          extension.searchItems(createExtensionContext(extension, null), query),
+        const providerPromise = measureDebugPerformanceSync(
+          'extension.search.provider',
+          {
+            extensionId: extension.id,
+            queryLength: String(query || '').length,
+            phase: 'launch',
+          },
+          () =>
+            extension.searchItems(
+              createExtensionContext(extension, null, undefined, { signal }),
+              query,
+            ),
+        );
+        const items = await withAbortableTimeout(
+          providerPromise,
           EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+          { signal },
         );
         const list = Array.isArray(items)
           ? items
@@ -2528,7 +2737,7 @@ async function extensionSearchActionsForExtension(extension, query) {
             ),
         );
       } catch (error) {
-        if (!String(error?.message || error).includes('Timed out'))
+        if (!(isPromiseAbortError(error) || isPromiseTimeoutError(error)))
           logError('extension.searchItems.failed', error, {
             source: 'host',
             scope: 'extension',
@@ -2538,21 +2747,6 @@ async function extensionSearchActionsForExtension(extension, query) {
       }
     },
   );
-}
-
-async function extensionRootActionsForExtension(extension) {
-  if (typeof extension.rootItems !== 'function') return [];
-  const cacheKey = extension.__filePath || extension.id;
-  const cached = extensionRootItemsCache.get(cacheKey);
-  if (cached && Date.now() - cached.updatedAt < EXTENSION_ROOT_ITEMS_TTL_MS) {
-    markDebugPerformance('extension.root.cache-hit', {
-      extensionId: extension.id,
-      itemCount: cached.items.length,
-    });
-    return cached.items;
-  }
-  const refresh = refreshExtensionRootActions(extension, cacheKey);
-  return cached?.items || (await refresh);
 }
 
 function refreshExtensionRootActions(extension, cacheKey) {
@@ -2566,7 +2760,7 @@ function refreshExtensionRootActions(extension, cacheKey) {
         extension,
         command: { id: 'root', title: extension.title || extension.id },
       };
-      const items = await withTimeout(
+      const items = await withAbortableTimeout(
         extension.rootItems(createExtensionContext(extension, null)),
         EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
       );
@@ -2594,7 +2788,7 @@ function refreshExtensionRootActions(extension, cacheKey) {
     },
   )
     .catch((error) => {
-      if (!String(error?.message || error).includes('Timed out'))
+      if (!isPromiseTimeoutError(error))
         logError('extension.rootItems.failed', error, {
           source: 'host',
           scope: 'extension',
@@ -2607,18 +2801,6 @@ function refreshExtensionRootActions(extension, cacheKey) {
     });
   extensionRootItemsRefreshes.set(cacheKey, promise);
   return promise;
-}
-
-function withTimeout(promise, timeoutMs) {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`Timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      ),
-    ),
-  ]);
 }
 
 function normalizeItemAppearance(appearance) {
@@ -3353,6 +3535,7 @@ function shellResultView(title, result) {
 function runQuitCleanup() {
   if (didRunQuitCleanup) return;
   didRunQuitCleanup = true;
+  progressiveSearchCoordinator.dispose();
   if (app.isReady()) globalShortcut.unregisterAll();
   updateManager.clearTimers();
   jobRegistry.clear();
@@ -3364,8 +3547,11 @@ function runQuitCleanup() {
 function registerTestModeIpcHandlers() {
   const handle = (channel: string, handler: (...args: any[]) => unknown) =>
     ipcMain.handle(channel, handler);
-  handle('actions:search', (_event, query, options) =>
-    searchActions(query, options),
+  handle('actions:search', (event, input) =>
+    startProgressiveSearch(event.sender, input),
+  );
+  ipcMain.on('actions:search:cancel', (event, input) =>
+    cancelProgressiveSearch(event.sender, input),
   );
   handle('actions:execute', (_event, action) => {
     if (!testModePaletteActionIsSafe(action))
@@ -5469,7 +5655,12 @@ async function expandTextTemplate(
   return text;
 }
 
-function createExtensionContext(extension, command, launchContext?: any) {
+function createExtensionContext(
+  extension,
+  command,
+  launchContext?: any,
+  runtimeOptions: { signal?: AbortSignal } = {},
+) {
   // The enable decision is the trust boundary. Manifest capabilities are review
   // declarations, not runtime privileges.
   const canUseDesktopApps = true;
@@ -5489,6 +5680,7 @@ function createExtensionContext(extension, command, launchContext?: any) {
     extension: createExtensionRuntimeMetadata(extension, command),
     command,
     launch: launchContext ? structuredClone(launchContext) : undefined,
+    ...(runtimeOptions.signal ? { signal: runtimeOptions.signal } : {}),
     ui: createExtensionUiApi({
       buildPreviewItemAction,
       progressView,
@@ -7043,6 +7235,8 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
         paletteWindow,
       });
       registerInternalExtensions();
+      if (isNvmTestMode)
+        registerExtension(createProgressiveSearchTestExtension());
       if (isDev)
         await measureDebugPerformance('extensions.load-dev', undefined, () =>
           loadDevExtensions(),
@@ -8717,7 +8911,8 @@ app.whenReady().then(async () => {
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
-    searchActions,
+    startSearch: startProgressiveSearch,
+    cancelSearch: cancelProgressiveSearch,
     executeActionForIpc,
     executeViewActionForIpc,
     refreshViewForIpc,

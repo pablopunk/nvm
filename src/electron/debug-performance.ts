@@ -57,6 +57,22 @@ export function measureDebugPerformanceSync<T>(
   }
 }
 
+export function recordDebugPerformance(
+  name: string,
+  durationMs: number,
+  detail?: DebugPerformanceDetail,
+) {
+  if (!debugPerformanceEnabled()) return;
+  try {
+    performance.measure(`nvm:${name}`, {
+      start: Math.max(0, performance.now() - durationMs),
+      duration: Math.max(0, durationMs),
+      detail,
+    });
+  } catch {}
+  logSlowDebugPerformance(name, durationMs, detail);
+}
+
 export function summarizeDebugValue(value: unknown): unknown {
   if (value == null) return value;
   if (typeof value === 'string')
