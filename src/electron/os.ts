@@ -11,6 +11,10 @@ import {
   type BrowserWindowConstructorOptions,
   shell,
 } from 'electron';
+import {
+  readWindowsIconResourcePng,
+  windowsShortcutIconSources,
+} from './windows-app-icons';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
@@ -48,7 +52,6 @@ const macOnlyCapabilities = new Set([
   'frontmost-paste',
   'keyboard.type-text',
   'applescript',
-  'app-icons',
   'open-with',
   'keyboard-settings',
   'window-panel-policy',
@@ -57,6 +60,8 @@ const macOnlyCapabilities = new Set([
 ]);
 
 export function hasCapability(capability: string) {
+  if (capability === 'app-icons')
+    return osDependent({ darwin: true, win32: true }, false);
   if (capability === 'ocr') return osDependent({ darwin: true }, false);
   if (capability === 'screen-capture')
     return osDependent({ darwin: true }, false);
@@ -254,6 +259,28 @@ export function appScanRoots() {
       path.join(os.homedir(), '.local/share/applications'),
     ],
   )();
+}
+
+export async function appIconSources(appPath: string) {
+  return osFunction(
+    {
+      win32: (shortcutPath: string) =>
+        windowsShortcutIconSources(shortcutPath, (candidate) =>
+          shell.readShortcutLink(candidate),
+        ),
+    },
+    async (candidate: string) => [candidate],
+  )(appPath);
+}
+
+export function readAppIconResourcePng(
+  iconPath: string,
+  resourceIndex: number,
+) {
+  return osFunction({ win32: readWindowsIconResourcePng }, async () => null)(
+    iconPath,
+    resourceIndex,
+  );
 }
 
 export async function launchApp(item: any) {

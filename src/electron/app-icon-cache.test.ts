@@ -47,8 +47,20 @@ test('app icon cache dedupes concurrent requests and resolves waiters from one l
   assert.deepEqual(loaded, ['/Applications/TextEdit.app']);
   assert.deepEqual(
     written.map((item) => item.key),
-    ['hash:bundle-icon-v2:/Applications/TextEdit.app'],
+    ['hash:bundle-icon-v5:/Applications/TextEdit.app'],
   );
+});
+
+test('app icon cache loads Windows Start Menu shortcut icons', async () => {
+  const { cache, scheduled, loaded } = createCache();
+  const appPath = String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Example.LNK`;
+
+  const request = cache.get(appPath);
+  assert.deepEqual(scheduled, [{ reason: 'icon-request', delayMs: 0 }]);
+
+  await cache.processPending();
+  assert.equal(await request, 'data:image/png;base64,cG5n');
+  assert.deepEqual(loaded, [appPath]);
 });
 
 test('app icon cache uses disk cache before loading native app icon', async () => {

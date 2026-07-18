@@ -1,3 +1,5 @@
+import { isAppIconPath } from '../app-icons';
+
 export type AppIconCacheDeps = {
   hasAppIcons: () => boolean;
   hashValue: (value: string) => string;
@@ -15,7 +17,7 @@ export type AppIconCacheDeps = {
 };
 
 const APP_ICON_LOAD_TIMEOUT_MS = 5000;
-const APP_ICON_CACHE_VERSION = 'bundle-icon-v2';
+const APP_ICON_CACHE_VERSION = 'bundle-icon-v5';
 
 export function withTimeout<T>(
   promise: Promise<T>,
@@ -107,8 +109,7 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
 
   async function get(appPath: string) {
     return measure('apps.icon.get', { appPath, alwaysLog: true }, async () => {
-      if (!deps.hasAppIcons() || !appPath || !appPath.endsWith('.app'))
-        return null;
+      if (!deps.hasAppIcons() || !isAppIconPath(appPath)) return null;
       if (memoryCache.has(appPath)) {
         deps.mark?.('apps.icon.memory-cache-hit', { appPath });
         return memoryCache.get(appPath) ?? null;

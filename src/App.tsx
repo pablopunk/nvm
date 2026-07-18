@@ -21,6 +21,7 @@ import {
   useState,
 } from 'react';
 import { ActionPanel } from './action-panel';
+import { isAppIconPath } from './app-icons';
 import {
   type CommandIconName,
   iconFor,
@@ -1099,7 +1100,7 @@ export function App() {
       for (const item of allViewItems(view)) {
         const appPath = diskPathForItem(item);
         if (
-          !appPath?.endsWith('.app') ||
+          !isAppIconPath(appPath) ||
           item.image ||
           iconUrls[appPath] ||
           requestedIcons.current.has(appPath)
@@ -2706,7 +2707,7 @@ export function App() {
 
   function appPathForIcon(action: Action | null | undefined) {
     const candidate = action?.app?.path || action?.rootAction?.path;
-    return candidate?.endsWith('.app') ? candidate : null;
+    return isAppIconPath(candidate) ? candidate : null;
   }
 
   function appPathForRunningStatus(action: Action | null | undefined) {
@@ -2736,7 +2737,7 @@ export function App() {
   function hydrateExtensionItemIcon(item: ExtensionViewItem) {
     if (item.image) return item;
     const appPath = diskPathForItem(item);
-    const iconUrl = appPath?.endsWith('.app') ? iconUrls[appPath] : null;
+    const iconUrl = isAppIconPath(appPath) ? iconUrls[appPath] : null;
     return iconUrl ? { ...item, image: iconUrl } : item;
   }
 

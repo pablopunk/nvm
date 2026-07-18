@@ -152,6 +152,7 @@ import {
   warn as logWarn,
 } from './logger';
 import {
+  appIconSources,
   autoUpdatesUnavailableMessage,
   captureScreenImage,
   runningAppPaths as detectRunningAppPaths,
@@ -167,6 +168,7 @@ import {
   pasteIntoFrontmostApp,
   prepareAppWindowPolicy,
   quickLookTitle,
+  readAppIconResourcePng,
   recognizeTextInImage,
   reservedPaletteShortcutName,
   revealPathTitle,
@@ -274,9 +276,29 @@ const appIconCache = createAppIconCache({
     const bundleIconPng = await readAppBundleIconPng(appPath);
     if (bundleIconPng) return bundleIconPng;
 
-    const icon = await app.getFileIcon(appPath, { size: 'normal' });
-    if (icon.isEmpty()) throw new Error(`No icon for ${appPath}`);
-    return icon.toPNG();
+    for (const source of await appIconSources(appPath)) {
+      try {
+        const iconPath = typeof source === 'string' ? source : source.path;
+        if (typeof source !== 'string') {
+          const resourcePng = await readAppIconResourcePng(
+            source.path,
+            source.resourceIndex,
+          );
+          if (resourcePng) return resourcePng;
+        }
+        if (
+          ['.ico', '.jpeg', '.jpg', '.png'].includes(
+            path.extname(iconPath).toLowerCase(),
+          )
+        ) {
+          const image = nativeImage.createFromPath(iconPath);
+          if (!image.isEmpty()) return image.toPNG();
+        }
+        const icon = await app.getFileIcon(iconPath, { size: 'normal' });
+        if (!icon.isEmpty()) return icon.toPNG();
+      } catch {}
+    }
+    throw new Error(`No icon for ${appPath}`);
   },
   schedule: (reason, delayMs = 0) =>
     jobRegistry.schedule('cache.app-icons', reason, delayMs),
