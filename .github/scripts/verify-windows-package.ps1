@@ -118,12 +118,15 @@ try {
   Assert-Condition ($LASTEXITCODE -eq 0) 'Packaged runtime import check failed.'
 
   $latest = Join-Path $ResolvedPackageRoot 'latest.yml'
+  $updaterMetadata = [ordered]@{ policy = $UpdaterMetadataPolicy; file = $null; sha256 = $null }
   if ($UpdaterMetadataPolicy -eq 'Absent') {
     Assert-Condition (-not (Test-Path -LiteralPath $latest)) 'Unsigned smoke must not contain stale latest.yml updater metadata.'
   } else {
     Assert-Condition (Test-Path -LiteralPath $latest) 'NSIS updater policy requires latest.yml.'
     & node (Join-Path $RepoRoot 'scripts/validate-windows-updater-metadata.cjs') $latest $ResolvedPackageRoot $ExpectedVersion $ExpectedArch
     Assert-Condition ($LASTEXITCODE -eq 0) 'Windows updater metadata check failed.'
+    $updaterMetadata.file = 'latest.yml'
+    $updaterMetadata.sha256 = Get-Sha256Hex $latest
   }
 
   $iconSource = Join-Path $RepoRoot 'build/Icon.icon/Assets/icon.png'
@@ -154,6 +157,7 @@ try {
         sha512 = Get-Sha512Base64 $setup.FullName
         signatureStatus = $setupSignature
         blockmap = [ordered]@{ file = $blockmap.Name; size = $blockmap.Length; sha512 = Get-Sha512Base64 $blockmap.FullName }
+        updaterMetadata = $updaterMetadata
       }
       portable = [ordered]@{
         file = $portable.Name

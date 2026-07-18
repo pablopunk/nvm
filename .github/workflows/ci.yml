@@ -215,7 +215,7 @@ jobs:
             '-ExpectedVersion', $version,
             '-ExpectedArch', 'x64',
             '-AsarExecutable', $asar,
-            '-UpdaterMetadataPolicy', 'Absent'
+            '-UpdaterMetadataPolicy', 'Nsis'
           )
           if ($negative.ExitCode -eq 0) { throw 'Verifier accepted a package missing app.asar.' }
           Remove-Item -LiteralPath $negativeRoot -Recurse -Force
@@ -224,7 +224,7 @@ jobs:
             -ExpectedVersion $version `
             -ExpectedArch x64 `
             -AsarExecutable $asar `
-            -UpdaterMetadataPolicy Absent
+            -UpdaterMetadataPolicy Nsis
 
       - name: Verify inherited Windows ACL privacy for representative secrets
         shell: pwsh
@@ -246,6 +246,7 @@ jobs:
           Copy-Item "release/Nevermind-$version-win-x64-setup.exe" windows-artifacts/
           Copy-Item "release/Nevermind-$version-win-x64-setup.exe.blockmap" windows-artifacts/
           Copy-Item "release/Nevermind-$version-win-x64-portable.exe" windows-artifacts/
+          Copy-Item release/latest.yml windows-artifacts/
           Copy-Item release/windows-smoke-manifest.json windows-artifacts/
 
       - name: Launch the staged portable package and prove renderer readiness

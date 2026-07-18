@@ -20,7 +20,7 @@ The machine-enforced companion inventory is [`windows-platform-inventory.json`](
 | Generated extensions | Implemented | Persistence suites; ASAR verifier requires the extension API declarations and TypeScript runtime declarations | Generate, execute, restart, and execute again | Desktop release |
 | Background jobs and watchers | Implemented | Recursive watcher simulation, cleanup proof, and existing job suites | Startup, interval, file-change, clipboard-change and relaunch persistence | Desktop release |
 | Notifications | Missing; no support claim | Inventory records the absence | Not a release requirement until product approval adds this capability | Desktop product |
-| Auto-updater | Intentionally disabled for Windows | Unsigned smoke rejects `latest.yml`; fixture validator checks an eventual NSIS-only metadata candidate | Signed candidate downloads and installs an update without channel collision | Release engineering |
+| Auto-updater | Publishing is intentionally disabled for Windows | `--publish never` output includes validated NSIS-only `latest.yml`; CI proves its URL, path, size and SHA-512 match the setup artifact | Signed candidate downloads and installs an update without channel collision | Release engineering |
 | NSIS installer/uninstaller | Unverified | Exact x64 setup name, differential blockmap, unsigned Authenticode status, hash manifest | Per-user install path, Start menu shortcut, uninstall cleanup, preserved user data | Release engineering |
 | Portable behavior | Unverified beyond startup | Staged wrapper identity, SHA-512, extracted child identity, packaged state/version, renderer readiness, PID stability and cleanup | Launch from writable/read-only locations and document where user data persists | Release engineering |
 | Logging and crash recovery | Unverified | Absolute startup logs/evidence are uploaded even on failure | Redacted logs, forced crash, recovery and relaunch | Desktop release |
@@ -34,6 +34,7 @@ The smoke build runs `mise exec -- pnpm run dist:win:x64` with `CSC_IDENTITY_AUT
 - `Nevermind-<version>-win-x64-setup.exe`
 - `Nevermind-<version>-win-x64-setup.exe.blockmap`
 - `Nevermind-<version>-win-x64-portable.exe`
+- `latest.yml` with exactly one NSIS target
 - `win-unpacked/Nevermind.exe`
 - `win-unpacked/resources/app.asar`
 
@@ -47,7 +48,7 @@ The setup, portable launcher, and unpacked executable must all report Authentico
 - Start menu creation, shortcut ownership/conflicts, uninstall cleanup, and preservation of Electron `userData` are manual gates. Packaging configuration alone is not evidence for them.
 - Portable launcher extraction is proven only for CI startup. Portable user-data placement and behavior from constrained locations remain manual gates.
 - Windows private-file `mode: 0o600` is creation-time POSIX/best-effort metadata, not an ACL guarantee. Production privacy relies on inheritance from Electron's per-user `userData`; CI and manual QA inspect the resulting ACL. Do not add ad-hoc `icacls` mutations without security review.
-- The unsigned smoke must not contain `latest.yml`. A future publish candidate must have exactly one NSIS file entry whose URL, path, size and SHA-512 match the x64 setup executable and whose `.exe.blockmap` is non-empty. Portable is not an updater target.
+- Electron-builder emits `latest.yml` even with `--publish never`; this is local build output, not evidence of publication or updater enablement. The unsigned smoke requires exactly one NSIS file entry whose URL, path, size and SHA-512 match the x64 setup executable and whose `.exe.blockmap` is non-empty. Portable is not an updater target. CI retains the validated metadata and binds its SHA-256 in the smoke manifest.
 - A production candidate additionally requires certificate custody, timestamping, SmartScreen reputation planning, signed artifact verification, and an installed update test. It must not collide with the macOS/Linux release channels.
 
 ## Windows CI evidence versus release evidence
