@@ -113,8 +113,12 @@ function proxySelects(options: { free?: number; paid?: number; model?: string | 
     [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     modelRoute,
+    [{ id: 'user_1' }],
     [],
+    [{ balance: (options.paid ?? 0) > 0 ? options.paid ?? 0 : options.free ?? 10 }],
+    [{ reserved: 0 }],
     [],
+    [{ requestId: 'test-reservation', userId: 'user_1', kind: (options.paid ?? 0) > 0 ? 'paid' : 'free', reservedCredits: 1, status: 'pending' }],
   ];
 }
 
@@ -539,7 +543,7 @@ test('proxy route honors extension smart/fast model selection headers', async ()
 
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
-  assert.equal(db.insertedValues.length, 2);
+  assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
 });
 
@@ -607,24 +611,22 @@ test('proxy preserves structured tool calls and debits the successful request', 
   );
   const body = (await response.json()) as any;
   const forwarded = JSON.parse(forwardedBody);
-  const requestId = response.headers.get('x-request-id');
-
   assert.equal(response.status, 200);
   assert.equal(forwarded.model, 'gemini-3-flash');
   assert.deepEqual(forwarded.tools, [tool]);
   assert.equal(forwarded.tool_choice, 'auto');
   assert.deepEqual(body.choices[0].message.tool_calls, [toolCall]);
-  assert.deepEqual(db.insertedValues[0], {
+  assert.deepEqual(db.insertedValues[1], {
     userId: 'user_1',
     delta: -1,
     kind: 'paid',
     reason: 'ai_usage',
-    refId: requestId,
+    refId: 'test-reservation',
   });
-  assert.equal((db.insertedValues[1] as any).inputTokens, 9);
-  assert.equal((db.insertedValues[1] as any).outputTokens, 4);
-  assert.equal((db.insertedValues[1] as any).costCredits, 1);
-  assert.equal((db.insertedValues[1] as any).requestId, requestId);
+  assert.equal((db.insertedValues[2] as any).inputTokens, 9);
+  assert.equal((db.insertedValues[2] as any).outputTokens, 4);
+  assert.equal((db.insertedValues[2] as any).costCredits, 1);
+  assert.equal((db.insertedValues[2] as any).requestId, 'test-reservation');
 });
 
 test('proxy route returns the rate-limit contract', async () => {
@@ -669,7 +671,7 @@ test('proxy route preserves streaming responses and records stream usage', async
   assert.match(response.headers.get('x-request-id') || '', /^[0-9a-f-]{36}$/);
   assert.equal(text, 'data: {"usage":{"prompt_tokens":2,"completion_tokens":3}}\n\ndata: [DONE]\n\n');
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-flash');
-  assert.equal(db.insertedValues.length, 2);
+  assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 2);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
 });
@@ -769,13 +771,13 @@ test('google proxy records split streaming usage metadata', async () => {
 
   assert.equal(response.status, 200);
   assert.equal(text, splitGoogleUsageStream.join(''));
-  assert.equal(db.insertedValues.length, 2);
-  assert.deepEqual(db.insertedValues[0], {
+  assert.equal(db.insertedValues.length, 3);
+  assert.deepEqual(db.insertedValues[1], {
     userId: 'user_1',
     delta: -1,
     kind: 'paid',
     reason: 'ai_usage',
-    refId: response.headers.get('x-request-id'),
+    refId: 'test-reservation',
   });
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
@@ -796,7 +798,12 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
       [{ id: 1 }],
       [{ paid: 1000, free: 500 }],
       modelRoute,
+      [{ id: 'user_1' }],
+      [],
+      [{ balance: 1000 }],
+      [{ reserved: 0 }],
       providerChain,
+      [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
     ],
   }));
 
@@ -825,8 +832,8 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   assert.equal(response.status, 200);
   assert.ok(primaryCalled, 'primary provider should have been tried');
   assert.ok(fallbackCalled, 'fallback provider should have been tried');
-  assert.equal(db.insertedValues.length, 2);
-  assert.equal((db.insertedValues[0] as any).kind, 'paid');
+  assert.equal(db.insertedValues.length, 3);
+  assert.equal((db.insertedValues[1] as any).kind, 'paid');
   assert.equal((db.insertedValues.at(-1) as any).provider, 'google');
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 5);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 10);
@@ -846,7 +853,12 @@ test('proxy failover: when all providers fail, last error passes through', async
       [{ id: 1 }],
       [{ free: 1000, paid: 0 }],
       modelRoute,
+      [{ id: 'user_1' }],
+      [],
+      [{ balance: 1000 }],
+      [{ reserved: 0 }],
       providerChain,
+      [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
 
@@ -880,7 +892,12 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
       [{ id: 1 }],
       [{ free: 1000, paid: 0 }],
       modelRoute,
+      [{ id: 'user_1' }],
+      [],
+      [{ balance: 1000 }],
+      [{ reserved: 0 }],
       providerChain,
+      [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
 
@@ -916,6 +933,11 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
       [{ id: 1 }],
       [{ free: 1000, paid: 0 }],
       modelRoute,
+      [{ id: 'user_1' }],
+      [],
+      [{ balance: 1000 }],
+      [{ reserved: 0 }],
+      [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
       [],
     ],
   }));
@@ -953,7 +975,12 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
       [{ id: 1 }],
       [{ free: 1000, paid: 0 }],
       modelRoute,
+      [{ id: 'user_1' }],
+      [],
+      [{ balance: 1000 }],
+      [{ reserved: 0 }],
       providerChain,
+      [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
 
@@ -1017,7 +1044,12 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
       [{ id: 1 }],
       [{ free: 1000, paid: 0 }],
       modelRoute,
+      [{ id: 'user_1' }],
       [],
+      [{ balance: 1000 }],
+      [{ reserved: 0 }],
+      [],
+      [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
   }));
 
