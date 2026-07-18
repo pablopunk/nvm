@@ -165,16 +165,31 @@ function actionNamed(view: any, title: string) {
 }
 
 async function searchTitles(page: any, query: string) {
-  return page.evaluate(
-    async (value: string) =>
-      (await window.nvm.search(value)).map((action) => action.title),
-    query,
-  );
+  return page.evaluate(async (value: string) => {
+    const state = window as typeof window & { testSearchGeneration?: number };
+    const generation = Math.max(
+      Date.now(),
+      (state.testSearchGeneration || 0) + 1,
+    );
+    state.testSearchGeneration = generation;
+    const snapshot = await window.nvm.search(value, {
+      generation,
+    });
+    return snapshot.results.map((action) => action.title);
+  }, query);
 }
 
 async function openExtensionsView(page: any) {
   return page.evaluate(async () => {
-    const actions = await window.nvm.search('Extensions');
+    const state = window as typeof window & { testSearchGeneration?: number };
+    const generation = Math.max(
+      Date.now(),
+      (state.testSearchGeneration || 0) + 1,
+    );
+    state.testSearchGeneration = generation;
+    const { results: actions } = await window.nvm.search('Extensions', {
+      generation,
+    });
     const extensions = actions.find(
       (action) =>
         action.extensionId === 'nevermind.extensions' &&
@@ -190,7 +205,15 @@ async function openExtensionsView(page: any) {
 async function lifecyclePaletteAction(page: any, version: string) {
   return page.evaluate(async (expectedVersion: string) => {
     const title = `PAB-53 Lifecycle ${expectedVersion}`;
-    const actions = await window.nvm.search(title);
+    const state = window as typeof window & { testSearchGeneration?: number };
+    const generation = Math.max(
+      Date.now(),
+      (state.testSearchGeneration || 0) + 1,
+    );
+    state.testSearchGeneration = generation;
+    const { results: actions } = await window.nvm.search(title, {
+      generation,
+    });
     const action = actions.find((candidate) => candidate.title === title);
     if (!action) throw new Error(`${title} not found`);
     return action;
@@ -303,6 +326,48 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
     await input.fill('Test: Confirm safe action');
     const action = page.getByText('Test: Confirm safe action', { exact: true });
     await expect(action).toBeVisible();
+    await page.evaluate(() => {
+      localStorage.setItem('nvm.debugPerformance', 'true');
+      performance.clearMeasures('nvm:search.renderer-to-results');
+    });
+    await input.fill('PAB-85 Immediate Search Alpha');
+    const immediate = page.getByText('PAB-85 Immediate Search', {
+      exact: true,
+    });
+    await expect(immediate).toBeVisible();
+    const initialSearchDurationMs = await page.evaluate(
+      () =>
+        performance.getEntriesByName('nvm:search.renderer-to-results')[0]
+          ?.duration,
+    );
+    expect(initialSearchDurationMs).toBeLessThan(75);
+    await expect(
+      page.getByText('PAB-85 Delayed Provider: PAB-85 Immediate Search Alpha', {
+        exact: true,
+      }),
+    ).toBeVisible({ timeout: 1_000 });
+    const searchDurationsMs = await page.evaluate(() =>
+      performance
+        .getEntriesByName('nvm:search.renderer-to-results')
+        .map((entry) => entry.duration),
+    );
+    expect(Math.max(...searchDurationsMs)).toBeGreaterThanOrEqual(450);
+    await expect(
+      page.locator('[cmdk-item][data-selected="true"]'),
+    ).toContainText('PAB-85 Immediate Search');
+    await input.fill('PAB-85 Immediate Search Stale');
+    await input.fill('PAB-85 Immediate Search Current');
+    await expect(
+      page.getByText(
+        'PAB-85 Delayed Provider: PAB-85 Immediate Search Current',
+        { exact: true },
+      ),
+    ).toBeVisible({ timeout: 1_000 });
+    await expect(
+      page.getByText('PAB-85 Delayed Provider: PAB-85 Immediate Search Stale', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await page.evaluate(() => window.nvm.testInvoke());
     await expect
       .poll(async () => {
