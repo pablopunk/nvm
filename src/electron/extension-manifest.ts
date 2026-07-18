@@ -59,6 +59,82 @@ function defaultExport(source: string) {
   );
 }
 
+function uniqueForkIdentifier(source: string, base: string) {
+  let candidate = base;
+  let suffix = 2;
+  while (new RegExp(`\\b${candidate}\\b`).test(source)) {
+    candidate = `${base}${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+/**
+ * Materializes a standalone extension fork without importing the original
+ * source file. The original manifest remains intact as local source so AI
+ * edits affect the fork itself; the exported wrapper only assigns the new
+ * identity and keeps explicit action ids local to that fork.
+ */
+function createStandaloneExtensionFork(
+  source: string,
+  options: { id: string; title: string },
+) {
+  const declaration = defaultExport(source);
+  if (!declaration) {
+    throw new Error('Extension source must have a default export to fork');
+  }
+  const expression = unwrap(declaration.expression);
+  if (!ts.isObjectLiteralExpression(expression)) {
+    throw new Error('Only object-literal extensions can be forked');
+  }
+
+  const sourceName = uniqueForkIdentifier(source, '__nvmForkSource');
+  const extensionIdName = uniqueForkIdentifier(source, '__nvmForkExtensionId');
+  const actionIdName = uniqueForkIdentifier(source, '__nvmForkActionId');
+  const contributionsName = uniqueForkIdentifier(
+    source,
+    '__nvmForkContributions',
+  );
+  const declarationStart = declaration.getStart();
+  const expressionStart = declaration.expression.getStart();
+  const localSource = `${source.slice(0, declarationStart)}const ${sourceName}: any = ${source.slice(expressionStart)}`;
+
+  return `${localSource}
+
+const ${extensionIdName} = ${JSON.stringify(options.id)};
+const ${actionIdName} = (actionId: unknown) =>
+  typeof actionId === 'string' && actionId
+    ? ${extensionIdName} + ':' + actionId
+    : undefined;
+const ${contributionsName} = (items: any[]) =>
+  items.map((item) => ({
+    ...item,
+    ...(item.actionId ? { actionId: ${actionIdName}(item.actionId) } : {}),
+  }));
+
+export default {
+  ...${sourceName},
+  id: ${extensionIdName},
+  title: ${JSON.stringify(options.title)},
+  commands: (${sourceName}.commands || []).map((command: any) => ({
+    ...command,
+    ...(command.actionId ? { actionId: ${actionIdName}(command.actionId) } : {}),
+  })),
+  actions: ${sourceName}.actions
+    ? (ctx: any) => {
+        const result = ${sourceName}.actions(ctx);
+        const items = Array.isArray(result)
+          ? result
+          : Array.isArray(result?.actions)
+            ? result.actions
+            : [];
+        return ${contributionsName}(items);
+      }
+    : undefined,
+};
+`;
+}
+
 function manifestProperties(expression: ts.ObjectLiteralExpression) {
   const values = new Map<string, ts.Expression>();
   let dynamic = false;
@@ -135,4 +211,4 @@ function inspectExtensionManifest(source: string): StaticExtensionManifest {
 }
 
 export type { StaticExtensionManifest };
-export { inspectExtensionManifest };
+export { createStandaloneExtensionFork, inspectExtensionManifest };

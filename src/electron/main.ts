@@ -124,6 +124,7 @@ import {
 } from './debug-performance';
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
 import { createExtensionJsonStore } from './extension-json-store';
+import { createStandaloneExtensionFork } from './extension-manifest';
 import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
@@ -8478,10 +8479,12 @@ async function duplicateCreatedAction(action) {
   const duplicateExtensionId = `${extension.id}-copy-${duplicateId.slice(0, 8)}`;
   const duplicateTitle = `Copy of ${extension.title || action.title}`;
   const duplicateFile = `${extensionSourceBasename(filePath)}-copy-${duplicateId.slice(0, 8)}.ts`;
-  const sourceFile = path.basename(filePath);
-  const sourceCode = `import type { NevermindExtension } from './${EXTENSION_TYPES_FILENAME.replace(/\.d\.ts$/, '')}'\nimport source from './${sourceFile.replace(/'/g, "\\'")}'\n\nconst duplicateExtensionId = ${JSON.stringify(duplicateExtensionId)}\nconst namespacedActionId = (actionId: unknown) => typeof actionId === 'string' && actionId ? duplicateExtensionId + ':' + actionId : undefined\nconst duplicateContributions = (items: any[]) => items.map((item) => ({ ...item, ...(item.actionId ? { actionId: namespacedActionId(item.actionId) } : {}) }))\n\nexport default {\n  ...source,\n  id: duplicateExtensionId,\n  title: ${JSON.stringify(duplicateTitle)},\n  commands: (source.commands || []).map((command) => ({ ...command, ...(command.actionId ? { actionId: namespacedActionId(command.actionId) } : {}) })),\n  actions: source.actions ? (ctx) => {\n    const result = source.actions(ctx)\n    const items = Array.isArray(result) ? result : Array.isArray(result?.actions) ? result.actions : []\n    return duplicateContributions(items)\n  } : undefined,\n} satisfies NevermindExtension\n`;
-
-  await fs.writeFile(path.join(extensionsDir, duplicateFile), sourceCode);
+  const sourceCode = createStandaloneExtensionFork(
+    await fs.readFile(filePath, 'utf8'),
+    { id: duplicateExtensionId, title: duplicateTitle },
+  );
+  await stageExtensionProposal(duplicateFile, sourceCode);
+  await activateManagedExtension(duplicateFile);
   userState.aiChats[duplicateId] = {
     id: duplicateId,
     query: `Tweak ${duplicateTitle}`,
