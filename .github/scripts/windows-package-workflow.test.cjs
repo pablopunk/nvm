@@ -60,7 +60,7 @@ test('tracked text stays LF on Windows so aggregate verification is host-indepen
   );
 });
 
-test('platform boundary allowlists use host-independent repository paths', () => {
+test('platform boundary selectors use host-independent repository paths', () => {
   assert.equal(
     normalizeRepositoryPath('src\\electron\\os.ts'),
     'src/electron/os.ts',

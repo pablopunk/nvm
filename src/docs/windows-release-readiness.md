@@ -2,7 +2,7 @@
 
 Windows support is **UNVERIFIED**. The Windows CI job produces unsigned smoke artifacts and startup evidence; it does not authorize a public support claim, production publishing, close intent, or a signed release. Every required Windows 11 manual row must pass against the same candidate artifact before that boundary changes.
 
-The machine-enforced companion inventory is [`windows-platform-inventory.json`](./windows-platform-inventory.json). `scripts/check-windows-platform-inventory.cjs` fails new or stale platform reads, platform selectors, injected platform branches, OS-owned labels, and known-folder construction that lacks an explicit disposition.
+The machine-enforced companion inventory is [`windows-platform-inventory.json`](./windows-platform-inventory.json). Each source rule owns exactly one structural source selector, an explicit disposition, and one readiness-matrix surface. `scripts/check-windows-platform-inventory.cjs` fails new, duplicate, or stale platform reads, platform selectors, injected platform branches, OS-owned labels, and known-folder construction—even when another site in the same file is already inventoried.
 
 ## Capability and readiness matrix
 
