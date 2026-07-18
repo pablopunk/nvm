@@ -1,3 +1,5 @@
+import type { ExtensionWindowCapability } from './extension-window-capabilities';
+
 type ExtensionWindowLike = {
   webContents: {
     send(channel: string, payload: unknown): void;
@@ -40,6 +42,19 @@ type ExtensionWindowRecord = {
   win: ExtensionWindowLike;
   view: any;
   options: any;
+  compatibility: ExtensionWindowCompatibility;
+};
+
+type ExtensionWindowCompatibility = {
+  persistence?: 'session-only';
+  degradedCapabilities?: ExtensionWindowCapability[];
+  diagnostics?: Array<
+    | { reason: 'missing-restore-key' }
+    | {
+        reason: 'unsupported-capability';
+        capability: ExtensionWindowCapability;
+      }
+  >;
 };
 
 type CloneSafeRecord = { [key: string]: CloneSafeValue };
@@ -69,8 +84,22 @@ type ExtensionWindowManagerDeps = {
     isTrusted: (url: string) => boolean,
   ) => void;
   isTrustedPage: (url: string, id: string) => boolean;
+  hasCapability: (capability: ExtensionWindowCapability) => boolean;
   debug?: (message: string, data?: Record<string, unknown>) => void;
 };
+
+export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
+  titleBar: 'default',
+  chrome: 'default',
+  size: 'default',
+  width: 560,
+  height: 420,
+  alwaysOnTop: true,
+  visibleOnAllSpaces: false,
+  hideOnBlur: false,
+  persistent: false,
+  remembersFrame: false,
+} as const);
 
 export function extensionWindowSize(options: any = {}) {
   const large = options.size === 'large';
@@ -146,6 +175,55 @@ function extensionWindowViewPayload(id: string, view: any, options: any) {
 export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   const records = new Map<string, ExtensionWindowRecord>();
 
+  function compatibilityForOptions(
+    id: string,
+    options: Record<string, unknown>,
+  ): ExtensionWindowCompatibility {
+    const requestedCapabilities: ExtensionWindowCapability[] = [];
+    if (options.alwaysOnTop !== false)
+      requestedCapabilities.push('windows.always-on-top');
+    if (options.visibleOnAllSpaces)
+      requestedCapabilities.push('windows.all-spaces');
+    if (options.remembersFrame || (options.persistent && options.restoreKey)) {
+      requestedCapabilities.push(
+        'windows.frame-restore',
+        'windows.display-recovery',
+      );
+    }
+    const degradedCapabilities = requestedCapabilities.filter(
+      (capability) => !deps.hasCapability(capability),
+    );
+    const diagnostics: ExtensionWindowCompatibility['diagnostics'] =
+      degradedCapabilities.map((capability) => ({
+        reason: 'unsupported-capability',
+        capability,
+      }));
+    const missingRestoreKey = Boolean(
+      options.persistent && !options.restoreKey,
+    );
+    if (missingRestoreKey)
+      diagnostics.unshift({ reason: 'missing-restore-key' });
+    for (const diagnostic of diagnostics) {
+      if (diagnostic.reason === 'missing-restore-key')
+        deps.debug?.('extensionWindow.persistenceDegraded', {
+          id,
+          persistence: 'session-only',
+          reason: diagnostic.reason,
+        });
+      else
+        deps.debug?.('extensionWindow.capabilityDegraded', {
+          id,
+          capability: diagnostic.capability,
+          reason: diagnostic.reason,
+        });
+    }
+    return {
+      ...(missingRestoreKey ? { persistence: 'session-only' as const } : {}),
+      ...(degradedCapabilities.length > 0 ? { degradedCapabilities } : {}),
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+    };
+  }
+
   function load(win: ExtensionWindowLike, id: string) {
     if (deps.isDev && deps.rendererUrl)
       return win.loadURL(
@@ -181,13 +259,19 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       });
     }
     const alwaysOnTop = options.alwaysOnTop !== false;
-    win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal');
-    win.setVisibleOnAllWorkspaces(Boolean(options.visibleOnAllSpaces), {
-      visibleOnFullScreen: true,
-    });
+    if (deps.hasCapability('windows.always-on-top'))
+      win.setAlwaysOnTop(alwaysOnTop, alwaysOnTop ? 'floating' : 'normal');
+    if (deps.hasCapability('windows.all-spaces'))
+      win.setVisibleOnAllWorkspaces(Boolean(options.visibleOnAllSpaces), {
+        visibleOnFullScreen: true,
+      });
   }
 
-  function createOrUpdate(view: any, options: any = {}) {
+  function createOrUpdate(
+    view: any,
+    options: any = {},
+    visibility: 'show' | 'preserve' = 'show',
+  ) {
     const normalizedView = deps.normalizeView(view);
     structuredClone(normalizedView);
     const safeOptions = cloneSafeWindowOptionRecord(options);
@@ -196,6 +280,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     if (existing && !existing.win.isDestroyed()) {
       existing.view = normalizedView;
       existing.options = { ...existing.options, ...safeOptions, id };
+      existing.compatibility = compatibilityForOptions(id, existing.options);
       applyOptions(existing.win, existing.options);
       existing.win.setTitle(
         String(existing.options.title || normalizedView.title || 'Nevermind'),
@@ -204,8 +289,10 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         'extension-window:view',
         extensionWindowViewPayload(id, normalizedView, existing.options),
       );
-      existing.win.show();
-      existing.win.focus();
+      if (visibility === 'show') {
+        existing.win.show();
+        existing.win.focus();
+      }
       return existing;
     }
 
@@ -240,6 +327,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       win,
       view: normalizedView,
       options: { ...safeOptions, id },
+      compatibility: compatibilityForOptions(id, safeOptions),
     };
     records.set(id, record);
     structuredClone(
@@ -270,45 +358,80 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   }
 
   function executeWindowAction(action: any) {
-    const id = String(action.windowId || action.id || '');
+    const id = String(
+      action.windowId ||
+        action.id ||
+        (action.type === 'toggleWindow' && action.view
+          ? extensionWindowId(
+              action.view,
+              action.windowOptions || {},
+              deps.hashValue,
+            )
+          : ''),
+    );
     if (action.type === 'createWindow') {
-      createOrUpdate(action.view, action.windowOptions || {});
-      return { toast: { message: 'Opened window' } };
+      const record = createOrUpdate(action.view, action.windowOptions || {});
+      return {
+        toast: { message: 'Opened window' },
+        ...record.compatibility,
+      };
     }
     const record = records.get(id);
     if (!record) {
       if (action.type === 'toggleWindow' && action.view) {
-        createOrUpdate(action.view, { ...(action.windowOptions || {}), id });
-        return { toast: { message: 'Opened window' } };
+        const created = createOrUpdate(action.view, {
+          ...(action.windowOptions || {}),
+          id,
+        });
+        return {
+          toast: { message: 'Opened window' },
+          ...created.compatibility,
+        };
       }
       return { toast: { message: 'Window is not open', tone: 'error' } };
     }
     if (action.type === 'showWindow') {
       record.win.show();
       record.win.focus();
-      return { toast: { message: 'Shown window' } };
+      return {
+        toast: { message: 'Shown window' },
+        ...record.compatibility,
+      };
     }
     if (action.type === 'hideWindow') {
       record.win.hide();
-      return { toast: { message: 'Hidden window' } };
+      return {
+        toast: { message: 'Hidden window' },
+        ...record.compatibility,
+      };
     }
     if (action.type === 'toggleWindow') {
       if (action.view || action.windowOptions)
-        createOrUpdate(action.view || record.view, {
-          ...(record.options || {}),
-          ...(action.windowOptions || {}),
-          id,
-        });
+        createOrUpdate(
+          action.view || record.view,
+          {
+            ...(record.options || {}),
+            ...(action.windowOptions || {}),
+            id,
+          },
+          'preserve',
+        );
       if (record.win.isVisible()) record.win.hide();
       else {
         record.win.show();
         record.win.focus();
       }
-      return { toast: { message: 'Toggled window' } };
+      return {
+        toast: { message: 'Toggled window' },
+        ...record.compatibility,
+      };
     }
     if (action.type === 'closeWindow') {
       record.win.close();
-      return { toast: { message: 'Closed window' } };
+      return {
+        toast: { message: 'Closed window' },
+        ...record.compatibility,
+      };
     }
     return null;
   }

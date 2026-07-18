@@ -20,12 +20,17 @@ import type {
   ExtensionImage,
   ExtensionView,
   ExtensionWebviewPermission,
+  ExtensionWindowCapability as PublicExtensionWindowCapability,
   ForegroundColor,
   PatchMode,
   ExtensionPermission as PublicExtensionPermission,
   ViewPresentation,
   ViewSize,
 } from './resources/nevermind-extension-api';
+import {
+  EXTENSION_WINDOW_CAPABILITIES,
+  type ExtensionWindowCapability as HostExtensionWindowCapability,
+} from './electron/extension-window-capabilities';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -39,6 +44,10 @@ type AssertEqual<A, B> = Equal<A, B> extends true ? true : never;
 const permissionContract: AssertEqual<
   HostExtensionPermission,
   PublicExtensionPermission
+> = true;
+const extensionWindowCapabilityContract: AssertEqual<
+  HostExtensionWindowCapability,
+  PublicExtensionWindowCapability
 > = true;
 const patchModeContract: AssertEqual<
   NonNullable<CommandViewPatch['mode']>,
@@ -98,6 +107,7 @@ const viewColumnsContract: AssertEqual<
 
 export const modelContractAssertions = {
   permissionContract,
+  extensionWindowCapabilityContract,
   patchModeContract,
   foregroundContract,
   accessoryToneContract,
@@ -118,4 +128,10 @@ export const modelContractAssertions = {
 test('host model shares canonical public extension API literal contracts', () => {
   for (const value of Object.values(modelContractAssertions))
     assert.equal(value, true);
+  assert.deepEqual(EXTENSION_WINDOW_CAPABILITIES, [
+    'windows.always-on-top',
+    'windows.all-spaces',
+    'windows.frame-restore',
+    'windows.display-recovery',
+  ]);
 });
