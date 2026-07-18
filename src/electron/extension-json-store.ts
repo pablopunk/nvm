@@ -39,6 +39,7 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     };
   const canonicalPathResolutions = new Map<string, Promise<string>>();
   const pendingOperations = new Map<string, Promise<void>>();
+  let operationRegistrationTail: Promise<void> = Promise.resolve();
 
   async function canonicalPath(filePath: string) {
     const absolutePath = path.resolve(filePath);
@@ -121,21 +122,32 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     filePath: string,
     operation: (canonicalFilePath: string) => Promise<T>,
   ): Promise<T> {
-    const canonicalFilePath = await resolveCanonicalPath(filePath);
-    const previous = pendingOperations.get(canonicalFilePath);
-    const operationPromise = (previous ?? Promise.resolve())
-      .catch(ignoreError)
-      .then(() => operation(canonicalFilePath));
-    const settledOperation = operationPromise.then(
+    // Resolve eagerly, but register in call order so aliases cannot enter the
+    // same canonical queue in resolution order.
+    const canonicalPathResolution = resolveCanonicalPath(filePath);
+    const registration = operationRegistrationTail.then(async () => {
+      const canonicalFilePath = await canonicalPathResolution;
+      const previous = pendingOperations.get(canonicalFilePath);
+      const operationPromise = (previous ?? Promise.resolve())
+        .catch(ignoreError)
+        .then(() => operation(canonicalFilePath));
+      const settledOperation = operationPromise.then(
+        () => undefined,
+        () => undefined,
+      );
+      pendingOperations.set(canonicalFilePath, settledOperation);
+      settledOperation.then(() => {
+        if (pendingOperations.get(canonicalFilePath) === settledOperation) {
+          pendingOperations.delete(canonicalFilePath);
+        }
+      });
+      return { operationPromise };
+    });
+    operationRegistrationTail = registration.then(
       () => undefined,
       () => undefined,
     );
-    pendingOperations.set(canonicalFilePath, settledOperation);
-    settledOperation.then(() => {
-      if (pendingOperations.get(canonicalFilePath) === settledOperation) {
-        pendingOperations.delete(canonicalFilePath);
-      }
-    });
+    const { operationPromise } = await registration;
     return operationPromise;
   }
 

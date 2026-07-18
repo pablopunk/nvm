@@ -109,6 +109,46 @@ test('preserves invocation order while the canonical path is resolving', async (
   });
 });
 
+test('preserves invocation order when distinct aliases resolve out of order', async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const canonicalPath = path.join(directory, 'storage.json');
+    const firstAlias = path.join(directory, 'first-alias.json');
+    const secondAlias = path.join(directory, 'second-alias.json');
+    let releaseFirstRealpath!: () => void;
+    const firstRealpathMayFinish = new Promise<void>((resolve) => {
+      releaseFirstRealpath = resolve;
+    });
+    let secondRealpathFinished!: () => void;
+    const secondRealpathDidFinish = new Promise<void>((resolve) => {
+      secondRealpathFinished = resolve;
+    });
+    const store = createExtensionJsonStore({
+      realpath: (async (candidate) => {
+        if (String(candidate) === firstAlias) {
+          await firstRealpathMayFinish;
+        }
+        if (String(candidate) === secondAlias) {
+          secondRealpathFinished();
+        }
+        return canonicalPath;
+      }) as typeof fs.realpath,
+    });
+
+    const mutation = store.mutate(firstAlias, (current) => ({
+      ...current,
+      mutation: true,
+    }));
+    const replacement = store.replace(secondAlias, { replacement: true });
+    await secondRealpathDidFinish;
+    releaseFirstRealpath();
+    await Promise.all([mutation, replacement]);
+
+    assert.deepEqual(JSON.parse(await fs.readFile(canonicalPath, 'utf8')), {
+      replacement: true,
+    });
+  });
+});
+
 test('serializes canonical path aliases', {
   skip: process.platform === 'win32',
 }, async () => {
