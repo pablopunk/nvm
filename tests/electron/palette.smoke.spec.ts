@@ -1,3 +1,4 @@
+// biome-ignore-all lint: End-to-end Electron harness intentionally uses dynamic page payloads, polling, and process cleanup primitives.
 import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -8,29 +9,40 @@ import { type ElectronApplication, _electron as electron } from 'playwright';
 
 const root = process.cwd();
 const require = createRequire(import.meta.url);
-const artifactDir = process.env.NVM_TEST_ARTIFACT_DIR!;
-const userDataDir = process.env.NVM_TEST_USER_DATA_DIR!;
+const artifactDir = process.env.NVM_TEST_ARTIFACT_DIR;
+const userDataDir = process.env.NVM_TEST_USER_DATA_DIR;
+if (!(artifactDir && userDataDir)) {
+  throw new Error(
+    'Electron test artifact and user-data directories are required',
+  );
+}
 const execFile = promisify(execFileCallback);
 
 async function processTree(rootPid: number) {
-  if (process.platform === 'win32') return [rootPid];
+  if (process.platform === 'win32') {
+    return [rootPid];
+  }
   const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=']);
   const children = new Map<number, number[]>();
   for (const line of stdout.split('\n')) {
     const [pidText, parentText] = line.trim().split(/\s+/);
     const pid = Number(pidText);
     const parent = Number(parentText);
-    if (!(Number.isInteger(pid) && Number.isInteger(parent))) continue;
+    if (!(Number.isInteger(pid) && Number.isInteger(parent))) {
+      continue;
+    }
     const siblings = children.get(parent) || [];
     siblings.push(pid);
     children.set(parent, siblings);
   }
   const tracked = new Set<number>([rootPid]);
   const pending = [rootPid];
-  while (pending.length) {
+  while (pending.length > 0) {
     const parent = pending.pop()!;
     for (const child of children.get(parent) || []) {
-      if (tracked.has(child)) continue;
+      if (tracked.has(child)) {
+        continue;
+      }
       tracked.add(child);
       pending.push(child);
     }
@@ -51,7 +63,9 @@ async function waitForProcessesToExit(pids: number[], timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const alive = pids.filter(isProcessAlive);
-    if (!alive.length) return [];
+    if (alive.length === 0) {
+      return [];
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return pids.filter(isProcessAlive);
@@ -62,7 +76,9 @@ function terminateTrackedProcesses(pids: number[], signal: NodeJS.Signals) {
     try {
       process.kill(pid, signal);
     } catch (error: any) {
-      if (!['ESRCH', 'EPERM'].includes(error?.code)) throw error;
+      if (!['ESRCH', 'EPERM'].includes(error?.code)) {
+        throw error;
+      }
     }
   }
 }
@@ -158,7 +174,9 @@ function actionNamed(view: any, title: string) {
       const action = section.actions?.find(
         (candidate: any) => candidate.title === title,
       );
-      if (action) return action;
+      if (action) {
+        return action;
+      }
     }
   }
   throw new Error(`Missing ${title} action in Extensions view`);
@@ -195,9 +213,13 @@ async function openExtensionsView(page: any) {
         action.extensionId === 'nevermind.extensions' &&
         action.commandId === 'extensions',
     );
-    if (!extensions) throw new Error('Extensions command not found');
+    if (!extensions) {
+      throw new Error('Extensions command not found');
+    }
     const result = await window.nvm.execute(extensions);
-    if (!result?.view) throw new Error('Extensions view did not open');
+    if (!result?.view) {
+      throw new Error('Extensions view did not open');
+    }
     return result.view;
   });
 }
@@ -215,7 +237,9 @@ async function lifecyclePaletteAction(page: any, version: string) {
       generation,
     });
     const action = actions.find((candidate) => candidate.title === title);
-    if (!action) throw new Error(`${title} not found`);
+    if (!action) {
+      throw new Error(`${title} not found`);
+    }
     return action;
   }, version);
 }
@@ -225,7 +249,9 @@ async function renderLifecycleDirectAction(page: any, version: string) {
   return page.evaluate(async (paletteAction) => {
     const result = await window.nvm.execute(paletteAction);
     const directAction = result.view?.items?.[0]?.primaryAction;
-    if (!directAction) throw new Error('Direct action was not rendered');
+    if (!directAction) {
+      throw new Error('Direct action was not rendered');
+    }
     return directAction;
   }, action);
 }
@@ -262,7 +288,9 @@ async function closeTestApplication(
     new Promise((resolve) => setTimeout(resolve, 2000)),
   ]);
   const survivors = await waitForProcessesToExit(trackedPids, 500);
-  if (survivors.length) terminateTrackedProcesses(survivors, 'SIGKILL');
+  if (survivors.length > 0) {
+    terminateTrackedProcesses(survivors, 'SIGKILL');
+  }
 }
 
 test('searches and invokes the safe built-in action, then hides and shows', async () => {
@@ -345,7 +373,7 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       page.getByText('PAB-85 Delayed Provider: PAB-85 Immediate Search Alpha', {
         exact: true,
       }),
-    ).toBeVisible({ timeout: 1_000 });
+    ).toBeVisible({ timeout: 1000 });
     const searchDurationsMs = await page.evaluate(() =>
       performance
         .getEntriesByName('nvm:search.renderer-to-results')
@@ -362,7 +390,7 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
         'PAB-85 Delayed Provider: PAB-85 Immediate Search Current',
         { exact: true },
       ),
-    ).toBeVisible({ timeout: 1_000 });
+    ).toBeVisible({ timeout: 1000 });
     await expect(
       page.getByText('PAB-85 Delayed Provider: PAB-85 Immediate Search Stale', {
         exact: true,
@@ -407,14 +435,14 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
       );
       let fallbackUsed = false;
       let survivorsAfterFallback = survivorsAfterClose;
-      if (survivorsAfterClose.length) {
+      if (survivorsAfterClose.length > 0) {
         fallbackUsed = true;
         terminateTrackedProcesses(survivorsAfterClose, 'SIGTERM');
         survivorsAfterFallback = await waitForProcessesToExit(
           survivorsAfterClose,
           2000,
         );
-        if (survivorsAfterFallback.length) {
+        if (survivorsAfterFallback.length > 0) {
           terminateTrackedProcesses(survivorsAfterFallback, 'SIGKILL');
           survivorsAfterFallback = await waitForProcessesToExit(
             survivorsAfterFallback,
@@ -432,13 +460,16 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
           passed: survivorsAfterFallback.length === 0,
         },
       });
-      if (survivorsAfterFallback.length)
+      if (survivorsAfterFallback.length > 0) {
         cleanupError = new Error(
           `Tracked Electron processes survived teardown: ${survivorsAfterFallback.join(', ')}`,
         );
+      }
     }
   }
-  if (cleanupError) throw cleanupError;
+  if (cleanupError) {
+    throw cleanupError;
+  }
 });
 
 test('proposal activation, rollback, disable, and re-enable are transactional', async () => {
@@ -766,7 +797,9 @@ test('proposal activation, rollback, disable, and re-enable are transactional', 
         new Promise((resolve) => setTimeout(resolve, 2000)),
       ]);
       const survivors = await waitForProcessesToExit(trackedPids, 500);
-      if (survivors.length) terminateTrackedProcesses(survivors, 'SIGKILL');
+      if (survivors.length > 0) {
+        terminateTrackedProcesses(survivors, 'SIGKILL');
+      }
     }
   }
 });

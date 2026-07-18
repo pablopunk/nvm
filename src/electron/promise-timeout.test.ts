@@ -7,6 +7,9 @@ import {
   withAbortableTimeout,
 } from './promise-timeout';
 
+const TEST_TIMEOUT_MS = 100;
+const FAILED_PATTERN = /failed/;
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
@@ -21,7 +24,7 @@ function fakeTimers() {
   const callbacks = new Map<object, () => void>();
   const timers: PromiseTimeoutTimers = {
     setTimeout: (callback) => {
-      const handle = { unref() {} };
+      const handle = { unref: () => undefined };
       callbacks.set(handle, callback);
       return handle as ReturnType<typeof setTimeout>;
     },
@@ -30,14 +33,18 @@ function fakeTimers() {
   return {
     timers,
     active: () => callbacks.size,
-    fire: () => [...callbacks.values()].forEach((callback) => callback()),
+    fire: () => {
+      for (const callback of callbacks.values()) {
+        callback();
+      }
+    },
   };
 }
 
 test('withAbortableTimeout clears its timer after resolve and reject', async () => {
   const resolvedTimers = fakeTimers();
   assert.equal(
-    await withAbortableTimeout(Promise.resolve('done'), 100, {
+    await withAbortableTimeout(Promise.resolve('done'), TEST_TIMEOUT_MS, {
       timers: resolvedTimers.timers,
     }),
     'done',
@@ -46,10 +53,10 @@ test('withAbortableTimeout clears its timer after resolve and reject', async () 
 
   const rejectedTimers = fakeTimers();
   await assert.rejects(
-    withAbortableTimeout(Promise.reject(new Error('failed')), 100, {
+    withAbortableTimeout(Promise.reject(new Error('failed')), TEST_TIMEOUT_MS, {
       timers: rejectedTimers.timers,
     }),
-    /failed/,
+    FAILED_PATTERN,
   );
   assert.equal(rejectedTimers.active(), 0);
 });
@@ -57,7 +64,7 @@ test('withAbortableTimeout clears its timer after resolve and reject', async () 
 test('withAbortableTimeout distinguishes timeout and abort and cleans up', async () => {
   const timeoutTimers = fakeTimers();
   const pending = deferred<void>();
-  const timed = withAbortableTimeout(pending.promise, 100, {
+  const timed = withAbortableTimeout(pending.promise, TEST_TIMEOUT_MS, {
     timers: timeoutTimers.timers,
   });
   assert.equal(timeoutTimers.active(), 1);
@@ -69,10 +76,14 @@ test('withAbortableTimeout distinguishes timeout and abort and cleans up', async
 
   const abortTimers = fakeTimers();
   const controller = new AbortController();
-  const aborted = withAbortableTimeout(deferred<void>().promise, 100, {
-    signal: controller.signal,
-    timers: abortTimers.timers,
-  });
+  const aborted = withAbortableTimeout(
+    deferred<void>().promise,
+    TEST_TIMEOUT_MS,
+    {
+      signal: controller.signal,
+      timers: abortTimers.timers,
+    },
+  );
   controller.abort();
   await assert.rejects(aborted, isPromiseAbortError);
   assert.equal(abortTimers.active(), 0);
@@ -83,7 +94,7 @@ test('withAbortableTimeout rejects immediately for a pre-aborted signal', async 
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(
-    withAbortableTimeout(deferred<void>().promise, 100, {
+    withAbortableTimeout(deferred<void>().promise, TEST_TIMEOUT_MS, {
       signal: controller.signal,
       timers: timers.timers,
     }),

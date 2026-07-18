@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Preload instrumentation intentionally uses Electron environment flags and best-effort Performance APIs.
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from 'electron';
 import type { NevermindApi } from '../preload-api';
 

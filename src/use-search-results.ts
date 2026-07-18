@@ -9,6 +9,9 @@ import {
   type SearchSessionTransport,
 } from './search-session';
 
+const SEARCH_DEBOUNCE_MS = 20;
+
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: Hook keeps one search session lifecycle and one debounce lifecycle together.
 export function useSearchResults<T>(
   transport: SearchSessionTransport<T>,
   query: string,
@@ -36,7 +39,7 @@ export function useSearchResults<T>(
           ),
       },
       onSnapshot: (snapshot, timing) => {
-        if (snapshot.complete)
+        if (snapshot.complete) {
           recordDebugPerformance(
             'search.renderer-to-results',
             timing.elapsedMs,
@@ -48,6 +51,7 @@ export function useSearchResults<T>(
               alwaysLog: true,
             },
           );
+        }
         markDebugPerformance('search.set-results', {
           generation: snapshot.generation,
           revision: snapshot.revision,
@@ -73,11 +77,13 @@ export function useSearchResults<T>(
     });
     const timer = window.setTimeout(() => {
       generation = sessionRef.current?.start(query);
-    }, 20);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timer);
-      if (generation !== undefined) sessionRef.current?.cancel(generation);
+      if (generation !== undefined) {
+        sessionRef.current?.cancel(generation);
+      }
     };
   }, [query, refreshNonce]);
 

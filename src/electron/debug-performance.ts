@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Performance instrumentation intentionally uses best-effort platform APIs and compact hot-path guards.
 import { performance } from 'node:perf_hooks';
 import { debug as logDebug } from './logger';
 

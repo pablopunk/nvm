@@ -8,6 +8,7 @@ export class PromiseTimeoutError extends Error {
   }
 }
 
+// biome-ignore lint/style/useExportsLast: Error types stay adjacent so callers can distinguish lifecycle outcomes.
 export class PromiseAbortError extends Error {
   constructor() {
     super('Operation aborted');
@@ -17,10 +18,10 @@ export class PromiseAbortError extends Error {
 
 type TimeoutHandle = ReturnType<typeof setTimeout> & { unref?: () => void };
 
-export type PromiseTimeoutTimers = {
+export interface PromiseTimeoutTimers {
   setTimeout: (callback: () => void, timeoutMs: number) => TimeoutHandle;
   clearTimeout: (handle: TimeoutHandle) => void;
-};
+}
 
 const defaultTimers: PromiseTimeoutTimers = {
   setTimeout: (callback, timeoutMs) => setTimeout(callback, timeoutMs),
@@ -49,27 +50,41 @@ export function withAbortableTimeout<T>(
     let timer: TimeoutHandle | undefined;
 
     function cleanup() {
-      if (timer) timers.clearTimeout(timer);
+      if (timer) {
+        timers.clearTimeout(timer);
+      }
       timer = undefined;
       options.signal?.removeEventListener('abort', abort);
     }
 
-    function settle(callback: (value: any) => void, value: unknown) {
-      if (settled) return;
+    function claimSettlement() {
+      if (settled) {
+        return false;
+      }
       settled = true;
       cleanup();
-      callback(value);
+      return true;
     }
 
     function abort() {
-      settle(reject, new PromiseAbortError());
+      if (claimSettlement()) {
+        reject(new PromiseAbortError());
+      }
     }
 
     // Attach both handlers before installing cancellation. A provider that
     // ignores cancellation can settle later without becoming unhandled.
     Promise.resolve(promise).then(
-      (value) => settle(resolve, value),
-      (error) => settle(reject, error),
+      (value) => {
+        if (claimSettlement()) {
+          resolve(value);
+        }
+      },
+      (error) => {
+        if (claimSettlement()) {
+          reject(error);
+        }
+      },
     );
 
     if (options.signal?.aborted) {
@@ -78,10 +93,11 @@ export function withAbortableTimeout<T>(
     }
 
     options.signal?.addEventListener('abort', abort, { once: true });
-    timer = timers.setTimeout(
-      () => settle(reject, new PromiseTimeoutError(timeoutMs)),
-      timeoutMs,
-    );
+    timer = timers.setTimeout(() => {
+      if (claimSettlement()) {
+        reject(new PromiseTimeoutError(timeoutMs));
+      }
+    }, timeoutMs);
     timer.unref?.();
   });
 }

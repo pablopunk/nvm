@@ -12,7 +12,7 @@ function deferred<T>() {
 }
 
 function harness() {
-  let listener: (snapshot: SearchSnapshot<string>) => void = () => {};
+  let listener: (snapshot: SearchSnapshot<string>) => void = () => undefined;
   const searches: Array<{
     query: string;
     generation: number;

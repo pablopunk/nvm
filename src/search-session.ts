@@ -1,13 +1,13 @@
 import type { SearchSnapshot } from './preload-api';
 
-export type SearchSessionTransport<T> = {
+export interface SearchSessionTransport<T> {
   search(
     query: string,
     options: { generation: number; clipboardOnly?: boolean },
   ): Promise<SearchSnapshot<T>>;
   cancelSearch(generation: number): void;
   onSearchUpdate(callback: (snapshot: SearchSnapshot<T>) => void): () => void;
-};
+}
 
 export function createSearchSession<T>(options: {
   transport: SearchSessionTransport<T>;
@@ -26,8 +26,9 @@ export function createSearchSession<T>(options: {
       !active ||
       snapshot.generation !== active.generation ||
       snapshot.revision <= active.highestRevision
-    )
+    ) {
       return;
+    }
     active.highestRevision = snapshot.revision;
     options.onSnapshot(snapshot, { elapsedMs: now() - active.startedAt });
   }
@@ -41,20 +42,25 @@ export function createSearchSession<T>(options: {
       .search(query, { generation, ...searchOptions })
       .then(accept)
       .catch((error) => {
-        if (active?.generation === generation)
+        if (active?.generation === generation) {
           options.onError?.(error, generation);
+        }
       });
     return generation;
   }
 
   function cancel(generation: number) {
-    if (active?.generation !== generation) return;
+    if (active?.generation !== generation) {
+      return;
+    }
     options.transport.cancelSearch(generation);
     active = undefined;
   }
 
   function dispose() {
-    if (active) options.transport.cancelSearch(active.generation);
+    if (active) {
+      options.transport.cancelSearch(active.generation);
+    }
     active = undefined;
     unsubscribe();
   }

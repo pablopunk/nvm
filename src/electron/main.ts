@@ -143,17 +143,6 @@ import {
 import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 import { markInternalExtension } from './internal-extension';
 import { type JobDefinition, JobRegistry, type JobSnapshot } from './jobs';
-import {
-  isPromiseAbortError,
-  isPromiseTimeoutError,
-  withAbortableTimeout,
-} from './promise-timeout';
-import {
-  createStableSearchResultPreparer,
-  createSearchCoordinator,
-  searchResultsFingerprint,
-} from './search-coordinator';
-import { createProgressiveSearchTestExtension } from './search-test-extension';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
   configureLogger,
@@ -196,7 +185,18 @@ import {
   createPaletteWindowController,
   installPermissionHandlers,
 } from './palette-window';
+import {
+  isPromiseAbortError,
+  isPromiseTimeoutError,
+  withAbortableTimeout,
+} from './promise-timeout';
 import { createRunningAppStatusService } from './running-app-status';
+import {
+  createSearchCoordinator,
+  createStableSearchResultPreparer,
+  searchResultsFingerprint,
+} from './search-coordinator';
+import { createProgressiveSearchTestExtension } from './search-test-extension';
 import {
   calculate,
   calculateDetailed,

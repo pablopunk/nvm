@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useConsistentTypeDefinitions: Public preload contracts retain the established object type-alias style.
 import type {
   CommandAction,
   CommandItemAppearance,

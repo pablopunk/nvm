@@ -1,31 +1,32 @@
-export type SearchSnapshot<T> = {
+export interface SearchSnapshot<T> {
   generation: number;
   revision: number;
   results: T[];
   complete: boolean;
-};
+}
 
-export type SearchRequest = {
+export interface SearchRequest {
   query: string;
   generation: number;
   clipboardOnly?: boolean;
-};
+}
 
-export type SearchProvider<T> = {
+export interface SearchProvider<T> {
   key: string;
   run(signal: AbortSignal): Promise<T[]>;
-};
+}
 
-export type SearchWork<T> = {
+export interface SearchWork<T> {
   initialResults: T[];
   providers: SearchProvider<T>[];
   buildResults(resultsByProvider: ReadonlyMap<string, T[]>): T[];
   completeImmediately?: boolean;
   onProvidersLaunched?: (durationMs: number) => void;
   onComplete?: () => void;
-};
+}
 
-export type SearchSender = {
+// biome-ignore lint/style/useExportsLast: Public sender contract is grouped with the other transport contracts.
+export interface SearchSender {
   isDestroyed(): boolean;
   send(channel: string, payload: unknown): void;
   on(event: 'destroyed' | 'render-process-gone', listener: () => void): void;
@@ -33,19 +34,20 @@ export type SearchSender = {
     event: 'destroyed' | 'render-process-gone',
     listener: () => void,
   ): void;
-};
+}
 
 type ScheduledFlush = unknown;
+const DEFAULT_COALESCING_WINDOW_MS = 16;
 
-export type SearchCoordinatorOptions<T> = {
+export interface SearchCoordinatorOptions<T> {
   createWork(request: SearchRequest): SearchWork<T>;
   fingerprint(results: T[]): string;
   scheduleFlush(callback: () => void): ScheduledFlush;
   cancelFlush(handle: ScheduledFlush): void;
   updateChannel?: string;
-};
+}
 
-type ActiveSearch<T> = {
+interface ActiveSearch<T> {
   generation: number;
   revision: number;
   controller: AbortController;
@@ -54,21 +56,22 @@ type ActiveSearch<T> = {
   lastFingerprint: string;
   scheduledFlush?: ScheduledFlush;
   work: SearchWork<T>;
-};
+}
 
-type SenderState<T> = {
+interface SenderState<T> {
   sender: SearchSender;
   highestSeenGeneration: number;
   active?: ActiveSearch<T>;
   destroy: () => void;
-};
+}
 
 function defaultScheduleFlush(callback: () => void) {
-  const handle = setTimeout(callback, 16);
+  const handle = setTimeout(callback, DEFAULT_COALESCING_WINDOW_MS);
   handle.unref?.();
   return handle;
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: Coordinator lifecycle stays together so generation and sender ownership cannot drift across helpers.
 export function createSearchCoordinator<T>(
   options: Partial<
     Pick<SearchCoordinatorOptions<T>, 'scheduleFlush' | 'cancelFlush'>
@@ -86,8 +89,9 @@ export function createSearchCoordinator<T>(
 
   function removeState(state: SenderState<T>) {
     state.active?.controller.abort();
-    if (state.active?.scheduledFlush !== undefined)
+    if (state.active?.scheduledFlush !== undefined) {
       cancelFlush(state.active.scheduledFlush);
+    }
     state.sender.removeListener('destroyed', state.destroy);
     state.sender.removeListener('render-process-gone', state.destroy);
     states.delete(state.sender);
@@ -95,7 +99,9 @@ export function createSearchCoordinator<T>(
 
   function stateFor(sender: SearchSender) {
     const current = states.get(sender);
-    if (current) return current;
+    if (current) {
+      return current;
+    }
     const state = {
       sender,
       highestSeenGeneration: 0,
@@ -117,15 +123,23 @@ export function createSearchCoordinator<T>(
 
   function flush(state: SenderState<T>, active: ActiveSearch<T>) {
     active.scheduledFlush = undefined;
-    if (!isCurrent(state, active)) return;
+    if (!isCurrent(state, active)) {
+      return;
+    }
     const results = active.work.buildResults(active.resultsByProvider);
     const fingerprint = options.fingerprint(results);
     const complete = active.pendingProviders === 0;
-    if (!complete && fingerprint === active.lastFingerprint) return;
+    if (!complete && fingerprint === active.lastFingerprint) {
+      return;
+    }
     active.lastFingerprint = fingerprint;
     active.revision += 1;
-    if (complete) active.work.onComplete?.();
-    if (!isCurrent(state, active)) return;
+    if (complete) {
+      active.work.onComplete?.();
+    }
+    if (!isCurrent(state, active)) {
+      return;
+    }
     const snapshot: SearchSnapshot<T> = {
       generation: active.generation,
       revision: active.revision,
@@ -133,12 +147,15 @@ export function createSearchCoordinator<T>(
       complete,
     };
     state.sender.send(updateChannel, snapshot);
-    if (complete) state.active = undefined;
+    if (complete) {
+      state.active = undefined;
+    }
   }
 
   function requestFlush(state: SenderState<T>, active: ActiveSearch<T>) {
-    if (!isCurrent(state, active) || active.scheduledFlush !== undefined)
+    if (!isCurrent(state, active) || active.scheduledFlush !== undefined) {
       return;
+    }
     active.scheduledFlush = scheduleFlush(() => flush(state, active));
   }
 
@@ -148,15 +165,19 @@ export function createSearchCoordinator<T>(
     provider: SearchProvider<T>,
     results: T[],
   ) {
-    if (!isCurrent(state, active)) return;
+    if (!isCurrent(state, active)) {
+      return;
+    }
     active.resultsByProvider.set(provider.key, results);
     active.pendingProviders -= 1;
     requestFlush(state, active);
   }
 
   function launchProviders(state: SenderState<T>, active: ActiveSearch<T>) {
-    if (!isCurrent(state, active)) return;
-    if (!active.work.providers.length) {
+    if (!isCurrent(state, active)) {
+      return;
+    }
+    if (active.work.providers.length === 0) {
       requestFlush(state, active);
       return;
     }
@@ -177,16 +198,19 @@ export function createSearchCoordinator<T>(
   }
 
   function search(sender: SearchSender, request: SearchRequest) {
-    if (!(Number.isSafeInteger(request.generation) && request.generation > 0))
+    if (!(Number.isSafeInteger(request.generation) && request.generation > 0)) {
       throw new RangeError('Search generation must be a positive safe integer');
+    }
     const state = stateFor(sender);
-    if (request.generation <= state.highestSeenGeneration)
+    if (request.generation <= state.highestSeenGeneration) {
       throw new RangeError('Search generation must increase monotonically');
+    }
 
     state.highestSeenGeneration = request.generation;
     state.active?.controller.abort();
-    if (state.active?.scheduledFlush !== undefined)
+    if (state.active?.scheduledFlush !== undefined) {
       cancelFlush(state.active.scheduledFlush);
+    }
 
     const work = options.createWork(request);
     const snapshot: SearchSnapshot<T> = {
@@ -217,14 +241,20 @@ export function createSearchCoordinator<T>(
   function cancel(sender: SearchSender, generation: number) {
     const state = states.get(sender);
     const active = state?.active;
-    if (!(state && active && active.generation === generation)) return;
+    if (!(state && active && active.generation === generation)) {
+      return;
+    }
     active.controller.abort();
-    if (active.scheduledFlush !== undefined) cancelFlush(active.scheduledFlush);
+    if (active.scheduledFlush !== undefined) {
+      cancelFlush(active.scheduledFlush);
+    }
     state.active = undefined;
   }
 
   function dispose() {
-    for (const state of [...states.values()]) removeState(state);
+    for (const state of [...states.values()]) {
+      removeState(state);
+    }
   }
 
   return {
@@ -236,8 +266,12 @@ export function createSearchCoordinator<T>(
 }
 
 function stableClone(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableClone);
-  if (!(value && typeof value === 'object')) return value;
+  if (Array.isArray(value)) {
+    return value.map(stableClone);
+  }
+  if (!(value && typeof value === 'object')) {
+    return value;
+  }
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
       .filter(([key, entry]) => key !== 'executionId' && entry !== undefined)
@@ -250,15 +284,15 @@ export function searchResultsFingerprint(results: unknown[]) {
   return JSON.stringify(stableClone(results));
 }
 
-export function createStableSearchResultPreparer<TSource, TPrepared>(options: {
-  logicalKey(source: TSource): string;
-  prepare(source: TSource): TPrepared;
+export function createStableSearchResultPreparer<Source, Prepared>(options: {
+  logicalKey(source: Source): string;
+  prepare(source: Source): Prepared;
 }) {
   const cache = new Map<
     string,
-    { sourceFingerprint: string; prepared: TPrepared }
+    { sourceFingerprint: string; prepared: Prepared }
   >();
-  return (sources: TSource[]) => {
+  return (sources: Source[]) => {
     const occurrences = new Map<string, number>();
     return sources.map((source) => {
       const logicalKey = options.logicalKey(source);
@@ -267,8 +301,9 @@ export function createStableSearchResultPreparer<TSource, TPrepared>(options: {
       const cacheKey = `${logicalKey}:${occurrence}`;
       const sourceFingerprint = searchResultsFingerprint([source]);
       const cached = cache.get(cacheKey);
-      if (cached?.sourceFingerprint === sourceFingerprint)
+      if (cached?.sourceFingerprint === sourceFingerprint) {
         return cached.prepared;
+      }
       const prepared = options.prepare(source);
       structuredClone(prepared);
       cache.set(cacheKey, { sourceFingerprint, prepared });

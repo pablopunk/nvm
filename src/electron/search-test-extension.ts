@@ -1,3 +1,5 @@
+const CONTROLLED_PROVIDER_DELAY_MS = 500;
+
 export function createProgressiveSearchTestExtension() {
   return {
     id: 'pab85.search-progressive',
@@ -16,7 +18,9 @@ export function createProgressiveSearchTestExtension() {
       },
     ],
     searchItems(ctx: { signal?: AbortSignal }, query: string) {
-      if (!query.startsWith('PAB-85 Immediate Search')) return [];
+      if (!query.startsWith('PAB-85 Immediate Search')) {
+        return [];
+      }
       return new Promise<unknown[]>((resolve) => {
         const timer = setTimeout(
           () =>
@@ -28,7 +32,7 @@ export function createProgressiveSearchTestExtension() {
                 icon: 'clock',
               },
             ]),
-          500,
+          CONTROLLED_PROVIDER_DELAY_MS,
         );
         timer.unref?.();
         ctx.signal?.addEventListener(

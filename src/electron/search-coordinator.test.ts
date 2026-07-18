@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  createStableSearchResultPreparer,
   createSearchCoordinator,
+  createStableSearchResultPreparer,
   type SearchRequest,
   type SearchSnapshot,
   type SearchWork,
   searchResultsFingerprint,
 } from './search-coordinator';
+
+const MONOTONIC_GENERATION_PATTERN = /increase monotonically/;
+const FUTURE_GENERATION = 3;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -48,8 +51,12 @@ class FakeSender {
   }
 
   emit(event: 'destroyed' | 'render-process-gone') {
-    if (event === 'destroyed') this.destroyed = true;
-    for (const listener of [...(this.listeners.get(event) || [])]) listener();
+    if (event === 'destroyed') {
+      this.destroyed = true;
+    }
+    for (const listener of [...(this.listeners.get(event) || [])]) {
+      listener();
+    }
   }
 }
 
@@ -133,23 +140,26 @@ test('forces a terminal update when providers do not change visible results', as
 });
 
 test('forces terminal delivery for empty and failed provider sets', async () => {
-  for (const providers of [
+  const providerSets = [
     [],
     [{ key: 'failed', run: async () => Promise.reject(new Error('failed')) }],
-  ]) {
-    const { coordinator, flush } = harness(() => ({
-      initialResults: ['local'],
-      providers,
-      buildResults: () => ['local'],
-    }));
-    const sender = new FakeSender();
-    coordinator.search(sender, { query: 'a', generation: 1 });
-    await drainMicrotasks();
-    flush();
-    assert.equal(sender.sent.length, 1);
-    assert.equal(sender.sent[0].complete, true);
-    assert.deepEqual(sender.sent[0].results, ['local']);
-  }
+  ];
+  await Promise.all(
+    providerSets.map(async (providers) => {
+      const { coordinator, flush } = harness(() => ({
+        initialResults: ['local'],
+        providers,
+        buildResults: () => ['local'],
+      }));
+      const sender = new FakeSender();
+      coordinator.search(sender, { query: 'a', generation: 1 });
+      await drainMicrotasks();
+      flush();
+      assert.equal(sender.sent.length, 1);
+      assert.equal(sender.sent[0].complete, true);
+      assert.deepEqual(sender.sent[0].results, ['local']);
+    }),
+  );
 });
 
 test('suppresses stale cooperative and non-cooperative provider results', async () => {
@@ -200,14 +210,14 @@ test('rejects duplicate generations and ignores late or future cancels', () => {
   coordinator.search(sender, { query: '', generation: 2 });
   assert.throws(
     () => coordinator.search(sender, { query: '', generation: 2 }),
-    /increase monotonically/,
+    MONOTONIC_GENERATION_PATTERN,
   );
   assert.throws(
     () => coordinator.search(sender, { query: '', generation: 1 }),
-    /increase monotonically/,
+    MONOTONIC_GENERATION_PATTERN,
   );
   coordinator.cancel(sender, 1);
-  coordinator.cancel(sender, 3);
+  coordinator.cancel(sender, FUTURE_GENERATION);
   coordinator.cancel(sender, 2);
   coordinator.cancel(sender, 2);
 });

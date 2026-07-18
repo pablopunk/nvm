@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Public extension declarations preserve released type-alias and void compatibility contracts.
 /**
  * Nevermind Extension API
  *
