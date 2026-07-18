@@ -36,8 +36,9 @@ test('platform inventory covers every planned category and non-os platform seam'
     'src/electron/app-ipc-handlers.ts',
     'src/electron/extensions/system.ts',
     'src/extension-view.tsx',
-  ])
+  ]) {
     assert.equal(files.has(expected), true, expected);
+  }
 });
 
 test('platform inventory checker accepts the frozen source and is wired into aggregate checks', () => {
@@ -47,9 +48,11 @@ test('platform inventory checker accepts the frozen source and is wired into agg
     { encoding: 'utf8' },
   );
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(
-    fs.readFileSync('scripts/run-checks.cjs', 'utf8'),
-    /check-windows-platform-inventory\.cjs/,
+  assert.equal(
+    fs
+      .readFileSync('scripts/run-checks.cjs', 'utf8')
+      .includes('check-windows-platform-inventory.cjs'),
+    true,
   );
 });
 
@@ -67,6 +70,7 @@ test('readiness document preserves the real Windows and support gates', () => {
     'SmartScreen',
     'actual Windows update',
     'blocks a Windows support claim and close intent',
-  ])
+  ]) {
     assert.equal(readiness.includes(required), true, required);
+  }
 });

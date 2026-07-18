@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This established renderer retains existing declarative view conventions.
 import {
   CornerDownLeft,
   CreditCard,
