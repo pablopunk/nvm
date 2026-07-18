@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAppIconCache, withTimeout } from './app-icon-cache';
 
+const ICON_BACKLOG_DELAY_MS = 50;
+const LONG_TIMEOUT_MS = 99_999;
+const SHORT_TIMEOUT_MS = 50;
+
 function createCache(
   options: { hasIcons?: boolean; cached?: Buffer | null; icon?: Buffer } = {},
 ) {
@@ -12,13 +16,14 @@ function createCache(
   const cache = createAppIconCache({
     hasAppIcons: () => options.hasIcons !== false,
     hashValue: (value) => `hash:${value}`,
-    readCachedIcon: async () => options.cached ?? null,
-    writeCachedIcon: async (key, png) => {
+    readCachedIcon: () => Promise.resolve(options.cached ?? null),
+    writeCachedIcon: (key, png) => {
       written.push({ key, png });
+      return Promise.resolve();
     },
-    loadIcon: async (appPath) => {
+    loadIcon: (appPath) => {
       loaded.push(appPath);
-      return options.icon || Buffer.from('png');
+      return Promise.resolve(options.icon || Buffer.from('png'));
     },
     schedule: (reason, delayMs) => scheduled.push({ reason, delayMs }),
     mark: (name, data) => marks.push({ name, data }),
@@ -89,7 +94,7 @@ test('app icon cache schedules backlog batches when pending work remains', async
   // First icon processed, 2 remaining
   assert.equal(cache.pendingCount(), 2);
   assert.equal(scheduled.at(-1)?.reason, 'icon-backlog');
-  assert.equal(scheduled.at(-1)?.delayMs, 50);
+  assert.equal(scheduled.at(-1)?.delayMs, ICON_BACKLOG_DELAY_MS);
 
   // Resolve remaining
   await cache.processPending();
@@ -99,14 +104,20 @@ test('app icon cache schedules backlog batches when pending work remains', async
 });
 
 test('withTimeout resolves with value when promise settles first', async () => {
-  const result = await withTimeout(Promise.resolve('ok'), 99999, 'fallback');
+  const result = await withTimeout(
+    Promise.resolve('ok'),
+    LONG_TIMEOUT_MS,
+    'fallback',
+  );
   assert.equal(result, 'ok');
 });
 
 test('withTimeout resolves with fallback when promise times out', {
   skip: 'unref() timer cannot keep event loop alive in test runner',
 }, async () => {
-  const never = new Promise<string>(() => {});
+  const never = new Promise<string>(() => {
+    // Intentionally unresolved to exercise the timeout fallback.
+  });
   const result = await withTimeout(never, 10, 'timed-out');
   assert.equal(result, 'timed-out');
 });
@@ -114,9 +125,13 @@ test('withTimeout resolves with fallback when promise times out', {
 test('withTimeout rejects when promise rejects (fallback is only for timeout)', async () => {
   // Catch the rejection so it doesn't trigger unhandledRejection
   const failing = new Promise<string>((_, reject) => reject(new Error('fail')));
-  await failing.catch(() => {}); // handle so it doesn't pollute
+  await failing.catch(() => undefined);
   await assert.rejects(
-    withTimeout(Promise.reject(new Error('fail')), 50, 'fallback'),
+    withTimeout(
+      Promise.reject(new Error('fail')),
+      SHORT_TIMEOUT_MS,
+      'fallback',
+    ),
     (err: Error) => err.message === 'fail',
   );
 });
@@ -127,16 +142,16 @@ test('app icon cache returns null for individual load failures (rejection, not t
   const deps = {
     hasAppIcons: () => true,
     hashValue: (value: string) => `hash:${value}`,
-    readCachedIcon: async () => null as Buffer | null,
-    writeCachedIcon: async (_key: string, _png: Buffer) => {},
-    loadIcon: async (_appPath: string) => {
+    readCachedIcon: () => Promise.resolve(null as Buffer | null),
+    writeCachedIcon: (_key: string, _png: Buffer) => Promise.resolve(),
+    loadIcon: (_appPath: string) => {
       if (throwOnLoad) {
-        throw new Error('injected failure');
+        return Promise.reject(new Error('injected failure'));
       }
-      return Buffer.from('ok');
+      return Promise.resolve(Buffer.from('ok'));
     },
-    schedule: (_reason: string, _delayMs?: number) => {},
-    mark: (_name: string, _data?: Record<string, unknown>) => {},
+    schedule: (_reason: string, _delayMs?: number) => undefined,
+    mark: (_name: string, _data?: Record<string, unknown>) => undefined,
   };
   const cache = createAppIconCache(deps);
 

@@ -2,7 +2,10 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export type AppIconSource = string | { path: string; resourceIndex: number };
+type AppIconSource = string | { path: string; resourceIndex: number };
+
+const ICON_EXTRACTION_MAX_BUFFER_BYTES = 2_097_152;
+const ICON_EXTRACTION_TIMEOUT_MS = 5000;
 
 function visualElementsLogoPath(targetPath: string, manifest: string) {
   const logo = ['Square44x44Logo', 'Square70x70Logo', 'Square150x150Logo']
@@ -13,7 +16,9 @@ function visualElementsLogoPath(targetPath: string, manifest: string) {
         )?.[1],
     )
     .find(Boolean);
-  if (!logo) return null;
+  if (!logo) {
+    return null;
+  }
 
   const appDirectory = path.win32.dirname(targetPath);
   const logoPath = path.win32.resolve(appDirectory, logo);
@@ -27,7 +32,7 @@ function visualElementsLogoPath(targetPath: string, manifest: string) {
   return logoPath;
 }
 
-export async function windowsShortcutIconSources(
+async function windowsShortcutIconSources(
   appPath: string,
   readShortcutLink: (shortcutPath: string) => {
     icon?: string;
@@ -70,7 +75,14 @@ export async function windowsShortcutIconSources(
   }
 }
 
-const WINDOWS_ICON_RESOURCE_SCRIPT = `
+function windowsIconResourceScript(iconPath: string, resourceIndex: number) {
+  const encodedIconPath = Buffer.from(iconPath, 'utf16le').toString('base64');
+  const normalizedResourceIndex = Number.isInteger(resourceIndex)
+    ? resourceIndex
+    : 0;
+  return `
+$iconPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encodedIconPath}'))
+$iconIndex = ${normalizedResourceIndex}
 $null = Add-Type -AssemblyName System.Drawing
 $null = Add-Type -Name IconExtractor -Namespace Nevermind -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
@@ -80,7 +92,7 @@ public static extern bool DestroyIcon(System.IntPtr icon);
 '@
 $large = New-Object System.IntPtr[] 1
 $small = New-Object System.IntPtr[] 1
-$count = [Nevermind.IconExtractor]::ExtractIconEx($env:NVM_ICON_PATH, [int]$env:NVM_ICON_INDEX, $large, $small, 1)
+$count = [Nevermind.IconExtractor]::ExtractIconEx($iconPath, $iconIndex, $large, $small, 1)
 if ($count -eq 0) { exit 1 }
 $handle = if ($large[0] -ne [System.IntPtr]::Zero) { $large[0] } else { $small[0] }
 $icon = [System.Drawing.Icon]::FromHandle($handle).Clone()
@@ -94,11 +106,9 @@ $icon.Dispose()
 if ($large[0] -ne [System.IntPtr]::Zero) { $null = [Nevermind.IconExtractor]::DestroyIcon($large[0]) }
 if ($small[0] -ne [System.IntPtr]::Zero) { $null = [Nevermind.IconExtractor]::DestroyIcon($small[0]) }
 `;
+}
 
-export function readWindowsIconResourcePng(
-  iconPath: string,
-  resourceIndex: number,
-) {
+function readWindowsIconResourcePng(iconPath: string, resourceIndex: number) {
   return new Promise<Buffer | null>((resolve) => {
     execFile(
       'powershell.exe',
@@ -107,17 +117,12 @@ export function readWindowsIconResourcePng(
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        WINDOWS_ICON_RESOURCE_SCRIPT,
+        windowsIconResourceScript(iconPath, resourceIndex),
       ],
       {
         encoding: 'utf8',
-        env: {
-          ...process.env,
-          NVM_ICON_INDEX: String(resourceIndex),
-          NVM_ICON_PATH: iconPath,
-        },
-        maxBuffer: 2 * 1024 * 1024,
-        timeout: 5000,
+        maxBuffer: ICON_EXTRACTION_MAX_BUFFER_BYTES,
+        timeout: ICON_EXTRACTION_TIMEOUT_MS,
         windowsHide: true,
       },
       (error, stdout) => {
@@ -130,3 +135,6 @@ export function readWindowsIconResourcePng(
     );
   });
 }
+
+export type { AppIconSource };
+export { readWindowsIconResourcePng, windowsShortcutIconSources };

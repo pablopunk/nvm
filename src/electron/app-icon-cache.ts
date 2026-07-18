@@ -1,6 +1,6 @@
 import { isAppIconPath } from '../app-icons';
 
-export type AppIconCacheDeps = {
+interface AppIconCacheDeps {
   hasAppIcons: () => boolean;
   hashValue: (value: string) => string;
   readCachedIcon: (cacheKey: string) => Promise<Buffer | null>;
@@ -14,12 +14,13 @@ export type AppIconCacheDeps = {
     fn: () => Promise<T>,
   ) => Promise<T>;
   warn?: (message: string, data?: Record<string, unknown>) => void;
-};
+}
 
 const APP_ICON_LOAD_TIMEOUT_MS = 5000;
 const APP_ICON_CACHE_VERSION = 'bundle-icon-v5';
+const ICON_BACKLOG_DELAY_MS = 50;
 
-export function withTimeout<T>(
+function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   fallbackValue: T,
@@ -30,11 +31,14 @@ export function withTimeout<T>(
     timer.unref?.();
   });
   return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+    }
   });
 }
 
-export function createAppIconCache(deps: AppIconCacheDeps) {
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: cache state and queue lifecycle share one closure
+function createAppIconCache(deps: AppIconCacheDeps) {
   const memoryCache = new Map<string, string | null>();
   const loadPromises = new Map<string, Promise<string | null>>();
   const pendingPaths = new Set<string>();
@@ -52,7 +56,7 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
     return `data:image/png;base64,${png.toString('base64')}`;
   }
 
-  async function loadAppIconDataUrl(appPath: string) {
+  function loadAppIconDataUrl(appPath: string) {
     return measure('apps.icon.load', { appPath }, async () => {
       try {
         const cacheKey = deps.hashValue(`${APP_ICON_CACHE_VERSION}:${appPath}`);
@@ -74,7 +78,7 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
           });
           return null;
         }
-        await deps.writeCachedIcon(cacheKey, pngBuffer).catch(() => {});
+        await deps.writeCachedIcon(cacheKey, pngBuffer).catch(() => undefined);
         return dataUrl(pngBuffer);
       } catch (error) {
         deps.warn?.('appIcon.load.failed', { appPath, error });
@@ -84,7 +88,9 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
   }
 
   function resolveWaitersForPath(appPath: string, result: string | null) {
-    for (const resolve of waiters.get(appPath) || []) resolve(result);
+    for (const resolve of waiters.get(appPath) || []) {
+      resolve(result);
+    }
     waiters.delete(appPath);
     loadPromises.delete(appPath);
   }
@@ -95,24 +101,32 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
     // symlinks. Processing sequentially prevents multiple concurrent blocks
     // and gives the event loop a chance to fire timers between each icon.
     const nextPath = pendingPaths.values().next().value;
-    if (!nextPath) return;
+    if (!nextPath) {
+      return;
+    }
     pendingPaths.delete(nextPath);
     try {
       const result = await loadAppIconDataUrl(nextPath);
-      if (result) memoryCache.set(nextPath, result);
+      if (result) {
+        memoryCache.set(nextPath, result);
+      }
       resolveWaitersForPath(nextPath, result);
-    } catch (_err) {
+    } catch {
       resolveWaitersForPath(nextPath, null);
     }
-    if (pendingPaths.size) deps.schedule('icon-backlog', 50);
+    if (pendingPaths.size > 0) {
+      deps.schedule('icon-backlog', ICON_BACKLOG_DELAY_MS);
+    }
   }
 
-  async function get(appPath: string) {
-    return measure('apps.icon.get', { appPath, alwaysLog: true }, async () => {
-      if (!deps.hasAppIcons() || !isAppIconPath(appPath)) return null;
+  function get(appPath: string) {
+    return measure('apps.icon.get', { appPath, alwaysLog: true }, () => {
+      if (!(deps.hasAppIcons() && isAppIconPath(appPath))) {
+        return Promise.resolve(null);
+      }
       if (memoryCache.has(appPath)) {
         deps.mark?.('apps.icon.memory-cache-hit', { appPath });
-        return memoryCache.get(appPath) ?? null;
+        return Promise.resolve(memoryCache.get(appPath) ?? null);
       }
       const inFlight = loadPromises.get(appPath);
       if (inFlight) {
@@ -140,3 +154,6 @@ export function createAppIconCache(deps: AppIconCacheDeps) {
     memorySize: () => memoryCache.size,
   };
 }
+
+export type { AppIconCacheDeps };
+export { createAppIconCache, withTimeout };
