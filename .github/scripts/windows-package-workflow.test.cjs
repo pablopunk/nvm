@@ -170,7 +170,7 @@ test('Windows tag release publishes only verified unsigned x64 package artifacts
     '\n  release-mac:\n',
   );
   for (const expected of [
-    "if: startsWith(github.ref, 'refs/tags/v')",
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
     'runs-on: windows-latest',
     'contents: write',
     "CSC_IDENTITY_AUTO_DISCOVERY: 'false'",
