@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       electron_smoke_changed: ${{ steps.app-changes.outputs.changed }}
+      windows_package_changed: ${{ steps.windows-package-changes.outputs.changed }}
 
     steps:
       - name: Checkout
@@ -37,6 +38,18 @@ jobs:
             BASE="HEAD~1"
           fi
           changed="$(git diff --name-only "$BASE" HEAD | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Classify Windows package changes
+        id: windows-package-changes
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="HEAD~1"
+          fi
+          changed="$(git diff --name-only "$BASE" HEAD | mise exec -- node .github/scripts/windows-package-paths.cjs)"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
@@ -153,6 +166,107 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: node .github/scripts/windows-first-run-smoke.cjs
+
+  windows-package-smoke:
+    name: Windows unsigned package smoke
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+      needs.check.outputs.windows_package_changed == 'true')
+    needs: check
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Prepare deterministic Windows evidence directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path windows-artifacts/startup-evidence -Force | Out-Null
+          New-Item -ItemType File -Path windows-artifacts/startup-evidence/harness.log -Force | Out-Null
+
+      - name: Aggregate verification
+        run: mise exec -- pnpm verify
+
+      - name: Build unsigned Windows x64 NSIS and portable packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: mise exec -- pnpm run dist:win:x64
+
+      - name: Reject a package missing its ASAR, then verify the untouched build
+        shell: pwsh
+        run: |
+          $version = mise exec -- node -p "require('./package.json').version"
+          $asar = (Resolve-Path 'node_modules/.bin/asar.CMD').Path
+          $negativeRoot = Join-Path $env:RUNNER_TEMP 'windows-package-negative'
+          Copy-Item -LiteralPath release -Destination $negativeRoot -Recurse
+          Remove-Item -LiteralPath (Join-Path $negativeRoot 'win-unpacked/resources/app.asar') -Force
+          $negative = Start-Process pwsh -Wait -PassThru -ArgumentList @(
+            '-NoProfile', '-File', '.github/scripts/verify-windows-package.ps1',
+            '-PackageRoot', $negativeRoot,
+            '-ExpectedVersion', $version,
+            '-ExpectedArch', 'x64',
+            '-AsarExecutable', $asar,
+            '-UpdaterMetadataPolicy', 'Nsis'
+          )
+          if ($negative.ExitCode -eq 0) { throw 'Verifier accepted a package missing app.asar.' }
+          Remove-Item -LiteralPath $negativeRoot -Recurse -Force
+          & .github/scripts/verify-windows-package.ps1 `
+            -PackageRoot (Resolve-Path release).Path `
+            -ExpectedVersion $version `
+            -ExpectedArch x64 `
+            -AsarExecutable $asar `
+            -UpdaterMetadataPolicy Nsis
+
+      - name: Verify inherited Windows ACL privacy for representative secrets
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:APPDATA "NevermindAclSmoke-$env:GITHUB_RUN_ID"
+          try {
+            mise exec -- pnpm exec tsx scripts/create-windows-private-file-fixture.ts $fixture
+            & .github/scripts/verify-windows-private-file-acl.ps1 -FixtureRoot $fixture
+          } finally {
+            if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture -Recurse -Force }
+          }
+
+      - name: Stage deterministic smoke artifacts
+        shell: pwsh
+        run: |
+          $version = mise exec -- node -p "require('./package.json').version"
+          New-Item -ItemType Directory -Path windows-artifacts/startup-evidence -Force | Out-Null
+          New-Item -ItemType File -Path windows-artifacts/startup-evidence/harness.log -Force | Out-Null
+          Copy-Item "release/Nevermind-$version-win-x64-setup.exe" windows-artifacts/
+          Copy-Item "release/Nevermind-$version-win-x64-setup.exe.blockmap" windows-artifacts/
+          Copy-Item "release/Nevermind-$version-win-x64-portable.exe" windows-artifacts/
+          Copy-Item release/latest.yml windows-artifacts/
+          Copy-Item release/windows-smoke-manifest.json windows-artifacts/
+
+      - name: Launch the staged portable package and prove renderer readiness
+        shell: pwsh
+        run: |
+          $version = mise exec -- node -p "require('./package.json').version"
+          node scripts/windows-portable-smoke.cjs `
+            "windows-artifacts/Nevermind-$version-win-x64-portable.exe" `
+            windows-artifacts/windows-smoke-manifest.json `
+            windows-artifacts 2>&1 | Tee-Object windows-artifacts/startup-evidence/harness.log
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged portable startup failed.' }
+
+      - name: Upload deterministic Windows smoke artifacts and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nevermind-windows-x64-smoke-${{ github.sha }}
+          path: windows-artifacts
+          if-no-files-found: error
+          retention-days: 7
 
   postgres-integration:
     if: github.event_name == 'pull_request'

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
@@ -51,16 +53,23 @@ function createFakeWindow() {
 }
 
 test('identifies trusted app and extension window pages', () => {
-  const rendererIndexPath = '/app/index.html';
+  const rendererIndexPath = path.join(
+    path.parse(process.cwd()).root,
+    'app',
+    'index.html',
+  );
+  const rendererPageUrl = pathToFileURL(rendererIndexPath).href;
+  const extensionRendererPageUrl = new URL(rendererPageUrl);
+  extensionRendererPageUrl.searchParams.set('extensionWindowId', 'abc 123');
   assert.equal(
-    isTrustedAppPage('file:///app/index.html', false, '', rendererIndexPath),
+    isTrustedAppPage(rendererPageUrl, false, '', rendererIndexPath),
     true,
   );
   assert.equal(
     isTrustedAppPage('file:///tmp/evil.html', false, '', rendererIndexPath),
     false,
   );
-  assert.equal(isTrustedAppPage('file:///app/index.html', false), false);
+  assert.equal(isTrustedAppPage(rendererPageUrl, false), false);
   assert.equal(
     isTrustedAppPage('http://localhost:5173/', true, 'http://localhost:5173/'),
     true,
@@ -80,7 +89,7 @@ test('identifies trusted app and extension window pages', () => {
 
   assert.equal(
     isTrustedExtensionWindowPage(
-      'file:///app/index.html?extensionWindowId=abc%20123',
+      extensionRendererPageUrl.href,
       'abc 123',
       false,
       '',
@@ -90,7 +99,7 @@ test('identifies trusted app and extension window pages', () => {
   );
   assert.equal(
     isTrustedExtensionWindowPage(
-      'file:///app/index.html',
+      rendererPageUrl,
       'abc 123',
       false,
       '',

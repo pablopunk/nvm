@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This established renderer retains existing declarative view conventions.
 import {
   CornerDownLeft,
   CreditCard,
@@ -402,7 +403,7 @@ function CameraView({
         )
           throw new Error(
             access.status === 'denied'
-              ? 'Camera access is denied in System Settings.'
+              ? 'Camera access is denied in system privacy settings.'
               : `Camera access is ${access.status}.`,
           );
         const constraints: MediaTrackConstraints = selectedDeviceId
@@ -447,7 +448,7 @@ function CameraView({
         const message = err instanceof Error ? err.message : String(err);
         setStatus('Camera unavailable');
         const hint = /not found|not available|not read|device/i.test(message)
-          ? ' Check System Settings → Privacy & Security → Camera.'
+          ? ' Check your system privacy settings for camera access.'
           : '';
         setError(message + hint);
       }

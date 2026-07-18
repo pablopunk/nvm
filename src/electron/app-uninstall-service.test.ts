@@ -1,6 +1,6 @@
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: the shared host-service fixture deliberately exposes all security seams.
 import assert from 'node:assert/strict';
-import path from 'node:path';
+import nodePath from 'node:path';
 import test from 'node:test';
 import {
   createAppUninstallService,
@@ -10,6 +10,8 @@ import {
   PLUTIL_PATH,
   validateBundleId,
 } from './app-uninstall-service';
+
+const path = nodePath.posix;
 
 const home = '/Users/tester';
 const appPath = '/Applications/Example.app';

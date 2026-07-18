@@ -20,6 +20,245 @@ type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
 };
 
+type OsPathFacade = Pick<typeof path.win32, 'basename' | 'join' | 'resolve'>;
+type OsFileSystem = Pick<typeof fs, 'readdir'>;
+type OsWatcher = {
+  close: () => unknown;
+  on: (event: string, listener: () => void) => unknown;
+};
+type OsExecFile = typeof execFile;
+
+export type OsAdapterDependencies = {
+  app?: typeof app;
+  environment?: NodeJS.ProcessEnv;
+  execFile?: OsExecFile;
+  fileSystem?: OsFileSystem;
+  homeDirectory?: string;
+  pathFacade?: OsPathFacade;
+  processPlatform?: NodeJS.Platform;
+  shell?: typeof shell;
+  watch?: (
+    filename: string,
+    options: { recursive: boolean },
+    listener: () => void,
+  ) => OsWatcher;
+};
+
+const macOnlyCapabilities = new Set([
+  'quick-look',
+  'selected-files',
+  'selected-text',
+  'frontmost-app',
+  'frontmost-paste',
+  'keyboard.type-text',
+  'applescript',
+  'open-with',
+  'keyboard-settings',
+  'window-panel-policy',
+  'file-date-added',
+  'app-uninstall',
+]);
+
+export function validatedWindowsImageName(rawName: string) {
+  if (!/^[\p{L}\p{N}\p{M} ._+@#-]+$/u.test(rawName)) return null;
+  const withoutOuterAsciiSpaces = rawName.replace(/^ +| +$/g, '');
+  const stem = withoutOuterAsciiSpaces.replace(/\.exe$/i, '');
+  if (!stem || stem === '.' || stem === '..') return null;
+  if (Array.from(stem).length > 255) return null;
+  return `${stem}.exe`;
+}
+
+export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
+  const processPlatform = dependencies.processPlatform || process.platform;
+  const environment = dependencies.environment || process.env;
+  const homeDirectory = dependencies.homeDirectory || os.homedir();
+  const pathFacade =
+    dependencies.pathFacade ||
+    (processPlatform === 'win32' ? path.win32 : path.posix);
+  const fileSystem = dependencies.fileSystem || fs;
+  const execFileDependency = dependencies.execFile || execFile;
+  const shellDependency = dependencies.shell || shell;
+  const appDependency = dependencies.app || app;
+  const watchDependency = dependencies.watch || (watch as never);
+
+  function dependent<T>(handlers: OsDependent<T>, fallback: T): T {
+    return (
+      handlers[processPlatform as 'darwin' | 'linux' | 'win32'] ??
+      handlers.default ??
+      fallback
+    );
+  }
+
+  function hasCapabilityForPlatform(capability: string) {
+    if (capability === 'app-icons')
+      return dependent({ darwin: true, win32: true }, false);
+    if (capability === 'ocr' || capability === 'screen-capture')
+      return dependent({ darwin: true }, false);
+    if (macOnlyCapabilities.has(capability))
+      return dependent({ darwin: true }, false);
+    if (capability === 'auto-updates')
+      return dependent(
+        { darwin: true, linux: Boolean(environment.APPIMAGE) },
+        false,
+      );
+    if (capability === 'camera')
+      return dependent({ darwin: true, win32: true, linux: true }, false);
+    if (capability === 'launch-at-login')
+      return dependent({ darwin: true, win32: true }, false);
+    return true;
+  }
+
+  function appScanRootsForPlatform() {
+    return dependent(
+      {
+        darwin: [
+          '/Applications',
+          '/System/Applications',
+          '/System/Library/CoreServices/Applications',
+          pathFacade.join(homeDirectory, 'Applications'),
+        ],
+        win32: [
+          environment.ProgramData &&
+            pathFacade.join(
+              environment.ProgramData,
+              'Microsoft',
+              'Windows',
+              'Start Menu',
+              'Programs',
+            ),
+          environment.APPDATA &&
+            pathFacade.join(
+              environment.APPDATA,
+              'Microsoft',
+              'Windows',
+              'Start Menu',
+              'Programs',
+            ),
+        ].filter(Boolean) as string[],
+      },
+      [
+        '/usr/share/applications',
+        '/usr/local/share/applications',
+        pathFacade.join(homeDirectory, '.local/share/applications'),
+      ],
+    );
+  }
+
+  async function scanWindowsAppsForPlatform() {
+    if (processPlatform !== 'win32') return [];
+    const found: Array<{ id: string; name: string; path: string }> = [];
+    async function walk(root: string): Promise<void> {
+      const entries = await fileSystem
+        .readdir(root, { withFileTypes: true })
+        .catch(() => []);
+      await Promise.all(
+        entries.map(async (entry) => {
+          const fullPath = pathFacade.join(root, entry.name);
+          if (entry.isDirectory()) return walk(fullPath);
+          if (/\.lnk$/i.test(entry.name))
+            found.push({
+              id: fullPath,
+              name: entry.name.replace(/\.lnk$/i, ''),
+              path: fullPath,
+            });
+        }),
+      );
+    }
+    await Promise.all(appScanRootsForPlatform().map(walk));
+    return found;
+  }
+
+  function watchAppsForPlatform(onChange: () => void) {
+    const watchers: OsWatcher[] = [];
+    for (const root of appScanRootsForPlatform()) {
+      try {
+        const watcher = watchDependency(
+          root,
+          {
+            recursive:
+              processPlatform === 'darwin' || processPlatform === 'win32',
+          },
+          onChange,
+        );
+        watcher.on('error', () => {});
+        watchers.push(watcher);
+      } catch {
+        // Inaccessible system roots are optional discovery inputs.
+      }
+    }
+    return watchers;
+  }
+
+  async function forceQuitWindowsAppForPlatform(appName: string) {
+    const imageName = validatedWindowsImageName(appName);
+    if (!imageName) return { ok: false, error: 'Invalid Windows process name' };
+    try {
+      await new Promise<void>((resolve, reject) => {
+        execFileDependency(
+          'taskkill',
+          ['/F', '/IM', imageName],
+          { timeout: 8000 },
+          (error) => (error ? reject(error) : resolve()),
+        );
+      });
+      return { ok: true };
+    } catch {
+      return { ok: false, error: `Could not force quit ${appName}` };
+    }
+  }
+
+  function knownUserFolder(name: 'Desktop' | 'Documents' | 'Downloads') {
+    return pathFacade.join(homeDirectory, name);
+  }
+
+  return {
+    appScanRoots: appScanRootsForPlatform,
+    forceQuitWindowsApp: forceQuitWindowsAppForPlatform,
+    hasCapability: hasCapabilityForPlatform,
+    knownUserFolder,
+    launchWindowsApp: (appPath: string) => shellDependency.openPath(appPath),
+    osLabel: () =>
+      dependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux'),
+    scanWindowsApps: scanWindowsAppsForPlatform,
+    settingsTitle: () =>
+      dependent({ darwin: 'Open System Settings' }, 'Open Settings'),
+    setLaunchAtLoginEnabled: (enabled: boolean) => {
+      if (!hasCapabilityForPlatform('launch-at-login'))
+        return {
+          ok: false,
+          message: `Start at login is not available on ${dependent(
+            { darwin: 'macOS', win32: 'Windows', linux: 'Linux' },
+            'Linux',
+          )}`,
+        };
+      if (!appDependency.isPackaged)
+        return {
+          ok: false,
+          message: 'Start at login is only available in packaged builds',
+        };
+      appDependency.setLoginItemSettings(
+        processPlatform === 'darwin'
+          ? { openAtLogin: enabled, openAsHidden: true }
+          : { openAtLogin: enabled },
+      );
+      return appDependency.getLoginItemSettings().openAtLogin === enabled
+        ? {
+            ok: true,
+            message: enabled
+              ? 'Nevermind will start at login'
+              : 'Nevermind will not start at login',
+          }
+        : {
+            ok: false,
+            message: `Could not ${enabled ? 'enable' : 'disable'} start at login`,
+          };
+    },
+    watchApps: watchAppsForPlatform,
+  };
+}
+
+const defaultOsAdapter = createOsAdapter();
+
 function noop() {}
 
 function osDependent<T>(handlers: OsDependent<T>, fallback: T): T {
@@ -38,45 +277,11 @@ function osFunction<TArgs extends unknown[], TResult>(
 }
 
 export function osLabel() {
-  return osDependent(
-    { darwin: 'macOS', win32: 'Windows', linux: 'Linux' },
-    'Linux',
-  );
+  return defaultOsAdapter.osLabel();
 }
 
-const macOnlyCapabilities = new Set([
-  'quick-look',
-  'selected-files',
-  'selected-text',
-  'frontmost-app',
-  'frontmost-paste',
-  'keyboard.type-text',
-  'applescript',
-  'open-with',
-  'keyboard-settings',
-  'window-panel-policy',
-  'file-date-added',
-  'app-uninstall',
-]);
-
 export function hasCapability(capability: string) {
-  if (capability === 'app-icons')
-    return osDependent({ darwin: true, win32: true }, false);
-  if (capability === 'ocr') return osDependent({ darwin: true }, false);
-  if (capability === 'screen-capture')
-    return osDependent({ darwin: true }, false);
-  if (macOnlyCapabilities.has(capability))
-    return osDependent({ darwin: true }, false);
-  if (capability === 'auto-updates')
-    return osDependent(
-      { darwin: true, linux: Boolean(process.env.APPIMAGE) },
-      false,
-    );
-  if (capability === 'camera')
-    return osDependent({ darwin: true, win32: true, linux: true }, false);
-  if (capability === 'launch-at-login')
-    return osDependent({ darwin: true, win32: true }, false);
-  return true;
+  return defaultOsAdapter.hasCapability(capability);
 }
 
 export function canRequestMediaPermission(permission: string) {
@@ -85,7 +290,14 @@ export function canRequestMediaPermission(permission: string) {
 }
 
 export function settingsTitle() {
-  return osDependent({ darwin: 'Open System Settings' }, 'Open Settings');
+  return defaultOsAdapter.settingsTitle();
+}
+
+export function systemSettingsLabel() {
+  return osDependent(
+    { darwin: 'System Settings', win32: 'Windows Settings' },
+    'System Settings',
+  );
 }
 
 export function revealPathTitle() {
@@ -225,40 +437,7 @@ export function autoUpdatesUnavailableMessage() {
 }
 
 export function appScanRoots() {
-  return osFunction(
-    {
-      darwin: () => [
-        '/Applications',
-        '/System/Applications',
-        '/System/Library/CoreServices/Applications',
-        path.join(os.homedir(), 'Applications'),
-      ],
-      win32: () =>
-        [
-          process.env.ProgramData &&
-            path.join(
-              process.env.ProgramData,
-              'Microsoft',
-              'Windows',
-              'Start Menu',
-              'Programs',
-            ),
-          process.env.APPDATA &&
-            path.join(
-              process.env.APPDATA,
-              'Microsoft',
-              'Windows',
-              'Start Menu',
-              'Programs',
-            ),
-        ].filter(Boolean) as string[],
-    },
-    () => [
-      '/usr/share/applications',
-      '/usr/local/share/applications',
-      path.join(os.homedir(), '.local/share/applications'),
-    ],
-  )();
+  return defaultOsAdapter.appScanRoots();
 }
 
 export async function appIconSources(appPath: string) {
@@ -292,7 +471,7 @@ export async function launchApp(item: any) {
           detached: true,
           stdio: 'ignore',
         }).unref(),
-      win32: (appItem) => shell.openPath(appItem.path),
+      win32: (appItem) => defaultOsAdapter.launchWindowsApp(appItem.path),
     },
     (appItem) => {
       if (appItem.command)
@@ -304,6 +483,12 @@ export async function launchApp(item: any) {
       return shell.openPath(appItem.path);
     },
   )(item);
+}
+
+export function knownUserFolderPath(
+  name: 'Desktop' | 'Documents' | 'Downloads',
+) {
+  return defaultOsAdapter.knownUserFolder(name);
 }
 
 const macSystemApps = ['/System/Library/CoreServices/Finder.app'];
@@ -360,26 +545,7 @@ async function scanMacApps() {
 }
 
 async function scanWindowsApps() {
-  const found: any[] = [];
-  async function walk(dir: string) {
-    const entries = await fs
-      .readdir(dir, { withFileTypes: true })
-      .catch(() => []);
-    await Promise.all(
-      entries.map(async (entry) => {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) return walk(fullPath);
-        if (entry.name.endsWith('.lnk'))
-          found.push({
-            id: fullPath,
-            name: entry.name.replace(/\.lnk$/i, ''),
-            path: fullPath,
-          });
-      }),
-    );
-  }
-  await Promise.all(appScanRoots().map(walk));
-  return found;
+  return defaultOsAdapter.scanWindowsApps();
 }
 
 async function scanLinuxApps() {
@@ -570,19 +736,7 @@ export async function runningAppPaths(apps: RunningAppCandidate[] = []) {
 }
 
 export function watchApps(onChange: () => void) {
-  const watchers: Array<{ close: () => unknown }> = [];
-  for (const root of appScanRoots()) {
-    try {
-      const watcher = watch(
-        root,
-        { recursive: osDependent({ darwin: true, win32: true }, false) },
-        onChange,
-      );
-      watcher.on('error', () => {});
-      watchers.push(watcher);
-    } catch {}
-  }
-  return watchers;
+  return defaultOsAdapter.watchApps(onChange);
 }
 
 function runAppleScript(script: string, timeout = 30_000) {
@@ -992,31 +1146,12 @@ async function forceQuitLinuxApp(appName: string) {
   }
 }
 
-async function forceQuitWindowsApp(appName: string) {
-  try {
-    await new Promise<void>((resolve, reject) => {
-      execFile(
-        'taskkill',
-        ['/F', '/IM', `${appName}.exe`],
-        { timeout: 8000 },
-        (error) => {
-          if (error) reject(error);
-          else resolve();
-        },
-      );
-    });
-    return { ok: true };
-  } catch {
-    return { ok: false, error: `Could not force quit ${appName}` };
-  }
-}
-
 export async function forceQuitApp(appPath: string, appName: string) {
   return osFunction(
     {
       darwin: () => forceQuitMacApp(appPath, appName),
       linux: () => forceQuitLinuxApp(appName),
-      win32: () => forceQuitWindowsApp(appName),
+      win32: () => defaultOsAdapter.forceQuitWindowsApp(appName),
     },
     async () => ({
       ok: false,

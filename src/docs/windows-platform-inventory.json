@@ -1,0 +1,1188 @@
+{
+  "schemaVersion": 2,
+  "supportStatus": "unverified",
+  "sourceRules": [
+    {
+      "key": "ai-os-label-bad42bbd1402",
+      "file": "src/electron/ai.ts",
+      "category": "os-label",
+      "selector": "function:capabilities/property:sortByDescriptions/property:added::os-label::added: 'Finder/Spotlight Date Added (dateAddedMs) with creation-time fallback; prefer for newest…#c124a5459dea::initializer",
+      "disposition": "extension-author-documentation",
+      "surface": "extensions-generated"
+    },
+    {
+      "key": "app-ipc-handlers-injected-platform-e229ad2ebbfa",
+      "file": "src/electron/app-ipc-handlers.ts",
+      "category": "injected-platform",
+      "selector": "function:registerAppIpcHandlers/call:ipcHandleMeasured('camera:request-access')/if:deps.processPlatform !== 'darwin'::injected-platform::if (deps.processPlatform !== 'darwin') { return { ok: true, status: 'unknown' }; }::expression.left",
+      "disposition": "intentional-composition-seam",
+      "surface": "camera"
+    },
+    {
+      "key": "app-uninstall-service-direct-platform-af36b7c61876",
+      "file": "src/electron/app-uninstall-service.ts",
+      "category": "direct-platform",
+      "selector": "function:createProductionAppUninstallService/property:platform::direct-platform::platform: input.platform || process.platform::initializer.right",
+      "disposition": "injected-service-default",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "system-known-folder-d8c8495b89a3",
+      "file": "src/electron/extensions/system.ts",
+      "category": "known-folder",
+      "selector": "function:placesItems/property:primaryAction/property:path::known-folder::path: knownUserFolderPath('Desktop')::initializer",
+      "disposition": "capability-consumer",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "system-known-folder-f7ce13f15bda",
+      "file": "src/electron/extensions/system.ts",
+      "category": "known-folder",
+      "selector": "function:placesItems/property:primaryAction/property:path::known-folder::path: knownUserFolderPath('Documents')::initializer",
+      "disposition": "capability-consumer",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "system-known-folder-8a316afa424d",
+      "file": "src/electron/extensions/system.ts",
+      "category": "known-folder",
+      "selector": "function:placesItems/property:primaryAction/property:path::known-folder::path: knownUserFolderPath('Downloads')::initializer",
+      "disposition": "capability-consumer",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "main-direct-platform-46e365d8ead5",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "function:attachExtensionFileTrigger/variable:watcher/property:recursive::direct-platform::recursive: process.platform === 'darwin' || process.platform === 'win32'::initializer.left.left",
+      "disposition": "runtime-startup-adapter",
+      "surface": "jobs-watchers"
+    },
+    {
+      "key": "main-direct-platform-54df11011fe2",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "function:attachExtensionFileTrigger/variable:watcher/property:recursive::direct-platform::recursive: process.platform === 'darwin' || process.platform === 'win32'::initializer.right.left",
+      "disposition": "runtime-startup-adapter",
+      "surface": "jobs-watchers"
+    },
+    {
+      "key": "main-direct-platform-bb738d1a16c3",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "function:osCacheRoot/if:process.platform === 'darwin'::direct-platform::if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Caches', appName);::expression.left",
+      "disposition": "runtime-startup-adapter",
+      "surface": "logs-crash-recovery"
+    },
+    {
+      "key": "main-direct-platform-024cefd1a2fd",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "function:osCacheRoot/if:process.platform === 'win32'::direct-platform::if (process.platform === 'win32') return path.join( process.env.LOCALAPPDATA || app.getPath('app…#547e6cd2e2c3::expression.left",
+      "disposition": "runtime-startup-adapter",
+      "surface": "logs-crash-recovery"
+    },
+    {
+      "key": "main-direct-platform-b1867c6274e4",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "function:resolveUserShellPath/variable:userShell::direct-platform::const userShell = process.platform === 'win32' ? '' : process.env.SHELL;::declarationList.declarations[0].initializer.condition.left",
+      "disposition": "runtime-startup-adapter",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "main-direct-platform-16cd1ce3c7a8",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "property:processPlatform::direct-platform::processPlatform: process.platform::initializer",
+      "disposition": "runtime-startup-adapter",
+      "surface": "camera"
+    },
+    {
+      "key": "main-known-folder-f76f4b588bf5",
+      "file": "src/electron/main.ts",
+      "category": "known-folder",
+      "selector": "function:defaultFileIndexRoots::known-folder::return ['Desktop', 'Documents', 'Downloads'].map((name) => path.join(os.homedir(), name), );::expression.expression.expression",
+      "disposition": "file-index-runtime-adapter",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "nevermind-api-direct-platform-9c54d224943b",
+      "file": "src/electron/nevermind-api.ts",
+      "category": "direct-platform",
+      "selector": "function:nevermindDesktopHeaders/property:X-Nevermind-Platform::direct-platform::'X-Nevermind-Platform': process.platform::initializer",
+      "disposition": "diagnostic-protocol-metadata",
+      "surface": "auth-token-byo-storage"
+    },
+    {
+      "key": "nevermind-auth-direct-platform-4a0a180cb4fc",
+      "file": "src/electron/nevermind-auth.ts",
+      "category": "direct-platform",
+      "selector": "function:defaultDeviceLabel::direct-platform::return `${os.hostname()} (${process.platform})`;::expression.templateSpans[1].expression",
+      "disposition": "diagnostic-device-metadata",
+      "surface": "auth-token-byo-storage"
+    },
+    {
+      "key": "os-direct-platform-306750c33b25",
+      "file": "src/electron/os.ts",
+      "category": "direct-platform",
+      "selector": "function:createOsAdapter/variable:processPlatform::direct-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].initializer.right",
+      "disposition": "capability-layer",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-direct-platform-e37443288a26",
+      "file": "src/electron/os.ts",
+      "category": "direct-platform",
+      "selector": "function:normalizedRunningPath::direct-platform::return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text;::expression.condition.left.left",
+      "disposition": "capability-layer",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-direct-platform-254fe6accffd",
+      "file": "src/electron/os.ts",
+      "category": "direct-platform",
+      "selector": "function:normalizedRunningPath::direct-platform::return process.platform === 'darwin' || process.platform === 'win32' ? text.toLowerCase() : text;::expression.condition.right.left",
+      "disposition": "capability-layer",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-direct-platform-693d33381cd4",
+      "file": "src/electron/os.ts",
+      "category": "direct-platform",
+      "selector": "function:osDependent::direct-platform::return ( handlers[process.platform as 'darwin' | 'linux' | 'win32'] ?? handlers.default ?? fallback );::expression.expression.left.left.argumentExpression.expression",
+      "disposition": "capability-layer",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-direct-platform-98bf1d1dcf1b",
+      "file": "src/electron/os.ts",
+      "category": "direct-platform",
+      "selector": "function:setLaunchAtLoginEnabled::direct-platform::app.setLoginItemSettings( process.platform === 'darwin' ? { openAtLogin: enabled, openAsHidden: …#e69f7aac7163::expression.arguments[0].condition.left",
+      "disposition": "capability-layer",
+      "surface": "auto-start"
+    },
+    {
+      "key": "os-injected-platform-3628dc2a5523",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/function:dependent::injected-platform::return ( handlers[processPlatform as 'darwin' | 'linux' | 'win32'] ?? handlers.default ?? fallback );::expression.expression.left.left.argumentExpression.expression",
+      "disposition": "capability-layer",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-injected-platform-06dc37aa7f17",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/function:scanWindowsAppsForPlatform/if:processPlatform !== 'win32'::injected-platform::if (processPlatform !== 'win32') return [];::expression.left",
+      "disposition": "capability-layer",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-injected-platform-6939b1aa90de",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/function:watchAppsForPlatform/variable:watcher/property:recursive::injected-platform::recursive: processPlatform === 'darwin' || processPlatform === 'win32'::initializer.left.left",
+      "disposition": "capability-layer",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-injected-platform-d6559a2d8829",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/function:watchAppsForPlatform/variable:watcher/property:recursive::injected-platform::recursive: processPlatform === 'darwin' || processPlatform === 'win32'::initializer.right.left",
+      "disposition": "capability-layer",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-injected-platform-dff9487b3879",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/property:setLaunchAtLoginEnabled::injected-platform::appDependency.setLoginItemSettings( processPlatform === 'darwin' ? { openAtLogin: enabled, openA…#41d94373429c::expression.arguments[0].condition.left",
+      "disposition": "capability-layer",
+      "surface": "auto-start"
+    },
+    {
+      "key": "os-injected-platform-16962cf46adc",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/variable:pathFacade::injected-platform::const pathFacade = dependencies.pathFacade || (processPlatform === 'win32' ? path.win32 : path.posix);::declarationList.declarations[0].initializer.right.expression.condition.left",
+      "disposition": "capability-layer",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-injected-platform-c174e1e5fda7",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/variable:processPlatform::injected-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].initializer.left",
+      "disposition": "capability-layer",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-injected-platform-44094726e4a5",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/variable:processPlatform::injected-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].name",
+      "disposition": "capability-layer",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-known-folder-9c4d2bf19f24",
+      "file": "src/electron/os.ts",
+      "category": "known-folder",
+      "selector": "function:createOsAdapter::known-folder::function knownUserFolder(name: 'Desktop' | 'Documents' | 'Downloads') { return pathFacade.join(homeDirectory, name); }::self",
+      "disposition": "capability-layer",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "os-known-folder-5a1453764f79",
+      "file": "src/electron/os.ts",
+      "category": "known-folder",
+      "selector": "function:knownUserFolderPath::known-folder::return defaultOsAdapter.knownUserFolder(name);::expression",
+      "disposition": "capability-layer",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "os-known-folder-f488430111db",
+      "file": "src/electron/os.ts",
+      "category": "known-folder",
+      "selector": "module::known-folder::export function knownUserFolderPath( name: 'Desktop' | 'Documents' | 'Downloads', ) { return def…#c99ad2911974::self",
+      "disposition": "capability-layer",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "os-os-label-3c9b3391dcb8",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:createOsAdapter/function:appScanRootsForPlatform/property:win32/call:pathFacade.join('Microsoft','Windows','Start Menu','Programs')::os-label::win32: [ environment.ProgramData && pathFacade.join( environment.ProgramData, 'Microsoft', 'Wind…#9524295907c9::initializer.expression.expression.expression.elements[0].right.arguments[3]",
+      "disposition": "capability-owned-label",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-os-label-c27b12df5884",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:createOsAdapter/function:appScanRootsForPlatform/property:win32/call:pathFacade.join('Microsoft','Windows','Start Menu','Programs')::os-label::win32: [ environment.ProgramData && pathFacade.join( environment.ProgramData, 'Microsoft', 'Wind…#9524295907c9::initializer.expression.expression.expression.elements[1].right.arguments[3]",
+      "disposition": "capability-owned-label",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-os-label-a15ad7209b7b",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:createOsAdapter/property:settingsTitle/call:dependent('Open Settings')/property:darwin::os-label::darwin: 'Open System Settings'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-2eebfbd60dba",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:keyboardSettingsSubtitle/call:osDependent('System keyboard shortcuts')/property:darwin::os-label::darwin: 'System Settings → Keyboard → Keyboard Shortcuts'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-os-label-d8fa68ab2072",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:keyboardSettingsSubtitle/call:osDependent('System keyboard shortcuts')/property:win32::os-label::win32: 'Windows Settings'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-os-label-1fc34282f1b7",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:quickLookDescription/call:osDependent('Preview this file')/property:darwin::os-label::darwin: 'Open Quick Look'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-ef716915638b",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:quickLookTitle/call:osDependent('Preview File')/property:darwin::os-label::darwin: 'Quick Look'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-c5d5cf60b770",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:reservedPaletteShortcutName/call:osDependent('the system')/property:darwin::os-label::darwin: 'Spotlight'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-os-label-0a5571c6b7c4",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:revealPathDescription/call:osDependent('Show in the system file manager')/property:darwin::os-label::darwin: 'Show in Finder'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-1bf52bb190b4",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:revealPathDescription/call:osDependent('Show in the system file manager')/property:win32::os-label::win32: 'Show in File Explorer'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-b6f314db431b",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:revealPathTitle/call:osDependent('Show in File Manager')/property:darwin::os-label::darwin: 'Show in Finder'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-147d43af3b45",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:revealPathTitle/call:osDependent('Show in File Manager')/property:win32::os-label::win32: 'Show in File Explorer'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-573b39e216f6",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:selectedFilePaths/property:darwin/variable:script::os-label::const script = 'set AppleScript\\'s text item delimiters to linefeed\\ntell application \"Finder\"\\n…#a1628e3dfe81::declarationList.declarations[0].initializer",
+      "disposition": "capability-owned-label",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "os-os-label-b3de59e10ff1",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:systemSettingsLabel/call:osDependent('System Settings')::os-label::return osDependent( { darwin: 'System Settings', win32: 'Windows Settings' }, 'System Settings', );::expression.arguments[1]",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-d7d897bb0790",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:systemSettingsLabel/call:osDependent('System Settings')/property:darwin::os-label::darwin: 'System Settings'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-b742b447126c",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:systemSettingsLabel/call:osDependent('System Settings')/property:win32::os-label::win32: 'Windows Settings'::initializer",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-os-label-9c1b523cad61",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "selector": "variable:macSystemApps::os-label::const macSystemApps = ['/System/Library/CoreServices/Finder.app'];::declarationList.declarations[0].initializer.elements[0]",
+      "disposition": "capability-owned-label",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-ea68a4dfee7a",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:appIconSources::platform-selector::win32: (shortcutPath: string) => windowsShortcutIconSources(shortcutPath, (candidate) => shell.r…#8a1f7757c4d4::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-1bb967749713",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:applyPaletteWindowPolicy::platform-selector::darwin: (window) => { if (!window) return; window.setAlwaysOnTop(true, 'screen-saver'); window.s…#e2a0db65f6d2::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-b6fd11bc1e91",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:captureScreenImage::platform-selector::darwin: captureScreenImageMac::self",
+      "disposition": "capability-selector",
+      "surface": "ocr-screen-capture"
+    },
+    {
+      "key": "os-platform-selector-fa2242474240",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:appScanRootsForPlatform::platform-selector::darwin: [ '/Applications', '/System/Applications', '/System/Library/CoreServices/Applications', …#b8f093c1435b::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-84c779c4f2d2",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:appScanRootsForPlatform::platform-selector::win32: [ environment.ProgramData && pathFacade.join( environment.ProgramData, 'Microsoft', 'Wind…#9524295907c9::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-1ead94f410f0",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'app-icons'/call:dependent(false)::platform-selector::darwin: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-ab1cba7fe5fc",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'app-icons'/call:dependent(false)::platform-selector::win32: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-267bdf33e26c",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::darwin: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-0dc3510a2353",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::linux: Boolean(environment.APPIMAGE)::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-283fb054769b",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'camera'/call:dependent(false)::platform-selector::darwin: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-4e93413e5fda",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'camera'/call:dependent(false)::platform-selector::linux: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-99b78b2e471f",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'camera'/call:dependent(false)::platform-selector::win32: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-474d0df1bb4c",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'launch-at-login'/call:dependent(false)::platform-selector::darwin: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-ff2b8a57cdad",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'launch-at-login'/call:dependent(false)::platform-selector::win32: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-a1bc3e55c3c9",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'ocr' || capability === 'screen-capture'/call:dependent(false)::platform-selector::darwin: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-9b1e35889e1a",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:macOnlyCapabilities.has(capability)/call:dependent(false)::platform-selector::darwin: true::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-febac03271da",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:osLabel/call:dependent('Linux')::platform-selector::darwin: 'macOS'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-bb46b51fc20b",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:osLabel/call:dependent('Linux')::platform-selector::linux: 'Linux'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-6b6b9ff119c8",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:osLabel/call:dependent('Linux')::platform-selector::win32: 'Windows'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-e3e03479e9af",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:setLaunchAtLoginEnabled/if:!hasCapabilityForPlatform('launch-at-login')/property:message/call:dependent('Linux')::platform-selector::darwin: 'macOS'::self",
+      "disposition": "capability-selector",
+      "surface": "auto-start"
+    },
+    {
+      "key": "os-platform-selector-3333f36e910d",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:setLaunchAtLoginEnabled/if:!hasCapabilityForPlatform('launch-at-login')/property:message/call:dependent('Linux')::platform-selector::linux: 'Linux'::self",
+      "disposition": "capability-selector",
+      "surface": "auto-start"
+    },
+    {
+      "key": "os-platform-selector-10e2e2b297ac",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:setLaunchAtLoginEnabled/if:!hasCapabilityForPlatform('launch-at-login')/property:message/call:dependent('Linux')::platform-selector::win32: 'Windows'::self",
+      "disposition": "capability-selector",
+      "surface": "auto-start"
+    },
+    {
+      "key": "os-platform-selector-53cc4c646b30",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:settingsTitle/call:dependent('Open Settings')::platform-selector::darwin: 'Open System Settings'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-e39e9227b971",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'lock-screen'::platform-selector::darwin: () => detached( '/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/C…#dc6b13dc88ac::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-cab2a79f0702",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'lock-screen'::platform-selector::win32: () => detached('rundll32.exe', ['user32.dll,LockWorkStation'])::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-0de2b78fd3f4",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'open-keyboard-settings'::platform-selector::darwin: () => shell.openExternal( 'x-apple.systempreferences:com.apple.Keyboard-Settings.extension', )::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-950d16edfed7",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'open-keyboard-settings'::platform-selector::win32: () => shell.openExternal('ms-settings:typing')::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-8f5301e35e87",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'restart'::platform-selector::darwin: () => detached('osascript', [ '-e', 'tell application \"System Events\" to restart', ])::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-549aff61864c",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'restart'::platform-selector::win32: () => detached('shutdown', ['/r', '/t', '0'])::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-2ad26dabf1c4",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'settings'::platform-selector::darwin: () => shell.openExternal('x-apple.systempreferences:')::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-e304efe82396",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'settings'::platform-selector::win32: () => shell.openExternal('ms-settings:')::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-df77e5f3a430",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'sleep'::platform-selector::darwin: () => detached('pmset', ['sleepnow'])::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-53df54435889",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:executeSystemBuiltin/case:'sleep'::platform-selector::win32: () => detached('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0'])::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-3505f4850011",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:forceQuitApp::platform-selector::darwin: () => forceQuitMacApp(appPath, appName)::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-ef7f32a4c8fa",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:forceQuitApp::platform-selector::linux: () => forceQuitLinuxApp(appName)::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-ac9ab507e312",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:forceQuitApp::platform-selector::win32: () => defaultOsAdapter.forceQuitWindowsApp(appName)::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-d38b368ed942",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:frontmostApp::platform-selector::darwin: async () => { const script = 'tell application \"System Events\"\\nset frontProcess to firs…#3210261adf40::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-635d025ef901",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:isReservedPaletteAccelerator::platform-selector::darwin: () => accelerator === 'Command+Space'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-6a4075e2a419",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:keyboardSettingsSubtitle/call:osDependent('System keyboard shortcuts')::platform-selector::darwin: 'System Settings → Keyboard → Keyboard Shortcuts'::self",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-platform-selector-57d29714a1cf",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:keyboardSettingsSubtitle/call:osDependent('System keyboard shortcuts')::platform-selector::win32: 'Windows Settings'::self",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-platform-selector-496e1bd6103f",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:keyboardShortcutConflictContent::platform-selector::darwin: () => `# ${label} is used by Spotlight\\n\\nmacOS has \\`${label}\\` bound to Spotlight, so …#8080226f75fb::self",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-platform-selector-db82bc8237fe",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:launchApp::platform-selector::darwin: (appItem) => spawn('open', [appItem.path], { detached: true, stdio: 'ignore', }).unref()::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-ac508c5ae40d",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:launchApp::platform-selector::win32: (appItem) => defaultOsAdapter.launchWindowsApp(appItem.path)::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-2489dc18a995",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:paletteBrowserWindowOptions::platform-selector::darwin: { type: 'panel' }::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-a944a2c495d3",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:pasteIntoFrontmostApp::platform-selector::darwin: () => execFile( 'osascript', [ '-e', 'tell application \"System Events\" to keystroke \"v\" …#809c4aba6056::self",
+      "disposition": "capability-selector",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "os-platform-selector-a5f787b3bb46",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:prepareAppWindowPolicy::platform-selector::darwin: () => { app.setActivationPolicy('accessory'); app.dock?.hide(); }::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-0d7a335bec75",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:quickLookDescription/call:osDependent('Preview this file')::platform-selector::darwin: 'Open Quick Look'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-0ffc528b364f",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:quickLookTitle/call:osDependent('Preview File')::platform-selector::darwin: 'Quick Look'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-ccd3f47263cd",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:readAppIconResourcePng::platform-selector::win32: readWindowsIconResourcePng::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-d23989517e6c",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:recognizeTextInImage::platform-selector::darwin: recognizeTextInImageMac::self",
+      "disposition": "capability-selector",
+      "surface": "ocr-screen-capture"
+    },
+    {
+      "key": "os-platform-selector-39c1f95d36cb",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:reservedPaletteShortcutName/call:osDependent('the system')::platform-selector::darwin: 'Spotlight'::self",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "os-platform-selector-de45b1c9c61d",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:revealPathDescription/call:osDependent('Show in the system file manager')::platform-selector::darwin: 'Show in Finder'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-1cce6c9147b1",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:revealPathDescription/call:osDependent('Show in the system file manager')::platform-selector::win32: 'Show in File Explorer'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-4024b2439ba8",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:revealPathTitle/call:osDependent('Show in File Manager')::platform-selector::darwin: 'Show in Finder'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-64c940700757",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:revealPathTitle/call:osDependent('Show in File Manager')::platform-selector::win32: 'Show in File Explorer'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-7a3f5d09695d",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:runningAppPaths::platform-selector::darwin: () => runningMacAppPaths(apps)::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-5b4c507195b5",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:runningAppPaths::platform-selector::linux: () => runningLinuxAppPaths(apps)::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-940ac34da606",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:scanApps::platform-selector::darwin: scanMacApps::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-72d6a4e444e3",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:scanApps::platform-selector::win32: scanWindowsApps::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "os-platform-selector-3d4aa35abbcc",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:selectedFilePaths::platform-selector::darwin: async () => { const script = 'set AppleScript\\'s text item delimiters to linefeed\\ntell …#b66fac37612c::self",
+      "disposition": "capability-selector",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "os-platform-selector-5ac9e4856610",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:selectedText::platform-selector::darwin: async () => { const script = 'tell application \"System Events\"\\nset frontProcess to firs…#b9ca87924315::self",
+      "disposition": "capability-selector",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "os-platform-selector-a2e2034dd90b",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:systemSettingsLabel/call:osDependent('System Settings')::platform-selector::darwin: 'System Settings'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-67727f032f7c",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:systemSettingsLabel/call:osDependent('System Settings')::platform-selector::win32: 'Windows Settings'::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-fbf43dc817ba",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:typeTextIntoFrontmostApp::platform-selector::darwin: (value, opts) => new Promise((resolve) => { const delayMs = Math.max(0, Number(opts?.del…#868238342e99::self",
+      "disposition": "capability-selector",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "private-file-direct-platform-6891ea87318a",
+      "file": "src/electron/private-file.ts",
+      "category": "direct-platform",
+      "selector": "function:writePrivateFile/variable:processPlatform::direct-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].initializer.right",
+      "disposition": "sensitive-file-adapter",
+      "surface": "auth-token-byo-storage"
+    },
+    {
+      "key": "private-file-injected-platform-22d53cf5f933",
+      "file": "src/electron/private-file.ts",
+      "category": "injected-platform",
+      "selector": "function:writePrivateFile/if:processPlatform !== 'win32'::injected-platform::if (processPlatform !== 'win32') { await fileSystem.chmod(filePath, PRIVATE_FILE_MODE); }::expression.left",
+      "disposition": "sensitive-file-adapter",
+      "surface": "auth-token-byo-storage"
+    },
+    {
+      "key": "private-file-injected-platform-2ed4abbe5d90",
+      "file": "src/electron/private-file.ts",
+      "category": "injected-platform",
+      "selector": "function:writePrivateFile/variable:processPlatform::injected-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].initializer.left",
+      "disposition": "sensitive-file-adapter",
+      "surface": "auth-token-byo-storage"
+    },
+    {
+      "key": "private-file-injected-platform-679b7f0ac79e",
+      "file": "src/electron/private-file.ts",
+      "category": "injected-platform",
+      "selector": "function:writePrivateFile/variable:processPlatform::injected-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].name",
+      "disposition": "sensitive-file-adapter",
+      "surface": "auth-token-byo-storage"
+    },
+    {
+      "key": "running-app-status-direct-platform-bf6e2d161cad",
+      "file": "src/electron/running-app-status.ts",
+      "category": "direct-platform",
+      "selector": "function:createRunningAppStatusService/variable:platform::direct-platform::const platform = options.platform || process.platform;::declarationList.declarations[0].initializer.right",
+      "disposition": "injected-service-default",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
+      "key": "shortcut-utils-direct-platform-51b407ba638b",
+      "file": "src/electron/shortcut-utils.ts",
+      "category": "direct-platform",
+      "selector": "function:formatShortcut::direct-platform::processPlatform: NodeJS.Platform = process.platform::initializer",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shortcut-utils-injected-platform-c08ad0e7e21a",
+      "file": "src/electron/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:formatShortcut::injected-platform::processPlatform: NodeJS.Platform = process.platform::name",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shortcut-utils-injected-platform-1eae6fed4b9a",
+      "file": "src/electron/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { return parts.join('+'); }::expression.left",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "system-settings-direct-platform-53bd60c81cd6",
+      "file": "src/electron/system-settings.ts",
+      "category": "direct-platform",
+      "selector": "function:systemSettingsEntries/if:process.platform !== 'darwin'::direct-platform::if (process.platform !== 'darwin') { return Promise.resolve([] as SystemSettingsEntry[]); }::expression.left",
+      "disposition": "capability-adapter",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "system-settings-direct-platform-dd1629b8e338",
+      "file": "src/electron/system-settings.ts",
+      "category": "direct-platform",
+      "selector": "function:systemSettingsPaneUrl::direct-platform::platform: NodeJS.Platform = process.platform::initializer",
+      "disposition": "capability-adapter",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "system-settings-os-label-84e72576f6a8",
+      "file": "src/electron/system-settings.ts",
+      "category": "os-label",
+      "selector": "variable:MAC_SYSTEM_SETTINGS_ENTRIES/property:aliases::os-label::aliases: ['Desktop', 'Dock']::initializer.elements[1]",
+      "disposition": "mac-capability-metadata",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "system-settings-os-label-b5020d49d494",
+      "file": "src/electron/system-settings.ts",
+      "category": "os-label",
+      "selector": "variable:MAC_SYSTEM_SETTINGS_ENTRIES/property:id::os-label::id: 'com.apple.Spotlight-Settings.extension'::initializer",
+      "disposition": "mac-capability-metadata",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "system-settings-os-label-63c481e62b6c",
+      "file": "src/electron/system-settings.ts",
+      "category": "os-label",
+      "selector": "variable:MAC_SYSTEM_SETTINGS_ENTRIES/property:title::os-label::title: 'Desktop & Dock'::initializer",
+      "disposition": "mac-capability-metadata",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "system-settings-os-label-aa2b62a60106",
+      "file": "src/electron/system-settings.ts",
+      "category": "os-label",
+      "selector": "variable:MAC_SYSTEM_SETTINGS_ENTRIES/property:title::os-label::title: 'Spotlight'::initializer",
+      "disposition": "mac-capability-metadata",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "system-settings-os-label-da9c091511e6",
+      "file": "src/electron/system-settings.ts",
+      "category": "os-label",
+      "selector": "variable:SYSTEM_SETTINGS_SIDEBAR::os-label::const SYSTEM_SETTINGS_SIDEBAR = '/System/Applications/System Settings.app/Contents/Resources/Sidebar.plist';::declarationList.declarations[0].initializer",
+      "disposition": "mac-capability-metadata",
+      "surface": "system-actions-settings"
+    }
+  ],
+  "resolvedEntries": [
+    {
+      "key": "byo-private-file",
+      "file": "src/electron/byo-key.ts",
+      "disposition": "uses-shared-private-file-writer",
+      "evidencePattern": "writePrivateFile"
+    },
+    {
+      "key": "auth-private-file",
+      "file": "src/electron/nevermind-auth.ts",
+      "disposition": "uses-shared-private-file-writer",
+      "evidencePattern": "writePrivateFile"
+    },
+    {
+      "key": "renderer-camera-label",
+      "file": "src/extension-view.tsx",
+      "disposition": "platform-neutral-copy",
+      "evidencePattern": "system privacy settings"
+    }
+  ],
+  "productSurfaces": [
+    {
+      "key": "palette-hotkey",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "os.windows.test.ts and shortcut-utils.test.ts",
+      "manualGate": "global shortcut registration, conflict, focus, dismissal",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "window-behavior",
+      "status": "unverified",
+      "source": "src/electron/palette-window.ts",
+      "automatedCheck": "packaged portable ready-to-show marker",
+      "manualGate": "focus, taskbar behavior, multi-monitor dismissal",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "app-discovery-launch-quit",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "off-host recursive scan, openPath, argv-safe taskkill tests",
+      "manualGate": "Start Menu discovery, launch, running status, quit",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "files-search-open",
+      "status": "implemented",
+      "source": "src/electron/main.ts",
+      "automatedCheck": "cross-platform file tests and inventory check",
+      "manualGate": "local, Unicode, spaces and UNC search/open",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "clipboard-text-image-paste",
+      "status": "implemented",
+      "source": "src/electron/clipboard-history.ts",
+      "automatedCheck": "clipboard unit tests",
+      "manualGate": "text, HTML, image, file copy and paste into another app",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "ocr-screen-capture",
+      "status": "intentionally-unsupported",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "capability fallback tests",
+      "manualGate": "confirm unavailable actions are omitted",
+      "owner": "desktop-product"
+    },
+    {
+      "key": "camera",
+      "status": "implemented",
+      "source": "src/electron/app-ipc-handlers.ts",
+      "automatedCheck": "injected Darwin/Windows permission contract",
+      "manualGate": "camera permission request, denial copy and live camera",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "system-actions-settings",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "platform inventory and Windows capability tests",
+      "manualGate": "lock, sleep, restart, Windows Settings and typing settings",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "auth-token-byo-storage",
+      "status": "implemented",
+      "source": "src/electron/private-file.ts",
+      "automatedCheck": "private writer tests and Windows ACL CI gate",
+      "manualGate": "sign-in/device auth and redacted ACL evidence on actual profile files",
+      "owner": "security-release"
+    },
+    {
+      "key": "extensions-generated",
+      "status": "implemented",
+      "source": "src/electron/extension-storage.ts",
+      "automatedCheck": "extension persistence tests and ASAR resource inspection",
+      "manualGate": "generate, run, restart and re-run an extension",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "jobs-watchers",
+      "status": "implemented",
+      "source": "src/electron/main.ts",
+      "automatedCheck": "recursive watcher simulation and background job tests",
+      "manualGate": "startup, interval and file-change background jobs",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "notifications",
+      "status": "missing",
+      "source": "src/electron",
+      "automatedCheck": "inventory records no Windows notification implementation",
+      "manualGate": "not required until product approval adds the capability",
+      "owner": "desktop-product"
+    },
+    {
+      "key": "auto-updater",
+      "status": "intentionally-unsupported",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "latest.yml absent smoke and NSIS metadata validator fixtures",
+      "manualGate": "signed publish-candidate update installation",
+      "owner": "release-engineering"
+    },
+    {
+      "key": "installer-uninstaller",
+      "status": "unverified",
+      "source": "electron-builder.yml",
+      "automatedCheck": "NSIS artifact, blockmap, unsigned signature and manifest checks",
+      "manualGate": "per-user install, Start menu, uninstall cleanup and preserved user data",
+      "owner": "release-engineering"
+    },
+    {
+      "key": "portable-data",
+      "status": "unverified",
+      "source": "scripts/windows-portable-smoke.cjs",
+      "automatedCheck": "staged launcher identity and packaged-child readiness",
+      "manualGate": "portable launch location and data behavior",
+      "owner": "release-engineering"
+    },
+    {
+      "key": "logs-crash-recovery",
+      "status": "unverified",
+      "source": "src/electron/logger.ts",
+      "automatedCheck": "startup evidence and stable-child window",
+      "manualGate": "redacted logs, crash recovery and relaunch",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "auto-start",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "injected packaged/unpackaged login-item tests",
+      "manualGate": "enable, sign out/in, disable",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "packaging-icon-architecture",
+      "status": "implemented",
+      "source": "electron-builder.yml",
+      "automatedCheck": "x64 names, icon source metadata and PE resource presence",
+      "manualGate": "taskbar, Start menu, installer and portable visual comparison",
+      "owner": "release-engineering"
+    }
+  ]
+}

@@ -121,6 +121,25 @@ test('registerAppIpcHandlers preserves palette, camera, and window behavior', as
   assert.deepEqual(calls, ['mode:preview', 'center', 'close-window']);
 });
 
+test('camera permission composition distinguishes Windows from unsupported platforms', async () => {
+  const windows = createDeps({
+    processPlatform: 'win32',
+    getCameraMediaAccessStatus: () => {
+      throw new Error('Windows must not use the macOS media status API');
+    },
+  });
+  assert.deepEqual(await windows.handles.get('camera:request-access')?.({}), {
+    ok: true,
+    status: 'unknown',
+  });
+
+  const unsupported = createDeps({ hasCapability: () => false });
+  assert.deepEqual(
+    await unsupported.handles.get('camera:request-access')?.({}),
+    { ok: false, status: 'unsupported' },
+  );
+});
+
 test('registerAppIpcHandlers suspends and resumes palette hotkey with action shortcuts', async () => {
   const { handles, calls } = createDeps();
 

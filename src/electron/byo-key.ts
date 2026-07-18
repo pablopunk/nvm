@@ -1,6 +1,7 @@
 // biome-ignore-all lint: This module retains existing encrypted-key persistence conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { writePrivateFile } from './private-file';
 
 const FILENAME = 'byo-key.json';
 
@@ -131,10 +132,7 @@ async function persistByoKey(input: {
     logWarn('safeStorage unavailable; storing BYO key as plaintext');
     payload.apiKey = Buffer.from(input.apiKey, 'utf8').toString('base64');
   }
-  await fs.writeFile(byoKeyPath(), JSON.stringify(payload, null, 2), {
-    mode: 0o600,
-  });
-  if (process.platform !== 'win32') await fs.chmod(byoKeyPath(), 0o600);
+  await writePrivateFile(byoKeyPath(), JSON.stringify(payload, null, 2));
   cached = {
     providerId: input.providerId,
     apiKey: input.apiKey,

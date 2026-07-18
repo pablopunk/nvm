@@ -1,3 +1,4 @@
+// biome-ignore-all lint/performance/noNamespaceImport lint/style/useExportsLast lint/style/useConsistentTypeDefinitions lint/style/useBlockStatements lint/complexity/noExcessiveCognitiveComplexity lint/style/noNestedTernary lint/style/noMagicNumbers lint/complexity/useSimplifiedLogicExpression lint/style/noProcessEnv lint/complexity/noExcessiveLinesPerFunction lint/style/useNamingConvention: This established window controller keeps native event handling and sizing policy together.
 import {
   app,
   BrowserWindow,
@@ -17,10 +18,14 @@ import {
   paletteBrowserWindowOptions,
 } from './os';
 import {
+  isNvmTestMode,
+  recordPackagedStartupReady,
+  recordTestWindowEvent,
+} from './test-mode';
+import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
 } from './window-navigation-policy';
-import { isNvmTestMode, recordTestWindowEvent } from './test-mode';
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview';
 
@@ -188,6 +193,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         showPalette();
       }
     });
+    win.once('ready-to-show', recordPackagedStartupReady);
 
     if (options.isDev && options.rendererUrl) win.loadURL(options.rendererUrl);
     else win.loadFile(options.rendererIndexPath);

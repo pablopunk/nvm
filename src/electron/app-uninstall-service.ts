@@ -11,6 +11,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const macPath = path.posix;
 export const PLUTIL_PATH = '/usr/bin/plutil';
 export const PLUTIL_OPTIONS = {
   shell: false,
@@ -130,12 +131,12 @@ function sameIdentity(left: Identity, right: Identity) {
 }
 
 function isWithin(root: string, target: string) {
-  const relative = path.relative(root, target);
+  const relative = macPath.relative(root, target);
   return (
     relative === '' ||
-    (!path.isAbsolute(relative) &&
+    (!macPath.isAbsolute(relative) &&
       relative !== '..' &&
-      !relative.startsWith(`..${path.sep}`))
+      !relative.startsWith(`..${macPath.sep}`))
   );
 }
 
@@ -205,7 +206,7 @@ async function resolveProductionPlistPath(
   fileSystem: PlistFileSystem,
 ) {
   const canonicalAppPath = await fileSystem.realpath(appPath);
-  const directPlistPath = path.join(appPath, 'Contents', 'Info.plist');
+  const directPlistPath = macPath.join(appPath, 'Contents', 'Info.plist');
   try {
     const canonicalPlistPath = await fileSystem.realpath(directPlistPath);
     if (!isWithin(canonicalAppPath, canonicalPlistPath)) {
@@ -218,7 +219,7 @@ async function resolveProductionPlistPath(
     }
   }
 
-  const wrapperPath = path.join(appPath, 'Wrapper');
+  const wrapperPath = macPath.join(appPath, 'Wrapper');
   const wrappedApps = (await fileSystem.readdir(wrapperPath)).filter(
     (entry) =>
       entry.name.endsWith('.app') &&
@@ -228,7 +229,7 @@ async function resolveProductionPlistPath(
   if (wrappedApps.length !== 1) {
     throw new Error('App has no supported bundle metadata');
   }
-  const wrappedPlistPath = path.join(
+  const wrappedPlistPath = macPath.join(
     wrapperPath,
     wrappedApps[0].name,
     'Info.plist',
@@ -286,14 +287,14 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     | { canonical: string; identity: Identity }
     | { code: string; message: string }
   > {
-    const parsed = path.parse(path.resolve(value));
+    const parsed = macPath.parse(macPath.resolve(value));
     let current = parsed.root;
-    const components = path
-      .relative(parsed.root, path.resolve(value))
-      .split(path.sep)
+    const components = macPath
+      .relative(parsed.root, macPath.resolve(value))
+      .split(macPath.sep)
       .filter(Boolean);
     for (const component of components) {
-      current = path.join(current, component);
+      current = macPath.join(current, component);
       let stat: Stat;
       try {
         stat = await deps.lstat(current);
@@ -351,7 +352,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
   }
 
   function appSpecs(appPath: string): CandidateSpec[] {
-    const homeApps = path.join(deps.homeDirectory, 'Applications');
+    const homeApps = macPath.join(deps.homeDirectory, 'Applications');
     return [
       { slot: 'app', path: appPath, root: '/Applications', kind: 'app' },
       { slot: 'app', path: appPath, root: homeApps, kind: 'app' },
@@ -359,52 +360,56 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
   }
 
   function associatedSpecs(bundleId: string): CandidateSpec[] {
-    const library = path.join(deps.homeDirectory, 'Library');
+    const library = macPath.join(deps.homeDirectory, 'Library');
     return [
       [
         'application-support',
-        path.join(library, 'Application Support', bundleId),
-        path.join(library, 'Application Support'),
+        macPath.join(library, 'Application Support', bundleId),
+        macPath.join(library, 'Application Support'),
       ],
       [
         'caches',
-        path.join(library, 'Caches', bundleId),
-        path.join(library, 'Caches'),
+        macPath.join(library, 'Caches', bundleId),
+        macPath.join(library, 'Caches'),
       ],
       [
         'preferences',
-        path.join(library, 'Preferences', `${bundleId}.plist`),
-        path.join(library, 'Preferences'),
+        macPath.join(library, 'Preferences', `${bundleId}.plist`),
+        macPath.join(library, 'Preferences'),
       ],
       [
         'saved-state',
-        path.join(library, 'Saved Application State', `${bundleId}.savedState`),
-        path.join(library, 'Saved Application State'),
+        macPath.join(
+          library,
+          'Saved Application State',
+          `${bundleId}.savedState`,
+        ),
+        macPath.join(library, 'Saved Application State'),
       ],
       [
         'containers',
-        path.join(library, 'Containers', bundleId),
-        path.join(library, 'Containers'),
+        macPath.join(library, 'Containers', bundleId),
+        macPath.join(library, 'Containers'),
       ],
       [
         'application-scripts',
-        path.join(library, 'Application Scripts', bundleId),
-        path.join(library, 'Application Scripts'),
+        macPath.join(library, 'Application Scripts', bundleId),
+        macPath.join(library, 'Application Scripts'),
       ],
       [
         'http-storages',
-        path.join(library, 'HTTPStorages', bundleId),
-        path.join(library, 'HTTPStorages'),
+        macPath.join(library, 'HTTPStorages', bundleId),
+        macPath.join(library, 'HTTPStorages'),
       ],
       [
         'webkit',
-        path.join(library, 'WebKit', bundleId),
-        path.join(library, 'WebKit'),
+        macPath.join(library, 'WebKit', bundleId),
+        macPath.join(library, 'WebKit'),
       ],
       [
         'cookies',
-        path.join(library, 'Cookies', `${bundleId}.binarycookies`),
-        path.join(library, 'Cookies'),
+        macPath.join(library, 'Cookies', `${bundleId}.binarycookies`),
+        macPath.join(library, 'Cookies'),
       ],
     ].map(([slot, candidatePath, root]) => ({
       slot,
@@ -467,7 +472,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
       return { code: 'self', message: 'Nevermind cannot uninstall itself' };
     }
     try {
-      await deps.access(path.dirname(checked.canonical), constants.W_OK);
+      await deps.access(macPath.dirname(checked.canonical), constants.W_OK);
     } catch {
       return {
         code: 'app-parent-not-writable',
@@ -533,7 +538,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
     }
     const appRoot = isWithin('/Applications', app.canonical)
       ? '/Applications'
-      : path.join(deps.homeDirectory, 'Applications');
+      : macPath.join(deps.homeDirectory, 'Applications');
     const candidates: SnapshotCandidate[] = [
       {
         id: randomId(),

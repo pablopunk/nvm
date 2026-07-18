@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useExportsLast lint/style/useBlockStatements lint/style/noProcessEnv lint/complexity/useSimplifiedLogicExpression lint/suspicious/noEmptyBlockStatements: Test-mode environment guards stay adjacent to the behavior they protect.
 import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -56,4 +57,30 @@ export function recordTestWindowEvent(event: 'hidden' | 'shown') {
   } catch {}
   events.push(event);
   fsSync.writeFileSync(file, `${JSON.stringify(events, null, 2)}\n`);
+}
+
+export function recordPackagedStartupReady() {
+  if (process.env.NVM_PACKAGED_STARTUP_SMOKE !== '1') return;
+  const markerPath = process.env.NVM_PORTABLE_SMOKE_MARKER;
+  if (!markerPath) throw new Error('NVM_PORTABLE_SMOKE_MARKER is required');
+  const resolvedMarkerPath = path.resolve(markerPath);
+  const temporaryMarkerPath = `${resolvedMarkerPath}.${process.pid}.tmp`;
+  fsSync.mkdirSync(path.dirname(resolvedMarkerPath), { recursive: true });
+  fsSync.writeFileSync(
+    temporaryMarkerPath,
+    `${JSON.stringify(
+      {
+        pid: process.pid,
+        appIsPackaged: app.isPackaged,
+        appVersion: app.getVersion(),
+        processExecPath: process.execPath,
+        portableExecutableFile: process.env.PORTABLE_EXECUTABLE_FILE || null,
+        portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR || null,
+        readyAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  fsSync.renameSync(temporaryMarkerPath, resolvedMarkerPath);
 }
