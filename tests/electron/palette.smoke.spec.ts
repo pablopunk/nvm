@@ -391,9 +391,13 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     firstLaunch = await launchTestApplication(stateSafetyUserDataDir);
     const input = firstLaunch.page.locator('input[placeholder]').first();
     await input.fill(settingsTitle);
-    await expect(
-      firstLaunch.page.getByText(settingsTitle, { exact: true }).first(),
-    ).toBeVisible();
+    const settingsRow = firstLaunch.page
+      .getByText(settingsTitle, { exact: true })
+      .first()
+      .locator('xpath=ancestor::*[@cmdk-item]');
+    await expect(settingsRow).toBeVisible();
+    await settingsRow.hover();
+    await expect(settingsRow).toHaveAttribute('data-selected', 'true');
 
     await firstLaunch.page.keyboard.press('Control+K');
     const setAlias = firstLaunch.page.getByText('Set alias', { exact: true });
