@@ -2,9 +2,9 @@ import crypto from 'node:crypto';
 import fs, { type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 
-export type JsonObject = Record<string, any>;
+type JsonObject = Record<string, unknown>;
 
-type ExtensionJsonStoreDeps = {
+interface ExtensionJsonStoreDeps {
   mkdir?: typeof fs.mkdir;
   open?: typeof fs.open;
   readFile?: typeof fs.readFile;
@@ -12,13 +12,20 @@ type ExtensionJsonStoreDeps = {
   rename?: typeof fs.rename;
   unlink?: typeof fs.unlink;
   writeTemporaryFile?: (file: FileHandle, data: string) => Promise<void>;
-};
+}
+
+const PRIVATE_FILE_MODE = 0o600;
+
+function ignoreError() {
+  return null;
+}
 
 function isMissingFileError(error: unknown) {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
 }
 
-export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: The factory keeps each store's injected filesystem operations and queue state isolated.
+function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
   const mkdir = deps.mkdir ?? fs.mkdir;
   const open = deps.open ?? fs.open;
   const readFile = deps.readFile ?? fs.readFile;
@@ -30,6 +37,7 @@ export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     async function writeTemporaryFile(file, data) {
       await file.writeFile(data);
     };
+  const canonicalPathResolutions = new Map<string, Promise<string>>();
   const pendingOperations = new Map<string, Promise<void>>();
 
   async function canonicalPath(filePath: string) {
@@ -37,14 +45,18 @@ export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     try {
       return await realpath(absolutePath);
     } catch (error) {
-      if (!isMissingFileError(error)) throw error;
+      if (!isMissingFileError(error)) {
+        throw error;
+      }
     }
 
     const directory = path.dirname(absolutePath);
     try {
       return path.join(await realpath(directory), path.basename(absolutePath));
     } catch (error) {
-      if (!isMissingFileError(error)) throw error;
+      if (!isMissingFileError(error)) {
+        throw error;
+      }
       return absolutePath;
     }
   }
@@ -53,9 +65,35 @@ export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     try {
       return JSON.parse(await readFile(filePath, 'utf8'));
     } catch (error) {
-      if (isMissingFileError(error)) return {};
+      if (isMissingFileError(error)) {
+        return {};
+      }
       throw error;
     }
+  }
+
+  function resolveCanonicalPath(filePath: string) {
+    const absolutePath = path.resolve(filePath);
+    const pendingResolution = canonicalPathResolutions.get(absolutePath);
+    if (pendingResolution) {
+      return pendingResolution;
+    }
+
+    const resolution = canonicalPath(absolutePath);
+    canonicalPathResolutions.set(absolutePath, resolution);
+    resolution.then(
+      () => {
+        if (canonicalPathResolutions.get(absolutePath) === resolution) {
+          canonicalPathResolutions.delete(absolutePath);
+        }
+      },
+      () => {
+        if (canonicalPathResolutions.get(absolutePath) === resolution) {
+          canonicalPathResolutions.delete(absolutePath);
+        }
+      },
+    );
+    return resolution;
   }
 
   async function atomicallyReplaceFile(filePath: string, data: JsonObject) {
@@ -67,15 +105,15 @@ export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     let file: FileHandle | undefined;
 
     try {
-      file = await open(temporaryPath, 'w', 0o600);
+      file = await open(temporaryPath, 'w', PRIVATE_FILE_MODE);
       await writeTemporaryFile(file, JSON.stringify(data, null, 2));
       await file.sync();
       await file.close();
       file = undefined;
       await rename(temporaryPath, filePath);
     } finally {
-      await file?.close().catch(() => {});
-      await unlink(temporaryPath).catch(() => {});
+      await file?.close().catch(ignoreError);
+      await unlink(temporaryPath).catch(ignoreError);
     }
   }
 
@@ -83,19 +121,20 @@ export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     filePath: string,
     operation: (canonicalFilePath: string) => Promise<T>,
   ): Promise<T> {
-    const canonicalFilePath = await canonicalPath(filePath);
+    const canonicalFilePath = await resolveCanonicalPath(filePath);
     const previous = pendingOperations.get(canonicalFilePath);
     const operationPromise = (previous ?? Promise.resolve())
-      .catch(() => {})
+      .catch(ignoreError)
       .then(() => operation(canonicalFilePath));
     const settledOperation = operationPromise.then(
       () => undefined,
       () => undefined,
     );
     pendingOperations.set(canonicalFilePath, settledOperation);
-    void settledOperation.then(() => {
-      if (pendingOperations.get(canonicalFilePath) === settledOperation)
+    settledOperation.then(() => {
+      if (pendingOperations.get(canonicalFilePath) === settledOperation) {
         pendingOperations.delete(canonicalFilePath);
+      }
     });
     return operationPromise;
   }
@@ -125,3 +164,6 @@ export function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     },
   };
 }
+
+export type { JsonObject };
+export { createExtensionJsonStore };

@@ -10,7 +10,24 @@ import {
   resolveLoaderEmptyView,
 } from './data-loader';
 
-test('ctx.data.loader returns an opaque handle and normalizeLoaderItems strips it', async () => {
+const CUSTOM_TTL_MS = 30_000;
+const CUSTOM_STALE_TTL_MS = 120_000;
+const DEFAULT_TTL_MS = 60_000;
+const DEFAULT_STALE_TTL_MS = 300_000;
+const FRESH_CACHE_AGE_MS = 10_000;
+const STALE_CACHE_AGE_MS = 90_000;
+
+type TestCache = Record<string, unknown>;
+
+function testCachedValue(cache: TestCache, key: string) {
+  const value = cache[key];
+  if (!(value && typeof value === 'object' && 'value' in value)) {
+    throw new TypeError(`Missing cache value for ${key}`);
+  }
+  return value;
+}
+
+test('ctx.data.loader returns an opaque handle and normalizeLoaderItems strips it', () => {
   const loader = createDataLoaderHandle(async () => [{ id: 'a' }], {
     retry: true,
   });
@@ -58,7 +75,7 @@ test('loader registry hydrates normalized items', async () => {
   ]);
 });
 
-test('views with loaders get a default empty state when one is not provided', async () => {
+test('views with loaders get a default empty state when one is not provided', () => {
   const loader = createDataLoaderHandle(async () => []);
 
   assert.deepEqual(resolveLoaderEmptyView(undefined, loader), {
@@ -73,7 +90,7 @@ test('views with loaders get a default empty state when one is not provided', as
 });
 
 test('loader errors preserve entry for retry and retry re-runs after re-registration', async () => {
-  const payloads: Array<Record<string, unknown>> = [];
+  const payloads: Record<string, unknown>[] = [];
   const warnings: Array<{ viewId: string; message: string }> = [];
   const registry = createViewLoaderRegistry({
     sendHydrate: (_viewId, payload) => payloads.push(payload),
@@ -84,7 +101,7 @@ test('loader errors preserve entry for retry and retry re-runs after re-registra
   // Non-retry: entry is cleaned up after error
   registry.register(
     'view:no-retry',
-    createDataLoaderHandle(async () => {
+    createDataLoaderHandle(() => {
       throw new Error('boom');
     }),
     null,
@@ -96,7 +113,7 @@ test('loader errors preserve entry for retry and retry re-runs after re-registra
   registry.register(
     'view:retry',
     createDataLoaderHandle(
-      async () => {
+      () => {
         throw new Error('retry me');
       },
       { retry: true },
@@ -127,17 +144,17 @@ test('loader errors preserve entry for retry and retry re-runs after re-registra
 });
 
 test('stale in-flight completions do not overwrite newer registrations', async () => {
-  const payloads: Array<Record<string, unknown>> = [];
+  const payloads: Record<string, unknown>[] = [];
   const registry = createViewLoaderRegistry({
     sendHydrate: (_viewId, payload) => payloads.push(payload),
     normalizeItems: (items) => items,
   });
 
   // Register and spawn a slow loader
-  let slowResolve!: (items: any[]) => void;
+  let slowResolve!: (items: Record<string, unknown>[]) => void;
   const slowLoader = createDataLoaderHandle(
     () =>
-      new Promise<any[]>((resolve) => {
+      new Promise<Record<string, unknown>[]>((resolve) => {
         slowResolve = resolve;
       }),
   );
@@ -178,8 +195,8 @@ test('createStaleWhileRevalidateHandle sets correct shape', () => {
   const loader = async () => [{ id: 'a' }];
   const handle = createStaleWhileRevalidateHandle({
     cacheKey: 'my-key',
-    ttlMs: 30_000,
-    staleTtlMs: 120_000,
+    ttlMs: CUSTOM_TTL_MS,
+    staleTtlMs: CUSTOM_STALE_TTL_MS,
     loader,
     retry: true,
   });
@@ -188,8 +205,8 @@ test('createStaleWhileRevalidateHandle sets correct shape', () => {
   assert.equal(isStaleWhileRevalidateHandle(handle), true);
   assert.equal(handle._kind, 'stale-while-revalidate');
   assert.equal(handle._cacheKey, 'my-key');
-  assert.equal(handle._ttlMs, 30_000);
-  assert.equal(handle._staleTtlMs, 120_000);
+  assert.equal(handle._ttlMs, CUSTOM_TTL_MS);
+  assert.equal(handle._staleTtlMs, CUSTOM_STALE_TTL_MS);
   assert.equal(handle._retry, true);
 
   // Default TTLs
@@ -197,16 +214,16 @@ test('createStaleWhileRevalidateHandle sets correct shape', () => {
     cacheKey: 'k',
     loader,
   });
-  assert.equal(defaultHandle._ttlMs, 60_000);
-  assert.equal(defaultHandle._staleTtlMs, 300_000);
+  assert.equal(defaultHandle._ttlMs, DEFAULT_TTL_MS);
+  assert.equal(defaultHandle._staleTtlMs, DEFAULT_STALE_TTL_MS);
   assert.equal(defaultHandle._retry, false);
 });
 
 test('stale-while-revalidate registry hydrates stale cached items before loader', async () => {
-  const cache: Record<string, any> = {
+  const cache: TestCache = {
     'swr-key': {
       value: [{ id: 'cached-a' }, { id: 'cached-b' }],
-      updatedAt: Date.now() - 90_000, // stale: > 60s ttl, < 300s stale
+      updatedAt: Date.now() - STALE_CACHE_AGE_MS,
     },
   };
 
@@ -216,8 +233,9 @@ test('stale-while-revalidate registry hydrates stale cached items before loader'
     sendHydrate: (viewId, payload) => payloads.push({ viewId, payload }),
     normalizeItems: (items) => items,
     readCache: async () => cache,
-    mutateCache: async (_ext, update) => {
+    mutateCache: (_ext, update) => {
       Object.assign(cache, update(cache));
+      return Promise.resolve();
     },
   });
 
@@ -225,8 +243,8 @@ test('stale-while-revalidate registry hydrates stale cached items before loader'
     'view:swr',
     createStaleWhileRevalidateHandle({
       cacheKey: 'swr-key',
-      ttlMs: 60_000,
-      staleTtlMs: 300_000,
+      ttlMs: DEFAULT_TTL_MS,
+      staleTtlMs: DEFAULT_STALE_TTL_MS,
       loader: async () => [{ id: 'fresh' }],
     }),
     { extension: { id: 'test' } },
@@ -253,26 +271,29 @@ test('stale-while-revalidate registry hydrates stale cached items before loader'
   });
 
   // Cache should be updated with fresh items
-  assert.ok(cache['swr-key']);
-  assert.deepEqual(cache['swr-key'].value, [{ id: 'fresh' }]);
+  assert.deepEqual(testCachedValue(cache, 'swr-key').value, [{ id: 'fresh' }]);
 });
 
 test('concurrent stale-while-revalidate hydrations retain every cache key', async () => {
-  const cache: Record<string, any> = {};
+  let cache: TestCache = {};
   const cacheMutations: Promise<void>[] = [];
   let mutationTail = Promise.resolve();
+  function mutateCache(
+    _extension: unknown,
+    update: (current: TestCache) => TestCache,
+  ) {
+    const mutation = mutationTail.then(() => {
+      cache = update(cache);
+    });
+    mutationTail = mutation;
+    cacheMutations.push(mutation);
+    return mutation;
+  }
   const registry = createViewLoaderRegistry({
-    sendHydrate: () => {},
+    sendHydrate: () => undefined,
     normalizeItems: (items) => items,
     readCache: async () => cache,
-    mutateCache: (_extension, update) => {
-      const mutation = mutationTail.then(() => {
-        Object.assign(cache, update(cache));
-      });
-      mutationTail = mutation;
-      cacheMutations.push(mutation);
-      return mutation;
-    },
+    mutateCache,
   });
 
   registry.register(
@@ -292,21 +313,66 @@ test('concurrent stale-while-revalidate hydrations retain every cache key', asyn
     { extension: { id: 'test' } },
   );
 
+  const unrelatedMutation = mutateCache(null, (current) => ({
+    ...current,
+    unrelated: { preserved: true },
+  }));
   await Promise.all([
     registry.spawn('view:first'),
     registry.spawn('view:second'),
+    unrelatedMutation,
   ]);
   await Promise.all(cacheMutations);
 
-  assert.deepEqual(cache.first.value, [{ id: 'first' }]);
-  assert.deepEqual(cache.second.value, [{ id: 'second' }]);
+  assert.deepEqual(testCachedValue(cache, 'first').value, [{ id: 'first' }]);
+  assert.deepEqual(testCachedValue(cache, 'second').value, [{ id: 'second' }]);
+  assert.deepEqual(cache.unrelated, { preserved: true });
+});
+
+test('fresh hydration does not wait for persistent cache mutation', async () => {
+  const payloads: Record<string, unknown>[] = [];
+  let releaseMutation!: () => void;
+  const mutationMayFinish = new Promise<void>((resolve) => {
+    releaseMutation = resolve;
+  });
+  let cacheMutation: Promise<void> | undefined;
+  const registry = createViewLoaderRegistry({
+    sendHydrate: (_viewId, payload) => payloads.push(payload),
+    normalizeItems: (items) => items,
+    readCache: async () => ({}),
+    mutateCache: () => {
+      cacheMutation = mutationMayFinish;
+      return cacheMutation;
+    },
+  });
+  registry.register(
+    'view:non-blocking-cache',
+    createStaleWhileRevalidateHandle({
+      cacheKey: 'non-blocking',
+      loader: async () => [{ id: 'fresh' }],
+    }),
+    { extension: { id: 'test' } },
+  );
+
+  await registry.spawn('view:non-blocking-cache');
+
+  assert.deepEqual(payloads, [{ items: [{ id: 'fresh' }], isLoading: false }]);
+  assert.ok(cacheMutation);
+  let mutationSettled = false;
+  cacheMutation.then(() => {
+    mutationSettled = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(mutationSettled, false);
+  releaseMutation();
+  await cacheMutation;
 });
 
 test('stale-while-revalidate fresh cache skips loader entirely', async () => {
-  const cache: Record<string, any> = {
+  const cache: TestCache = {
     'swr-fresh': {
       value: [{ id: 'recent' }],
-      updatedAt: Date.now() - 10_000, // fresh: < 60s ttl
+      updatedAt: Date.now() - FRESH_CACHE_AGE_MS,
     },
   };
 
@@ -323,11 +389,11 @@ test('stale-while-revalidate fresh cache skips loader entirely', async () => {
     'view:fresh',
     createStaleWhileRevalidateHandle({
       cacheKey: 'swr-fresh',
-      ttlMs: 60_000,
-      staleTtlMs: 300_000,
-      loader: async () => {
+      ttlMs: DEFAULT_TTL_MS,
+      staleTtlMs: DEFAULT_STALE_TTL_MS,
+      loader: () => {
         loaderRan = true;
-        return [{ id: 'new' }];
+        return Promise.resolve([{ id: 'new' }]);
       },
     }),
     { extension: { id: 'test' } },
@@ -349,14 +415,14 @@ test('stale-while-revalidate fresh cache skips loader entirely', async () => {
 });
 
 test('stale-while-revalidate loader failure falls back to stale cache', async () => {
-  const cache: Record<string, any> = {
+  const cache: TestCache = {
     'swr-fallback': {
       value: [{ id: 'stale' }],
-      updatedAt: Date.now() - 90_000,
+      updatedAt: Date.now() - STALE_CACHE_AGE_MS,
     },
   };
 
-  const payloads: Array<Record<string, unknown>> = [];
+  const payloads: Record<string, unknown>[] = [];
   const warnings: Array<{ viewId: string; message: string }> = [];
   const registry = createViewLoaderRegistry({
     sendHydrate: (_viewId, payload) => payloads.push(payload),
@@ -369,11 +435,9 @@ test('stale-while-revalidate loader failure falls back to stale cache', async ()
     'view:fail',
     createStaleWhileRevalidateHandle({
       cacheKey: 'swr-fallback',
-      ttlMs: 60_000,
-      staleTtlMs: 300_000,
-      loader: async () => {
-        throw new Error('network error');
-      },
+      ttlMs: DEFAULT_TTL_MS,
+      staleTtlMs: DEFAULT_STALE_TTL_MS,
+      loader: () => Promise.reject(new Error('network error')),
     }),
     { extension: { id: 'test' } },
   );
