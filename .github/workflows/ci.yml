@@ -141,6 +141,14 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: '& $env:PNPM_STANDALONE_PATH install --frozen-lockfile'
 
+      - name: Extension persistence tests
+        shell: pwsh
+        run: >-
+          & $env:PNPM_STANDALONE_PATH -C backend exec node --import tsx --test
+          "../src/electron/extension-json-store.test.ts"
+          "../src/electron/extension-storage.test.ts"
+          "../src/electron/data-loader.test.ts"
+
       - name: Root pnpm run dev repairs Electron and starts the app
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
