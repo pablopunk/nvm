@@ -62,14 +62,18 @@ linux:
     - x-scheme-handler/nvm
   artifactName: '${productName}-${version}-linux-${arch}.${ext}'
 win:
+  icon: build/Icon.icon/Assets/icon.png
   target:
     - nsis
     - portable
-  artifactName: '${productName}-${version}-win-${arch}.${ext}'
   protocols:
     - name: nvm
       schemes:
         - nvm
 nsis:
   perMachine: false
+  differentialPackage: true
+  artifactName: '${productName}-${version}-win-${arch}-setup.${ext}'
+portable:
+  artifactName: '${productName}-${version}-win-${arch}-portable.${ext}'
 electronUpdaterCompatibility: '>=2.16'

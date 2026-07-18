@@ -53,6 +53,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@electron/asar": "3.4.1",
     "@playwright/test": "^1.52.0",
     "@types/node": "^25.8.0",
     "@types/react": "^19.2.14",

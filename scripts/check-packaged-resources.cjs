@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const configPath = path.join(process.cwd(), 'electron-builder.yml');
 const config = fs.readFileSync(configPath, 'utf8');
+const packageRoot = path.resolve(process.argv[2] || process.cwd());
 
 function fail(message) {
   console.error(`Packaged resource check failed: ${message}`);
@@ -12,12 +13,7 @@ function fail(message) {
 
 if (
   !fs.existsSync(
-    path.join(
-      process.cwd(),
-      'src',
-      'resources',
-      'nevermind-extension-api.d.ts',
-    ),
+    path.join(packageRoot, 'src', 'resources', 'nevermind-extension-api.d.ts'),
   )
 ) {
   fail('missing src/resources/nevermind-extension-api.d.ts');
@@ -26,7 +22,7 @@ if (
 if (
   !fs.existsSync(
     path.join(
-      process.cwd(),
+      packageRoot,
       'node_modules',
       'typescript',
       'lib',

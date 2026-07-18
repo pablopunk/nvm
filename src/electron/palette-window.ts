@@ -20,7 +20,11 @@ import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
 } from './window-navigation-policy';
-import { isNvmTestMode, recordTestWindowEvent } from './test-mode';
+import {
+  isNvmTestMode,
+  recordPackagedStartupReady,
+  recordTestWindowEvent,
+} from './test-mode';
 
 export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview';
 
@@ -188,6 +192,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         showPalette();
       }
     });
+    win.once('ready-to-show', recordPackagedStartupReady);
 
     if (options.isDev && options.rendererUrl) win.loadURL(options.rendererUrl);
     else win.loadFile(options.rendererIndexPath);

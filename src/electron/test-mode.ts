@@ -57,3 +57,29 @@ export function recordTestWindowEvent(event: 'hidden' | 'shown') {
   events.push(event);
   fsSync.writeFileSync(file, `${JSON.stringify(events, null, 2)}\n`);
 }
+
+export function recordPackagedStartupReady() {
+  if (process.env.NVM_PACKAGED_STARTUP_SMOKE !== '1') return;
+  const markerPath = process.env.NVM_PORTABLE_SMOKE_MARKER;
+  if (!markerPath) throw new Error('NVM_PORTABLE_SMOKE_MARKER is required');
+  const resolvedMarkerPath = path.resolve(markerPath);
+  const temporaryMarkerPath = `${resolvedMarkerPath}.${process.pid}.tmp`;
+  fsSync.mkdirSync(path.dirname(resolvedMarkerPath), { recursive: true });
+  fsSync.writeFileSync(
+    temporaryMarkerPath,
+    `${JSON.stringify(
+      {
+        pid: process.pid,
+        appIsPackaged: app.isPackaged,
+        appVersion: app.getVersion(),
+        processExecPath: process.execPath,
+        portableExecutableFile: process.env.PORTABLE_EXECUTABLE_FILE || null,
+        portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR || null,
+        readyAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  fsSync.renameSync(temporaryMarkerPath, resolvedMarkerPath);
+}

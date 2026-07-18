@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = process.cwd();
+const root = path.resolve(process.argv[2] || process.cwd());
 const runtimeDirs = [
   path.join(root, 'dist', 'main'),
   path.join(root, 'dist', 'preload'),
