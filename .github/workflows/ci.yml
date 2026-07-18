@@ -302,6 +302,80 @@ jobs:
           NVM_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: mise exec -- pnpm -C backend test:postgres-integration
 
+  release-windows:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build unsigned Windows x64 NSIS and portable packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: mise exec -- pnpm run dist:win:x64
+
+      - name: Verify unsigned Windows release packages
+        shell: pwsh
+        run: |
+          $version = mise exec -- node -p "require('./package.json').version"
+          $asar = (Resolve-Path 'node_modules/.bin/asar.CMD').Path
+          & .github/scripts/verify-windows-package.ps1 `
+            -PackageRoot (Resolve-Path release).Path `
+            -ExpectedVersion $version `
+            -ExpectedArch x64 `
+            -AsarExecutable $asar `
+            -UpdaterMetadataPolicy Nsis
+
+      - name: Collect Windows release artifacts
+        shell: pwsh
+        run: |
+          $version = mise exec -- node -p "require('./package.json').version"
+          New-Item -ItemType Directory -Path windows-release-artifacts -Force | Out-Null
+          $artifacts = @(
+            "release/Nevermind-$version-win-x64-setup.exe",
+            "release/Nevermind-$version-win-x64-setup.exe.blockmap",
+            "release/Nevermind-$version-win-x64-portable.exe",
+            'release/latest.yml'
+          )
+          foreach ($artifact in $artifacts) {
+            $file = Get-Item -LiteralPath $artifact
+            if ($file.Length -eq 0) { throw "$artifact is empty." }
+            Copy-Item -LiteralPath $file.FullName -Destination windows-release-artifacts/
+          }
+          $collected = @(Get-ChildItem -LiteralPath windows-release-artifacts -File)
+          if ($collected.Count -ne $artifacts.Count) {
+            throw "Expected $($artifacts.Count) release artifacts; found $($collected.Count)."
+          }
+
+      - name: Upload Windows release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title $tag --generate-notes
+            if ($LASTEXITCODE -ne 0) {
+              gh release view $tag *> $null
+              if ($LASTEXITCODE -ne 0) { throw "Unable to create or find release $tag." }
+            }
+          }
+          $artifacts = Get-ChildItem -LiteralPath windows-release-artifacts -File |
+            ForEach-Object { $_.FullName }
+          gh release upload $tag @artifacts --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Unable to upload Windows artifacts to $tag." }
+
   release-mac:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: macos-26

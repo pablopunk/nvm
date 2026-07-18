@@ -162,6 +162,37 @@ test('Windows package smoke remains separate from first-run development smoke an
   }
 });
 
+test('Windows tag release publishes only verified unsigned x64 package artifacts', () => {
+  const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  const release = section(
+    workflow,
+    '\n  release-windows:\n',
+    '\n  release-mac:\n',
+  );
+  for (const expected of [
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+    'runs-on: windows-latest',
+    'contents: write',
+    "CSC_IDENTITY_AUTO_DISCOVERY: 'false'",
+    'mise exec -- pnpm run dist:win:x64',
+    'verify-windows-package.ps1',
+    '-UpdaterMetadataPolicy Nsis',
+    'Nevermind-$version-win-x64-setup.exe',
+    'Nevermind-$version-win-x64-setup.exe.blockmap',
+    'Nevermind-$version-win-x64-portable.exe',
+    "'release/latest.yml'",
+    'gh release create $tag --title $tag --generate-notes',
+    'gh release upload $tag @artifacts --clobber',
+  ]) {
+    assert.equal(release.includes(expected), true, expected);
+  }
+  assert.equal(
+    /workflow_dispatch|secrets\.|WIN_CSC|AZURE/.test(release),
+    false,
+  );
+  assert.match(release, /\$collected\.Count -ne \$artifacts\.Count/);
+});
+
 test('packaged checks accept an extracted package root', () => {
   assert.match(
     fs.readFileSync('scripts/check-packaged-resources.cjs', 'utf8'),
