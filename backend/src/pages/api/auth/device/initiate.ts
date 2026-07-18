@@ -12,7 +12,7 @@ import { previewOriginMatchesRequest } from '../../../../lib/preview-auth';
 
 const TTL_MS = 5 * 60 * 1000;
 
-const initiateSchema = z.object({ label: z.string().max(120).optional() });
+const initiateSchema = z.object({ label: z.string().optional() });
 
 export const POST: APIRoute = async ({ request, url }) => {
   const requestId = requestIdFromHeaders(request.headers);
@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request, url }) => {
 
   const parsed = await safeJsonBody(request, initiateSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
-  const deviceLabel = (parsed.data.label ?? '').trim() || 'Desktop';
+  const deviceLabel = ((parsed.data.label ?? '').trim() || 'Desktop').slice(0, 120);
 
   let verifyOrigin: string;
   try {

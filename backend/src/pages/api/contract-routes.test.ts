@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import type { APIContext } from 'astro';
 import { setDbForTests, resetDbForTests } from '../../db/client';
@@ -19,6 +20,15 @@ type FakeDb = {
 };
 
 const originalFetch = globalThis.fetch;
+
+function fixture(name: string) {
+  return JSON.parse(
+    readFileSync(
+      new URL(`../../fixtures/contracts/desktop-v1/${name}.json`, import.meta.url),
+      'utf8',
+    ),
+  );
+}
 
 function createChain(result: unknown, onValues?: (values: unknown) => void) {
   const promise = () => Promise.resolve(result);
@@ -212,9 +222,25 @@ test('device auth kill switch returns service-unavailable contract', async () =>
 
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('x-request-id'), 'req_auth_disabled');
-  assert.deepEqual(await response.json(), {
-    error: { type: 'service_unavailable', message: 'Device authorization is temporarily disabled.' },
-  });
+  assert.deepEqual(
+    await response.json(),
+    fixture('device-auth-service-unavailable-error'),
+  );
+});
+
+test('device auth keeps legacy long labels compatible by truncating storage', async () => {
+  const db = installDb(createFakeDb());
+  const response = await initiateDeviceAuth(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/auth/device/initiate', {
+        method: 'POST',
+        body: JSON.stringify({ label: 'a'.repeat(121) }),
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal((db.insertedValues[0] as any).deviceLabel, 'a'.repeat(120));
 });
 
 test('device auth exchange returns pending and missing-code contracts', async () => {
