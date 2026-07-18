@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This legacy palette component retains established renderer conventions.
 import { Command } from 'cmdk';
 import {
   Clipboard,
