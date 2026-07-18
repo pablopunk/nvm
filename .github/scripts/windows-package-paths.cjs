@@ -11,6 +11,7 @@ const relevantPrefixes = [
   'tests/electron/',
 ];
 const relevantFiles = new Set([
+  '.gitattributes',
   '.github/workflows/ci.yml',
   'electron-builder.yml',
   'electron.vite.config.ts',

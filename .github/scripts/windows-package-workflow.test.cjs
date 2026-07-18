@@ -16,6 +16,7 @@ function section(source, start, end) {
 
 test('Windows packaging filter covers every package and application input', () => {
   for (const candidate of [
+    '.gitattributes',
     '.github/workflows/ci.yml',
     '.github/scripts/verify-windows-package.ps1',
     'build/Icon.icon/Assets/icon.png',
@@ -47,6 +48,13 @@ test('builder config has deterministic unsigned-inspectable Windows targets', ()
   assert.match(builder, /-portable\.\$\{ext\}/);
   assert.equal(packageJson.devDependencies['@electron/asar'], '3.4.1');
   assert.match(packageJson.scripts['dist:win:x64'], /--publish never/);
+});
+
+test('tracked text stays LF on Windows so aggregate verification is host-independent', () => {
+  assert.equal(
+    fs.readFileSync('.gitattributes', 'utf8'),
+    '* text=auto eol=lf\n',
+  );
 });
 
 test('package verifier enforces ASAR, signatures, metadata policy, icons, and fixed manifest schema', () => {
