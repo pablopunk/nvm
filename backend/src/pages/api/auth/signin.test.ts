@@ -95,17 +95,28 @@ test('local HTTP sign-in uses the callback host without a Secure attribute', asy
   assert.doesNotMatch(cookie, /Domain=/i);
 });
 
-test('production sign-in fails closed before creating state when WorkOS config is missing', async () => {
+test('production sign-in fails closed and logs the safe configuration stage', async (t) => {
   validProduction();
   const stateStore = new Map<string, unknown>();
   setPreviewAuthStoreForTests(stateStore);
   delete process.env.WORKOS_API_KEY;
+  const errors: string[] = [];
+  t.mock.method(console, 'error', (line: unknown) => errors.push(String(line)));
 
   const response = await GET(context('https://www.nvm.fyi/api/auth/signin'));
 
   assert.equal(response.status, 503);
   assert.equal(await response.text(), 'Authentication is temporarily unavailable');
   assert.equal(stateStore.size, 0);
+  assert.equal(errors.length, 1);
+  const entry = JSON.parse(errors[0]!);
+  assert.equal(entry.msg, 'auth_signin_failed');
+  assert.equal(entry.stage, 'configuration');
+  assert.equal(entry.error_name, 'AuthConfigurationError');
+  assert.equal(
+    entry.reason,
+    'Production auth configuration is incomplete: WORKOS_API_KEY',
+  );
 });
 
 test('Preview sign-in rejects a mismatched request origin before signing or redirecting', async () => {
