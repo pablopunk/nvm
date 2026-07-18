@@ -125,6 +125,7 @@ import {
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
 import { createExtensionJsonStore } from './extension-json-store';
 import { createExtensionPrSubmitter } from './extension-pr-submitter';
+import { createExtensionStorage as createPersistentExtensionStorage } from './extension-storage';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowManager } from './extension-window-manager';
 import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
@@ -4661,10 +4662,6 @@ async function readExtensionStorage(extension) {
   return extensionJsonStore.read(extensionStoragePath(extension));
 }
 
-async function replaceExtensionStorage(extension, data) {
-  await extensionJsonStore.replace(extensionStoragePath(extension), data);
-}
-
 async function mutateExtensionStorage(extension, update) {
   return extensionJsonStore.mutate(extensionStoragePath(extension), update);
 }
@@ -4677,10 +4674,6 @@ async function mutateExtensionCache(extension, update) {
   return extensionJsonStore.mutate(extensionCachePath(extension), update);
 }
 
-function extensionStorageRefreshKey(extension, key) {
-  return `${extensionCachePath(extension)}:${String(key)}`;
-}
-
 function limitedOutput(value, limit = 200_000) {
   const text = String(value || '');
   return text.length > limit
@@ -4689,68 +4682,12 @@ function limitedOutput(value, limit = 200_000) {
 }
 
 function createExtensionStorage(extension) {
-  return {
-    async get(key, fallback = null) {
-      const data = await readExtensionStorage(extension);
-      return Object.hasOwn(data, key) ? data[key] : fallback;
-    },
-    async set(key, value) {
-      await mutateExtensionStorage(extension, (current) => ({
-        ...current,
-        [key]: value,
-      }));
-      return value;
-    },
-    async delete(key) {
-      await mutateExtensionStorage(extension, (current) => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      });
-    },
-    async clear() {
-      await replaceExtensionStorage(extension, {});
-    },
-    async memo(key, ttlMs, loader) {
-      const data = await readExtensionCache(extension);
-      const cached = data[key];
-      if (
-        cached &&
-        typeof cached === 'object' &&
-        Date.now() - Number(cached.updatedAt || 0) < Number(ttlMs || 0)
-      )
-        return cached.value;
-      const value = await loader();
-      await mutateExtensionCache(extension, (current) => ({
-        ...current,
-        [key]: { value, updatedAt: Date.now() },
-      }));
-      return value;
-    },
-    async memoStale(key, ttlMs, staleTtlMs, loader) {
-      const data = await readExtensionCache(extension);
-      const cached = data[key];
-      const age =
-        cached && typeof cached === 'object'
-          ? Date.now() - Number(cached.updatedAt || 0)
-          : Number.POSITIVE_INFINITY;
-      if (age < Number(ttlMs || 0)) return cached.value;
-      const refreshKey = extensionStorageRefreshKey(extension, key);
-      const refresh =
-        extensionStorageRefreshes.get(refreshKey) ||
-        (async () => {
-          const value = await loader();
-          await mutateExtensionCache(extension, (current) => ({
-            ...current,
-            [key]: { value, updatedAt: Date.now() },
-          }));
-          return value;
-        })().finally(() => extensionStorageRefreshes.delete(refreshKey));
-      extensionStorageRefreshes.set(refreshKey, refresh);
-      if (cached && age < Number(staleTtlMs || 0)) return cached.value;
-      return refresh;
-    },
-  };
+  return createPersistentExtensionStorage({
+    storagePath: extensionStoragePath(extension),
+    cachePath: extensionCachePath(extension),
+    store: extensionJsonStore,
+    refreshes: extensionStorageRefreshes,
+  });
 }
 
 const EXTENSION_AI_ATTACHMENT_LIMIT = 8;

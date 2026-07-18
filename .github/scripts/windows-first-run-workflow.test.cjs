@@ -25,6 +25,9 @@ test('Windows CI uses standalone pnpm for the automatic first-run repair', () =>
   assertIncludes(job, 'PNPM_STANDALONE_PATH=$pnpm');
   assertIncludes(job, 'GITHUB_PATH');
   assertIncludes(job, 'install --frozen-lockfile');
+  assertIncludes(job, 'extension-json-store.test.ts');
+  assertIncludes(job, 'extension-storage.test.ts');
+  assertIncludes(job, 'data-loader.test.ts');
   assertIncludes(job, 'node .github/scripts/windows-first-run-smoke.cjs');
   assert.equal(job.split('ELECTRON_SKIP_BINARY_DOWNLOAD').length - 1, 2);
   assert.equal(job.includes('approve-builds'), false);
