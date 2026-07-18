@@ -217,11 +217,11 @@ afterEach(() => {
   delete process.env.NEVERMIND_KILL_SWITCHES;
 });
 
-test('credit reservation reconciliation is scheduled every five minutes', () => {
+test('credit reservation reconciliation has an automatic daily schedule', () => {
   const vercelConfig = JSON.parse(readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'));
   assert.deepEqual(
     vercelConfig.crons.find((cron: { path: string }) => cron.path === '/api/cron/credit-reservations'),
-    { path: '/api/cron/credit-reservations', schedule: '*/5 * * * *' },
+    { path: '/api/cron/credit-reservations', schedule: '15 6 * * *' },
   );
 });
 

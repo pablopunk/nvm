@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/credit-reservations",
-      "schedule": "*/5 * * * *"
+      "schedule": "15 6 * * *"
     }
   ],
   "rewrites": [
