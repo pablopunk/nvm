@@ -60,6 +60,8 @@ test('CI wires the app gate and reporter wires serialized no-artifact skips', ()
     '.github/workflows/report-linux-palette-screenshot.yml',
     'utf8',
   );
+  assert.match(reportWorkflow, /^  pull-requests: write$/m);
+  assert.doesNotMatch(reportWorkflow, /^  issues: write$/m);
   assert.match(
     reportWorkflow,
     /group: report-linux-palette-\$\{\{ github\.event\.workflow_run\.pull_requests\[0\]\.number \|\| github\.run_id \}\}/,
