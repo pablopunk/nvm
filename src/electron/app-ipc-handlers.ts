@@ -77,6 +77,7 @@ export interface AppIpcHandlersDeps {
   processPlatform: NodeJS.Platform | string;
   getCameraMediaAccessStatus: () => string;
   extensionWindowManager: { getState(id: string): unknown };
+  // biome-ignore lint/style/useNamingConvention: Electron API class name convention
   BrowserWindow: {
     fromWebContents(sender: unknown): { close(): void } | null | undefined;
   };
@@ -86,6 +87,7 @@ export interface AppIpcHandlersDeps {
   probeGh: () => Promise<{ installed: boolean; authed: boolean }>;
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: declarative IPC registration table
 export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   const ipcHandleMeasured = createMeasuredIpcRegistrar({
     ipcMain: deps.ipcMain,
@@ -182,20 +184,26 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       });
     },
   );
-  ipcHandleMeasured('ai-builder:start-chat', (_event, input: any = {}) => {
+  ipcHandleMeasured('ai-builder:start-chat', (_event, input: unknown = {}) => {
+    // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
+    const typedInput = input as any;
     const item = deps.createDraftAiChat(
-      String(input?.prompt || input?.query || ''),
+      String(typedInput?.prompt || typedInput?.query || ''),
     );
+    // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
+    const messages = (item as any).messages;
     return deps.normalizeHostViewResult({
       view: deps.aiChatView(item, {
-        start: (item as any).messages.length <= 1,
+        start: messages.length <= 1,
       }),
     });
   });
   ipcHandleMeasured('nevermind:auth-status', async () => {
     const auth = await deps.getNevermindAuth();
     deps.setActiveNevermindBaseUrl(auth?.baseUrl || null);
-    if (auth?.baseUrl) deps.warmNevermindCompatibilityCache(auth.baseUrl);
+    if (auth?.baseUrl) {
+      deps.warmNevermindCompatibilityCache(auth.baseUrl);
+    }
     deps.logInfo(
       'nevermind.auth-status.check',
       { authed: Boolean(auth) },
@@ -235,15 +243,20 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('palette:shortcut-ready', () =>
     deps.paletteWindow.revealPalette(),
   );
-  ipcHandleMeasured('camera:request-access', async () => {
-    if (!deps.hasCapability('camera'))
+  ipcHandleMeasured('camera:request-access', () => {
+    if (!deps.hasCapability('camera')) {
       return { ok: false, status: 'unsupported' };
-    if (deps.processPlatform !== 'darwin')
+    }
+    if (deps.processPlatform !== 'darwin') {
       return { ok: true, status: 'unknown' };
+    }
     const status = deps.getCameraMediaAccessStatus();
-    if (status === 'granted') return { ok: true, status };
-    if (status === 'denied' || status === 'restricted')
+    if (status === 'granted') {
+      return { ok: true, status };
+    }
+    if (status === 'denied' || status === 'restricted') {
       return { ok: false, status };
+    }
     return { ok: true, status };
   });
   ipcHandleMeasured('gh:status', () => deps.probeGh());
@@ -255,14 +268,14 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     win?.close();
   });
   ipcHandleMeasured('logs:write', (_event, level, message, data) => {
-    const method =
-      level === 'error'
-        ? deps.logError
-        : level === 'warn'
-          ? deps.logWarn
-          : level === 'debug'
-            ? deps.loggerDebug
-            : deps.logInfo;
+    let method = deps.logInfo;
+    if (level === 'error') {
+      method = deps.logError;
+    } else if (level === 'warn') {
+      method = deps.logWarn;
+    } else if (level === 'debug') {
+      method = deps.loggerDebug;
+    }
     method(String(message || ''), data, {
       source: 'renderer',
       scope: 'renderer',

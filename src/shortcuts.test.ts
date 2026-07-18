@@ -57,6 +57,7 @@ test('acceleratorFromKeyboardEvent recovers AltGraph modifiers cleared by Chromi
       keyboardEvent({
         key: ' ',
         code: 'Space',
+        // biome-ignore lint/style/useNamingConvention: DOM modifier state name
         modifierState: { AltGraph: true },
       }),
       true,
@@ -71,6 +72,7 @@ test('acceleratorFromKeyboardEvent leaves AltGraph alone off Windows', () => {
       keyboardEvent({
         key: ' ',
         code: 'Space',
+        // biome-ignore lint/style/useNamingConvention: DOM modifier state name
         modifierState: { AltGraph: true },
       }),
       false,
