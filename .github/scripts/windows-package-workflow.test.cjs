@@ -147,6 +147,19 @@ test('Windows package smoke remains separate from first-run development smoke an
     assert.equal(packageSmoke.includes(expected), true, expected);
   }
   assert.equal(/gh release|release upload|secrets\./.test(packageSmoke), false);
+  const aclVerifier = fs.readFileSync(
+    '.github/scripts/verify-windows-private-file-acl.ps1',
+    'utf8',
+  );
+  for (const expected of [
+    "'S-1-1-0'",
+    "'S-1-5-11'",
+    "'S-1-5-32-545'",
+    '$currentUserAllowed',
+    '$allowedOwnerSids',
+  ]) {
+    assert.equal(aclVerifier.includes(expected), true, expected);
+  }
 });
 
 test('packaged checks accept an extracted package root', () => {
