@@ -26,7 +26,8 @@ function createChain(result: unknown, onValues?: (values: unknown) => void) {
     from: () => chain,
     innerJoin: () => chain,
     where: () => chain,
-    limit: () => promise(),
+    limit: () => chain,
+    for: () => promise(),
     orderBy: () => promise(),
     set: () => chain,
     values: (values: unknown) => {
@@ -223,7 +224,13 @@ test('device auth exchange returns pending and missing-code contracts', async ()
   assert.equal(missingCodeBody.error.type, 'invalid_request');
   assert.equal(missingCodeBody.error.message, 'Request body validation failed');
 
-  installDb(createFakeDb({ selects: [[{ code: 'device_code', approvedAt: null, consumedAt: null, userId: null }]] }));
+  installDb(createFakeDb({ selects: [[{
+    code: 'device_code',
+    approvedAt: null,
+    consumedAt: null,
+    expiresAt: new Date(Date.now() + 60_000),
+    userId: null,
+  }]] }));
   const pending = await exchangeDeviceAuth(routeContext(new Request('https://api.nvm.fyi/api/auth/device/exchange', {
     method: 'POST',
     body: JSON.stringify({ code: 'device_code' }),
@@ -233,12 +240,18 @@ test('device auth exchange returns pending and missing-code contracts', async ()
 });
 
 test('device auth exchange returns terminal expired and consumed contracts', async function returnsTerminalDeviceContracts() {
-  installDb(createFakeDb({ selects: [[]] }));
+  installDb(createFakeDb({ selects: [[{
+    code: 'expired_and_consumed_code',
+    approvedAt: new Date(Date.now() - 120_000),
+    consumedAt: new Date(Date.now() - 90_000),
+    expiresAt: new Date(Date.now() - 60_000),
+    userId: 'user_1',
+  }]] }));
   const expired = await exchangeDeviceAuth(
     routeContext(
       new Request('https://api.nvm.fyi/api/auth/device/exchange', {
         method: 'POST',
-        body: JSON.stringify({ code: 'expired_code' }),
+        body: JSON.stringify({ code: 'expired_and_consumed_code' }),
       }),
     ),
   );
@@ -253,6 +266,7 @@ test('device auth exchange returns terminal expired and consumed contracts', asy
             code: 'consumed_code',
             approvedAt: new Date(),
             consumedAt: new Date(),
+            expiresAt: new Date(Date.now() + 60_000),
             userId: 'user_1',
           },
         ],
@@ -271,6 +285,28 @@ test('device auth exchange returns terminal expired and consumed contracts', asy
   assert.deepEqual(await consumed.json(), { status: 'consumed' });
 });
 
+test('approved device auth exchange preserves the missing-user contract', async () => {
+  installDb(createFakeDb({
+    selects: [[{
+      code: 'missing_user_code',
+      approvedAt: new Date(),
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      userId: null,
+    }]],
+  }));
+  const response = await exchangeDeviceAuth(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/auth/device/exchange', {
+        method: 'POST',
+        body: JSON.stringify({ code: 'missing_user_code' }),
+      }),
+    ),
+  );
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), 'User not found');
+});
+
 test('approved device auth exchange consumes the code and returns a scoped token', async function exchangesApprovedDeviceCode() {
   const db = installDb(
     createFakeDb({
@@ -280,6 +316,7 @@ test('approved device auth exchange consumes the code and returns a scoped token
             code: 'approved_code',
             approvedAt: new Date(),
             consumedAt: null,
+            expiresAt: new Date(Date.now() + 60_000),
             userId: 'user_1',
             deviceLabel: 'Pablo Mac',
           },

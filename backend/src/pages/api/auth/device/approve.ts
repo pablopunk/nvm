@@ -5,6 +5,7 @@ import { getSessionFromCookies } from '../../../../lib/workos';
 import { db } from '../../../../db/client';
 import { users, deviceCodes } from '../../../../db/schema';
 import { safeJsonBody } from '../../../../lib/validation';
+import { requireSameOrigin } from '../../../../lib/csrf';
 
 const approveSchema = z.object({
   code: z.string().min(1),
@@ -12,6 +13,12 @@ const approveSchema = z.object({
 });
 
 export const POST: APIRoute = async ({ request }) => {
+  const originCheck = requireSameOrigin(request);
+  if (originCheck) return originCheck;
+  const mediaType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (mediaType !== 'application/json') {
+    return new Response('Unsupported Media Type', { status: 415 });
+  }
   const session = await getSessionFromCookies(request.headers.get('cookie'));
   if (!session) return new Response('Unauthorized', { status: 401 });
   const [user] = await db.select().from(users).where(eq(users.workosUserId, session.user.id)).limit(1);

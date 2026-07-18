@@ -12,6 +12,7 @@ import {
 import { authorizationUrlForState } from '../../../lib/workos';
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../lib/ratelimit';
 import { env } from '../../../lib/env';
+import { authCorrelationCookie } from '../../../lib/auth-correlation';
 
 export const GET: APIRoute = async ({ url, request, redirect }) => {
   const decision = await rateLimitIp('auth', clientIp(request), 30, '1 m');
@@ -71,5 +72,9 @@ export const GET: APIRoute = async ({ url, request, redirect }) => {
       status: 503,
     });
   }
+  response.headers.append(
+    'Set-Cookie',
+    authCorrelationCookie(pending.state, new URL(redirectUri).protocol === 'https:'),
+  );
   return response;
 };

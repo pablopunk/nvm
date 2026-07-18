@@ -5,6 +5,7 @@ import {
 } from '../../../lib/auth-config';
 import { preparePreviewGatewayState } from '../../../lib/preview-auth';
 import { authorizationUrlForState } from '../../../lib/workos';
+import { authCorrelationCookie } from '../../../lib/auth-correlation';
 
 export const GET: APIRoute = async ({ url, redirect }) => {
   if (!isProductionGatewayOrigin(url.origin)) {
@@ -35,5 +36,9 @@ export const GET: APIRoute = async ({ url, redirect }) => {
   if (!(await pending.commit())) {
     return new Response('Preview authentication is unavailable', { status: 503 });
   }
+  response.headers.append(
+    'Set-Cookie',
+    authCorrelationCookie(pending.state, new URL(redirectUri).protocol === 'https:'),
+  );
   return response;
 };
