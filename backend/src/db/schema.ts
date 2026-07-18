@@ -67,6 +67,30 @@ export const usage = pgTable(
   ],
 );
 
+// Reservations are deliberately separate from the append-only ledger. A
+// reservation reduces what may be admitted, while only a final settlement
+// creates a spendable-ledger debit for the measured usage.
+export const creditReservations = pgTable(
+  'credit_reservations',
+  {
+    requestId: text('request_id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    reservedCredits: integer('reserved_credits').notNull(),
+    status: text('status').notNull().default('pending'),
+    actualCredits: integer('actual_credits'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('credit_reservations_active_user_idx').on(t.userId, t.status),
+    index('credit_reservations_pending_expiry_idx').on(t.status, t.expiresAt),
+  ],
+);
+
 export const apiTokens = pgTable(
   'api_tokens',
   {
