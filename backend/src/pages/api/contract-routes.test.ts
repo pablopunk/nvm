@@ -821,7 +821,6 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
 
   const request = authorizedGoogleRequest();
   const response = await postGoogleModel({ ...routeContext(request), params: { path: 'placeholder:streamGenerateContent' } } as any);
-  const body = await response.json() as any;
 
   assert.equal(response.status, 200);
   assert.ok(primaryCalled, 'primary provider should have been tried');
