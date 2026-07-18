@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This end-to-end harness intentionally uses imperative process control, injected environment names, and bounded polling.
 import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -374,6 +375,94 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
     }
   }
   if (cleanupError) throw cleanupError;
+});
+
+test('dismisses transient alias UI and flushes scheduled state before quit', async () => {
+  const stateSafetyUserDataDir = path.join(userDataDir, 'pab4-state-safety');
+  let firstLaunch:
+    | Awaited<ReturnType<typeof launchTestApplication>>
+    | undefined;
+  let firstLaunchExited = false;
+  let relaunch: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    firstLaunch = await launchTestApplication(stateSafetyUserDataDir);
+    const input = firstLaunch.page.locator('input[placeholder]').first();
+    await input.fill('Open System Settings');
+    await expect(
+      firstLaunch.page
+        .getByText('Open System Settings', { exact: true })
+        .first(),
+    ).toBeVisible();
+
+    await firstLaunch.page.keyboard.press('Control+K');
+    const setAlias = firstLaunch.page.getByText('Set alias', { exact: true });
+    await expect(setAlias).toBeVisible();
+    await setAlias.click();
+    const aliasInput = firstLaunch.page.locator(
+      'input[placeholder^="Alias for"]',
+    );
+    await expect(aliasInput).toBeVisible();
+
+    await firstLaunch.page.evaluate(() => window.nvm.hide());
+    await expect(aliasInput).toHaveCount(0);
+    await expect(input).toBeVisible();
+
+    const scheduledShortcut = await firstLaunch.page.evaluate(async () => {
+      const actions = await window.nvm.search('Open System Settings');
+      const action = actions.find(
+        (candidate) => candidate.title === 'Open System Settings',
+      );
+      if (!action) throw new Error('System Settings action not found');
+      const result = await window.nvm.setShortcut(
+        action,
+        'CommandOrControl+Alt+Shift+8',
+      );
+      if (!result.ok) throw new Error(result.message);
+      const record = (await window.nvm.getShortcuts()).find(
+        (candidate) => candidate.actionId === action.id,
+      );
+      if (!record) throw new Error('Scheduled shortcut not found');
+      return { actionId: action.id, accelerator: record.accelerator };
+    });
+
+    await firstLaunch.page
+      .evaluate(() => window.nvm.quitApp())
+      .catch(() => undefined);
+    const survivors = await waitForProcessesToExit(
+      firstLaunch.trackedPids,
+      8000,
+    );
+    expect(survivors).toEqual([]);
+    firstLaunchExited = true;
+
+    const persistedState = JSON.parse(
+      await fs.readFile(
+        path.join(stateSafetyUserDataDir, 'state.json'),
+        'utf8',
+      ),
+    );
+    expect(persistedState.shortcuts[scheduledShortcut.actionId]).toBe(
+      scheduledShortcut.accelerator,
+    );
+
+    relaunch = await launchTestApplication(stateSafetyUserDataDir);
+    await expect
+      .poll(() => relaunch?.page.evaluate(() => window.nvm.getShortcuts()))
+      .toContainEqual(
+        expect.objectContaining({
+          actionId: scheduledShortcut.actionId,
+          accelerator: scheduledShortcut.accelerator,
+        }),
+      );
+  } finally {
+    if (firstLaunch && !firstLaunchExited) {
+      await closeTestApplication(firstLaunch.app, firstLaunch.trackedPids);
+    }
+    if (relaunch) {
+      await closeTestApplication(relaunch.app, relaunch.trackedPids);
+    }
+  }
 });
 
 test('proposal activation, rollback, disable, and re-enable are transactional', async () => {
