@@ -8,6 +8,7 @@ import {
   apiTokens,
   authIntents,
   creditLedger,
+  creditReservations,
   deviceCodes,
   emailOutbox,
   emailSuppressions,
@@ -23,6 +24,7 @@ import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
 import { createApiToken } from '../src/lib/tokens';
+import { finalizeReservation, reserveCredits } from '../src/lib/credit-reservations';
 import { runPostgresMigrations } from './migrate-postgres';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
@@ -99,6 +101,28 @@ async function runAssertions() {
         })
         .returning();
       assert.ok(user);
+
+      // Admission is serialized on the user row: with 10 credits plus the
+      // configured 100-credit grace, two 80-credit requests cannot both win.
+      await db.insert(creditLedger).values({
+        userId: user.id,
+        delta: 10,
+        kind: 'paid',
+        reason: 'integration.reservation_grant',
+        refId: databaseName,
+      });
+      const admissions = await Promise.all([
+        reserveCredits({ requestId: `reserve-a-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
+        reserveCredits({ requestId: `reserve-b-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
+      ]);
+      assert.equal(admissions.filter((result) => result.ok).length, 1, 'only one near-empty concurrent reservation may succeed');
+      const admitted = admissions.find((result) => result.ok);
+      assert.ok(admitted?.ok);
+      const requestId = admitted.reservation.requestId;
+      const cost = { provider: 'integration', modelId: 'reservation-model', inputUsdPerMtok: 1, outputUsdPerMtok: 1 };
+      await finalizeReservation({ requestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 });
+      assert.equal(await finalizeReservation({ requestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 }), 'already_terminal');
+      assert.equal((await db.select().from(creditReservations).where(eq(creditReservations.requestId, requestId))).length, 1);
 
       const tokenHash = `hash-${databaseName}`;
       await db.insert(apiTokens).values({
