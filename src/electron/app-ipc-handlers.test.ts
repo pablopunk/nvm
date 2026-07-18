@@ -37,8 +37,10 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     openSystemKeyboardSettings: () => 'keyboard-settings',
     getShortcuts: () => [],
     removeShortcut: (actionId) => ({ actionId }),
-    unregisterActionShortcuts: () => 'suspended',
-    registerActionShortcuts: () => 'resumed',
+    unregisterActionShortcuts: () => calls.push('suspend-actions'),
+    registerActionShortcuts: () => calls.push('resume-actions'),
+    suspendPaletteHotkey: () => calls.push('suspend-hotkey'),
+    resumePaletteHotkey: () => calls.push('resume-hotkey'),
     setOverride: (action, instruction) => ({ action, instruction }),
     clearOverride: (action) => action,
     duplicateCreatedAction: (action) => action,
@@ -117,6 +119,20 @@ test('registerAppIpcHandlers preserves palette, camera, and window behavior', as
   await handles.get('extension-window:close')?.({ sender: 'sender' });
 
   assert.deepEqual(calls, ['mode:preview', 'center', 'close-window']);
+});
+
+test('registerAppIpcHandlers suspends and resumes palette hotkey with action shortcuts', async () => {
+  const { handles, calls } = createDeps();
+
+  await handles.get('actions:suspend-shortcuts')?.({});
+  await handles.get('actions:resume-shortcuts')?.({});
+
+  assert.deepEqual(calls, [
+    'suspend-hotkey',
+    'suspend-actions',
+    'resume-actions',
+    'resume-hotkey',
+  ]);
 });
 
 test('registerAppIpcHandlers redacts auth status logs and keeps sign-in failures stable', async () => {

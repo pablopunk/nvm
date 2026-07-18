@@ -35,6 +35,8 @@ export interface AppIpcHandlersDeps {
   removeShortcut: (actionId: unknown) => unknown;
   unregisterActionShortcuts: () => unknown;
   registerActionShortcuts: () => unknown;
+  suspendPaletteHotkey: () => unknown;
+  resumePaletteHotkey: () => unknown;
   setOverride: (action: unknown, instruction: unknown) => unknown;
   clearOverride: (action: unknown) => unknown;
   duplicateCreatedAction: (action: unknown) => unknown;
@@ -141,12 +143,15 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('actions:remove-shortcut', (_event, actionId) =>
     deps.removeShortcut(actionId),
   );
-  ipcHandleMeasured('actions:suspend-shortcuts', () =>
-    deps.unregisterActionShortcuts(),
-  );
-  ipcHandleMeasured('actions:resume-shortcuts', () =>
-    deps.registerActionShortcuts(),
-  );
+  ipcHandleMeasured('actions:suspend-shortcuts', () => {
+    deps.suspendPaletteHotkey();
+    return deps.unregisterActionShortcuts();
+  });
+  ipcHandleMeasured('actions:resume-shortcuts', () => {
+    const result = deps.registerActionShortcuts();
+    deps.resumePaletteHotkey();
+    return result;
+  });
   ipcHandleMeasured('actions:set-override', (_event, action, instruction) =>
     deps.setOverride(action, instruction),
   );

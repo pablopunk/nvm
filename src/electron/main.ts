@@ -8184,6 +8184,15 @@ function registerActionShortcuts() {
   }
 }
 
+function suspendPaletteHotkey() {
+  globalShortcut.unregister(String(getPaletteHotkey()));
+}
+
+function resumePaletteHotkey() {
+  globalShortcut.unregister(String(getPaletteHotkey()));
+  paletteWindow.registerHotkey();
+}
+
 function canCustomizeAction(action) {
   return canCustomizeCommandAction(action);
 }
@@ -8706,6 +8715,8 @@ app.whenReady().then(async () => {
     removeShortcut,
     unregisterActionShortcuts,
     registerActionShortcuts,
+    suspendPaletteHotkey,
+    resumePaletteHotkey,
     setOverride,
     clearOverride,
     duplicateCreatedAction,

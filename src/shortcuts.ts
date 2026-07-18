@@ -12,18 +12,33 @@ export function keyNameForShortcut(event: Pick<KeyboardEvent, 'key' | 'code'>) {
   return key[0].toUpperCase() + key.slice(1);
 }
 
+function windowsClearsAltGraphModifiers() {
+  return (
+    typeof navigator !== 'undefined' && /Windows/.test(navigator.userAgent)
+  );
+}
+
 export function acceleratorFromKeyboardEvent(
   event: Pick<
     KeyboardEvent,
-    'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+    | 'key'
+    | 'code'
+    | 'metaKey'
+    | 'ctrlKey'
+    | 'altKey'
+    | 'shiftKey'
+    | 'getModifierState'
   >,
+  recoverAltGraph = windowsClearsAltGraphModifiers(),
 ) {
   const key = keyNameForShortcut(event);
   if (!key) return '';
+  const altGraph =
+    recoverAltGraph && (event.getModifierState?.('AltGraph') ?? false);
   const parts = [];
   if (event.metaKey) parts.push('Command');
-  if (event.ctrlKey) parts.push('Control');
-  if (event.altKey) parts.push('Alt');
+  if (event.ctrlKey || altGraph) parts.push('Control');
+  if (event.altKey || altGraph) parts.push('Alt');
   if (event.shiftKey) parts.push('Shift');
   parts.push(key);
   const isArrow =
