@@ -7,8 +7,22 @@ const path = require('node:path');
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, 'src');
 
-/** Files where process.platform is always allowed. */
-const PLATFORM_ALLOWLIST = new Set(['src/electron/os.ts']);
+const inventory = JSON.parse(
+  fs.readFileSync(
+    path.join(SRC, 'docs', 'windows-platform-inventory.json'),
+    'utf8',
+  ),
+);
+const PLATFORM_ALLOWLIST = new Set(
+  inventory.sourceRules
+    .filter((rule) => rule.category === 'direct-platform')
+    .map((rule) => rule.file),
+);
+const LABEL_ALLOWLIST = new Set(
+  inventory.sourceRules
+    .filter((rule) => rule.category === 'os-label')
+    .map((rule) => rule.file),
+);
 
 /**
  * OS-specific UI labels that should not appear in renderer/shared code.
@@ -32,10 +46,6 @@ const OS_UI_LABELS = [
 function fail(message) {
   console.error(`OS platform boundary check failed: ${message}`);
   process.exitCode = 1;
-}
-
-function warn(message) {
-  console.warn(`OS platform boundary warning: ${message}`);
 }
 
 function relative(filePath) {
@@ -110,16 +120,9 @@ function checkFile(filePath) {
       /\bos\.platform\(\)\b/.test(line)
     ) {
       if (isAllowedPlatformFile(filePath)) continue;
-
-      if (isElectronFile(filePath)) {
-        warn(
-          `${rel}:${lineNum} — process.platform outside os.ts capability layer`,
-        );
-      } else {
-        fail(
-          `${rel}:${lineNum} — process.platform in renderer/shared code; use capability checks instead`,
-        );
-      }
+      fail(
+        `${rel}:${lineNum} — unowned process.platform site; add an injected capability or explicit inventory disposition`,
+      );
     }
   }
 
@@ -127,9 +130,10 @@ function checkFile(filePath) {
   if (isRendererOrShared(filePath)) {
     for (const label of OS_UI_LABELS) {
       if (source.includes(label)) {
-        warn(
-          `${rel} — OS-specific label "${label}" in shared code; use OS capability labels instead`,
-        );
+        if (!LABEL_ALLOWLIST.has(rel))
+          fail(
+            `${rel} — unowned OS-specific label "${label}" in shared code; use OS capability labels instead`,
+          );
       }
     }
   }

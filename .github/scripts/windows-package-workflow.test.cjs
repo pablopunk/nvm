@@ -1,3 +1,4 @@
+// biome-ignore-all lint/performance/useTopLevelRegex: Contract assertions are evaluated once per test.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -26,8 +27,9 @@ test('Windows packaging filter covers every package and application input', () =
     'src/resources/nevermind-extension-api.d.ts',
     'src/ui.tsx',
     'tests/electron/palette.smoke.spec.ts',
-  ])
+  ]) {
     assert.equal(isWindowsPackageRelevantPath(candidate), true, candidate);
+  }
   assert.equal(isWindowsPackageRelevantPath('backend/src/index.ts'), false);
   assert.equal(isWindowsPackageRelevantPath('README.md'), false);
 });
@@ -70,8 +72,9 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
     'portable = [ordered]@{',
     'unpacked = [ordered]@{',
     'configured-source-and-PE-resource-presence-only',
-  ])
+  ]) {
     assert.equal(verifier.includes(required), true, required);
+  }
   assert.match(verifier, /finally\s*\{[\s\S]*Remove-Item/);
 });
 
@@ -84,8 +87,9 @@ test('portable marker distinguishes wrapper identity from packaged child identit
     'processExecPath',
     'portableExecutableFile',
     'portableExecutableDir',
-  ])
+  ]) {
     assert.equal(marker.includes(field), true, field);
+  }
   assert.match(harness, /manifest\.artifacts\.portable\.sha512/);
   assert.match(harness, /temporary storage/);
   assert.match(harness, /stabilityMilliseconds = 5_000/);
@@ -116,8 +120,9 @@ test('Windows package smoke remains separate from first-run development smoke an
     'verify-windows-private-file-acl.ps1',
     'windows-portable-smoke.cjs',
     'if-no-files-found: error',
-  ])
+  ]) {
     assert.equal(packageSmoke.includes(expected), true, expected);
+  }
   assert.equal(/gh release|release upload|secrets\./.test(packageSmoke), false);
 });
 

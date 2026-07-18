@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useExportsLast lint/style/useBlockStatements lint/style/noProcessEnv lint/complexity/useSimplifiedLogicExpression lint/suspicious/noEmptyBlockStatements: Test-mode environment guards stay adjacent to the behavior they protect.
 import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

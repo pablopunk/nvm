@@ -3,15 +3,15 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
-import * as logger from './logger';
-import { nevermindDesktopHeaders } from './nevermind-api';
-import { checkNevermindCompatibility } from './nevermind-compatibility';
-import { openExternalUrl } from './url-utils';
-import { writePrivateFile } from './private-file';
 import {
   migrateLegacyDesktopOrigin,
   parsePublicOrigin,
 } from '../shared/public-origin';
+import * as logger from './logger';
+import { nevermindDesktopHeaders } from './nevermind-api';
+import { checkNevermindCompatibility } from './nevermind-compatibility';
+import { writePrivateFile } from './private-file';
+import { openExternalUrl } from './url-utils';
 
 const FILENAME = 'nevermind-auth.json';
 const STORE_FILENAME = 'nevermind-auth-by-origin.json';

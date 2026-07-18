@@ -1,8 +1,4 @@
-import {
-  knownUserFolderPath,
-  settingsTitle,
-  systemSettingsLabel,
-} from '../os';
+import { knownUserFolderPath, settingsTitle, systemSettingsLabel } from '../os';
 import { systemSettingsEntries } from '../system-settings';
 import { extensionContext } from './_context';
 

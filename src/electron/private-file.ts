@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 
 type PrivateFileSystem = Pick<typeof fs, 'writeFile' | 'chmod'>;
+const PRIVATE_FILE_MODE = 0o600;
 
-export type PrivateFileDependencies = {
+export interface PrivateFileDependencies {
   fileSystem?: PrivateFileSystem;
   processPlatform?: NodeJS.Platform;
-};
+}
 
 /**
  * Writes sensitive user data with restrictive creation-time metadata.
@@ -21,6 +22,8 @@ export async function writePrivateFile(
 ) {
   const fileSystem = dependencies.fileSystem || fs;
   const processPlatform = dependencies.processPlatform || process.platform;
-  await fileSystem.writeFile(filePath, contents, { mode: 0o600 });
-  if (processPlatform !== 'win32') await fileSystem.chmod(filePath, 0o600);
+  await fileSystem.writeFile(filePath, contents, { mode: PRIVATE_FILE_MODE });
+  if (processPlatform !== 'win32') {
+    await fileSystem.chmod(filePath, PRIVATE_FILE_MODE);
+  }
 }

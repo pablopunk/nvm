@@ -15,6 +15,7 @@ const checks = [
   'check-backend-contract-fixtures.cjs',
   'check-extension-fixture-coverage.cjs',
   'check-extension-trust-copy.cjs',
+  'check-windows-platform-inventory.cjs',
   'check-os-platform-boundaries.cjs',
   'check-runtime-nonblocking.cjs',
   'check-window-config.cjs',

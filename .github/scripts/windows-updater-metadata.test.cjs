@@ -18,8 +18,9 @@ function fixture(overrides = {}) {
   const setupPath = path.join(root, setupName);
   const bytes = Buffer.from('unsigned setup fixture');
   fs.writeFileSync(setupPath, bytes);
-  if (!overrides.missingBlockmap)
+  if (!overrides.missingBlockmap) {
     fs.writeFileSync(`${setupPath}.blockmap`, 'blockmap fixture');
+  }
   const hash = crypto.createHash('sha512').update(bytes).digest('base64');
   const metadataPath = path.join(root, 'latest.yml');
   const url = overrides.portable

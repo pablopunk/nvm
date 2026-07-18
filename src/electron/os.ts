@@ -22,7 +22,10 @@ type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
 
 type OsPathFacade = Pick<typeof path.win32, 'basename' | 'join' | 'resolve'>;
 type OsFileSystem = Pick<typeof fs, 'readdir'>;
-type OsWatcher = { close: () => unknown; on: (event: string, listener: () => void) => unknown };
+type OsWatcher = {
+  close: () => unknown;
+  on: (event: string, listener: () => void) => unknown;
+};
 type OsExecFile = typeof execFile;
 
 export type OsAdapterDependencies = {
@@ -171,7 +174,10 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
       try {
         const watcher = watchDependency(
           root,
-          { recursive: processPlatform === 'darwin' || processPlatform === 'win32' },
+          {
+            recursive:
+              processPlatform === 'darwin' || processPlatform === 'win32',
+          },
           onChange,
         );
         watcher.on('error', () => {});
@@ -185,8 +191,7 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
 
   async function forceQuitWindowsAppForPlatform(appName: string) {
     const imageName = validatedWindowsImageName(appName);
-    if (!imageName)
-      return { ok: false, error: 'Invalid Windows process name' };
+    if (!imageName) return { ok: false, error: 'Invalid Windows process name' };
     try {
       await new Promise<void>((resolve, reject) => {
         execFileDependency(
@@ -215,7 +220,8 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
     osLabel: () =>
       dependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux'),
     scanWindowsApps: scanWindowsAppsForPlatform,
-    settingsTitle: () => dependent({ darwin: 'Open System Settings' }, 'Open Settings'),
+    settingsTitle: () =>
+      dependent({ darwin: 'Open System Settings' }, 'Open Settings'),
     setLaunchAtLoginEnabled: (enabled: boolean) => {
       if (!hasCapabilityForPlatform('launch-at-login'))
         return {
@@ -288,7 +294,10 @@ export function settingsTitle() {
 }
 
 export function systemSettingsLabel() {
-  return osDependent({ darwin: 'System Settings', win32: 'Windows Settings' }, 'System Settings');
+  return osDependent(
+    { darwin: 'System Settings', win32: 'Windows Settings' },
+    'System Settings',
+  );
 }
 
 export function revealPathTitle() {

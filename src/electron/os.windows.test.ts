@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/useAwait lint/style/useBlockStatements lint/suspicious/noEmptyBlockStatements lint/complexity/noForEach lint/suspicious/useIterableCallbackReturn lint/performance/noAwaitInLoops lint/style/useNamingConvention: Injectable test doubles intentionally favor direct recordings and real Windows environment names.
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import test, { mock } from 'node:test';
@@ -112,7 +113,10 @@ test('Windows watcher uses recursive mode and returns every cleanup handle', () 
 
   const watchers = adapter.watchApps(() => {});
   assert.equal(watchers.length, 2);
-  assert.equal(calls.every((call) => call.recursive), true);
+  assert.equal(
+    calls.every((call) => call.recursive),
+    true,
+  );
   watchers.forEach((watcher) => watcher.close());
   assert.equal(closes, 2);
 });
@@ -141,7 +145,10 @@ test('force quit validates raw names before normalization and passes one argv el
     },
   });
 
-  assert.equal(validatedWindowsImageName('  Never mind 应用.EXE  '), 'Never mind 应用.exe');
+  assert.equal(
+    validatedWindowsImageName('  Never mind 应用.EXE  '),
+    'Never mind 应用.exe',
+  );
   assert.deepEqual(await adapter.forceQuitWindowsApp('Never mind 应用.exe'), {
     ok: true,
   });

@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const leadingCurrentDirectoryPattern = /^\.\//;
 
 const relevantPrefixes = [
   '.github/scripts/',
@@ -22,7 +23,9 @@ const relevantFiles = new Set([
 ]);
 
 function isWindowsPackageRelevantPath(filePath) {
-  const normalizedPath = filePath.replaceAll('\\', '/').replace(/^\.\//, '');
+  const normalizedPath = filePath
+    .replaceAll('\\', '/')
+    .replace(leadingCurrentDirectoryPattern, '');
   return (
     relevantFiles.has(normalizedPath) ||
     relevantPrefixes.some((prefix) => normalizedPath.startsWith(prefix))

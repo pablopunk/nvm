@@ -8,7 +8,9 @@ mock.module('electron', {
   },
 });
 
-const { formatShortcut, normalizeAccelerator } = await import('./shortcut-utils');
+const { formatShortcut, normalizeAccelerator } = await import(
+  './shortcut-utils'
+);
 
 test('shortcut display uses native macOS symbols only on macOS', () => {
   assert.equal(formatShortcut('Command+Alt+K', 'darwin'), '⌘⌥K');

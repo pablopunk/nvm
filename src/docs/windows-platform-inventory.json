@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "supportStatus": "unverified",
+  "sourceRules": [
+    {
+      "key": "os-capability-direct",
+      "file": "src/electron/os.ts",
+      "category": "direct-platform",
+      "disposition": "capability-layer"
+    },
+    {
+      "key": "os-capability-injected",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "disposition": "capability-layer"
+    },
+    {
+      "key": "os-capability-selectors",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "disposition": "capability-layer"
+    },
+    {
+      "key": "os-owned-labels",
+      "file": "src/electron/os.ts",
+      "category": "os-label",
+      "disposition": "capability-layer"
+    },
+    {
+      "key": "os-known-folders",
+      "file": "src/electron/os.ts",
+      "category": "known-folder",
+      "disposition": "capability-layer"
+    },
+    {
+      "key": "system-settings-platform",
+      "file": "src/electron/system-settings.ts",
+      "category": "direct-platform",
+      "disposition": "capability-adapter"
+    },
+    {
+      "key": "system-settings-label",
+      "file": "src/electron/system-settings.ts",
+      "category": "os-label",
+      "disposition": "mac-capability-metadata"
+    },
+    {
+      "key": "ai-platform-guidance-label",
+      "file": "src/electron/ai.ts",
+      "category": "os-label",
+      "disposition": "extension-author-documentation"
+    },
+    {
+      "key": "running-app-default",
+      "file": "src/electron/running-app-status.ts",
+      "category": "direct-platform",
+      "disposition": "injected-service-default"
+    },
+    {
+      "key": "api-platform-header",
+      "file": "src/electron/nevermind-api.ts",
+      "category": "direct-platform",
+      "disposition": "diagnostic-protocol-metadata"
+    },
+    {
+      "key": "main-platform",
+      "file": "src/electron/main.ts",
+      "category": "direct-platform",
+      "disposition": "runtime-startup-adapter"
+    },
+    {
+      "key": "main-platform-composition",
+      "file": "src/electron/main.ts",
+      "category": "injected-platform",
+      "disposition": "composition-root"
+    },
+    {
+      "key": "main-known-folders",
+      "file": "src/electron/main.ts",
+      "category": "known-folder",
+      "disposition": "file-index-runtime-adapter"
+    },
+    {
+      "key": "auth-device-platform",
+      "file": "src/electron/nevermind-auth.ts",
+      "category": "direct-platform",
+      "disposition": "diagnostic-device-metadata"
+    },
+    {
+      "key": "private-file-default",
+      "file": "src/electron/private-file.ts",
+      "category": "direct-platform",
+      "disposition": "sensitive-file-adapter"
+    },
+    {
+      "key": "private-file-injected",
+      "file": "src/electron/private-file.ts",
+      "category": "injected-platform",
+      "disposition": "sensitive-file-adapter"
+    },
+    {
+      "key": "shortcut-platform-default",
+      "file": "src/electron/shortcut-utils.ts",
+      "category": "direct-platform",
+      "disposition": "presentation-adapter"
+    },
+    {
+      "key": "shortcut-platform-injected",
+      "file": "src/electron/shortcut-utils.ts",
+      "category": "injected-platform",
+      "disposition": "presentation-adapter"
+    },
+    {
+      "key": "uninstall-platform-default",
+      "file": "src/electron/app-uninstall-service.ts",
+      "category": "direct-platform",
+      "disposition": "injected-service-default"
+    },
+    {
+      "key": "camera-permission-composition",
+      "file": "src/electron/app-ipc-handlers.ts",
+      "category": "injected-platform",
+      "disposition": "intentional-composition-seam"
+    },
+    {
+      "key": "places-known-folders",
+      "file": "src/electron/extensions/system.ts",
+      "category": "known-folder",
+      "disposition": "capability-consumer"
+    }
+  ],
+  "resolvedEntries": [
+    {
+      "key": "byo-private-file",
+      "file": "src/electron/byo-key.ts",
+      "disposition": "uses-shared-private-file-writer",
+      "evidencePattern": "writePrivateFile"
+    },
+    {
+      "key": "auth-private-file",
+      "file": "src/electron/nevermind-auth.ts",
+      "disposition": "uses-shared-private-file-writer",
+      "evidencePattern": "writePrivateFile"
+    },
+    {
+      "key": "renderer-camera-label",
+      "file": "src/extension-view.tsx",
+      "disposition": "platform-neutral-copy",
+      "evidencePattern": "system privacy settings"
+    }
+  ],
+  "productSurfaces": [
+    {
+      "key": "palette-hotkey",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "os.windows.test.ts and shortcut-utils.test.ts",
+      "manualGate": "global shortcut registration, conflict, focus, dismissal",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "window-behavior",
+      "status": "unverified",
+      "source": "src/electron/palette-window.ts",
+      "automatedCheck": "packaged portable ready-to-show marker",
+      "manualGate": "focus, taskbar behavior, multi-monitor dismissal",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "app-discovery-launch-quit",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "off-host recursive scan, openPath, argv-safe taskkill tests",
+      "manualGate": "Start Menu discovery, launch, running status, quit",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "files-search-open",
+      "status": "implemented",
+      "source": "src/electron/main.ts",
+      "automatedCheck": "cross-platform file tests and inventory check",
+      "manualGate": "local, Unicode, spaces and UNC search/open",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "clipboard-text-image-paste",
+      "status": "implemented",
+      "source": "src/electron/clipboard-history.ts",
+      "automatedCheck": "clipboard unit tests",
+      "manualGate": "text, HTML, image, file copy and paste into another app",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "ocr-screen-capture",
+      "status": "intentionally-unsupported",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "capability fallback tests",
+      "manualGate": "confirm unavailable actions are omitted",
+      "owner": "desktop-product"
+    },
+    {
+      "key": "camera",
+      "status": "implemented",
+      "source": "src/electron/app-ipc-handlers.ts",
+      "automatedCheck": "injected Darwin/Windows permission contract",
+      "manualGate": "camera permission request, denial copy and live camera",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "system-actions-settings",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "platform inventory and Windows capability tests",
+      "manualGate": "lock, sleep, restart, Windows Settings and typing settings",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "auth-token-byo-storage",
+      "status": "implemented",
+      "source": "src/electron/private-file.ts",
+      "automatedCheck": "private writer tests and Windows ACL CI gate",
+      "manualGate": "sign-in/device auth and redacted ACL evidence on actual profile files",
+      "owner": "security-release"
+    },
+    {
+      "key": "extensions-generated",
+      "status": "implemented",
+      "source": "src/electron/extension-storage.ts",
+      "automatedCheck": "extension persistence tests and ASAR resource inspection",
+      "manualGate": "generate, run, restart and re-run an extension",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "jobs-watchers",
+      "status": "implemented",
+      "source": "src/electron/main.ts",
+      "automatedCheck": "recursive watcher simulation and background job tests",
+      "manualGate": "startup, interval and file-change background jobs",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "notifications",
+      "status": "missing",
+      "source": "src/electron",
+      "automatedCheck": "inventory records no Windows notification implementation",
+      "manualGate": "not required until product approval adds the capability",
+      "owner": "desktop-product"
+    },
+    {
+      "key": "auto-updater",
+      "status": "intentionally-unsupported",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "latest.yml absent smoke and NSIS metadata validator fixtures",
+      "manualGate": "signed publish-candidate update installation",
+      "owner": "release-engineering"
+    },
+    {
+      "key": "installer-uninstaller",
+      "status": "unverified",
+      "source": "electron-builder.yml",
+      "automatedCheck": "NSIS artifact, blockmap, unsigned signature and manifest checks",
+      "manualGate": "per-user install, Start menu, uninstall cleanup and preserved user data",
+      "owner": "release-engineering"
+    },
+    {
+      "key": "portable-data",
+      "status": "unverified",
+      "source": "scripts/windows-portable-smoke.cjs",
+      "automatedCheck": "staged launcher identity and packaged-child readiness",
+      "manualGate": "portable launch location and data behavior",
+      "owner": "release-engineering"
+    },
+    {
+      "key": "logs-crash-recovery",
+      "status": "unverified",
+      "source": "src/electron/logger.ts",
+      "automatedCheck": "startup evidence and stable-child window",
+      "manualGate": "redacted logs, crash recovery and relaunch",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "auto-start",
+      "status": "implemented",
+      "source": "src/electron/os.ts",
+      "automatedCheck": "injected packaged/unpackaged login-item tests",
+      "manualGate": "enable, sign out/in, disable",
+      "owner": "desktop-release"
+    },
+    {
+      "key": "packaging-icon-architecture",
+      "status": "implemented",
+      "source": "electron-builder.yml",
+      "automatedCheck": "x64 names, icon source metadata and PE resource presence",
+      "manualGate": "taskbar, Start menu, installer and portable visual comparison",
+      "owner": "release-engineering"
+    }
+  ]
+}
