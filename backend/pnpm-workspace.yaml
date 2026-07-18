@@ -6,3 +6,6 @@ onlyBuiltDependencies:
   - '@sentry/cli'
   - esbuild
   - sharp
+overrides:
+  # Remove after a normal Astro lock refresh selects patched Vite.
+  vite: 7.3.5

@@ -12,3 +12,7 @@ onlyBuiltDependencies:
   - electron-winstaller
   - esbuild
   - protobufjs
+overrides:
+  # Remove after Pi's @google/genai graph resolves patched versions directly.
+  protobufjs: 7.6.3
+  ws: 8.21.0
