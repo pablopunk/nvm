@@ -14,7 +14,8 @@ export interface AppIpcHandlersDeps {
     fn: () => T | Promise<T>,
   ) => T | Promise<T>;
   summarizeDebugValue: (value: unknown) => unknown;
-  searchActions: (query: unknown, options: unknown) => unknown;
+  startSearch: (sender: unknown, input: unknown) => unknown;
+  cancelSearch: (sender: unknown, input: unknown) => unknown;
   executeActionForIpc: (action: unknown) => unknown;
   executeViewActionForIpc: (action: unknown) => unknown;
   refreshViewForIpc: (input: unknown) => unknown;
@@ -95,8 +96,11 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     summarize: deps.summarizeDebugValue,
   });
 
-  ipcHandleMeasured('actions:search', (_event, query, options) =>
-    deps.searchActions(query, options),
+  ipcHandleMeasured('actions:search', (event, input) =>
+    deps.startSearch(event.sender, input),
+  );
+  deps.ipcMain.on('actions:search:cancel', (event, input) =>
+    deps.cancelSearch(event.sender, input),
   );
   ipcHandleMeasured('actions:execute', (_event, action) =>
     deps.executeActionForIpc(action),

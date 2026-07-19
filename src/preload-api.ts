@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useConsistentTypeDefinitions: Public preload contracts retain the established object type-alias style.
 import type {
   CommandAction,
   CommandItemAppearance,
@@ -60,6 +61,18 @@ export type RootAction = {
   executionId?: string;
 };
 
+export type SearchOptions = {
+  generation: number;
+  clipboardOnly?: boolean;
+};
+
+export type SearchSnapshot<T = RootAction> = {
+  generation: number;
+  revision: number;
+  results: T[];
+  complete: boolean;
+};
+
 export type SaveResult = {
   ok: boolean;
   message: string;
@@ -108,8 +121,12 @@ export type ViewHydratePayload = {
 export type NevermindApi = {
   search: (
     query: string,
-    options?: { clipboardOnly?: boolean },
-  ) => Promise<RootAction[]>;
+    options: SearchOptions,
+  ) => Promise<SearchSnapshot<RootAction>>;
+  cancelSearch: (generation: number) => void;
+  onSearchUpdate: (
+    callback: (snapshot: SearchSnapshot<RootAction>) => void,
+  ) => () => void;
   execute: (action: RootAction) => Promise<{ view?: CommandView }>;
   runViewAction: (action: CommandAction) => Promise<ViewActionResult>;
   refreshView: (input: {

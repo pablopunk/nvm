@@ -521,7 +521,7 @@ export function App() {
   const [query, setQuery] = useState('');
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [actions, setActions] = useSearchResults<Action>(
-    window.nvm.search,
+    window.nvm,
     query,
     refreshNonce,
   );
@@ -971,7 +971,14 @@ export function App() {
         `extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`,
       );
     else if (extensionView) selectValue('preview');
-    else selectValue(actions[0]?.id ?? '');
+    else {
+      const current = selectedValueRef.current;
+      selectValue(
+        current && actions.some((action) => action.id === current)
+          ? current
+          : actions[0]?.id || '',
+      );
+    }
   }, [
     actions,
     actionSubmenuFor,
@@ -1329,7 +1336,7 @@ export function App() {
     scrollResultsToTop();
     const frame = requestAnimationFrame(scrollResultsToTop);
     return () => cancelAnimationFrame(frame);
-  }, [activeSearchQuery, activeSearchScope, actions]);
+  }, [activeSearchQuery, activeSearchScope]);
 
   function markShortcutReady(shouldReveal: boolean) {
     if (shouldReveal) setPendingShortcutReveal(true);

@@ -19,7 +19,8 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     },
     measureDebugPerformance: (_name, _data, fn) => fn(),
     summarizeDebugValue: (value) => value,
-    searchActions: (query, options) => ({ query, options }),
+    startSearch: (sender, input) => ({ sender, input }),
+    cancelSearch: (sender, input) => calls.push(`cancel:${sender}:${input}`),
     executeActionForIpc: (action) => action,
     executeViewActionForIpc: (action) => action,
     refreshViewForIpc: (input) => ({ refreshed: input }),
@@ -99,6 +100,27 @@ test('registerAppIpcHandlers registers core invoke handlers and drag listener', 
   assert.equal(handles.has('camera:request-access'), true);
   assert.equal(handles.has('logs:write'), true);
   assert.equal(listeners.has('drag:file'), true);
+  assert.equal(listeners.has('actions:search:cancel'), true);
+});
+
+test('search IPC stays scoped to the originating sender', async () => {
+  const starts: unknown[] = [];
+  const cancels: unknown[] = [];
+  const { handles, listeners } = createDeps({
+    startSearch: (sender, input) => {
+      starts.push({ sender, input });
+      return { ok: true };
+    },
+    cancelSearch: (sender, input) => cancels.push({ sender, input }),
+  });
+  const sender = { id: 42 };
+  const input = { query: 'abc', generation: 3 };
+  assert.deepEqual(await handles.get('actions:search')?.({ sender }, input), {
+    ok: true,
+  });
+  listeners.get('actions:search:cancel')?.({ sender }, { generation: 3 });
+  assert.deepEqual(starts, [{ sender, input }]);
+  assert.deepEqual(cancels, [{ sender, input: { generation: 3 } }]);
 });
 
 test('registerAppIpcHandlers preserves palette, camera, and window behavior', async () => {
