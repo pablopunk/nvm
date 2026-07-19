@@ -107,11 +107,11 @@ export function extensionWindowSize(options: any = {}) {
   return {
     width: Math.max(
       320,
-      Math.min(1600, Number(options.width || (large ? 900 : 560))),
+      Math.min(1600, Number(options.width ?? (large ? 900 : 560))),
     ),
     height: Math.max(
       240,
-      Math.min(1200, Number(options.height || (large ? 680 : 420))),
+      Math.min(1200, Number(options.height ?? (large ? 680 : 420))),
     ),
   };
 }

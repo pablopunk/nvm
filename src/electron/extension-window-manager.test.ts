@@ -155,10 +155,18 @@ test('extension window helpers clamp size and derive stable ids', () => {
     width: 320,
     height: 240,
   });
+  assert.deepEqual(extensionWindowSize({ width: 0, height: 0 }), {
+    width: 320,
+    height: 240,
+  });
   assert.deepEqual(extensionWindowSize({ size: 'large' }), {
     width: 900,
     height: 680,
   });
+  assert.deepEqual(
+    extensionWindowSize({ size: 'large', width: 0, height: 0 }),
+    { width: 320, height: 240 },
+  );
   assert.deepEqual(extensionWindowSize({ width: 9999, height: 9999 }), {
     width: 1600,
     height: 1200,

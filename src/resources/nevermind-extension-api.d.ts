@@ -240,9 +240,9 @@ export type ExtensionWindowOptions = {
   titleBar?: 'default' | 'hidden';
   /** Host chrome around the view. Defaults to `default`; use `none` for edge-to-edge companion tools. */
   chrome?: 'default' | 'none';
-  /** Window width. Defaults to 560 (`size: 'large'`: 900) and is clamped to 320–1600. */
+  /** Window width. Defaults to 560 (`size: 'large'`: 900) and is clamped to 320–1600; explicit zero is accepted and clamps to 320. */
   width?: number;
-  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200. */
+  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200; explicit zero is accepted and clamps to 240. */
   height?: number;
   /** Named dimension preset. Defaults to `default`. Explicit width/height take precedence. */
   size?: ViewSize;
