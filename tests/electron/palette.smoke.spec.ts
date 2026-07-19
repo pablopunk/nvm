@@ -568,7 +568,15 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     await expect(input).toBeVisible();
 
     const scheduledShortcut = await firstLaunch.page.evaluate(async (title) => {
-      const actions = await window.nvm.search(title);
+      const state = window as typeof window & { testSearchGeneration?: number };
+      const generation = Math.max(
+        Date.now(),
+        (state.testSearchGeneration || 0) + 1,
+      );
+      state.testSearchGeneration = generation;
+      const { results: actions } = await window.nvm.search(title, {
+        generation,
+      });
       const action = actions.find((candidate) => candidate.title === title);
       if (!action) throw new Error('System Settings action not found');
       const result = await window.nvm.setShortcut(
