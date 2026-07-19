@@ -217,9 +217,15 @@ import {
 } from './settings';
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils';
+import { createStateSafeQuit } from './state-safe-quit';
 import { systemSettingsPaneUrl } from './system-settings';
 import { createUpdateManager } from './update-manager';
 import { openExternalUrl } from './url-utils';
+import {
+  createUserStateSaveScheduler,
+  readUserStateFile,
+  writeUserStateFile,
+} from './user-state';
 import { isNewerVersion as isVersionNewerThan } from './version-utils';
 import {
   installExternalNavigationPolicy,
@@ -409,8 +415,6 @@ let extensionCacheDir = '';
 let learningRulesPath = '';
 let legacyLearningRulesPath = '';
 let learningTracesPath = '';
-let saveTimer: NodeJS.Timeout | undefined;
-let stateWriteQueue: Promise<void> = Promise.resolve();
 type ExtensionFileWatcher = PreparedFileWatcher & {
   close: () => unknown;
 };
@@ -494,6 +498,38 @@ let userState: AnyRecord = {
     baseUrl: getDefaultNevermindBaseUrl(),
   },
 };
+
+const userStateSaveScheduler = createUserStateSaveScheduler({
+  save: writeCurrentUserState,
+  onSaveError: (error) =>
+    logError('state.save.failed', error, { source: 'host', scope: 'state' }),
+});
+
+const stateSafeQuit = createStateSafeQuit({
+  flushPendingSave: userStateSaveScheduler.flushPendingSave,
+  quit: () => app.quit(),
+  cleanup: runQuitCleanup,
+  exit: () => app.exit(0),
+  onFlushError: (error) =>
+    logError('state.flush.failed', error, {
+      source: 'host',
+      scope: 'state',
+    }),
+  onFlushTimeout: (reason) =>
+    logWarn(
+      'state.flush.timedOut',
+      { reason },
+      { source: 'host', scope: 'state' },
+    ),
+  onFallbackExit: (reason) =>
+    logWarn(
+      'app.quit.fallbackExit',
+      { reason },
+      { source: 'host', scope: 'app' },
+    ),
+  flushTimeoutMs: 2000,
+  exitFallbackMs: 5000,
+});
 
 clipboardService = createClipboardHistory({
   getHistory: () => clipboardHistory,
@@ -1750,37 +1786,14 @@ function downloadUpdateView() {
   return { view: updateStatusView(), navigation: 'replace' };
 }
 
-let updateInstallQuitFallbackTimer: NodeJS.Timeout | null = null;
-
-function scheduleUpdateInstallQuitFallback() {
-  if (updateInstallQuitFallbackTimer) return;
-  updateInstallQuitFallbackTimer = setTimeout(() => {
-    updateInstallQuitFallbackTimer = null;
-    logWarn('updater.install.quitFallback', undefined, {
-      source: 'host',
-      scope: 'updater',
-    });
-    nevermindApp.isQuiting = true;
-    app.quit();
-    setTimeout(() => {
-      logWarn('updater.install.exitFallback', undefined, {
-        source: 'host',
-        scope: 'updater',
-      });
-      runQuitCleanup();
-      app.exit(0);
-    }, 2000).unref?.();
-  }, 5000);
-  updateInstallQuitFallbackTimer.unref?.();
-}
-
 function installDownloadedUpdate() {
   if (!updateManager.state.downloadedInfo)
     return { view: updateStatusView(), navigation: 'replace' };
   nevermindApp.isQuiting = true;
-  const didStart = updateManager.quitAndInstall();
-  if (didStart || updateManager.state.installInFlight)
-    scheduleUpdateInstallQuitFallback();
+  void stateSafeQuit.requestQuit('updater', () => {
+    const didStart = updateManager.quitAndInstall();
+    if (!(didStart || updateManager.state.installInFlight)) app.quit();
+  });
   return { view: updateStatusView(), navigation: 'replace' };
 }
 
@@ -3563,16 +3576,7 @@ function registerTestModeIpcHandlers() {
 function requestQuitApp(reason = 'action') {
   nevermindApp.isQuiting = true;
   logInfo('app.quit.requested', { reason }, { source: 'host', scope: 'app' });
-  app.quit();
-  setTimeout(() => {
-    logWarn(
-      'app.quit.fallbackExit',
-      { reason },
-      { source: 'host', scope: 'app' },
-    );
-    runQuitCleanup();
-    app.exit(0);
-  }, 250).unref?.();
+  void stateSafeQuit.requestQuit(reason);
 }
 
 async function executeViewAction(action, launchContext?: any) {
@@ -8103,8 +8107,25 @@ async function loadUserState() {
     })
     .catch(() => {});
 
-  try {
-    const loaded = JSON.parse(await fs.readFile(statePath, 'utf8'));
+  const loaded = await readUserStateFile(statePath, {
+    onCorrupt: (error, backupPath) =>
+      logWarn(
+        'state.load.corrupt',
+        {
+          backupPath,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { source: 'host', scope: 'state' },
+      ),
+    onCorruptBackupError: (error) =>
+      logError('state.load.corruptBackupFailed', error, {
+        source: 'host',
+        scope: 'state',
+      }),
+    onReadError: (error) =>
+      logError('state.load.failed', error, { source: 'host', scope: 'state' }),
+  });
+  if (loaded) {
     userState = {
       recents: loaded.recents || {},
       aliases: loaded.aliases || {},
@@ -8129,8 +8150,6 @@ async function loadUserState() {
         baseUrl: getDefaultNevermindBaseUrl(),
       },
     };
-  } catch {
-    // First run.
   }
 
   migrateAiChats();
@@ -8173,13 +8192,7 @@ function rememberClipboardItem(item) {
 }
 
 function scheduleSaveState() {
-  if (jobRegistry.has('state.save')) {
-    jobRegistry.schedule('state.save', 'state.changed', 200);
-    return;
-  }
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveUserState, 200);
-  saveTimer.unref?.();
+  userStateSaveScheduler.schedule();
 }
 
 async function saveUserState() {
@@ -8205,9 +8218,8 @@ async function atomicWriteFile(
 }
 
 function persistUserState() {
-  const write = stateWriteQueue.then(writeCurrentUserState);
-  stateWriteQueue = write.catch(() => {});
-  return write;
+  userStateSaveScheduler.schedule();
+  return userStateSaveScheduler.flushPendingSave();
 }
 
 async function writeCurrentUserState() {
@@ -8216,7 +8228,7 @@ async function writeCurrentUserState() {
     ...(userState.jobSettings || {}),
     enabled: jobRegistry.enabledOverridesSnapshot(),
   };
-  await atomicWriteFile(statePath, JSON.stringify(userState, null, 2));
+  await writeUserStateFile(statePath, userState);
 }
 
 function pollClipboardChange() {
@@ -8930,12 +8942,13 @@ app.whenReady().then(async () => {
 });
 
 app.on('activate', () => paletteWindow.showPalette());
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   nevermindApp.isQuiting = true;
+  stateSafeQuit.handleBeforeQuit(event);
 });
 app.on('will-quit', () => {
   nevermindApp.isQuiting = true;
-  runQuitCleanup();
+  stateSafeQuit.handleWillQuit();
 });
 
 if (!isDev && !isNvmTestMode) {

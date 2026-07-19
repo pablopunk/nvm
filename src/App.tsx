@@ -56,6 +56,7 @@ import {
   type CommandViewPatch,
   canCustomizeCommandAction,
 } from './model';
+import { resetTransientPaletteState } from './palette-lifecycle';
 import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api';
 import {
   ShortcutManagerView,
@@ -578,6 +579,22 @@ export function App() {
     selectedValueRef.current = value;
     setSelectedValue(value);
   }
+  function resetTransientSurfaces() {
+    resetTransientPaletteState({
+      setOptionsFor,
+      setExtensionItemOptionsFor,
+      setConfirmRemoveFor,
+      setPreviewFor,
+      setChildQuery,
+      setShortcutFor,
+      setRecordedShortcut,
+      setShortcutManagerOpen,
+      setShortcutOptionsFor,
+      setAliasFor,
+      setConfirmViewActionFor,
+      setActionSubmenuFor,
+    });
+  }
   useEffect(() => {
     extensionViewRef.current = extensionView;
   }, [extensionView]);
@@ -752,15 +769,7 @@ export function App() {
 
     const stopShown = window.nvm.onShown(() => {
       markDebugPerformance('palette.shown', { queryLength: query.length });
-      setOptionsFor(null);
-      setExtensionItemOptionsFor(null);
-      setConfirmRemoveFor(null);
-      setPreviewFor(null);
-      setChildQuery('');
-      setShortcutFor(null);
-      setRecordedShortcut('');
-      setShortcutManagerOpen(false);
-      setShortcutOptionsFor(null);
+      resetTransientSurfaces();
       if (!aiChatOpenRef.current) {
         extensionNavigation.clearView();
         aiChat.setMessages([]);
@@ -787,15 +796,7 @@ export function App() {
         ? aiChatIdRef.current
         : undefined;
       setRootQuery('');
-      setOptionsFor(null);
-      setExtensionItemOptionsFor(null);
-      setConfirmRemoveFor(null);
-      setPreviewFor(null);
-      setChildQuery('');
-      setShortcutFor(null);
-      setRecordedShortcut('');
-      setShortcutManagerOpen(false);
-      setShortcutOptionsFor(null);
+      resetTransientSurfaces();
       if (!aiChatOpenRef.current) {
         extensionNavigation.clearView();
         aiChat.setMessages([]);
@@ -822,8 +823,7 @@ export function App() {
         viewId: payload?.view?.id,
       });
       if (!payload?.view) return;
-      setOptionsFor(null);
-      setPreviewFor(null);
+      resetTransientSurfaces();
       const current = extensionViewRef.current;
       if (payload.asSibling && current && current.id !== payload.view.id) {
         setSiblingViews((siblings) => [...siblings, current]);

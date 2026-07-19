@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
 import fs, { type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
+import { atomicallyReplaceFile } from './atomic-file';
 
 type JsonObject = Record<string, unknown>;
 
@@ -13,8 +13,6 @@ interface ExtensionJsonStoreDeps {
   unlink?: typeof fs.unlink;
   writeTemporaryFile?: (file: FileHandle, data: string) => Promise<void>;
 }
-
-const PRIVATE_FILE_MODE = 0o600;
 
 function ignoreError() {
   return null;
@@ -97,27 +95,6 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     return resolution;
   }
 
-  async function atomicallyReplaceFile(filePath: string, data: JsonObject) {
-    await mkdir(path.dirname(filePath), { recursive: true });
-    const temporaryPath = path.join(
-      path.dirname(filePath),
-      `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`,
-    );
-    let file: FileHandle | undefined;
-
-    try {
-      file = await open(temporaryPath, 'w', PRIVATE_FILE_MODE);
-      await writeTemporaryFile(file, JSON.stringify(data, null, 2));
-      await file.sync();
-      await file.close();
-      file = undefined;
-      await rename(temporaryPath, filePath);
-    } finally {
-      await file?.close().catch(ignoreError);
-      await unlink(temporaryPath).catch(ignoreError);
-    }
-  }
-
   async function enqueue<T>(
     filePath: string,
     operation: (canonicalFilePath: string) => Promise<T>,
@@ -157,7 +134,11 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     },
     replace(filePath: string, data: JsonObject) {
       return enqueue(filePath, async (canonicalFilePath) => {
-        await atomicallyReplaceFile(canonicalFilePath, data);
+        await atomicallyReplaceFile(
+          canonicalFilePath,
+          JSON.stringify(data, null, 2),
+          { mkdir, open, rename, unlink, writeTemporaryFile },
+        );
       });
     },
     mutate(
@@ -167,7 +148,11 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
       return enqueue(filePath, async (canonicalFilePath) => {
         const current = await readFileData(canonicalFilePath);
         const next = await update(current);
-        await atomicallyReplaceFile(canonicalFilePath, next);
+        await atomicallyReplaceFile(
+          canonicalFilePath,
+          JSON.stringify(next, null, 2),
+          { mkdir, open, rename, unlink, writeTemporaryFile },
+        );
         return next;
       });
     },
