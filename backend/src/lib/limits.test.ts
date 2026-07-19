@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
+import { estimateInputTokensFromBody, estimatePromptCredits, estimateRequestCredits, requestedMaxOutputTokens, MAX_INPUT_TOKENS } from './limits';
 import type { ModelCost } from './pricing';
 
 const CHARS_PER_TOKEN = 4;
@@ -98,6 +98,19 @@ describe('estimatePromptCredits', () => {
     const credits = estimatePromptCredits(0, makeCost(10));
     assert.strictEqual(credits, 1);
   });
+});
+
+test('reservation estimate includes bounded output cost', () => {
+  const cost = { ...makeCost(10), outputUsdPerMtok: 20 };
+  assert.equal(estimateRequestCredits(100_000, 100_000, cost), 1500);
+});
+
+test('reads output caps for OpenAI, Anthropic, and Google requests', () => {
+  assert.equal(requestedMaxOutputTokens({ max_tokens: 12 }), 12);
+  assert.equal(requestedMaxOutputTokens({ max_completion_tokens: 13 }), 13);
+  assert.equal(requestedMaxOutputTokens({ generationConfig: { maxOutputTokens: 14 } }), 14);
+  assert.equal(requestedMaxOutputTokens({ max_tokens: -1 }), undefined);
+  assert.equal(requestedMaxOutputTokens({}), undefined);
 });
 
 describe('MAX_INPUT_TOKENS', () => {

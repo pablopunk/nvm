@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Public extension declarations preserve released type-alias and void compatibility contracts.
 /**
  * Nevermind Extension API
  *
@@ -1082,6 +1083,8 @@ export type ExtensionUpdateState = {
 };
 
 export type ExtensionContext = {
+  /** Cooperative cancellation for query providers. Present only while `searchItems` is running; pass it to fetch or other abort-aware work. */
+  readonly signal?: AbortSignal;
   /** Runtime metadata for the current extension plus host helpers such as persistent rename. */
   extension: NevermindExtension & {
     rename(

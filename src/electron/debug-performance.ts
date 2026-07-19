@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Performance instrumentation intentionally uses best-effort platform APIs and compact hot-path guards.
 import { performance } from 'node:perf_hooks';
 import { debug as logDebug } from './logger';
 
@@ -55,6 +56,22 @@ export function measureDebugPerformanceSync<T>(
   } finally {
     finishDebugPerformanceMeasure(measurement);
   }
+}
+
+export function recordDebugPerformance(
+  name: string,
+  durationMs: number,
+  detail?: DebugPerformanceDetail,
+) {
+  if (!debugPerformanceEnabled()) return;
+  try {
+    performance.measure(`nvm:${name}`, {
+      start: Math.max(0, performance.now() - durationMs),
+      duration: Math.max(0, durationMs),
+      detail,
+    });
+  } catch {}
+  logSlowDebugPerformance(name, durationMs, detail);
 }
 
 export function summarizeDebugValue(value: unknown): unknown {

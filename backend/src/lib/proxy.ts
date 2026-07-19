@@ -1,28 +1,27 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { creditLedger, usage, requestDedup } from '../db/schema';
+import { requestDedup } from '../db/schema';
 import { getModelRoute, getModelProviderChain, ModelNotConfiguredError, parseExtensionAiModelRole, type ModelRouteSlot } from './settings';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
   computeUsdCost,
   usdToCredits,
-  usdToMicrocents,
   type ModelCost,
 } from './cost';
+import { lookupModelDescriptor } from './pricing';
 import { getUpstreamConfig, selectApiForModel, providerSupportsFormat, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
-import { estimateInputTokensFromBody, estimatePromptCredits, MAX_INPUT_TOKENS } from './limits';
+import { estimateInputTokensFromBody, estimateRequestCredits, MAX_INPUT_TOKENS, requestedMaxOutputTokens } from './limits';
+import { finalizeReservation, reserveCredits } from './credit-reservations';
 import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
 import * as Sentry from '@sentry/astro';
 import { PRODUCTION_WEB_ORIGIN } from '../../../src/shared/public-origin';
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
-
-const CREDIT_GRACE_THRESHOLD = Math.max(0, Number(process.env.CREDIT_GRACE_THRESHOLD ?? 100));
 
 export type UsageTokens = { inputTokens: number; outputTokens: number };
 
@@ -95,33 +94,11 @@ export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, sta
 }
 
 async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number, latencyMs: number) {
-  const costUsd = computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens);
-  const credits = usdToCredits(costUsd);
-  const microcents = usdToMicrocents(costUsd);
   const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
-  await db.transaction(async (tx) => {
-    if (billable && credits > 0) {
-      await tx.insert(creditLedger).values({
-        userId: ctx.user.id,
-        delta: -credits,
-        kind: ctx.kind,
-        reason: 'ai_usage',
-        refId: ctx.requestId,
-      }).onConflictDoNothing();
-    }
-    await tx.insert(usage).values({
-      userId: ctx.user.id,
-      model: ctx.activeModelId,
-      provider: ctx.provider,
-      inputTokens: tokens.inputTokens,
-      outputTokens: tokens.outputTokens,
-      costCredits: billable ? credits : 0,
-      upstreamCostMicrocents: billable ? microcents : 0,
-      requestId: ctx.requestId,
-      status,
-      latencyMs,
-    });
-  });
+  const credits = billable ? usdToCredits(computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens)) : 0;
+  await finalizeReservation(billable
+    ? { requestId: ctx.requestId, outcome: 'settle', model: ctx.activeModelId, provider: ctx.provider, tokens, costRow: ctx.costRow, status, latencyMs }
+    : { requestId: ctx.requestId, outcome: 'release' });
   log.info('chat_completion', {
     request_id: ctx.requestId,
     user_id: ctx.user.id,
@@ -140,6 +117,23 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
     client_platform: ctx.client.platform,
     client_arch: ctx.client.arch,
   });
+}
+
+async function releaseReservationAfterError(requestId: string, error: unknown) {
+  try {
+    await finalizeReservation({ requestId, outcome: 'release' });
+  } catch (releaseError) {
+    log.error('reservation_error_release_failed', { request_id: requestId, error, release_error: releaseError });
+  }
+}
+
+async function markDedupFailed(ctx: Pick<BillContext, 'user' | 'requestId' | 'dedupIdempotencyKey'>) {
+  if (!ctx.dedupIdempotencyKey) return;
+  await db.update(requestDedup).set({ status: 'failed', completedAt: new Date() }).where(and(
+    eq(requestDedup.userId, ctx.user.id),
+    eq(requestDedup.idempotencyKey, ctx.dedupIdempotencyKey),
+    eq(requestDedup.requestId, ctx.requestId),
+  ));
 }
 
 type ResolvedRouting = {
@@ -474,7 +468,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const idempotencyKey = cfg.idempotencyKey;
   const dedupEnabled = idempotencyKey && !backendKillSwitchEnabled('idempotency_dedup');
   if (dedupEnabled) {
-    requestId = createHash('sha256').update(`${routing.user.id}:${idempotencyKey}`).digest('hex');
     const dedupResult = await handleDedup(idempotencyKey, routing.user.id, cfg.request, requestId);
     if (dedupResult instanceof Response) return dedupResult;
   }
@@ -485,9 +478,11 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     return withRequestId(tooManyRequests(rateDecision), requestId);
   }
 
-  let forwardBody: BodyInit | undefined;
-  let estimatedInputTokens = 0;
-  if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
+  let reservationCommitted = false;
+  try {
+    let forwardBody: BodyInit | undefined;
+    let estimatedInputTokens = 0;
+    if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
     const text = await cfg.request.text();
     estimatedInputTokens = estimateInputTokensFromBody(text);
     if (estimatedInputTokens > MAX_INPUT_TOKENS) {
@@ -496,50 +491,76 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         { status: 413 },
       ), requestId);
     }
-    let estimatedCredits = estimatePromptCredits(estimatedInputTokens, routing.costRow);
-    if (estimatedCredits > routing.balanceAvailable && routing.kind === 'paid' && routing.freeBalanceAvailable > 0) {
+    let parsedBody: unknown = null;
+    try { parsedBody = JSON.parse(text); } catch { /* upstream retains its existing invalid-JSON behavior */ }
+    const requestedOutput = requestedMaxOutputTokens(parsedBody);
+    const maxOutputFor = async (candidate: ModelRouting) => {
+      const descriptor = await lookupModelDescriptor(candidate.provider, candidate.activeModelId);
+      const serverMaximum = descriptor?.maxTokens ?? 32_000;
+      return Math.min(requestedOutput ?? serverMaximum, serverMaximum);
+    };
+    let maxOutputTokens = await maxOutputFor(routing);
+    let estimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, routing.costRow);
+    let reservation = await reserveCredits({
+      requestId,
+      userId: routing.user.id,
+      kind: routing.kind,
+      credits: estimatedCredits,
+    });
+    if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.kind === 'paid') {
       const freeRouting = await resolveModelRouting(parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'free');
       if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
-      const freeEstimatedCredits = estimatePromptCredits(estimatedInputTokens, freeRouting.costRow);
-      if (freeEstimatedCredits <= routing.freeBalanceAvailable) {
-        routing = {
-          user: routing.user,
-          ...freeRouting,
-          kind: 'free',
-          balanceAvailable: routing.freeBalanceAvailable,
-          freeBalanceAvailable: routing.freeBalanceAvailable,
-        };
+      maxOutputTokens = await maxOutputFor(freeRouting);
+      const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, freeRouting.costRow);
+      const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
+      if (freeReservation.ok) {
+        routing = { user: routing.user, ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
         estimatedCredits = freeEstimatedCredits;
+        reservation = freeReservation;
       }
     }
-    if (estimatedCredits > routing.balanceAvailable + CREDIT_GRACE_THRESHOLD) {
+    if (!reservation.ok && reservation.reason === 'request_already_reserved') {
       return withRequestId(Response.json(
-        { error: { type: 'insufficient_credits', message: 'Prompt cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: routing.balanceAvailable, dashboard_url: DASHBOARD_URL } },
+        { error: { type: 'idempotency_conflict', message: 'Request execution was already finalized or is still in progress' } },
+        { status: 409 },
+      ), requestId);
+    }
+    if (!reservation.ok) {
+      const available = reservation.balance - reservation.reserved;
+      return withRequestId(Response.json(
+        { error: { type: 'insufficient_credits', message: 'Request cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: available, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
       ), requestId);
-    } else if (estimatedCredits > routing.balanceAvailable) {
+    }
+    reservationCommitted = true;
+    if (estimatedCredits + reservation.reserved > reservation.balance) {
       log.warn('credit_grace_used', {
         request_id: requestId,
         user_id: routing.user.id,
         estimated_credits: estimatedCredits,
-        balance: routing.balanceAvailable,
-        grace_threshold: CREDIT_GRACE_THRESHOLD,
+        balance: reservation.balance - reservation.reserved,
         kind: routing.kind,
       });
     }
     forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
     if (dedupEnabled) {
       const bodyHash = createHash('sha256').update(`${text}|${routing.activeModelId}`).digest('hex');
-      db.update(requestDedup).set({ requestHash: bodyHash }).where(
-        and(eq(requestDedup.userId, routing.user.id), eq(requestDedup.idempotencyKey, idempotencyKey)),
-      ).catch((err) => {
+      db.update(requestDedup).set({ requestHash: bodyHash }).where(and(
+        eq(requestDedup.userId, routing.user.id),
+        eq(requestDedup.idempotencyKey, idempotencyKey),
+        eq(requestDedup.requestId, requestId),
+      ))
+      .catch((err) => {
         log.warn('dedup_hash_update_failed', { request_id: requestId, error: err });
       });
     }
   }
 
   const result = await tryUpstreamProviders(cfg, routing, forwardBody, requestId);
-  if (result instanceof Response) return result;
+  if (result instanceof Response) {
+    await finalizeReservation({ requestId, outcome: 'release' });
+    return result;
+  }
 
   const upstreamResponse = result.response;
   const winningProvider = result.provider;
@@ -563,9 +584,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   if (!upstreamResponse.ok) {
     const latencyMs = Date.now() - startedAt;
-    await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs).catch((err) => {
-      log.error('record_usage_failed', { request_id: requestId, error: err });
-    });
+    await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs);
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
@@ -574,7 +593,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   }
 
   if (isStreamingContentType(upstreamResponse.headers.get('content-type'))) {
-    if (backendKillSwitchEnabled('ai_streaming')) return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
+    if (backendKillSwitchEnabled('ai_streaming')) {
+      await finalizeReservation({ requestId, outcome: 'release' });
+      return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
+    }
     const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
     return new Response(transformed, {
       status: upstreamResponse.status,
@@ -605,9 +627,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       responseHeaders: headersObj,
       upstreamStatus: upstreamResponse.status,
       completedAt: new Date(),
-    }).where(
-      and(eq(requestDedup.userId, routing.user.id), eq(requestDedup.idempotencyKey, idempotencyKey)),
-    ).catch((err) => {
+    }).where(and(
+      eq(requestDedup.userId, routing.user.id),
+      eq(requestDedup.idempotencyKey, idempotencyKey),
+      eq(requestDedup.requestId, requestId),
+    ))
+    .catch((err) => {
       log.error('dedup_complete_update_failed', { request_id: requestId, error: err });
     });
   }
@@ -616,6 +641,14 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,
   });
+  } catch (error) {
+    if (reservationCommitted) await releaseReservationAfterError(requestId, error);
+    if (dedupEnabled) {
+      await markDedupFailed({ user: routing.user, requestId, dedupIdempotencyKey: idempotencyKey })
+        .catch((dedupError) => log.error('dedup_failed_update_failed', { request_id: requestId, error: dedupError }));
+    }
+    throw error;
+  }
 }
 
 function stripHopByHop(input: Headers): Headers {
@@ -653,32 +686,65 @@ function teeStreamAndBill(
     reportMalformedFrame: reportMalformedStreamUsageFrame,
   };
   const decoder = new TextDecoder('utf-8', { fatal: false });
-  const transform = new TransformStream<Uint8Array, Uint8Array>({
-    transform(chunk, controller) {
-      controller.enqueue(chunk);
-      sniffStreamUsage(decoder.decode(chunk, { stream: true }));
-    },
-    async flush() {
+  let terminal = false;
+  let deliveredOutput = false;
+  async function finish(naturalCompletion: boolean) {
+    if (terminal) return;
+    terminal = true;
+    if (naturalCompletion) {
       sniffStreamUsage(decoder.decode(), true);
-      const latencyMs = Date.now() - startedAt;
-      const streamTokens = resolveBillableTokens(
-        billCtx,
-        { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens },
-        status,
-      );
-      await recordUsage(billCtx, streamTokens, status, latencyMs);
-      if (billCtx.dedupIdempotencyKey) {
-        db.update(requestDedup).set({
-          status: 'completed',
-          upstreamStatus: status,
-          completedAt: new Date(),
-        }).where(
-          and(eq(requestDedup.userId, billCtx.user.id), eq(requestDedup.idempotencyKey, billCtx.dedupIdempotencyKey)),
-        ).catch((err) => {
-          log.error('dedup_stream_complete_update_failed', { request_id: billCtx.requestId, error: err });
-        });
+    }
+    const observedOutput = acc.outputTokens > 0 || deliveredOutput;
+    const streamTokens = naturalCompletion || deliveredOutput
+      ? resolveBillableTokens(billCtx, { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens }, status)
+      : { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens };
+    try {
+      await recordUsage(billCtx, streamTokens, observedOutput || naturalCompletion ? status : 499, Date.now() - startedAt);
+    } catch (error) {
+      await releaseReservationAfterError(billCtx.requestId, error);
+      throw error;
+    }
+    if (naturalCompletion && billCtx.dedupIdempotencyKey) {
+      db.update(requestDedup).set({ status: 'completed', upstreamStatus: status, completedAt: new Date() }).where(
+        and(
+          eq(requestDedup.userId, billCtx.user.id),
+          eq(requestDedup.idempotencyKey, billCtx.dedupIdempotencyKey),
+          eq(requestDedup.requestId, billCtx.requestId),
+        ),
+      ).catch((err) => log.error('dedup_stream_complete_update_failed', { request_id: billCtx.requestId, error: err }));
+    } else if (!naturalCompletion) {
+      await markDedupFailed(billCtx);
+    }
+  }
+
+  const reader = upstreamResponse.body!.getReader();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          await finish(true);
+          controller.close();
+          return;
+        }
+        if (value) {
+          sniffStreamUsage(decoder.decode(value, { stream: true }));
+          if (value.byteLength > 0) deliveredOutput = true;
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        await finish(false).catch((finalizeError) => log.error('stream_finalize_failed', { request_id: billCtx.requestId, error: finalizeError }));
+        controller.error(error);
       }
     },
+    async cancel(reason) {
+      // Claim the terminal transition before cancelling the upstream reader:
+      // reader.cancel() resolves a pending read as done, which must not race
+      // cancellation into the natural-completion billing policy.
+      const finalization = finish(false)
+        .catch((error) => log.error('stream_cancel_finalize_failed', { request_id: billCtx.requestId, error }));
+      await reader.cancel(reason).catch(() => undefined);
+      await finalization;
+    },
   });
-  return upstreamResponse.body!.pipeThrough(transform);
 }

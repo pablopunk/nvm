@@ -8,6 +8,7 @@ import {
   apiTokens,
   authIntents,
   creditLedger,
+  creditReservations,
   deviceCodes,
   emailOutbox,
   emailSuppressions,
@@ -15,6 +16,7 @@ import {
   appSettings,
   requestDedup,
   stripeEvents,
+  usage,
   users,
 } from '../src/db/schema';
 import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src/lib/waitlist';
@@ -23,6 +25,7 @@ import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
 import { createApiToken } from '../src/lib/tokens';
+import { finalizeReservation, reconcileStaleReservations, reserveCredits } from '../src/lib/credit-reservations';
 import { runPostgresMigrations } from './migrate-postgres';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
@@ -99,6 +102,111 @@ async function runAssertions() {
         })
         .returning();
       assert.ok(user);
+
+      // Admission is serialized on the user row: with 10 credits plus the
+      // configured 100-credit grace, two 80-credit requests cannot both win.
+      await db.insert(creditLedger).values({
+        userId: user.id,
+        delta: 10,
+        kind: 'paid',
+        reason: 'integration.reservation_grant',
+        refId: databaseName,
+      });
+      const admissions = await Promise.all([
+        reserveCredits({ requestId: `reserve-a-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
+        reserveCredits({ requestId: `reserve-b-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
+      ]);
+      assert.equal(admissions.filter((result) => result.ok).length, 1, 'only one near-empty concurrent reservation may succeed');
+      const admitted = admissions.find((result) => result.ok);
+      assert.ok(admitted?.ok);
+      const requestId = admitted.reservation.requestId;
+      const cost = { provider: 'integration', modelId: 'reservation-model', inputUsdPerMtok: 1, outputUsdPerMtok: 1 };
+      await finalizeReservation({ requestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 });
+      assert.equal(await finalizeReservation({ requestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 }), 'already_terminal');
+      assert.equal((await db.select().from(creditReservations).where(eq(creditReservations.requestId, requestId))).length, 1);
+      assert.equal((await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, requestId)))).length, 1, 'settlement retries must create one ledger charge');
+      assert.equal((await db.select().from(usage).where(eq(usage.requestId, requestId))).length, 1, 'settlement retries must create one usage row');
+      assert.deepEqual(
+        await reserveCredits({ requestId, userId: user.id, kind: 'paid', credits: 80 }),
+        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 80 },
+        'a settled execution identity must never authorize more upstream work',
+      );
+
+      const releasedRequestId = `released-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: releasedRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      assert.equal(await finalizeReservation({ requestId: releasedRequestId, outcome: 'release' }), 'released');
+      assert.equal(await finalizeReservation({ requestId: releasedRequestId, outcome: 'release' }), 'already_terminal');
+      assert.equal((await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, releasedRequestId)))).length, 0, 'release retries must never debit');
+      assert.equal((await db.select().from(usage).where(eq(usage.requestId, releasedRequestId))).length, 0, 'release retries must never record usage');
+      assert.deepEqual(
+        await reserveCredits({ requestId: releasedRequestId, userId: user.id, kind: 'paid', credits: 20 }),
+        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 20 },
+        'a released execution identity must never authorize more upstream work',
+      );
+
+      const terminalRaceRequestId = `terminal-race-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: terminalRaceRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      const terminalRace = await Promise.all([
+        finalizeReservation({ requestId: terminalRaceRequestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 }),
+        finalizeReservation({ requestId: terminalRaceRequestId, outcome: 'release' }),
+      ]);
+      assert.equal(terminalRace.filter((result) => result === 'already_terminal').length, 1, 'settle/release race must have one terminal winner');
+      const [terminalRaceReservation] = await db.select().from(creditReservations).where(eq(creditReservations.requestId, terminalRaceRequestId));
+      const terminalRaceCharges = await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, terminalRaceRequestId)));
+      const terminalRaceUsage = await db.select().from(usage).where(eq(usage.requestId, terminalRaceRequestId));
+      assert.ok(terminalRaceReservation.status === 'settled' || terminalRaceReservation.status === 'released');
+      assert.equal(terminalRaceCharges.length, terminalRaceReservation.status === 'settled' ? 1 : 0);
+      assert.equal(terminalRaceUsage.length, terminalRaceReservation.status === 'settled' ? 1 : 0);
+
+      const lockRaceRequestId = `lock-race-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: lockRaceRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      const userLock = await pool.connect();
+      try {
+        await userLock.query('BEGIN');
+        await userLock.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [user.id]);
+        const finalization = finalizeReservation({ requestId: lockRaceRequestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 });
+        const admission = reserveCredits({ requestId: lockRaceRequestId, userId: user.id, kind: 'paid', credits: 20 });
+
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const { rows } = await pool.query(
+            `select count(*)::int as count from pg_stat_activity
+             where datname = current_database() and wait_event_type = 'Lock'`,
+          );
+          if (rows[0]?.count >= 2) break;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          if (attempt === 49) assert.fail('admission and finalization did not both reach the user lock');
+        }
+
+        const reservationProbe = await pool.connect();
+        try {
+          await reservationProbe.query('BEGIN');
+          await reservationProbe.query('SELECT request_id FROM credit_reservations WHERE request_id = $1 FOR UPDATE NOWAIT', [lockRaceRequestId]);
+          await reservationProbe.query('ROLLBACK');
+        } finally {
+          reservationProbe.release();
+        }
+        await userLock.query('COMMIT');
+        const [finalizationResult, admissionResult] = await Promise.all([finalization, admission]);
+        assert.equal(finalizationResult, 'settled');
+        assert.deepEqual(admissionResult, { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 20 });
+      } finally {
+        await userLock.query('ROLLBACK').catch(() => undefined);
+        userLock.release();
+      }
+
+      const reconciliationNow = new Date();
+      const staleRequestIds = [1, 2, 3].map((index) => `stale-${index}-${databaseName}`);
+      const freshRequestId = `fresh-${databaseName}`;
+      for (const staleRequestId of staleRequestIds) {
+        assert.equal((await reserveCredits({ requestId: staleRequestId, userId: user.id, kind: 'paid', credits: 10, now: new Date(reconciliationNow.getTime() - 10 * 60_000) })).ok, true);
+      }
+      assert.equal((await reserveCredits({ requestId: freshRequestId, userId: user.id, kind: 'paid', credits: 10, now: reconciliationNow })).ok, true);
+      assert.deepEqual(await reconcileStaleReservations(2, reconciliationNow), { released: 2 }, 'first bounded reconciliation page releases two stale rows');
+      assert.deepEqual(await reconcileStaleReservations(2, reconciliationNow), { released: 1 }, 'second page releases the remaining stale row');
+      assert.deepEqual(await reconcileStaleReservations(2, reconciliationNow), { released: 0 }, 'repeat reconciliation is idempotent');
+      const reconciliationRows = await db.select().from(creditReservations).where(eq(creditReservations.userId, user.id));
+      assert.equal(reconciliationRows.find((row) => row.requestId === freshRequestId)?.status, 'pending', 'fresh reservations must be skipped');
+      assert.ok(staleRequestIds.every((staleRequestId) => reconciliationRows.find((row) => row.requestId === staleRequestId)?.status === 'released'));
 
       const tokenHash = `hash-${databaseName}`;
       await db.insert(apiTokens).values({

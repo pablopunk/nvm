@@ -31,3 +31,24 @@ export function estimateInputTokensFromBody(bodyText: string): number {
 export function estimatePromptCredits(inputTokens: number, cost: ModelCost): number {
   return usdToCredits(computeUsdCost(cost, inputTokens, 0));
 }
+
+export function estimateRequestCredits(inputTokens: number, maxOutputTokens: number, cost: ModelCost): number {
+  return usdToCredits(computeUsdCost(cost, inputTokens, maxOutputTokens));
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : undefined;
+}
+
+/** Extract the provider-specific output cap from a parsed request body. */
+export function requestedMaxOutputTokens(body: unknown): number | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  const request = body as Record<string, unknown>;
+  return positiveInteger(request.max_tokens)
+    ?? positiveInteger(request.max_completion_tokens)
+    ?? (request.generationConfig && typeof request.generationConfig === 'object'
+      ? positiveInteger((request.generationConfig as Record<string, unknown>).maxOutputTokens)
+      : undefined);
+}

@@ -296,6 +296,7 @@ test('handleDedup reclaims stale in-flight row and returns undefined', async fun
   assert.equal(result, undefined);
   assert.ok(updates.length >= 1);
   assert.equal(updates[0].setValues.status, 'in_flight');
+  assert.equal(updates[0].setValues.requestId, STABLE_REQUEST_ID, 'reclaim assigns a new execution identity');
 });
 
 test('concurrent stale reclaim permits exactly one winner', async function concurrentStaleReclaimsOneWinner() {
@@ -393,4 +394,5 @@ test('handleDedup reclaims failed row and returns undefined', async function fai
   assert.equal(result, undefined);
   assert.ok(updates.length >= 1);
   assert.equal(updates[0].setValues.status, 'in_flight');
+  assert.equal(updates[0].setValues.requestId, STABLE_REQUEST_ID, 'failed retry assigns a new execution identity');
 });
