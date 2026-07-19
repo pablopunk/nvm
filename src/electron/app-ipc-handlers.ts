@@ -77,10 +77,9 @@ export interface AppIpcHandlersDeps {
   hasCapability: (capability: string) => boolean;
   processPlatform: NodeJS.Platform | string;
   getCameraMediaAccessStatus: () => string;
-  extensionWindowManager: { getState(id: string): unknown };
-  // biome-ignore lint/style/useNamingConvention: Electron API class name convention
-  BrowserWindow: {
-    fromWebContents(sender: unknown): { close(): void } | null | undefined;
+  extensionWindowManager: {
+    getStateForSender(sender: unknown): unknown;
+    closeForSender(sender: unknown): boolean;
   };
   logError: (message: string, data?: unknown, context?: unknown) => unknown;
   logWarn: (message: string, data?: unknown, context?: unknown) => unknown;
@@ -264,13 +263,12 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     return { ok: true, status };
   });
   ipcHandleMeasured('gh:status', () => deps.probeGh());
-  ipcHandleMeasured('extension-window:get-state', (_event, id) =>
-    deps.extensionWindowManager.getState(String(id || '')),
+  ipcHandleMeasured('extension-window:get-state', (event) =>
+    deps.extensionWindowManager.getStateForSender(event.sender),
   );
-  ipcHandleMeasured('extension-window:close', (event) => {
-    const win = deps.BrowserWindow.fromWebContents(event.sender);
-    win?.close();
-  });
+  ipcHandleMeasured('extension-window:close', (event) =>
+    deps.extensionWindowManager.closeForSender(event.sender),
+  );
   ipcHandleMeasured('logs:write', (_event, level, message, data) => {
     let method = deps.logInfo;
     if (level === 'error') {

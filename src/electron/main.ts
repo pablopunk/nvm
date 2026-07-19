@@ -8866,7 +8866,6 @@ app.whenReady().then(async () => {
     getCameraMediaAccessStatus: () =>
       systemPreferences.getMediaAccessStatus('camera'),
     extensionWindowManager,
-    BrowserWindow,
     logError,
     logWarn,
     loggerDebug,

@@ -291,7 +291,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       .getNevermindAuthStatus()
       .then((status) => setNevermindAuthed(Boolean(status.authed)))
       .catch(() => setNevermindAuthed(false));
-    window.nvm.getExtensionWindowState(windowId).then((state) => {
+    window.nvm.getExtensionWindowState().then((state) => {
       if (state?.view) {
         setView(state.view);
         setFormValues(seedFormValuesFromView(state.view));

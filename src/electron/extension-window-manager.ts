@@ -102,16 +102,108 @@ export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
   remembersFrame: false,
 } as const);
 
+const WINDOW_OPTION_KEYS = new Set([
+  'id',
+  'restoreKey',
+  'title',
+  'titleBar',
+  'chrome',
+  'width',
+  'height',
+  'size',
+  'alwaysOnTop',
+  'visibleOnAllSpaces',
+  'hideOnBlur',
+  'persistent',
+  'remembersFrame',
+]);
+const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+function invalidWindowInput(message: string): never {
+  throw new Error(`Invalid extension window input: ${message}`);
+}
+
+function finiteDimension(value: unknown, fallback: number, name: string) {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    invalidWindowInput(`${name} must be a finite number`);
+  return Math.round(value);
+}
+
+/** Validate only the bounded window-options structure, never ExtensionView itself. */
+export function normalizeExtensionWindowOptions(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    invalidWindowInput('options must be an object');
+  const options = value as Record<string, unknown>;
+  for (const key of Object.keys(options)) {
+    if (!WINDOW_OPTION_KEYS.has(key))
+      invalidWindowInput(`unknown option ${key}`);
+  }
+  for (const key of ['id', 'restoreKey'] as const) {
+    if (options[key] !== undefined) {
+      if (typeof options[key] !== 'string' || !STABLE_KEY.test(options[key]))
+        invalidWindowInput(`${key} must be a bounded stable key`);
+    }
+  }
+  if (options.title !== undefined && typeof options.title !== 'string')
+    invalidWindowInput('title must be a string');
+  if (
+    options.titleBar !== undefined &&
+    options.titleBar !== 'default' &&
+    options.titleBar !== 'hidden'
+  )
+    invalidWindowInput('titleBar must be default or hidden');
+  if (
+    options.chrome !== undefined &&
+    options.chrome !== 'default' &&
+    options.chrome !== 'none'
+  )
+    invalidWindowInput('chrome must be default or none');
+  if (
+    options.size !== undefined &&
+    options.size !== 'default' &&
+    options.size !== 'large'
+  )
+    invalidWindowInput('size must be default or large');
+  for (const key of [
+    'alwaysOnTop',
+    'visibleOnAllSpaces',
+    'hideOnBlur',
+    'persistent',
+    'remembersFrame',
+  ]) {
+    if (options[key] !== undefined && typeof options[key] !== 'boolean')
+      invalidWindowInput(`${key} must be a boolean`);
+  }
+  finiteDimension(
+    options.width,
+    EXTENSION_WINDOW_OPTION_DEFAULTS.width,
+    'width',
+  );
+  finiteDimension(
+    options.height,
+    EXTENSION_WINDOW_OPTION_DEFAULTS.height,
+    'height',
+  );
+  return { ...options };
+}
+
 export function extensionWindowSize(options: any = {}) {
   const large = options.size === 'large';
   return {
     width: Math.max(
       320,
-      Math.min(1600, Number(options.width ?? (large ? 900 : 560))),
+      Math.min(
+        1600,
+        finiteDimension(options.width, large ? 900 : 560, 'width'),
+      ),
     ),
     height: Math.max(
       240,
-      Math.min(1200, Number(options.height ?? (large ? 680 : 420))),
+      Math.min(
+        1200,
+        finiteDimension(options.height, large ? 680 : 420, 'height'),
+      ),
     ),
   };
 }
@@ -275,7 +367,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   ) {
     const normalizedView = deps.normalizeView(view);
     structuredClone(normalizedView);
-    const safeOptions = cloneSafeWindowOptionRecord(options);
+    const safeOptions = normalizeExtensionWindowOptions(options);
     const id = extensionWindowId(normalizedView, safeOptions, deps.hashValue);
     const existing = records.get(id);
     if (existing && !existing.win.isDestroyed()) {
@@ -444,10 +536,42 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       : null;
   }
 
+  /**
+   * Independent windows never authorize state reads by a renderer-supplied id.
+   * Electron gives us the exact sender object, which must belong to one live
+   * record. Palette and sibling renderers therefore cannot inspect each other.
+   */
+  function getStateForSender(sender: unknown) {
+    for (const record of records.values()) {
+      if (!record.win.isDestroyed() && record.win.webContents === sender) {
+        return { id: record.id, view: record.view, options: record.options };
+      }
+    }
+    return null;
+  }
+
+  function closeForSender(sender: unknown) {
+    for (const record of records.values()) {
+      if (!record.win.isDestroyed() && record.win.webContents === sender) {
+        record.win.close();
+        return true;
+      }
+    }
+    return false;
+  }
+
   function closeAll() {
     for (const record of records.values()) record.win.close();
     records.clear();
   }
 
-  return { records, createOrUpdate, executeWindowAction, getState, closeAll };
+  return {
+    records,
+    createOrUpdate,
+    executeWindowAction,
+    getState,
+    getStateForSender,
+    closeForSender,
+    closeAll,
+  };
 }
