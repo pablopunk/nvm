@@ -12,14 +12,14 @@ import {
   shell,
 } from 'electron';
 import {
+  EXTENSION_WINDOW_CAPABILITIES,
+  type ExtensionWindowSession,
+  hasExtensionWindowCapability,
+} from './extension-window-capabilities';
+import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
-import {
-  EXTENSION_WINDOW_CAPABILITIES,
-  hasExtensionWindowCapability,
-  type ExtensionWindowSession,
-} from './extension-window-capabilities';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;

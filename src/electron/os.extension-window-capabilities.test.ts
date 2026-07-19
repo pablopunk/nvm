@@ -56,6 +56,7 @@ test('drives every window capability from the injected OS and Linux session', ()
 
 test('detects Wayland from the injectable session environment', () => {
   const adapter = createOsAdapter({
+    // biome-ignore lint/style/useNamingConvention: This is the OS-defined environment variable name.
     environment: { XDG_SESSION_TYPE: 'wayland' },
     processPlatform: 'linux',
   });

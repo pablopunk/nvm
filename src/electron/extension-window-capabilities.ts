@@ -15,12 +15,17 @@ export function hasExtensionWindowCapability(
   platform: NodeJS.Platform,
   linuxSession: ExtensionWindowSession,
 ) {
-  if (capability === 'windows.always-on-top') return true;
-  if (capability === 'windows.all-spaces') return platform !== 'win32';
+  if (capability === 'windows.always-on-top') {
+    return true;
+  }
+  if (capability === 'windows.all-spaces') {
+    return platform !== 'win32';
+  }
   if (
     capability === 'windows.frame-restore' ||
     capability === 'windows.display-recovery'
-  )
+  ) {
     return platform !== 'linux' || linuxSession !== 'wayland';
+  }
   return false;
 }

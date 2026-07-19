@@ -7,7 +7,7 @@ import type {
 
 const view = { id: 'note', title: 'Note', type: 'editor' } as const;
 
-export function everyReleasedExtensionWindowCall(
+function everyReleasedExtensionWindowCall(
   ctx: ExtensionContext,
 ): ExtensionAction[] {
   return [
@@ -43,7 +43,9 @@ const extension = {
     _ctx: ExtensionContext,
     restoreKey: string,
   ): ExtensionWindowRestoreDescriptor | null {
-    if (restoreKey !== 'note') return null;
+    if (restoreKey !== 'note') {
+      return null;
+    }
     return {
       view,
       options: {
@@ -65,8 +67,9 @@ const extension = {
           'windows.frame-restore',
           'windows.display-recovery',
         ] as const;
-        for (const capability of capabilities)
+        for (const capability of capabilities) {
           ctx.system.capabilities.has(capability);
+        }
         return ctx.windows.create(view, {
           id: 'note',
           restoreKey: 'note',
@@ -77,4 +80,4 @@ const extension = {
   ],
 } satisfies NevermindExtension;
 
-export default extension;
+export { everyReleasedExtensionWindowCall, extension };

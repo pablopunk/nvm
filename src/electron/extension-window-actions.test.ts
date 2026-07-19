@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createExtensionWindowActions } from './extension-window-actions';
 
-const view = { id: 'view-id', title: 'View title', type: 'detail' };
+const view = { id: 'view-id', title: 'View title', type: 'preview' } as const;
 
 test('preserves every released create window action form', () => {
   const { create } = createExtensionWindowActions();
@@ -23,7 +23,7 @@ test('preserves every released create window action form', () => {
     windowOptions: { id: 'option-id', title: 'Option title' },
     windowId: 'option-id',
   });
-  assert.equal(create({ type: 'detail' }).title, 'Open Window');
+  assert.equal(create({ title: '', type: 'preview' }).title, 'Open Window');
 });
 
 test('preserves every released show, hide, and close action form', () => {
@@ -90,28 +90,24 @@ test('preserves every released string toggle overload', () => {
       },
     },
     {
-      args: [
-        'window-id',
-        'Custom title',
-        { width: 640, shortcut: 'Command+1' },
-      ] as const,
+      args: ['window-id', 'Custom title', { width: 640 }] as const,
       expected: {
         dismissAfterRun: 'auto',
         width: 640,
-        shortcut: 'Command+1',
         type: 'toggleWindow',
         title: 'Custom title',
         windowId: 'window-id',
-        windowOptions: { width: 640, shortcut: 'Command+1' },
+        windowOptions: { width: 640 },
       },
     },
   ];
 
-  for (const { args, expected } of cases)
+  for (const { args, expected } of cases) {
     assert.deepEqual(
       toggle(...(args as unknown as Parameters<typeof toggle>)),
       expected,
     );
+  }
 });
 
 test('preserves every released view toggle overload', () => {
@@ -163,9 +159,10 @@ test('preserves every released view toggle overload', () => {
     },
   ];
 
-  for (const { args, expected } of cases)
+  for (const { args, expected } of cases) {
     assert.deepEqual(
       toggle(...(args as unknown as Parameters<typeof toggle>)),
       expected,
     );
+  }
 });

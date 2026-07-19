@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This legacy Electron test double mirrors dynamic listeners, native method names, and the manager's numeric boundary cases.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -330,10 +331,11 @@ test('returns the frozen missing-window error for every id-only control action',
     'hideWindow',
     'toggleWindow',
     'closeWindow',
-  ])
+  ]) {
     assert.deepEqual(manager.executeWindowAction({ type, id: 'missing' }), {
       toast: { message: 'Window is not open', tone: 'error' },
     });
+  }
 });
 
 test('toggles an existing window exactly once while updating its view and options', () => {

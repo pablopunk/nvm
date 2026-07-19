@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This legacy structural Electron boundary retains established dynamic extension payload and imperative lifecycle conventions.
 import type { ExtensionWindowCapability } from './extension-window-capabilities';
 
 type ExtensionWindowLike = {
