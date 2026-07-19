@@ -1,5 +1,10 @@
+// biome-ignore-all lint/style/noMagicNumbers: Type equality requires distinct literal discriminator branches.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {
+  EXTENSION_WINDOW_CAPABILITIES,
+  type ExtensionWindowCapability as HostExtensionWindowCapability,
+} from './electron/extension-window-capabilities';
 import type {
   CommandAccessoryTone,
   CommandFormFieldType,
@@ -23,6 +28,7 @@ import type {
   ForegroundColor,
   PatchMode,
   ExtensionPermission as PublicExtensionPermission,
+  ExtensionWindowCapability as PublicExtensionWindowCapability,
   ViewPresentation,
   ViewSize,
 } from './resources/nevermind-extension-api';
@@ -39,6 +45,10 @@ type AssertEqual<A, B> = Equal<A, B> extends true ? true : never;
 const permissionContract: AssertEqual<
   HostExtensionPermission,
   PublicExtensionPermission
+> = true;
+const extensionWindowCapabilityContract: AssertEqual<
+  HostExtensionWindowCapability,
+  PublicExtensionWindowCapability
 > = true;
 const patchModeContract: AssertEqual<
   NonNullable<CommandViewPatch['mode']>,
@@ -96,8 +106,9 @@ const viewColumnsContract: AssertEqual<
   NonNullable<ExtensionView['columns']>
 > = true;
 
-export const modelContractAssertions = {
+const modelContractAssertions = {
   permissionContract,
+  extensionWindowCapabilityContract,
   patchModeContract,
   foregroundContract,
   accessoryToneContract,
@@ -116,6 +127,13 @@ export const modelContractAssertions = {
 };
 
 test('host model shares canonical public extension API literal contracts', () => {
-  for (const value of Object.values(modelContractAssertions))
+  for (const value of Object.values(modelContractAssertions)) {
     assert.equal(value, true);
+  }
+  assert.deepEqual(EXTENSION_WINDOW_CAPABILITIES, [
+    'windows.always-on-top',
+    'windows.all-spaces',
+    'windows.frame-restore',
+    'windows.display-recovery',
+  ]);
 });

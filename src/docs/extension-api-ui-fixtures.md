@@ -30,6 +30,12 @@ When adding or changing an extension API method that renders UI:
 - `ctx.ui.camera`
 - `ctx.ui.confirm`
 - `ctx.ui.toast`
+- `ctx.windows.create`, `ctx.windows.toggle`, and `ctx.windows.close`
+
+The independent-window fixture is the manual rendered-UI companion to the
+compile and runtime tables. It exercises a host-rendered view in a separate
+window; overload compatibility, lifecycle transitions, persistence diagnostics,
+and OS/session capability degradation remain automated contract-test coverage.
 
 ## Loading Model
 

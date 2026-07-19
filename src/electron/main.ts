@@ -125,6 +125,7 @@ import { createStandaloneExtensionFork } from './extension-manifest';
 import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { createExtensionStorage as createPersistentExtensionStorage } from './extension-storage';
 import { createExtensionUiApi } from './extension-ui-api';
+import { createExtensionWindowActions } from './extension-window-actions';
 import { createExtensionWindowManager } from './extension-window-manager';
 import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
 import { initExtensionContext } from './extensions/_context';
@@ -270,6 +271,7 @@ const extensionWindowManager = createExtensionWindowManager({
   getDisplayNearestPoint: (point) => screen.getDisplayNearestPoint(point),
   normalizeView: (view) => normalizeView(view, null),
   hashValue,
+  hasCapability,
   installNavigationPolicy: installExternalNavigationPolicy,
   isTrustedPage: (url, id) =>
     isTrustedExtensionWindowPage(
@@ -5936,69 +5938,7 @@ function createExtensionContext(
     input: {
       prompt: buildPromptAction,
     },
-    windows: {
-      create: (view, options: any = {}) => ({
-        dismissAfterRun: 'auto',
-        type: 'createWindow',
-        title: options.title || view?.title || 'Open Window',
-        view,
-        windowOptions: options,
-        windowId: options.id || view?.id,
-      }),
-      show: (id, title = 'Show Window', options: any = {}) => ({
-        dismissAfterRun: 'auto',
-        ...options,
-        type: 'showWindow',
-        title,
-        windowId: id,
-      }),
-      hide: (id, title = 'Hide Window', options: any = {}) => ({
-        dismissAfterRun: 'auto',
-        ...options,
-        type: 'hideWindow',
-        title,
-        windowId: id,
-      }),
-      toggle: (
-        idOrView,
-        titleOrOptions: any = 'Toggle Window',
-        options: any = {},
-      ) => {
-        if (typeof idOrView === 'string')
-          return {
-            dismissAfterRun: 'auto',
-            ...options,
-            type: 'toggleWindow',
-            title:
-              typeof titleOrOptions === 'string'
-                ? titleOrOptions
-                : titleOrOptions.title || 'Toggle Window',
-            windowId: idOrView,
-            windowOptions:
-              typeof titleOrOptions === 'string' ? options : titleOrOptions,
-          };
-        const windowOptions =
-          typeof titleOrOptions === 'string' ? options : titleOrOptions || {};
-        return {
-          dismissAfterRun: 'auto',
-          type: 'toggleWindow',
-          title:
-            typeof titleOrOptions === 'string'
-              ? titleOrOptions
-              : windowOptions.title || idOrView?.title || 'Toggle Window',
-          view: idOrView,
-          windowOptions,
-          windowId: windowOptions.id || idOrView?.id,
-        };
-      },
-      close: (id, title = 'Close Window', options: any = {}) => ({
-        dismissAfterRun: 'auto',
-        ...options,
-        type: 'closeWindow',
-        title,
-        windowId: id,
-      }),
-    },
+    windows: createExtensionWindowActions(),
     clipboard: {
       history: canUseClipboard
         ? {

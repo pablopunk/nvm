@@ -171,6 +171,14 @@
       "surface": "system-actions-settings"
     },
     {
+      "key": "os-injected-platform-cd928e82d389",
+      "file": "src/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:EXTENSION_WINDOW_CAPABILITIES.includes( capability as (typeof EXTENSION_WINDOW_CAPABILITIES)[number], )::injected-platform::if ( EXTENSION_WINDOW_CAPABILITIES.includes( capability as (typeof EXTENSION_WINDOW_CAPABILITIES…#cd928e82d389::thenStatement.expression.arguments[1]",
+      "disposition": "capability-layer",
+      "surface": "window-behavior"
+    },
+    {
       "key": "os-injected-platform-06dc37aa7f17",
       "file": "src/electron/os.ts",
       "category": "injected-platform",

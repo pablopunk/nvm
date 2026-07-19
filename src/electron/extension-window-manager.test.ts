@@ -1,7 +1,9 @@
+// biome-ignore-all lint: This legacy Electron test double mirrors dynamic listeners, native method names, and the manager's numeric boundary cases.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createExtensionWindowManager,
+  EXTENSION_WINDOW_OPTION_DEFAULTS,
   extensionWindowId,
   extensionWindowSize,
 } from './extension-window-manager';
@@ -22,6 +24,9 @@ class FakeBrowserWindow {
   loadedUrl = '';
   loadedFile: { path: string; options?: unknown } | null = null;
   handlers = new Map<string, (...args: any[]) => void>();
+  showCount = 0;
+  hideCount = 0;
+  focusCount = 0;
   webContents = {
     send: (channel: string, payload: unknown) =>
       this.sent.push({ channel, payload }),
@@ -75,12 +80,16 @@ class FakeBrowserWindow {
     return this.visible;
   }
   show() {
+    this.showCount += 1;
     this.visible = true;
   }
   hide() {
+    this.hideCount += 1;
     this.visible = false;
   }
-  focus() {}
+  focus() {
+    this.focusCount += 1;
+  }
   close() {
     this.destroyed = true;
     this.handlers.get('closed')?.();
@@ -93,9 +102,13 @@ class FakeBrowserWindow {
   }
 }
 
-function createManager() {
+function createManager(unsupportedCapabilities: string[] = []) {
   FakeBrowserWindow.instances = [];
   const trustedChecks: Array<{ id: string; url: string }> = [];
+  const diagnostics: Array<{
+    message: string;
+    data?: Record<string, unknown>;
+  }> = [];
   const manager = createExtensionWindowManager({
     BrowserWindow: FakeBrowserWindow,
     preloadPath: '/preload.cjs',
@@ -109,6 +122,8 @@ function createManager() {
     }),
     normalizeView: (view) => ({ ...view, normalized: true }),
     hashValue: () => 'hash',
+    hasCapability: (capability) =>
+      !unsupportedCapabilities.includes(capability),
     installNavigationPolicy: (_win, isTrusted) => {
       trustedChecks.push({ id: 'installed', url: 'policy' });
       assert.equal(isTrusted('trusted-url'), true);
@@ -117,12 +132,30 @@ function createManager() {
       trustedChecks.push({ id, url });
       return url === 'trusted-url';
     },
+    debug: (message, data) => diagnostics.push({ message, data }),
   });
-  return { manager, trustedChecks };
+  return { manager, trustedChecks, diagnostics };
 }
 
 test('extension window helpers clamp size and derive stable ids', () => {
+  assert.deepEqual(EXTENSION_WINDOW_OPTION_DEFAULTS, {
+    titleBar: 'default',
+    chrome: 'default',
+    size: 'default',
+    width: 560,
+    height: 420,
+    alwaysOnTop: true,
+    visibleOnAllSpaces: false,
+    hideOnBlur: false,
+    persistent: false,
+    remembersFrame: false,
+  });
+  assert.deepEqual(extensionWindowSize(), { width: 560, height: 420 });
   assert.deepEqual(extensionWindowSize({ width: 10, height: 10 }), {
+    width: 320,
+    height: 240,
+  });
+  assert.deepEqual(extensionWindowSize({ width: 0, height: 0 }), {
     width: 320,
     height: 240,
   });
@@ -130,6 +163,10 @@ test('extension window helpers clamp size and derive stable ids', () => {
     width: 900,
     height: 680,
   });
+  assert.deepEqual(
+    extensionWindowSize({ size: 'large', width: 0, height: 0 }),
+    { width: 320, height: 240 },
+  );
   assert.deepEqual(extensionWindowSize({ width: 9999, height: 9999 }), {
     width: 1600,
     height: 1200,
@@ -174,6 +211,14 @@ test('creates extension windows with hardened renderer preferences and state', (
     { id: 'installed', url: 'policy' },
     { id: 'panel', url: 'trusted-url' },
   ]);
+  assert.deepEqual(win.alwaysOnTop, [{ flag: true, level: 'floating' }]);
+  assert.deepEqual(win.visibleOnAllWorkspaces, [
+    { flag: false, options: { visibleOnFullScreen: true } },
+  ]);
+  assert.equal(win.handlers.has('blur'), false);
+  win.handlers.get('once:ready-to-show')?.();
+  assert.equal(win.visible, true);
+  assert.deepEqual(win.bounds, { x: 230, y: 210, width: 560, height: 420 });
 });
 
 test('updates existing extension windows in place and sends clone-safe view payloads', () => {
@@ -257,4 +302,176 @@ test('executes toggle and cleanup actions against tracked windows', () => {
   manager.closeAll();
   assert.equal(win.destroyed, true);
   assert.equal(manager.getState('panel'), null);
+});
+
+test('shows, focuses, hides, and closes existing windows', () => {
+  const { manager } = createManager();
+  const record = manager.createOrUpdate(
+    { id: 'panel', title: 'Panel' },
+    { hideOnBlur: true },
+  );
+  const win = record.win as FakeBrowserWindow;
+
+  assert.equal(win.handlers.has('blur'), true);
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'showWindow', id: 'panel' }),
+    { toast: { message: 'Shown window' } },
+  );
+  assert.equal(win.visible, true);
+  assert.equal(win.focusCount, 1);
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'hideWindow', id: 'panel' }),
+    { toast: { message: 'Hidden window' } },
+  );
+  assert.equal(win.visible, false);
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'closeWindow', id: 'panel' }),
+    { toast: { message: 'Closed window' } },
+  );
+  assert.equal(win.destroyed, true);
+  assert.equal(manager.getState('panel'), null);
+});
+
+test('returns the frozen missing-window error for every id-only control action', () => {
+  const { manager } = createManager();
+  for (const type of [
+    'showWindow',
+    'hideWindow',
+    'toggleWindow',
+    'closeWindow',
+  ]) {
+    assert.deepEqual(manager.executeWindowAction({ type, id: 'missing' }), {
+      toast: { message: 'Window is not open', tone: 'error' },
+    });
+  }
+});
+
+test('toggles an existing window exactly once while updating its view and options', () => {
+  const { manager } = createManager();
+  const record = manager.createOrUpdate(
+    { id: 'panel', title: 'Old' },
+    { width: 400 },
+  );
+  const win = record.win as FakeBrowserWindow;
+  win.handlers.get('once:ready-to-show')?.();
+  assert.equal(win.visible, true);
+
+  const showsBeforeHideToggle = win.showCount;
+  assert.deepEqual(
+    manager.executeWindowAction({
+      type: 'toggleWindow',
+      view: { id: 'panel', title: 'New' },
+      windowOptions: { width: 640 },
+    }),
+    { toast: { message: 'Toggled window' } },
+  );
+  assert.equal(win.visible, false);
+  assert.equal(win.showCount, showsBeforeHideToggle);
+  assert.equal(win.hideCount, 1);
+
+  const hidesBeforeShowToggle = win.hideCount;
+  manager.executeWindowAction({
+    type: 'toggleWindow',
+    view: { id: 'panel', title: 'Newest' },
+    windowOptions: { height: 480 },
+  });
+  assert.equal(win.visible, true);
+  assert.equal(win.hideCount, hidesBeforeShowToggle);
+  assert.equal(win.showCount, showsBeforeHideToggle + 1);
+  assert.equal(win.focusCount, 1);
+  assert.equal(win.title, 'Newest');
+  assert.deepEqual(win.bounds, { x: 310, y: 210, width: 640, height: 480 });
+});
+
+test('keeps persistent windows without restore keys live and reports session-only persistence', () => {
+  const { manager, diagnostics } = createManager();
+  const result = manager.executeWindowAction({
+    type: 'createWindow',
+    view: { id: 'panel', title: 'Panel' },
+    windowOptions: { persistent: true },
+  });
+
+  assert.deepEqual(result, {
+    toast: { message: 'Opened window' },
+    persistence: 'session-only',
+    diagnostics: [{ reason: 'missing-restore-key' }],
+  });
+  assert.notEqual(manager.getState('panel'), null);
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'hideWindow', id: 'panel' }),
+    {
+      toast: { message: 'Hidden window' },
+      persistence: 'session-only',
+      diagnostics: [{ reason: 'missing-restore-key' }],
+    },
+  );
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'showWindow', id: 'panel' }),
+    {
+      toast: { message: 'Shown window' },
+      persistence: 'session-only',
+      diagnostics: [{ reason: 'missing-restore-key' }],
+    },
+  );
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'toggleWindow', id: 'panel' }),
+    {
+      toast: { message: 'Toggled window' },
+      persistence: 'session-only',
+      diagnostics: [{ reason: 'missing-restore-key' }],
+    },
+  );
+  assert.deepEqual(diagnostics, [
+    {
+      message: 'extensionWindow.persistenceDegraded',
+      data: {
+        id: 'panel',
+        persistence: 'session-only',
+        reason: 'missing-restore-key',
+      },
+    },
+  ]);
+  assert.deepEqual(
+    manager.executeWindowAction({ type: 'closeWindow', id: 'panel' }),
+    {
+      toast: { message: 'Closed window' },
+      persistence: 'session-only',
+      diagnostics: [{ reason: 'missing-restore-key' }],
+    },
+  );
+  assert.equal(manager.getState('panel'), null);
+});
+
+test('opens in degraded mode and skips unsupported native window methods', () => {
+  const unsupported = [
+    'windows.always-on-top',
+    'windows.all-spaces',
+    'windows.frame-restore',
+    'windows.display-recovery',
+  ];
+  const { manager, diagnostics } = createManager(unsupported);
+  const result = manager.executeWindowAction({
+    type: 'createWindow',
+    view: { id: 'panel', title: 'Panel' },
+    windowOptions: {
+      visibleOnAllSpaces: true,
+      remembersFrame: true,
+    },
+  });
+  const win = FakeBrowserWindow.instances[0];
+
+  assert.deepEqual(win.alwaysOnTop, []);
+  assert.deepEqual(win.visibleOnAllWorkspaces, []);
+  assert.deepEqual(result, {
+    toast: { message: 'Opened window' },
+    degradedCapabilities: unsupported,
+    diagnostics: unsupported.map((capability) => ({
+      reason: 'unsupported-capability',
+      capability,
+    })),
+  });
+  assert.deepEqual(
+    diagnostics.map(({ data }) => data?.capability),
+    unsupported,
+  );
 });

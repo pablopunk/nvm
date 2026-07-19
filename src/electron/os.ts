@@ -12,6 +12,11 @@ import {
   shell,
 } from 'electron';
 import {
+  EXTENSION_WINDOW_CAPABILITIES,
+  type ExtensionWindowSession,
+  hasExtensionWindowCapability,
+} from './extension-window-capabilities';
+import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
@@ -36,6 +41,7 @@ export type OsAdapterDependencies = {
   homeDirectory?: string;
   pathFacade?: OsPathFacade;
   processPlatform?: NodeJS.Platform;
+  sessionType?: ExtensionWindowSession;
   shell?: typeof shell;
   watch?: (
     filename: string,
@@ -71,6 +77,12 @@ export function validatedWindowsImageName(rawName: string) {
 export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   const processPlatform = dependencies.processPlatform || process.platform;
   const environment = dependencies.environment || process.env;
+  const sessionType =
+    dependencies.sessionType ||
+    (String(environment.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' ||
+    environment.WAYLAND_DISPLAY
+      ? 'wayland'
+      : 'x11');
   const homeDirectory = dependencies.homeDirectory || os.homedir();
   const pathFacade =
     dependencies.pathFacade ||
@@ -90,6 +102,16 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   }
 
   function hasCapabilityForPlatform(capability: string) {
+    if (
+      EXTENSION_WINDOW_CAPABILITIES.includes(
+        capability as (typeof EXTENSION_WINDOW_CAPABILITIES)[number],
+      )
+    )
+      return hasExtensionWindowCapability(
+        capability as (typeof EXTENSION_WINDOW_CAPABILITIES)[number],
+        processPlatform,
+        sessionType,
+      );
     if (capability === 'app-icons')
       return dependent({ darwin: true, win32: true }, false);
     if (capability === 'ocr' || capability === 'screen-capture')

@@ -1,4 +1,4 @@
-// biome-ignore-all lint: Public extension declarations preserve released type-alias and void compatibility contracts.
+// biome-ignore-all lint: This canonical declaration intentionally favors extension-author-readable aliases and established public API shapes while preserving released type-alias and void compatibility contracts.
 /**
  * Nevermind Extension API
  *
@@ -68,6 +68,12 @@ export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden';
 export type ViewSize = 'default' | 'large';
 export type ViewPresentation = 'root' | 'stacked' | 'preview';
 export type PatchMode = 'patch' | 'replace' | 'prepend' | 'append';
+/** Independent-window behavior reported by the host OS/session capability layer. */
+export type ExtensionWindowCapability =
+  | 'windows.always-on-top'
+  | 'windows.all-spaces'
+  | 'windows.frame-restore'
+  | 'windows.display-recovery';
 export type ForegroundColor =
   | 'yellow'
   | 'blue'
@@ -224,21 +230,59 @@ export type ExtensionClipboardReadResult =
   | { type: 'empty' };
 
 export type ExtensionWindowOptions = {
-  /** Stable id for reusing and controlling a window. Defaults to the view id/title. */
+  /** Stable id local to the current extension owner. Defaults to `view.id`, then a deterministic hash. It is not a relaunch restore key. */
   id?: string;
+  /** Stable key passed back to this extension's `restoreWindow` callback after relaunch. It does not identify the live window. */
+  restoreKey?: string;
+  /** Native window title. Defaults to the view title, then `Nevermind`. */
   title?: string;
-  /** Native window title bar. Use `hidden` for title-less floating companion windows. */
+  /** Native window title bar. Defaults to `default`; use `hidden` for title-less floating companion windows. */
   titleBar?: 'default' | 'hidden';
-  /** Host chrome around the view. Use `none` for edge-to-edge companion tools. */
+  /** Host chrome around the view. Defaults to `default`; use `none` for edge-to-edge companion tools. */
   chrome?: 'default' | 'none';
+  /** Window width. Defaults to 560 (`size: 'large'`: 900) and is clamped to 320–1600; explicit zero is accepted and clamps to 320. */
   width?: number;
+  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200; explicit zero is accepted and clamps to 240. */
   height?: number;
+  /** Named dimension preset. Defaults to `default`. Explicit width/height take precedence. */
   size?: ViewSize;
+  /** Keep the window above normal windows. Defaults to true. Check `windows.always-on-top` for native support. */
   alwaysOnTop?: boolean;
+  /** Show the window on every workspace where supported. Defaults to false. Check `windows.all-spaces`. */
   visibleOnAllSpaces?: boolean;
+  /** Hide the live window when it loses focus. Defaults to false. */
   hideOnBlur?: boolean;
+  /**
+   * Retain the window for relaunch restoration. Defaults to false.
+   *
+   * Relaunch restoration requires `restoreKey`. For backward compatibility,
+   * `persistent: true` without a restore key remains fully functional for the
+   * current session but is not restored after relaunch; results report
+   * `persistence: 'session-only'` and diagnostics report `missing-restore-key`.
+   */
   persistent?: boolean;
+  /** Remember the owner-local id's frame after close where supported. Defaults to false. Check `windows.frame-restore` and `windows.display-recovery`. */
   remembersFrame?: boolean;
+};
+
+/** Fresh descriptor returned by the current extension when the host restores a persistent window. */
+export type ExtensionWindowRestoreDescriptor = {
+  view: ExtensionView;
+  options?: ExtensionWindowOptions;
+};
+
+/** Observable compatibility and platform details returned after a window action executes. */
+export type ExtensionWindowActionResult = {
+  toast: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
+  persistence?: 'relaunch' | 'session-only';
+  degradedCapabilities?: ExtensionWindowCapability[];
+  diagnostics?: Array<
+    | { reason: 'missing-restore-key' }
+    | {
+        reason: 'unsupported-capability';
+        capability: ExtensionWindowCapability;
+      }
+  >;
 };
 
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
@@ -1060,7 +1104,7 @@ export type ExtensionClipboardHistory = {
 export type ExtensionSystem = {
   /** Display label for the host OS, e.g. `macOS`. */
   os: string;
-  capabilities: { has(id: string): boolean };
+  capabilities: { has(id: ExtensionWindowCapability | string): boolean };
   labels: {
     revealInFileManager: string;
     previewFile: string;
@@ -1349,29 +1393,47 @@ export type ExtensionContext = {
     ): ExtensionAction;
   };
 
-  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. */
+  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return actions; execution results expose persistence and capability degradation. */
   windows: {
-    /** Open or update an independent window rendering the given host-owned view. */
+    /** Open or update, show, and focus an independent window rendering the given host-owned view. The action title is `options.title`, then `view.title`, then `Open Window`. */
     create(
       view: ExtensionView,
       options?: ExtensionWindowOptions,
     ): ExtensionAction;
+    /** Show and focus an existing owner-local window. Missing windows return an error result. */
     show(
       id: string,
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
+    /** Hide an existing owner-local window without destroying it. Missing windows return an error result. */
     hide(
       id: string,
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** Toggle an existing window by id, or create it first when given a fallback view plus stable `options.id`. */
+    /** Toggle an existing owner-local window exactly once. Missing id-only targets return an error. */
+    toggle(id: string): ExtensionAction;
+    toggle(id: string, title: string): ExtensionAction;
+    toggle(id: string, options: ExtensionWindowOptions): ExtensionAction;
     toggle(
-      idOrView: string | ExtensionView,
-      titleOrOptions?: string | ExtensionWindowOptions,
-      options?: ExtensionWindowOptions,
+      id: string,
+      title: string,
+      options: ExtensionWindowOptions,
     ): ExtensionAction;
+    /** Toggle an existing window resolved from the view/options id, or create it when missing. */
+    toggle(view: ExtensionView): ExtensionAction;
+    toggle(view: ExtensionView, title: string): ExtensionAction;
+    toggle(
+      view: ExtensionView,
+      options: ExtensionWindowOptions,
+    ): ExtensionAction;
+    toggle(
+      view: ExtensionView,
+      title: string,
+      options: ExtensionWindowOptions,
+    ): ExtensionAction;
+    /** Destroy an existing owner-local window. Missing windows return an error result. */
     close(
       id: string,
       title?: string,
@@ -1613,6 +1675,17 @@ export type NevermindExtension = {
   capabilities?: ExtensionCapability[];
   /** @deprecated Use `capabilities`. Used only when `capabilities` is absent. */
   permissions?: ExtensionPermission[];
+  /**
+   * Rebuild a persistent window from current extension code after relaunch.
+   * The host invokes only the currently enabled extension that owns the saved
+   * restore key, freshly normalizes a returned descriptor, and purges saved
+   * restoration when this returns null. Views and action handlers are never
+   * serialized as restoration state.
+   */
+  restoreWindow?(
+    ctx: ExtensionContext,
+    restoreKey: string,
+  ): ExtensionWindowRestoreDescriptor | null;
   /** Shorthand for search-visible durable actions with imperative `run(ctx)`. */
   commands?: ExtensionCommand[];
   /**
