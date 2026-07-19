@@ -121,8 +121,7 @@ const api: NevermindApi = {
   shortcutReady: () => invokeMeasured('palette:shortcut-ready'),
   requestCameraAccess: () => invokeMeasured('camera:request-access'),
   getGhStatus: () => invokeMeasured('gh:status'),
-  getExtensionWindowState: (id) =>
-    invokeMeasured('extension-window:get-state', id),
+  getExtensionWindowState: () => invokeMeasured('extension-window:get-state'),
   closeExtensionWindow: () => invokeMeasured('extension-window:close'),
   log: (level, message, data) =>
     invokeMeasured('logs:write', level, message, data),

@@ -224,7 +224,7 @@ export type NevermindApi = {
     callback: (payload?: OpenActionViewPayload) => void,
   ) => () => void;
   onAiChatEvent: (callback: (event: AiChatEvent) => void) => () => void;
-  getExtensionWindowState: (id: string) => Promise<{
+  getExtensionWindowState: () => Promise<{
     id: string;
     view: CommandView;
     options?: Record<string, unknown>;

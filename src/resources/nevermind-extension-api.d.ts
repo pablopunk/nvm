@@ -265,6 +265,39 @@ export type ExtensionWindowOptions = {
   remembersFrame?: boolean;
 };
 
+/** Host-owned autosave settings for an editor draft. Drafts are scoped to the owning extension and key. */
+export type ExtensionEditorDraftOptions = {
+  key: string;
+  version: string | number;
+  autosave?: { debounceMs?: number };
+  /** Invoked only when an existing draft has a different version. */
+  onConflict?: ExtensionAction;
+};
+
+/** Version conflict injected by the host into an editor draft's configured conflict action. */
+export type ExtensionDraftConflict = {
+  key: string;
+  storedVersion: string | number;
+  storedContent: string;
+  currentVersion: string | number;
+  currentContent: string;
+};
+
+/** Resolve an editor draft conflict. Migration must supply replacement content. */
+export type ExtensionDraftResolution =
+  | {
+      type: 'draftResolution';
+      key: string;
+      resolution: 'reset' | 'restore-old';
+      content?: never;
+    }
+  | {
+      type: 'draftResolution';
+      key: string;
+      resolution: 'migrate';
+      content: string;
+    };
+
 /** Fresh descriptor returned by the current extension when the host restores a persistent window. */
 export type ExtensionWindowRestoreDescriptor = {
   view: ExtensionView;
@@ -311,6 +344,7 @@ export type ExtensionActionResult =
   | ExtensionView
   | ExtensionAction
   | ExtensionToastResult
+  | ExtensionDraftResolution
   | {
       view?: ExtensionView | null;
       action?: ExtensionAction;
@@ -340,6 +374,8 @@ export type ExtensionAction = {
   formValues?: Record<string, ExtensionFormValue>;
   /** Current text injected by the host when an editor view's `submitAction` runs. */
   editorContent?: string;
+  /** Draft-version conflict injected only into the configured editor conflict action. */
+  draftConflict?: ExtensionDraftConflict;
   /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
   selectedItemId?: string;
   /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
@@ -507,6 +543,8 @@ export type ExtensionView = {
   presentation?: ViewPresentation;
   subtitle?: string;
   content?: string;
+  /** Optional host-owned draft lifecycle for editor views only. */
+  draft?: ExtensionEditorDraftOptions;
   /** Placeholder for editable text surfaces such as `ctx.ui.editor(...)`. */
   placeholder?: string;
   /** Text format for editable text surfaces. Markdown editors get a host-rendered preview. */

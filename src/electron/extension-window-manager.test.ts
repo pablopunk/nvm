@@ -6,6 +6,7 @@ import {
   EXTENSION_WINDOW_OPTION_DEFAULTS,
   extensionWindowId,
   extensionWindowSize,
+  normalizeExtensionWindowOptions,
 } from './extension-window-manager';
 
 class FakeBrowserWindow {
@@ -171,6 +172,19 @@ test('extension window helpers clamp size and derive stable ids', () => {
     width: 1600,
     height: 1200,
   });
+  assert.throws(() => extensionWindowSize({ width: Number.NaN }), /finite/);
+  assert.throws(
+    () => normalizeExtensionWindowOptions({ unknown: true }),
+    /unknown option/,
+  );
+  assert.throws(
+    () => normalizeExtensionWindowOptions({ id: '' }),
+    /stable key/,
+  );
+  assert.throws(
+    () => normalizeExtensionWindowOptions({ alwaysOnTop: 'yes' }),
+    /boolean/,
+  );
   assert.equal(
     extensionWindowId({ title: 'A' }, {}, () => 'abc'),
     'window:abc',
@@ -183,6 +197,25 @@ test('extension window helpers clamp size and derive stable ids', () => {
     extensionWindowId({ id: 'view-id' }, { id: 'option-id' }, () => 'abc'),
     'option-id',
   );
+});
+
+test('independent-window state and close bind to the exact renderer sender', () => {
+  const { manager } = createManager();
+  const record = manager.createOrUpdate(
+    { id: 'private-note', title: 'Private note' },
+    { id: 'private-note' },
+  );
+  const sibling = { id: 'sibling-renderer' };
+
+  assert.equal(manager.getStateForSender(sibling), null);
+  assert.equal(manager.closeForSender(sibling), false);
+  assert.deepEqual(manager.getStateForSender(record.win.webContents), {
+    id: 'private-note',
+    view: { id: 'private-note', title: 'Private note', normalized: true },
+    options: { id: 'private-note' },
+  });
+  assert.equal(manager.closeForSender(record.win.webContents), true);
+  assert.equal(record.win.isDestroyed(), true);
 });
 
 test('creates extension windows with hardened renderer preferences and state', () => {
@@ -230,7 +263,6 @@ test('updates existing extension windows in place and sends clone-safe view payl
       width: 400,
       height: 300,
       visibleOnAllSpaces: true,
-      onClick: () => 'ignored',
     },
   );
   const record = manager.createOrUpdate(
@@ -242,7 +274,6 @@ test('updates existing extension windows in place and sends clone-safe view payl
       height: 360,
       alwaysOnTop: false,
       visibleOnAllSpaces: false,
-      onClick: () => 'ignored',
     },
   );
   const win = record.win as FakeBrowserWindow;

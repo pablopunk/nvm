@@ -1,11 +1,24 @@
 import type {
   ExtensionAction,
   ExtensionContext,
+  ExtensionDraftResolution,
   ExtensionWindowRestoreDescriptor,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
 
-const view = { id: 'note', title: 'Note', type: 'editor' } as const;
+const view = {
+  id: 'note',
+  title: 'Note',
+  type: 'editor',
+  draft: { key: 'note:primary', version: 1, autosave: { debounceMs: 500 } },
+} as const;
+
+const migratedDraft: ExtensionDraftResolution = {
+  type: 'draftResolution',
+  key: 'note:primary',
+  resolution: 'migrate',
+  content: 'migrated',
+};
 
 function everyReleasedExtensionWindowCall(
   ctx: ExtensionContext,
@@ -80,4 +93,4 @@ const extension = {
   ],
 } satisfies NevermindExtension;
 
-export { everyReleasedExtensionWindowCall, extension };
+export { everyReleasedExtensionWindowCall, extension, migratedDraft };

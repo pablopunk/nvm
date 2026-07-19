@@ -75,10 +75,12 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     hasCapability: () => true,
     processPlatform: 'darwin',
     getCameraMediaAccessStatus: () => 'granted',
-    extensionWindowManager: { getState: (id) => ({ id }) },
-    // biome-ignore lint/style/useNamingConvention: Electron API class name convention
-    BrowserWindow: {
-      fromWebContents: () => ({ close: () => calls.push('close-window') }),
+    extensionWindowManager: {
+      getStateForSender: (sender) => ({ sender }),
+      closeForSender: (sender) => {
+        calls.push(`close-window:${String(sender)}`);
+        return true;
+      },
     },
     logError: (message) => calls.push(`error:${message}`),
     logWarn: (message) => calls.push(`warn:${message}`),
@@ -135,12 +137,14 @@ test('registerAppIpcHandlers preserves palette, camera, and window behavior', as
     status: 'granted',
   });
   assert.deepEqual(
-    await handles.get('extension-window:get-state')?.({}, 'window-a'),
-    { id: 'window-a' },
+    await handles.get('extension-window:get-state')?.({ sender: 'window-a' }),
+    {
+      sender: 'window-a',
+    },
   );
   await handles.get('extension-window:close')?.({ sender: 'sender' });
 
-  assert.deepEqual(calls, ['mode:preview', 'center', 'close-window']);
+  assert.deepEqual(calls, ['mode:preview', 'center', 'close-window:sender']);
 });
 
 test('camera permission composition distinguishes Windows from unsupported platforms', async () => {
