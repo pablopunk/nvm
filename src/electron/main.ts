@@ -1020,6 +1020,8 @@ function mergeRendererActionInput(storedAction, rendererAction) {
   if (rendererAction && typeof rendererAction === 'object') {
     if ('formValues' in rendererAction)
       merged.formValues = rendererAction.formValues;
+    if ('editorContent' in rendererAction)
+      merged.editorContent = rendererAction.editorContent;
     if ('selectedItemId' in rendererAction)
       merged.selectedItemId = rendererAction.selectedItemId;
     if ('value' in rendererAction) merged.value = rendererAction.value;
@@ -1139,6 +1141,7 @@ const REQUIRED_INTERNAL_EXTENSIONS = [
   'nevermind.clipboard',
   'nevermind.apps',
   'nevermind.files',
+  'nevermind.floating-notes',
   AI_BUILDER_EXTENSION_ID,
   'nevermind.updates',
   'nevermind.shortcuts',
