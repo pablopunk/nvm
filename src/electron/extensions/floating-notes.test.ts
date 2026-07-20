@@ -15,6 +15,7 @@ function createContext() {
     },
     ui: {
       list: (view: any) => ({ ...view, type: 'list' }),
+      collection: (view: any) => ({ ...view, type: 'list' }),
       editor: (view: any) => ({ ...view, type: 'editor' }),
       toast: (toast: any) => ({ toast }),
     },
@@ -37,7 +38,7 @@ test('Floating Notes creates, saves Markdown, renames, lists, and deletes notes'
   assert.equal(list.title, 'Floating Notes');
   assert.equal(list.items.length, 0);
 
-  const created = await list.actions[0].__handler(ctx);
+  const created = await list.add.__handler(ctx);
   assert.equal(created.view.type, 'editor');
   assert.equal(created.view.title, 'Untitled note');
   const save = created.view.submitAction;
@@ -62,12 +63,15 @@ test('Floating Notes creates, saves Markdown, renames, lists, and deletes notes'
   assert.equal(refreshed.items.length, 1);
   assert.equal(refreshed.items[0].title, 'Launch notes');
   assert.equal(refreshed.items[0].subtitle, 'A durable idea');
-  const floating = refreshed.items[0].actions[0];
+  const opened = await refreshed.items[0].preview.__handler(ctx);
+  const floating = opened.view.actions.find(
+    (action: any) => action.type === 'createWindow',
+  );
   assert.equal(floating.type, 'createWindow');
   assert.match(floating.windowOptions.id, /^floating-note-note-/);
   assert.equal(floating.windowOptions.restoreKey, floating.windowOptions.id);
 
-  const deleted = await refreshed.items[0].actions[2].__handler(ctx);
+  const deleted = await refreshed.items[0].remove.__handler(ctx);
   assert.equal(deleted.toast.message, 'Note deleted');
   assert.deepEqual(values.get('notes'), []);
 });

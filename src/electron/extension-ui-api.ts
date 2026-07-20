@@ -24,6 +24,32 @@ export function createExtensionUiApi({
 }: ExtensionUiApiDeps) {
   return {
     list: (view: any) => ({ ...view, type: 'list' }),
+    collection: (input: any = {}) => {
+      const add = input.add;
+      return {
+        id: input.id,
+        type: 'list',
+        title: input.title || 'Collection',
+        subtitle: input.subtitle,
+        searchBarPlaceholder: input.searchBarPlaceholder,
+        emptyView: input.emptyView,
+        actions: add ? [add] : [],
+        actionPanel: add ? { sections: [{ actions: [add] }] } : undefined,
+        items: Array.isArray(input.items)
+          ? input.items.map(({ preview, edit, remove, ...item }: any) => {
+              const actions = [preview, edit, remove].filter(Boolean);
+              return {
+                ...item,
+                primaryAction: preview || edit,
+                actions,
+                actionPanel: actions.length
+                  ? { sections: [{ actions }] }
+                  : undefined,
+              };
+            })
+          : [],
+      };
+    },
     grid: (view: any) => ({ ...view, type: 'grid' }),
     preview: (fileOrView: any, view: any = {}) => {
       if (isFilePreviewInput(fileOrView)) {

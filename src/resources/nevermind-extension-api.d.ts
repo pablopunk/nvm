@@ -503,6 +503,31 @@ export type ExtensionItemSection = {
   items: ExtensionItem[];
 };
 
+/** One record in a reusable host-rendered CRUD collection. Supply only the operations your data model supports. */
+export type ExtensionCrudItem = Omit<
+  ExtensionItem,
+  'primaryAction' | 'actions' | 'actionPanel'
+> & {
+  /** Opens a read-only or rich preview for this record. Becomes the default Enter action. */
+  preview?: ExtensionAction;
+  /** Opens an editor or prompt for this record. */
+  edit?: ExtensionAction;
+  /** Removes this record. The supplied action should use ctx.ui.confirm for destructive work. */
+  remove?: ExtensionAction;
+};
+
+/** A generic, host-owned CRUD collection: list/search chrome plus consistent add, preview, edit, and remove action panels. */
+export type ExtensionCrudCollection = {
+  id?: string;
+  title: string;
+  subtitle?: string;
+  searchBarPlaceholder?: string;
+  emptyView?: { title?: string; subtitle?: string };
+  /** Creates a new record. Rendered in the collection action panel. */
+  add?: ExtensionAction;
+  items: ExtensionCrudItem[];
+};
+
 export type ExtensionPagination = {
   hasMore?: boolean;
   pageSize?: number;
@@ -1187,6 +1212,8 @@ export type ExtensionContext = {
   /** Declarative host-owned UI primitives. Nevermind owns rendering, navigation, filtering, actions, shortcuts, and errors. */
   ui: {
     list(view: ExtensionView): ExtensionView;
+    /** A generic list/search surface that consistently wires supplied add, preview, edit, and remove actions. */
+    collection(input: ExtensionCrudCollection): ExtensionView;
     grid(view: ExtensionView): ExtensionView;
     /** Full preview view for markdown/text/media. */
     preview(view: ExtensionView): ExtensionView;

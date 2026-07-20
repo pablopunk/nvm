@@ -80,3 +80,21 @@ test('extension ui api keeps utility helpers stable', () => {
   assert.equal(error.items[0].subtitle, 'Try another app.');
   assert.equal(error.items[1].primaryAction.type, 'popView');
 });
+
+test('extension ui collection gives records consistent CRUD actions', () => {
+  const ui = createUi();
+  const add = { title: 'Add task' };
+  const preview = { title: 'Preview task' };
+  const edit = { title: 'Edit task' };
+  const remove = { title: 'Remove task', style: 'destructive' };
+  const view = ui.collection({
+    id: 'tasks',
+    title: 'Tasks',
+    add,
+    items: [{ id: 'one', title: 'Write API', preview, edit, remove }],
+  });
+  assert.equal(view.type, 'list');
+  assert.deepEqual(view.actions, [add]);
+  assert.equal(view.items[0].primaryAction, preview);
+  assert.deepEqual(view.items[0].actions, [preview, edit, remove]);
+});

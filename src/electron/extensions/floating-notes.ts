@@ -228,7 +228,7 @@ async function notesView(ctx: any) {
     (a, b) => b.updatedAt - a.updatedAt,
   );
   const create = createAction();
-  return ctx.ui.list({
+  return ctx.ui.collection({
     id: 'floating-notes',
     title: 'Floating Notes',
     subtitle: `${notes.length} ${notes.length === 1 ? 'note' : 'notes'} · Markdown, local, and yours`,
@@ -237,15 +237,14 @@ async function notesView(ctx: any) {
       title: 'A clear space for your next idea',
       subtitle: 'Create a Markdown note and keep it close at hand.',
     },
-    actions: [create],
-    actionPanel: { sections: [{ actions: [create] }] },
+    add: create,
     items: notes.map((note) => ({
       id: `floating-note:${note.id}`,
       title: note.title,
       subtitle: preview(note.content),
       icon: 'notebook-pen',
       accessories: [{ text: relativeTime(note.updatedAt) }],
-      primaryAction: {
+      preview: {
         type: 'runExtensionAction',
         title: 'Open note',
         __handler: async (innerCtx: any) => {
@@ -258,11 +257,8 @@ async function notesView(ctx: any) {
               });
         },
       },
-      actions: [
-        openFloatingWindowAction(ctx, note),
-        renameAction(note.id),
-        deleteAction(note),
-      ],
+      edit: renameAction(note.id),
+      remove: deleteAction(note),
     })),
   });
 }

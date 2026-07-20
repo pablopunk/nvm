@@ -1173,6 +1173,67 @@ function webviewView(ctx: ExtensionContext) {
   });
 }
 
+function crudCollectionView(ctx: ExtensionContext) {
+  const preview = ctx.actions.run('Preview draft', () =>
+    ctx.ui.preview({
+      id: 'dev-ui-crud-preview',
+      title: 'Release notes draft',
+      content:
+        '# Release notes draft\n\nA generic collection record can open any host-rendered preview.',
+    }),
+  );
+  const edit = ctx.input.prompt({
+    title: 'Edit draft',
+    fields: [
+      {
+        id: 'title',
+        label: 'Title',
+        type: 'text',
+        value: 'Release notes draft',
+      },
+    ],
+    action: ctx.actions.run('Save draft', (_innerCtx, action) =>
+      ctx.ui.toast({
+        message: `Saved ${String(action.formValues?.title || 'draft')}`,
+        tone: 'success',
+      }),
+    ),
+  });
+  const remove = ctx.ui.confirm({
+    title: 'Remove draft',
+    message: 'Remove this example record?',
+    confirmLabel: 'Remove',
+    destructive: true,
+    onConfirm: ctx.actions.run('Remove draft', () =>
+      ctx.ui.toast({ message: 'Draft removed', tone: 'success' }),
+    ),
+  });
+  return ctx.ui.collection({
+    id: 'dev-ui-crud-collection',
+    title: 'Dev UI · CRUD Collection',
+    subtitle: 'Generic add, preview, edit, and remove composition',
+    searchBarPlaceholder: 'Find a record',
+    emptyView: {
+      title: 'No records',
+      subtitle: 'Use Add record to exercise the empty state.',
+    },
+    add: ctx.actions.run('Add record', () =>
+      ctx.ui.toast({ message: 'Add action invoked', tone: 'success' }),
+    ),
+    items: [
+      {
+        id: 'release-notes',
+        title: 'Release notes draft',
+        subtitle: 'A reusable CRUD record fixture',
+        icon: 'file-pen-line',
+        preview,
+        edit,
+        remove,
+      },
+    ],
+  });
+}
+
 const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
   title: 'Dev UI Fixtures',
@@ -1197,6 +1258,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: List',
       icon: 'list',
       run: (ctx) => listView(ctx),
+    },
+    {
+      id: 'crud-collection',
+      title: 'Dev UI: CRUD Collection',
+      icon: 'list-plus',
+      run: (ctx) => crudCollectionView(ctx),
     },
     {
       id: 'rendering-polish',
