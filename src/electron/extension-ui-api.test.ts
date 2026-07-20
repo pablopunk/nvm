@@ -95,6 +95,10 @@ test('extension ui collection gives records consistent CRUD actions', () => {
   });
   assert.equal(view.type, 'list');
   assert.deepEqual(view.actions, [add]);
-  assert.equal(view.items[0].primaryAction, preview);
-  assert.deepEqual(view.items[0].actions, [preview, edit, remove]);
+  assert.equal(view.items[0].title, 'Add task');
+  assert.equal(view.items[0].subtitle, 'Create a new item');
+  assert.equal(view.items[0].primaryAction, add);
+  assert.deepEqual(view.items[0].actions, [add]);
+  assert.equal(view.items[1].primaryAction, preview);
+  assert.deepEqual(view.items[1].actions, [preview, edit, remove]);
 });

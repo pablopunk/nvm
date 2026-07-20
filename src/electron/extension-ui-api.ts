@@ -26,6 +26,34 @@ export function createExtensionUiApi({
     list: (view: any) => ({ ...view, type: 'list' }),
     collection: (input: any = {}) => {
       const add = input.add;
+      const records = Array.isArray(input.items)
+        ? input.items.map(({ preview, edit, remove, ...item }: any) => {
+            const actions = [preview, edit, remove].filter(Boolean);
+            return {
+              ...item,
+              primaryAction: preview || edit,
+              actions,
+              actionPanel: actions.length
+                ? { sections: [{ actions }] }
+                : undefined,
+            };
+          })
+        : [];
+      const existingIds = new Set(records.map((item: any) => item.id));
+      let createId = `__nvm-collection-create:${input.id || input.title || 'item'}`;
+      let suffix = 2;
+      while (existingIds.has(createId)) createId = `${createId}-${suffix++}`;
+      const createItem = add
+        ? {
+            id: createId,
+            title: add.title || 'Create item',
+            subtitle: add.subtitle || 'Create a new item',
+            icon: 'plus',
+            primaryAction: add,
+            actions: [add],
+            actionPanel: { sections: [{ actions: [add] }] },
+          }
+        : null;
       return {
         id: input.id,
         type: 'list',
@@ -35,19 +63,7 @@ export function createExtensionUiApi({
         emptyView: input.emptyView,
         actions: add ? [add] : [],
         actionPanel: add ? { sections: [{ actions: [add] }] } : undefined,
-        items: Array.isArray(input.items)
-          ? input.items.map(({ preview, edit, remove, ...item }: any) => {
-              const actions = [preview, edit, remove].filter(Boolean);
-              return {
-                ...item,
-                primaryAction: preview || edit,
-                actions,
-                actionPanel: actions.length
-                  ? { sections: [{ actions }] }
-                  : undefined,
-              };
-            })
-          : [],
+        items: createItem ? [createItem, ...records] : records,
       };
     },
     grid: (view: any) => ({ ...view, type: 'grid' }),

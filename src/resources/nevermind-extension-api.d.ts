@@ -516,14 +516,14 @@ export type ExtensionCrudItem = Omit<
   remove?: ExtensionAction;
 };
 
-/** A generic, host-owned CRUD collection: list/search chrome plus consistent add, preview, edit, and remove action panels. */
+/** A generic, host-owned CRUD collection: list/search chrome plus consistent add, preview, edit, and remove actions. */
 export type ExtensionCrudCollection = {
   id?: string;
   title: string;
   subtitle?: string;
   searchBarPlaceholder?: string;
   emptyView?: { title?: string; subtitle?: string };
-  /** Creates a new record. Rendered in the collection action panel. */
+  /** Creates a new record. The host renders this as the always-visible first collection row and in the collection action panel. */
   add?: ExtensionAction;
   items: ExtensionCrudItem[];
 };
