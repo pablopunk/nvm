@@ -3,6 +3,7 @@ import { Folder, Loader2 } from 'lucide-react';
 import React, { type ReactNode, useEffect, useState } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
@@ -101,14 +102,18 @@ export type FormViewProps = {
 };
 export type EditorViewProps = {
   value: string;
+  title?: string;
+  subtitle?: string;
   format?: 'text' | 'markdown';
   language?: string;
   placeholder?: string;
   readOnly?: boolean;
+  autoFocus?: boolean;
   preview?: ReactNode;
   actions?: ReactNode;
   submitTitle?: string;
   onChange?: (value: string) => void;
+  onFlush?: (value: string) => void;
   onSubmit?: () => void;
 };
 export type ItemSection<T> = { title?: string; subtitle?: string; items: T[] };
@@ -792,39 +797,65 @@ export function FormView({
 
 export function EditorView({
   value,
+  title,
+  subtitle,
   format = 'text',
   language,
   placeholder,
   readOnly,
+  autoFocus,
   preview,
   actions,
   submitTitle = 'Save',
   onChange,
+  onFlush,
   onSubmit,
 }: EditorViewProps) {
   const showsPreview = format === 'markdown' && Boolean(preview);
   return (
     <div
-      className={`extensionView editorView ${showsPreview ? 'editorViewSplit' : ''}`}
+      className={`extensionView editorView ${showsPreview ? 'editorViewSplit' : ''} ${format === 'markdown' ? 'editorViewMarkdown' : ''}`}
     >
+      {title || subtitle ? (
+        <header className="editorHeader">
+          {title ? <span className="editorHeaderTitle">{title}</span> : null}
+          {subtitle ? (
+            <span className="editorHeaderSubtitle">{subtitle}</span>
+          ) : null}
+        </header>
+      ) : null}
       <div className="editorPane">
-        <div className="editorToolbar">
-          <span>{format === 'markdown' ? 'Markdown' : 'Plain text'}</span>
-          {language ? <small>{language}</small> : null}
-        </div>
-        <textarea
-          className="editorTextarea"
-          value={value}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          spellCheck={format !== 'markdown'}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') return;
-            if (event.metaKey || event.ctrlKey || event.altKey) return;
-            event.stopPropagation();
-          }}
-          onChange={(event) => onChange?.(event.currentTarget.value)}
-        />
+        {showsPreview || language ? (
+          <div className="editorToolbar">
+            <span>{format === 'markdown' ? 'Markdown' : 'Plain text'}</span>
+            {language ? <small>{language}</small> : null}
+          </div>
+        ) : null}
+        {format === 'markdown' ? (
+          <MarkdownEditor
+            value={value}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            autoFocus={autoFocus}
+            onChange={onChange}
+            onFlush={onFlush}
+          />
+        ) : (
+          <textarea
+            className="editorTextarea"
+            value={value}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            autoFocus={autoFocus}
+            spellCheck={true}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') return;
+              if (event.metaKey || event.ctrlKey || event.altKey) return;
+              event.stopPropagation();
+            }}
+            onChange={(event) => onChange?.(event.currentTarget.value)}
+          />
+        )}
         {onSubmit ? (
           <button
             className="formSubmitButton editorSubmitButton"

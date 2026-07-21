@@ -265,12 +265,29 @@ export type ExtensionWindowOptions = {
   remembersFrame?: boolean;
 };
 
-/** Host-owned autosave settings for an editor draft. Drafts are scoped to the owning extension and key. */
+/** Host-owned autosave settings for an editor draft. Drafts are scoped to the owning extension and key, persisted by the host, and recovered on reopen. */
 export type ExtensionEditorDraftOptions = {
+  /** Stable draft key within the owning extension, e.g. the record id being edited. */
   key: string;
+  /**
+   * Version of the content the view was opened with (e.g. the record's
+   * `updatedAt`). Opening with a different version than the stored draft
+   * triggers conflict handling; a matching version recovers unsaved content.
+   */
   version: string | number;
-  autosave?: { debounceMs?: number };
-  /** Invoked only when an existing draft has a different version. */
+  /**
+   * Debounced host autosave. The host stores every change as a draft. When
+   * `action` is supplied the host also runs it with `editorContent` injected
+   * so the extension can persist the record itself; its result is discarded,
+   * so keep it silent and call `ctx.drafts.commit(key, newVersion)` after
+   * writing.
+   */
+  autosave?: { debounceMs?: number; action?: ExtensionAction };
+  /**
+   * Runs when an existing draft has a different version than the view. The
+   * host injects `draftConflict`; return a choice view or an
+   * `ExtensionDraftResolution` (optionally with a follow-up `view`).
+   */
   onConflict?: ExtensionAction;
 };
 
@@ -283,20 +300,27 @@ export type ExtensionDraftConflict = {
   currentContent: string;
 };
 
+/** Follow-up rendered after the host applies a draft resolution. */
+export type ExtensionDraftResolutionFollowUp = {
+  view?: ExtensionView;
+  navigation?: 'root' | 'push' | 'replace' | 'pop';
+  toast?: { message: string; tone?: 'default' | 'success' | 'error' };
+};
+
 /** Resolve an editor draft conflict. Migration must supply replacement content. */
 export type ExtensionDraftResolution =
-  | {
+  | ({
       type: 'draftResolution';
       key: string;
       resolution: 'reset' | 'restore-old';
       content?: never;
-    }
-  | {
+    } & ExtensionDraftResolutionFollowUp)
+  | ({
       type: 'draftResolution';
       key: string;
       resolution: 'migrate';
       content: string;
-    };
+    } & ExtensionDraftResolutionFollowUp);
 
 /** Fresh descriptor returned by the current extension when the host restores a persistent window. */
 export type ExtensionWindowRestoreDescriptor = {
@@ -383,6 +407,7 @@ export type ExtensionAction = {
   /** Legacy payload carrier for selection id / accessory value. Prefer `selectedItemId` or `value`. */
   text?: string;
   /** Prompt fields carried by `ctx.input.prompt(...)`. */
+  /** Fields collected one at a time through prompt views or rendered as controls in legacy form views. */
   fields?: ExtensionFormField[];
   promptMessage?: string;
   submitTitle?: string;
@@ -503,16 +528,20 @@ export type ExtensionItemSection = {
   items: ExtensionItem[];
 };
 
-/** One record in a reusable host-rendered CRUD collection. Supply only the operations your data model supports. */
+/** One record in a reusable host-rendered CRUD collection. Supply only the operations your data model supports. Item ids must not start with the host-reserved `__nvm:` prefix. */
 export type ExtensionCrudItem = Omit<
   ExtensionItem,
   'primaryAction' | 'actions' | 'actionPanel'
 > & {
   /** Opens a read-only or rich preview for this record. Becomes the default Enter action. */
   preview?: ExtensionAction;
-  /** Opens an editor or prompt for this record. */
+  /** Opens an editor or prompt for this record. Defaults to the `⌘E` shortcut; becomes Enter when no preview is set. */
   edit?: ExtensionAction;
-  /** Removes this record. The supplied action should use ctx.ui.confirm for destructive work. */
+  /**
+   * Removes this record. The host defaults to the `⌘⌫` shortcut, destructive
+   * styling, and a confirmation prompt (`Remove “<title>”?`); override any of
+   * them on the action itself.
+   */
   remove?: ExtensionAction;
 };
 
@@ -558,6 +587,7 @@ export type ExtensionView = {
     | 'grid'
     | 'preview'
     | 'chat'
+    | 'prompt'
     | 'form'
     | 'editor'
     | 'progress'
@@ -572,8 +602,12 @@ export type ExtensionView = {
   draft?: ExtensionEditorDraftOptions;
   /** Placeholder for editable text surfaces such as `ctx.ui.editor(...)`. */
   placeholder?: string;
-  /** Text format for editable text surfaces. Markdown editors get a host-rendered preview. */
+  /** Text format for editable text surfaces. Markdown editors render rich headings, emphasis, links, code, lists, and checklists in place while preserving Markdown storage. */
   format?: ExtensionEditorFormat;
+  /** Markdown editors only: render a split host-rendered live preview next to the text. Defaults to false. */
+  preview?: boolean;
+  /** Editor views only: derive and live-update the visible title from the first non-empty content line. Markdown heading markers are stripped. */
+  titleFromContent?: boolean;
   /** Optional language hint for text/code editors. */
   language?: string;
   /** Render an editor as read-only while preserving selection/copy behavior. */
@@ -611,6 +645,8 @@ export type ExtensionView = {
   actions?: ExtensionAction[];
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
+  /** Independent windows only: render Cmd+K actions as a compact bottom-right overlay instead of replacing the view. */
+  actionPanelPresentation?: 'default' | 'compact';
   layout?: 'square' | 'wide' | 'compact';
   aspectRatio?: string | number;
   columns?: number;
@@ -1233,8 +1269,9 @@ export type ExtensionContext = {
       shortcut?: string;
     }): ExtensionAction;
     chat(view: ExtensionView): ExtensionView;
+    /** Legacy structured form surface retained for compatibility. Prefer `ctx.input.prompt`, editors, choices, and native pickers for new workflows. */
     form(view: ExtensionView): ExtensionView;
-    /** Editable host-owned text/markdown surface. The host injects `editorContent` into `submitAction`. */
+    /** Editable host-owned text/Markdown surface. Markdown is rendered as single-pane rich text with Markdown shortcuts while remaining the persisted value. The host injects `editorContent` into `submitAction`; use `titleFromContent` for note-like documents instead of a separate rename flow. */
     editor(view: ExtensionView): ExtensionView;
     progress(input?: {
       title?: string;
@@ -1444,7 +1481,7 @@ export type ExtensionContext = {
   /** Text and template helpers for snippets, quicklinks, prompts, and selected-text transforms. */
   text: ExtensionText;
 
-  /** Lightweight input helpers for command arguments. Prompted values are injected into the wrapped action as `formValues`. */
+  /** Lightweight palette input helpers for command arguments. Fields are collected sequentially through the palette input and injected into the wrapped action as `formValues`. */
   input: {
     prompt(
       input: {
@@ -1678,6 +1715,21 @@ export type ExtensionContext = {
   };
 
   storage: ExtensionStorage;
+  /**
+   * Host-owned editor draft lifecycle for views declaring `draft`. Drafts are
+   * unsaved-work buffers the host persists and recovers; they are not the
+   * extension's source of truth — keep records in `storage`.
+   */
+  drafts: {
+    /**
+     * Mark the draft as persisted at a new version after the extension writes
+     * its record. The unsaved content carries over so the next open recovers
+     * instead of conflicting. Returns false when no draft exists.
+     */
+    commit(key: string, version: string | number): Promise<boolean> | boolean;
+    /** Drop the draft for a key, e.g. after deleting the record it belongs to. */
+    discard(key: string): Promise<void> | void;
+  };
   settings: ExtensionSettings;
   shortcuts: {
     /** Active global action shortcuts, including user overrides and declared extension shortcuts. */

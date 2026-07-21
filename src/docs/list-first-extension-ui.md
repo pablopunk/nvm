@@ -20,11 +20,10 @@ grids, or custom controls.
 
 ## Allowed exceptions
 
-- A single boolean that is part of a short, otherwise non-selectable form may
-  use a checkbox.
-- Text, date, password, and other scalar form fields remain forms.
-- `file`, `files`, and `folder` form fields invoke the native OS picker. They
-  are valid for choosing paths, but are not a substitute for a palette list of
+- Short scalar input and booleans follow the sequential palette-input pattern
+  in [Palette-first extension UI](./palette-first-extension-ui.md).
+- `file`, `files`, and `folder` fields invoke the native OS picker. They are
+  valid for choosing paths, but are not a substitute for a palette list of
   already-known candidates.
 - A genuinely minor, non-selectable status or description may remain plain
   text. It must not look or behave like an interactive row.

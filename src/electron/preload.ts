@@ -123,6 +123,8 @@ const api: NevermindApi = {
   getGhStatus: () => invokeMeasured('gh:status'),
   getExtensionWindowState: () => invokeMeasured('extension-window:get-state'),
   closeExtensionWindow: () => invokeMeasured('extension-window:close'),
+  saveExtensionDraft: (ref, content) =>
+    invokeMeasured('extension-draft:save', { ref, content }),
   log: (level, message, data) =>
     invokeMeasured('logs:write', level, message, data),
   getNevermindAuthStatus: () => invokeMeasured('nevermind:auth-status'),

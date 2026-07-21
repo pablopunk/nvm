@@ -361,6 +361,7 @@ export type CommandAction = {
   title: string;
   subtitle?: string;
   description?: string;
+  icon?: string;
   path?: string;
   paths?: string[];
   app?: CommandApp;
@@ -541,6 +542,7 @@ export type CommandView = {
     | 'grid'
     | 'preview'
     | 'chat'
+    | 'prompt'
     | 'form'
     | 'editor'
     | 'progress'
@@ -560,8 +562,18 @@ export type CommandView = {
   initialPrompt?: string;
   subtitle?: string;
   content?: string;
+  draft?: {
+    key?: string;
+    version?: string | number;
+    ref?: string;
+    autosave?: { debounceMs?: number };
+  };
   placeholder?: string;
   format?: ExtensionEditorFormat;
+  /** Markdown editors render a split live preview only when this is true. */
+  preview?: boolean;
+  /** Derive the visible editor title from the first non-empty content line. */
+  titleFromContent?: boolean;
   language?: string;
   readOnly?: boolean;
   html?: string;
@@ -603,6 +615,7 @@ export type CommandView = {
   actions?: CommandAction[];
   actionPanel?: CommandActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
+  actionPanelPresentation?: 'default' | 'compact';
   layout?: NonNullable<ExtensionView['layout']>;
   aspectRatio?: NonNullable<ExtensionView['aspectRatio']>;
   columns?: NonNullable<ExtensionView['columns']>;

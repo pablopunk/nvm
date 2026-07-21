@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createExtensionUiApi } from './extension-ui-api';
 
+const RESERVED_PREFIX_ERROR = /must not start with/;
+
 function createUi() {
   return createExtensionUiApi({
     buildPreviewItemAction: (item) => ({ previewItem: item }),
@@ -95,10 +97,52 @@ test('extension ui collection gives records consistent CRUD actions', () => {
   });
   assert.equal(view.type, 'list');
   assert.deepEqual(view.actions, [add]);
+  assert.equal(view.items[0].id, '__nvm:collection-create');
   assert.equal(view.items[0].title, 'Add task');
-  assert.equal(view.items[0].subtitle, 'Create a new item');
+  assert.equal(view.items[0].icon, 'plus');
   assert.equal(view.items[0].primaryAction, add);
   assert.deepEqual(view.items[0].actions, [add]);
-  assert.equal(view.items[1].primaryAction, preview);
-  assert.deepEqual(view.items[1].actions, [preview, edit, remove]);
+
+  const record = view.items[1];
+  assert.equal(record.primaryAction, preview);
+  const [recordPreview, recordEdit, recordRemove] = record.actions;
+  assert.equal(recordPreview, preview);
+  assert.equal(recordEdit.shortcut, 'Command+E');
+  assert.equal(recordEdit.title, 'Edit task');
+  assert.equal(recordRemove.shortcut, 'Command+Backspace');
+  assert.equal(recordRemove.requiresConfirmation, true);
+  assert.equal(recordRemove.confirmMessage, 'Remove “Write API”?');
+  assert.equal(recordRemove.confirmLabel, 'Remove');
+  assert.equal(recordRemove.style, 'destructive');
+});
+
+test('extension ui collection respects explicit action overrides', () => {
+  const ui = createUi();
+  const edit = { title: 'Rename', shortcut: 'Command+R' };
+  const remove = {
+    title: 'Delete forever',
+    confirmMessage: 'Custom prompt',
+    requiresConfirmation: false,
+  };
+  const view = ui.collection({
+    title: 'Notes',
+    items: [{ id: 'one', title: 'Note', edit, remove }],
+  });
+  const [recordEdit, recordRemove] = view.items[0].actions;
+  assert.equal(recordEdit.shortcut, 'Command+R');
+  assert.equal(view.items[0].primaryAction, recordEdit);
+  assert.equal(recordRemove.confirmMessage, 'Custom prompt');
+  assert.equal(recordRemove.requiresConfirmation, false);
+});
+
+test('extension ui collection rejects reserved item id prefixes', () => {
+  const ui = createUi();
+  assert.throws(
+    () =>
+      ui.collection({
+        title: 'Notes',
+        items: [{ id: '__nvm:collection-create', title: 'Collision' }],
+      }),
+    RESERVED_PREFIX_ERROR,
+  );
 });

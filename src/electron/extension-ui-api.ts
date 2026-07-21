@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Host-side extension payload boundary keeps dynamic view shapes by design.
 import { feedbackView } from '../feedback';
 
 export type ExtensionUiApiDeps = {
@@ -17,6 +18,52 @@ function isFilePreviewInput(value: any) {
   return value?.path || value?.fileUrl;
 }
 
+const RESERVED_ITEM_ID_PREFIX = '__nvm:';
+
+function collectionRecord(item: any) {
+  const { preview, edit, remove, ...record } = item;
+  if (
+    typeof record.id === 'string' &&
+    record.id.startsWith(RESERVED_ITEM_ID_PREFIX)
+  )
+    throw new Error(
+      `Collection item ids must not start with "${RESERVED_ITEM_ID_PREFIX}"`,
+    );
+  const editAction = edit
+    ? { shortcut: 'Command+E', ...edit, title: edit.title || 'Edit' }
+    : null;
+  const removeAction = remove
+    ? {
+        shortcut: 'Command+Backspace',
+        style: 'destructive',
+        requiresConfirmation: true,
+        confirmMessage: `Remove “${record.title || 'item'}”?`,
+        confirmLabel: 'Remove',
+        ...remove,
+        title: remove.title || 'Remove',
+      }
+    : null;
+  const actions = [preview, editAction, removeAction].filter(Boolean);
+  return {
+    ...record,
+    primaryAction: preview || editAction || removeAction,
+    actions,
+    actionPanel: actions.length ? { sections: [{ actions }] } : undefined,
+  };
+}
+
+function collectionCreateItem(add: any) {
+  return {
+    id: `${RESERVED_ITEM_ID_PREFIX}collection-create`,
+    title: add.title || 'Create item',
+    subtitle: add.subtitle,
+    icon: add.icon || 'plus',
+    primaryAction: add,
+    actions: [add],
+    actionPanel: { sections: [{ actions: [add] }] },
+  };
+}
+
 export function createExtensionUiApi({
   buildPreviewItemAction,
   progressView,
@@ -27,33 +74,8 @@ export function createExtensionUiApi({
     collection: (input: any = {}) => {
       const add = input.add;
       const records = Array.isArray(input.items)
-        ? input.items.map(({ preview, edit, remove, ...item }: any) => {
-            const actions = [preview, edit, remove].filter(Boolean);
-            return {
-              ...item,
-              primaryAction: preview || edit,
-              actions,
-              actionPanel: actions.length
-                ? { sections: [{ actions }] }
-                : undefined,
-            };
-          })
+        ? input.items.map(collectionRecord)
         : [];
-      const existingIds = new Set(records.map((item: any) => item.id));
-      let createId = `__nvm-collection-create:${input.id || input.title || 'item'}`;
-      let suffix = 2;
-      while (existingIds.has(createId)) createId = `${createId}-${suffix++}`;
-      const createItem = add
-        ? {
-            id: createId,
-            title: add.title || 'Create item',
-            subtitle: add.subtitle || 'Create a new item',
-            icon: 'plus',
-            primaryAction: add,
-            actions: [add],
-            actionPanel: { sections: [{ actions: [add] }] },
-          }
-        : null;
       return {
         id: input.id,
         type: 'list',
@@ -63,7 +85,7 @@ export function createExtensionUiApi({
         emptyView: input.emptyView,
         actions: add ? [add] : [],
         actionPanel: add ? { sections: [{ actions: [add] }] } : undefined,
-        items: createItem ? [createItem, ...records] : records,
+        items: add ? [collectionCreateItem(add), ...records] : records,
       };
     },
     grid: (view: any) => ({ ...view, type: 'grid' }),

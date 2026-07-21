@@ -16,6 +16,7 @@ import React, {
 } from 'react';
 import { iconForItem } from './command-icons';
 import { RootCommandList } from './command-list';
+import { titleFromFirstContentLine } from './editor-title';
 import {
   actionsFromPanel,
   type CommandAction,
@@ -79,6 +80,8 @@ export type ExtensionViewRendererProps = {
   dragPathForItem: (item: CommandItem) => string | null | undefined;
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void;
   selectedItemId?: string;
+  /** Rendering host; windows get compact headers and no palette chrome. */
+  surface?: 'palette' | 'window';
 };
 
 function tileActionHint(item: CommandItem) {
@@ -326,28 +329,75 @@ function EditorSurface({
   actions,
   renderMarkdown,
   runAction,
+  surface,
 }: {
   view: CommandView;
   actions: ReactNode;
   renderMarkdown: (content: string) => ReactNode;
   runAction: (action: CommandAction) => void;
+  surface?: 'palette' | 'window';
 }) {
   const [value, setValue] = useState(view.content || '');
   const viewKey = `${view.id || ''}:${view.title}`;
   useEffect(() => setValue(view.content || ''), [viewKey, view.content]);
   const preview =
-    view.format === 'markdown' ? renderMarkdown(value) : undefined;
+    view.format === 'markdown' && view.preview
+      ? renderMarkdown(value)
+      : undefined;
+  const draftRef = typeof view.draft?.ref === 'string' ? view.draft.ref : '';
+  const draftDebounceMs = Math.max(
+    100,
+    Number(view.draft?.autosave?.debounceMs) || 500,
+  );
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    dirtyRef.current = false;
+  }, [draftRef]);
+  useEffect(() => {
+    if (!draftRef || !dirtyRef.current) return;
+    const timer = window.setTimeout(() => {
+      dirtyRef.current = false;
+      void window.nvm
+        .saveExtensionDraft(draftRef, latestValueRef.current)
+        .catch(() => {});
+    }, draftDebounceMs);
+    return () => window.clearTimeout(timer);
+  }, [draftRef, value, draftDebounceMs]);
+  useEffect(
+    () => () => {
+      if (draftRef && dirtyRef.current)
+        void window.nvm
+          .saveExtensionDraft(draftRef, latestValueRef.current)
+          .catch(() => {});
+    },
+    [draftRef],
+  );
+  const editorTitle = view.titleFromContent
+    ? titleFromFirstContentLine(value, view.title)
+    : view.title;
   return (
     <EditorView
       value={value}
+      title={surface === 'window' ? editorTitle : undefined}
+      subtitle={surface === 'window' ? view.subtitle : undefined}
       format={view.format || 'text'}
       language={view.language}
       placeholder={view.placeholder}
       readOnly={view.readOnly}
+      autoFocus={surface === 'window'}
       preview={preview}
       actions={actions}
       submitTitle={view.submitAction?.title}
-      onChange={setValue}
+      onChange={(next) => {
+        dirtyRef.current = true;
+        setValue(next);
+      }}
+      onFlush={(next) => {
+        if (draftRef)
+          void window.nvm.saveExtensionDraft(draftRef, next).catch(() => {});
+      }}
       onSubmit={
         view.submitAction
           ? () => runAction({ ...view.submitAction!, editorContent: value })
@@ -888,6 +938,7 @@ function EditorExtensionView({
   renderActionPanel,
   actionPanelRows,
   runAction,
+  surface,
 }: ExtensionViewSurfaceProps) {
   const editorActionRows = visibleActionPanelRows(
     view,
@@ -907,6 +958,7 @@ function EditorExtensionView({
       actions={editorActions}
       renderMarkdown={renderMarkdown}
       runAction={runAction}
+      surface={surface}
     />
   );
 }

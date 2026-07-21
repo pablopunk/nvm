@@ -44,6 +44,26 @@ type ExtensionWindowRecord = {
   view: any;
   options: any;
   compatibility: ExtensionWindowCompatibility;
+  ownerExtensionId?: string;
+  restoredFrame?: boolean;
+};
+
+export type PersistedExtensionWindowFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PersistedExtensionWindow = {
+  restoreKey: string;
+  ownerExtensionId?: string;
+  options?: Record<string, unknown>;
+};
+
+export type PersistedExtensionWindowState = {
+  frames?: Record<string, PersistedExtensionWindowFrame>;
+  windows?: PersistedExtensionWindow[];
 };
 
 type ExtensionWindowCompatibility = {
@@ -86,6 +106,10 @@ type ExtensionWindowManagerDeps = {
   ) => void;
   isTrustedPage: (url: string, id: string) => boolean;
   hasCapability: (capability: ExtensionWindowCapability) => boolean;
+  persistence?: {
+    read?(): PersistedExtensionWindowState;
+    write(state: PersistedExtensionWindowState): void;
+  };
   debug?: (message: string, data?: Record<string, unknown>) => void;
 };
 
@@ -267,6 +291,127 @@ function extensionWindowViewPayload(id: string, view: any, options: any) {
 
 export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   const records = new Map<string, ExtensionWindowRecord>();
+  let persistedState: PersistedExtensionWindowState =
+    deps.persistence?.read?.() || {};
+  let persistedStateHydrated = Boolean(deps.persistence?.read);
+  let quitting = false;
+
+  /**
+   * Async startup hydration path. The manager is constructed before persisted
+   * state is readable without blocking I/O, so the host hydrates it once.
+   */
+  function hydratePersistedState(state: PersistedExtensionWindowState) {
+    if (persistedStateHydrated) return;
+    persistedStateHydrated = true;
+    persistedState = state && typeof state === 'object' ? state : {};
+  }
+
+  function writePersistedState() {
+    deps.persistence?.write(persistedState);
+  }
+
+  function frameKeyFor(id: string, options: any) {
+    return String(options?.restoreKey || id);
+  }
+
+  function savedFrameFor(id: string, options: any) {
+    const frame = persistedState.frames?.[frameKeyFor(id, options)];
+    if (
+      !frame ||
+      !Number.isFinite(frame.x) ||
+      !Number.isFinite(frame.y) ||
+      !Number.isFinite(frame.width) ||
+      !Number.isFinite(frame.height)
+    )
+      return null;
+    return frame;
+  }
+
+  function clampedFrame(frame: PersistedExtensionWindowFrame) {
+    const size = extensionWindowSize(frame);
+    if (!deps.hasCapability('windows.display-recovery'))
+      return { x: Math.round(frame.x), y: Math.round(frame.y), ...size };
+    const centerPoint = {
+      x: frame.x + frame.width / 2,
+      y: frame.y + frame.height / 2,
+    };
+    const { workArea } = deps.getDisplayNearestPoint(centerPoint);
+    return {
+      x: Math.min(
+        Math.max(Math.round(frame.x), workArea.x),
+        Math.max(workArea.x, workArea.x + workArea.width - size.width),
+      ),
+      y: Math.min(
+        Math.max(Math.round(frame.y), workArea.y),
+        Math.max(workArea.y, workArea.y + workArea.height - size.height),
+      ),
+      ...size,
+    };
+  }
+
+  function rememberFrame(id: string, options: any, bounds: any) {
+    if (!deps.persistence || !options?.remembersFrame) return;
+    if (
+      !bounds ||
+      !Number.isFinite(bounds.width) ||
+      !Number.isFinite(bounds.height)
+    )
+      return;
+    persistedState = {
+      ...persistedState,
+      frames: {
+        ...(persistedState.frames || {}),
+        [frameKeyFor(id, options)]: {
+          x: Math.round(Number(bounds.x) || 0),
+          y: Math.round(Number(bounds.y) || 0),
+          width: Math.round(bounds.width),
+          height: Math.round(bounds.height),
+        },
+      },
+    };
+    writePersistedState();
+  }
+
+  function persistWindowRecord(record: ExtensionWindowRecord) {
+    if (!deps.persistence) return;
+    const options = record.options || {};
+    if (
+      !options.persistent ||
+      !options.restoreKey ||
+      record.compatibility.persistence === 'session-only'
+    )
+      return;
+    const restoreKey = String(options.restoreKey);
+    const entry: PersistedExtensionWindow = {
+      restoreKey,
+      ...(record.ownerExtensionId
+        ? { ownerExtensionId: record.ownerExtensionId }
+        : {}),
+      options: cloneSafeWindowOptionRecord(options),
+    };
+    const windows = (persistedState.windows || []).filter(
+      (saved) => saved.restoreKey !== restoreKey,
+    );
+    persistedState = { ...persistedState, windows: [...windows, entry] };
+    writePersistedState();
+  }
+
+  function forgetPersistentWindow(restoreKey: string) {
+    if (!deps.persistence) return;
+    const windows = (persistedState.windows || []).filter(
+      (saved) => saved.restoreKey !== restoreKey,
+    );
+    if (windows.length === (persistedState.windows || []).length) return;
+    persistedState = { ...persistedState, windows };
+    writePersistedState();
+  }
+
+  function persistentWindowRecords() {
+    return [...(persistedState.windows || [])].map((entry) => ({
+      ...entry,
+      options: entry.options ? { ...entry.options } : undefined,
+    }));
+  }
 
   function compatibilityForOptions(
     id: string,
@@ -364,6 +509,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     view: any,
     options: any = {},
     visibility: 'show' | 'preserve' = 'show',
+    ownerExtensionId?: string,
   ) {
     const normalizedView = deps.normalizeView(view);
     structuredClone(normalizedView);
@@ -373,6 +519,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     if (existing && !existing.win.isDestroyed()) {
       existing.view = normalizedView;
       existing.options = { ...existing.options, ...safeOptions, id };
+      existing.ownerExtensionId = ownerExtensionId || existing.ownerExtensionId;
       existing.compatibility = compatibilityForOptions(id, existing.options);
       applyOptions(existing.win, existing.options);
       existing.win.setTitle(
@@ -386,10 +533,16 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         existing.win.show();
         existing.win.focus();
       }
+      persistWindowRecord(existing);
       return existing;
     }
 
-    const size = extensionWindowSize(safeOptions);
+    const canRestoreFrame =
+      Boolean(safeOptions.remembersFrame) &&
+      deps.hasCapability('windows.frame-restore');
+    const savedFrame = canRestoreFrame ? savedFrameFor(id, safeOptions) : null;
+    const restoredFrame = savedFrame ? clampedFrame(savedFrame) : null;
+    const size = restoredFrame || extensionWindowSize(safeOptions);
     const hiddenTitleBar = safeOptions.titleBar === 'hidden';
     const win = new deps.BrowserWindow({
       width: size.width,
@@ -415,25 +568,36 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         sandbox: true,
       },
     });
-    const record = {
+    const record: ExtensionWindowRecord = {
       id,
       win,
       view: normalizedView,
       options: { ...safeOptions, id },
       compatibility: compatibilityForOptions(id, safeOptions),
+      ownerExtensionId,
+      restoredFrame: Boolean(restoredFrame),
     };
     records.set(id, record);
     structuredClone(
       extensionWindowViewPayload(id, normalizedView, record.options),
     );
     applyOptions(win, record.options);
+    if (restoredFrame) win.setBounds(restoredFrame);
     win.once('ready-to-show', () => {
-      center(win);
+      if (!record.restoredFrame) center(win);
       win.show();
     });
     if ((safeOptions as any).hideOnBlur) win.on('blur', () => win.hide());
+    if (safeOptions.remembersFrame) {
+      const trackFrame = () =>
+        rememberFrame(id, record.options, win.getBounds());
+      win.on('resize', trackFrame);
+      win.on('move', trackFrame);
+    }
     win.on('closed', () => {
       if (records.get(id)?.win === win) records.delete(id);
+      if (!quitting && record.options?.restoreKey)
+        forgetPersistentWindow(String(record.options.restoreKey));
     });
     deps.installNavigationPolicy(win, (url) => deps.isTrustedPage(url, id));
     win.webContents.on(
@@ -447,6 +611,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         }),
     );
     load(win, id);
+    persistWindowRecord(record);
     return record;
   }
 
@@ -463,7 +628,12 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
           : ''),
     );
     if (action.type === 'createWindow') {
-      const record = createOrUpdate(action.view, action.windowOptions || {});
+      const record = createOrUpdate(
+        action.view,
+        action.windowOptions || {},
+        'show',
+        action.ownerExtensionId,
+      );
       return {
         toast: { message: 'Opened window' },
         ...record.compatibility,
@@ -472,10 +642,15 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     const record = records.get(id);
     if (!record) {
       if (action.type === 'toggleWindow' && action.view) {
-        const created = createOrUpdate(action.view, {
-          ...(action.windowOptions || {}),
-          id,
-        });
+        const created = createOrUpdate(
+          action.view,
+          {
+            ...(action.windowOptions || {}),
+            id,
+          },
+          'show',
+          action.ownerExtensionId,
+        );
         return {
           toast: { message: 'Opened window' },
           ...created.compatibility,
@@ -508,6 +683,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
             id,
           },
           'preserve',
+          action.ownerExtensionId,
         );
       if (record.win.isVisible()) record.win.hide();
       else {
@@ -561,6 +737,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   }
 
   function closeAll() {
+    quitting = true;
     for (const record of records.values()) record.win.close();
     records.clear();
   }
@@ -573,5 +750,8 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     getStateForSender,
     closeForSender,
     closeAll,
+    persistentWindowRecords,
+    forgetPersistentWindow,
+    hydratePersistedState,
   };
 }

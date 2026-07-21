@@ -109,6 +109,10 @@ select:focus-visible,
   outline: none;
 }
 
+.palettePromptConcealed {
+  -webkit-text-security: disc;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -793,8 +797,8 @@ kbd {
 .editorPane,
 .editorPreviewPane {
   min-height: 260px;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-lg);
@@ -825,6 +829,7 @@ kbd {
 }
 
 .editorTextarea {
+  flex: 1;
   min-height: 0;
   resize: none;
   border: 0;
@@ -1966,12 +1971,72 @@ kbd {
 }
 
 .extensionWindowShell {
+  position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   color: var(--text-primary);
   background: var(--surface-extension-window);
   padding: 12px;
+}
+
+.extensionWindowCompactPanel {
+  position: absolute;
+  right: 12px;
+  bottom: 40px;
+  z-index: 10;
+  width: min(320px, calc(100% - 24px));
+  max-height: min(360px, calc(100% - 64px));
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: 0 16px 48px var(--surface-sunken);
+  backdrop-filter: blur(20px);
+  -webkit-app-region: no-drag;
+}
+
+.extensionWindowCompactPanel .extensionWindowSearchRow {
+  height: 36px;
+  padding: 0 12px;
+  margin: 0;
+}
+
+.extensionWindowCompactResults {
+  max-height: 300px;
+  padding: 6px;
+  overflow: auto;
+}
+
+.extensionWindowCompactResults .result {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  min-height: 32px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.extensionWindowCompactResults .resultIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-xs);
+}
+
+.extensionWindowCompactResults .resultIcon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.extensionWindowCompactResults .resultText strong {
+  font-size: var(--fs-sm);
+}
+
+.extensionWindowCompactResults .resultText small {
+  display: none;
+}
+
+.extensionWindowCompactResults .actionSectionHeader {
+  padding: 4px 8px 2px;
+  font-size: var(--fs-2xs);
 }
 
 .extensionWindowBody {
@@ -2012,6 +2077,8 @@ kbd {
 .extensionWindowShell .editorView {
   gap: 8px;
   overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
 }
 
 .extensionWindowShell .editorView:not(.editorViewSplit) {
@@ -2020,9 +2087,182 @@ kbd {
 
 .extensionWindowShell .editorPane,
 .extensionWindowShell .editorPreviewPane {
-  border-color: var(--border-1);
-  border-radius: var(--radius-md);
-  background: var(--surface-extension-window-weak);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.extensionWindowShell .editorTextarea {
+  padding: 8px 4px;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.extensionWindowShell .editorViewMarkdown .editorTextarea {
+  font:
+    14px / 1.65 -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Helvetica Neue",
+    sans-serif;
+}
+
+.markdownEditor {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.markdownEditorContent {
+  min-height: 100%;
+  padding: 8px 4px;
+  color: var(--text-primary);
+  font:
+    14px / 1.65 -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Helvetica Neue",
+    sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+
+.markdownEditorPlaceholder {
+  position: absolute;
+  top: 8px;
+  left: 4px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.markdownEditorParagraph {
+  margin: 0 0 8px;
+}
+
+.markdownEditorHeading {
+  margin: 0 0 8px;
+  color: var(--text-strong);
+  line-height: 1.25;
+}
+
+.markdownEditorHeading1 {
+  font-size: var(--fs-2xl);
+}
+
+.markdownEditorHeading2 {
+  font-size: var(--fs-xl);
+}
+
+.markdownEditorHeading3,
+.markdownEditorHeading4,
+.markdownEditorHeading5,
+.markdownEditorHeading6 {
+  font-size: var(--fs-lg);
+}
+
+.markdownEditorBold {
+  font-weight: 650;
+}
+
+.markdownEditorItalic {
+  font-style: italic;
+}
+
+.markdownEditorStrikethrough {
+  text-decoration: line-through;
+}
+
+.markdownEditorUnderline {
+  text-decoration: underline;
+}
+
+.markdownEditorInlineCode {
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.markdownEditorCodeBlock {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--fs-sm);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.markdownEditorQuote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-3);
+  color: var(--text-secondary);
+}
+
+.markdownEditorOrderedList,
+.markdownEditorUnorderedList,
+.markdownEditorChecklist {
+  margin: 4px 0 8px;
+  padding-left: 24px;
+}
+
+.markdownEditorChecklist {
+  padding-left: 4px;
+  list-style: none;
+}
+
+.markdownEditorListItem {
+  margin: 2px 0;
+}
+
+.markdownEditorListItemChecked,
+.markdownEditorListItemUnchecked {
+  position: relative;
+  padding-left: 24px;
+  list-style: none;
+}
+
+.markdownEditorListItemChecked::before,
+.markdownEditorListItemUnchecked::before {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius-xs);
+  content: "";
+}
+
+.markdownEditorListItemChecked::before {
+  border-color: var(--accent-mid);
+  background: var(--accent-soft);
+}
+
+.markdownEditorListItemChecked::after {
+  position: absolute;
+  left: 4px;
+  top: 5px;
+  color: var(--text-primary);
+  content: "✓";
+  font-size: var(--fs-2xs);
+  line-height: 1;
+}
+
+.markdownEditorNestedListItem {
+  list-style: none;
+}
+
+.markdownEditorLink {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .extensionWindowChromeNone .editorPane,
@@ -2036,14 +2276,8 @@ kbd {
   display: none;
 }
 
-.extensionWindowShell .editorTextarea {
-  padding: 14px;
-  color: var(--text-primary);
-  background: transparent;
-}
-
 .extensionWindowChromeNone .editorTextarea {
-  padding: 18px 14px 14px;
+  padding: 18px 4px 14px;
 }
 
 .extensionWindowShell .editorSubmitButton {
@@ -2051,35 +2285,103 @@ kbd {
   min-width: 96px;
 }
 
-.extensionWindowActions {
+.extensionWindowSearchRow {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  grid-column: 1 / -1;
-}
-
-.extensionWindowActions button {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  color: var(--text-secondary);
-  background: var(--surface-1);
-  font: inherit;
-  font-size: var(--fs-xs);
+  gap: 10px;
+  flex: 0 0 40px;
+  height: 40px;
+  padding: 0 4px;
+  margin: 0 0 6px;
+  border: 0;
+  border-bottom: 1px solid var(--border-1);
+  background: transparent;
+  -webkit-app-region: no-drag;
 }
 
-.extensionWindowActions button:hover {
+.extensionWindowSearchIcon {
+  color: var(--text-muted);
+  flex: none;
+}
+
+.extensionWindowSearchRow input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
-  background: var(--surface-2);
+  font: inherit;
+  font-size: var(--fs-md);
 }
 
-.extensionWindowActions small {
+.extensionWindowSearchRow input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.extensionWindowSearchRow input::placeholder {
   color: var(--text-muted);
 }
 
-.extensionWindowActions .dangerWindowAction {
-  color: var(--danger-text);
+.extensionWindowFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 8px 4px 0;
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  user-select: none;
+}
+
+.extensionWindowFooter span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.extensionWindowFooter kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font: inherit;
+}
+
+.extensionWindowShell {
+  display: flex;
+  flex-direction: column;
+}
+
+.editorHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 4px 0;
+}
+
+.editorHeaderTitle {
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editorHeaderSubtitle {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.extensionWindowList {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }

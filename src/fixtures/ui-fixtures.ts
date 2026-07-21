@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Dev-only UI fixtures intentionally exercise dynamic extension payload shapes.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -148,10 +149,13 @@ function floatingNoteEditorView(ctx: ExtensionContext) {
     id: FLOATING_WINDOW_ID,
     title: 'Floating Note',
     subtitle: 'Editable host-rendered note',
-    format: 'text',
+    format: 'markdown',
+    titleFromContent: true,
+    actionPanelPresentation: 'compact',
     placeholder: 'Write a floating note…',
     content:
-      'Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- No palette chrome, preview, or action menu',
+      '# Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- Compact Cmd+K action panel',
+    actions: [ctx.actions.copyText('Floating note', 'Copy Note')],
   });
 }
 
@@ -578,7 +582,7 @@ function promptView(ctx: ExtensionContext) {
       ctx.ui.item({
         id: 'prompt',
         title: 'Prompt for Quicklink Arguments',
-        subtitle: 'Opens a form and then runs the wrapped action',
+        subtitle: 'Collects each argument through the palette input',
         icon: 'text-cursor-input',
         primaryAction: prompt,
         actions: [prompt],
@@ -594,9 +598,15 @@ function editorView(ctx: ExtensionContext) {
     subtitle:
       'Editable markdown with a host-rendered preview and submit action',
     format: 'markdown',
+    preview: true,
     placeholder: 'Write markdown…',
     content:
-      '# Release Note Draft\n\n- Built with host-owned editor UI.\n- Supports **markdown preview**.\n- Submit injects `editorContent` into the action.',
+      '# Release Note Draft\n\n- Built with host-owned editor UI.\n- Supports **markdown preview**.\n- Submit injects `editorContent` into the action.\n- Draft autosave recovers unsaved content on reopen.',
+    draft: {
+      key: 'dev-ui-editor-draft',
+      version: 1,
+      autosave: { debounceMs: 500 },
+    },
     submitAction: ctx.actions.run('Preview Draft', (_ctx, action) =>
       ctx.ui.preview({
         title: 'Submitted Editor Content',
@@ -1199,19 +1209,14 @@ function crudCollectionView(ctx: ExtensionContext) {
       }),
     ),
   });
-  const remove = ctx.ui.confirm({
-    title: 'Remove draft',
-    message: 'Remove this example record?',
-    confirmLabel: 'Remove',
-    destructive: true,
-    onConfirm: ctx.actions.run('Remove draft', () =>
-      ctx.ui.toast({ message: 'Draft removed', tone: 'success' }),
-    ),
-  });
+  const remove = ctx.actions.run('Remove draft', () =>
+    ctx.ui.toast({ message: 'Draft removed', tone: 'success' }),
+  );
   return ctx.ui.collection({
     id: 'dev-ui-crud-collection',
     title: 'Dev UI · CRUD Collection',
-    subtitle: 'Generic add, preview, edit, and remove composition',
+    subtitle:
+      'Host-owned add, preview, edit, and remove with default shortcuts and confirmation',
     searchBarPlaceholder: 'Find a record',
     emptyView: {
       title: 'No records',
@@ -1229,6 +1234,19 @@ function crudCollectionView(ctx: ExtensionContext) {
         preview,
         edit,
         remove,
+      },
+      {
+        id: 'roadmap',
+        title: 'Roadmap draft',
+        subtitle: 'Custom remove confirmation and no preview',
+        icon: 'map',
+        edit,
+        remove: {
+          ...remove,
+          title: 'Discard roadmap',
+          confirmMessage: 'Discard the roadmap draft permanently?',
+          confirmLabel: 'Discard',
+        },
       },
     ],
   });

@@ -120,6 +120,7 @@ import {
   summarizeDebugValue,
 } from './debug-performance';
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
+import { createExtensionDraftStore } from './extension-draft-store';
 import { createExtensionJsonStore } from './extension-json-store';
 import { createStandaloneExtensionFork } from './extension-manifest';
 import { createExtensionPrSubmitter } from './extension-pr-submitter';
@@ -281,6 +282,9 @@ const extensionWindowManager = createExtensionWindowManager({
       rendererUrl,
       rendererIndexPath,
     ),
+  persistence: {
+    write: (state) => writeExtensionWindowsState(state as never),
+  },
   debug: (message, data) =>
     loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
 });
@@ -832,6 +836,150 @@ const extensionRootItemsCache = new Map<
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>();
 const extensionStorageRefreshes = new Map<string, Promise<any>>();
 const extensionJsonStore = createExtensionJsonStore();
+const extensionDraftStore = createExtensionDraftStore();
+const extensionDraftRefs = new Map<
+  string,
+  {
+    ownerExtensionId: string;
+    key: string;
+    version: string | number;
+    autosaveAction: any;
+  }
+>();
+let extensionDraftsHydrated = false;
+let extensionDraftPersistTimer: NodeJS.Timeout | null = null;
+
+function extensionEditorDraftsFile() {
+  return path.join(app.getPath('userData'), 'extension-editor-drafts.json');
+}
+
+async function hydrateExtensionDrafts() {
+  if (extensionDraftsHydrated || isNvmTestMode) return;
+  extensionDraftsHydrated = true;
+  try {
+    const parsed = JSON.parse(
+      await fs.readFile(extensionEditorDraftsFile(), 'utf8'),
+    );
+    extensionDraftStore.hydrate(
+      Array.isArray(parsed?.drafts) ? parsed.drafts : [],
+    );
+  } catch {
+    // Missing or malformed draft state is best-effort; start empty.
+  }
+}
+
+function persistExtensionDraftsNow() {
+  if (isNvmTestMode) return;
+  void extensionJsonStore
+    .replace(extensionEditorDraftsFile(), {
+      drafts: extensionDraftStore.list() as never,
+    })
+    .catch((error) =>
+      logWarn('extension.draft.persist.failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+}
+
+function schedulePersistExtensionDrafts() {
+  if (isNvmTestMode) return;
+  if (extensionDraftPersistTimer) clearTimeout(extensionDraftPersistTimer);
+  extensionDraftPersistTimer = setTimeout(() => {
+    extensionDraftPersistTimer = null;
+    persistExtensionDraftsNow();
+  }, 250);
+  extensionDraftPersistTimer.unref?.();
+}
+
+function extensionWindowsStateFile() {
+  return path.join(app.getPath('userData'), 'extension-windows.json');
+}
+
+let extensionWindowsStateCache: Record<string, unknown> | null = null;
+
+async function hydrateExtensionWindowsState() {
+  if (extensionWindowsStateCache || isNvmTestMode) return;
+  try {
+    const parsed = JSON.parse(
+      await fs.readFile(extensionWindowsStateFile(), 'utf8'),
+    );
+    extensionWindowsStateCache =
+      parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    extensionWindowsStateCache = {};
+  }
+  extensionWindowManager.hydratePersistedState(extensionWindowsStateCache);
+}
+
+function writeExtensionWindowsState(state: Record<string, unknown>) {
+  extensionWindowsStateCache = state;
+  if (isNvmTestMode) return;
+  void extensionJsonStore
+    .replace(extensionWindowsStateFile(), state as never)
+    .catch((error) =>
+      logWarn('extensionWindow.persist.failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+}
+
+async function saveExtensionDraftForIpc(input: any = {}) {
+  const ref = String(input?.ref || '');
+  const record = extensionDraftRefs.get(ref);
+  if (!record) return { ok: false, error: 'unknown-draft' };
+  const content = String(input?.content ?? '');
+  try {
+    extensionDraftStore.save(
+      record.ownerExtensionId,
+      record.key,
+      record.version,
+      content,
+    );
+  } catch {
+    return { ok: false, error: 'invalid-draft-content' };
+  }
+  schedulePersistExtensionDrafts();
+  if (record.autosaveAction) {
+    try {
+      await executeViewAction({
+        ...record.autosaveAction,
+        editorContent: content,
+      });
+    } catch (error) {
+      logWarn('extension.draft.autosave.failed', {
+        extensionId: record.ownerExtensionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return { ok: true };
+}
+
+function commitExtensionDraft(
+  extensionId: string,
+  key: unknown,
+  version: unknown,
+) {
+  const draftKey = String(key || '');
+  const updated = extensionDraftStore.commit(
+    extensionId,
+    draftKey,
+    version as string | number,
+  );
+  if (!updated) return false;
+  for (const record of extensionDraftRefs.values()) {
+    if (record.ownerExtensionId === extensionId && record.key === draftKey)
+      record.version = updated.draftVersion;
+  }
+  schedulePersistExtensionDrafts();
+  return true;
+}
+
+function discardExtensionDraft(extensionId: string, key: unknown) {
+  extensionDraftStore.remove(extensionId, String(key || ''));
+  schedulePersistExtensionDrafts();
+}
+
 const extensionActionHandlers = new Map<string, any>();
 type ExtensionExecutionRecord = {
   action: any;
@@ -2984,6 +3132,70 @@ function normalizeExtensionView(result, entry) {
   return view ? normalizeView(view, entry) : null;
 }
 
+function prepareViewDraft(draft, view, entry) {
+  if (!draft || typeof draft !== 'object') return { draft: undefined };
+  if (typeof draft.ref === 'string' && extensionDraftRefs.has(draft.ref))
+    return { draft };
+  const ownerExtensionId = entry?.extension?.id;
+  if (!ownerExtensionId) return { draft: undefined };
+  try {
+    const key = String(draft.key || '');
+    const version = draft.version;
+    const opened = extensionDraftStore.open(
+      ownerExtensionId,
+      key,
+      version,
+      String(view.content || ''),
+    );
+    const ref = crypto.randomUUID();
+    const autosaveAction = draft.autosave?.action
+      ? normalizeViewAction(draft.autosave.action, entry)
+      : null;
+    if (extensionDraftRefs.size >= 1000)
+      extensionDraftRefs.delete(extensionDraftRefs.keys().next().value);
+    extensionDraftRefs.set(ref, {
+      ownerExtensionId,
+      key,
+      version,
+      autosaveAction,
+    });
+    const prepared = {
+      key,
+      version,
+      ref,
+      ...(draft.autosave
+        ? {
+            autosave: {
+              debounceMs: Number(draft.autosave.debounceMs) || 500,
+            },
+          }
+        : {}),
+      ...(draft.onConflict
+        ? { onConflict: normalizeViewAction(draft.onConflict, entry) }
+        : {}),
+      ...(opened.kind === 'conflict'
+        ? {
+            conflict: {
+              key,
+              storedVersion: opened.conflict.storedVersion,
+              storedContent: opened.conflict.storedContent,
+              currentVersion: version,
+              currentContent: opened.conflict.currentContent,
+            },
+          }
+        : {}),
+    };
+    structuredClone(prepared);
+    return { draft: prepared, content: opened.content };
+  } catch (error) {
+    logWarn('extension.draft.prepare.failed', {
+      extensionId: ownerExtensionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { draft: undefined };
+  }
+}
+
 function normalizeView(view, entry) {
   const actions = normalizeViewActions(view.actions, entry);
   const webviewPermissions =
@@ -3009,10 +3221,23 @@ function normalizeView(view, entry) {
 
   const emptyView = resolveLoaderEmptyView(view.emptyView, loaderHandle);
 
+  const preparedDraft =
+    view.type === 'editor' && view.draft
+      ? prepareViewDraft(view.draft, view, entry)
+      : null;
+
   return {
     ...view,
     id: viewId,
     ...(webviewPermissions === undefined ? {} : { webviewPermissions }),
+    ...(preparedDraft
+      ? {
+          draft: preparedDraft.draft,
+          ...(preparedDraft.content !== undefined
+            ? { content: preparedDraft.content }
+            : {}),
+        }
+      : {}),
     actions,
     actionPanel: normalizeActionPanel(view.actionPanel, actions, entry),
     onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
@@ -3164,6 +3389,9 @@ function normalizeViewAction(action, entry) {
       {
         ...normalized,
         view: normalizeView(normalized.view, entry),
+        ...(entry?.extension?.id
+          ? { ownerExtensionId: entry.extension.id }
+          : {}),
       },
       entry,
     );
@@ -3298,6 +3526,38 @@ function normalizeHostViewResult(result) {
 
 async function executeViewActionResult(result, entry, launchContext?: any) {
   if (!result) return result;
+  if (result?.type === 'draftResolution') {
+    const ownerExtensionId = entry?.extension?.id;
+    if (!ownerExtensionId)
+      return {
+        toast: { message: 'Draft resolution unavailable', tone: 'error' },
+      };
+    try {
+      extensionDraftStore.resolveByKey(
+        ownerExtensionId,
+        String(result.key || ''),
+        result,
+      );
+      schedulePersistExtensionDrafts();
+    } catch (error) {
+      logWarn('extension.draft.resolve.failed', {
+        extensionId: ownerExtensionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        toast: { message: 'Draft is no longer in conflict', tone: 'error' },
+      };
+    }
+    const followUp = {
+      view: result.view,
+      navigation: result.navigation,
+      toast: result.toast,
+      patch: result.patch,
+    };
+    if (!followUp.view && !followUp.patch)
+      return { toast: followUp.toast || { message: 'Draft updated' } };
+    result = followUp;
+  }
   if (isAction(result))
     return executeViewAction(normalizeViewAction(result, entry), launchContext);
   if (isAction(result.action))
@@ -3306,6 +3566,17 @@ async function executeViewActionResult(result, entry, launchContext?: any) {
       launchContext,
     );
   const view = normalizeExtensionView(result, entry);
+  const draftConflictDepth = Number(launchContext?.draftConflictDepth) || 0;
+  if (
+    view?.draft?.conflict &&
+    view.draft.onConflict &&
+    draftConflictDepth < 3
+  ) {
+    return executeViewAction(
+      { ...view.draft.onConflict, draftConflict: view.draft.conflict },
+      { ...(launchContext || {}), draftConflictDepth: draftConflictDepth + 1 },
+    );
+  }
   return view
     ? {
         view,
@@ -3453,6 +3724,15 @@ async function executeViewActionForIpc(action) {
           trustedAction?.type === 'runExtensionAction'
             ? extensionActionHandlers.get(trustedAction.handlerId)
             : null;
+        logError('extension.viewAction.failed', error, {
+          source: 'host',
+          scope: 'extension',
+          extensionId: record?.entry?.extension?.id,
+          data: {
+            actionType: trustedAction?.type || action?.type,
+            actionTitle: trustedAction?.title || action?.title,
+          },
+        });
         if (record)
           return {
             view: extensionErrorView(record.entry, error),
@@ -3653,9 +3933,28 @@ async function executeViewAction(action, launchContext?: any) {
           };
     }
     case 'createWindow':
+    case 'toggleWindow': {
+      const view = action.view;
+      const draftConflictDepth = Number(launchContext?.draftConflictDepth) || 0;
+      if (
+        view?.draft?.conflict &&
+        view.draft.onConflict &&
+        draftConflictDepth < 3
+      ) {
+        const conflictResult = await executeViewAction(
+          { ...view.draft.onConflict, draftConflict: view.draft.conflict },
+          {
+            ...(launchContext || {}),
+            draftConflictDepth: draftConflictDepth + 1,
+          },
+        );
+        if (conflictResult?.view)
+          return executeWindowAction({ ...action, view: conflictResult.view });
+      }
+      return executeWindowAction(action);
+    }
     case 'showWindow':
     case 'hideWindow':
-    case 'toggleWindow':
     case 'closeWindow':
       return executeWindowAction(action);
     case 'copyImage':
@@ -3955,7 +4254,7 @@ async function executeViewAction(action, launchContext?: any) {
       const itemTitle = extAction.title || extension.title || '';
       return {
         view: {
-          type: 'form',
+          type: 'prompt',
           title: `Rename "${itemTitle}"`,
           fields: [
             {
@@ -5450,18 +5749,10 @@ function promptActionView(action: any = {}) {
   const fields = Array.isArray(action.fields) ? action.fields : [];
   const promptMessage = action.promptMessage || action.subtitle;
   return {
-    type: 'form',
+    type: 'prompt',
     title: action.title || 'Prompt',
-    fields: promptMessage
-      ? [
-          {
-            id: '__prompt_message',
-            type: 'description',
-            description: String(promptMessage),
-          },
-          ...fields,
-        ]
-      : fields,
+    subtitle: promptMessage ? String(promptMessage) : undefined,
+    fields,
     submitAction: {
       ...targetAction,
       title: action.submitTitle || targetAction.title || 'Submit',
@@ -6118,6 +6409,11 @@ function createExtensionContext(
         }
       : undefined,
     storage: createExtensionStorage(extension),
+    drafts: {
+      commit: (key, version) =>
+        commitExtensionDraft(extension.id, key, version),
+      discard: (key) => discardExtensionDraft(extension.id, key),
+    },
     settings: {
       definitions: () =>
         availableSettingDefinitions().map((definition) => ({
@@ -7251,6 +7547,45 @@ async function renameExtension(extension, command, metadata) {
   await loadExtensions();
   registerActionShortcuts();
   return { ok: true, title: extension.title, commandTitle: command?.title };
+}
+
+async function restorePersistentExtensionWindows() {
+  if (isNvmTestMode) return;
+  for (const record of extensionWindowManager.persistentWindowRecords()) {
+    try {
+      const extension = record.ownerExtensionId
+        ? extensionModules.get(record.ownerExtensionId)
+        : null;
+      const descriptor =
+        extension && typeof extension.restoreWindow === 'function'
+          ? await extension.restoreWindow(
+              createExtensionContext(extension, null),
+              record.restoreKey,
+            )
+          : null;
+      if (!descriptor?.view) {
+        extensionWindowManager.forgetPersistentWindow(record.restoreKey);
+        continue;
+      }
+      extensionWindowManager.createOrUpdate(
+        normalizeView(descriptor.view, { extension, command: null }),
+        {
+          ...(descriptor.options || {}),
+          restoreKey: record.restoreKey,
+          persistent: true,
+        },
+        'preserve',
+        extension.id,
+      );
+    } catch (error) {
+      logWarn('extensionWindow.restore.failed', {
+        restoreKey: record.restoreKey,
+        extensionId: record.ownerExtensionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      extensionWindowManager.forgetPersistentWindow(record.restoreKey);
+    }
+  }
 }
 
 function fixturePersistentActionItems(fixture) {
@@ -8780,6 +9115,7 @@ app.whenReady().then(async () => {
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
 
   await loadUserState();
+  await Promise.all([hydrateExtensionDrafts(), hydrateExtensionWindowsState()]);
   extensionPrSubmitter = createExtensionPrSubmitter({
     execFileText,
     extensionsDir,
@@ -8804,6 +9140,7 @@ app.whenReady().then(async () => {
   }
   await initNevermindAi();
   initExtensionContext({ nevermindAi });
+  void restorePersistentExtensionWindows();
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();
   flushBufferedDeepLinks();
@@ -8869,6 +9206,7 @@ app.whenReady().then(async () => {
     getCameraMediaAccessStatus: () =>
       systemPreferences.getMediaAccessStatus('camera'),
     extensionWindowManager,
+    saveExtensionDraft: saveExtensionDraftForIpc,
     logError,
     logWarn,
     loggerDebug,

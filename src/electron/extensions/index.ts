@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Internal extension registry intentionally accepts heterogeneous factory shapes.
 import { createAccountExtension } from './account';
 import { createAiBuilderExtension } from './ai-builder';
 import { createAppsExtension } from './apps';

@@ -73,6 +73,11 @@ function lucideIcon(
 }
 
 export function iconForAction(action: CommandAction) {
+  if (typeof action.icon === 'string' && action.icon) {
+    const Icon = lucideIcon(action.icon);
+    return <Icon size={18} />;
+  }
+  if (action.style === 'destructive') return <LucideIcons.Trash2 size={18} />;
   if (
     action.type === 'copyText' ||
     action.type === 'copyImage' ||

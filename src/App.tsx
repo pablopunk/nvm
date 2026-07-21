@@ -57,6 +57,7 @@ import {
   canCustomizeCommandAction,
 } from './model';
 import { resetTransientPaletteState } from './palette-lifecycle';
+import { usePalettePrompt } from './palette-prompt';
 import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api';
 import {
   ShortcutManagerView,
@@ -273,13 +274,20 @@ function selectedItemIdForView(view: ExtensionView | null, current = '') {
 
 export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [view, setView] = useState<ExtensionView | null>(null);
+  const [backStack, setBackStack] = useState<ExtensionView[]>([]);
   const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>(
     {},
   );
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
   const [selectedValue, setSelectedValue] = useState('');
+  const [query, setQuery] = useState('');
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [confirmFor, setConfirmFor] = useState<ExtensionViewAction | null>(
+    null,
+  );
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
   const windowAiChatIdRef = useRef<string | undefined>(undefined);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -294,6 +302,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     window.nvm.getExtensionWindowState().then((state) => {
       if (state?.view) {
         setView(state.view);
+        setBackStack([]);
         setFormValues(seedFormValuesFromView(state.view));
         setSelectedValue(selectedItemIdForView(state.view));
         setWindowOptions(state.options || {});
@@ -303,6 +312,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     return window.nvm.onExtensionWindowView((payload) => {
       if (payload.id === windowId) {
         setView(payload.view);
+        setBackStack([]);
         setFormValues(seedFormValuesFromView(payload.view));
         setSelectedValue(selectedItemIdForView(payload.view));
         setWindowOptions(payload.options || {});
@@ -310,6 +320,13 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       }
     });
   }, [windowId]);
+
+  const viewKey = `${view?.id || ''}:${view?.type || ''}:${view?.title || ''}`;
+  useEffect(() => {
+    setQuery('');
+    setPanelOpen(false);
+    setConfirmFor(null);
+  }, [viewKey]);
 
   useEffect(() => {
     windowAiChatIdRef.current = view?.chatId;
@@ -344,8 +361,19 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   ) {
     if (!result) return;
     if (result.patch) applyPatch(result.patch);
-    if (result.navigation === 'pop') await window.nvm.closeExtensionWindow();
-    else if (result.view) {
+    if (result.navigation === 'pop') {
+      const previous = backStack.at(-1);
+      if (previous) {
+        setBackStack((current) => current.slice(0, -1));
+        setView(previous);
+        setFormValues(seedFormValuesFromView(previous));
+        setSelectedValue(selectedItemIdForView(previous));
+      } else await window.nvm.closeExtensionWindow();
+    } else if (result.view) {
+      if (result.navigation === 'push' && view)
+        setBackStack((current) => [...current, view]);
+      else if (result.navigation === 'root') setBackStack([]);
+      setPanelOpen(false);
       setView(result.view);
       setFormValues(seedFormValuesFromView(result.view));
       setSelectedValue(selectedItemIdForView(result.view, selectedValue));
@@ -354,6 +382,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setToast(result.toast);
       window.setTimeout(() => setToast(null), 2000);
     }
+  }
+
+  async function executeAction(action: ExtensionViewAction) {
+    await handleActionResult(await window.nvm.runViewAction(action));
   }
 
   async function runAction(action: ExtensionViewAction) {
@@ -371,7 +403,46 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       );
       return;
     }
-    await handleActionResult(await window.nvm.runViewAction(action));
+    if (action.requiresConfirmation) {
+      setConfirmFor(action);
+      return;
+    }
+    await executeAction(action);
+  }
+
+  const palettePrompt = usePalettePrompt(view, runAction);
+
+  function popWindowView() {
+    const previous = backStack.at(-1);
+    if (!previous) {
+      void window.nvm.closeExtensionWindow();
+      return;
+    }
+    setBackStack((current) => current.slice(0, -1));
+    setView(previous);
+    setFormValues(seedFormValuesFromView(previous));
+    setSelectedValue(selectedItemIdForView(previous));
+  }
+
+  function selectedItem(): ExtensionViewItem | null {
+    if (!(view && (view.type === 'list' || view.type === 'grid'))) return null;
+    return allViewItems(view).find((item) => item.id === selectedValue) || null;
+  }
+
+  function panelContents() {
+    const item = selectedItem();
+    if (item) {
+      const itemActions = actionsFromPanel(
+        item.actionPanel,
+        item.actions || [],
+      );
+      if (itemActions.length > 0)
+        return { panel: item.actionPanel, fallback: item.actions || [] };
+    }
+    return {
+      panel: view?.actionPanel,
+      fallback: (view?.actions || []) as ExtensionViewAction[],
+    };
   }
 
   function actionPanelRows(
@@ -388,7 +459,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         title: action.title,
         subtitle: actionDescription(action),
         shortcut: action.shortcut,
-        onSelect: () => runAction(action),
+        onSelect: () => {
+          setPanelOpen(false);
+          void runAction(action);
+        },
         className:
           action.style === 'destructive' ? 'result dangerResult' : 'result',
       }));
@@ -406,6 +480,83 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
           ]
         : rows;
     });
+  }
+
+  function confirmRows(): ActionPanelRow[] {
+    const action = confirmFor;
+    if (!action) return [];
+    return [
+      {
+        value: 'window-confirm:run',
+        icon:
+          action.style === 'destructive' ? (
+            <Trash2 size={18} />
+          ) : (
+            <Zap size={18} />
+          ),
+        title: action.confirmLabel || action.title || 'Run action',
+        subtitle: action.confirmMessage || 'Confirm this action',
+        onSelect: () => {
+          setConfirmFor(null);
+          void executeAction({ ...action, requiresConfirmation: false });
+        },
+        className:
+          action.style === 'destructive' ? 'result dangerResult' : 'result',
+      },
+      {
+        value: 'window-confirm:cancel',
+        icon: <RotateCcw size={18} />,
+        title: action.cancelLabel || 'Cancel',
+        subtitle: 'Do nothing',
+        onSelect: () => setConfirmFor(null),
+        className: 'result',
+      },
+    ];
+  }
+
+  function filteredRows(rows: ActionPanelRow[]) {
+    if (!query) return rows;
+    return rows.filter(
+      (row) => row.sectionHeader || valuesMatch(query, row.title, row.subtitle),
+    );
+  }
+
+  function onShellKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'Escape') {
+      if (confirmFor) setConfirmFor(null);
+      else if (panelOpen) setPanelOpen(false);
+      else if (palettePrompt.active) popWindowView();
+      else if (query) setQuery('');
+      else void window.nvm.closeExtensionWindow();
+      event.preventDefault();
+      return;
+    }
+    const accelerator = acceleratorFromKeyboardEvent(event.nativeEvent);
+    if (!accelerator) return;
+    const normalized = normalizedShortcut(accelerator);
+    if (palettePrompt.active) return;
+    if (normalized === 'command+k') {
+      event.preventDefault();
+      setQuery('');
+      setPanelOpen((open) => !open);
+      return;
+    }
+    if (panelOpen || confirmFor) return;
+    const item = selectedItem();
+    const candidates = (
+      item
+        ? [
+            item.primaryAction,
+            ...actionsFromPanel(item.actionPanel, item.actions || []),
+          ]
+        : actionsFromPanel(view?.actionPanel, view?.actions || [])
+    ).filter(Boolean) as ExtensionViewAction[];
+    const action = candidates.find(
+      (candidate) => normalizedShortcut(candidate.shortcut) === normalized,
+    );
+    if (!action) return;
+    event.preventDefault();
+    void runAction(action);
   }
 
   function renderMarkdown(content: string) {
@@ -430,6 +581,53 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     window.nvm.startFileDrag(filePath);
   }
 
+  const actionSurfaceOpen = panelOpen || Boolean(confirmFor);
+  const compactActionSurface = Boolean(
+    view?.actionPanelPresentation === 'compact' && actionSurfaceOpen,
+  );
+  const { panel, fallback } = panelContents();
+  const surfaceRows = confirmFor
+    ? confirmRows()
+    : palettePrompt.active
+      ? palettePrompt.rows
+      : filteredRows(actionPanelRows(panel, fallback));
+  const surfaceSelectionKey = surfaceRows
+    .filter((row) => !row.sectionHeader)
+    .map((row) => row.value)
+    .join(':');
+  const searchableView =
+    panelOpen ||
+    Boolean(confirmFor) ||
+    palettePrompt.active ||
+    view?.type === 'list' ||
+    view?.type === 'grid';
+  useEffect(() => {
+    if (!searchableView) return;
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      if (palettePrompt.active) searchInputRef.current?.select();
+    });
+  }, [
+    searchableView,
+    viewKey,
+    panelOpen,
+    confirmFor,
+    palettePrompt.fieldIndex,
+  ]);
+
+  useEffect(() => {
+    if (palettePrompt.active || actionSurfaceOpen)
+      setSelectedValue(
+        surfaceRows.find((row) => !row.sectionHeader)?.value || '',
+      );
+  }, [
+    palettePrompt.active,
+    palettePrompt.fieldIndex,
+    palettePrompt.selectionKey,
+    actionSurfaceOpen,
+    surfaceSelectionKey,
+  ]);
+
   if (!view)
     return (
       <div className="extensionWindowShell">
@@ -437,69 +635,151 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       </div>
     );
 
-  function renderWindowActionPanel(rows: unknown[]) {
-    const actionRows = (rows as ActionPanelRow[]).filter(
-      (row) => !row.sectionHeader,
-    );
-    if (actionRows.length === 0) return null;
-    return (
-      <div className="extensionWindowActions">
-        {actionRows.map((row) => (
-          <button
-            key={row.value}
-            className={
-              row.className?.includes('danger')
-                ? 'dangerWindowAction'
-                : undefined
-            }
-            type="button"
-            onClick={row.onSelect}
-          >
-            {row.icon}
-            <span>{row.title}</span>
-            {row.shortcut ? <small>{shortcutLabel(row.shortcut)}</small> : null}
-          </button>
-        ))}
-      </div>
-    );
-  }
+  const surfaceOpen =
+    palettePrompt.active || (actionSurfaceOpen && !compactActionSurface);
+  const overlayOpen = surfaceOpen || compactActionSurface;
+  const searchable = searchableView;
+  const hasActions =
+    actionsFromPanel(view.actionPanel, view.actions || []).length > 0;
 
   return (
     <Command
       className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`}
       value={selectedValue}
       onValueChange={setSelectedValue}
+      shouldFilter={false}
+      onKeyDownCapture={onShellKeyDown}
     >
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
+      {searchable && !compactActionSurface ? (
+        <div className="extensionWindowSearchRow">
+          <Search size={15} className="extensionWindowSearchIcon" />
+          <Command.Input
+            ref={searchInputRef}
+            autoFocus
+            className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
+            value={palettePrompt.active ? palettePrompt.query : query}
+            onValueChange={
+              palettePrompt.active ? palettePrompt.setQuery : setQuery
+            }
+            placeholder={
+              confirmFor
+                ? 'Confirm action'
+                : panelOpen
+                  ? `Filter ${view.title || 'window'} actions`
+                  : palettePrompt.active
+                    ? palettePrompt.placeholder
+                    : view.searchBarPlaceholder || 'Search…'
+            }
+            spellCheck={false}
+          />
+        </div>
+      ) : null}
       <main className="extensionWindowBody">
-        <ExtensionViewRenderer
-          view={view}
-          aiChat={aiChat}
-          nevermindAuthed={nevermindAuthed}
-          onSignInToNevermind={() =>
-            window.nvm
-              .signInToNevermind()
-              .then((result) => setNevermindAuthed(Boolean(result.ok)))
-          }
-          formValues={formValues}
-          setFormValues={setFormValues}
-          filterItems={(items) => items || []}
-          filterSections={(currentView) => currentView.sections}
-          renderMarkdown={renderMarkdown}
-          renderActionPanel={(rows) => renderWindowActionPanel(rows)}
-          actionPanelRows={(panel, fallbackActions) =>
-            actionPanelRows(panel, fallbackActions as ExtensionViewAction[])
-          }
-          renderRootIcon={(item) => iconForItem(item)}
-          runDefaultAction={runDefaultAction}
-          runAction={runAction}
-          sendAiPrompt={(message) => aiChat.sendPrompt(message, view.chatId)}
-          abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
-          dragPathForItem={dragPathForItem}
-          startItemDrag={startItemDrag}
-          selectedItemId={selectedValue}
-        />
+        <Command.List className="extensionWindowList">
+          {surfaceOpen ? (
+            <ActionPanel
+              rows={surfaceRows}
+              emptyMessage="No matching choices"
+            />
+          ) : (
+            <>
+              <ExtensionViewRenderer
+                view={view}
+                aiChat={aiChat}
+                nevermindAuthed={nevermindAuthed}
+                onSignInToNevermind={() =>
+                  window.nvm
+                    .signInToNevermind()
+                    .then((result) => setNevermindAuthed(Boolean(result.ok)))
+                }
+                formValues={formValues}
+                setFormValues={setFormValues}
+                filterItems={(items) =>
+                  filterCommandItems(
+                    items || [],
+                    query,
+                    view.type === 'list' || view.type === 'grid'
+                      ? { minScore: 50 }
+                      : undefined,
+                  )
+                }
+                filterSections={(currentView) =>
+                  filterCommandSections(
+                    currentView,
+                    query,
+                    currentView.type === 'list' || currentView.type === 'grid'
+                      ? { minScore: 50 }
+                      : undefined,
+                  )
+                }
+                renderMarkdown={renderMarkdown}
+                renderActionPanel={() => null}
+                actionPanelRows={(actionPanel, fallbackActions) =>
+                  actionPanelRows(
+                    actionPanel,
+                    fallbackActions as ExtensionViewAction[],
+                  )
+                }
+                renderRootIcon={(item) => iconForItem(item)}
+                runDefaultAction={runDefaultAction}
+                runAction={runAction}
+                sendAiPrompt={(message) =>
+                  aiChat.sendPrompt(message, view.chatId)
+                }
+                abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+                dragPathForItem={dragPathForItem}
+                startItemDrag={startItemDrag}
+                selectedItemId={selectedValue}
+                surface="window"
+              />
+              {compactActionSurface ? (
+                <aside className="extensionWindowCompactPanel">
+                  <div className="extensionWindowSearchRow">
+                    <Search size={15} className="extensionWindowSearchIcon" />
+                    <Command.Input
+                      ref={searchInputRef}
+                      autoFocus
+                      value={query}
+                      onValueChange={setQuery}
+                      placeholder={
+                        confirmFor
+                          ? 'Confirm action'
+                          : `Filter ${view.title || 'window'} actions`
+                      }
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="extensionWindowCompactResults">
+                    <ActionPanel
+                      rows={surfaceRows}
+                      emptyMessage="No matching choices"
+                    />
+                  </div>
+                </aside>
+              ) : null}
+            </>
+          )}
+        </Command.List>
       </main>
+      <footer className="extensionWindowFooter">
+        {palettePrompt.progress ? <span>{palettePrompt.progress}</span> : null}
+        {!overlayOpen && (view.type === 'list' || view.type === 'grid') ? (
+          <span>
+            <kbd>↵</kbd> Open
+          </span>
+        ) : null}
+        {!overlayOpen && hasActions ? (
+          <span>
+            <kbd>⌘K</kbd> Actions
+          </span>
+        ) : null}
+        {overlayOpen ? (
+          <span>
+            <kbd>esc</kbd> Back
+          </span>
+        ) : null}
+      </footer>
     </Command>
   );
 }
@@ -571,6 +851,7 @@ export function App() {
   const [shortcutOptionsFor, setShortcutOptionsFor] =
     useState<ShortcutRecord | null>(null);
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
+  const palettePrompt = usePalettePrompt(extensionView, runViewAction);
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([]);
   const extensionViewRef = useRef<ExtensionView | null>(null);
   const wasChildOpenRef = useRef(false);
@@ -964,6 +1245,8 @@ export function App() {
       selectValue(getExtensionItemActionRows()[0]?.value ?? '');
     else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '');
     else if (previewFor) selectValue('preview');
+    else if (palettePrompt.active)
+      selectValue(palettePrompt.rows[0]?.value ?? '');
     else if (extensionView && isFilterableExtensionView)
       selectExtensionItem(extensionView);
     else if (extensionView?.actions?.length)
@@ -989,6 +1272,7 @@ export function App() {
     extensionItemOptionsFor,
     optionsFor,
     previewFor,
+    palettePrompt.selectionKey,
     extensionViewSelectionKey,
     shortcutFor,
     shortcutManagerOpen,
@@ -1012,6 +1296,11 @@ export function App() {
   useEffect(() => {
     setFormValues(seedFormValuesFromView(extensionView));
   }, [extensionView]);
+
+  useEffect(() => {
+    if (!palettePrompt.active) return;
+    requestAnimationFrame(() => inputRef.current?.select());
+  }, [palettePrompt.resetKey, palettePrompt.fieldIndex]);
 
   useEffect(() => {
     if (!(pendingShortcutReveal && extensionView)) return;
@@ -1174,7 +1463,9 @@ export function App() {
     [actions],
   );
   const isFilterableExtensionView =
-    extensionView?.type === 'list' || extensionView?.type === 'grid';
+    extensionView?.type === 'list' ||
+    extensionView?.type === 'grid' ||
+    palettePrompt.active;
   const isRootLikeExtensionView = extensionView?.id === 'clipboard-history';
   const isFilterableChildOpen = Boolean(
     actionSubmenuFor ||
@@ -1220,27 +1511,34 @@ export function App() {
               ? `Filter actions for “${optionsFor.title}”`
               : aliasFor
                 ? `Alias for “${aliasFor.title}”`
-                : extensionView
-                  ? `Filter ${extensionView.title}`
-                  : '';
+                : palettePrompt.active
+                  ? palettePrompt.placeholder
+                  : extensionView
+                    ? `Filter ${extensionView.title}`
+                    : '';
   const inputValue = shortcutFor
     ? recordedShortcut
-    : isFilterableChildOpen
-      ? childQuery
-      : previewFor
-        ? previewFor.title
-        : extensionView
-          ? extensionView.title
-          : optionsFor && !query
-            ? optionsFor.title
-            : query;
+    : palettePrompt.active
+      ? palettePrompt.query
+      : isFilterableChildOpen
+        ? childQuery
+        : previewFor
+          ? previewFor.title
+          : extensionView
+            ? extensionView.title
+            : optionsFor && !query
+              ? optionsFor.title
+              : query;
   const placeholder = shortcutFor
     ? 'Press a keyboard shortcut'
-    : isFilterableChildOpen
-      ? extensionView?.searchBarPlaceholder || childPlaceholder
-      : SEARCH_PLACEHOLDERS[placeholderIndex];
-  const activeSearchQuery =
-    !shortcutFor && isFilterableChildOpen
+    : palettePrompt.active
+      ? palettePrompt.placeholder
+      : isFilterableChildOpen
+        ? extensionView?.searchBarPlaceholder || childPlaceholder
+        : SEARCH_PLACEHOLDERS[placeholderIndex];
+  const activeSearchQuery = palettePrompt.active
+    ? palettePrompt.query
+    : !shortcutFor && isFilterableChildOpen
       ? childQuery
       : isChildOpen
         ? ''
@@ -3260,10 +3558,12 @@ export function App() {
           <Zap className="brandIcon" size={22} />
           <Command.Input
             ref={inputRef}
+            className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
             value={inputValue}
             onValueChange={(value) => {
               if (shortcutFor) return;
-              if (isFilterableChildOpen) setChildQuery(value);
+              if (palettePrompt.active) palettePrompt.setQuery(value);
+              else if (isFilterableChildOpen) setChildQuery(value);
               else if (!isChildOpen) setRootQuery(value);
             }}
             placeholder={placeholder}
@@ -3362,6 +3662,11 @@ export function App() {
                 </div>
               )}
             </div>
+          ) : palettePrompt.active ? (
+            <ActionPanel
+              rows={palettePrompt.rows}
+              emptyMessage="No matching choices"
+            />
           ) : extensionView ? (
             renderExtensionView(extensionView)
           ) : (

@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Validation-boundary tests use inline input patterns and node:test idioms.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createExtensionDraftStore } from './extension-draft-store';
@@ -69,4 +70,65 @@ test('rejects malformed bounded draft inputs and purges all owner state', () => 
   drafts.purgeOwner('notes');
   assert.equal(drafts.records.has('notes\u0000a'), false);
   assert.equal(drafts.records.has('other\u0000a'), true);
+});
+
+test('commit advances the stored version so the next open recovers', () => {
+  const drafts = createExtensionDraftStore();
+  drafts.save('notes', 'note:a', 1, 'unsaved');
+
+  assert.equal(drafts.commit('notes', 'missing', 2), null);
+  assert.equal(drafts.commit('notes', 'note:a', 2)?.draftVersion, 2);
+  assert.deepEqual(drafts.open('notes', 'note:a', 2, 'current'), {
+    kind: 'recovered',
+    content: 'unsaved',
+  });
+  assert.throws(() => drafts.commit('notes', 'note:a', -1), /version/);
+});
+
+test('resolveByKey resolves the latest live conflict without a handle', () => {
+  const drafts = createExtensionDraftStore();
+  drafts.save('notes', 'note:a', 1, 'old');
+  const opened = drafts.open('notes', 'note:a', 2, 'new');
+  assert.equal(opened.kind, 'conflict');
+
+  assert.throws(
+    () =>
+      drafts.resolveByKey('notes', 'note:b', {
+        type: 'draftResolution',
+        key: 'note:b',
+        resolution: 'reset',
+      }),
+    /No live draft conflict/,
+  );
+  assert.equal(
+    drafts.resolveByKey('notes', 'note:a', {
+      type: 'draftResolution',
+      key: 'note:a',
+      resolution: 'restore-old',
+    }).content,
+    'old',
+  );
+  assert.deepEqual(drafts.open('notes', 'note:a', 2, 'new'), {
+    kind: 'recovered',
+    content: 'old',
+  });
+});
+
+test('hydrate restores persisted records and skips malformed entries', () => {
+  const drafts = createExtensionDraftStore();
+  drafts.hydrate([
+    {
+      schemaVersion: 1,
+      ownerExtensionId: 'notes',
+      draftKey: 'note:a',
+      draftVersion: 3,
+      content: 'persisted',
+    },
+    { schemaVersion: 1, ownerExtensionId: '', draftKey: 'x' } as never,
+  ]);
+  assert.deepEqual(drafts.open('notes', 'note:a', 3, 'current'), {
+    kind: 'recovered',
+    content: 'persisted',
+  });
+  assert.equal(drafts.list().length, 1);
 });

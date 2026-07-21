@@ -81,6 +81,7 @@ export interface AppIpcHandlersDeps {
     getStateForSender(sender: unknown): unknown;
     closeForSender(sender: unknown): boolean;
   };
+  saveExtensionDraft: (input: unknown) => unknown;
   logError: (message: string, data?: unknown, context?: unknown) => unknown;
   logWarn: (message: string, data?: unknown, context?: unknown) => unknown;
   loggerDebug: (message: string, data?: unknown, context?: unknown) => unknown;
@@ -268,6 +269,9 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   );
   ipcHandleMeasured('extension-window:close', (event) =>
     deps.extensionWindowManager.closeForSender(event.sender),
+  );
+  ipcHandleMeasured('extension-draft:save', (_event, input) =>
+    deps.saveExtensionDraft(input),
   );
   ipcHandleMeasured('logs:write', (_event, level, message, data) => {
     let method = deps.logInfo;
