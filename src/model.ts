@@ -616,6 +616,7 @@ export type CommandView = {
   actionPanel?: CommandActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   actionPanelPresentation?: 'default' | 'compact';
+  windowPresentation?: 'default' | 'compact';
   layout?: NonNullable<ExtensionView['layout']>;
   aspectRatio?: NonNullable<ExtensionView['aspectRatio']>;
   columns?: NonNullable<ExtensionView['columns']>;

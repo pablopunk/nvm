@@ -647,6 +647,8 @@ export type ExtensionView = {
   actionPanelVisibility?: ActionPanelVisibility;
   /** Independent windows only: render Cmd+K actions as a compact bottom-right overlay instead of replacing the view. */
   actionPanelPresentation?: 'default' | 'compact';
+  /** Independent windows only: render this result as a compact overlay while preserving the current base view. Other surfaces render it normally. */
+  windowPresentation?: 'default' | 'compact';
   layout?: 'square' | 'wide' | 'compact';
   aspectRatio?: string | number;
   columns?: number;

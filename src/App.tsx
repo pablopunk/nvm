@@ -274,6 +274,7 @@ function selectedItemIdForView(view: ExtensionView | null, current = '') {
 
 export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [view, setView] = useState<ExtensionView | null>(null);
+  const [compactView, setCompactView] = useState<ExtensionView | null>(null);
   const [backStack, setBackStack] = useState<ExtensionView[]>([]);
   const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>(
     {},
@@ -302,6 +303,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     window.nvm.getExtensionWindowState().then((state) => {
       if (state?.view) {
         setView(state.view);
+        setCompactView(null);
         setBackStack([]);
         setFormValues(seedFormValuesFromView(state.view));
         setSelectedValue(selectedItemIdForView(state.view));
@@ -312,6 +314,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     return window.nvm.onExtensionWindowView((payload) => {
       if (payload.id === windowId) {
         setView(payload.view);
+        setCompactView(null);
         setBackStack([]);
         setFormValues(seedFormValuesFromView(payload.view));
         setSelectedValue(selectedItemIdForView(payload.view));
@@ -369,11 +372,18 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setFormValues(seedFormValuesFromView(previous));
         setSelectedValue(selectedItemIdForView(previous));
       } else await window.nvm.closeExtensionWindow();
+    } else if (result.view?.windowPresentation === 'compact') {
+      setPanelOpen(false);
+      setConfirmFor(null);
+      setCompactView(result.view);
+      setQuery('');
+      setSelectedValue(selectedItemIdForView(result.view));
     } else if (result.view) {
       if (result.navigation === 'push' && view)
         setBackStack((current) => [...current, view]);
       else if (result.navigation === 'root') setBackStack([]);
       setPanelOpen(false);
+      setCompactView(null);
       setView(result.view);
       setFormValues(seedFormValuesFromView(result.view));
       setSelectedValue(selectedItemIdForView(result.view, selectedValue));
@@ -420,13 +430,24 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     }
     setBackStack((current) => current.slice(0, -1));
     setView(previous);
+    setCompactView(null);
     setFormValues(seedFormValuesFromView(previous));
     setSelectedValue(selectedItemIdForView(previous));
   }
 
   function selectedItem(): ExtensionViewItem | null {
-    if (!(view && (view.type === 'list' || view.type === 'grid'))) return null;
-    return allViewItems(view).find((item) => item.id === selectedValue) || null;
+    const interactiveView = compactView || view;
+    if (
+      !(
+        interactiveView &&
+        (interactiveView.type === 'list' || interactiveView.type === 'grid')
+      )
+    )
+      return null;
+    return (
+      allViewItems(interactiveView).find((item) => item.id === selectedValue) ||
+      null
+    );
   }
 
   function panelContents() {
@@ -440,8 +461,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         return { panel: item.actionPanel, fallback: item.actions || [] };
     }
     return {
-      panel: view?.actionPanel,
-      fallback: (view?.actions || []) as ExtensionViewAction[],
+      panel: (compactView || view)?.actionPanel,
+      fallback: ((compactView || view)?.actions || []) as ExtensionViewAction[],
     };
   }
 
@@ -525,7 +546,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (event.key === 'Escape') {
       if (confirmFor) setConfirmFor(null);
       else if (panelOpen) setPanelOpen(false);
-      else if (palettePrompt.active) popWindowView();
+      else if (compactView) {
+        setCompactView(null);
+        setQuery('');
+      } else if (palettePrompt.active) popWindowView();
       else if (query) setQuery('');
       else void window.nvm.closeExtensionWindow();
       event.preventDefault();
@@ -585,6 +609,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const compactActionSurface = Boolean(
     view?.actionPanelPresentation === 'compact' && actionSurfaceOpen,
   );
+  const compactViewOpen = Boolean(compactView);
   const { panel, fallback } = panelContents();
   const surfaceRows = confirmFor
     ? confirmRows()
@@ -598,6 +623,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const searchableView =
     panelOpen ||
     Boolean(confirmFor) ||
+    compactViewOpen ||
     palettePrompt.active ||
     view?.type === 'list' ||
     view?.type === 'grid';
@@ -637,7 +663,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
 
   const surfaceOpen =
     palettePrompt.active || (actionSurfaceOpen && !compactActionSurface);
-  const overlayOpen = surfaceOpen || compactActionSurface;
+  const overlayOpen = surfaceOpen || compactActionSurface || compactViewOpen;
   const searchable = searchableView;
   const hasActions =
     actionsFromPanel(view.actionPanel, view.actions || []).length > 0;
@@ -651,7 +677,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       onKeyDownCapture={onShellKeyDown}
     >
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
-      {searchable && !compactActionSurface ? (
+      {searchable && !(compactActionSurface || compactViewOpen) ? (
         <div className="extensionWindowSearchRow">
           <Search size={15} className="extensionWindowSearchIcon" />
           <Command.Input
@@ -733,7 +759,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                 selectedItemId={selectedValue}
                 surface="window"
               />
-              {compactActionSurface ? (
+              {compactActionSurface || compactView ? (
                 <aside className="extensionWindowCompactPanel">
                   <div className="extensionWindowSearchRow">
                     <Search size={15} className="extensionWindowSearchIcon" />
@@ -745,16 +771,59 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                       placeholder={
                         confirmFor
                           ? 'Confirm action'
-                          : `Filter ${view.title || 'window'} actions`
+                          : compactView
+                            ? compactView.searchBarPlaceholder ||
+                              `Filter ${compactView.title}`
+                            : `Filter ${view.title || 'window'} actions`
                       }
                       spellCheck={false}
                     />
                   </div>
                   <div className="extensionWindowCompactResults">
-                    <ActionPanel
-                      rows={surfaceRows}
-                      emptyMessage="No matching choices"
-                    />
+                    {actionSurfaceOpen ? (
+                      <ActionPanel
+                        rows={surfaceRows}
+                        emptyMessage="No matching choices"
+                      />
+                    ) : compactView ? (
+                      <ExtensionViewRenderer
+                        view={compactView}
+                        aiChat={aiChat}
+                        nevermindAuthed={nevermindAuthed}
+                        onSignInToNevermind={() => {}}
+                        formValues={formValues}
+                        setFormValues={setFormValues}
+                        filterItems={(items) =>
+                          filterCommandItems(items || [], query, {
+                            minScore: 50,
+                          })
+                        }
+                        filterSections={(currentView) =>
+                          filterCommandSections(currentView, query, {
+                            minScore: 50,
+                          })
+                        }
+                        renderMarkdown={renderMarkdown}
+                        renderActionPanel={() => null}
+                        actionPanelRows={(actionPanel, fallbackActions) =>
+                          actionPanelRows(
+                            actionPanel,
+                            fallbackActions as ExtensionViewAction[],
+                          )
+                        }
+                        renderRootIcon={(item) => iconForItem(item)}
+                        runDefaultAction={runDefaultAction}
+                        runAction={runAction}
+                        sendAiPrompt={(message) =>
+                          aiChat.sendPrompt(message, compactView.chatId)
+                        }
+                        abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+                        dragPathForItem={dragPathForItem}
+                        startItemDrag={startItemDrag}
+                        selectedItemId={selectedValue}
+                        surface="window"
+                      />
+                    ) : null}
                   </div>
                 </aside>
               ) : null}

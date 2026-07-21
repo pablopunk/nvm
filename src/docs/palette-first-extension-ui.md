@@ -20,6 +20,9 @@ actions should preserve the palette's single focus target and keyboard model.
 - Independent editor/companion windows may use
   `actionPanelPresentation: 'compact'` to keep their primary content visible
   while Cmd+K actions appear in a small bottom-right overlay.
+- List or choice results launched inside those windows may use
+  `windowPresentation: 'compact'` to reuse the overlay without replacing the
+  base editor; normal palette launches still render the list at full size.
 
 ## Exceptions
 

@@ -139,6 +139,7 @@ test('collection lists notes with CRUD operations and deletes discard drafts', a
   const extension = createFloatingNotesExtension();
   const collection = await extension.commands[1].run(ctx as any);
   assert.equal(collection.title, 'Floating Notes');
+  assert.equal(collection.windowPresentation, 'compact');
   assert.equal(collection.items.length, 0);
 
   await collection.add.__handler(ctx);

@@ -315,6 +315,7 @@ async function notesCollection(ctx: any) {
   return ctx.ui.collection({
     id: 'floating-notes',
     title: 'Floating Notes',
+    windowPresentation: 'compact',
     subtitle: `${notes.length} ${notes.length === 1 ? 'note' : 'notes'} · Markdown, local, and yours`,
     searchBarPlaceholder: 'Find a note',
     emptyView: {
