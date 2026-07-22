@@ -30,6 +30,12 @@
 * Reserve empty states for active result lists; do not show them in passive surfaces.
 * Use canonical storage (`Command+Alt+K`) and symbol display (`⌘⌥K`) formats via `shortcutLabel`.
 
+## Scope and Delivery
+
+* Before choosing foundations, name the requested user-facing journey and its acceptance evidence. Build only the smallest foundation that reaches it; label foundation work as partial in progress reports and draft PRs, and name the remaining journey. At the first runnable UI or product slice, exercise the core create or primary action through the real flow, not only its API, fixture, or secondary controls.
+* Treat requests to match an existing nvm platform or workflow as parity tasks: start from the closest implementation and preserve its support and security posture. Do not introduce new trust architecture, external repositories, credential programmes, or cross-platform policy redesign without an explicit request or concrete incompatibility.
+* If scope must expand, pause once and give the owner a decision in at most two plain-language sentences covering the smallest viable path, extra authority, cost, or access needed, and the consequence. Do not iterate on speculative designs while that decision is pending.
+
 ## Style and Documentation
 
 * Prefer descriptive function naming over comments.
