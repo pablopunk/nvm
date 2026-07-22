@@ -596,7 +596,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     await expect(
       noteWindow.getByText('All notes', { exact: true }),
     ).toBeVisible();
-    await noteWindow.keyboard.press('Escape');
+    await noteWindow.keyboard.press('Meta+K');
     await expect(
       noteWindow.getByText('All notes', { exact: true }),
     ).toHaveCount(0);

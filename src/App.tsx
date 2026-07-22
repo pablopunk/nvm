@@ -566,6 +566,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     );
   }
 
+  function closeActionPanel() {
+    setPanelOpen(false);
+    shellRef.current?.focus();
+    requestAnimationFrame(() => shellRef.current?.focus());
+  }
+
   function onShellKeyDown(event: React.KeyboardEvent) {
     if (event.key === 'Escape') {
       if (confirmFor) setConfirmFor(null);
@@ -573,11 +579,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setActionSubmenuFor(null);
         setPanelOpen(true);
         setQuery('');
-      } else if (panelOpen) {
-        setPanelOpen(false);
-        shellRef.current?.focus();
-        requestAnimationFrame(() => shellRef.current?.focus());
-      } else if (compactView) {
+      } else if (panelOpen) closeActionPanel();
+      else if (compactView) {
         setCompactView(null);
         setQuery('');
       } else if (palettePrompt.active) popWindowView();
@@ -595,7 +598,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setQuery('');
       setActionSubmenuFor(null);
       if (actionSubmenuFor) setPanelOpen(true);
-      else if (panelOpen) setPanelOpen(false);
+      else if (panelOpen) closeActionPanel();
       else setPanelOpen(true);
       return;
     }
