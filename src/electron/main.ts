@@ -57,6 +57,7 @@ import {
   isVideoPath,
   LOCAL_FILE_PROTOCOL,
   LOCAL_THUMB_PROTOCOL,
+  localFilePathFromUrl,
   partitionRootsByExistence,
   thumbnailUrlForPath,
   VIDEO_EXTENSIONS,
@@ -4546,13 +4547,7 @@ async function localFileResponse(requestPath: string, request: Request) {
 function registerLocalFileProtocol() {
   protocol.handle(LOCAL_FILE_PROTOCOL, (request) => {
     const url = new URL(request.url);
-    const encodedPath =
-      url.host === 'local'
-        ? url.pathname
-        : url.host
-          ? `/${url.host}${url.pathname}`
-          : url.pathname;
-    const requestPath = path.resolve(decodeURIComponent(encodedPath));
+    const requestPath = localFilePathFromUrl(url);
     if (!path.isAbsolute(requestPath))
       return new Response('Invalid file path', { status: 400 });
     if (

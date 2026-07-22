@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const IMAGE_EXTENSIONS = new Set([
   'png',
@@ -93,6 +93,16 @@ function fileUrlForPath(filePath: string) {
   return url.href;
 }
 
+function localFilePathFromUrl(urlInput: string | URL) {
+  const url = typeof urlInput === 'string' ? new URL(urlInput) : urlInput;
+  if (url.host === 'local') {
+    return fileURLToPath(`file://${url.pathname}`);
+  }
+  return path.resolve(
+    decodeURIComponent(url.host ? `/${url.host}${url.pathname}` : url.pathname),
+  );
+}
+
 function thumbnailUrlForPath(filePath: string) {
   const resolved = canonicalLocalPath(filePath);
   const url = new URL(`${LOCAL_THUMB_PROTOCOL}://thumb`);
@@ -153,6 +163,7 @@ export {
   isVideoPath,
   LOCAL_FILE_PROTOCOL,
   LOCAL_THUMB_PROTOCOL,
+  localFilePathFromUrl,
   partitionRootsByExistence,
   thumbnailUrlForPath,
   VIDEO_EXTENSIONS,
