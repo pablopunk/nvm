@@ -35,13 +35,13 @@ test('keeps the Linux platform contract non-destructive', linuxOnly, () => {
 });
 
 test(
-  'only enables Linux auto-updates for AppImages and restores APPIMAGE',
+  'enables Linux auto-updates for AppImage and package builds',
   linuxOnly,
   () => {
     const originalAppImage = process.env.APPIMAGE;
     try {
       delete process.env.APPIMAGE;
-      assert.equal(os.supportsAutoUpdates(), false);
+      assert.equal(os.supportsAutoUpdates(), true);
       process.env.APPIMAGE = '/tmp/Nevermind.AppImage';
       assert.equal(os.supportsAutoUpdates(), true);
     } finally {

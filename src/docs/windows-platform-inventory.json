@@ -1138,10 +1138,10 @@
     },
     {
       "key": "auto-updater",
-      "status": "intentionally-unsupported",
+      "status": "implemented",
       "source": "src/electron/os.ts",
-      "automatedCheck": "latest.yml absent smoke and NSIS metadata validator fixtures",
-      "manualGate": "signed publish-candidate update installation",
+      "automatedCheck": "installed versus portable capability tests and NSIS metadata validation",
+      "manualGate": "unsigned installed old-to-new update installation",
       "owner": "release-engineering"
     },
     {

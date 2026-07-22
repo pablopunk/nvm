@@ -98,7 +98,11 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
       return dependent({ darwin: true }, false);
     if (capability === 'auto-updates')
       return dependent(
-        { darwin: true, linux: Boolean(environment.APPIMAGE) },
+        {
+          darwin: true,
+          linux: true,
+          win32: !environment.PORTABLE_EXECUTABLE_FILE,
+        },
         false,
       );
     if (capability === 'camera')
@@ -433,7 +437,7 @@ export function supportsAutoUpdates() {
 }
 
 export function autoUpdatesUnavailableMessage() {
-  return 'Automatic updates only run from packaged macOS builds or Linux AppImages';
+  return 'Updates are unavailable in development and portable builds';
 }
 
 export function appScanRoots() {

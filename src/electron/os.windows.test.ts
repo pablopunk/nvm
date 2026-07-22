@@ -32,6 +32,7 @@ test('simulates Windows labels, capabilities, and exact platform paths off-host'
   assert.equal(adapter.hasCapability('app-icons'), true);
   assert.equal(adapter.hasCapability('quick-look'), false);
   assert.equal(adapter.hasCapability('launch-at-login'), true);
+  assert.equal(adapter.hasCapability('auto-updates'), true);
   assert.deepEqual(adapter.appScanRoots(), [
     String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs`,
     String.raw`C:\Users\Zoë\AppData\Roaming\Microsoft\Windows\Start Menu\Programs`,
@@ -178,6 +179,19 @@ test('force quit validates raw names before normalization and passes one argv el
     });
   }
   assert.equal(calls.length, 1);
+});
+
+test('disables auto-updates for Windows portable builds', () => {
+  assert.equal(
+    windowsAdapter({
+      environment: {
+        APPDATA: String.raw`C:\Users\Zoë\AppData\Roaming`,
+        PORTABLE_EXECUTABLE_FILE: String.raw`D:\Nevermind.exe`,
+        ProgramData: String.raw`C:\ProgramData`,
+      },
+    }).hasCapability('auto-updates'),
+    false,
+  );
 });
 
 test('unsupported capabilities and unpackaged launch-at-login fail safely', () => {
