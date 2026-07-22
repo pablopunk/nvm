@@ -11,6 +11,17 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 20;
 
+export function visibleResultsForSearchSnapshot<T>(
+  currentResults: T[],
+  snapshot: { complete: boolean; results: T[]; revision: number },
+) {
+  return currentResults.length > 0 &&
+    snapshot.revision === 0 &&
+    !snapshot.complete
+    ? currentResults
+    : snapshot.results;
+}
+
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: Hook keeps one search session lifecycle and one debounce lifecycle together.
 export function useSearchResults<T>(
   transport: SearchSessionTransport<T>,
@@ -58,7 +69,9 @@ export function useSearchResults<T>(
           resultCount: snapshot.results.length,
           complete: snapshot.complete,
         });
-        setResults(snapshot.results);
+        setResults((current) =>
+          visibleResultsForSearchSnapshot(current, snapshot),
+        );
       },
       onError: (_error, generation) =>
         markDebugPerformance('search.failed', { generation }),
