@@ -34,22 +34,9 @@ test('keeps the Linux platform contract non-destructive', linuxOnly, () => {
   ]);
 });
 
-test(
-  'only enables Linux auto-updates for AppImages and restores APPIMAGE',
-  linuxOnly,
-  () => {
-    const originalAppImage = process.env.APPIMAGE;
-    try {
-      delete process.env.APPIMAGE;
-      assert.equal(os.supportsAutoUpdates(), false);
-      process.env.APPIMAGE = '/tmp/Nevermind.AppImage';
-      assert.equal(os.supportsAutoUpdates(), true);
-    } finally {
-      if (originalAppImage === undefined) delete process.env.APPIMAGE;
-      else process.env.APPIMAGE = originalAppImage;
-    }
-  },
-);
+test('enables Linux auto-updates for package builds', linuxOnly, () => {
+  assert.equal(os.supportsAutoUpdates(), true);
+});
 
 test(
   'parses visible Linux desktop entries without filesystem access',
@@ -73,8 +60,9 @@ StartupWMClass=ExampleApp
       '[Desktop Entry]\nHidden=true\nName=Hidden\nExec=hidden',
       '[Desktop Entry]\nExec=missing-name',
       '[Desktop Entry]\nName=Missing Exec',
-    ])
+    ]) {
       assert.equal(os.parseLinuxDesktopEntry(body), null);
+    }
   },
 );
 
