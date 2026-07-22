@@ -161,7 +161,7 @@ type SessionEntry = {
   promise: Promise<AgentSession>;
 };
 
-type PiApi = any;
+type PiApi = typeof import('@earendil-works/pi-coding-agent');
 type TypeApi = any;
 
 function isMessageUpdateEvent(
@@ -502,18 +502,21 @@ function createNevermindAi(options: NevermindAiOptions) {
       import('@earendil-works/pi-ai') as Promise<any>,
     ]);
 
-    const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'));
+    const modelRuntime = await pi.ModelRuntime.create({
+      authPath: path.join(agentDir, 'auth.json'),
+      modelsPath: null,
+      allowModelNetwork: false,
+    });
     const {
       model,
       source: modelSource,
       creditInfo,
-    } = await resolveAiModelAndAuth(pi, ai, authStorage);
+    } = await resolveAiModelAndAuth(modelRuntime);
     if (creditInfo)
       creditInfoRef.current = {
         credits: creditInfo.credits,
         notice: creditInfo.notice,
       };
-    const modelRegistry = pi.ModelRegistry.inMemory(authStorage);
     onEvent?.({
       type: 'debug',
       label: 'model-source',
@@ -561,8 +564,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       agentDir,
       model,
       thinkingLevel: 'low',
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       resourceLoader,
       noTools: 'builtin',
       customTools,
@@ -727,15 +729,14 @@ async function createGeneralSession(
   const { agentDir, workspaceDir } = options;
   await fs.mkdir(agentDir, { recursive: true });
   await fs.mkdir(workspaceDir, { recursive: true });
-  const [pi, ai] = await Promise.all([
-    import('@earendil-works/pi-coding-agent') as Promise<PiApi>,
-    import('@earendil-works/pi-ai') as Promise<any>,
-  ]);
-  const authStorage = pi.AuthStorage.create(path.join(agentDir, 'auth.json'));
+  const pi = (await import('@earendil-works/pi-coding-agent')) as PiApi;
+  const modelRuntime = await pi.ModelRuntime.create({
+    authPath: path.join(agentDir, 'auth.json'),
+    modelsPath: null,
+    allowModelNetwork: false,
+  });
   const { model } = await resolveAiModelAndAuth(
-    pi,
-    ai,
-    authStorage,
+    modelRuntime,
     sessionOptions.model,
   );
   const resourceLoader = {
@@ -760,8 +761,7 @@ async function createGeneralSession(
     agentDir,
     model,
     thinkingLevel: 'low',
-    authStorage,
-    modelRegistry: pi.ModelRegistry.inMemory(authStorage),
+    modelRuntime,
     resourceLoader,
     noTools: 'builtin',
     sessionManager: pi.SessionManager.inMemory(
@@ -819,14 +819,12 @@ async function fetchActiveModelDescriptor(
 }
 
 async function resolveAiModelAndAuth(
-  _pi: any,
-  _ai: any,
-  authStorage: any,
+  modelRuntime: Awaited<ReturnType<PiApi['ModelRuntime']['create']>>,
   modelRole?: AiModelRole,
 ) {
   const byo = await getByoKey();
   if (byo) {
-    authStorage.setRuntimeApiKey(byo.providerId, byo.apiKey);
+    await modelRuntime.setRuntimeApiKey(byo.providerId, byo.apiKey);
     return {
       model: byoModelDescriptor(byo),
       source: 'byo' as const,
@@ -836,7 +834,6 @@ async function resolveAiModelAndAuth(
 
   const nevermind = await getNevermindAuth();
   if (!nevermind) throw new NevermindAuthRequiredError();
-  authStorage.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token);
   const descriptor = await fetchActiveModelDescriptor(
     nevermind.baseUrl,
     nevermind.token,
@@ -849,7 +846,7 @@ async function resolveAiModelAndAuth(
     provider: descriptor.provider,
     baseUrl: descriptor.baseUrl,
     reasoning: descriptor.reasoning,
-    input: descriptor.input as ReadonlyArray<string>,
+    input: descriptor.input as Array<'text' | 'image'>,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: descriptor.contextWindow,
     maxTokens: descriptor.maxTokens,
@@ -857,6 +854,13 @@ async function resolveAiModelAndAuth(
       modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {},
     ),
   };
+  modelRuntime.registerProvider(NEVERMIND_PROVIDER_ID, {
+    name: 'Nevermind',
+    api: descriptor.api as any,
+    baseUrl: descriptor.baseUrl,
+    models: [model],
+  });
+  await modelRuntime.setRuntimeApiKey(NEVERMIND_PROVIDER_ID, nevermind.token);
   const creditInfo = descriptor.credits
     ? {
         credits: descriptor.credits,
@@ -874,7 +878,7 @@ function byoModelDescriptor(byo: ByoKeySnapshot) {
     provider: byo.provider,
     baseUrl: byo.baseUrl,
     reasoning: false,
-    input: ['text'] as ReadonlyArray<string>,
+    input: ['text'] as Array<'text' | 'image'>,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
     maxTokens: 16_384,
