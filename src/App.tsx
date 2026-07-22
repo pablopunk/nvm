@@ -297,6 +297,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
   const windowAiChatIdRef = useRef<string | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -565,6 +566,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     );
   }
 
+  function closeActionPanel() {
+    setPanelOpen(false);
+    shellRef.current?.focus();
+    requestAnimationFrame(() => shellRef.current?.focus());
+  }
+
   function onShellKeyDown(event: React.KeyboardEvent) {
     if (event.key === 'Escape') {
       if (confirmFor) setConfirmFor(null);
@@ -572,7 +579,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setActionSubmenuFor(null);
         setPanelOpen(true);
         setQuery('');
-      } else if (panelOpen) setPanelOpen(false);
+      } else if (panelOpen) closeActionPanel();
       else if (compactView) {
         setCompactView(null);
         setQuery('');
@@ -590,19 +597,27 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       event.preventDefault();
       setQuery('');
       setActionSubmenuFor(null);
-      setPanelOpen((open) => (actionSubmenuFor ? true : !open));
+      if (actionSubmenuFor) setPanelOpen(true);
+      else if (panelOpen) closeActionPanel();
+      else setPanelOpen(true);
       return;
     }
-    if (panelOpen || confirmFor || actionSubmenuFor) return;
+    if (confirmFor || actionSubmenuFor) return;
+    const { panel, fallback } = panelContents();
     const item = selectedItem();
-    const candidates = (
-      item
-        ? [
-            item.primaryAction,
-            ...actionsFromPanel(item.actionPanel, item.actions || []),
-          ]
-        : actionsFromPanel(view?.actionPanel, view?.actions || [])
-    ).filter(Boolean) as ExtensionViewAction[];
+    const candidates = panelOpen
+      ? actionsFromPanel(panel, fallback)
+      : (
+          (item
+            ? [
+                item.primaryAction,
+                ...actionsFromPanel(item.actionPanel, item.actions || []),
+              ]
+            : actionsFromPanel(
+                view?.actionPanel,
+                view?.actions || [],
+              )) as Array<ExtensionViewAction | undefined>
+        ).filter(Boolean);
     const action = candidates.find(
       (candidate) => normalizedShortcut(candidate.shortcut) === normalized,
     );
@@ -705,6 +720,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
 
   return (
     <Command
+      ref={shellRef}
+      tabIndex={-1}
       className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`}
       value={selectedValue}
       onValueChange={setSelectedValue}

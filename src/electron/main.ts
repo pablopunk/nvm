@@ -2567,6 +2567,7 @@ function testModeExtensionIsSafe(extensionId: string) {
   return [
     'nevermind.system',
     'nevermind.extensions',
+    'nevermind.floating-notes',
     'pab53.lifecycle',
     'pab53.legacy',
     'pab53.discovered',
@@ -3839,6 +3840,12 @@ function registerTestModeIpcHandlers() {
   });
   handle('view-action:execute', (_event, action) =>
     executeViewActionForIpc(action),
+  );
+  handle('extension-window:get-state', (event) =>
+    extensionWindowManager.getStateForSender(event.sender),
+  );
+  handle('extension-window:close', (event) =>
+    extensionWindowManager.closeForSender(event.sender),
   );
   handle('actions:set-shortcut', (_event, action, shortcut) =>
     setShortcut(action, shortcut),

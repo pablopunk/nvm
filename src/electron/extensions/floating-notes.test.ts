@@ -133,6 +133,21 @@ test('conflict action offers restore and reset resolutions that keep versions co
   assert.equal(kept.view.type, 'editor');
 });
 
+test('All notes action exposes Command+O and replaces the editor with the collection', async () => {
+  const { ctx } = createContext();
+  const extension = createFloatingNotesExtension();
+  const action = await extension.commands[0].run(ctx as any);
+  const allNotes = action.view.actions.find(
+    (candidate: any) => candidate.title === 'All notes',
+  );
+
+  assert.equal(allNotes.shortcut, 'Command+O');
+  const result = await allNotes.__handler(ctx);
+  assert.equal(result.navigation, 'replace');
+  assert.equal(result.view.id, 'floating-notes');
+  assert.equal(result.view.type, 'list');
+});
+
 test('collection lists notes with CRUD operations and deletes discard drafts', async () => {
   const { ctx, values, discards } = createContext();
   const extension = createFloatingNotesExtension();

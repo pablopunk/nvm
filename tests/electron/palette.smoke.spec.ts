@@ -532,6 +532,94 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
   }
 });
 
+test('Floating Notes runs Cmd+O from and after dismissing its action panel', async () => {
+  test.setTimeout(40_000);
+  const floatingNotesUserDataDir = path.join(userDataDir, 'floating-notes');
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    launched = await launchTestApplication(floatingNotesUserDataDir);
+    await expect
+      .poll(() => searchTitles(launched!.page, 'notes'))
+      .toContain('Floating Notes');
+    await launched.page.evaluate(async () => {
+      const generation = Date.now();
+      const { results } = await window.nvm.search('notes', {
+        generation,
+      });
+      const action = results.find(
+        (candidate) => candidate.title === 'Floating Notes',
+      );
+      if (!action) throw new Error('Floating Notes action not found');
+      await window.nvm.execute(action);
+    });
+    await expect.poll(() => launched!.app.windows().length).toBeGreaterThan(1);
+    await expect
+      .poll(async () =>
+        Promise.all(
+          launched!.app
+            .windows()
+            .map((page) => page.locator('[contenteditable="true"]').count()),
+        ),
+      )
+      .toContain(1);
+    const noteWindows = await Promise.all(
+      launched.app.windows().map(async (page) => ({
+        page,
+        editorCount: await page.locator('[contenteditable="true"]').count(),
+      })),
+    );
+    const noteWindow = noteWindows.find(
+      ({ editorCount }) => editorCount > 0,
+    )?.page;
+    if (!noteWindow) throw new Error('Floating Notes window not found');
+    const editor = noteWindow.locator('[contenteditable="true"]');
+    await expect(editor).toBeVisible();
+    await noteWindow.bringToFront();
+    await editor.focus();
+
+    await noteWindow.keyboard.press('Meta+K');
+    await expect(
+      noteWindow.getByText('All notes', { exact: true }),
+    ).toBeVisible();
+    await expect(noteWindow.getByText('⌘O', { exact: true })).toBeVisible();
+    await noteWindow.keyboard.press('Meta+O');
+    await expect(
+      noteWindow.locator('input[placeholder="Find a note"]'),
+    ).toBeVisible();
+
+    const noteItem = noteWindow.locator('[cmdk-item]').last();
+    await noteItem.dispatchEvent('click');
+    await expect(editor).toBeVisible();
+    await editor.focus();
+    await noteWindow.keyboard.press('Meta+K');
+    await expect(
+      noteWindow.getByText('All notes', { exact: true }),
+    ).toBeVisible();
+    await noteWindow.keyboard.press('Meta+K');
+    await expect(
+      noteWindow.getByText('All notes', { exact: true }),
+    ).toHaveCount(0);
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(() =>
+          document.activeElement?.matches(
+            '[contenteditable="true"], .extensionWindowShell',
+          ),
+        ),
+      )
+      .toBe(true);
+    await noteWindow.keyboard.press('Meta+O');
+    await expect(
+      noteWindow.locator('input[placeholder="Find a note"]'),
+    ).toBeVisible();
+  } finally {
+    if (launched) {
+      await closeTestApplication(launched.app, launched.trackedPids);
+    }
+  }
+});
+
 test('dismisses transient alias UI and flushes scheduled state before quit', async () => {
   const stateSafetyUserDataDir = path.join(userDataDir, 'pab4-state-safety');
   const settingsTitle =
