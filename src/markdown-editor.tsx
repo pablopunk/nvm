@@ -68,6 +68,8 @@ function MarkdownValuePlugin({
   const currentMarkdownRef = useRef(value);
   const pendingEditorStateRef = useRef<EditorState | null>(null);
   const exportTimerRef = useRef<number | null>(null);
+  const callbacksRef = useRef({ onChange, onFlush });
+  callbacksRef.current = { onChange, onFlush };
 
   useEffect(() => {
     if (value === currentMarkdownRef.current) {
@@ -85,9 +87,9 @@ function MarkdownValuePlugin({
       }
       currentMarkdownRef.current = markdown;
       if (flush) {
-        onFlush?.(markdown);
+        callbacksRef.current.onFlush?.(markdown);
       } else {
-        onChange?.(markdown);
+        callbacksRef.current.onChange?.(markdown);
       }
     });
   }
