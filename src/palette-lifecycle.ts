@@ -15,6 +15,28 @@ interface TransientPaletteStateSetters {
   setActionSubmenuFor: ClearNullableState;
 }
 
+interface RootResultSelectionInput {
+  actionIds: string[];
+  currentSelection: string;
+  previousFirstActionId: string;
+  queryChanged: boolean;
+}
+
+function rootResultSelection({
+  actionIds,
+  currentSelection,
+  previousFirstActionId,
+  queryChanged,
+}: RootResultSelectionInput) {
+  const firstActionId = actionIds[0] || '';
+  if (queryChanged || currentSelection === previousFirstActionId) {
+    return firstActionId;
+  }
+  return actionIds.includes(currentSelection)
+    ? currentSelection
+    : firstActionId;
+}
+
 function resetTransientPaletteState(setters: TransientPaletteStateSetters) {
   setters.setOptionsFor(null);
   setters.setExtensionItemOptionsFor(null);
@@ -31,4 +53,4 @@ function resetTransientPaletteState(setters: TransientPaletteStateSetters) {
 }
 
 export type { TransientPaletteStateSetters };
-export { resetTransientPaletteState };
+export { resetTransientPaletteState, rootResultSelection };

@@ -57,7 +57,10 @@ import {
   type CommandViewPatch,
   canCustomizeCommandAction,
 } from './model';
-import { resetTransientPaletteState } from './palette-lifecycle';
+import {
+  resetTransientPaletteState,
+  rootResultSelection,
+} from './palette-lifecycle';
 import { usePalettePrompt } from './palette-prompt';
 import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api';
 import {
@@ -905,6 +908,8 @@ export function App() {
   const queryHistoryDraftRef = useRef('');
   const compactActionMenuOriginSelectionRef = useRef('');
   const compactActionMenuWasOpenRef = useRef(false);
+  const previousRootQueryRef = useRef('');
+  const previousRootFirstActionIdRef = useRef('');
   const [query, setQuery] = useState('');
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [actions, setActions] = useSearchResults<Action>(
@@ -1383,10 +1388,15 @@ export function App() {
     else {
       const current = selectedValueRef.current;
       selectValue(
-        current && actions.some((action) => action.id === current)
-          ? current
-          : actions[0]?.id || '',
+        rootResultSelection({
+          actionIds: actions.map((action) => action.id),
+          currentSelection: current,
+          previousFirstActionId: previousRootFirstActionIdRef.current,
+          queryChanged: previousRootQueryRef.current !== query,
+        }),
       );
+      previousRootQueryRef.current = query;
+      previousRootFirstActionIdRef.current = actions[0]?.id || '';
     }
   }, [
     actions,
@@ -1400,6 +1410,7 @@ export function App() {
     optionsFor,
     previewFor,
     palettePrompt.selectionKey,
+    query,
     extensionViewSelectionKey,
     shortcutFor,
     shortcutManagerOpen,

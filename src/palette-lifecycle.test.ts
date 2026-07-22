@@ -1,6 +1,45 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resetTransientPaletteState } from './palette-lifecycle';
+import {
+  resetTransientPaletteState,
+  rootResultSelection,
+} from './palette-lifecycle';
+
+test('keeps untouched root selection on the first progressive result', () => {
+  assert.equal(
+    rootResultSelection({
+      actionIds: ['new-first', 'old-first'],
+      currentSelection: 'old-first',
+      previousFirstActionId: 'old-first',
+      queryChanged: false,
+    }),
+    'new-first',
+  );
+});
+
+test('preserves a root selection moved away from the first result', () => {
+  assert.equal(
+    rootResultSelection({
+      actionIds: ['new-first', 'selected'],
+      currentSelection: 'selected',
+      previousFirstActionId: 'old-first',
+      queryChanged: false,
+    }),
+    'selected',
+  );
+});
+
+test('resets root selection when the query changes', () => {
+  assert.equal(
+    rootResultSelection({
+      actionIds: ['new-first', 'selected'],
+      currentSelection: 'selected',
+      previousFirstActionId: 'old-first',
+      queryChanged: true,
+    }),
+    'new-first',
+  );
+});
 
 test('resets every transient palette surface', () => {
   const resets: [string, unknown][] = [];
