@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Draft validation boundary keeps compact guard clauses and bounded numeric limits.
 import { randomBytes } from 'node:crypto';
 
 export type DraftVersion = string | number;
@@ -66,12 +67,7 @@ function assertVersion(value: unknown): asserts value is DraftVersion {
     byteLength(value) <= MAX_VERSION_BYTES
   )
     return;
-  if (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= 2_147_483_647
-  )
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
     return;
   throw new Error('Invalid draft version');
 }
@@ -167,6 +163,14 @@ export function createExtensionDraftStore(deps: DraftStoreDeps = {}) {
       throw new Error('Stale draft conflict');
     if (conflict.ownerExtensionId !== ownerExtensionId)
       throw new Error('Draft conflict owner mismatch');
+    return resolveConflict(ownerExtensionId, conflict, resolution);
+  }
+
+  function resolveConflict(
+    ownerExtensionId: string,
+    conflict: ConflictRecord,
+    resolution: DraftResolution,
+  ) {
     if (resolution.key !== conflict.key)
       throw new Error('Draft conflict key mismatch');
     const stored = records.get(recordKey(ownerExtensionId, conflict.key));
@@ -197,10 +201,75 @@ export function createExtensionDraftStore(deps: DraftStoreDeps = {}) {
     );
   }
 
+  /** Resolve the most recent live conflict for owner plus key without a handle. */
+  function resolveByKey(
+    ownerExtensionId: string,
+    draftKey: string,
+    resolution: DraftResolution,
+  ) {
+    assertStableKey(ownerExtensionId, 'owner extension id');
+    assertStableKey(draftKey, 'draft key');
+    let latest: ConflictRecord | null = null;
+    for (const conflict of conflicts.values()) {
+      if (
+        conflict.ownerExtensionId === ownerExtensionId &&
+        conflict.key === draftKey &&
+        conflict.expiresAt >= now() &&
+        (!latest || conflict.expiresAt > latest.expiresAt)
+      )
+        latest = conflict;
+    }
+    if (!latest) throw new Error('No live draft conflict');
+    conflicts.delete(latest.handle);
+    return resolveConflict(ownerExtensionId, latest, resolution);
+  }
+
+  /**
+   * Mark the draft as persisted at a new version. The unsaved content carries
+   * over so the next open recovers instead of conflicting.
+   */
+  function commit(
+    ownerExtensionId: string,
+    draftKey: string,
+    draftVersion: DraftVersion,
+  ) {
+    assertStableKey(ownerExtensionId, 'owner extension id');
+    assertStableKey(draftKey, 'draft key');
+    assertVersion(draftVersion);
+    const stored = records.get(recordKey(ownerExtensionId, draftKey));
+    if (!stored) return null;
+    return save(ownerExtensionId, draftKey, draftVersion, stored.content);
+  }
+
   function remove(ownerExtensionId: string, draftKey: string) {
     assertStableKey(ownerExtensionId, 'owner extension id');
     assertStableKey(draftKey, 'draft key');
     records.delete(recordKey(ownerExtensionId, draftKey));
+  }
+
+  function list() {
+    return [...records.values()];
+  }
+
+  function hydrate(savedRecords: ExtensionDraftRecord[]) {
+    for (const record of Array.isArray(savedRecords) ? savedRecords : []) {
+      try {
+        validateInput(
+          record?.ownerExtensionId,
+          record?.draftKey,
+          record?.draftVersion,
+          record?.content,
+        );
+        save(
+          record.ownerExtensionId,
+          record.draftKey,
+          record.draftVersion,
+          record.content,
+        );
+      } catch {
+        // Skip malformed persisted records; drafts are best-effort state.
+      }
+    }
   }
 
   function purgeOwner(ownerExtensionId: string) {
@@ -214,5 +283,16 @@ export function createExtensionDraftStore(deps: DraftStoreDeps = {}) {
     }
   }
 
-  return { records, save, open, resolve, remove, purgeOwner };
+  return {
+    records,
+    save,
+    open,
+    resolve,
+    resolveByKey,
+    commit,
+    remove,
+    purgeOwner,
+    list,
+    hydrate,
+  };
 }

@@ -16,19 +16,26 @@ import type {
   ViewSize,
 } from './resources/nevermind-extension-api';
 
+const CUSTOMIZABLE_ACTION_KINDS = new Set([
+  'app',
+  'builtin',
+  'clipboard-history',
+  'extension-action',
+]);
+
 export type ExtensionPermission = PublicExtensionPermission;
 
 export type ActionDismissBehavior = 'manual' | 'immediate' | 'after-success';
 export type ActionLoadingBehavior = 'view' | 'none';
 export type ActionExecutionLocation = 'main' | 'renderer';
 
-export type CommandActionDefinition = {
+export interface CommandActionDefinition {
   description: string;
   dismiss: ActionDismissBehavior;
   loading: ActionLoadingBehavior;
   execute: ActionExecutionLocation;
   inline?: boolean;
-};
+}
 
 export const ACTION_DEFINITIONS = {
   openPath: {
@@ -354,13 +361,17 @@ export const ACTION_DEFINITIONS = {
 
 export type CommandActionType = keyof typeof ACTION_DEFINITIONS;
 
-export type CommandApp = { name?: string; path?: string };
+export interface CommandApp {
+  name?: string;
+  path?: string;
+}
 
-export type CommandAction = {
+export interface CommandAction {
   type: CommandActionType;
   title: string;
   subtitle?: string;
   description?: string;
+  icon?: string;
   path?: string;
   paths?: string[];
   app?: CommandApp;
@@ -430,43 +441,45 @@ export type CommandAction = {
   cancelLabel?: string;
   dismissAfterRun?: 'auto';
   executionId?: string;
-};
+}
 
-export type CommandActionSection = {
+export interface CommandActionSection {
   title?: string;
   actions: CommandAction[];
   lazyActions?: CommandAction[];
   isLoading?: boolean;
-};
+}
 
-export type CommandActionPanel = {
+export interface CommandActionPanel {
   title?: string;
   sections: CommandActionSection[];
-};
+}
 
 export type CommandAccessoryTone = ExtensionAccessoryTone;
-export type CommandItemAccessory = {
+export interface CommandItemAccessory {
   text?: string;
   icon?: string | ReactNode;
   tone?: CommandAccessoryTone;
   tooltip?: string;
-};
+}
 export type CommandImage = ExtensionImage;
 export type CommandMetadataItem =
   | { type?: 'text'; label: string; value: string; copyable?: boolean }
   | { type: 'link'; label: string; value: string; url: string }
   | { type: 'tag'; label?: string; value: string; tone?: CommandAccessoryTone }
   | { type: 'separator' };
-export type CommandDetail = {
+export interface CommandDetail {
   title?: string;
   subtitle?: string;
   markdown?: string;
   metadata?: CommandMetadataItem[];
   image?: CommandImage;
   actions?: CommandAction[];
-};
+}
 export type CommandItemForeground = ForegroundColor;
-export type CommandItemAppearance = { foreground?: CommandItemForeground };
+export interface CommandItemAppearance {
+  foreground?: CommandItemForeground;
+}
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & {
   id: string;
@@ -474,7 +487,7 @@ export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & {
 export type CommandFormValue = ExtensionFormValue;
 export type CommandFormFieldType = ExtensionFormFieldType;
 export type CommandFormOption = ExtensionFormOption;
-export type CommandFormField = {
+export interface CommandFormField {
   id: string;
   label?: string;
   type?: CommandFormFieldType;
@@ -490,9 +503,9 @@ export type CommandFormField = {
   buttonLabel?: string;
   defaultPath?: string;
   canCreateDirectories?: boolean;
-};
+}
 
-export type CommandItem = {
+export interface CommandItem {
   id: string;
   title: string;
   subtitle?: string;
@@ -518,29 +531,30 @@ export type CommandItem = {
   disabled?: boolean;
   className?: string;
   detail?: CommandDetail;
-};
+}
 
-export type CommandItemSection = {
+export interface CommandItemSection {
   title?: string;
   subtitle?: string;
   items: CommandItem[];
-};
+}
 
-export type CommandViewPatch = {
+export interface CommandViewPatch {
   items?: CommandItemPatch[];
   mode?: PatchMode;
   removeItemIds?: string[];
   isLoading?: boolean;
   selectedItemId?: string;
-};
+}
 
-export type CommandView = {
+export interface CommandView {
   id?: string;
   type:
     | 'list'
     | 'grid'
     | 'preview'
     | 'chat'
+    | 'prompt'
     | 'form'
     | 'editor'
     | 'progress'
@@ -560,8 +574,18 @@ export type CommandView = {
   initialPrompt?: string;
   subtitle?: string;
   content?: string;
+  draft?: {
+    key?: string;
+    version?: string | number;
+    ref?: string;
+    autosave?: { debounceMs?: number };
+  };
   placeholder?: string;
   format?: ExtensionEditorFormat;
+  /** Markdown editors render a split live preview only when this is true. */
+  preview?: boolean;
+  /** Derive the visible editor title from the first non-empty content line. */
+  titleFromContent?: boolean;
   language?: string;
   readOnly?: boolean;
   html?: string;
@@ -603,12 +627,14 @@ export type CommandView = {
   actions?: CommandAction[];
   actionPanel?: CommandActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
+  actionPanelPresentation?: 'default' | 'compact';
+  windowPresentation?: 'default' | 'compact';
   layout?: NonNullable<ExtensionView['layout']>;
   aspectRatio?: NonNullable<ExtensionView['aspectRatio']>;
   columns?: NonNullable<ExtensionView['columns']>;
-};
+}
 
-export type RowModel = {
+export interface RowModel {
   value: string;
   icon: ReactNode;
   title: string;
@@ -617,19 +643,12 @@ export type RowModel = {
   extras?: string[];
   className?: string;
   onSelect: () => void;
-};
+}
 
-export type CustomizableCommandAction = {
+export interface CustomizableCommandAction {
   kind?: string;
   customizable?: boolean;
-};
-
-const CUSTOMIZABLE_ACTION_KINDS = new Set([
-  'app',
-  'builtin',
-  'clipboard-history',
-  'extension-action',
-]);
+}
 
 export function canCustomizeCommandAction(
   action: CustomizableCommandAction | null | undefined,
@@ -644,7 +663,9 @@ export function actionPanelFromActions(
   actions?: CommandAction[],
   title?: string,
 ): CommandActionPanel | undefined {
-  if (!actions?.length) return;
+  if (!actions || actions.length === 0) {
+    return;
+  }
   return { title, sections: [{ actions }] };
 }
 
@@ -664,15 +685,18 @@ export function actionDefinition(
 }
 
 export function actionDescription(action: CommandAction) {
-  if (action.subtitle || action.description)
+  if (action.subtitle || action.description) {
     return action.subtitle || action.description;
-  if (action.type === 'quickLook' || action.type === 'revealPath')
+  }
+  if (action.type === 'quickLook' || action.type === 'revealPath') {
     return (
       action.title || actionDefinition(action)?.description || 'Run action'
     );
-  if (action.type === 'openWith')
+  }
+  if (action.type === 'openWith') {
     return action.app?.name
       ? `Open with ${action.app.name}`
       : actionDefinition(action)?.description || 'Run action';
+  }
   return actionDefinition(action)?.description || 'Run action';
 }

@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Internal extension registry intentionally accepts heterogeneous factory shapes.
 import { createAccountExtension } from './account';
 import { createAiBuilderExtension } from './ai-builder';
 import { createAppsExtension } from './apps';
@@ -6,6 +7,7 @@ import { createCalculatorExtension } from './calculator';
 import { createClipboardExtension } from './clipboard';
 import { createExtensionsExtension } from './extensions';
 import { createFilesExtension } from './files';
+import { createFloatingNotesExtension } from './floating-notes';
 import { createKeyboardShortcutsExtension } from './keyboard-shortcuts';
 import { createSettingsExtension } from './settings';
 import { createPlacesExtension, createSystemExtension } from './system';
@@ -20,6 +22,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createClipboardExtension,
   createAppsExtension,
   createFilesExtension,
+  createFloatingNotesExtension,
   createExtensionsExtension,
   createAiBuilderExtension,
   createUpdatesExtension,

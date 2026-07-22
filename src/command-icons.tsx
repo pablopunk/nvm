@@ -1,8 +1,19 @@
-import * as LucideIcons from 'lucide-react';
+import {
+  Clipboard,
+  Folder,
+  Globe,
+  icons,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import React, { type ComponentType } from 'react';
 import type { CommandAction, CommandItem } from './model';
 
 type LucideComponent = ComponentType<{ size?: number; className?: string }>;
+type CommandIconName = string;
+
+const ICON_SUFFIX_PATTERN = /Icon$/;
+const ICON_NAME_SEPARATOR_PATTERN = /[^a-zA-Z0-9]+/;
 
 const curatedIconAliases = {
   app: 'AppWindow',
@@ -24,30 +35,27 @@ const curatedIconAliases = {
   trash: 'Trash2',
 } as const;
 
-export const iconFor = Object.fromEntries(
+const iconLibrary = icons as Record<string, LucideComponent | undefined>;
+const iconFor = Object.fromEntries(
   Object.entries(curatedIconAliases).map(([name, lucideName]) => [
     name,
-    LucideIcons[lucideName] as LucideComponent,
+    iconLibrary[lucideName] as LucideComponent,
   ]),
 ) as Record<keyof typeof curatedIconAliases, LucideComponent>;
 
-export type CommandIconName = string;
-
 function pascalCaseIconName(name: string) {
   return name
-    .replace(/Icon$/, '')
-    .split(/[^a-zA-Z0-9]+/)
+    .replace(ICON_SUFFIX_PATTERN, '')
+    .split(ICON_NAME_SEPARATOR_PATTERN)
     .filter(Boolean)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join('');
 }
 
 function isRenderableLucideIcon(value: unknown): value is LucideComponent {
-  if (!(typeof value === 'object' || typeof value === 'function')) return false;
-  // lucide-react also exports helpers such as `Icon`, `icons`, and
-  // `createLucideIcon`. Some of them are objects/functions but are not
-  // complete icon components; rendering them crashes inside lucide-react.
-  // Real generated icon components have a displayName (for example Trash2).
+  if (!(typeof value === 'object' || typeof value === 'function')) {
+    return false;
+  }
   return typeof (value as { displayName?: unknown }).displayName === 'string';
 }
 
@@ -66,39 +74,57 @@ function lucideIcon(
     pascalName ? `${pascalName}Icon` : '',
   ].filter(Boolean);
   for (const candidate of candidates) {
-    const Icon = (LucideIcons as Record<string, unknown>)[candidate];
-    if (isRenderableLucideIcon(Icon)) return Icon;
+    const Icon = iconLibrary[candidate];
+    if (isRenderableLucideIcon(Icon)) {
+      return Icon;
+    }
   }
   return iconFor[fallback];
 }
 
-export function iconForAction(action: CommandAction) {
+function iconForAction(action: CommandAction) {
+  if (typeof action.icon === 'string' && action.icon) {
+    const Icon = lucideIcon(action.icon);
+    return <Icon size={18} />;
+  }
+  if (action.style === 'destructive') {
+    return <Trash2 size={18} />;
+  }
   if (
     action.type === 'copyText' ||
     action.type === 'copyImage' ||
     action.type === 'pasteText'
-  )
-    return <LucideIcons.Clipboard size={18} />;
-  if (action.type === 'trash' || action.type === 'removeClipboardHistory')
-    return <LucideIcons.Trash2 size={18} />;
+  ) {
+    return <Clipboard size={18} />;
+  }
+  if (action.type === 'trash' || action.type === 'removeClipboardHistory') {
+    return <Trash2 size={18} />;
+  }
   if (
     action.type === 'revealPath' ||
     action.type === 'openPath' ||
     action.type === 'quickLook' ||
     action.type === 'openWith'
-  )
-    return <LucideIcons.Folder size={18} />;
-  if (action.type === 'nativeAction') return <LucideIcons.Sparkles size={18} />;
-  return <LucideIcons.Globe size={18} />;
+  ) {
+    return <Folder size={18} />;
+  }
+  if (action.type === 'nativeAction') {
+    return <Sparkles size={18} />;
+  }
+  return <Globe size={18} />;
 }
 
 function imageSource(image: CommandItem['image']) {
-  if (!image) return '';
-  if (typeof image === 'string') return image;
+  if (!image) {
+    return '';
+  }
+  if (typeof image === 'string') {
+    return image;
+  }
   return image.dark || image.src || image.light || image.fallback || '';
 }
 
-export function iconForItem(
+function iconForItem(
   item: CommandItem,
   fallback: CommandIconName = 'sparkles',
 ) {
@@ -115,3 +141,6 @@ export function iconForItem(
     <Icon size={18} />
   );
 }
+
+export type { CommandIconName };
+export { iconFor, iconForAction, iconForItem };

@@ -103,13 +103,26 @@ class FakeBrowserWindow {
   }
 }
 
-function createManager(unsupportedCapabilities: string[] = []) {
+function createManager(
+  unsupportedCapabilities: string[] = [],
+  persistedState?: Record<string, unknown>,
+) {
   FakeBrowserWindow.instances = [];
   const trustedChecks: Array<{ id: string; url: string }> = [];
   const diagnostics: Array<{
     message: string;
     data?: Record<string, unknown>;
   }> = [];
+  const persistence = persistedState
+    ? {
+        read: () => persistedState as never,
+        write: (state: Record<string, unknown>) => {
+          for (const key of Object.keys(persistedState))
+            delete persistedState[key];
+          Object.assign(persistedState, state);
+        },
+      }
+    : undefined;
   const manager = createExtensionWindowManager({
     BrowserWindow: FakeBrowserWindow,
     preloadPath: '/preload.cjs',
@@ -133,9 +146,10 @@ function createManager(unsupportedCapabilities: string[] = []) {
       trustedChecks.push({ id, url });
       return url === 'trusted-url';
     },
+    persistence,
     debug: (message, data) => diagnostics.push({ message, data }),
   });
-  return { manager, trustedChecks, diagnostics };
+  return { manager, trustedChecks, diagnostics, persistedState };
 }
 
 test('extension window helpers clamp size and derive stable ids', () => {
@@ -505,4 +519,121 @@ test('opens in degraded mode and skips unsupported native window methods', () =>
     diagnostics.map(({ data }) => data?.capability),
     unsupported,
   );
+});
+
+test('remembers frames across sessions and skips centering restored windows', () => {
+  const persistedState: Record<string, unknown> = {};
+  const first = createManager([], persistedState);
+  const created = first.manager.createOrUpdate(
+    { id: 'panel', title: 'Panel' },
+    { id: 'panel', remembersFrame: true, restoreKey: 'panel' },
+  );
+  const win = created.win as FakeBrowserWindow;
+  win.setBounds({ x: 300, y: 300, width: 700, height: 500 });
+  win.handlers.get('move')?.();
+  assert.deepEqual(persistedState.frames, {
+    panel: { x: 300, y: 300, width: 700, height: 500 },
+  });
+
+  const second = createManager([], persistedState);
+  const restored = second.manager.createOrUpdate(
+    { id: 'panel', title: 'Panel' },
+    { id: 'panel', remembersFrame: true, restoreKey: 'panel' },
+  );
+  const restoredWin = restored.win as FakeBrowserWindow;
+  restoredWin.handlers.get('once:ready-to-show')?.();
+  assert.deepEqual(restoredWin.bounds, {
+    x: 300,
+    y: 300,
+    width: 700,
+    height: 500,
+  });
+  assert.equal(restoredWin.visible, true);
+});
+
+test('clamps restored frames into the nearest display work area', () => {
+  const persistedState: Record<string, unknown> = {
+    frames: { panel: { x: 5000, y: 5000, width: 700, height: 500 } },
+  };
+  const { manager } = createManager([], persistedState);
+  const record = manager.createOrUpdate(
+    { id: 'panel', title: 'Panel' },
+    { id: 'panel', remembersFrame: true, restoreKey: 'panel' },
+  );
+  assert.deepEqual((record.win as FakeBrowserWindow).bounds, {
+    x: 310,
+    y: 320,
+    width: 700,
+    height: 500,
+  });
+});
+
+test('tracks persistent windows and forgets them on close but not on quit', () => {
+  const persistedState: Record<string, unknown> = {};
+  const { manager } = createManager([], persistedState);
+  manager.createOrUpdate(
+    { id: 'notes', title: 'Notes' },
+    {
+      id: 'notes',
+      persistent: true,
+      restoreKey: 'notes',
+    },
+    'show',
+    'nevermind.floating-notes',
+  );
+  assert.deepEqual(manager.persistentWindowRecords(), [
+    {
+      restoreKey: 'notes',
+      ownerExtensionId: 'nevermind.floating-notes',
+      options: { id: 'notes', persistent: true, restoreKey: 'notes' },
+    },
+  ]);
+
+  manager.closeAll();
+  assert.equal(manager.persistentWindowRecords().length, 1);
+
+  const reopened = createManager([], persistedState);
+  reopened.manager.createOrUpdate(
+    { id: 'notes', title: 'Notes' },
+    { id: 'notes', persistent: true, restoreKey: 'notes' },
+    'preserve',
+    'nevermind.floating-notes',
+  );
+  const win = FakeBrowserWindow.instances[0];
+  win.close();
+  assert.equal(reopened.manager.persistentWindowRecords().length, 0);
+});
+
+test('hydrates persisted state once for the async startup path', () => {
+  FakeBrowserWindow.instances = [];
+  const writes: unknown[] = [];
+  const manager = createExtensionWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    preloadPath: '/preload.cjs',
+    rendererIndexPath: '/index.html',
+    isDev: false,
+    shouldUseDarkColors: () => true,
+    getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+    getDisplayNearestPoint: () => ({
+      workArea: { x: 0, y: 0, width: 1000, height: 800 },
+    }),
+    normalizeView: (view) => view,
+    hashValue: () => 'hash',
+    hasCapability: () => true,
+    installNavigationPolicy: () => {},
+    isTrustedPage: () => true,
+    persistence: {
+      write: (state) => writes.push(state),
+    },
+  });
+
+  manager.hydratePersistedState({
+    windows: [{ restoreKey: 'notes', ownerExtensionId: 'ext' }],
+  });
+  manager.hydratePersistedState({ windows: [] });
+  assert.deepEqual(manager.persistentWindowRecords(), [
+    { restoreKey: 'notes', ownerExtensionId: 'ext', options: undefined },
+  ]);
+  manager.forgetPersistentWindow('notes');
+  assert.equal(writes.length, 1);
 });

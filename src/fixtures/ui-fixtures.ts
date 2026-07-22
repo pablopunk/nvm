@@ -1,3 +1,4 @@
+// biome-ignore-all lint: Dev-only UI fixtures intentionally exercise dynamic extension payload shapes.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -144,14 +145,53 @@ const FLOATING_WINDOW_OPTIONS = {
 };
 
 function floatingNoteEditorView(ctx: ExtensionContext) {
+  const copyNote = ctx.actions.copyText('Floating note', 'Copy Note');
+  const prompt = ctx.input.prompt({
+    title: 'Label Floating Note',
+    message: 'Prompts expand from the compact action panel.',
+    fields: [
+      {
+        id: 'label',
+        label: 'Label',
+        type: 'text',
+        placeholder: 'Scratchpad',
+        required: true,
+      },
+    ],
+    submitTitle: 'Apply Label',
+    action: ctx.actions.run('Apply Label', (_ctx, action) =>
+      _ctx.ui.toast({
+        message: `Label: ${String(action.formValues?.label || '')}`,
+      }),
+    ),
+  });
+  const confirm = ctx.ui.confirm({
+    title: 'Confirm Floating Action',
+    message: 'Confirmations expand from the compact action panel.',
+    confirmLabel: 'Confirm',
+    onConfirm: ctx.actions.run('Confirm', (_ctx) =>
+      _ctx.ui.toast({ message: 'Floating action confirmed' }),
+    ),
+  });
+  const submenu: ExtensionAction = {
+    type: 'submenu',
+    title: 'More Actions',
+    icon: 'ellipsis',
+    submenu: {
+      title: 'More Actions',
+      sections: [{ actions: [copyNote] }],
+    },
+  };
   return ctx.ui.editor({
     id: FLOATING_WINDOW_ID,
     title: 'Floating Note',
     subtitle: 'Editable host-rendered note',
-    format: 'text',
+    format: 'markdown',
+    titleFromContent: true,
     placeholder: 'Write a floating note…',
     content:
-      'Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- No palette chrome, preview, or action menu',
+      '# Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- Compact Cmd+K action panel by default',
+    actions: [copyNote, prompt, confirm, submenu],
   });
 }
 
@@ -578,7 +618,7 @@ function promptView(ctx: ExtensionContext) {
       ctx.ui.item({
         id: 'prompt',
         title: 'Prompt for Quicklink Arguments',
-        subtitle: 'Opens a form and then runs the wrapped action',
+        subtitle: 'Collects each argument through the palette input',
         icon: 'text-cursor-input',
         primaryAction: prompt,
         actions: [prompt],
@@ -594,9 +634,15 @@ function editorView(ctx: ExtensionContext) {
     subtitle:
       'Editable markdown with a host-rendered preview and submit action',
     format: 'markdown',
+    preview: true,
     placeholder: 'Write markdown…',
     content:
-      '# Release Note Draft\n\n- Built with host-owned editor UI.\n- Supports **markdown preview**.\n- Submit injects `editorContent` into the action.',
+      '# Release Note Draft\n\n- Built with host-owned editor UI.\n- Supports **markdown preview**.\n- Submit injects `editorContent` into the action.\n- Draft autosave recovers unsaved content on reopen.',
+    draft: {
+      key: 'dev-ui-editor-draft',
+      version: 1,
+      autosave: { debounceMs: 500 },
+    },
     submitAction: ctx.actions.run('Preview Draft', (_ctx, action) =>
       ctx.ui.preview({
         title: 'Submitted Editor Content',
@@ -1173,6 +1219,75 @@ function webviewView(ctx: ExtensionContext) {
   });
 }
 
+function crudCollectionView(ctx: ExtensionContext) {
+  const preview = ctx.actions.run('Preview draft', () =>
+    ctx.ui.preview({
+      id: 'dev-ui-crud-preview',
+      title: 'Release notes draft',
+      content:
+        '# Release notes draft\n\nA generic collection record can open any host-rendered preview.',
+    }),
+  );
+  const edit = ctx.input.prompt({
+    title: 'Edit draft',
+    fields: [
+      {
+        id: 'title',
+        label: 'Title',
+        type: 'text',
+        value: 'Release notes draft',
+      },
+    ],
+    action: ctx.actions.run('Save draft', (_innerCtx, action) =>
+      ctx.ui.toast({
+        message: `Saved ${String(action.formValues?.title || 'draft')}`,
+        tone: 'success',
+      }),
+    ),
+  });
+  const remove = ctx.actions.run('Remove draft', () =>
+    ctx.ui.toast({ message: 'Draft removed', tone: 'success' }),
+  );
+  return ctx.ui.collection({
+    id: 'dev-ui-crud-collection',
+    title: 'Dev UI · CRUD Collection',
+    subtitle:
+      'Host-owned add, preview, edit, and remove with default shortcuts and confirmation',
+    searchBarPlaceholder: 'Find a record',
+    emptyView: {
+      title: 'No records',
+      subtitle: 'Use Add record to exercise the empty state.',
+    },
+    add: ctx.actions.run('Add record', () =>
+      ctx.ui.toast({ message: 'Add action invoked', tone: 'success' }),
+    ),
+    items: [
+      {
+        id: 'release-notes',
+        title: 'Release notes draft',
+        subtitle: 'A reusable CRUD record fixture',
+        icon: 'file-pen-line',
+        preview,
+        edit,
+        remove,
+      },
+      {
+        id: 'roadmap',
+        title: 'Roadmap draft',
+        subtitle: 'Custom remove confirmation and no preview',
+        icon: 'map',
+        edit,
+        remove: {
+          ...remove,
+          title: 'Discard roadmap',
+          confirmMessage: 'Discard the roadmap draft permanently?',
+          confirmLabel: 'Discard',
+        },
+      },
+    ],
+  });
+}
+
 const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
   title: 'Dev UI Fixtures',
@@ -1197,6 +1312,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: List',
       icon: 'list',
       run: (ctx) => listView(ctx),
+    },
+    {
+      id: 'crud-collection',
+      title: 'Dev UI: CRUD Collection',
+      icon: 'list-plus',
+      run: (ctx) => crudCollectionView(ctx),
     },
     {
       id: 'rendering-polish',

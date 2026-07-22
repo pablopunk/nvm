@@ -230,6 +230,10 @@ export type NevermindApi = {
     options?: Record<string, unknown>;
   } | null>;
   closeExtensionWindow: () => Promise<void>;
+  saveExtensionDraft: (
+    ref: string,
+    content: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   onExtensionWindowView: (
     callback: (payload: {
       id: string;

@@ -23,6 +23,7 @@
 ## Product and UX
 
 * Use the Command-K palette for all interactions. Avoid `window.confirm`, `alert`, or dedicated settings windows.
+* Treat the palette input and result rows as the canonical UI for short input and choices; avoid stacked form controls. Use an editor for long-form content and native pickers for OS resources. See `src/docs/palette-first-extension-ui.md`.
 * Show cached snapshots immediately and refresh in place. Do not disrupt navigation history with passive loading states.
 * Do not block palette first paint, typing, or command execution on decoration/enrichment work such as running status, icons, thumbnails, metadata, or heavy refreshes.
 * Reset filters and search during navigation unless inheritance is explicit.

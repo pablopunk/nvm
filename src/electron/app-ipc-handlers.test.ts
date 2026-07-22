@@ -82,6 +82,7 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
         return true;
       },
     },
+    saveExtensionDraft: (input) => ({ ok: true, input }),
     logError: (message) => calls.push(`error:${message}`),
     logWarn: (message) => calls.push(`warn:${message}`),
     loggerDebug: (message) => calls.push(`debug:${message}`),

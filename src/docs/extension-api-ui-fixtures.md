@@ -19,6 +19,7 @@ When adding or changing an extension API method that renders UI:
 `src/fixtures/ui-fixtures.ts` covers the current host-rendered UI surface:
 
 - `ctx.ui.list`
+- `ctx.ui.collection`
 - `ctx.ui.grid`
 - `ctx.ui.preview`
 - `ctx.ui.chat`

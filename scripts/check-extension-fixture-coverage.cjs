@@ -7,6 +7,7 @@ const ts = require('typescript');
 // Keep in sync with src/docs/extension-api-ui-fixtures.md § "Current Fixture".
 const FIXTURE_REQUIRED = new Set([
   'ui.list',
+  'ui.collection',
   'ui.grid',
   'ui.preview',
   'ui.chat',

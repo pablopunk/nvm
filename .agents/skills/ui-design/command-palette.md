@@ -69,7 +69,9 @@ Patterns specific to keyboard-first command palette interfaces — Nevermind's c
 ## Actions & sub-views
 
 - Primary action is `↵`. Secondary actions live in an inline action menu (`⌘.`), not as buttons.
-- For detail views (preview, form, multi-step), slide-in from the right of the same panel. Keep the search input visible if it still applies.
+- Collect short scalar input and multi-step choices through the existing palette input and result rows; do not open stacked form controls.
+- Use an editor for long-form content and native pickers for OS resources.
+- In independent editor or companion windows, keep primary content visible and present action menus as compact anchored overlays when a full-size palette would obscure the task.
 - Breadcrumbs at the top-left for nested views; Escape pops one level.
 
 ## AI-specific considerations (Nevermind)
