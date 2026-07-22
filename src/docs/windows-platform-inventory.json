@@ -454,9 +454,17 @@
       "key": "os-platform-selector-0dc3510a2353",
       "file": "src/electron/os.ts",
       "category": "platform-selector",
-      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::linux: Boolean(environment.APPIMAGE)::self",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::linux: true::self",
       "disposition": "capability-selector",
       "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-platform-selector-auto-updates-win32",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::win32: !environment.PORTABLE_EXECUTABLE_FILE::self",
+      "disposition": "capability-selector",
+      "surface": "auto-updater"
     },
     {
       "key": "os-platform-selector-283fb054769b",
