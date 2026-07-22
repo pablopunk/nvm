@@ -92,10 +92,12 @@ test('extension ui collection gives records consistent CRUD actions', () => {
   const view = ui.collection({
     id: 'tasks',
     title: 'Tasks',
+    windowPresentation: 'compact',
     add,
     items: [{ id: 'one', title: 'Write API', preview, edit, remove }],
   });
   assert.equal(view.type, 'list');
+  assert.equal(view.windowPresentation, 'compact');
   assert.deepEqual(view.actions, [add]);
   assert.equal(view.items[0].id, '__nvm:collection-create');
   assert.equal(view.items[0].title, 'Add task');

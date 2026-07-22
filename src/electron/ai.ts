@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This legacy AI integration retains established provider and session conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';

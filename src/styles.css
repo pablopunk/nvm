@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/complexity/noImportantStyles lint/style/noDescendingSpecificity: Legacy cascade and reduced-motion overrides are intentional. */
 :root {
   --window-blur-margin: 96px;
   --search-row-height: 58px;
@@ -1996,6 +1997,10 @@ kbd {
   -webkit-app-region: no-drag;
 }
 
+.paletteCompactPanel {
+  bottom: 12px;
+}
+
 .extensionWindowCompactPanel .extensionWindowSearchRow {
   height: 36px;
   padding: 0 12px;
@@ -2024,6 +2029,19 @@ kbd {
 .extensionWindowCompactResults .resultIcon svg {
   width: 13px;
   height: 13px;
+}
+
+.extensionWindowCompactResults .thumbnailIcon {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.extensionWindowCompactResults .resultIcon img {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .extensionWindowCompactResults .resultText strong {

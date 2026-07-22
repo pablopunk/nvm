@@ -21,6 +21,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { actionMenuPresentation } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
 import { isAppIconPath } from './app-icons';
 import {
@@ -283,6 +284,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [selectedValue, setSelectedValue] = useState('');
   const [query, setQuery] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
+  const [actionSubmenuFor, setActionSubmenuFor] = useState<{
+    title: string;
+    panel: CommandActionPanel;
+  } | null>(null);
   const [confirmFor, setConfirmFor] = useState<ExtensionViewAction | null>(
     null,
   );
@@ -328,6 +333,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   useEffect(() => {
     setQuery('');
     setPanelOpen(false);
+    setActionSubmenuFor(null);
     setConfirmFor(null);
   }, [viewKey]);
 
@@ -374,6 +380,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       } else await window.nvm.closeExtensionWindow();
     } else if (result.view?.windowPresentation === 'compact') {
       setPanelOpen(false);
+      setActionSubmenuFor(null);
       setConfirmFor(null);
       setCompactView(result.view);
       setQuery('');
@@ -383,6 +390,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setBackStack((current) => [...current, view]);
       else if (result.navigation === 'root') setBackStack([]);
       setPanelOpen(false);
+      setActionSubmenuFor(null);
       setCompactView(null);
       setView(result.view);
       setFormValues(seedFormValuesFromView(result.view));
@@ -414,6 +422,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       return;
     }
     if (action.requiresConfirmation) {
+      setPanelOpen(false);
+      setActionSubmenuFor(null);
       setConfirmFor(action);
       return;
     }
@@ -431,6 +441,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     setBackStack((current) => current.slice(0, -1));
     setView(previous);
     setCompactView(null);
+    setActionSubmenuFor(null);
     setFormValues(seedFormValuesFromView(previous));
     setSelectedValue(selectedItemIdForView(previous));
   }
@@ -451,6 +462,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   function panelContents() {
+    if (actionSubmenuFor)
+      return { panel: actionSubmenuFor.panel, fallback: [] };
     const item = selectedItem();
     if (item) {
       const itemActions = actionsFromPanel(
@@ -478,10 +491,17 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         value: `window-action:${sectionIndex}:${index}:${action.type}:${action.title}`,
         icon: iconForAction(action),
         title: action.title,
-        subtitle: actionDescription(action),
+        subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
         shortcut: action.shortcut,
         onSelect: () => {
+          if (action.submenu) {
+            setPanelOpen(false);
+            setActionSubmenuFor({ title: action.title, panel: action.submenu });
+            setQuery('');
+            return;
+          }
           setPanelOpen(false);
+          setActionSubmenuFor(null);
           void runAction(action);
         },
         className:
@@ -545,7 +565,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   function onShellKeyDown(event: React.KeyboardEvent) {
     if (event.key === 'Escape') {
       if (confirmFor) setConfirmFor(null);
-      else if (panelOpen) setPanelOpen(false);
+      else if (actionSubmenuFor) {
+        setActionSubmenuFor(null);
+        setPanelOpen(true);
+        setQuery('');
+      } else if (panelOpen) setPanelOpen(false);
       else if (compactView) {
         setCompactView(null);
         setQuery('');
@@ -562,10 +586,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (normalized === 'command+k') {
       event.preventDefault();
       setQuery('');
-      setPanelOpen((open) => !open);
+      setActionSubmenuFor(null);
+      setPanelOpen((open) => (actionSubmenuFor ? true : !open));
       return;
     }
-    if (panelOpen || confirmFor) return;
+    if (panelOpen || confirmFor || actionSubmenuFor) return;
     const item = selectedItem();
     const candidates = (
       item
@@ -605,9 +630,16 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     window.nvm.startFileDrag(filePath);
   }
 
-  const actionSurfaceOpen = panelOpen || Boolean(confirmFor);
+  const actionSurfaceOpen =
+    panelOpen || Boolean(confirmFor) || Boolean(actionSubmenuFor);
+  const actionOverlayKind = confirmFor
+    ? 'confirmation'
+    : actionSubmenuFor
+      ? 'submenu'
+      : 'actions';
   const compactActionSurface = Boolean(
-    view?.actionPanelPresentation === 'compact' && actionSurfaceOpen,
+    actionSurfaceOpen &&
+      actionMenuPresentation(actionOverlayKind) === 'compact',
   );
   const compactViewOpen = Boolean(compactView);
   const { panel, fallback } = panelContents();
@@ -621,8 +653,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     .map((row) => row.value)
     .join(':');
   const searchableView =
-    panelOpen ||
-    Boolean(confirmFor) ||
+    actionSurfaceOpen ||
     compactViewOpen ||
     palettePrompt.active ||
     view?.type === 'list' ||
@@ -637,6 +668,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     searchableView,
     viewKey,
     panelOpen,
+    actionSubmenuFor,
     confirmFor,
     palettePrompt.fieldIndex,
   ]);
@@ -693,9 +725,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                 ? 'Confirm action'
                 : panelOpen
                   ? `Filter ${view.title || 'window'} actions`
-                  : palettePrompt.active
-                    ? palettePrompt.placeholder
-                    : view.searchBarPlaceholder || 'Search…'
+                  : actionSubmenuFor
+                    ? `Filter ${actionSubmenuFor.title}`
+                    : palettePrompt.active
+                      ? palettePrompt.placeholder
+                      : view.searchBarPlaceholder || 'Search…'
             }
             spellCheck={false}
           />
@@ -855,6 +889,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const compactActionInputRef = useRef<HTMLInputElement>(null);
   const resultsListRef = useRef<HTMLDivElement>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
   const requestedIcons = useRef(new Set<string>());
@@ -868,6 +903,8 @@ export function App() {
   const queryHistoryRef = useRef<string[]>([]);
   const queryHistoryIndexRef = useRef<number | null>(null);
   const queryHistoryDraftRef = useRef('');
+  const compactActionMenuOriginSelectionRef = useRef('');
+  const compactActionMenuWasOpenRef = useRef(false);
   const [query, setQuery] = useState('');
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [actions, setActions] = useSearchResults<Action>(
@@ -913,6 +950,7 @@ export function App() {
   );
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false);
   const [childQuery, setChildQuery] = useState('');
+  const [actionQuery, setActionQuery] = useState('');
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null);
   const [recordedShortcut, setRecordedShortcut] = useState('');
   const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false);
@@ -924,6 +962,12 @@ export function App() {
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([]);
   const extensionViewRef = useRef<ExtensionView | null>(null);
   const wasChildOpenRef = useRef(false);
+  const isCompactActionMenuOpen = Boolean(
+    shortcutOptionsFor ||
+      actionSubmenuFor ||
+      extensionItemOptionsFor ||
+      optionsFor,
+  );
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 });
   function selectValue(value: string) {
     selectedValueRef.current = value;
@@ -944,6 +988,7 @@ export function App() {
       setConfirmViewActionFor,
       setActionSubmenuFor,
     });
+    setActionQuery('');
   }
   useEffect(() => {
     extensionViewRef.current = extensionView;
@@ -961,6 +1006,7 @@ export function App() {
     markDebugPerformance('app.commit', {
       queryLength: query.length,
       childQueryLength: childQuery.length,
+      actionQueryLength: actionQuery.length,
       actionCount: actions.length,
       selectedValue,
       extensionViewType: extensionView?.type,
@@ -1275,6 +1321,17 @@ export function App() {
     : '';
 
   useLayoutEffect(() => {
+    const wasOpen = compactActionMenuWasOpenRef.current;
+    if (isCompactActionMenuOpen && !wasOpen) {
+      compactActionMenuOriginSelectionRef.current = selectedValueRef.current;
+    } else if (!isCompactActionMenuOpen && wasOpen) {
+      selectValue(compactActionMenuOriginSelectionRef.current);
+      compactActionMenuOriginSelectionRef.current = '';
+    }
+    compactActionMenuWasOpenRef.current = isCompactActionMenuOpen;
+  }, [isCompactActionMenuOpen]);
+
+  useLayoutEffect(() => {
     function selectExtensionItem(view: ExtensionView) {
       const items = filterExtensionItems(allViewItems(view));
       const current = selectedValueRef.current;
@@ -1334,6 +1391,7 @@ export function App() {
   }, [
     actions,
     actionSubmenuFor,
+    actionQuery,
     aliasFor,
     childQuery,
     confirmRemoveFor,
@@ -1351,15 +1409,18 @@ export function App() {
 
   useEffect(() => {
     setChildQuery('');
+  }, [extensionView?.title, extensionView?.type, shortcutManagerOpen]);
+
+  useEffect(() => {
+    setActionQuery('');
   }, [
     actionSubmenuFor?.title,
+    aliasFor?.id,
     confirmRemoveFor?.id,
     confirmViewActionFor?.title,
     extensionItemOptionsFor?.id,
-    extensionView?.title,
-    extensionView?.type,
     optionsFor?.id,
-    previewFor?.id,
+    shortcutOptionsFor?.action.id,
   ]);
 
   useEffect(() => {
@@ -1390,9 +1451,6 @@ export function App() {
     const isLarge =
       extensionView?.size === 'large' ||
       extensionView?.presentation === 'preview';
-    const isActionPanelOpen = Boolean(
-      actionSubmenuFor || extensionItemOptionsFor,
-    );
     aiChatOpenRef.current = isAiChat;
     aiChatIdRef.current = visibleAiChat?.chatId;
     const previousAiChatId = lastVisibleAiChatIdRef.current;
@@ -1403,7 +1461,7 @@ export function App() {
       void window.nvm.aiChatExited(previousAiChatId);
     lastVisibleAiChatIdRef.current = visibleAiChat?.chatId;
     const mode: PaletteMode =
-      previewFor || (isLarge && !isActionPanelOpen)
+      previewFor || isLarge
         ? 'preview'
         : siblingViews.length > 0
           ? 'stacked'
@@ -1536,21 +1594,25 @@ export function App() {
     extensionView?.type === 'grid' ||
     palettePrompt.active;
   const isRootLikeExtensionView = extensionView?.id === 'clipboard-history';
+  const isActionWorkflowOpen = Boolean(
+    aliasFor || confirmRemoveFor || confirmViewActionFor,
+  );
+  const compactActionMenuVisible = Boolean(
+    isCompactActionMenuOpen &&
+      !shortcutFor &&
+      !aliasFor &&
+      !confirmRemoveFor &&
+      !confirmViewActionFor &&
+      !palettePrompt.active,
+  );
   const isFilterableChildOpen = Boolean(
-    actionSubmenuFor ||
-      confirmRemoveFor ||
+    confirmRemoveFor ||
       confirmViewActionFor ||
-      extensionItemOptionsFor ||
-      optionsFor ||
       aliasFor ||
-      shortcutManagerOpen ||
+      (shortcutManagerOpen && !shortcutOptionsFor) ||
       isFilterableExtensionView,
   );
-  const isLargeExtensionView = Boolean(
-    extensionView?.size === 'large' &&
-      !actionSubmenuFor &&
-      !extensionItemOptionsFor,
-  );
+  const isLargeExtensionView = extensionView?.size === 'large';
   const isChildOpen = Boolean(
     shortcutFor ||
       shortcutOptionsFor ||
@@ -1565,39 +1627,52 @@ export function App() {
       extensionView,
   );
   const isVisuallyStacked =
-    (isChildOpen && !isRootLikeExtensionView) || siblingViews.length > 0;
-  const childPlaceholder = actionSubmenuFor
+    (isChildOpen && !isRootLikeExtensionView && !compactActionMenuVisible) ||
+    siblingViews.length > 0;
+  const childPlaceholder =
+    actionSubmenuFor && !compactActionMenuVisible
+      ? `Filter ${actionSubmenuFor.title}`
+      : shortcutOptionsFor && !compactActionMenuVisible
+        ? `Actions for “${shortcutOptionsFor.action.title}”`
+        : shortcutManagerOpen
+          ? 'Filter keyboard shortcuts'
+          : confirmRemoveFor || confirmViewActionFor
+            ? 'Filter confirmation actions'
+            : extensionItemOptionsFor && !compactActionMenuVisible
+              ? `Filter actions for “${extensionItemOptionsFor.title}”`
+              : optionsFor && !compactActionMenuVisible
+                ? `Filter actions for “${optionsFor.title}”`
+                : aliasFor
+                  ? `Alias for “${aliasFor.title}”`
+                  : palettePrompt.active
+                    ? palettePrompt.placeholder
+                    : extensionView
+                      ? `Filter ${extensionView.title}`
+                      : '';
+  const compactActionPlaceholder = actionSubmenuFor
     ? `Filter ${actionSubmenuFor.title}`
     : shortcutOptionsFor
-      ? `Actions for “${shortcutOptionsFor.action.title}”`
-      : shortcutManagerOpen
-        ? 'Filter keyboard shortcuts'
-        : confirmRemoveFor || confirmViewActionFor
-          ? 'Filter confirmation actions'
-          : extensionItemOptionsFor
-            ? `Filter actions for “${extensionItemOptionsFor.title}”`
-            : optionsFor
-              ? `Filter actions for “${optionsFor.title}”`
-              : aliasFor
-                ? `Alias for “${aliasFor.title}”`
-                : palettePrompt.active
-                  ? palettePrompt.placeholder
-                  : extensionView
-                    ? `Filter ${extensionView.title}`
-                    : '';
+      ? `Filter actions for “${shortcutOptionsFor.action.title}”`
+      : extensionItemOptionsFor
+        ? `Filter actions for “${extensionItemOptionsFor.title}”`
+        : optionsFor
+          ? `Filter actions for “${optionsFor.title}”`
+          : 'Filter actions';
   const inputValue = shortcutFor
     ? recordedShortcut
     : palettePrompt.active
       ? palettePrompt.query
-      : isFilterableChildOpen
-        ? childQuery
-        : previewFor
-          ? previewFor.title
-          : extensionView
-            ? extensionView.title
-            : optionsFor && !query
-              ? optionsFor.title
-              : query;
+      : isActionWorkflowOpen
+        ? actionQuery
+        : isFilterableChildOpen
+          ? childQuery
+          : previewFor
+            ? previewFor.title
+            : extensionView
+              ? extensionView.title
+              : optionsFor && !compactActionMenuVisible && !query
+                ? optionsFor.title
+                : query;
   const placeholder = shortcutFor
     ? 'Press a keyboard shortcut'
     : palettePrompt.active
@@ -1607,13 +1682,16 @@ export function App() {
         : SEARCH_PLACEHOLDERS[placeholderIndex];
   const activeSearchQuery = palettePrompt.active
     ? palettePrompt.query
+    : isActionWorkflowOpen
+      ? actionQuery
+      : !shortcutFor && isFilterableChildOpen
+        ? childQuery
+        : isChildOpen
+          ? ''
+          : query;
+  const activeSearchScope = isActionWorkflowOpen
+    ? `action-workflow:${aliasFor?.id || confirmRemoveFor?.id || confirmViewActionFor?.title}`
     : !shortcutFor && isFilterableChildOpen
-      ? childQuery
-      : isChildOpen
-        ? ''
-        : query;
-  const activeSearchScope =
-    !shortcutFor && isFilterableChildOpen
       ? `child:${actionSubmenuFor?.title || confirmRemoveFor?.id || confirmViewActionFor?.title || extensionItemOptionsFor?.id || optionsFor?.id || aliasFor?.id || extensionView?.id || extensionView?.title || shortcutManagerOpen}`
       : isChildOpen
         ? ''
@@ -1682,6 +1760,17 @@ export function App() {
     isFilterableChildOpen,
     optionsFor?.id,
     shortcutFor?.id,
+  ]);
+
+  useEffect(() => {
+    if (!compactActionMenuVisible) return;
+    requestAnimationFrame(() => compactActionInputRef.current?.focus());
+  }, [
+    compactActionMenuVisible,
+    actionSubmenuFor?.title,
+    extensionItemOptionsFor?.id,
+    optionsFor?.id,
+    shortcutOptionsFor?.action.id,
   ]);
 
   useEffect(() => {
@@ -1933,7 +2022,7 @@ export function App() {
   async function runViewAction(action: ExtensionViewAction, confirmed = false) {
     if (action.requiresConfirmation && !confirmed) {
       setConfirmViewActionFor(action);
-      setChildQuery('');
+      setActionQuery('');
       return;
     }
     if (viewActionRequestsQuit(action)) {
@@ -1951,6 +2040,7 @@ export function App() {
       const nextQuery = String(action.query ?? action.text ?? '');
       setRootQuery(nextQuery);
       setChildQuery('');
+      setActionQuery('');
       setOptionsFor(null);
       setExtensionItemOptionsFor(null);
       setActionSubmenuFor(null);
@@ -2294,13 +2384,13 @@ export function App() {
   async function setAlias() {
     if (!optionsFor) return;
     setAliasFor(optionsFor);
-    setChildQuery('');
+    setActionQuery('');
     setOptionsFor(null);
   }
 
   async function submitAlias() {
     if (!aliasFor) return;
-    const alias = childQuery.trim();
+    const alias = actionQuery.trim();
     if (!alias) return;
     const result = (await window.nvm.runViewAction({
       type: 'setActionAlias',
@@ -2312,7 +2402,7 @@ export function App() {
     const current = aliasFor.userAliases || [];
     const userAliases = current.includes(alias) ? current : [...current, alias];
     setAliasFor({ ...aliasFor, userAliases });
-    setChildQuery('');
+    setActionQuery('');
   }
 
   async function removeAliasEntry(alias: string) {
@@ -2525,6 +2615,10 @@ export function App() {
     return valuesMatch(childQuery, ...values);
   }
 
+  function actionMatches(...values: Array<string | undefined>) {
+    return valuesMatch(actionQuery, ...values);
+  }
+
   function filterViewSections(view: ExtensionView) {
     const minScore = view.id === 'clipboard-history' ? 50 : undefined;
     return measureDebugPerformanceSync(
@@ -2566,7 +2660,7 @@ export function App() {
   }
 
   function getAliasActionRows() {
-    const draft = childQuery.trim();
+    const draft = actionQuery.trim();
     const existing = aliasFor?.userAliases || [];
     const rows: ActionPanelRow[] = [];
     if (draft && !existing.includes(draft)) {
@@ -2598,7 +2692,7 @@ export function App() {
         : 'Close without changes',
       onSelect: () => {
         setAliasFor(null);
-        setChildQuery('');
+        setActionQuery('');
       },
     });
     return rows;
@@ -2624,7 +2718,7 @@ export function App() {
         onSelect: () => setConfirmRemoveFor(null),
         className: 'result',
       },
-    ].filter((row) => childMatches(row.title, row.subtitle));
+    ].filter((row) => actionMatches(row.title, row.subtitle));
   }
 
   function getConfirmViewActionRows() {
@@ -2656,7 +2750,7 @@ export function App() {
         onSelect: () => setConfirmViewActionFor(null),
         className: 'result',
       },
-    ].filter((row) => childMatches(row.title, row.subtitle));
+    ].filter((row) => actionMatches(row.title, row.subtitle));
   }
 
   function actionIdentity(action: ExtensionViewAction) {
@@ -2678,7 +2772,7 @@ export function App() {
     setActionSubmenuFor(null);
     setExtensionItemOptionsFor(null);
     setOptionsFor(null);
-    setChildQuery('');
+    setActionQuery('');
   }
 
   function actionRow(
@@ -2696,6 +2790,7 @@ export function App() {
       onSelect: async () => {
         if (action.submenu) {
           setActionSubmenuFor({ title: action.title, panel: action.submenu });
+          setActionQuery('');
           return;
         }
         await runViewAction(action);
@@ -2726,7 +2821,7 @@ export function App() {
             closeAfterSelect,
           ),
         )
-        .filter((row) => childMatches(row.title, row.subtitle));
+        .filter((row) => actionMatches(row.title, row.subtitle));
       if (rows.length === 0) return [];
       return section.title
         ? [
@@ -2752,7 +2847,7 @@ export function App() {
     const primary = item.primaryAction;
     const skip = new Set<string>();
     const primaryRows =
-      primary && childMatches(primary.title, actionDescription(primary))
+      primary && actionMatches(primary.title, actionDescription(primary))
         ? [
             actionRow(
               primary,
@@ -2815,7 +2910,7 @@ export function App() {
         setShortcutOptionsFor(null);
       },
       (record) => removeShortcut(record as ShortcutRecord),
-      childMatches,
+      actionMatches,
     );
   }
 
@@ -2946,8 +3041,22 @@ export function App() {
         onSelect: askRemoveCreatedAction,
         show: canRemoveCreatedAction,
       },
-    ].filter((row) => row.show && childMatches(row.title, row.subtitle));
+    ].filter((row) => row.show && actionMatches(row.title, row.subtitle));
     return [...getRootActionRows(), ...optionRows];
+  }
+
+  function getCompactActionRows() {
+    if (shortcutOptionsFor) return getShortcutOptionRows();
+    if (actionSubmenuFor)
+      return actionPanelRows(
+        actionSubmenuFor.panel,
+        [],
+        'action-submenu',
+        true,
+      );
+    if (extensionItemOptionsFor) return getExtensionItemActionRows();
+    if (optionsFor) return getOptionActionRows();
+    return [];
   }
 
   function renderChildEmpty(message = EMPTY_ACTIONS_TITLE, subtitle?: string) {
@@ -3444,7 +3553,7 @@ export function App() {
       else if (shortcutManagerOpen) setShortcutManagerOpen(false);
       else if (aliasFor) {
         setAliasFor(null);
-        setChildQuery('');
+        setActionQuery('');
       } else if (confirmRemoveFor) setConfirmRemoveFor(null);
       else if (confirmViewActionFor) setConfirmViewActionFor(null);
       else if (actionSubmenuFor) setActionSubmenuFor(null);
@@ -3458,6 +3567,11 @@ export function App() {
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
+      if (compactActionMenuVisible) {
+        setShortcutOptionsFor(null);
+        closeActionPanels();
+        return;
+      }
       if (
         selectedShortcutRecord &&
         shortcutManagerOpen &&
@@ -3476,7 +3590,7 @@ export function App() {
         !optionsFor &&
         !previewFor
       ) {
-        setChildQuery('');
+        setActionQuery('');
         const persistentAction = persistentActionForItem(selectedExtensionItem);
         if (persistentAction) setOptionsFor(persistentAction);
         else setExtensionItemOptionsFor(selectedExtensionItem);
@@ -3494,7 +3608,7 @@ export function App() {
         !optionsFor &&
         !previewFor
       ) {
-        setChildQuery('');
+        setActionQuery('');
         setActionSubmenuFor({
           title: extensionView.title,
           panel: viewActionPanel(extensionView),
@@ -3526,7 +3640,7 @@ export function App() {
       else if (shortcutManagerOpen) setShortcutManagerOpen(false);
       else if (aliasFor) {
         setAliasFor(null);
-        setChildQuery('');
+        setActionQuery('');
       } else if (confirmRemoveFor) setConfirmRemoveFor(null);
       else if (confirmViewActionFor) setConfirmViewActionFor(null);
       else if (actionSubmenuFor) setActionSubmenuFor(null);
@@ -3566,7 +3680,7 @@ export function App() {
         !previewFor
       ) {
         event.preventDefault();
-        setChildQuery('');
+        setActionQuery('');
         const persistentAction = persistentActionForItem(selectedExtensionItem);
         if (persistentAction) setOptionsFor(persistentAction);
         else setExtensionItemOptionsFor(selectedExtensionItem);
@@ -3632,11 +3746,15 @@ export function App() {
             onValueChange={(value) => {
               if (shortcutFor) return;
               if (palettePrompt.active) palettePrompt.setQuery(value);
+              else if (isActionWorkflowOpen) setActionQuery(value);
               else if (isFilterableChildOpen) setChildQuery(value);
               else if (!isChildOpen) setRootQuery(value);
             }}
             placeholder={placeholder}
-            readOnly={!(shortcutFor || isFilterableChildOpen) && isChildOpen}
+            readOnly={
+              compactActionMenuVisible ||
+              (!(shortcutFor || isFilterableChildOpen) && isChildOpen)
+            }
             spellCheck={false}
           />
           {renderSearchAccessory(extensionView)}
@@ -3675,8 +3793,6 @@ export function App() {
               </div>
               {renderActionPanel(getShortcutRecorderRows())}
             </div>
-          ) : shortcutOptionsFor ? (
-            renderActionPanel(getShortcutOptionRows())
           ) : shortcutManagerOpen ? (
             renderShortcutManager()
           ) : aliasFor ? (
@@ -3685,19 +3801,6 @@ export function App() {
             renderActionPanel(getConfirmActionRows())
           ) : confirmViewActionFor ? (
             renderActionPanel(getConfirmViewActionRows())
-          ) : actionSubmenuFor ? (
-            renderActionPanel(
-              actionPanelRows(
-                actionSubmenuFor.panel,
-                [],
-                'action-submenu',
-                true,
-              ),
-            )
-          ) : extensionItemOptionsFor ? (
-            renderActionPanel(getExtensionItemActionRows())
-          ) : optionsFor ? (
-            renderActionPanel(getOptionActionRows())
           ) : previewFor ? (
             <div className="previewPane">
               {previewFor.videoUrl ? (
@@ -3742,6 +3845,28 @@ export function App() {
             renderActionResults()
           )}
         </Command.List>
+        {compactActionMenuVisible ? (
+          <aside className="extensionWindowCompactPanel paletteCompactPanel">
+            <div className="extensionWindowSearchRow">
+              <Search size={15} className="extensionWindowSearchIcon" />
+              <input
+                ref={compactActionInputRef}
+                autoFocus
+                value={actionQuery}
+                onChange={(event) => setActionQuery(event.currentTarget.value)}
+                placeholder={compactActionPlaceholder}
+                aria-label={compactActionPlaceholder}
+                spellCheck={false}
+              />
+            </div>
+            <Command.List className="extensionWindowCompactResults">
+              <ActionPanel
+                rows={getCompactActionRows()}
+                emptyMessage="No matching actions"
+              />
+            </Command.List>
+          </aside>
+        ) : null}
       </Command>
     </main>
   );

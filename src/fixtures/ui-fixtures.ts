@@ -145,17 +145,53 @@ const FLOATING_WINDOW_OPTIONS = {
 };
 
 function floatingNoteEditorView(ctx: ExtensionContext) {
+  const copyNote = ctx.actions.copyText('Floating note', 'Copy Note');
+  const prompt = ctx.input.prompt({
+    title: 'Label Floating Note',
+    message: 'Prompts expand from the compact action panel.',
+    fields: [
+      {
+        id: 'label',
+        label: 'Label',
+        type: 'text',
+        placeholder: 'Scratchpad',
+        required: true,
+      },
+    ],
+    submitTitle: 'Apply Label',
+    action: ctx.actions.run('Apply Label', (_ctx, action) =>
+      _ctx.ui.toast({
+        message: `Label: ${String(action.formValues?.label || '')}`,
+      }),
+    ),
+  });
+  const confirm = ctx.ui.confirm({
+    title: 'Confirm Floating Action',
+    message: 'Confirmations expand from the compact action panel.',
+    confirmLabel: 'Confirm',
+    onConfirm: ctx.actions.run('Confirm', (_ctx) =>
+      _ctx.ui.toast({ message: 'Floating action confirmed' }),
+    ),
+  });
+  const submenu: ExtensionAction = {
+    type: 'submenu',
+    title: 'More Actions',
+    icon: 'ellipsis',
+    submenu: {
+      title: 'More Actions',
+      sections: [{ actions: [copyNote] }],
+    },
+  };
   return ctx.ui.editor({
     id: FLOATING_WINDOW_ID,
     title: 'Floating Note',
     subtitle: 'Editable host-rendered note',
     format: 'markdown',
     titleFromContent: true,
-    actionPanelPresentation: 'compact',
     placeholder: 'Write a floating note…',
     content:
-      '# Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- Compact Cmd+K action panel',
-    actions: [ctx.actions.copyText('Floating note', 'Copy Note')],
+      '# Floating Note\n\nEdit this note in a real independent window.\n\n- Always on top\n- Reuses ctx.ui.editor(...)\n- Compact Cmd+K action panel by default',
+    actions: [copyNote, prompt, confirm, submenu],
   });
 }
 

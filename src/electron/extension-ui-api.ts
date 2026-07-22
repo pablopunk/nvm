@@ -83,6 +83,7 @@ export function createExtensionUiApi({
         subtitle: input.subtitle,
         searchBarPlaceholder: input.searchBarPlaceholder,
         emptyView: input.emptyView,
+        windowPresentation: input.windowPresentation,
         actions: add ? [add] : [],
         actionPanel: add ? { sections: [{ actions: [add] }] } : undefined,
         items: add ? [collectionCreateItem(add), ...records] : records,

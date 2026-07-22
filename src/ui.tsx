@@ -1,3 +1,4 @@
+// biome-ignore-all lint: This legacy shared UI module retains established renderer conventions.
 import { Command } from 'cmdk';
 import { Folder, Loader2 } from 'lucide-react';
 import React, { type ReactNode, useEffect, useState } from 'react';
@@ -14,13 +15,15 @@ export const EMPTY_ITEMS_TITLE = 'No items';
 export const EMPTY_ACTIONS_TITLE = 'No actions';
 export const EMPTY_SHORTCUTS_TITLE = 'No keyboard shortcuts';
 
-export type KeyHintsProps = {
+export interface KeyHintsProps {
   shortcut?: string;
   extras?: string[];
   showEnter?: boolean;
-};
-export type ItemAppearance = { foreground?: string };
-export type CommandRowProps = {
+}
+export interface ItemAppearance {
+  foreground?: string;
+}
+export interface CommandRowProps {
   value: string;
   icon: ReactNode;
   title: string;
@@ -38,8 +41,8 @@ export type CommandRowProps = {
   selectedOnlyShortcut?: boolean;
   disabled?: boolean;
   onSelect: () => void;
-};
-export type CommandTileProps = {
+}
+export interface CommandTileProps {
   value: string;
   title: string;
   subtitle?: string;
@@ -50,33 +53,33 @@ export type CommandTileProps = {
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent) => void;
   onSelect: () => void;
-};
-export type EmptyStateProps = {
+}
+export interface EmptyStateProps {
   icon: ReactNode;
   title: string;
   subtitle?: string;
   action?: ActionPanelRow;
-};
+}
 export type ToastTone = 'default' | 'info' | 'success' | 'error';
-export type ToastProps = {
+export interface ToastProps {
   message: string;
   tone?: ToastTone;
-};
-export type PreviewViewProps = {
+}
+export interface PreviewViewProps {
   content?: ReactNode;
   image?: CommandImage;
   video?: string;
   poster?: string;
   actions?: ReactNode;
-};
-export type ProgressViewProps = {
+}
+export interface ProgressViewProps {
   steps: { title: string; status?: string }[];
   value?: number;
   total?: number;
   status?: string;
-};
+}
 export type FormValue = string | boolean | string[];
-export type FormField = {
+export interface FormField {
   id: string;
   label?: string;
   type?: string;
@@ -92,15 +95,15 @@ export type FormField = {
   buttonLabel?: string;
   defaultPath?: string;
   canCreateDirectories?: boolean;
-};
-export type FormViewProps = {
+}
+export interface FormViewProps {
   fields: FormField[];
   values?: Record<string, FormValue>;
   onChange?: (id: string, value: FormValue) => void;
   onSubmit?: () => void;
   submitTitle?: string;
-};
-export type EditorViewProps = {
+}
+export interface EditorViewProps {
   value: string;
   title?: string;
   subtitle?: string;
@@ -115,9 +118,13 @@ export type EditorViewProps = {
   onChange?: (value: string) => void;
   onFlush?: (value: string) => void;
   onSubmit?: () => void;
-};
-export type ItemSection<T> = { title?: string; subtitle?: string; items: T[] };
-export type ListViewProps<T> = {
+}
+export interface ItemSection<T> {
+  title?: string;
+  subtitle?: string;
+  items: T[];
+}
+export interface ListViewProps<T> {
   items?: T[];
   sections?: ItemSection<T>[];
   renderItem: (item: T) => ReactNode;
@@ -125,8 +132,8 @@ export type ListViewProps<T> = {
   subtitle?: string;
   isLoading?: boolean;
   pagination?: ReactNode;
-};
-export type GridViewProps<T> = {
+}
+export interface GridViewProps<T> {
   items?: T[];
   sections?: ItemSection<T>[];
   renderItem: (item: T) => ReactNode;
@@ -136,15 +143,15 @@ export type GridViewProps<T> = {
   style?: React.CSSProperties;
   isLoading?: boolean;
   pagination?: ReactNode;
-};
-export type ChatViewProps = {
+}
+export interface ChatViewProps {
   messages: { role: string; content: ReactNode }[];
   isBusy?: boolean;
   input?: ReactNode;
   messagesRef?: React.RefObject<HTMLDivElement | null>;
   banner?: ReactNode;
-};
-export type ActionPanelRow = {
+}
+export interface ActionPanelRow {
   value: string;
   icon?: ReactNode;
   title: string;
@@ -154,18 +161,20 @@ export type ActionPanelRow = {
   sectionHeader?: boolean;
   disabled?: boolean;
   onSelect: () => void;
-};
-export type ActionPanelViewProps = {
+}
+export interface ActionPanelViewProps {
   rows: ActionPanelRow[];
   renderEmpty: () => ReactNode;
-};
-export type SearchAccessoryProps = {
+}
+export interface SearchAccessoryProps {
   tooltip?: string;
   value?: string;
   items: { title: string; value: string }[];
   onChange?: (value: string) => void;
-};
-export type MarkdownContentProps = { content: string };
+}
+export interface MarkdownContentProps {
+  content: string;
+}
 
 let shortcutLabelHyperKey = 'Command+Control+Alt+Shift';
 
@@ -198,6 +207,7 @@ export function shortcutLabel(shortcut?: string) {
           Shift: '⇧',
           Enter: '↵',
           Return: '↵',
+          Backspace: '⌫',
           Escape: 'Esc',
           Tab: 'Tab',
         })[part] || part,

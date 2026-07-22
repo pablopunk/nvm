@@ -60,7 +60,6 @@ test('Floating Notes command opens a persistent floating window with an autosavi
   assert.equal(view.type, 'editor');
   assert.equal(view.format, 'markdown');
   assert.equal(view.titleFromContent, true);
-  assert.equal(view.actionPanelPresentation, 'compact');
   assert.equal(view.submitAction, undefined);
   assert.equal(view.draft.autosave.debounceMs, 400);
   assert.equal(typeof view.draft.autosave.action.__handler, 'function');

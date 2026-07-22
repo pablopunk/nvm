@@ -1,10 +1,10 @@
 import { Check, ChevronRight, FileUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import {
-  type CommandAction,
-  type CommandFormField,
-  type CommandFormValue,
-  type CommandView,
+import type {
+  CommandAction,
+  CommandFormField,
+  CommandFormValue,
+  CommandView,
 } from './model';
 import type { ActionPanelRow } from './ui';
 
@@ -19,9 +19,12 @@ function interactiveFields(view: CommandView | null) {
 function seededValues(fields: CommandFormField[]) {
   return Object.fromEntries(
     fields.map((field) => {
-      if (field.type === 'checkbox') return [field.id, Boolean(field.value)];
-      if (field.type === 'multiselect' || field.type === 'files')
+      if (field.type === 'checkbox') {
+        return [field.id, Boolean(field.value)];
+      }
+      if (field.type === 'multiselect' || field.type === 'files') {
         return [field.id, Array.isArray(field.value) ? field.value : []];
+      }
       return [field.id, field.value || ''];
     }),
   ) as Record<string, CommandFormValue>;
@@ -39,7 +42,9 @@ function initialQuery(
   field: CommandFormField | undefined,
   values: Record<string, CommandFormValue>,
 ) {
-  if (!field) return '';
+  if (!field) {
+    return '';
+  }
   if (
     field.type === 'dropdown' ||
     field.type === 'select' ||
@@ -48,11 +53,13 @@ function initialQuery(
     field.type === 'file' ||
     field.type === 'files' ||
     field.type === 'folder'
-  )
+  ) {
     return '';
+  }
   return textValue(values[field.id]);
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: Prompt state and row actions share one navigation lifecycle.
 export function usePalettePrompt(
   view: CommandView | null,
   submit: PromptSubmit,
@@ -75,7 +82,9 @@ export function usePalettePrompt(
   }, [resetKey]);
 
   function advance(value: CommandFormValue) {
-    if (!(view && field)) return;
+    if (!(view && field)) {
+      return;
+    }
     const nextValues = { ...values, [field.id]: value };
     setValues(nextValues);
     const nextField = fields[fieldIndex + 1];
@@ -84,12 +93,15 @@ export function usePalettePrompt(
       setQuery(initialQuery(nextField, nextValues));
       return;
     }
-    if (view.submitAction)
-      void submit({ ...view.submitAction, formValues: nextValues });
+    if (view.submitAction) {
+      submit({ ...view.submitAction, formValues: nextValues });
+    }
   }
 
   async function choosePaths() {
-    if (!field) return;
+    if (!field) {
+      return;
+    }
     const type = field.type as 'file' | 'files' | 'folder';
     const result = await window.nvm.pickFormFieldPaths({
       type,
@@ -100,36 +112,45 @@ export function usePalettePrompt(
       filterName: field.filterName,
       canCreateDirectories: field.canCreateDirectories,
     });
-    if (!result.canceled)
+    if (!result.canceled) {
       advance(type === 'files' ? result.paths : result.paths[0] || '');
+    }
   }
 
   function textRows(): ActionPanelRow[] {
-    if (!field) return [];
+    if (!field) {
+      return [];
+    }
     const value = query.trim();
     const displayedValue = field.type === 'password' ? '******' : value;
     const missing = field.required && !value;
+    let title = 'Continue';
+    if (missing) {
+      title = `Enter ${fieldLabel(field)}`;
+    } else if (fieldIndex === fields.length - 1) {
+      title = view?.submitAction?.title || 'Submit';
+    }
     return [
       {
         value: `prompt:${fieldIndex}:text`,
         icon: missing ? <ChevronRight size={18} /> : <Check size={18} />,
-        title: missing
-          ? `Enter ${fieldLabel(field)}`
-          : fieldIndex === fields.length - 1
-            ? view?.submitAction?.title || 'Submit'
-            : 'Continue',
+        title,
         subtitle: missing
           ? field.error || 'Type a value above'
           : `Use "${displayedValue}" for ${fieldLabel(field)}`,
         onSelect: () => {
-          if (!missing) advance(value);
+          if (!missing) {
+            advance(value);
+          }
         },
       },
     ];
   }
 
   function choiceRows(): ActionPanelRow[] {
-    if (!field) return [];
+    if (!field) {
+      return [];
+    }
     const selected = Array.isArray(values[field.id])
       ? (values[field.id] as string[])
       : [];
@@ -140,13 +161,15 @@ export function usePalettePrompt(
           .toLowerCase()
           .includes(query.toLowerCase()),
       )
-      .sort((left, right) =>
-        left.value === selectedValue
-          ? -1
-          : right.value === selectedValue
-            ? 1
-            : 0,
-      );
+      .sort((left, right) => {
+        if (left.value === selectedValue) {
+          return -1;
+        }
+        if (right.value === selectedValue) {
+          return 1;
+        }
+        return 0;
+      });
     const rows = options.map((option) => ({
       value: `prompt:${fieldIndex}:option:${option.value}`,
       icon: (
@@ -174,7 +197,7 @@ export function usePalettePrompt(
         }));
       },
     }));
-    if (field.type === 'multiselect')
+    if (field.type === 'multiselect') {
       rows.unshift({
         value: `prompt:${fieldIndex}:continue`,
         icon: <ChevronRight size={18} />,
@@ -182,18 +205,22 @@ export function usePalettePrompt(
         subtitle: `${selected.length} selected`,
         onSelect: () => advance(selected),
       });
+    }
     return rows;
   }
 
   function rows(): ActionPanelRow[] {
-    if (!active || !field) return [];
+    if (!(active && field)) {
+      return [];
+    }
     if (
       field.type === 'dropdown' ||
       field.type === 'select' ||
       field.type === 'multiselect'
-    )
+    ) {
       return choiceRows();
-    if (field.type === 'checkbox')
+    }
+    if (field.type === 'checkbox') {
       return [
         {
           value: `prompt:${fieldIndex}:yes`,
@@ -212,20 +239,22 @@ export function usePalettePrompt(
       ].sort((left) =>
         Boolean(values[field.id]) === left.value.endsWith(':yes') ? -1 : 1,
       );
+    }
     if (
       field.type === 'file' ||
       field.type === 'files' ||
       field.type === 'folder'
-    )
+    ) {
       return [
         {
           value: `prompt:${fieldIndex}:pick`,
           icon: <FileUp size={18} />,
           title: field.buttonLabel || `Choose ${fieldLabel(field)}`,
           subtitle: field.description || field.placeholder,
-          onSelect: () => void choosePaths(),
+          onSelect: choosePaths,
         },
       ];
+    }
     return textRows();
   }
 

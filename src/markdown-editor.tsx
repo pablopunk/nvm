@@ -8,11 +8,11 @@ import {
 } from '@lexical/markdown';
 import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
 import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin';
-import { ContentEditable } from '@lexical/react/LexicalContentEditable';
-import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
@@ -21,6 +21,8 @@ import { TabIndentationPlugin } from '@lexical/react/LexicalTabIndentationPlugin
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { EditorState } from 'lexical';
 import { useEffect, useRef } from 'react';
+
+const MARKDOWN_EXPORT_DELAY_MS = 80;
 
 const markdownEditorTheme = {
   code: 'markdownEditorCodeBlock',
@@ -68,7 +70,9 @@ function MarkdownValuePlugin({
   const exportTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (value === currentMarkdownRef.current) return;
+    if (value === currentMarkdownRef.current) {
+      return;
+    }
     currentMarkdownRef.current = value;
     editor.update(() => $convertFromMarkdownString(value, TRANSFORMERS));
   }, [editor, value]);
@@ -76,27 +80,39 @@ function MarkdownValuePlugin({
   function emitMarkdown(editorState: EditorState, flush = false) {
     editorState.read(() => {
       const markdown = $convertToMarkdownString(TRANSFORMERS);
-      if (markdown === currentMarkdownRef.current) return;
+      if (markdown === currentMarkdownRef.current) {
+        return;
+      }
       currentMarkdownRef.current = markdown;
-      if (flush) onFlush?.(markdown);
-      else onChange?.(markdown);
+      if (flush) {
+        onFlush?.(markdown);
+      } else {
+        onChange?.(markdown);
+      }
     });
   }
 
   function flushMarkdown(persist = false) {
-    if (exportTimerRef.current !== null)
+    if (exportTimerRef.current !== null) {
       window.clearTimeout(exportTimerRef.current);
+    }
     exportTimerRef.current = null;
     const editorState = pendingEditorStateRef.current;
     pendingEditorStateRef.current = null;
-    if (editorState) emitMarkdown(editorState, persist);
+    if (editorState) {
+      emitMarkdown(editorState, persist);
+    }
   }
 
   function scheduleMarkdown(editorState: EditorState) {
     pendingEditorStateRef.current = editorState;
-    if (exportTimerRef.current !== null)
+    if (exportTimerRef.current !== null) {
       window.clearTimeout(exportTimerRef.current);
-    exportTimerRef.current = window.setTimeout(flushMarkdown, 80);
+    }
+    exportTimerRef.current = window.setTimeout(
+      flushMarkdown,
+      MARKDOWN_EXPORT_DELAY_MS,
+    );
   }
 
   useEffect(
@@ -159,8 +175,12 @@ export function MarkdownEditor({
               }
               spellCheck={true}
               onKeyDown={(event) => {
-                if (event.key === 'Escape') return;
-                if (event.metaKey || event.ctrlKey || event.altKey) return;
+                if (event.key === 'Escape') {
+                  return;
+                }
+                if (event.metaKey || event.ctrlKey || event.altKey) {
+                  return;
+                }
                 event.stopPropagation();
               }}
             />

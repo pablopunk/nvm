@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const IMAGE_EXTENSIONS = new Set([
+const IMAGE_EXTENSIONS = new Set([
   'png',
   'jpg',
   'jpeg',
@@ -15,7 +15,7 @@ export const IMAGE_EXTENSIONS = new Set([
   'tif',
   'heic',
 ]);
-export const VIDEO_EXTENSIONS = new Set([
+const VIDEO_EXTENSIONS = new Set([
   'mp4',
   'mov',
   'avi',
@@ -25,22 +25,34 @@ export const VIDEO_EXTENSIONS = new Set([
   'flv',
   'm4v',
 ]);
-export const LOCAL_FILE_PROTOCOL = 'nvm-file';
-export const LOCAL_THUMB_PROTOCOL = 'nvm-thumb';
+const LOCAL_FILE_PROTOCOL = 'nvm-file';
+const LOCAL_THUMB_PROTOCOL = 'nvm-thumb';
+const LOCAL_FILE_URL_SECRET_BYTES = 32;
+const LEADING_PERIOD_PATTERN = /^\./;
 
-let localFileUrlSecret: Buffer = crypto.randomBytes(32);
+let localFileUrlSecret: Buffer = crypto.randomBytes(
+  LOCAL_FILE_URL_SECRET_BYTES,
+);
 
-export function configureLocalFileUrlSecret(secret: string | Buffer) {
+function configureLocalFileUrlSecret(secret: string | Buffer) {
   const value = Buffer.isBuffer(secret)
     ? secret
     : Buffer.from(String(secret), 'base64url');
-  if (value.length >= 32) localFileUrlSecret = value;
+  if (value.length >= LOCAL_FILE_URL_SECRET_BYTES) {
+    localFileUrlSecret = value;
+  }
 }
 
-export function expandUserPath(value: string) {
-  if (!value) return value;
-  if (value === '~') return os.homedir();
-  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
+function expandUserPath(value: string) {
+  if (!value) {
+    return value;
+  }
+  if (value === '~') {
+    return os.homedir();
+  }
+  if (value.startsWith('~/')) {
+    return path.join(os.homedir(), value.slice(2));
+  }
   return value;
 }
 
@@ -55,12 +67,14 @@ function localFileToken(kind: 'file' | 'thumb', filePath: string) {
     .digest('base64url');
 }
 
-export function verifyLocalFileToken(
+function verifyLocalFileToken(
   kind: 'file' | 'thumb',
   filePath: string,
   token: string | null,
 ) {
-  if (!token) return false;
+  if (!token) {
+    return false;
+  }
   const expected = localFileToken(kind, filePath);
   const provided = Buffer.from(token);
   const actual = Buffer.from(expected);
@@ -70,16 +84,16 @@ export function verifyLocalFileToken(
   );
 }
 
-export function fileUrlForPath(filePath: string) {
+function fileUrlForPath(filePath: string) {
   const resolved = canonicalLocalPath(filePath);
   const url = new URL(
-    `${LOCAL_FILE_PROTOCOL}:${pathToFileURL(resolved).href.slice('file:'.length)}`,
+    `${LOCAL_FILE_PROTOCOL}://local${pathToFileURL(resolved).pathname}`,
   );
   url.searchParams.set('token', localFileToken('file', resolved));
   return url.href;
 }
 
-export function thumbnailUrlForPath(filePath: string) {
+function thumbnailUrlForPath(filePath: string) {
   const resolved = canonicalLocalPath(filePath);
   const url = new URL(`${LOCAL_THUMB_PROTOCOL}://thumb`);
   url.searchParams.set('path', resolved);
@@ -87,15 +101,18 @@ export function thumbnailUrlForPath(filePath: string) {
   return url.href;
 }
 
-export function extensionForPath(filePath: string) {
-  return path.extname(filePath).toLowerCase().replace(/^\./, '');
+function extensionForPath(filePath: string) {
+  return path
+    .extname(filePath)
+    .toLowerCase()
+    .replace(LEADING_PERIOD_PATTERN, '');
 }
 
-export function isImagePath(filePath: string) {
+function isImagePath(filePath: string) {
   return IMAGE_EXTENSIONS.has(extensionForPath(filePath));
 }
 
-export function isVideoPath(filePath: string) {
+function isVideoPath(filePath: string) {
   return VIDEO_EXTENSIONS.has(extensionForPath(filePath));
 }
 
@@ -117,7 +134,7 @@ async function checkRootExistence(
   }
 }
 
-export async function partitionRootsByExistence(roots: string[]) {
+async function partitionRootsByExistence(roots: string[]) {
   const existing: string[] = [];
   const missing: string[] = [];
   await Promise.all(
@@ -125,3 +142,19 @@ export async function partitionRootsByExistence(roots: string[]) {
   );
   return { existing, missing };
 }
+
+export {
+  configureLocalFileUrlSecret,
+  expandUserPath,
+  extensionForPath,
+  fileUrlForPath,
+  IMAGE_EXTENSIONS,
+  isImagePath,
+  isVideoPath,
+  LOCAL_FILE_PROTOCOL,
+  LOCAL_THUMB_PROTOCOL,
+  partitionRootsByExistence,
+  thumbnailUrlForPath,
+  VIDEO_EXTENSIONS,
+  verifyLocalFileToken,
+};

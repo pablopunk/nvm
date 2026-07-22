@@ -296,7 +296,6 @@ function noteEditor(ctx: any, note: FloatingNote) {
       autosave: { debounceMs: 400, action: autosaveAction(note.id) },
       onConflict: draftConflictAction(note.id),
     },
-    actionPanelPresentation: 'compact',
     actions: [create, allNotes, remove],
     actionPanel: {
       title: 'Note actions',
