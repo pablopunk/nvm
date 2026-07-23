@@ -86,7 +86,9 @@ export function patchBuilderPreviewViewById<
 >(previews: T[], viewId: string, patch: CommandViewPatch) {
   let matched = false;
   const next = previews.map((preview) => {
-    if (preview.view.id !== viewId) return preview;
+    if (preview.view.id !== viewId) {
+      return preview;
+    }
     matched = true;
     return patchBuilderPreviewState(preview, patch);
   });
@@ -98,7 +100,9 @@ export function replaceBuilderPreviewViewById<
 >(previews: T[], viewId: string, view: CommandView) {
   let matched = false;
   const next = previews.map((preview) => {
-    if (preview.view.id !== viewId) return preview;
+    if (preview.view.id !== viewId) {
+      return preview;
+    }
     matched = true;
     return {
       ...preview,
@@ -119,18 +123,19 @@ export function retryBuilderPreviewHydration<
   const next = previews.map((preview) => {
     const hasRetry = allViewItems(preview.view).some(
       (item) =>
-        (item.primaryAction?.type === 'nativeAction' &&
-          (
-            item.primaryAction.nativeAction as {
-              kind?: string;
-              viewId?: string;
-            }
-          )?.kind === 'view-hydrate-retry' &&
-          (item.primaryAction.nativeAction as { viewId?: string }).viewId ===
-            viewId) ||
-        false,
+        item.primaryAction?.type === 'nativeAction' &&
+        (
+          item.primaryAction.nativeAction as {
+            kind?: string;
+            viewId?: string;
+          }
+        )?.kind === 'view-hydrate-retry' &&
+        (item.primaryAction.nativeAction as { viewId?: string }).viewId ===
+          viewId,
     );
-    if (!hasRetry) return preview;
+    if (!hasRetry) {
+      return preview;
+    }
     matched = true;
     const view: CommandView = {
       type: 'list',
@@ -179,7 +184,9 @@ export function hydrateBuilderPreviewViewById<
       }),
     );
   }
-  if (!payload.items) return previews;
+  if (!payload.items) {
+    return previews;
+  }
   return patchBuilderPreviewViewById(previews, payload.viewId, {
     mode: 'replace',
     items: payload.items,
@@ -203,16 +210,21 @@ export function applyBuilderPreviewActionResult<
   },
 ) {
   return previews.map((preview) => {
-    if (preview.filename !== filename) return preview;
+    if (preview.filename !== filename) {
+      return preview;
+    }
     if (result.navigation === 'pop') {
       const backStack = [...preview.backStack];
       const view = backStack.pop();
       return view ? { ...preview, view, backStack } : preview;
     }
     const view = result.view;
-    if (!view) return preview;
-    if (result.navigation === 'root')
+    if (!view) {
+      return preview;
+    }
+    if (result.navigation === 'root') {
       return { ...preview, rootView: view, view, backStack: [] };
+    }
     return {
       ...preview,
       view,
