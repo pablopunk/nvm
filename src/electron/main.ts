@@ -38,6 +38,7 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
+import { aiChatPreviewFiles, prepareAiChatPreview } from './ai-chat-previews';
 import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
@@ -835,6 +836,7 @@ const extensionRootItemsCache = new Map<
   { updatedAt: number; items: any[] }
 >();
 const extensionRootItemsRefreshes = new Map<string, Promise<any[]>>();
+const liveExtensionWriteLocks = new Map<string, Promise<void>>();
 const extensionStorageRefreshes = new Map<string, Promise<any>>();
 const extensionJsonStore = createExtensionJsonStore();
 const extensionDraftStore = createExtensionDraftStore();
@@ -1542,7 +1544,34 @@ function appendAiChatDelta(chatId, text) {
   scheduleSaveState();
 }
 
-function aiChatView(item, options: any = {}) {
+async function aiChatView(item, options: any = {}) {
+  const { files: previewFiles, selectedBuilderPreviewFilename } =
+    aiChatPreviewFiles(
+      item,
+      Array.from(
+        extensionModules.values(),
+        (extension: any) => extension.__filePath,
+      ),
+    );
+  const builderPreviews = (
+    await Promise.all(
+      previewFiles.map(async (filename) => {
+        try {
+          return prepareAiChatPreview(
+            await activatedExtensionPreview(filename),
+            prepareRootActionForRenderer,
+          );
+        } catch (error) {
+          logError('aiChat.builderPreview.rehydrate.failed', error, {
+            source: 'host',
+            scope: 'ai',
+            extensionId: filename,
+          });
+          return null;
+        }
+      }),
+    )
+  ).filter(Boolean);
   return {
     type: 'chat',
     title: `Automate "${item.query}"`,
@@ -1550,6 +1579,8 @@ function aiChatView(item, options: any = {}) {
     chatId: item.id,
     initialPrompt: options.initialPrompt,
     messages: item.messages || [],
+    builderPreviews,
+    selectedBuilderPreviewFilename,
   };
 }
 
@@ -1558,7 +1589,7 @@ function aiChatOpenAction(chatId) {
     const item = userState.aiChats[chatId] || draftAiChats.get(chatId);
     if (!item)
       return { toast: { message: 'AI chat not found', tone: 'error' } };
-    return { view: aiChatView(item) };
+    return { view: await aiChatView(item) };
   });
 }
 
@@ -1680,15 +1711,30 @@ function aiChatIdForExtensionFile(filename) {
   return matches.length === 1 ? (matches[0] as any).id : null;
 }
 
+function extensionFileOwner(filename) {
+  const ownerId = aiChatIdForExtensionFile(filename);
+  return ownerId
+    ? userState.aiChats[ownerId] || draftAiChats.get(ownerId) || null
+    : null;
+}
+
+function claimExtensionFileForChat(chat, filename) {
+  if (!(chat && filename)) return false;
+  const safeName = path.basename(filename);
+  const owner = extensionFileOwner(safeName);
+  if (owner && owner.id !== chat.id) return false;
+  touchExtensionFileForChat(chat, safeName);
+  return true;
+}
+
 function touchExtensionFileForChat(chat, filename) {
   if (!(chat && filename)) return;
+  const safeName = path.basename(filename);
   chat.touchedExtensionFiles = Array.from(
-    new Set([...chatTouchedExtensionFiles(chat), path.basename(filename)]),
+    new Set([...chatTouchedExtensionFiles(chat), safeName]),
   );
-  if (!chat.contextExtensionFile)
-    chat.contextExtensionFile = path.basename(filename);
-  if (!chat.generatedExtensionFile)
-    chat.generatedExtensionFile = path.basename(filename);
+  chat.contextExtensionFile = safeName;
+  chat.generatedExtensionFile = safeName;
   chat.status = 'ready';
   chat.updatedAt = Date.now();
   learningStore?.upsertTraceMetadata(chat.id, aiLearningMetadata(chat.id));
@@ -3098,7 +3144,7 @@ function extensionErrorAiAction(entry, message) {
     type: 'runExtensionAction',
     title: 'Fix with AI',
     __handler: async () =>
-      aiChatView(
+      await aiChatView(
         getOrCreateExtensionChat(
           extensionFile,
           entry.extension.title || entry.command?.title,
@@ -6539,7 +6585,7 @@ function createAiBuilderApi(extension) {
         async () => {
           const item = createDraftAiChat(prompt);
           return {
-            view: aiChatView(item, { start: item.messages.length <= 1 }),
+            view: await aiChatView(item, { start: item.messages.length <= 1 }),
           };
         },
         input.options,
@@ -6552,7 +6598,7 @@ function createAiBuilderApi(extension) {
           const item = userState.aiChats[chatId] || draftAiChats.get(chatId);
           if (!item)
             return { toast: { message: 'AI chat not found', tone: 'error' } };
-          return { view: aiChatView(item) };
+          return { view: await aiChatView(item) };
         },
         input.options,
       ),
@@ -6572,7 +6618,9 @@ function createAiBuilderApi(extension) {
               toast: { message: 'No extension specified', tone: 'error' },
             };
           const item = getOrCreateExtensionChat(file, input.title || file);
-          return { view: aiChatView(item, { initialPrompt: input.prompt }) };
+          return {
+            view: await aiChatView(item, { initialPrompt: input.prompt }),
+          };
         },
         input.options,
       ),
@@ -6625,8 +6673,7 @@ function createExtensionOwnershipApi(extension) {
       const chat = chatId
         ? userState.aiChats[chatId] || draftAiChats.get(chatId)
         : null;
-      if (!chat) return false;
-      touchExtensionFileForChat(chat, extensionFile);
+      if (!claimExtensionFileForChat(chat, extensionFile)) return false;
       scheduleSaveState();
       return true;
     },
@@ -6709,7 +6756,29 @@ async function initNevermindAi() {
       userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
     markGeneratedExtension: (filePath, chatId) =>
       markGeneratedExtensionForActiveChat(filePath, chatId),
-    stageExtensionProposal,
+    activateGeneratedExtension: async (filename, source, chatId) => {
+      const chat = chatId
+        ? userState.aiChats[chatId] || draftAiChats.get(chatId)
+        : null;
+      if (!(chat && chatCanWriteExtension(filename, chatId)))
+        throw new Error(
+          `Refusing to write ${path.basename(filename)}: this AI chat does not own that extension.`,
+        );
+      await stageExtensionProposal(filename, source);
+      try {
+        await activateManagedExtension(filename);
+      } catch (error) {
+        await discardExtensionProposal(filename);
+        throw error;
+      }
+      if (!claimExtensionFileForChat(chat, filename))
+        throw new Error(
+          `Refusing to write ${path.basename(filename)}: this AI chat does not own that extension.`,
+        );
+      scheduleSaveState();
+      return activatedExtensionPreview(filename);
+    },
+    withLiveExtensionWriteLock,
     canWriteExtension: (filename, chatId) =>
       chatCanWriteExtension(filename, chatId),
     removeExtension: (filename, chatId) =>
@@ -6776,6 +6845,24 @@ async function initNevermindAi() {
       }
       if (chatId && event.type === 'error' && event.message)
         appendAiChatMessage(chatId, 'system', event.message);
+      if (chatId && event.type === 'extension_activated' && event.data) {
+        const preview = event.data as any;
+        if (preview.filename && preview.preview) {
+          const chat = userState.aiChats[chatId] || draftAiChats.get(chatId);
+          if (chat) {
+            chat.builderPreviewFiles = Array.from(
+              new Set([
+                ...(chat.builderPreviewFiles || []),
+                path.basename(preview.filename),
+              ]),
+            );
+            chat.selectedBuilderPreviewFilename = path.basename(
+              preview.filename,
+            );
+            scheduleSaveState();
+          }
+        }
+      }
       if (chatId && event.type === 'done' && userState.aiChats[chatId]) {
         if (userState.aiChats[chatId].status !== 'ready')
           userState.aiChats[chatId].status = 'done';
@@ -6796,6 +6883,54 @@ async function initNevermindAi() {
       });
     },
   });
+}
+
+async function activatedExtensionPreview(filename) {
+  const safeName = path.basename(filename);
+  const extension = Array.from(extensionModules.values()).find(
+    (item: any) => path.basename(item.__filePath || '') === safeName,
+  );
+  if (!extension)
+    throw new Error(`Activated extension ${safeName} is not loaded.`);
+  const actionEntries = Array.from(extensionActionRegistry.values()).filter(
+    (entry: any) =>
+      path.basename(entry.extension?.__filePath || '') === safeName,
+  );
+  const previewAction = (action) => {
+    const prepared = prepareRootActionForRenderer(action);
+    return structuredClone(prepared);
+  };
+  const entry = {
+    extension,
+    command: { id: 'root', title: extension.title || extension.id },
+  };
+  const rootItems =
+    validCachedRootActions(extension) ||
+    (typeof extension.rootItems === 'function'
+      ? await refreshExtensionRootActions(
+          extension,
+          extension.__filePath || extension.id,
+        )
+      : []);
+  const contributions = actionEntries
+    .map((item) => ({
+      action: extensionActionFromContribution(item),
+      source: item.source,
+    }))
+    .filter((item) => item.action);
+  return {
+    filename: safeName,
+    preview: {
+      extensionId: extension.id,
+      rootItems: rootItems.map(previewAction).filter(Boolean),
+      commands: contributions
+        .filter((item) => item.source !== 'action')
+        .map((item) => previewAction(item.action)),
+      actions: contributions
+        .filter((item) => item.source === 'action')
+        .map((item) => previewAction(item.action)),
+    },
+  };
 }
 
 function extensionRuntimeStateForFile(filename) {
@@ -6850,15 +6985,29 @@ function chatCanWriteExtension(filename, chatId = activeAiChatId) {
     ? userState.aiChats[chatId] || draftAiChats.get(chatId)
     : null;
   if (!chat) return false;
-  const ownedFiles = chatTouchedExtensionFiles(chat);
-  if (ownedFiles.includes(base)) return true;
-  const owner = (Object.values(userState.aiChats || {}) as any[]).find((item) =>
-    chatTouchedExtensionFiles(item).includes(base),
-  );
-  if (owner) return false;
+  const owner = extensionFileOwner(base);
+  if (owner) return owner.id === chat.id;
   return !Array.from(extensionModules.values()).some(
     (extension) => path.basename(extension.__filePath || '') === base,
   );
+}
+
+function withLiveExtensionWriteLock<T>(
+  filename: string,
+  operation: () => Promise<T>,
+) {
+  const safeName = path.basename(filename);
+  const previous = liveExtensionWriteLocks.get(safeName) || Promise.resolve();
+  const current = previous.catch(() => {}).then(operation);
+  const settled = current.then(
+    () => undefined,
+    () => undefined,
+  );
+  liveExtensionWriteLocks.set(safeName, settled);
+  return current.finally(() => {
+    if (liveExtensionWriteLocks.get(safeName) === settled)
+      liveExtensionWriteLocks.delete(safeName);
+  });
 }
 
 async function removeGeneratedExtensionForChat(
@@ -6867,22 +7016,81 @@ async function removeGeneratedExtensionForChat(
 ) {
   const base = path.basename(filename || '');
   if (!(base && isExtensionSourceFile(base))) return { removed: false };
-  if (!chatCanWriteExtension(base, chatId))
-    throw new Error(
-      `Refusing to remove ${base}: this AI chat does not own that extension.`,
-    );
-  const filePath = path.join(extensionsDir, base);
-  const existed = await fs
-    .stat(filePath)
-    .then(() => true)
-    .catch(() => false);
-  if (!existed) return { removed: false, filePath };
-  await fs.unlink(filePath);
-  await removeAiChatReferencesToExtensionFile(base, chatId);
-  scheduleSaveState();
-  await loadExtensions();
-  registerActionShortcuts();
-  return { removed: true, filePath };
+  return withLiveExtensionWriteLock(base, async () => {
+    if (!chatCanWriteExtension(base, chatId))
+      throw new Error(
+        `Refusing to remove ${base}: this AI chat does not own that extension.`,
+      );
+    const filePath = path.join(extensionsDir, base);
+    const existed = await fs
+      .stat(filePath)
+      .then(() => true)
+      .catch(() => false);
+    if (!existed) return { removed: false, filePath };
+    const manager = extensionManagerState();
+    const proposal = manager.proposals?.[base];
+    const fileState = manager.files?.[base];
+    const source = await fs.readFile(filePath);
+    const proposalSource = proposal?.draftFile
+      ? await fs.readFile(proposal.draftFile).catch(() => null)
+      : null;
+    const runtime = captureManagedExtensionRuntime(base);
+    detachManagedExtensionRuntime(base);
+    delete manager.files[base];
+    delete manager.proposals[base];
+    try {
+      await fs.unlink(filePath);
+      if (proposal?.draftFile)
+        await fs.unlink(proposal.draftFile).catch(() => {});
+      await persistUserState();
+    } catch (error) {
+      if (fileState) manager.files[base] = fileState;
+      if (proposal) manager.proposals[base] = proposal;
+      await atomicWriteFile(filePath, source);
+      if (proposal?.draftFile && proposalSource)
+        await atomicWriteFile(proposal.draftFile, proposalSource);
+      restoreManagedExtensionRuntime(runtime, {
+        filename: base,
+        extensionIds: new Set(),
+        modules: new Map(),
+        actions: new Map(),
+        handlers: new Map(),
+        viewActions: new Map(),
+        rootActions: new Map(),
+        viewRefreshes: new Map(),
+        jobs: [],
+        fileWatchers: [],
+      });
+      throw error;
+    }
+    try {
+      await removeAiChatReferencesToExtensionFile(base, chatId);
+    } catch (error) {
+      await atomicWriteFile(filePath, source);
+      if (fileState) manager.files[base] = fileState;
+      if (proposal) manager.proposals[base] = proposal;
+      if (proposal?.draftFile && proposalSource)
+        await atomicWriteFile(proposal.draftFile, proposalSource);
+      restoreManagedExtensionRuntime(runtime, {
+        filename: base,
+        extensionIds: new Set(),
+        modules: new Map(),
+        actions: new Map(),
+        handlers: new Map(),
+        viewActions: new Map(),
+        rootActions: new Map(),
+        viewRefreshes: new Map(),
+        jobs: [],
+        fileWatchers: [],
+      });
+      await persistUserState();
+      throw error;
+    }
+    syncFrontmostAppPolling();
+    registerActionShortcuts();
+    invalidateExtensionRootItems();
+    return { removed: true, filePath };
+  });
 }
 
 function addAliasForGeneratedAction(chatId) {
@@ -7018,6 +7226,15 @@ async function stageExtensionProposal(filename: string, source: string) {
   };
   await persistUserState();
   return { draftFile };
+}
+
+async function discardExtensionProposal(filename: string) {
+  const safeName = path.basename(filename);
+  const proposal = extensionManagerState().proposals[safeName];
+  if (!proposal) return;
+  delete extensionManagerState().proposals[safeName];
+  await fs.unlink(proposal.draftFile).catch(() => {});
+  await persistUserState();
 }
 
 function replaceMapContents(target: Map<any, any>, source: Map<any, any>) {
@@ -8437,7 +8654,7 @@ async function loadUserState() {
     };
   }
 
-  migrateAiChats();
+  await migrateAiChats();
   clipboardHistory = await normalizeClipboardHistory(
     userState.clipboardHistory,
     CLIPBOARD_LIMIT,
@@ -8455,12 +8672,35 @@ async function loadUserState() {
   jobRegistry.hydrateEnabled(userState.jobSettings?.enabled || {});
 }
 
-function migrateAiChats() {
+async function migrateAiChats() {
+  const existingFiles = new Set(
+    await fs
+      .readdir(extensionsDir, { withFileTypes: true })
+      .then((entries) =>
+        entries.filter((entry) => entry.isFile()).map((entry) => entry.name),
+      )
+      .catch(() => []),
+  );
   for (const chat of Object.values(userState.aiChats || {}) as any[]) {
     if (chat.generatedExtensionFile && !chat.touchedExtensionFiles)
       chat.touchedExtensionFiles = [chat.generatedExtensionFile];
     if (chat.generatedExtensionFile && !chat.contextExtensionFile)
       chat.contextExtensionFile = chat.generatedExtensionFile;
+    if (Array.isArray(chat.builderPreviews)) {
+      chat.builderPreviewFiles = chat.builderPreviews
+        .map((preview) => preview?.filename)
+        .filter((filename) => typeof filename === 'string');
+      delete chat.builderPreviews;
+    }
+    const previewState = aiChatPreviewFiles(chat, existingFiles);
+    if (previewState.files.length) {
+      chat.builderPreviewFiles = previewState.files;
+      chat.selectedBuilderPreviewFilename =
+        previewState.selectedBuilderPreviewFilename;
+    } else {
+      delete chat.builderPreviewFiles;
+      delete chat.selectedBuilderPreviewFilename;
+    }
   }
 }
 
@@ -8986,9 +9226,16 @@ async function removeAiChatReferencesToExtensionFile(
       continue;
     }
     chat.touchedExtensionFiles = remainingFiles;
+    chat.builderPreviewFiles = (chat.builderPreviewFiles || []).filter(
+      (filename) => path.basename(filename) !== removedFile,
+    );
+    if (chat.selectedBuilderPreviewFilename === removedFile)
+      chat.selectedBuilderPreviewFilename = chat.builderPreviewFiles[0];
     if (remainingFiles.length === 0) {
       delete chat.contextExtensionFile;
       delete chat.generatedExtensionFile;
+      delete chat.builderPreviewFiles;
+      delete chat.selectedBuilderPreviewFilename;
     }
     if (chat.contextExtensionFile === removedFile)
       chat.contextExtensionFile = remainingFiles[0];

@@ -181,11 +181,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup mise
-        uses: jdx/mise-action@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install standalone pnpm 11.13.0
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'pnpm-win32-x64.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'pnpm-standalone'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/pnpm/pnpm/releases/download/v11.13.0/pnpm-win32-x64.zip' `
+            -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $destination
+          $pnpm = Join-Path $destination 'pnpm.exe'
+          $destination | Out-File `
+            -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PNPM_STANDALONE_PATH=$pnpm" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $pnpm --version
 
       - name: Install dependencies
-        run: mise exec -- pnpm install --frozen-lockfile
+        shell: pwsh
+        run: '& $env:PNPM_STANDALONE_PATH install --frozen-lockfile'
 
       - name: Prepare deterministic Windows evidence directory
         shell: pwsh
@@ -194,17 +213,19 @@ jobs:
           New-Item -ItemType File -Path windows-artifacts/startup-evidence/harness.log -Force | Out-Null
 
       - name: Aggregate verification
-        run: mise exec -- pnpm verify
+        shell: pwsh
+        run: '& $env:PNPM_STANDALONE_PATH verify'
 
       - name: Build unsigned Windows x64 NSIS and portable packages
+        shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: mise exec -- pnpm run dist:win:x64
+        run: '& $env:PNPM_STANDALONE_PATH run dist:win:x64'
 
       - name: Reject a package missing its ASAR, then verify the untouched build
         shell: pwsh
         run: |
-          $version = mise exec -- node -p "require('./package.json').version"
+          $version = node -p "require('./package.json').version"
           $asar = (Resolve-Path 'node_modules/.bin/asar.CMD').Path
           $negativeRoot = Join-Path $env:RUNNER_TEMP 'windows-package-negative'
           Copy-Item -LiteralPath release -Destination $negativeRoot -Recurse
@@ -231,7 +252,7 @@ jobs:
         run: |
           $fixture = Join-Path $env:APPDATA "NevermindAclSmoke-$env:GITHUB_RUN_ID"
           try {
-            mise exec -- pnpm exec tsx scripts/create-windows-private-file-fixture.ts $fixture
+            & $env:PNPM_STANDALONE_PATH exec tsx scripts/create-windows-private-file-fixture.ts $fixture
             & .github/scripts/verify-windows-private-file-acl.ps1 -FixtureRoot $fixture
           } finally {
             if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture -Recurse -Force }
@@ -240,7 +261,7 @@ jobs:
       - name: Stage deterministic smoke artifacts
         shell: pwsh
         run: |
-          $version = mise exec -- node -p "require('./package.json').version"
+          $version = node -p "require('./package.json').version"
           New-Item -ItemType Directory -Path windows-artifacts/startup-evidence -Force | Out-Null
           New-Item -ItemType File -Path windows-artifacts/startup-evidence/harness.log -Force | Out-Null
           Copy-Item "release/Nevermind-$version-win-x64-setup.exe" windows-artifacts/
@@ -252,7 +273,7 @@ jobs:
       - name: Launch the staged portable package and prove renderer readiness
         shell: pwsh
         run: |
-          $version = mise exec -- node -p "require('./package.json').version"
+          $version = node -p "require('./package.json').version"
           node scripts/windows-portable-smoke.cjs `
             "windows-artifacts/Nevermind-$version-win-x64-portable.exe" `
             windows-artifacts/windows-smoke-manifest.json `
@@ -260,7 +281,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Packaged portable startup failed.' }
 
       - name: Upload deterministic Windows smoke artifacts and evidence
-        if: always()
+        if: always() && hashFiles('windows-artifacts/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: nevermind-windows-x64-smoke-${{ github.sha }}
@@ -327,7 +348,7 @@ jobs:
       - name: Verify unsigned Windows release packages
         shell: pwsh
         run: |
-          $version = mise exec -- node -p "require('./package.json').version"
+          $version = node -p "require('./package.json').version"
           $asar = (Resolve-Path 'node_modules/.bin/asar.CMD').Path
           & .github/scripts/verify-windows-package.ps1 `
             -PackageRoot (Resolve-Path release).Path `
@@ -339,7 +360,7 @@ jobs:
       - name: Collect Windows release artifacts
         shell: pwsh
         run: |
-          $version = mise exec -- node -p "require('./package.json').version"
+          $version = node -p "require('./package.json').version"
           New-Item -ItemType Directory -Path windows-release-artifacts -Force | Out-Null
           $artifacts = @(
             "release/Nevermind-$version-win-x64-setup.exe",

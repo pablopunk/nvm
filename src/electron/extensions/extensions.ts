@@ -16,6 +16,20 @@ async function extensionsView(ctx) {
   });
 }
 
+function extensionStatus(entry) {
+  if (entry.proposal) return entry.enabled ? 'Pending Update' : 'Pending';
+  return entry.enabled ? 'Enabled' : 'Disabled';
+}
+
+function extensionSourceContent(entry, declared) {
+  const capabilities = declared.capabilities.length
+    ? declared.capabilities.map((value) => `- ${value}`).join('\n')
+    : '- Not statically declared';
+  const currentSource = `## Current Source\n\n\`\`\`ts\n${entry.source || ''}\n\`\`\``;
+  const proposedSource = `## Proposed Source\n\n\`\`\`ts\n${entry.proposalSource || ''}\n\`\`\``;
+  return `# ${entry.filename}\n\n${EXTENSION_TRUST_DISCLOSURE}\n\n## Declared capabilities\n\n${capabilities}\n\n${entry.proposal ? `${proposedSource}\n\n${currentSource}` : currentSource}`;
+}
+
 function extensionItem(ctx, entry) {
   const source = entry.proposal ? entry.proposalSource : entry.source;
   const manifest = inspectExtensionManifest(source || '');
@@ -29,13 +43,7 @@ function extensionItem(ctx, entry) {
         ? manifest.capabilities
         : undefined,
   });
-  const status = entry.proposal
-    ? entry.enabled
-      ? 'Pending Update'
-      : 'Pending'
-    : entry.enabled
-      ? 'Enabled'
-      : 'Disabled';
+  const status = extensionStatus(entry);
   const refresh = async () => ({
     view: await extensionsView(ctx),
     navigation: 'replace' as const,
@@ -60,26 +68,19 @@ function extensionItem(ctx, entry) {
   const sourceView = ctx.actions.push('View Source', {
     type: 'preview',
     title: entry.filename,
-    content: `# ${entry.filename}\n\n${EXTENSION_TRUST_DISCLOSURE}\n\n## Declared capabilities\n\n${declared.capabilities.length ? declared.capabilities.map((value) => `- ${value}`).join('\n') : '- Not statically declared'}\n\n## Current Source\n\n\`\`\`ts\n${entry.source || ''}\n\`\`\`${entry.proposal ? `\n\n## Proposed Source\n\n\`\`\`ts\n${entry.proposalSource || ''}\n\`\`\`` : ''}`,
+    content: extensionSourceContent(entry, declared),
   });
   return {
     id: `extension:${entry.filename}`,
-    title: manifest.title || entry.filename,
-    subtitle: `${status} · ${declared.provenance}`,
-    accessories: [{ text: status }],
-    primaryAction: sourceView,
-    actionPanel: {
-      sections: [
-        {
-          actions: [
-            sourceView,
-            entry.enabled ? disable : enable,
-            entry.proposal ? enable : null,
-            discard,
-          ].filter(Boolean),
-        },
-      ],
-    },
+    title: entry.filename,
+    subtitle: `${status} · ${declared.provenance === 'undeclared' ? 'Capabilities undeclared' : `${declared.capabilities.length} declared capabilities`}`,
+    icon: entry.enabled ? 'check' : 'file-text',
+    primaryAction: entry.proposal || !entry.enabled ? enable : sourceView,
+    actions: [
+      sourceView,
+      entry.proposal ? enable : entry.enabled ? disable : enable,
+      discard,
+    ].filter(Boolean),
   };
 }
 
@@ -87,13 +88,13 @@ export function createExtensionsExtension() {
   return {
     id: 'nevermind.extensions',
     title: 'Extensions',
-    capabilities: [] as const,
+    capabilities: ['extensions.manage'] as const,
     commands: [
       {
         id: 'extensions',
         title: 'Extensions',
-        subtitle: 'Review and manage trusted local extensions',
-        icon: 'puzzle',
+        subtitle: 'Review, enable, disable, or update local extensions',
+        icon: 'file-text',
         run: (ctx) => extensionsView(ctx),
       },
     ],
