@@ -42,7 +42,11 @@ test('builder preview defaults to the first command when other contributions exi
   };
   assert.equal(builderPreviewShouldAutoRun(preview), true);
   assert.deepEqual(builderPreviewAutoRunAction(preview), { id: 'start' });
-  assert.equal(builderPreviewRootActions(preview).length, 3);
+  assert.deepEqual(builderPreviewRootActions(preview), [
+    { id: 'status' },
+    { id: 'start' },
+    { id: 'stop' },
+  ]);
 });
 
 test('builder preview ignores action results from an obsolete preview version', () => {
