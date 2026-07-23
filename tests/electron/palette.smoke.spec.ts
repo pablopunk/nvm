@@ -692,7 +692,8 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     await firstLaunch.page.keyboard.press('Control+K');
     const setAlias = firstLaunch.page.getByText('Set alias', { exact: true });
     await expect(setAlias).toBeVisible();
-    await setAlias.click();
+    await setAlias.hover();
+    await firstLaunch.page.keyboard.press('Enter');
     const aliasInput = firstLaunch.page.locator(
       'input[placeholder^="Alias for"]',
     );
