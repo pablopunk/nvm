@@ -186,6 +186,16 @@ test('applies the production test-mode action and progressive-root policy', () =
   );
   assert.equal(
     searchActionIsVisibleInTestMode(
+      action('safe-root', 'Safe root', {
+        extensionId: 'test.visible',
+        kind: 'extension-root-item',
+      }),
+      options,
+    ),
+    true,
+  );
+  assert.equal(
+    searchActionIsVisibleInTestMode(
       action('root', 'Root', {
         extensionId: 'test.progressive',
         kind: 'extension-root-item',
@@ -203,7 +213,10 @@ test('applies the production test-mode action and progressive-root policy', () =
   );
   assert.equal(
     searchActionIsVisibleInTestMode(
-      action('other-root', 'Other root', { kind: 'extension-root-item' }),
+      action('other-root', 'Other root', {
+        extensionId: 'test.hidden',
+        kind: 'extension-root-item',
+      }),
       options,
     ),
     false,
