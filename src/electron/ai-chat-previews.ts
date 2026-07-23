@@ -48,13 +48,23 @@ function withoutExecutionHandles(value: unknown): unknown {
 }
 
 export function prepareAiChatPreview<
-  T extends { preview: { rootItems: unknown[]; actions: unknown[] } },
+  T extends {
+    preview: {
+      rootItems: unknown[];
+      commands: unknown[];
+      actions: unknown[];
+    };
+  },
 >(preview: T, prepareAction: (action: unknown) => unknown): T {
   return {
     ...preview,
     preview: {
       ...preview.preview,
       rootItems: preview.preview.rootItems
+        .map(withoutExecutionHandles)
+        .map(prepareAction)
+        .filter(Boolean),
+      commands: preview.preview.commands
         .map(withoutExecutionHandles)
         .map(prepareAction)
         .filter(Boolean),

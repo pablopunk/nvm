@@ -544,6 +544,7 @@ export interface BuilderPreview {
   preview: {
     extensionId: string;
     rootItems: unknown[];
+    commands: unknown[];
     actions: unknown[];
   };
 }

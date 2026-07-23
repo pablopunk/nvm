@@ -59,6 +59,7 @@ test('write_extension validates then activates the staged source', async () => {
             preview: {
               extensionId: 'test.ai-live',
               rootItems: [],
+              commands: [],
               actions: [],
             },
           });
@@ -74,6 +75,7 @@ test('write_extension validates then activates the staged source', async () => {
     assert.deepEqual(result.preview, {
       extensionId: 'test.ai-live',
       rootItems: [],
+      commands: [],
       actions: [],
     });
     await assert.rejects(

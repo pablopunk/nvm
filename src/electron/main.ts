@@ -6912,15 +6912,23 @@ async function activatedExtensionPreview(filename) {
           extension.__filePath || extension.id,
         )
       : []);
+  const contributions = actionEntries
+    .map((item) => ({
+      action: extensionActionFromContribution(item),
+      source: item.source,
+    }))
+    .filter((item) => item.action);
   return {
     filename: safeName,
     preview: {
       extensionId: extension.id,
       rootItems: rootItems.map(previewAction).filter(Boolean),
-      actions: actionEntries
-        .map((item) => extensionActionFromContribution(item))
-        .map(previewAction)
-        .filter(Boolean),
+      commands: contributions
+        .filter((item) => item.source !== 'action')
+        .map((item) => previewAction(item.action)),
+      actions: contributions
+        .filter((item) => item.source === 'action')
+        .map((item) => previewAction(item.action)),
     },
   };
 }

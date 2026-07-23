@@ -16,30 +16,33 @@ import {
 } from './builder-preview';
 import type { BuilderPreview, CommandView } from './model';
 
-test('builder preview auto-runs its only root action', () => {
+test('builder preview does not auto-run standalone actions', () => {
   const preview: BuilderPreview = {
-    filename: 'timer.ts',
+    filename: 'quit.ts',
     preview: {
-      extensionId: 'dev.timer',
-      rootItems: [{ id: 'start' }],
-      actions: [],
+      extensionId: 'dev.quit',
+      rootItems: [],
+      commands: [],
+      actions: [{ id: 'quit' }],
     },
   };
-  assert.equal(builderPreviewShouldAutoRun(preview), true);
+  assert.equal(builderPreviewShouldAutoRun(preview), false);
+  assert.equal(builderPreviewAutoRunAction(preview), undefined);
 });
 
-test('builder preview defaults to the first command when root items also exist', () => {
+test('builder preview defaults to the first command when other contributions exist', () => {
   const preview: BuilderPreview = {
     filename: 'timer.ts',
     preview: {
       extensionId: 'dev.timer',
-      rootItems: [{ id: 'start' }],
+      rootItems: [{ id: 'status' }],
+      commands: [{ id: 'start' }],
       actions: [{ id: 'stop' }],
     },
   };
   assert.equal(builderPreviewShouldAutoRun(preview), true);
-  assert.deepEqual(builderPreviewAutoRunAction(preview), { id: 'stop' });
-  assert.equal(builderPreviewRootActions(preview).length, 2);
+  assert.deepEqual(builderPreviewAutoRunAction(preview), { id: 'start' });
+  assert.equal(builderPreviewRootActions(preview).length, 3);
 });
 
 test('builder preview ignores action results from an obsolete preview version', () => {

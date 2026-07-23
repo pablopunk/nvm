@@ -9,15 +9,19 @@ import type {
 import { patchCommandView } from './view-patches';
 
 export function builderPreviewRootActions(preview: BuilderPreview) {
-  return [...preview.preview.rootItems, ...preview.preview.actions];
+  return [
+    ...preview.preview.rootItems,
+    ...preview.preview.commands,
+    ...preview.preview.actions,
+  ];
 }
 
 export function builderPreviewShouldAutoRun(preview: BuilderPreview) {
-  return builderPreviewRootActions(preview).length > 0;
+  return preview.preview.commands.length > 0;
 }
 
 export function builderPreviewAutoRunAction(preview: BuilderPreview) {
-  return preview.preview.actions[0] || preview.preview.rootItems[0];
+  return preview.preview.commands[0];
 }
 
 export function builderPreviewResultIsCurrent(

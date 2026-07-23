@@ -43,6 +43,7 @@ test('prepareAiChatPreview refreshes execution handles for restored actions', ()
     preview: {
       extensionId: 'live',
       rootItems: [{ id: 'root' }],
+      commands: [{ id: 'command' }],
       actions: [{ id: 'action' }],
     },
   };
@@ -82,6 +83,7 @@ test('prepareAiChatPreview removes persisted nested execution handles before reh
           primaryAction: { executionId: 'stale-primary' },
         },
       ],
+      commands: [],
       actions: [],
     },
   };
