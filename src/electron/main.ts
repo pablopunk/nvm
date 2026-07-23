@@ -2582,6 +2582,7 @@ function testModeExtensionIsSafe(extensionId: string) {
     'nevermind.system',
     'nevermind.extensions',
     'nevermind.floating-notes',
+    'dev.design-token-editor',
     'pab53.lifecycle',
     'pab53.legacy',
     'pab53.discovered',
