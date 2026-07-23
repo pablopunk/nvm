@@ -142,6 +142,7 @@ test('Windows package smoke remains separate from first-run development smoke an
     'windows-package-negative',
     'verify-windows-private-file-acl.ps1',
     'windows-portable-smoke.cjs',
+    "if: always() && hashFiles('windows-artifacts/**') != ''",
     'if-no-files-found: error',
   ]) {
     assert.equal(packageSmoke.includes(expected), true, expected);

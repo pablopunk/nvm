@@ -80,6 +80,7 @@ export type ExtensionViewRendererProps = {
   dragPathForItem: (item: CommandItem) => string | null | undefined;
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void;
   selectedItemId?: string;
+  onSelectItem?: (item: CommandItem) => void;
   /** Rendering host; windows get compact headers and no palette chrome. */
   surface?: 'palette' | 'window';
 };
@@ -656,6 +657,7 @@ function GridExtensionView({
   dragPathForItem,
   startItemDrag,
   runAction,
+  onSelectItem,
 }: ExtensionViewSurfaceProps) {
   return (
     <GridView
@@ -679,7 +681,10 @@ function GridExtensionView({
           appearance={item.appearance}
           draggable={Boolean(dragPathForItem(item))}
           onDragStart={(event) => startItemDrag(event, item)}
-          onSelect={() => runDefaultAction(item)}
+          onSelect={() => {
+            onSelectItem?.(item);
+            runDefaultAction(item);
+          }}
         />
       )}
     />
@@ -789,6 +794,7 @@ function ChatInputForm({
     >
       <textarea
         ref={inputRef}
+        autoFocus
         rows={1}
         value={value}
         onChange={(event) => onChange(event.target.value)}

@@ -281,7 +281,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Packaged portable startup failed.' }
 
       - name: Upload deterministic Windows smoke artifacts and evidence
-        if: always()
+        if: always() && hashFiles('windows-artifacts/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: nevermind-windows-x64-smoke-${{ github.sha }}

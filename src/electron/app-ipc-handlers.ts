@@ -78,7 +78,6 @@ export interface AppIpcHandlersDeps {
     hidePalette(): unknown;
     revealPalette(): unknown;
   };
-  requestQuitApp: (reason: string) => unknown;
   hasCapability: (capability: string) => boolean;
   processPlatform: NodeJS.Platform | string;
   getCameraMediaAccessStatus: () => string;
@@ -192,7 +191,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   );
   ipcHandleMeasured(
     'ai-builder:tweak-extension',
-    (_event, input: unknown = {}) => {
+    async (_event, input: unknown = {}) => {
       // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
       const typedInput = input as any;
       const file = typedInput?.extensionFile || typedInput?.extensionId;
@@ -204,24 +203,27 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
         typedInput.title || file,
       );
       return deps.normalizeHostViewResult({
-        view: deps.aiChatView(item, { initialPrompt: typedInput.prompt }),
+        view: await deps.aiChatView(item, { initialPrompt: typedInput.prompt }),
       });
     },
   );
-  ipcHandleMeasured('ai-builder:start-chat', (_event, input: unknown = {}) => {
-    // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
-    const typedInput = input as any;
-    const item = deps.createDraftAiChat(
-      String(typedInput?.prompt || typedInput?.query || ''),
-    );
-    // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
-    const messages = (item as any).messages;
-    return deps.normalizeHostViewResult({
-      view: deps.aiChatView(item, {
-        start: messages.length <= 1,
-      }),
-    });
-  });
+  ipcHandleMeasured(
+    'ai-builder:start-chat',
+    async (_event, input: unknown = {}) => {
+      // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
+      const typedInput = input as any;
+      const item = deps.createDraftAiChat(
+        String(typedInput?.prompt || typedInput?.query || ''),
+      );
+      // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
+      const messages = (item as any).messages;
+      return deps.normalizeHostViewResult({
+        view: await deps.aiChatView(item, {
+          start: messages.length <= 1,
+        }),
+      });
+    },
+  );
   ipcHandleMeasured('nevermind:auth-status', async () => {
     const auth = await deps.getNevermindAuth();
     deps.setActiveNevermindBaseUrl(auth?.baseUrl || null);
@@ -260,10 +262,6 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     deps.paletteWindow.centerWindow();
   });
   ipcHandleMeasured('palette:hide', () => deps.paletteWindow.hidePalette());
-  ipcHandleMeasured('app:quit', () => {
-    deps.requestQuitApp('ipc');
-    return { ok: true };
-  });
   ipcHandleMeasured('palette:shortcut-ready', () =>
     deps.paletteWindow.revealPalette(),
   );

@@ -47,7 +47,6 @@ function systemItems(ctx) {
       subtitle: 'Close the app',
       icon: 'power',
       score: 15,
-      dismissAfterRun: 'auto',
       appearance: { foreground: 'red' },
       primaryAction: system.quit('Quit Nevermind'),
     },
