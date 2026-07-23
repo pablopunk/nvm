@@ -19,8 +19,14 @@ export async function createDesignTokenStudioServer(
   const token = crypto.randomBytes(32).toString('hex');
   const server = http.createServer(async (request, response) => {
     response.setHeader('access-control-allow-origin', options.allowedOrigin);
-    response.setHeader('access-control-allow-headers', 'content-type, x-nvm-token');
-    response.setHeader('access-control-allow-methods', 'GET, PUT, DELETE, OPTIONS');
+    response.setHeader(
+      'access-control-allow-headers',
+      'content-type, x-nvm-token',
+    );
+    response.setHeader(
+      'access-control-allow-methods',
+      'GET, PUT, DELETE, OPTIONS',
+    );
     response.setHeader('cache-control', 'no-store');
     if (request.method === 'OPTIONS') {
       response.statusCode = 204;

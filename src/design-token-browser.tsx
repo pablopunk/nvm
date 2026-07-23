@@ -26,7 +26,8 @@ const api: DesignTokenEditorApi = {
 };
 
 async function request<T>(init?: RequestInit): Promise<T> {
-  if (!(apiUrl && apiToken)) throw new Error('Open this studio from Nevermind.');
+  if (!(apiUrl && apiToken))
+    throw new Error('Open this studio from Nevermind.');
   const headers = new Headers(init?.headers);
   headers.set('x-nvm-token', apiToken);
   const response = await fetch(apiUrl, { ...init, headers });
