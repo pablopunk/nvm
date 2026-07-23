@@ -2424,33 +2424,10 @@ export function App() {
     );
   }
 
-  function rootActionRequestsQuit(action: unknown) {
-    const root = action as Action | undefined;
-    return (
-      root?.id === 'extension-root:nevermind.system:builtin:quit' ||
-      root?.id === 'extension:nevermind.system:builtin:quit' ||
-      (root?.extensionId === 'nevermind.system' &&
-        root?.commandId === 'builtin:quit') ||
-      root?.rootAction?.type === 'quitApp'
-    );
-  }
-
-  function viewActionRequestsQuit(action: ExtensionViewAction) {
-    return (
-      action.type === 'quitApp' ||
-      (action.type === 'nativeAction' &&
-        rootActionRequestsQuit(action.nativeAction))
-    );
-  }
-
   async function runViewAction(action: ExtensionViewAction, confirmed = false) {
     if (action.requiresConfirmation && !confirmed) {
       setConfirmViewActionFor(action);
       setActionQuery('');
-      return;
-    }
-    if (viewActionRequestsQuit(action)) {
-      await window.nvm.quitApp();
       return;
     }
     const nativeAction =
@@ -2570,9 +2547,13 @@ export function App() {
       actionCanDismissImmediately(action) ||
       Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction));
     const loadingNavigation = nativeAction ? 'root' : 'push';
-    const definition = actionDefinition(action);
+    const nestedAction =
+      nativeAction && 'rootAction' in nativeAction
+        ? nativeAction.rootAction
+        : action;
+    const definition = actionDefinition(nestedAction);
     const showsLoading =
-      !(dismissedImmediately || nativeAction) && definition?.loading === 'view';
+      !dismissedImmediately && definition?.loading === 'view';
     try {
       markDebugPerformance('view-action.start', {
         actionType: action.type,
@@ -2704,10 +2685,6 @@ export function App() {
   }
 
   async function run(action: Action) {
-    if (rootActionRequestsQuit(action)) {
-      await window.nvm.quitApp();
-      return;
-    }
     const dismissedImmediately = rootActionCanDismissImmediately(action);
     markDebugPerformance('root-action.start', {
       id: action.id,
