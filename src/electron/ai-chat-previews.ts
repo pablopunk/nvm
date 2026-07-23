@@ -1,15 +1,17 @@
 import path from 'node:path';
 
-type AiChatPreviewState = {
+interface AiChatPreviewState {
   builderPreviewFiles?: unknown;
   selectedBuilderPreviewFilename?: unknown;
   touchedExtensionFiles?: unknown;
   generatedExtensionFile?: unknown;
   contextExtensionFile?: unknown;
-};
+}
 
 function extensionSourceFilename(value: unknown) {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
   const filename = path.basename(value);
   return filename.endsWith('.ts') && !filename.endsWith('.d.ts')
     ? filename
@@ -27,8 +29,12 @@ function uniqueExtensionSourceFilenames(values: unknown[]) {
 }
 
 function withoutExecutionHandles(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutExecutionHandles);
-  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map(withoutExecutionHandles);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
   const { executionId: _executionId, ...rest } = value as Record<
     string,
     unknown
@@ -81,14 +87,12 @@ export function aiChatPreviewFiles(
   const selectedFile = extensionSourceFilename(
     chat.selectedBuilderPreviewFilename,
   );
+  const preferredFile = fallback ? contextFile : selectedFile;
   return {
     files,
-    selectedBuilderPreviewFilename: fallback
-      ? contextFile && files.includes(contextFile)
-        ? contextFile
-        : files.at(-1)
-      : selectedFile && files.includes(selectedFile)
-        ? selectedFile
+    selectedBuilderPreviewFilename:
+      preferredFile && files.includes(preferredFile)
+        ? preferredFile
         : files.at(-1),
   };
 }

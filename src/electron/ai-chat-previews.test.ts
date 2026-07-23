@@ -85,13 +85,14 @@ test('prepareAiChatPreview removes persisted nested execution handles before reh
       actions: [],
     },
   };
-  const restored = prepareAiChatPreview(preview, (action) => action) as any;
+  const restored = prepareAiChatPreview(preview, (action) => action);
+  const rootItem = restored.preview.rootItems[0] as {
+    executionId?: string;
+    primaryAction: { executionId?: string };
+  };
 
-  assert.equal(restored.preview.rootItems[0].executionId, undefined);
-  assert.equal(
-    restored.preview.rootItems[0].primaryAction.executionId,
-    undefined,
-  );
+  assert.equal(rootItem.executionId, undefined);
+  assert.equal(rootItem.primaryAction.executionId, undefined);
 });
 
 test('aiChatPreviewFiles retains a valid saved preview selection', () => {

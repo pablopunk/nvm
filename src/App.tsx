@@ -25,24 +25,24 @@ import { actionMenuPresentation } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
 import { isAppIconPath } from './app-icons';
 import {
+  applyBuilderPreviewActionResult,
+  builderPreviewAutoRunAction,
+  builderPreviewResultIsCurrent,
+  builderPreviewRootActions,
+  builderPreviewSelectedItemId,
+  hydrateBuilderPreviewViewById,
+  patchBuilderPreviewState,
+  patchBuilderPreviewViewById,
+  resetBuilderPreviewState,
+  retryBuilderPreviewHydration,
+  upsertBuilderPreview,
+} from './builder-preview';
+import {
   type CommandIconName,
   iconFor,
   iconForAction,
   iconForItem,
 } from './command-icons';
-import {
-  applyBuilderPreviewActionResult,
-  builderPreviewAutoRunAction,
-  builderPreviewResultIsCurrent,
-  builderPreviewSelectedItemId,
-  hydrateBuilderPreviewViewById,
-  patchBuilderPreviewState,
-  patchBuilderPreviewViewById,
-  retryBuilderPreviewHydration,
-  builderPreviewRootActions,
-  resetBuilderPreviewState,
-  upsertBuilderPreview,
-} from './builder-preview';
 import { RootCommandList } from './command-list';
 import {
   markDebugPerformance,
@@ -1584,7 +1584,7 @@ export function App() {
       void window.nvm.aiChatExited(previousAiChatId);
     lastVisibleAiChatIdRef.current = visibleAiChat?.chatId;
     const mode: PaletteMode =
-      previewFor || isLarge
+      previewFor || isLarge || (isAiChat && builderPreviews.length > 0)
         ? 'preview'
         : siblingViews.length > 0
           ? 'stacked'
@@ -1601,6 +1601,7 @@ export function App() {
     extensionView,
     previewFor,
     siblingViews,
+    builderPreviews.length,
   ]);
 
   useEffect(() => {
@@ -2672,6 +2673,7 @@ export function App() {
           setSelectedBuilderPreviewFilename(null);
         }
         await aiChat.openChat(view);
+        requestAnimationFrame(() => aiChat.inputRef.current?.focus());
       },
     );
   }

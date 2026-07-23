@@ -3,15 +3,15 @@ import { test } from 'node:test';
 import {
   applyBuilderPreviewActionResult,
   builderPreviewAutoRunAction,
-  hydrateBuilderPreviewViewById,
-  patchBuilderPreviewViewById,
-  retryBuilderPreviewHydration,
-  builderPreviewRootActions,
   builderPreviewResultIsCurrent,
+  builderPreviewRootActions,
   builderPreviewSelectedItemId,
-  patchBuilderPreviewState,
   builderPreviewShouldAutoRun,
+  hydrateBuilderPreviewViewById,
+  patchBuilderPreviewState,
+  patchBuilderPreviewViewById,
   resetBuilderPreviewState,
+  retryBuilderPreviewHydration,
   upsertBuilderPreview,
 } from './builder-preview';
 import type { BuilderPreview, CommandView } from './model';
