@@ -63,7 +63,8 @@ export function searchActionIsVisibleInTestMode(
     (action.kind === 'extension-action' &&
       options.isSafeExtension(action.extensionId)) ||
     (action.kind === 'extension-root-item' &&
-      action.extensionId === options.progressiveRootExtensionId)
+      (options.isSafeExtension(action.extensionId) ||
+        action.extensionId === options.progressiveRootExtensionId))
   );
 }
 
