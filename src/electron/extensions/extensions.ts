@@ -73,7 +73,7 @@ function extensionItem(ctx, entry) {
   return {
     id: `extension:${entry.filename}`,
     title: entry.filename,
-    subtitle: `${status} · ${declared.label}`,
+    subtitle: `${status} · ${declared.provenance === 'undeclared' ? 'Capabilities undeclared' : `${declared.capabilities.length} declared capabilities`}`,
     icon: entry.enabled ? 'check' : 'file-text',
     primaryAction: entry.proposal || !entry.enabled ? enable : sourceView,
     actions: [sourceView, entry.enabled ? disable : enable, discard].filter(
