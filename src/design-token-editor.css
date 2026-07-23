@@ -1,3 +1,12 @@
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+}
+
 .tokenStudio {
   width: 100vw;
   height: 100vh;
@@ -6,6 +15,15 @@
   overflow: hidden;
   color: var(--text-primary);
   background: rgb(12, 13, 17);
+}
+
+.tokenStudioStatus {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: rgb(12, 13, 17);
+  font: 14px var(--font-family-ui);
 }
 
 .tokenSidebar {

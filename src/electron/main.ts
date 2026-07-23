@@ -38,6 +38,7 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
+import { createDesignTokenStudioServer } from './design-token-studio-server';
 import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
@@ -259,6 +260,12 @@ const updateManager: any = isNvmTestMode
     }
   : createUpdateManager(autoUpdater as any);
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+const designTokenStudioOrigin = rendererUrl
+  ? new URL(rendererUrl).origin
+  : undefined;
+let designTokenStudioServer: Awaited<
+  ReturnType<typeof createDesignTokenStudioServer>
+> | null = null;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
 const paletteWindow = createPaletteWindowController({
@@ -7684,6 +7691,31 @@ function createFixturesExtension() {
   };
 }
 
+async function openDesignTokenStudioInBrowser() {
+  if (isNvmTestMode) {
+    const state = designTokenState();
+    paletteWindow.setDesignTokenEditorOpen(true);
+    paletteWindow.win?.webContents.send('design-tokens:open-editor', state);
+    return;
+  }
+  if (!(rendererUrl && designTokenStudioOrigin))
+    throw new Error('Design token editor is only available in development');
+  if (!designTokenStudioServer) {
+    designTokenStudioServer = await createDesignTokenStudioServer({
+      allowedOrigin: designTokenStudioOrigin,
+      getState: designTokenState,
+      setState: saveDesignTokenOverrides,
+      resetState: resetDesignTokenOverrides,
+    });
+  }
+  const studioUrl = new URL('design-tokens.html', rendererUrl);
+  studioUrl.hash = new URLSearchParams({
+    api: designTokenStudioServer.apiUrl,
+    token: designTokenStudioServer.token,
+  }).toString();
+  await shell.openExternal(studioUrl.toString());
+}
+
 function designTokenEditorRootItem(ctx) {
   return {
     id: 'design-token-editor',
@@ -7693,10 +7725,10 @@ function designTokenEditorRootItem(ctx) {
     aliases: ['ui editor', 'design tokens', 'theme editor'],
     score: 90,
     customizable: true,
-    primaryAction: ctx.actions.run('Open Design Token Editor', () => {
-      const state = designTokenState();
-      paletteWindow.win?.webContents.send('design-tokens:open-editor', state);
-    }),
+    primaryAction: ctx.actions.run(
+      'Open Design Token Editor',
+      openDesignTokenStudioInBrowser,
+    ),
   };
 }
 
@@ -9130,21 +9162,29 @@ function openDesignTokenEditor(event: { sender: Electron.WebContents }) {
   return designTokenState();
 }
 
+function saveDesignTokenOverrides(input: unknown) {
+  userState.designTokens = validateDesignTokenOverrides(input);
+  scheduleSaveState();
+  return designTokenState();
+}
+
 function setDesignTokens(
   event: { sender: Electron.WebContents },
   input: unknown,
 ) {
   requireDesignTokenEditor(event);
-  userState.designTokens = validateDesignTokenOverrides(input);
+  return saveDesignTokenOverrides(input);
+}
+
+function resetDesignTokenOverrides() {
+  userState.designTokens = {};
   scheduleSaveState();
   return designTokenState();
 }
 
 function resetDesignTokens(event: { sender: Electron.WebContents }) {
   requireDesignTokenEditor(event);
-  userState.designTokens = {};
-  scheduleSaveState();
-  return designTokenState();
+  return resetDesignTokenOverrides();
 }
 
 function closeDesignTokenEditor(event: { sender: Electron.WebContents }) {
@@ -9342,6 +9382,8 @@ app.on('before-quit', (event) => {
 });
 app.on('will-quit', () => {
   nevermindApp.isQuiting = true;
+  void designTokenStudioServer?.close();
+  designTokenStudioServer = null;
   stateSafeQuit.handleWillQuit();
 });
 

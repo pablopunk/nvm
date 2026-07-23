@@ -7,6 +7,13 @@ import {
 } from './design-tokens';
 import type { DesignTokenState } from './preload-api';
 
+export type DesignTokenEditorApi = {
+  setDesignTokens: (
+    overrides: DesignTokenOverrides,
+  ) => Promise<DesignTokenState>;
+  resetDesignTokens: () => Promise<DesignTokenState>;
+};
+
 const GROUPS = [
   [
     'Spacing',
@@ -143,10 +150,12 @@ function Preview({ tab }: { tab: string }) {
 
 export function DesignTokenEditor({
   initial,
+  api = window.nvm,
   onClose,
 }: {
   initial: DesignTokenState;
-  onClose: () => void;
+  api?: DesignTokenEditorApi;
+  onClose?: () => void;
 }) {
   const [state, setState] = useState(initial);
   const [drafts, setDrafts] = useState<DesignTokenValues>(initial.values);
@@ -171,7 +180,7 @@ export function DesignTokenEditor({
       [name]: value,
     };
     try {
-      const next = await window.nvm.setDesignTokens(overrides);
+      const next = await api.setDesignTokens(overrides);
       setState(next);
       setDrafts(next.values);
       setError('');
@@ -183,7 +192,7 @@ export function DesignTokenEditor({
   }
 
   async function reset() {
-    const next = await window.nvm.resetDesignTokens();
+    const next = await api.resetDesignTokens();
     setState(next);
     setDrafts(next.values);
     setError('');
@@ -197,9 +206,11 @@ export function DesignTokenEditor({
             <span className="tokenEyebrow">DEVELOPMENT</span>
             <h1>Design tokens</h1>
           </div>
-          <button aria-label="Close editor" onClick={onClose} type="button">
-            ×
-          </button>
+          {onClose && (
+            <button aria-label="Close editor" onClick={onClose} type="button">
+              ×
+            </button>
+          )}
         </header>
         <div className="tokenSidebarActions">
           <button onClick={reset} type="button">
