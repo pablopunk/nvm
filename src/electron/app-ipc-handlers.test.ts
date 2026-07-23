@@ -167,6 +167,33 @@ test('camera permission composition distinguishes Windows from unsupported platf
   );
 });
 
+test('registerAppIpcHandlers awaits restored AI chat views', async () => {
+  let resolved = false;
+  const { handles } = createDeps({
+    aiChatView: async (item, options) => {
+      await Promise.resolve();
+      resolved = true;
+      return { type: 'chat', item, options };
+    },
+  });
+
+  const result = await handles.get('ai-builder:start-chat')?.(
+    {},
+    { prompt: 'Restore' },
+  );
+
+  assert.equal(resolved, true);
+  assert.deepEqual(result, {
+    normalized: {
+      view: {
+        type: 'chat',
+        item: { prompt: 'Restore', messages: [] },
+        options: { start: true },
+      },
+    },
+  });
+});
+
 test('registerAppIpcHandlers suspends and resumes palette hotkey with action shortcuts', async () => {
   const { handles, calls } = createDeps();
 

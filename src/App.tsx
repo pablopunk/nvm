@@ -30,6 +30,19 @@ import {
   iconForAction,
   iconForItem,
 } from './command-icons';
+import {
+  applyBuilderPreviewActionResult,
+  builderPreviewAutoRunAction,
+  builderPreviewResultIsCurrent,
+  builderPreviewSelectedItemId,
+  hydrateBuilderPreviewViewById,
+  patchBuilderPreviewState,
+  patchBuilderPreviewViewById,
+  retryBuilderPreviewHydration,
+  builderPreviewRootActions,
+  resetBuilderPreviewState,
+  upsertBuilderPreview,
+} from './builder-preview';
 import { RootCommandList } from './command-list';
 import {
   markDebugPerformance,
@@ -49,6 +62,7 @@ import {
   actionDescription,
   actionPanelFromActions,
   actionsFromPanel,
+  type BuilderPreview,
   type CommandAction,
   type CommandActionPanel,
   type CommandItem,
@@ -163,6 +177,17 @@ type Action = {
 type ExtensionViewAction = CommandAction;
 type ExtensionViewItem = CommandItem;
 type ExtensionView = CommandView;
+type BuilderPreviewAction = Action;
+
+type BuilderPreviewState = {
+  filename: string;
+  extensionId: string;
+  rootActions: BuilderPreviewAction[];
+  rootView: ExtensionView;
+  view: ExtensionView;
+  backStack: ExtensionView[];
+  selectedItemId: string;
+};
 
 declare global {
   interface Window {
@@ -948,16 +973,33 @@ export function App() {
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{
     title: string;
     panel: CommandActionPanel;
+    runAction?: (
+      action: ExtensionViewAction,
+      confirmed?: boolean,
+    ) => Promise<void>;
   } | null>(null);
   const [confirmRemoveFor, setConfirmRemoveFor] = useState<Action | null>(null);
   const [confirmViewActionFor, setConfirmViewActionFor] =
     useState<ExtensionViewAction | null>(null);
+  const [confirmBuilderPreviewAction, setConfirmBuilderPreviewAction] =
+    useState<{
+      filename: string;
+      action: ExtensionViewAction;
+    } | null>(null);
   const [aliasFor, setAliasFor] = useState<Action | null>(null);
   const [previewFor, setPreviewFor] = useState<Action | null>(null);
   const extensionNavigation = useExtensionNavigation();
   const extensionView = extensionNavigation.view;
   const extensionViewBackStack = extensionNavigation.backStack;
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
+  const [builderPreviews, setBuilderPreviews] = useState<BuilderPreviewState[]>(
+    [],
+  );
+  const builderPreviewsRef = useRef<BuilderPreviewState[]>([]);
+  const builderPreviewVersionRef = useRef(0);
+  const [selectedBuilderPreviewFilename, setSelectedBuilderPreviewFilename] =
+    useState<string | null>(null);
+  const [builderPreviewFocused, setBuilderPreviewFocused] = useState(false);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [ghStatus, setGhStatus] = useState<{
     installed: boolean;
@@ -987,6 +1029,7 @@ export function App() {
   const isCompactActionMenuOpen = Boolean(
     shortcutOptionsFor ||
       actionSubmenuFor ||
+      confirmBuilderPreviewAction ||
       extensionItemOptionsFor ||
       optionsFor,
   );
@@ -1010,11 +1053,15 @@ export function App() {
       setConfirmViewActionFor,
       setActionSubmenuFor,
     });
+    setConfirmBuilderPreviewAction(null);
     setActionQuery('');
   }
   useEffect(() => {
     extensionViewRef.current = extensionView;
   }, [extensionView]);
+  useEffect(() => {
+    builderPreviewsRef.current = builderPreviews;
+  }, [builderPreviews]);
   useEffect(() => {
     selectedValueRef.current = selectedValue;
   }, [selectedValue]);
@@ -1260,6 +1307,16 @@ export function App() {
         mode: payload?.patch?.mode,
       });
       if (!payload) return;
+      const previewPatch = patchBuilderPreviewViewById(
+        builderPreviewsRef.current,
+        payload.viewId || '',
+        payload.patch,
+      );
+      if (previewPatch !== builderPreviewsRef.current) {
+        builderPreviewsRef.current = previewPatch;
+        setBuilderPreviews(previewPatch);
+        return;
+      }
       const current = extensionViewRef.current;
       if (payload.viewId && current?.id !== payload.viewId) return;
       if (!current) return;
@@ -1271,6 +1328,15 @@ export function App() {
         hasItems: Boolean(payload?.items),
         hasError: Boolean(payload?.error),
       });
+      const previewHydration = hydrateBuilderPreviewViewById(
+        builderPreviewsRef.current,
+        payload,
+      );
+      if (previewHydration !== builderPreviewsRef.current) {
+        builderPreviewsRef.current = previewHydration;
+        setBuilderPreviews(previewHydration);
+        return;
+      }
       const current = extensionViewRef.current;
       if (payload.viewId && current?.id !== payload.viewId) return;
       if (!current) return;
@@ -1323,6 +1389,31 @@ export function App() {
           event.data,
         );
       aiChat.handleEvent(event, aiChatIdRef.current);
+      if (
+        event.type === 'extension_activated' &&
+        (!event.chatId || event.chatId === aiChatIdRef.current)
+      ) {
+        const preview = builderPreviewFrom(event.data as BuilderPreview);
+        if (!(preview && aiChatIdRef.current)) return;
+        builderPreviewVersionRef.current += 1;
+        setBuilderPreviews((previews) =>
+          upsertBuilderPreview(previews, preview),
+        );
+        setSelectedBuilderPreviewFilename(preview.filename);
+        setBuilderPreviewFocused(false);
+        const action = builderPreviewAutoRunAction(
+          event.data as BuilderPreview,
+        );
+        if (action)
+          queueMicrotask(
+            () =>
+              void runBuilderPreviewAction(
+                preview.filename,
+                action as BuilderPreviewAction,
+              ),
+          );
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
     });
     return () => {
       stopShown();
@@ -1380,6 +1471,8 @@ export function App() {
       selectValue(getConfirmActionRows()[0]?.value ?? '');
     else if (confirmViewActionFor)
       selectValue(getConfirmViewActionRows()[0]?.value ?? '');
+    else if (confirmBuilderPreviewAction)
+      selectValue(getConfirmBuilderPreviewActionRows()[0]?.value ?? '');
     else if (actionSubmenuFor)
       selectValue(
         actionPanelRows(
@@ -1387,7 +1480,9 @@ export function App() {
           [],
           'action-submenu',
           true,
-        ).find((row) => !row.sectionHeader)?.value ?? '',
+          new Set<string>(),
+          actionSubmenuFor.runAction,
+        )[0]?.value ?? '',
       );
     else if (extensionItemOptionsFor)
       selectValue(getExtensionItemActionRows()[0]?.value ?? '');
@@ -1607,6 +1702,90 @@ export function App() {
     () => actions.find((action) => action.id === selectedValue),
     [actions, selectedValue],
   );
+  const selectedBuilderPreview = useMemo(
+    () =>
+      builderPreviews.find(
+        (preview) => preview.filename === selectedBuilderPreviewFilename,
+      ) || null,
+    [builderPreviews, selectedBuilderPreviewFilename],
+  );
+  const builderPreviewRefreshKey = builderPreviews
+    .map(
+      (preview) =>
+        `${preview.filename}:${viewIdentity(preview.view)}:${preview.view.refresh?.id || ''}:${preview.view.refresh?.intervalMs || ''}:${preview.view.refresh?.immediate || ''}`,
+    )
+    .join('|');
+  useEffect(() => {
+    const timers = builderPreviews.flatMap((preview) => {
+      if (!(preview.view.refresh?.id && preview.view.refresh.intervalMs))
+        return [];
+      const filename = preview.filename;
+      const viewKey = viewIdentity(preview.view);
+      const refreshId = preview.view.refresh.id;
+      const intervalMs = preview.view.refresh.intervalMs;
+      let cancelled = false;
+      let running = false;
+      const refresh = async () => {
+        const current = builderPreviewsRef.current.find(
+          (item) => item.filename === filename,
+        );
+        if (
+          cancelled ||
+          running ||
+          !current ||
+          viewIdentity(current.view) !== viewKey ||
+          current.view.refresh?.id !== refreshId
+        )
+          return;
+        running = true;
+        try {
+          const result = await measureDebugPerformance(
+            'builder-preview.refresh',
+            { filename, refreshId, viewId: current.view.id, viewKey },
+            () =>
+              window.nvm.refreshView({
+                id: refreshId,
+                viewId: current.view.id,
+              }),
+          );
+          const latest = builderPreviewsRef.current.find(
+            (item) => item.filename === filename,
+          );
+          if (
+            !(result?.skipped || cancelled) &&
+            latest &&
+            viewIdentity(latest.view) === viewKey
+          )
+            applyBuilderPreviewResult(filename, result, undefined);
+        } catch (error) {
+          await window.nvm.log('warn', 'Builder preview refresh failed', {
+            filename,
+            viewKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          running = false;
+        }
+      };
+      const minimumIntervalMs = preview.view.type === 'grid' ? 5000 : 1000;
+      const timer = window.setInterval(
+        refresh,
+        Math.max(minimumIntervalMs, intervalMs),
+      );
+      const immediateTimer = preview.view.refresh.immediate
+        ? window.setTimeout(refresh, 0)
+        : undefined;
+      return [
+        () => {
+          cancelled = true;
+          window.clearInterval(timer);
+          if (immediateTimer !== undefined) window.clearTimeout(immediateTimer);
+        },
+      ];
+    });
+    return () => timers.forEach((stop) => stop());
+  }, [builderPreviewRefreshKey]);
+
   const createAction = useMemo(
     () =>
       actions.find(
@@ -1623,7 +1802,10 @@ export function App() {
     palettePrompt.active;
   const isRootLikeExtensionView = extensionView?.id === 'clipboard-history';
   const isActionWorkflowOpen = Boolean(
-    aliasFor || confirmRemoveFor || confirmViewActionFor,
+    aliasFor ||
+      confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction,
   );
   const compactActionMenuVisible = Boolean(
     isCompactActionMenuOpen &&
@@ -1631,11 +1813,13 @@ export function App() {
       !aliasFor &&
       !confirmRemoveFor &&
       !confirmViewActionFor &&
+      !confirmBuilderPreviewAction &&
       !palettePrompt.active,
   );
   const isFilterableChildOpen = Boolean(
     confirmRemoveFor ||
       confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
       aliasFor ||
       (shortcutManagerOpen && !shortcutOptionsFor) ||
       isFilterableExtensionView,
@@ -1648,6 +1832,7 @@ export function App() {
       actionSubmenuFor ||
       confirmRemoveFor ||
       confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
       extensionItemOptionsFor ||
       optionsFor ||
       aliasFor ||
@@ -1845,6 +2030,202 @@ export function App() {
     navigation: 'root' | 'push' | 'replace' = 'replace',
   ) {
     extensionNavigation.showView(view, navigation);
+  }
+
+  function builderPreviewRootView(preview: BuilderPreview) {
+    const rootActions = builderPreviewRootActions(
+      preview,
+    ) as BuilderPreviewAction[];
+    return {
+      type: 'list' as const,
+      id: `builder-preview:${preview.filename}`,
+      title: preview.filename.replace(/\.tsx?$/, ''),
+      subtitle: preview.preview.extensionId,
+      items: rootActions.map((action) => ({
+        ...action,
+        primaryAction: {
+          type: 'nativeAction' as const,
+          title: action.title,
+          nativeAction: action,
+        },
+      })),
+    };
+  }
+
+  function builderPreviewFrom(
+    preview: BuilderPreview,
+  ): BuilderPreviewState | null {
+    if (
+      !preview.filename ||
+      !preview.preview?.extensionId ||
+      !Array.isArray(preview.preview.rootItems) ||
+      !Array.isArray(preview.preview.actions)
+    )
+      return null;
+    const rootView = builderPreviewRootView(preview);
+    return {
+      filename: preview.filename,
+      extensionId: preview.preview.extensionId,
+      rootActions: builderPreviewRootActions(preview) as BuilderPreviewAction[],
+      rootView,
+      view: rootView,
+      backStack: [],
+      selectedItemId: builderPreviewSelectedItemId(rootView),
+    };
+  }
+
+  function resetBuilderPreview(filename: string) {
+    setBuilderPreviews((previews) =>
+      resetBuilderPreviewState(previews, filename).map((preview) =>
+        preview.filename === filename
+          ? {
+              ...preview,
+              selectedItemId: builderPreviewSelectedItemId(preview.rootView),
+            }
+          : preview,
+      ),
+    );
+  }
+
+  function applyBuilderPreviewResult(
+    filename: string,
+    result: {
+      view?: ExtensionView;
+      patch?: CommandViewPatch;
+      navigation?: 'root' | 'push' | 'replace' | 'pop';
+      toast?: { message: string; tone?: ToastTone };
+    },
+    dismissAfterRun?: 'auto',
+  ) {
+    if (result.toast)
+      showToast(result.toast.message, result.toast.tone || 'default');
+    setBuilderPreviews((previews) =>
+      previews.map((preview) => {
+        if (preview.filename !== filename) return preview;
+        const patched = result.patch
+          ? patchBuilderPreviewState(preview, result.patch)
+          : preview;
+        const transitioned = applyBuilderPreviewActionResult(
+          [patched],
+          filename,
+          result,
+        )[0];
+        if (dismissAfterRun === 'auto' && !result.view)
+          return {
+            ...transitioned,
+            view: transitioned.rootView,
+            backStack: [],
+            selectedItemId: builderPreviewSelectedItemId(transitioned.rootView),
+          };
+        return {
+          ...transitioned,
+          selectedItemId: builderPreviewSelectedItemId(
+            transitioned.view,
+            transitioned.selectedItemId,
+          ),
+        };
+      }),
+    );
+  }
+
+  async function runBuilderPreviewAction(
+    filename: string,
+    action: BuilderPreviewAction,
+  ) {
+    const previewVersion = builderPreviewVersionRef.current;
+    try {
+      const result = await window.nvm.execute(action);
+      if (
+        !builderPreviewResultIsCurrent(
+          previewVersion,
+          builderPreviewVersionRef.current,
+        )
+      )
+        return;
+      applyBuilderPreviewResult(filename, result || {}, action.dismissAfterRun);
+    } catch (error) {
+      if (
+        !builderPreviewResultIsCurrent(
+          previewVersion,
+          builderPreviewVersionRef.current,
+        )
+      )
+        return;
+      showToast(
+        error instanceof Error ? error.message : 'Could not run action',
+        'error',
+      );
+    }
+  }
+
+  function popBuilderPreview(filename: string) {
+    setBuilderPreviews((previews) =>
+      previews.map((preview) => {
+        if (preview.filename !== filename) return preview;
+        const backStack = [...preview.backStack];
+        const view = backStack.pop();
+        return view
+          ? {
+              ...preview,
+              view,
+              backStack,
+              selectedItemId: builderPreviewSelectedItemId(view),
+            }
+          : preview;
+      }),
+    );
+  }
+
+  async function runBuilderPreviewViewAction(
+    filename: string,
+    action: ExtensionViewAction,
+    confirmed = false,
+  ) {
+    if (action.requiresConfirmation && !confirmed) {
+      setConfirmBuilderPreviewAction({ filename, action });
+      setActionQuery('');
+      return;
+    }
+    const nativeAction =
+      action.type === 'nativeAction'
+        ? (action.nativeAction as { kind?: string; viewId?: string })
+        : null;
+    if (nativeAction?.kind === 'view-hydrate-retry') {
+      const viewId = String(nativeAction.viewId || '');
+      const retryPreviews = retryBuilderPreviewHydration(
+        builderPreviewsRef.current,
+        viewId,
+      );
+      if (retryPreviews !== builderPreviewsRef.current) {
+        builderPreviewsRef.current = retryPreviews;
+        setBuilderPreviews(retryPreviews);
+      }
+      try {
+        await window.nvm.retryViewLoader(viewId);
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Could not retry loading',
+          'error',
+        );
+      }
+      return;
+    }
+    const rootAction =
+      action.type === 'nativeAction' ? (action.nativeAction as Action) : null;
+    if (rootAction?.kind) return runBuilderPreviewAction(filename, rootAction);
+    try {
+      const result = await window.nvm.runViewAction({
+        ...action,
+        dismissAfterRun: undefined,
+        keepPaletteOpen: true,
+      });
+      applyBuilderPreviewResult(filename, result || {}, action.dismissAfterRun);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Could not run action',
+        'error',
+      );
+    }
   }
 
   function showActionLoadingView(
@@ -2064,6 +2445,13 @@ export function App() {
             | { kind?: string; action?: Action; actionId?: string }
             | undefined)
         : undefined;
+    if (nativeAction?.kind === 'builder-preview-focus') {
+      setOptionsFor(null);
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>('.builderPreviewPane')?.focus(),
+      );
+      return;
+    }
     if (action.type === 'setSearchQuery') {
       const nextQuery = String(action.query ?? action.text ?? '');
       setRootQuery(nextQuery);
@@ -2253,6 +2641,36 @@ export function App() {
       },
       async () => {
         showExtensionView(view, navigation);
+        const previews = (view.builderPreviews || [])
+          .map(builderPreviewFrom)
+          .filter(Boolean) as BuilderPreviewState[];
+        if (previews.length) {
+          builderPreviewVersionRef.current += 1;
+          setBuilderPreviews(previews);
+          setSelectedBuilderPreviewFilename(
+            previews.some(
+              (preview) =>
+                preview.filename === view.selectedBuilderPreviewFilename,
+            )
+              ? view.selectedBuilderPreviewFilename || null
+              : previews.at(-1)?.filename || null,
+          );
+          for (const preview of view.builderPreviews || []) {
+            const action = builderPreviewAutoRunAction(preview);
+            if (action)
+              queueMicrotask(
+                () =>
+                  void runBuilderPreviewAction(
+                    preview.filename,
+                    action as BuilderPreviewAction,
+                  ),
+              );
+          }
+        } else {
+          builderPreviewVersionRef.current += 1;
+          setBuilderPreviews([]);
+          setSelectedBuilderPreviewFilename(null);
+        }
         await aiChat.openChat(view);
       },
     );
@@ -2306,14 +2724,21 @@ export function App() {
         action.subtitle || 'Waiting for the action to finish',
         'root',
       );
-    const result = await resultPromise;
-    if (result?.view) {
-      setOptionsFor(null);
-      setPreviewFor(null);
-      if (result.view.aiChat) await openAiChat(result.view, 'root');
-      else showExtensionView(result.view, 'root');
-    } else if (!dismissedImmediately) {
-      window.nvm.hide();
+    try {
+      const result = await resultPromise;
+      if (result?.view) {
+        setOptionsFor(null);
+        setPreviewFor(null);
+        if (result.view.aiChat) await openAiChat(result.view, 'root');
+        else showExtensionView(result.view, 'root');
+      } else if (!dismissedImmediately) {
+        window.nvm.hide();
+      }
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Could not run action',
+        'error',
+      );
     }
   }
 
@@ -2781,6 +3206,43 @@ export function App() {
     ].filter((row) => actionMatches(row.title, row.subtitle));
   }
 
+  function getConfirmBuilderPreviewActionRows() {
+    const confirmation = confirmBuilderPreviewAction;
+    const action = confirmation?.action;
+    return [
+      {
+        value: 'confirm:builder-preview-action',
+        icon:
+          action?.style === 'destructive' ? (
+            <Trash2 size={18} />
+          ) : (
+            <Zap size={18} />
+          ),
+        title: action?.confirmLabel || action?.title || 'Run action',
+        subtitle: action?.confirmMessage || 'Confirm this action',
+        onSelect: async () => {
+          if (!confirmation) return;
+          setConfirmBuilderPreviewAction(null);
+          await runBuilderPreviewViewAction(
+            confirmation.filename,
+            { ...confirmation.action, requiresConfirmation: false },
+            true,
+          );
+        },
+        className:
+          action?.style === 'destructive' ? 'result dangerResult' : 'result',
+      },
+      {
+        value: 'confirm:builder-preview-cancel',
+        icon: <RotateCcw size={18} />,
+        title: action?.cancelLabel || 'Cancel',
+        subtitle: 'Do nothing',
+        onSelect: () => setConfirmBuilderPreviewAction(null),
+        className: 'result',
+      },
+    ].filter((row) => actionMatches(row.title, row.subtitle));
+  }
+
   function actionIdentity(action: ExtensionViewAction) {
     const nativeId = (action.nativeAction as { id?: string } | undefined)?.id;
     return [
@@ -2808,6 +3270,7 @@ export function App() {
     value: string,
     closeAfterSelect: boolean,
     icon = iconForAction(action),
+    runAction = runViewAction,
   ): ActionPanelRow {
     return {
       value,
@@ -2817,11 +3280,15 @@ export function App() {
       shortcut: action.shortcut,
       onSelect: async () => {
         if (action.submenu) {
-          setActionSubmenuFor({ title: action.title, panel: action.submenu });
+          setActionSubmenuFor({
+            title: action.title,
+            panel: action.submenu,
+            runAction,
+          });
           setActionQuery('');
           return;
         }
-        await runViewAction(action);
+        await runAction(action);
         if (closeAfterSelect) closeActionPanels();
       },
       className:
@@ -2835,6 +3302,7 @@ export function App() {
     prefix = 'extension-item',
     closeAfterSelect = true,
     skipActionIdentities = new Set<string>(),
+    runAction = runViewAction,
   ): ActionPanelRow[] {
     const sections = panel?.sections?.length
       ? panel.sections
@@ -2847,6 +3315,8 @@ export function App() {
             action,
             `${prefix}:${sectionIndex}:${index}:${action.type}:${action.title}`,
             closeAfterSelect,
+            undefined,
+            runAction,
           ),
         )
         .filter((row) => actionMatches(row.title, row.subtitle));
@@ -3300,6 +3770,117 @@ export function App() {
     );
   }
 
+  function renderBuilderPreview() {
+    if (!selectedBuilderPreview) return null;
+    const preview = selectedBuilderPreview;
+    return (
+      <section
+        className="builderPreviewPane"
+        data-focused={builderPreviewFocused}
+        tabIndex={0}
+        onFocus={() => setBuilderPreviewFocused(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            setBuilderPreviewFocused(false);
+        }}
+        onClick={() => setBuilderPreviewFocused(true)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (actionSubmenuFor) setActionSubmenuFor(null);
+          else if (confirmBuilderPreviewAction)
+            setConfirmBuilderPreviewAction(null);
+          else if (preview.backStack.length > 0)
+            popBuilderPreview(preview.filename);
+          else {
+            setBuilderPreviewFocused(false);
+            aiChat.inputRef.current?.focus();
+          }
+        }}
+      >
+        <header className="builderPreviewHeader">
+          {builderPreviews.length > 1 ? (
+            <div
+              className="builderPreviewSwitcher"
+              aria-label="Preview extensions"
+            >
+              {builderPreviews.map((item) => (
+                <button
+                  key={item.filename}
+                  type="button"
+                  data-selected={item.filename === preview.filename}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    resetBuilderPreview(item.filename);
+                    setSelectedBuilderPreviewFilename(item.filename);
+                  }}
+                >
+                  {item.filename.replace(/\.tsx?$/, '')}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span>{preview.filename.replace(/\.tsx?$/, '')}</span>
+          )}
+        </header>
+        <div className="builderPreviewBody">
+          <ExtensionViewRenderer
+            view={preview.view}
+            aiChat={aiChat}
+            nevermindAuthed={nevermindAuthed}
+            onSignInToNevermind={() => {}}
+            formValues={formValues}
+            setFormValues={setFormValues}
+            filterItems={(items) => items || []}
+            filterSections={(view) => view.sections}
+            renderMarkdown={renderMarkdown}
+            renderActionPanel={renderActionPanel}
+            actionPanelRows={(
+              panel,
+              fallbackActions,
+              prefix,
+              closeAfterSelect,
+            ) =>
+              actionPanelRows(
+                panel,
+                fallbackActions,
+                `builder-preview:${preview.filename}:${prefix || 'view'}`,
+                closeAfterSelect,
+                new Set<string>(),
+                (action, confirmed) =>
+                  runBuilderPreviewViewAction(
+                    preview.filename,
+                    action,
+                    confirmed,
+                  ),
+              )
+            }
+            renderRootIcon={iconForCommandItem}
+            runDefaultAction={(item) => {
+              const action =
+                item.primaryAction ||
+                actionsFromPanel(item.actionPanel, item.actions || [])[0];
+              if (action)
+                void runBuilderPreviewViewAction(preview.filename, action);
+            }}
+            runAction={(action) =>
+              void runBuilderPreviewViewAction(preview.filename, action)
+            }
+            sendAiPrompt={() => {}}
+            abortAiChat={() => {}}
+            dragPathForItem={() => null}
+            startItemDrag={() => {}}
+            selectedItemId={preview.selectedItemId}
+            onSelectItem={(item) =>
+              selectBuilderPreviewItem(preview.filename, item.id)
+            }
+          />
+        </div>
+      </section>
+    );
+  }
+
   function renderExtensionView(view: ExtensionView) {
     return (
       <ExtensionViewRenderer
@@ -3378,6 +3959,105 @@ export function App() {
       (candidate) =>
         candidate.type === 'setSearchQuery' && candidate.title === title,
     );
+  }
+
+  function selectBuilderPreviewItem(filename: string, itemId: string) {
+    setBuilderPreviews((previews) =>
+      previews.map((preview) =>
+        preview.filename === filename
+          ? { ...preview, selectedItemId: itemId }
+          : preview,
+      ),
+    );
+  }
+
+  function moveBuilderPreviewSelection(key: string) {
+    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    const view = selectedBuilderPreview.view;
+    const items = allViewItems(view).filter((item) => !item.disabled);
+    if (!items.length) return false;
+    const currentIndex = Math.max(
+      0,
+      items.findIndex(
+        (item) => item.id === selectedBuilderPreview.selectedItemId,
+      ),
+    );
+    const grid = document.querySelector<HTMLElement>(
+      '.builderPreviewPane .extensionGrid',
+    );
+    const columns = grid
+      ? Math.max(
+          1,
+          getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean)
+            .length,
+        )
+      : 4;
+    const delta =
+      key === 'ArrowRight'
+        ? 1
+        : key === 'ArrowLeft'
+          ? -1
+          : key === 'ArrowDown'
+            ? columns
+            : -columns;
+    const item =
+      items[Math.max(0, Math.min(items.length - 1, currentIndex + delta))];
+    if (!item) return false;
+    selectBuilderPreviewItem(selectedBuilderPreview.filename, item.id);
+    requestAnimationFrame(() =>
+      document
+        .querySelector(
+          `.builderPreviewPane [data-extension-item-id="${CSS.escape(item.id)}"]`,
+        )
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    );
+    return true;
+  }
+
+  function selectedBuilderPreviewItem() {
+    if (!selectedBuilderPreview) return null;
+    return (
+      allViewItems(selectedBuilderPreview.view).find(
+        (item) => item.id === selectedBuilderPreview.selectedItemId,
+      ) || null
+    );
+  }
+
+  function runSelectedBuilderPreviewAction() {
+    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    const item = selectedBuilderPreviewItem();
+    const action =
+      item?.primaryAction ||
+      actionsFromPanel(item?.actionPanel, item?.actions || [])[0] ||
+      actionsFromPanel(
+        selectedBuilderPreview.view.actionPanel,
+        selectedBuilderPreview.view.actions || [],
+      )[0];
+    if (!action) return false;
+    void runBuilderPreviewViewAction(selectedBuilderPreview.filename, action);
+    return true;
+  }
+
+  function runBuilderPreviewShortcut(accelerator: string) {
+    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    const item = selectedBuilderPreviewItem();
+    const actions = item
+      ? [
+          item.primaryAction,
+          ...actionsFromPanel(item.actionPanel, item.actions || []),
+        ].filter(Boolean)
+      : actionsFromPanel(
+          selectedBuilderPreview.view.actionPanel,
+          selectedBuilderPreview.view.actions || [],
+        );
+    const action = (actions as ExtensionViewAction[]).find(
+      (candidate) =>
+        normalizedShortcut(candidate.shortcut) ===
+        normalizedShortcut(accelerator),
+    );
+    if (!action) return false;
+    void runBuilderPreviewViewAction(selectedBuilderPreview.filename, action);
+    return true;
   }
 
   function moveGridSelection(key: string) {
@@ -3481,6 +4161,23 @@ export function App() {
     }
 
     const localAccelerator = acceleratorFromEvent(event);
+    const eventTarget = event.target;
+    const builderPreviewEventTargetsEditableControl =
+      eventTarget instanceof HTMLInputElement ||
+      eventTarget instanceof HTMLTextAreaElement ||
+      eventTarget instanceof HTMLSelectElement ||
+      (eventTarget instanceof HTMLElement && eventTarget.isContentEditable);
+    if (
+      builderPreviewFocused &&
+      !builderPreviewEventTargetsEditableControl &&
+      !localAccelerator &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
+      if (runSelectedBuilderPreviewAction()) {
+        event.preventDefault();
+        return;
+      }
+    }
     if (normalizedShortcut(localAccelerator) === 'command+enter') {
       const path = selectedDiskPath();
       if (path) {
@@ -3489,7 +4186,11 @@ export function App() {
         return;
       }
     }
-    if (localAccelerator && runLocalShortcut(localAccelerator)) {
+    if (
+      localAccelerator &&
+      (runBuilderPreviewShortcut(localAccelerator) ||
+        runLocalShortcut(localAccelerator))
+    ) {
       event.preventDefault();
       return;
     }
@@ -3568,8 +4269,9 @@ export function App() {
     }
 
     if (
+      !builderPreviewEventTargetsEditableControl &&
       ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
-      moveGridSelection(event.key)
+      (moveBuilderPreviewSelection(event.key) || moveGridSelection(event.key))
     ) {
       event.preventDefault();
       return;
@@ -3584,17 +4286,80 @@ export function App() {
         setActionQuery('');
       } else if (confirmRemoveFor) setConfirmRemoveFor(null);
       else if (confirmViewActionFor) setConfirmViewActionFor(null);
+      else if (confirmBuilderPreviewAction)
+        setConfirmBuilderPreviewAction(null);
       else if (actionSubmenuFor) setActionSubmenuFor(null);
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null);
       else if (optionsFor) setOptionsFor(null);
       else if (previewFor) setPreviewFor(null);
-      else if (extensionView) popExtensionView();
+      else if (builderPreviewFocused) {
+        setBuilderPreviewFocused(false);
+        aiChat.inputRef.current?.focus();
+      } else if (extensionView) popExtensionView();
       else window.nvm.hide();
+      return;
+    }
+
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLowerCase() === 'k' &&
+      extensionView?.aiChat &&
+      selectedBuilderPreview &&
+      !builderPreviewFocused
+    ) {
+      event.preventDefault();
+      setOptionsFor({
+        id: `builder-preview:${selectedBuilderPreview.filename}`,
+        kind: 'builtin',
+        title: 'Builder workspace',
+        subtitle: '',
+        icon: 'sparkles',
+        score: 0,
+        actionPanel: {
+          sections: [
+            {
+              actions: [
+                {
+                  type: 'nativeAction',
+                  title: 'Focus Preview',
+                  nativeAction: {
+                    kind: 'builder-preview-focus',
+                    title: 'Focus Preview',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
       return;
     }
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
+      if (builderPreviewFocused && selectedBuilderPreview) {
+        const item = allViewItems(selectedBuilderPreview.view).find(
+          (candidate) => candidate.id === selectedBuilderPreview.selectedItemId,
+        );
+        const panel =
+          item?.actionPanel || selectedBuilderPreview.view.actionPanel;
+        const actions =
+          item?.actions || selectedBuilderPreview.view.actions || [];
+        if (panel || actions.length > 0) {
+          setActionQuery('');
+          setActionSubmenuFor({
+            title: item?.title || selectedBuilderPreview.view.title,
+            panel: panel || actionPanelFromActions(actions),
+            runAction: (action, confirmed) =>
+              runBuilderPreviewViewAction(
+                selectedBuilderPreview.filename,
+                action,
+                confirmed,
+              ),
+          });
+        }
+        return;
+      }
       if (compactActionMenuVisible) {
         setShortcutOptionsFor(null);
         closeActionPanels();
@@ -3829,6 +4594,8 @@ export function App() {
             renderActionPanel(getConfirmActionRows())
           ) : confirmViewActionFor ? (
             renderActionPanel(getConfirmViewActionRows())
+          ) : confirmBuilderPreviewAction ? (
+            renderActionPanel(getConfirmBuilderPreviewActionRows())
           ) : previewFor ? (
             <div className="previewPane">
               {previewFor.videoUrl ? (
@@ -3868,7 +4635,19 @@ export function App() {
               emptyMessage="No matching choices"
             />
           ) : extensionView ? (
-            renderExtensionView(extensionView)
+            extensionView.aiChat && selectedBuilderPreview ? (
+              <div className="builderWorkspace">
+                <div
+                  className="builderChatPane"
+                  onFocusCapture={() => setBuilderPreviewFocused(false)}
+                >
+                  {renderExtensionView(extensionView)}
+                </div>
+                {renderBuilderPreview()}
+              </div>
+            ) : (
+              renderExtensionView(extensionView)
+            )
           ) : (
             renderActionResults()
           )}

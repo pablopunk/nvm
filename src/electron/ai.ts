@@ -89,6 +89,15 @@ type NevermindAiOptions = {
     filename: string,
     source: string,
   ) => Promise<{ draftFile: string }>;
+  activateGeneratedExtension?: (
+    filename: string,
+    source: string,
+    chatId?: string,
+  ) => Promise<GeneratedExtensionActivation>;
+  withLiveExtensionWriteLock?: <T>(
+    filename: string,
+    operation: () => Promise<T>,
+  ) => Promise<T>;
   canWriteExtension?: (filename: string, chatId?: string) => boolean;
   removeExtension?: (
     filename: string,
@@ -101,6 +110,15 @@ type NevermindAiOptions = {
 };
 
 type AiImageContent = { type: 'image'; data: string; mimeType: string };
+
+type GeneratedExtensionActivation = {
+  filename: string;
+  preview: {
+    extensionId: string;
+    rootItems: unknown[];
+    actions: unknown[];
+  };
+};
 
 type AiModelRole = 'smart' | 'fast';
 
@@ -485,7 +503,8 @@ function createNevermindAi(options: NevermindAiOptions) {
       getActiveChat,
       getChat,
       markGeneratedExtension,
-      stageExtensionProposal,
+      activateGeneratedExtension,
+      withLiveExtensionWriteLock,
       canWriteExtension,
       removeExtension,
       addAliasForChat,
@@ -550,7 +569,13 @@ function createNevermindAi(options: NevermindAiOptions) {
       getActiveChat: () => getChat?.(chatId) || getActiveChat?.() || null,
       markGeneratedExtension: (filePath) =>
         markGeneratedExtension?.(filePath, chatId),
-      stageExtensionProposal,
+      activateGeneratedExtension: (filename, source) =>
+        activateGeneratedExtension?.(
+          filename,
+          source,
+          chatId,
+        ) as Promise<GeneratedExtensionActivation>,
+      withLiveExtensionWriteLock,
       canWriteExtension: (filename) =>
         canWriteExtension?.(filename, chatId) ?? true,
       removeExtension: (filename) =>
@@ -987,7 +1012,8 @@ function createTools(
     getExtensionRuntimeState,
     getActiveChat,
     markGeneratedExtension,
-    stageExtensionProposal,
+    activateGeneratedExtension,
+    withLiveExtensionWriteLock,
     canWriteExtension,
     removeExtension,
     addAliasForChat,
@@ -1003,7 +1029,8 @@ function createTools(
     | 'getExtensionRuntimeState'
     | 'getActiveChat'
     | 'markGeneratedExtension'
-    | 'stageExtensionProposal'
+    | 'activateGeneratedExtension'
+    | 'withLiveExtensionWriteLock'
     | 'canWriteExtension'
     | 'removeExtension'
     | 'addAliasForChat'
@@ -1308,31 +1335,29 @@ function createTools(
           _toolCallId: string,
           params: { filename: string; code: string },
         ) => {
-          const { filePath, filename, draftPath } =
+          const { filePath, filename, preview } =
             await stageAiGeneratedExtension(
               {
                 extensionsDir,
                 extensionTypesPath,
-                stageExtensionProposal,
+                activateGeneratedExtension,
+                withLiveExtensionWriteLock,
                 canWriteExtension,
                 currentExtensionFile: currentExtensionFile(getActiveChat?.()),
                 readFiles,
               },
               params,
             );
+          markGeneratedExtension?.(filePath);
+          emitEvent?.({
+            type: 'extension_activated',
+            data: { filename, preview },
+          });
           return {
             content: [
-              {
-                type: 'text',
-                text: `Staged ${filename} for review. It has not been imported or enabled; review and apply it from Extensions.`,
-              },
+              { type: 'text', text: `Installed and enabled ${filename}.` },
             ],
-            details: {
-              filePath,
-              draftPath,
-              extensionsDir,
-              staged: true,
-            },
+            details: { filePath, filename, extensionsDir, preview },
           };
         },
       ),
@@ -1404,7 +1429,7 @@ function createTools(
       name: 'install_extension',
       label: 'Install Extension',
       description:
-        'No-op compatibility tool. write_extension stages a proposal that requires user review and enablement.',
+        'No-op compatibility tool. write_extension installs and enables generated extensions immediately.',
       parameters: Type.Object({ filename: Type.String() }),
       execute: observedTool(
         'install_extension',
@@ -1414,10 +1439,10 @@ function createTools(
             content: [
               {
                 type: 'text',
-                text: `${path.basename(filePath)} remains staged until the user reviews and enables it in Extensions.`,
+                text: `${path.basename(filePath)} is already installed by write_extension.`,
               },
             ],
-            details: { filePath, extensionsDir, staged: true },
+            details: { filePath, extensionsDir },
           };
         },
       ),
@@ -1429,8 +1454,10 @@ export async function stageAiGeneratedExtension(
   options: {
     extensionsDir: string;
     extensionTypesPath: string;
-    stageExtensionProposal?: NevermindAiOptions['stageExtensionProposal'];
+    activateGeneratedExtension?: NevermindAiOptions['activateGeneratedExtension'];
+    withLiveExtensionWriteLock?: NevermindAiOptions['withLiveExtensionWriteLock'];
     canWriteExtension?: NevermindAiOptions['canWriteExtension'];
+    chatId?: string;
     currentExtensionFile?: string;
     readFiles?: ReadonlySet<string>;
   },
@@ -1438,42 +1465,48 @@ export async function stageAiGeneratedExtension(
 ) {
   const filePath = safeExtensionPath(options.extensionsDir, params.filename);
   const filename = path.basename(filePath);
-  const exists = await fileExists(filePath);
-  if (exists && !options.canWriteExtension?.(filename))
-    throw new Error(
-      `Refusing to overwrite ${filename}: this AI chat does not own that extension.`,
+  const stage = async () => {
+    const exists = await fileExists(filePath);
+    if (exists && !options.canWriteExtension?.(filename, options.chatId))
+      throw new Error(
+        `Refusing to overwrite ${filename}: this AI chat does not own that extension.`,
+      );
+    if (
+      exists &&
+      options.currentExtensionFile !== filename &&
+      !options.readFiles?.has(filename)
+    )
+      throw new Error(
+        `Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`,
+      );
+    const draftsDir = path.join(
+      path.dirname(options.extensionsDir),
+      'extension-drafts',
     );
-  if (
-    exists &&
-    options.currentExtensionFile !== filename &&
-    !options.readFiles?.has(filename)
-  )
-    throw new Error(
-      `Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`,
-    );
-  const draftsDir = path.join(
-    path.dirname(options.extensionsDir),
-    'extension-drafts',
-  );
-  const draftPath = safeExtensionPath(draftsDir, filename);
-  await fs.mkdir(draftsDir, { recursive: true });
-  await fs.writeFile(draftPath, params.code);
-  try {
-    await validateTypeScriptExtension(
-      draftPath,
-      options.extensionTypesPath,
-      options.extensionsDir,
-    );
-  } catch (error) {
-    await fs.unlink(draftPath).catch(() => {});
-    throw error;
-  }
-  const staged = options.stageExtensionProposal
-    ? await options.stageExtensionProposal(filename, params.code)
-    : { draftFile: draftPath };
-  if (staged.draftFile !== draftPath)
-    await fs.unlink(draftPath).catch(() => {});
-  return { filePath, filename, draftPath: staged.draftFile };
+    const draftPath = safeExtensionPath(draftsDir, filename);
+    await fs.mkdir(draftsDir, { recursive: true });
+    await fs.writeFile(draftPath, params.code);
+    try {
+      await validateTypeScriptExtension(
+        draftPath,
+        options.extensionTypesPath,
+        options.extensionsDir,
+      );
+      if (!options.activateGeneratedExtension)
+        throw new Error('Generated extension activation is unavailable.');
+      const activated = await options.activateGeneratedExtension(
+        filename,
+        params.code,
+        options.chatId,
+      );
+      return { filePath, filename, preview: activated.preview };
+    } finally {
+      await fs.unlink(draftPath).catch(() => {});
+    }
+  };
+  return options.withLiveExtensionWriteLock
+    ? options.withLiveExtensionWriteLock(filename, stage)
+    : stage();
 }
 
 function summarizedToolInput(params: unknown) {

@@ -24,78 +24,106 @@ const repoRoot =
 const validSource = `import type { NevermindExtension } from './nevermind-extension-api'
 
 export default {
-  id: 'test.ai-staged',
-  title: 'AI Staged',
+  id: 'test.ai-live',
+  title: 'AI Live',
   capabilities: [],
-  commands: [{ id: 'open', title: 'AI Staged', run: () => undefined }],
+  commands: [{ id: 'open', title: 'AI Live', run: () => undefined }],
 } satisfies NevermindExtension
 `;
-const TYPECHECK_FAILURE = /TypeScript validation failed/;
 
-test('write_extension path validates and persists a proposal without importing or enabling it', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-ai-stage-'));
-  const extensionsDir = path.join(root, 'extensions');
-  const persistedDraft = path.join(root, 'managed-drafts', 'ai-staged.ts');
-  let staged: { filename: string; source: string } | undefined;
+function options(root: string) {
+  return {
+    extensionsDir: path.join(root, 'extensions'),
+    extensionTypesPath: path.join(
+      repoRoot,
+      'src/resources/nevermind-extension-api.d.ts',
+    ),
+    canWriteExtension: () => true,
+  };
+}
+
+test('write_extension validates then activates the staged source', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-ai-live-'));
+  const received: Array<{ filename: string; source: string }> = [];
   try {
     const result = await stageAiGeneratedExtension(
       {
-        extensionsDir,
-        extensionTypesPath: path.join(
-          repoRoot,
-          'src/resources/nevermind-extension-api.d.ts',
-        ),
-        canWriteExtension: () => true,
-        stageExtensionProposal: async (filename, source) => {
-          staged = { filename, source };
-          await fs.mkdir(path.dirname(persistedDraft), { recursive: true });
-          await fs.writeFile(persistedDraft, source);
-          return { draftFile: persistedDraft };
+        ...options(root),
+        activateGeneratedExtension: async (filename, source) => {
+          received.push({ filename, source });
+          return {
+            filename,
+            preview: {
+              extensionId: 'test.ai-live',
+              rootItems: [],
+              actions: [],
+            },
+          };
         },
       },
-      { filename: 'ai-staged.ts', code: validSource },
+      { filename: 'ai-live.ts', code: validSource },
     );
 
-    assert.equal(result.draftPath, persistedDraft);
-    assert.deepEqual(staged, {
-      filename: 'ai-staged.ts',
-      source: validSource,
+    assert.deepEqual(received, [
+      { filename: 'ai-live.ts', source: validSource },
+    ]);
+    assert.equal(result.filename, 'ai-live.ts');
+    assert.deepEqual(result.preview, {
+      extensionId: 'test.ai-live',
+      rootItems: [],
+      actions: [],
     });
-    await assert.rejects(fs.stat(path.join(extensionsDir, 'ai-staged.ts')));
-    assert.equal(await fs.readFile(persistedDraft, 'utf8'), validSource);
     await assert.rejects(
-      fs.stat(path.join(root, 'extension-drafts', 'ai-staged.ts')),
+      fs.access(path.join(root, 'extension-drafts', 'ai-live.ts')),
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test('write_extension path removes an invalid draft before proposal persistence', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-ai-stage-'));
-  const extensionsDir = path.join(root, 'extensions');
-  let proposalCalls = 0;
+test('write_extension removes invalid staging and does not activate', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-ai-invalid-'));
+  let activated = false;
   try {
     await assert.rejects(
       stageAiGeneratedExtension(
         {
-          extensionsDir,
-          extensionTypesPath: path.join(
-            repoRoot,
-            'src/resources/nevermind-extension-api.d.ts',
-          ),
-          stageExtensionProposal: () => {
-            proposalCalls += 1;
-            return Promise.resolve({ draftFile: 'unused' });
+          ...options(root),
+          activateGeneratedExtension: async () => {
+            activated = true;
+            throw new Error('unexpected activation');
           },
         },
         { filename: 'invalid.ts', code: 'export default {' },
       ),
-      TYPECHECK_FAILURE,
+      /TypeScript validation failed/,
     );
-    assert.equal(proposalCalls, 0);
+    assert.equal(activated, false);
     await assert.rejects(
-      fs.stat(path.join(root, 'extension-drafts', 'invalid.ts')),
+      fs.access(path.join(root, 'extension-drafts', 'invalid.ts')),
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('write_extension removes staging when live activation fails', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-ai-activate-'));
+  try {
+    await assert.rejects(
+      stageAiGeneratedExtension(
+        {
+          ...options(root),
+          activateGeneratedExtension: async () => {
+            throw new Error('activation failed');
+          },
+        },
+        { filename: 'failed.ts', code: validSource },
+      ),
+      /activation failed/,
+    );
+    await assert.rejects(
+      fs.access(path.join(root, 'extension-drafts', 'failed.ts')),
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });

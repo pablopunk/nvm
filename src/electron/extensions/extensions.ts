@@ -17,8 +17,7 @@ async function extensionsView(ctx) {
 }
 
 function extensionItem(ctx, entry) {
-  const source = entry.proposal ? entry.proposalSource : entry.source;
-  const manifest = inspectExtensionManifest(source || '');
+  const manifest = inspectExtensionManifest(entry.source || '');
   const declared = declaredExtensionCapabilities({
     capabilities:
       manifest.provenance === 'capabilities'
@@ -29,38 +28,23 @@ function extensionItem(ctx, entry) {
         ? manifest.capabilities
         : undefined,
   });
-  const status = entry.proposal
-    ? entry.enabled
-      ? 'Pending Update'
-      : 'Pending'
-    : entry.enabled
-      ? 'Enabled'
-      : 'Disabled';
+  const status = entry.enabled ? 'Enabled' : 'Disabled';
   const refresh = async () => ({
     view: await extensionsView(ctx),
     navigation: 'replace' as const,
   });
-  const enable = ctx.actions.run(
-    entry.proposal && entry.enabled ? 'Apply Update' : 'Enable',
-    async () => {
-      await extensionContext.extensionManager.enable(entry.filename);
-      return refresh();
-    },
-  );
+  const enable = ctx.actions.run('Enable', async () => {
+    await extensionContext.extensionManager.enable(entry.filename);
+    return refresh();
+  });
   const disable = ctx.actions.run('Disable', async () => {
     await extensionContext.extensionManager.disable(entry.filename);
     return refresh();
   });
-  const discard = entry.proposal
-    ? ctx.actions.run('Discard Proposal', async () => {
-        await extensionContext.extensionManager.discard(entry.filename);
-        return refresh();
-      })
-    : null;
   const sourceView = ctx.actions.push('View Source', {
     type: 'preview',
     title: entry.filename,
-    content: `# ${entry.filename}\n\n${EXTENSION_TRUST_DISCLOSURE}\n\n## Declared capabilities\n\n${declared.capabilities.length ? declared.capabilities.map((value) => `- ${value}`).join('\n') : '- Not statically declared'}\n\n## Current Source\n\n\`\`\`ts\n${entry.source || ''}\n\`\`\`${entry.proposal ? `\n\n## Proposed Source\n\n\`\`\`ts\n${entry.proposalSource || ''}\n\`\`\`` : ''}`,
+    content: `# ${entry.filename}\n\n${EXTENSION_TRUST_DISCLOSURE}\n\n## Declared capabilities\n\n${declared.capabilities.length ? declared.capabilities.map((value) => `- ${value}`).join('\n') : '- Not statically declared'}\n\n## Current Source\n\n\`\`\`ts\n${entry.source || ''}\n\`\`\``,
   });
   return {
     id: `extension:${entry.filename}`,
@@ -71,12 +55,9 @@ function extensionItem(ctx, entry) {
     actionPanel: {
       sections: [
         {
-          actions: [
-            sourceView,
-            entry.enabled ? disable : enable,
-            entry.proposal ? enable : null,
-            discard,
-          ].filter(Boolean),
+          actions: [sourceView, entry.enabled ? disable : enable].filter(
+            Boolean,
+          ),
         },
       ],
     },

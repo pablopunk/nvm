@@ -611,6 +611,82 @@ kbd {
   padding: 16px;
 }
 
+.builderWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+  min-height: 420px;
+}
+
+.builderChatPane {
+  min-width: 0;
+  border-right: 1px solid var(--border-1);
+}
+
+.builderPreviewPane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  outline: none;
+  background: var(--surface-sunken);
+}
+
+.builderPreviewPane[data-focused="true"] {
+  box-shadow: inset 2px 0 var(--accent-mid);
+}
+
+.builderPreviewHeader {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-1);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.builderPreviewSwitcher {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.builderPreviewSwitcher button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  color: var(--text-tertiary);
+  background: transparent;
+  font-size: var(--fs-xs);
+}
+
+.builderPreviewSwitcher button[data-selected="true"] {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+.builderPreviewBody {
+  min-height: 0;
+  overflow: auto;
+}
+
+.builderPreviewBody .extensionView {
+  padding: 12px;
+}
+
+@media (max-width: 700px) {
+  .builderWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .builderChatPane {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-1);
+  }
+}
+
 .extensionSubtitle {
   margin: 0 0 12px;
   color: var(--text-tertiary);

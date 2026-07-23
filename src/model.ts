@@ -539,6 +539,15 @@ export interface CommandItemSection {
   items: CommandItem[];
 }
 
+export interface BuilderPreview {
+  filename: string;
+  preview: {
+    extensionId: string;
+    rootItems: unknown[];
+    actions: unknown[];
+  };
+}
+
 export interface CommandViewPatch {
   items?: CommandItemPatch[];
   mode?: PatchMode;
@@ -571,6 +580,8 @@ export interface CommandView {
   controls?: boolean;
   aiChat?: boolean;
   chatId?: string;
+  builderPreviews?: BuilderPreview[];
+  selectedBuilderPreviewFilename?: string;
   initialPrompt?: string;
   subtitle?: string;
   content?: string;
