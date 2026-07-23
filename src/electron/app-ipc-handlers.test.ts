@@ -71,7 +71,6 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
       hidePalette: () => calls.push('hide'),
       revealPalette: () => calls.push('reveal'),
     },
-    requestQuitApp: (reason) => calls.push(`quit:${reason}`),
     hasCapability: () => true,
     processPlatform: 'darwin',
     getCameraMediaAccessStatus: () => 'granted',

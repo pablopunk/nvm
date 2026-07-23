@@ -73,7 +73,6 @@ export interface AppIpcHandlersDeps {
     hidePalette(): unknown;
     revealPalette(): unknown;
   };
-  requestQuitApp: (reason: string) => unknown;
   hasCapability: (capability: string) => boolean;
   processPlatform: NodeJS.Platform | string;
   getCameraMediaAccessStatus: () => string;
@@ -243,10 +242,6 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     deps.paletteWindow.centerWindow();
   });
   ipcHandleMeasured('palette:hide', () => deps.paletteWindow.hidePalette());
-  ipcHandleMeasured('app:quit', () => {
-    deps.requestQuitApp('ipc');
-    return { ok: true };
-  });
   ipcHandleMeasured('palette:shortcut-ready', () =>
     deps.paletteWindow.revealPalette(),
   );

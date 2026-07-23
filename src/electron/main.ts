@@ -3906,16 +3906,12 @@ function registerTestModeIpcHandlers() {
   handle('actions:resume-shortcuts', () => undefined);
   handle('actions:get-shortcuts', () => getShortcuts());
   handle('logs:write', () => undefined);
-  handle('app:quit', () => {
-    requestQuitApp('test');
-    return { ok: true };
-  });
 }
 
 function requestQuitApp(reason = 'action') {
   nevermindApp.isQuiting = true;
   logInfo('app.quit.requested', { reason }, { source: 'host', scope: 'app' });
-  void stateSafeQuit.requestQuit(reason);
+  return stateSafeQuit.requestQuit(reason);
 }
 
 async function executeViewAction(action, launchContext?: any) {
@@ -4129,8 +4125,7 @@ async function executeViewAction(action, launchContext?: any) {
       runInBackground(openSystemKeyboardSettings);
       break;
     case 'quitApp':
-      requestQuitApp('view-action');
-      break;
+      return requestQuitApp('view-action');
     case 'forceQuitApp': {
       const appPath = action.path || action.appPath || '';
       const appName =
@@ -6196,7 +6191,6 @@ function createExtensionContext(
               title,
             }),
             quit: (title = 'Quit Nevermind', options: any = {}) => ({
-              dismissAfterRun: 'auto',
               ...options,
               type: 'quitApp',
               title,
@@ -9454,7 +9448,6 @@ app.whenReady().then(async () => {
     appIconCache,
     runningAppStatus,
     paletteWindow,
-    requestQuitApp,
     hasCapability,
     processPlatform: process.platform,
     getCameraMediaAccessStatus: () =>

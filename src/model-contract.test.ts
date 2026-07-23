@@ -16,6 +16,7 @@ import type {
   CommandViewPatch,
   ExtensionPermission as HostExtensionPermission,
 } from './model';
+import { ACTION_DEFINITIONS } from './model';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
@@ -41,6 +42,15 @@ type Equal<A, B> =
     : false;
 
 type AssertEqual<A, B> = Equal<A, B> extends true ? true : never;
+
+test('quit actions use the standard visible action lifecycle', () => {
+  assert.deepEqual(ACTION_DEFINITIONS.quitApp, {
+    description: 'Quit app',
+    dismiss: 'manual',
+    loading: 'view',
+    execute: 'main',
+  });
+});
 
 const permissionContract: AssertEqual<
   HostExtensionPermission,

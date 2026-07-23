@@ -190,7 +190,6 @@ export type NevermindApi = {
   testIsActionShortcutRegistered: (
     accelerator: string,
   ) => Promise<{ registered: boolean }>;
-  quitApp: () => Promise<{ ok: boolean }>;
   shortcutReady: () => Promise<void>;
   requestCameraAccess: () => Promise<{ ok: boolean; status: string }>;
   log: (

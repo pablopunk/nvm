@@ -196,8 +196,8 @@ export const ACTION_DEFINITIONS = {
   },
   quitApp: {
     description: 'Quit app',
-    dismiss: 'immediate',
-    loading: 'none',
+    dismiss: 'manual',
+    loading: 'view',
     execute: 'main',
   },
   forceQuitApp: {
