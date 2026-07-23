@@ -89,7 +89,7 @@ export function createExtensionsExtension() {
     capabilities: ['extensions.manage'] as const,
     commands: [
       {
-        id: 'manage',
+        id: 'extensions',
         title: 'Extensions',
         subtitle: 'Review, enable, disable, or update local extensions',
         icon: 'file-text',
