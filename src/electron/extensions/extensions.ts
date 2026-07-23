@@ -76,9 +76,11 @@ function extensionItem(ctx, entry) {
     subtitle: `${status} · ${declared.provenance === 'undeclared' ? 'Capabilities undeclared' : `${declared.capabilities.length} declared capabilities`}`,
     icon: entry.enabled ? 'check' : 'file-text',
     primaryAction: entry.proposal || !entry.enabled ? enable : sourceView,
-    actions: [sourceView, entry.enabled ? disable : enable, discard].filter(
-      Boolean,
-    ),
+    actions: [
+      sourceView,
+      entry.proposal ? enable : entry.enabled ? disable : enable,
+      discard,
+    ].filter(Boolean),
   };
 }
 
