@@ -7684,6 +7684,36 @@ function createFixturesExtension() {
   };
 }
 
+function designTokenEditorRootItem(ctx) {
+  return {
+    id: 'design-token-editor',
+    title: 'Design Token Editor',
+    subtitle: 'Preview and customize Nevermind UI tokens',
+    icon: 'paintbrush',
+    aliases: ['ui editor', 'design tokens', 'theme editor'],
+    score: 90,
+    customizable: true,
+    primaryAction: ctx.actions.run('Open Design Token Editor', () => {
+      const state = designTokenState();
+      paletteWindow.win?.webContents.send('design-tokens:open-editor', state);
+    }),
+  };
+}
+
+function createDesignTokenEditorExtension() {
+  return {
+    id: 'dev.design-token-editor',
+    title: 'Design Token Editor',
+    subtitle: 'Dev-only design system tooling',
+    rootItems(ctx) {
+      return [designTokenEditorRootItem(ctx)];
+    },
+    searchItems(ctx) {
+      return [designTokenEditorRootItem(ctx)];
+    },
+  };
+}
+
 async function loadDevExtensions() {
   const fixturesDir = path.join(app.getAppPath(), 'src', 'fixtures');
   const entries = await fs
@@ -7708,6 +7738,7 @@ async function loadDevExtensions() {
     }
   }
   if (fixtureExtensions.length) registerExtension(createFixturesExtension());
+  registerExtension(createDesignTokenEditorExtension());
 }
 
 function registerInternalExtensions() {

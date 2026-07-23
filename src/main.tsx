@@ -13,22 +13,14 @@ const extensionWindowId = new URLSearchParams(window.location.search).get(
 function Root() {
   const [tokenState, setTokenState] = useState<DesignTokenState | null>(null);
   useEffect(() => {
-    const open = (event: KeyboardEvent) => {
-      if (event.altKey && event.shiftKey && event.code === 'KeyD') {
-        window.nvm
-          .openDesignTokenEditor()
-          .then(setTokenState)
-          .catch(() => {});
-      }
-    };
-    window.addEventListener('keydown', open);
+    const unsubscribe = window.nvm.onOpenDesignTokenEditor(setTokenState);
     if (new URLSearchParams(window.location.search).has('designTokens')) {
       window.nvm
         .openDesignTokenEditor()
         .then(setTokenState)
         .catch(() => {});
     }
-    return () => window.removeEventListener('keydown', open);
+    return unsubscribe;
   }, []);
   if (tokenState)
     return (

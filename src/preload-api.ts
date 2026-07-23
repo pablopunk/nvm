@@ -129,6 +129,9 @@ export type DesignTokenState = {
 export type NevermindApi = {
   getDesignTokens: () => Promise<DesignTokenState>;
   openDesignTokenEditor: () => Promise<DesignTokenState>;
+  onOpenDesignTokenEditor: (
+    callback: (state: DesignTokenState) => void,
+  ) => () => void;
   setDesignTokens: (
     overrides: DesignTokenOverrides,
   ) => Promise<DesignTokenState>;

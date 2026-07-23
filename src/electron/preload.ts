@@ -53,6 +53,12 @@ async function invokeMeasured<T>(
 const api: NevermindApi = {
   getDesignTokens: () => invokeMeasured('design-tokens:get'),
   openDesignTokenEditor: () => invokeMeasured('design-tokens:open'),
+  onOpenDesignTokenEditor: (callback) => {
+    const listener = (_event: IpcRendererEvent, state) => callback(state);
+    ipcRenderer.on('design-tokens:open-editor', listener);
+    return () =>
+      ipcRenderer.removeListener('design-tokens:open-editor', listener);
+  },
   setDesignTokens: (overrides) =>
     invokeMeasured('design-tokens:set', overrides),
   resetDesignTokens: () => invokeMeasured('design-tokens:reset'),

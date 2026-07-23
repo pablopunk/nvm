@@ -354,7 +354,11 @@ test('development design token editor previews, resets, and persists tokens', as
   await fs.rm(tokenUserDataDir, { recursive: true, force: true });
   let launched = await launchTestApplication(tokenUserDataDir);
   try {
-    await launched.page.keyboard.press('Alt+Shift+D');
+    const input = launched.page.locator('input[placeholder]').first();
+    await input.fill('Design Token Editor');
+    await launched.page
+      .getByText('Design Token Editor', { exact: true })
+      .click();
     const editor = launched.page.getByTestId('design-token-editor');
     await expect(editor).toBeVisible();
     const radius = launched.page.getByLabel('--radius-lg');
@@ -377,7 +381,11 @@ test('development design token editor previews, resets, and persists tokens', as
     });
     await closeTestApplication(launched.app, launched.trackedPids);
     launched = await launchTestApplication(tokenUserDataDir);
-    await launched.page.keyboard.press('Alt+Shift+D');
+    const relaunchedInput = launched.page.locator('input[placeholder]').first();
+    await relaunchedInput.fill('Design Token Editor');
+    await launched.page
+      .getByText('Design Token Editor', { exact: true })
+      .click();
     await expect(launched.page.getByLabel('--radius-lg')).toHaveValue('30px');
     await launched.page.getByRole('button', { name: 'Reset all' }).click();
     await expect(launched.page.getByLabel('--radius-lg')).toHaveValue('16px');
