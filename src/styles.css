@@ -611,21 +611,37 @@ kbd {
   padding: 16px;
 }
 
+.builderResultsCard > [cmdk-list-sizer] {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+}
+
 .builderWorkspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
-  min-height: 420px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .builderChatPane {
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--border-1);
+}
+
+.builderChatPane > .chatView {
+  height: 100%;
 }
 
 .builderPreviewPane {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   outline: none;
   background: var(--surface-sunken);
 }
@@ -670,6 +686,7 @@ kbd {
 .builderPreviewBody {
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .builderPreviewBody .extensionView {

@@ -1608,11 +1608,19 @@ export function App() {
     if (!(extensionView?.aiChat || siblingViews.some((view) => view.aiChat)))
       return;
     requestAnimationFrame(() => {
-      aiChat.messagesRef.current?.scrollTo({
-        top: aiChat.messagesRef.current.scrollHeight,
+      requestAnimationFrame(() => {
+        aiChat.messagesRef.current?.scrollTo({
+          top: aiChat.messagesRef.current.scrollHeight,
+        });
       });
     });
-  }, [aiChat.messages, aiChat.busy, extensionView, siblingViews]);
+  }, [
+    aiChat.messages,
+    aiChat.busy,
+    extensionView,
+    siblingViews,
+    builderPreviews.length,
+  ]);
 
   useEffect(() => {
     if (!shortcutFor) return;
@@ -1840,8 +1848,14 @@ export function App() {
       previewFor ||
       extensionView,
   );
+  const builderWorkspaceVisible = Boolean(
+    extensionView?.aiChat && selectedBuilderPreview,
+  );
   const isVisuallyStacked =
-    (isChildOpen && !isRootLikeExtensionView && !compactActionMenuVisible) ||
+    (!builderWorkspaceVisible &&
+      isChildOpen &&
+      !isRootLikeExtensionView &&
+      !compactActionMenuVisible) ||
     siblingViews.length > 0;
   const childPlaceholder =
     actionSubmenuFor && !compactActionMenuVisible
@@ -3780,7 +3794,10 @@ export function App() {
         className="builderPreviewPane"
         data-focused={builderPreviewFocused}
         tabIndex={0}
-        onFocus={() => setBuilderPreviewFocused(true)}
+        onFocus={() => {
+          setBuilderPreviewFocused(true);
+          selectValue(preview.selectedItemId);
+        }}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null))
             setBuilderPreviewFocused(false);
@@ -3971,6 +3988,7 @@ export function App() {
           : preview,
       ),
     );
+    selectValue(itemId);
   }
 
   function moveBuilderPreviewSelection(key: string) {
@@ -4574,7 +4592,7 @@ export function App() {
 
         <Command.List
           ref={resultsListRef}
-          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
         >
           {shortcutFor ? (
             <div className="shortcutRecorder">
