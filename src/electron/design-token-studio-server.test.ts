@@ -1,21 +1,32 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {
+  DESIGN_TOKEN_DEFAULTS,
+  type DesignTokenOverrides,
+  resolveDesignTokens,
+} from '../design-tokens';
 import { createDesignTokenStudioServer } from './design-token-studio-server';
 
 const origin = 'http://127.0.0.1:5173';
 
 test('design token studio server requires its origin and token', async () => {
-  let overrides = {};
+  let overrides: DesignTokenOverrides = {};
+  const state = () => ({
+    enabled: true,
+    defaults: { ...DESIGN_TOKEN_DEFAULTS },
+    overrides,
+    values: resolveDesignTokens(overrides),
+  });
   const server = await createDesignTokenStudioServer({
     allowedOrigin: origin,
-    getState: () => ({ enabled: true, defaults: {}, overrides, values: {} }),
+    getState: state,
     setState: (next) => {
       overrides = next;
-      return { enabled: true, defaults: {}, overrides, values: {} };
+      return state();
     },
     resetState: () => {
       overrides = {};
-      return { enabled: true, defaults: {}, overrides, values: {} };
+      return state();
     },
   });
   try {
