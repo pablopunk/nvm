@@ -133,15 +133,16 @@ test('Windows package smoke remains separate from first-run development smoke an
     "github.event_name == 'workflow_dispatch'",
     'windows_package_changed',
     'runs-on: windows-latest',
-    'mise exec -- pnpm verify',
+    '& $env:PNPM_STANDALONE_PATH verify',
     'CSC_IDENTITY_AUTO_DISCOVERY',
-    'mise exec -- pnpm run dist:win:x64',
+    '& $env:PNPM_STANDALONE_PATH run dist:win:x64',
     "'-UpdaterMetadataPolicy', 'Nsis'",
     '-UpdaterMetadataPolicy Nsis',
     'Copy-Item release/latest.yml windows-artifacts/',
     'windows-package-negative',
     'verify-windows-private-file-acl.ps1',
     'windows-portable-smoke.cjs',
+    "if: always() && hashFiles('windows-artifacts/**') != ''",
     'if-no-files-found: error',
   ]) {
     assert.equal(packageSmoke.includes(expected), true, expected);
