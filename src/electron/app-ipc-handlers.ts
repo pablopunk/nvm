@@ -14,6 +14,11 @@ export interface AppIpcHandlersDeps {
     fn: () => T | Promise<T>,
   ) => T | Promise<T>;
   summarizeDebugValue: (value: unknown) => unknown;
+  getDesignTokens: (event: unknown) => unknown;
+  openDesignTokenEditor: (event: unknown) => unknown;
+  setDesignTokens: (event: unknown, input: unknown) => unknown;
+  resetDesignTokens: (event: unknown) => unknown;
+  closeDesignTokenEditor: (event: unknown) => unknown;
   startSearch: (sender: unknown, input: unknown) => unknown;
   cancelSearch: (sender: unknown, input: unknown) => unknown;
   executeActionForIpc: (action: unknown) => unknown;
@@ -96,6 +101,21 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     summarize: deps.summarizeDebugValue,
   });
 
+  ipcHandleMeasured('design-tokens:get', (event) =>
+    deps.getDesignTokens(event),
+  );
+  ipcHandleMeasured('design-tokens:open', (event) =>
+    deps.openDesignTokenEditor(event),
+  );
+  ipcHandleMeasured('design-tokens:set', (event, input) =>
+    deps.setDesignTokens(event, input),
+  );
+  ipcHandleMeasured('design-tokens:reset', (event) =>
+    deps.resetDesignTokens(event),
+  );
+  ipcHandleMeasured('design-tokens:close', (event) =>
+    deps.closeDesignTokenEditor(event),
+  );
   ipcHandleMeasured('actions:search', (event, input) =>
     deps.startSearch(event.sender, input),
   );

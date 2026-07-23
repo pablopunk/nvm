@@ -51,6 +51,12 @@ async function invokeMeasured<T>(
 }
 
 const api: NevermindApi = {
+  getDesignTokens: () => invokeMeasured('design-tokens:get'),
+  openDesignTokenEditor: () => invokeMeasured('design-tokens:open'),
+  setDesignTokens: (overrides) =>
+    invokeMeasured('design-tokens:set', overrides),
+  resetDesignTokens: () => invokeMeasured('design-tokens:reset'),
+  closeDesignTokenEditor: () => invokeMeasured('design-tokens:close'),
   search: (query, options) =>
     invokeMeasured('actions:search', { query, ...options }),
   cancelSearch: (generation) =>

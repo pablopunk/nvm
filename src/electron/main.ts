@@ -231,12 +231,18 @@ import {
 } from './user-state';
 import { isNewerVersion as isVersionNewerThan } from './version-utils';
 import {
+  DESIGN_TOKEN_DEFAULTS,
+  resolveDesignTokens,
+  validateDesignTokenOverrides,
+} from '../design-tokens';
+import {
   installExternalNavigationPolicy,
   isTrustedExtensionWindowPage,
 } from './window-navigation-policy';
 
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
+const designTokenEditorEnabled = isDev || isNvmTestMode;
 configureLogger(isDev);
 setDeepLinkLogger({ warn: logWarn });
 
@@ -499,6 +505,7 @@ let userState: AnyRecord = {
   settings: {},
   jobSettings: {},
   rateCache: {},
+  designTokens: {},
   extensionManager: { schemaVersion: 1, files: {}, proposals: {} },
   nevermindEnvironment: {
     environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
@@ -3798,6 +3805,11 @@ function runQuitCleanup() {
 function registerTestModeIpcHandlers() {
   const handle = (channel: string, handler: (...args: any[]) => unknown) =>
     ipcMain.handle(channel, handler);
+  handle('design-tokens:get', (event) => getDesignTokens(event));
+  handle('design-tokens:open', (event) => openDesignTokenEditor(event));
+  handle('design-tokens:set', (event, input) => setDesignTokens(event, input));
+  handle('design-tokens:reset', (event) => resetDesignTokens(event));
+  handle('design-tokens:close', (event) => closeDesignTokenEditor(event));
   handle('actions:search', (event, input) =>
     startProgressiveSearch(event.sender, input),
   );
@@ -8423,6 +8435,13 @@ async function loadUserState() {
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},
+      designTokens: (() => {
+        try {
+          return validateDesignTokenOverrides(loaded.designTokens || {});
+        } catch {
+          return {};
+        }
+      })(),
       extensionManager: loaded.extensionManager || {
         schemaVersion: 0,
         files: {},
@@ -9050,6 +9069,58 @@ async function runPaletteDebugCli() {
   );
 }
 
+function requireDesignTokenEditor(event: { sender: Electron.WebContents }) {
+  if (
+    !designTokenEditorEnabled ||
+    event.sender !== paletteWindow.win?.webContents
+  ) {
+    throw new Error('Design token editor is only available in development');
+  }
+}
+
+function designTokenState() {
+  const overrides = validateDesignTokenOverrides(userState.designTokens || {});
+  return {
+    enabled: designTokenEditorEnabled,
+    defaults: { ...DESIGN_TOKEN_DEFAULTS },
+    overrides,
+    values: resolveDesignTokens(overrides),
+  };
+}
+
+function getDesignTokens(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  return designTokenState();
+}
+
+function openDesignTokenEditor(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  paletteWindow.setDesignTokenEditorOpen(true);
+  return designTokenState();
+}
+
+function setDesignTokens(
+  event: { sender: Electron.WebContents },
+  input: unknown,
+) {
+  requireDesignTokenEditor(event);
+  userState.designTokens = validateDesignTokenOverrides(input);
+  scheduleSaveState();
+  return designTokenState();
+}
+
+function resetDesignTokens(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  userState.designTokens = {};
+  scheduleSaveState();
+  return designTokenState();
+}
+
+function closeDesignTokenEditor(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  paletteWindow.setDesignTokenEditorOpen(false);
+}
+
 async function pickFormFieldPaths(event, input: any = {}) {
   const senderWindow =
     BrowserWindow.fromWebContents(event.sender) ||
@@ -9161,6 +9232,11 @@ app.whenReady().then(async () => {
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
+    getDesignTokens,
+    openDesignTokenEditor,
+    setDesignTokens,
+    resetDesignTokens,
+    closeDesignTokenEditor,
     startSearch: startProgressiveSearch,
     cancelSearch: cancelProgressiveSearch,
     executeActionForIpc,

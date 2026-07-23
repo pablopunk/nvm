@@ -60,14 +60,15 @@
 
   --danger-text: #ffb4b4;
   --danger-bg: rgba(255, 90, 90, 0.18);
+  --font-family-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", ui-sans-serif, system-ui,
+    "Segoe UI", Roboto, sans-serif;
 
   color: white;
   background: transparent;
   color-scheme: dark;
   font-size: var(--fs-lg);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", ui-sans-serif, system-ui,
-    "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-family-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

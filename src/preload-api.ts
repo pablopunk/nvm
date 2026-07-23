@@ -1,4 +1,5 @@
 // biome-ignore-all lint/style/useConsistentTypeDefinitions: Public preload contracts retain the established object type-alias style.
+import type { DesignTokenOverrides, DesignTokenValues } from './design-tokens';
 import type {
   CommandAction,
   CommandItemAppearance,
@@ -118,7 +119,21 @@ export type ViewHydratePayload = {
   retry?: boolean;
 };
 
+export type DesignTokenState = {
+  enabled: boolean;
+  defaults: DesignTokenValues;
+  overrides: DesignTokenOverrides;
+  values: DesignTokenValues;
+};
+
 export type NevermindApi = {
+  getDesignTokens: () => Promise<DesignTokenState>;
+  openDesignTokenEditor: () => Promise<DesignTokenState>;
+  setDesignTokens: (
+    overrides: DesignTokenOverrides,
+  ) => Promise<DesignTokenState>;
+  resetDesignTokens: () => Promise<DesignTokenState>;
+  closeDesignTokenEditor: () => Promise<void>;
   search: (
     query: string,
     options: SearchOptions,
