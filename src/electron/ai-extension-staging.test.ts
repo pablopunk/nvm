@@ -21,6 +21,9 @@ const repoRoot =
     ? path.dirname(process.cwd())
     : process.cwd();
 
+const TYPECHECK_FAILURE = /TypeScript validation failed/;
+const ACTIVATION_FAILURE = /activation failed/;
+
 const validSource = `import type { NevermindExtension } from './nevermind-extension-api'
 
 export default {
@@ -49,16 +52,16 @@ test('write_extension validates then activates the staged source', async () => {
     const result = await stageAiGeneratedExtension(
       {
         ...options(root),
-        activateGeneratedExtension: async (filename, source) => {
+        activateGeneratedExtension: (filename, source) => {
           received.push({ filename, source });
-          return {
+          return Promise.resolve({
             filename,
             preview: {
               extensionId: 'test.ai-live',
               rootItems: [],
               actions: [],
             },
-          };
+          });
         },
       },
       { filename: 'ai-live.ts', code: validSource },
@@ -89,14 +92,14 @@ test('write_extension removes invalid staging and does not activate', async () =
       stageAiGeneratedExtension(
         {
           ...options(root),
-          activateGeneratedExtension: async () => {
+          activateGeneratedExtension: () => {
             activated = true;
-            throw new Error('unexpected activation');
+            return Promise.reject(new Error('unexpected activation'));
           },
         },
         { filename: 'invalid.ts', code: 'export default {' },
       ),
-      /TypeScript validation failed/,
+      TYPECHECK_FAILURE,
     );
     assert.equal(activated, false);
     await assert.rejects(
@@ -114,13 +117,12 @@ test('write_extension removes staging when live activation fails', async () => {
       stageAiGeneratedExtension(
         {
           ...options(root),
-          activateGeneratedExtension: async () => {
-            throw new Error('activation failed');
-          },
+          activateGeneratedExtension: () =>
+            Promise.reject(new Error('activation failed')),
         },
         { filename: 'failed.ts', code: validSource },
       ),
-      /activation failed/,
+      ACTIVATION_FAILURE,
     );
     await assert.rejects(
       fs.access(path.join(root, 'extension-drafts', 'failed.ts')),

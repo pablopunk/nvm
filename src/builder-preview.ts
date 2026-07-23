@@ -13,13 +13,11 @@ export function builderPreviewRootActions(preview: BuilderPreview) {
 }
 
 export function builderPreviewShouldAutoRun(preview: BuilderPreview) {
-  return builderPreviewRootActions(preview).length === 1;
+  return builderPreviewRootActions(preview).length > 0;
 }
 
 export function builderPreviewAutoRunAction(preview: BuilderPreview) {
-  return builderPreviewShouldAutoRun(preview)
-    ? builderPreviewRootActions(preview)[0]
-    : undefined;
+  return preview.preview.actions[0] || preview.preview.rootItems[0];
 }
 
 export function builderPreviewResultIsCurrent(

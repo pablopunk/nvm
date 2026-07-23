@@ -44,7 +44,7 @@ function extensionItem(ctx, entry) {
   const sourceView = ctx.actions.push('View Source', {
     type: 'preview',
     title: entry.filename,
-    content: `# ${entry.filename}\n\n${EXTENSION_TRUST_DISCLOSURE}\n\n## Declared capabilities\n\n${declared.capabilities.length ? declared.capabilities.map((value) => `- ${value}`).join('\n') : '- Not statically declared'}\n\n## Current Source\n\n\`\`\`ts\n${entry.source || ''}\n\`\`\``,
+    content: `# ${entry.filename}\n\n${EXTENSION_TRUST_DISCLOSURE}\n\n## Declared capabilities\n\n${declared.capabilities.length > 0 ? declared.capabilities.map((value) => `- ${value}`).join('\n') : '- Not statically declared'}\n\n## Current Source\n\n\`\`\`ts\n${entry.source || ''}\n\`\`\``,
   });
   return {
     id: `extension:${entry.filename}`,

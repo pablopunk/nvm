@@ -28,7 +28,7 @@ test('builder preview auto-runs its only root action', () => {
   assert.equal(builderPreviewShouldAutoRun(preview), true);
 });
 
-test('builder preview keeps multiple root actions scoped', () => {
+test('builder preview defaults to the first command when root items also exist', () => {
   const preview: BuilderPreview = {
     filename: 'timer.ts',
     preview: {
@@ -37,8 +37,8 @@ test('builder preview keeps multiple root actions scoped', () => {
       actions: [{ id: 'stop' }],
     },
   };
-  assert.equal(builderPreviewShouldAutoRun(preview), false);
-  assert.equal(builderPreviewAutoRunAction(preview), undefined);
+  assert.equal(builderPreviewShouldAutoRun(preview), true);
+  assert.deepEqual(builderPreviewAutoRunAction(preview), { id: 'stop' });
   assert.equal(builderPreviewRootActions(preview).length, 2);
 });
 
