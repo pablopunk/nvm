@@ -213,7 +213,10 @@ test('applies the production test-mode action and progressive-root policy', () =
   );
   assert.equal(
     searchActionIsVisibleInTestMode(
-      action('other-root', 'Other root', { kind: 'extension-root-item' }),
+      action('other-root', 'Other root', {
+        extensionId: 'test.hidden',
+        kind: 'extension-root-item',
+      }),
       options,
     ),
     false,
