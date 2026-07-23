@@ -7455,8 +7455,10 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
         paletteWindow,
       });
       registerInternalExtensions();
-      if (isNvmTestMode)
+      if (isNvmTestMode) {
         registerExtension(createProgressiveSearchTestExtension());
+        registerExtension(createDesignTokenEditorExtension());
+      }
       if (isDev)
         await measureDebugPerformance('extensions.load-dev', undefined, () =>
           loadDevExtensions(),
