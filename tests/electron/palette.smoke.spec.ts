@@ -438,7 +438,7 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
     if (process.platform === 'linux') {
       await input.fill('Open Settings');
       await expect(
-        page.getByText('Open Settings', { exact: true }),
+        page.getByText('Open Settings', { exact: true }).first(),
       ).toBeVisible();
       await page.screenshot({
         path: path.join(artifactDir, 'linux-palette.png'),
