@@ -4,10 +4,7 @@ import {
   DesignTokenEditor,
   type DesignTokenEditorApi,
 } from './design-token-editor';
-import {
-  DESIGN_TOKEN_DEFAULTS,
-  resolveDesignTokens,
-} from './design-tokens';
+import { DESIGN_TOKEN_DEFAULTS, resolveDesignTokens } from './design-tokens';
 import type { DesignTokenState } from './preload-api';
 import './styles.css';
 import './design-token-editor.css';
@@ -50,7 +47,9 @@ function BrowserDesignTokenStudio() {
 
   React.useEffect(() => {
     if (!(apiUrl && apiToken)) return;
-    request<DesignTokenState>().then(setState).catch(() => {});
+    request<DesignTokenState>()
+      .then(setState)
+      .catch(() => {});
   }, []);
 
   return <DesignTokenEditor api={api} initial={state} />;
