@@ -4,6 +4,10 @@ import {
   DesignTokenEditor,
   type DesignTokenEditorApi,
 } from './design-token-editor';
+import {
+  DESIGN_TOKEN_DEFAULTS,
+  resolveDesignTokens,
+} from './design-tokens';
 import type { DesignTokenState } from './preload-api';
 import './styles.css';
 import './design-token-editor.css';
@@ -11,6 +15,12 @@ import './design-token-editor.css';
 const parameters = new URLSearchParams(window.location.hash.slice(1));
 const apiUrl = parameters.get('api');
 const apiToken = parameters.get('token');
+const previewState: DesignTokenState = {
+  enabled: true,
+  defaults: { ...DESIGN_TOKEN_DEFAULTS },
+  overrides: {},
+  values: resolveDesignTokens({}),
+};
 
 const api: DesignTokenEditorApi = {
   setDesignTokens(overrides) {
@@ -36,19 +46,13 @@ async function request<T>(init?: RequestInit): Promise<T> {
 }
 
 function BrowserDesignTokenStudio() {
-  const [state, setState] = React.useState<DesignTokenState | null>(null);
-  const [error, setError] = React.useState('');
+  const [state, setState] = React.useState<DesignTokenState>(previewState);
 
   React.useEffect(() => {
-    request<DesignTokenState>()
-      .then(setState)
-      .catch((caught) =>
-        setError(caught instanceof Error ? caught.message : 'Failed to load'),
-      );
+    if (!(apiUrl && apiToken)) return;
+    request<DesignTokenState>().then(setState).catch(() => {});
   }, []);
 
-  if (error) return <main className="tokenStudioStatus">{error}</main>;
-  if (!state) return <main className="tokenStudioStatus">Loading…</main>;
   return <DesignTokenEditor api={api} initial={state} />;
 }
 
