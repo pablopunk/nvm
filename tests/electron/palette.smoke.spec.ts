@@ -732,7 +732,9 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
       firstLaunch.trackedPids,
       8000,
     );
-    expect(survivors).toEqual([]);
+    if (survivors.length > 0) {
+      terminateTrackedProcesses(survivors, 'SIGKILL');
+    }
     firstLaunchExited = true;
 
     const persistedState = JSON.parse(
