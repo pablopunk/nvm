@@ -53,3 +53,42 @@ test('design token studio server requires its origin and token', async () => {
     await server.close();
   }
 });
+
+test('design token studio server routes authenticated RPC calls', async () => {
+  const calls: Array<{ method: string; params: unknown }> = [];
+  const server = await createDesignTokenStudioServer({
+    allowedOrigin: origin,
+    getState: () => ({
+      enabled: true,
+      defaults: { ...DESIGN_TOKEN_DEFAULTS },
+      overrides: {},
+      values: resolveDesignTokens({}),
+    }),
+    setState: () => {
+      throw new Error('unused');
+    },
+    resetState: () => {
+      throw new Error('unused');
+    },
+    rpc: (method, params) => {
+      calls.push({ method, params });
+      return { ok: true };
+    },
+  });
+  try {
+    const response = await fetch(server.rpcUrl, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.token}`,
+        origin,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ method: 'search', params: { query: 'app' } }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+    assert.deepEqual(calls, [{ method: 'search', params: { query: 'app' } }]);
+  } finally {
+    await server.close();
+  }
+});

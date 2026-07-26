@@ -1,5 +1,7 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import ReactDom from 'react-dom/client';
+import { App } from './App';
+import { createBrowserNevermindApi } from './browser-adapter/nevermind-api';
 import {
   DesignTokenEditor,
   type DesignTokenEditorApi,
@@ -11,7 +13,17 @@ import './design-token-editor.css';
 
 const parameters = new URLSearchParams(window.location.hash.slice(1));
 const apiUrl = parameters.get('api');
+const rpcUrl = parameters.get('rpc');
+const eventUrl = parameters.get('events');
 const apiToken = parameters.get('token');
+
+if (rpcUrl && eventUrl) {
+  window.nvm = createBrowserNevermindApi({
+    rpcUrl,
+    eventUrl,
+    token: apiToken || undefined,
+  });
+}
 const previewState: DesignTokenState = {
   enabled: true,
   defaults: { ...DESIGN_TOKEN_DEFAULTS },
@@ -52,10 +64,19 @@ function BrowserDesignTokenStudio() {
       .catch(() => {});
   }, []);
 
-  return <DesignTokenEditor api={api} initial={state} />;
+  return (
+    <main className="realTokenStudio">
+      <aside className="realTokenControls">
+        <DesignTokenEditor api={api} initial={state} />
+      </aside>
+      <section className="realTokenPreview" data-testid="real-token-preview">
+        {rpcUrl && eventUrl ? <App /> : <p>Open this studio from Nevermind.</p>}
+      </section>
+    </main>
+  );
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+ReactDom.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserDesignTokenStudio />
   </React.StrictMode>,

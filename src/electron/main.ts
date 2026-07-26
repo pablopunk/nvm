@@ -39,7 +39,6 @@ import {
 import electronUpdater from 'electron-updater';
 import { createNevermindAi } from './ai';
 import { aiChatPreviewFiles, prepareAiChatPreview } from './ai-chat-previews';
-import { createDesignTokenStudioServer } from './design-token-studio-server';
 import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
@@ -49,6 +48,7 @@ import {
   parseAuthDeepLink,
   setDeepLinkLogger,
 } from './deep-link';
+import { createDesignTokenStudioServer } from './design-token-studio-server';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -96,6 +96,11 @@ if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
 if (!isNvmTestMode) initSentry();
 
+import {
+  DESIGN_TOKEN_DEFAULTS,
+  resolveDesignTokens,
+  validateDesignTokenOverrides,
+} from '../design-tokens';
 import { feedbackView } from '../feedback';
 import { type CommandAction, canCustomizeCommandAction } from '../model';
 import { appResultMarker, priorityBoost } from './action-ranking';
@@ -232,11 +237,6 @@ import {
   writeUserStateFile,
 } from './user-state';
 import { isNewerVersion as isVersionNewerThan } from './version-utils';
-import {
-  DESIGN_TOKEN_DEFAULTS,
-  resolveDesignTokens,
-  validateDesignTokenOverrides,
-} from '../design-tokens';
 import {
   installExternalNavigationPolicy,
   isTrustedExtensionWindowPage,
@@ -7905,6 +7905,59 @@ function createFixturesExtension() {
   };
 }
 
+const browserStudioSearchSender = {
+  isDestroyed: () => false,
+  send(channel: string, payload: unknown) {
+    if (channel === 'actions:search:update')
+      designTokenStudioServer?.publish('search-update', payload);
+  },
+  on: () => {},
+  removeListener: () => {},
+};
+
+async function browserStudioRpc(method: string, params: any = {}) {
+  switch (method) {
+    case 'search': {
+      const results = await searchActions(params.query, params.options);
+      return {
+        generation: Number(params.options?.generation),
+        revision: 0,
+        results: results.map(prepareRootActionForRenderer),
+        complete: true,
+      };
+    }
+    case 'cancelSearch':
+      cancelProgressiveSearch(browserStudioSearchSender, params);
+      return null;
+    case 'execute':
+      return executeActionForIpc(params.action);
+    case 'runViewAction':
+      return executeViewActionForIpc(params.action);
+    case 'refreshView':
+      return refreshViewForIpc(params);
+    case 'getSetting':
+      return getSetting(params.id);
+    case 'getShortcuts':
+      return getShortcuts();
+    case 'getNevermindAuthStatus': {
+      const auth = await getNevermindAuth();
+      return auth ? { authed: true, email: auth.email } : { authed: false };
+    }
+    case 'getGhStatus':
+      return (
+        extensionPrSubmitter?.probe() ?? { installed: false, authed: false }
+      );
+    case 'getDesignTokens':
+      return designTokenState();
+    case 'setDesignTokens':
+      return saveDesignTokenOverrides(params.overrides);
+    case 'resetDesignTokens':
+      return resetDesignTokenOverrides();
+    default:
+      throw new Error(`Unsupported browser studio method: ${method}`);
+  }
+}
+
 async function openDesignTokenStudioInBrowser() {
   if (isNvmTestMode) {
     const state = designTokenState();
@@ -7920,11 +7973,14 @@ async function openDesignTokenStudioInBrowser() {
       getState: designTokenState,
       setState: saveDesignTokenOverrides,
       resetState: resetDesignTokenOverrides,
+      rpc: browserStudioRpc,
     });
   }
   const studioUrl = new URL('design-tokens.html', rendererUrl);
   studioUrl.hash = new URLSearchParams({
     api: designTokenStudioServer.apiUrl,
+    rpc: designTokenStudioServer.rpcUrl,
+    events: designTokenStudioServer.eventUrl,
     token: designTokenStudioServer.token,
   }).toString();
   await shell.openExternal(studioUrl.toString());
