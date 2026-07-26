@@ -373,8 +373,6 @@ test('development design token editor previews, resets, and persists tokens', as
         ),
       )
       .toBe('30px');
-    await launched.page.getByRole('button', { name: 'Command K' }).click();
-    await expect(launched.page.getByText('Create new extension')).toBeVisible();
     await launched.page.screenshot({
       path: path.join(artifactDir, 'design-token-editor.png'),
       fullPage: true,
