@@ -708,6 +708,30 @@ function reindexDownloadsAction(ctx: ExtensionContext) {
   });
 }
 
+function openWithAppsAction(ctx: ExtensionContext) {
+  return ctx.actions.run('Show Open With Apps', async (innerCtx) => {
+    const filePath = path.join(WATCH_FIXTURE_ROOT, 'open-with-fixture.png');
+    fs.mkdirSync(WATCH_FIXTURE_ROOT, { recursive: true });
+    if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, '');
+    const apps = (await innerCtx.desktop.files?.openWithApps(filePath)) || [];
+    return innerCtx.ui.list({
+      id: 'dev-ui-open-with-apps',
+      title: 'Dev UI · Open With Apps',
+      subtitle: `${apps.length} available apps`,
+      items: apps.map((app) => ({
+        id: app.id || app.path || app.name,
+        title: app.name,
+        subtitle: app.path,
+        primaryAction: innerCtx.actions.openWith(filePath, app),
+      })),
+      emptyView: innerCtx.ui.empty(
+        'No apps available',
+        'The host did not discover an application for this file.',
+      ),
+    });
+  });
+}
+
 function listView(ctx: ExtensionContext) {
   const confirm = ctx.ui.confirm({
     title: 'Confirm Dev Action',
@@ -808,6 +832,7 @@ function listView(ctx: ExtensionContext) {
             actions: [
               fileIndexControlsAction(ctx),
               reindexDownloadsAction(ctx),
+              openWithAppsAction(ctx),
             ],
           }),
           ctx.ui.item({
