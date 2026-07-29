@@ -339,6 +339,21 @@ body,
   padding: 32px;
 }
 
+.realTokenPreviewEmpty {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.realTokenPreviewEmpty strong {
+  color: var(--text-primary);
+  font-size: var(--fs-xl);
+}
+
 @media (max-width: 820px) {
   .realTokenStudio {
     grid-template-columns: 1fr;

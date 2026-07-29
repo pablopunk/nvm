@@ -11,7 +11,9 @@ import type { DesignTokenState } from './preload-api';
 import './styles.css';
 import './design-token-editor.css';
 
-const parameters = new URLSearchParams(window.location.hash.slice(1));
+const parameters = new URLSearchParams(
+  window.location.hash.slice(1) || window.location.search.slice(1),
+);
 const apiUrl = parameters.get('api');
 const rpcUrl = parameters.get('rpc');
 const eventUrl = parameters.get('events');
@@ -70,7 +72,16 @@ function BrowserDesignTokenStudio() {
         <DesignTokenEditor api={api} initial={state} />
       </aside>
       <section className="realTokenPreview" data-testid="real-token-preview">
-        {rpcUrl && eventUrl ? <App /> : <p>Open this studio from Nevermind.</p>}
+        {rpcUrl && eventUrl ? (
+          <App />
+        ) : (
+          <div className="realTokenPreviewEmpty">
+            <strong>Preview connection missing</strong>
+            <span>
+              Close this tab and reopen Design Token Editor from Nevermind.
+            </span>
+          </div>
+        )}
       </section>
     </main>
   );

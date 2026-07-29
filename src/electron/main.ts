@@ -7947,13 +7947,15 @@ async function openDesignTokenStudioInBrowser() {
     });
   }
   const studioUrl = new URL('design-tokens.html', rendererUrl);
-  studioUrl.hash = new URLSearchParams({
+  const studioParameters = new URLSearchParams({
     api: designTokenStudioServer.apiUrl,
     rpc: designTokenStudioServer.rpcUrl,
     events: designTokenStudioServer.eventUrl,
     token: designTokenStudioServer.token,
-  }).toString();
-  await shell.openExternal(studioUrl.toString());
+  });
+  studioUrl.search = studioParameters.toString();
+  studioUrl.hash = studioParameters.toString();
+  await shell.openExternal(studioUrl.toString(), { activate: true });
 }
 
 function designTokenEditorRootItem(ctx) {
