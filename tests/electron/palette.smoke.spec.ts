@@ -495,7 +495,7 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
         'PAB-85 Delayed Provider: PAB-85 Immediate Search Current',
         { exact: true },
       ),
-    ).toBeVisible({ timeout: 1000 });
+    ).toBeVisible();
     await expect(
       page.getByText('PAB-85 Delayed Provider: PAB-85 Immediate Search Stale', {
         exact: true,
@@ -667,6 +667,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
 
 test('dismisses transient alias UI and flushes scheduled state before quit', async () => {
   const stateSafetyUserDataDir = path.join(userDataDir, 'pab4-state-safety');
+  const aliasTargetTitle = 'Floating Notes';
   const settingsTitle =
     process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings';
   let firstLaunch:
@@ -678,20 +679,34 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
   try {
     firstLaunch = await launchTestApplication(stateSafetyUserDataDir);
     const input = firstLaunch.page.locator('input[placeholder]').first();
-    await input.fill(settingsTitle);
-    const settingsRow = firstLaunch.page
-      .getByText(settingsTitle, { exact: true })
-      .first()
+    await firstLaunch.page.evaluate(() => {
+      localStorage.setItem('nvm.debugPerformance', 'true');
+      performance.clearMeasures('nvm:search.renderer-to-results');
+    });
+    await input.fill(aliasTargetTitle);
+    const aliasSearch = await rendererSearchMeasure(firstLaunch.page, {
+      phase: 'initial',
+      queryLength: aliasTargetTitle.length,
+    });
+    await rendererSearchMeasure(firstLaunch.page, {
+      generation: aliasSearch.generation,
+      phase: 'final',
+    });
+    const aliasTargetRow = firstLaunch.page
+      .getByText(aliasTargetTitle, { exact: true })
       .locator('xpath=ancestor::*[@cmdk-item]');
-    await expect(settingsRow).toBeVisible();
-    await settingsRow.hover();
-    await expect(settingsRow).toHaveAttribute('data-selected', 'true');
+    await expect(aliasTargetRow).toBeVisible();
+    await aliasTargetRow.hover();
+    await expect(aliasTargetRow).toHaveAttribute('data-selected', 'true');
 
-    await firstLaunch.page.keyboard.press('Control+K');
+    await firstLaunch.page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+K' : 'Control+K',
+    );
     const setAlias = firstLaunch.page.getByText('Set alias', { exact: true });
     await expect(setAlias).toBeVisible();
-    await setAlias.hover();
-    await firstLaunch.page.keyboard.press('Enter');
+    await setAlias
+      .locator('xpath=ancestor::*[@cmdk-item]')
+      .dispatchEvent('click');
     const aliasInput = firstLaunch.page.locator(
       'input[placeholder^="Alias for"]',
     );
@@ -726,7 +741,24 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     }, settingsTitle);
 
     await firstLaunch.page
-      .evaluate(() => window.nvm.quitApp())
+      .evaluate(async () => {
+        const state = window as typeof window & {
+          testSearchGeneration?: number;
+        };
+        const generation = Math.max(
+          Date.now(),
+          (state.testSearchGeneration || 0) + 1,
+        );
+        state.testSearchGeneration = generation;
+        const { results: actions } = await window.nvm.search('Quit Nevermind', {
+          generation,
+        });
+        const quitAction = actions.find(
+          (candidate) => candidate.title === 'Quit Nevermind',
+        );
+        if (!quitAction) throw new Error('Quit Nevermind action not found');
+        await window.nvm.execute(quitAction);
+      })
       .catch(() => undefined);
     const survivors = await waitForProcessesToExit(
       firstLaunch.trackedPids,

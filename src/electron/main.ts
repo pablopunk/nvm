@@ -158,6 +158,7 @@ import {
   info as logInfo,
   warn as logWarn,
 } from './logger';
+import { compatibleOpenWithApps } from './open-with-apps';
 import {
   appIconSources,
   autoUpdatesUnavailableMessage,
@@ -171,6 +172,7 @@ import {
   hasCapability,
   keyboardSettingsSubtitle,
   launchApp as launchOsApp,
+  openFileWithApp as openFileWithOsApp,
   osLabel,
   pasteIntoFrontmostApp,
   prepareAppWindowPolicy,
@@ -4688,11 +4690,14 @@ async function imageDimensionsForPath(filePath) {
     : {};
 }
 
-function thumbnailUrlForPreviewablePath(filePath) {
+function thumbnailRevisionForStat(stat) {
+  return stat ? `${stat.mtimeMs}:${stat.size}` : undefined;
+}
+
+function thumbnailUrlForPreviewablePath(filePath, knownStat?) {
   const expandedPath = expandUserPath(filePath);
-  return isImagePath(expandedPath) || isVideoPath(expandedPath)
-    ? thumbnailUrlForPath(expandedPath)
-    : null;
+  if (!(isImagePath(expandedPath) || isVideoPath(expandedPath))) return null;
+  return thumbnailUrlForPath(expandedPath, thumbnailRevisionForStat(knownStat));
 }
 
 function dataUrlExtension(dataUrl: string) {
@@ -4781,11 +4786,11 @@ async function fileToExtensionFile(filePath, options: any = {}) {
     name: path.basename(expandedPath),
     displayPath: displayUserPath(expandedPath),
     url:
-      thumbnailUrlForPreviewablePath(expandedPath) ||
+      thumbnailUrlForPreviewablePath(expandedPath, stat) ||
       fileUrlForPath(expandedPath),
     fileUrl: fileUrlForPath(expandedPath),
     videoUrl: isVideoPath(expandedPath) ? fileUrlForPath(expandedPath) : null,
-    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath),
+    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath, stat),
     kind: isImagePath(expandedPath)
       ? 'image'
       : isVideoPath(expandedPath)
@@ -5042,37 +5047,15 @@ async function documentTypesForApp(appPath) {
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath);
   if (!(resolvedPath && path.isAbsolute(resolvedPath))) return [];
-  if (!hasCapability('open-with')) return appIndexService.get();
+  if (!hasCapability('open-with-app-filtering')) return appIndexService.get();
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase();
   const contentTypes = new Set(await contentTypesForPath(resolvedPath));
-  const scored = [];
-  await Promise.all(
-    appIndexService.get().map(async (item) => {
-      if (!item.path?.endsWith('.app')) return;
-      const documentTypes = await documentTypesForApp(item.path);
-      let score = 0;
-      for (const type of documentTypes) {
-        const extensions = (type.CFBundleTypeExtensions || []).map((value) =>
-          String(value).toLowerCase(),
-        );
-        const itemTypes = type.LSItemContentTypes || [];
-        if (extension && extensions.includes(extension))
-          score = Math.max(score, 3);
-        if (itemTypes.some((itemType) => contentTypes.has(itemType)))
-          score = Math.max(score, 2);
-        if (
-          extensions.includes('*') ||
-          itemTypes.includes('public.data') ||
-          itemTypes.includes('public.item')
-        )
-          score = Math.max(score, 1);
-      }
-      if (score) scored.push({ ...item, score });
-    }),
+  return compatibleOpenWithApps(
+    appIndexService.get(),
+    extension,
+    contentTypes,
+    documentTypesForApp,
   );
-  return scored
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
-    .map(({ score, ...item }) => item);
 }
 
 async function openPathWithApp(filePath, appPath) {
@@ -5089,20 +5072,7 @@ async function openPathWithApp(filePath, appPath) {
     return {
       toast: { message: 'Cannot open this file with that app', tone: 'error' },
     };
-  if (hasCapability('open-with')) {
-    const child = spawn('open', ['-a', resolvedAppPath, resolvedPath], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.on('error', (err) =>
-      logWarn(
-        'openWith.failed',
-        { app: resolvedAppPath, file: resolvedPath, error: err?.message },
-        { source: 'host', scope: 'action' },
-      ),
-    );
-    child.unref();
-  } else await shell.openPath(resolvedPath);
+  await openFileWithOsApp(resolvedPath, resolvedAppPath);
 }
 
 async function selectedFiles() {
@@ -8574,11 +8544,11 @@ async function scanFiles(options: any = {}) {
       return sorted.slice(0, limit).map((file) => ({
         ...file,
         url:
-          thumbnailUrlForPreviewablePath(file.path) ||
+          thumbnailUrlForPreviewablePath(file.path, file.stat) ||
           fileUrlForPath(file.path),
         fileUrl: fileUrlForPath(file.path),
         videoUrl: isVideoPath(file.path) ? fileUrlForPath(file.path) : null,
-        thumbnailUrl: thumbnailUrlForPreviewablePath(file.path),
+        thumbnailUrl: thumbnailUrlForPreviewablePath(file.path, file.stat),
       }));
     },
   );

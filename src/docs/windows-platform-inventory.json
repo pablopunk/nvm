@@ -435,6 +435,30 @@
       "surface": "app-discovery-launch-quit"
     },
     {
+      "key": "os-platform-selector-open-with-darwin",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:openFileWithAppForPlatform::platform-selector::darwin: () => executeOpenWithCommand('/usr/bin/open', ['-a', appPath, filePath])::self",
+      "disposition": "capability-selector",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "os-platform-selector-open-with-win32",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:openFileWithAppForPlatform::platform-selector::win32: () => executeOpenWithCommand( 'powershell.exe', [ '-NoProfile', '-NonInteractive', '-Comm…#23e01a9dd535::self",
+      "disposition": "capability-selector",
+      "surface": "files-search-open"
+    },
+    {
+      "key": "os-platform-selector-open-with-linux",
+      "file": "src/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/function:openFileWithAppForPlatform::platform-selector::linux: () => executeOpenWithCommand('gio', ['launch', appPath, filePath])::self",
+      "disposition": "capability-selector",
+      "surface": "files-search-open"
+    },
+    {
       "key": "os-platform-selector-1ead94f410f0",
       "file": "src/electron/os.ts",
       "category": "platform-selector",
