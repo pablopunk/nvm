@@ -11,6 +11,13 @@ mock.module('electron', {
 });
 
 const { createOsAdapter, validatedWindowsImageName } = await import('./os');
+const POWERSHELL_PREFIX_ARGUMENT_COUNT = 3;
+type OpenWithExecFile = (
+  command: string,
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv },
+  callback: (error: Error | null) => void,
+) => void;
 
 function windowsAdapter(overrides: Record<string, unknown> = {}) {
   return createOsAdapter({
@@ -25,12 +32,24 @@ function windowsAdapter(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function openWithAdapter(
+  processPlatform: NodeJS.Platform,
+  execFile: OpenWithExecFile,
+) {
+  return createOsAdapter({
+    execFile: execFile as never,
+    processPlatform,
+  });
+}
+
 test('simulates Windows labels, capabilities, and exact platform paths off-host', () => {
   const adapter = windowsAdapter();
   assert.equal(adapter.osLabel(), 'Windows');
   assert.equal(adapter.settingsTitle(), 'Open Settings');
   assert.equal(adapter.hasCapability('app-icons'), true);
   assert.equal(adapter.hasCapability('quick-look'), false);
+  assert.equal(adapter.hasCapability('open-with'), true);
+  assert.equal(adapter.hasCapability('open-with-app-filtering'), false);
   assert.equal(adapter.hasCapability('launch-at-login'), true);
   assert.equal(adapter.hasCapability('auto-updates'), true);
   assert.deepEqual(adapter.appScanRoots(), [
@@ -130,6 +149,66 @@ test('Windows app launch passes the exact shortcut path to Electron shell', asyn
   const candidate = String.raw`\\server\share\Apps\Never mind 应用.lnk`;
   await adapter.launchWindowsApp(candidate);
   assert.deepEqual(opened, [candidate]);
+});
+
+test('Open With uses argv-safe native launchers on every desktop platform', async () => {
+  const calls: Array<{
+    command: string;
+    args: string[];
+    options: { env?: NodeJS.ProcessEnv };
+  }> = [];
+  const execFile = (
+    command: string,
+    args: string[],
+    options: { env?: NodeJS.ProcessEnv },
+    callback: (error: Error | null) => void,
+  ) => {
+    calls.push({ command, args, options });
+    callback(null);
+  };
+  const filePath = String.raw`C:\Users\Zoë\Pictures\screen & notes.png`;
+  const appPath = String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Image App.lnk`;
+
+  await windowsAdapter({ execFile }).openFileWithApp(filePath, appPath);
+  await openWithAdapter('darwin', execFile).openFileWithApp(
+    '/Users/Zoë/screen & notes.png',
+    '/Applications/Preview.app',
+  );
+  await openWithAdapter('linux', execFile).openFileWithApp(
+    '/home/zoë/screen & notes.png',
+    '/usr/share/applications/org.gnome.Loupe.desktop',
+  );
+
+  assert.equal(calls[0]?.command, 'powershell.exe');
+  assert.deepEqual(calls[0]?.args.slice(0, POWERSHELL_PREFIX_ARGUMENT_COUNT), [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+  ]);
+  assert.equal(calls[0]?.options.env?.NVM_OPEN_WITH_APP, appPath);
+  assert.equal(calls[0]?.options.env?.NVM_OPEN_WITH_FILE, filePath);
+  assert.deepEqual(
+    { command: calls[1]?.command, args: calls[1]?.args },
+    {
+      command: '/usr/bin/open',
+      args: [
+        '-a',
+        '/Applications/Preview.app',
+        '/Users/Zoë/screen & notes.png',
+      ],
+    },
+  );
+  assert.deepEqual(
+    { command: calls[2]?.command, args: calls[2]?.args },
+    {
+      command: 'gio',
+      args: [
+        'launch',
+        '/usr/share/applications/org.gnome.Loupe.desktop',
+        '/home/zoë/screen & notes.png',
+      ],
+    },
+  );
 });
 
 test('force quit validates raw names before normalization and passes one argv element', async () => {
