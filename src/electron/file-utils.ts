@@ -103,11 +103,14 @@ function localFilePathFromUrl(urlInput: string | URL) {
   );
 }
 
-function thumbnailUrlForPath(filePath: string) {
+function thumbnailUrlForPath(filePath: string, revision?: string) {
   const resolved = canonicalLocalPath(filePath);
   const url = new URL(`${LOCAL_THUMB_PROTOCOL}://thumb`);
   url.searchParams.set('path', resolved);
   url.searchParams.set('token', localFileToken('thumb', resolved));
+  if (revision) {
+    url.searchParams.set('revision', revision);
+  }
   return url.href;
 }
 

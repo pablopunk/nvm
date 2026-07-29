@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import { createReadStream, watch } from 'node:fs';
+import { createReadStream, statSync, watch } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -4668,11 +4668,24 @@ async function imageDimensionsForPath(filePath) {
     : {};
 }
 
-function thumbnailUrlForPreviewablePath(filePath) {
+function thumbnailRevisionForStat(stat) {
+  return stat ? `${stat.mtimeMs}:${stat.size}` : undefined;
+}
+
+function thumbnailUrlForPreviewablePath(filePath, knownStat?) {
   const expandedPath = expandUserPath(filePath);
-  return isImagePath(expandedPath) || isVideoPath(expandedPath)
-    ? thumbnailUrlForPath(expandedPath)
-    : null;
+  if (!(isImagePath(expandedPath) || isVideoPath(expandedPath))) return null;
+  const stat =
+    knownStat === undefined
+      ? (() => {
+          try {
+            return statSync(expandedPath);
+          } catch {
+            return null;
+          }
+        })()
+      : knownStat;
+  return thumbnailUrlForPath(expandedPath, thumbnailRevisionForStat(stat));
 }
 
 function dataUrlExtension(dataUrl: string) {
@@ -4761,11 +4774,11 @@ async function fileToExtensionFile(filePath, options: any = {}) {
     name: path.basename(expandedPath),
     displayPath: displayUserPath(expandedPath),
     url:
-      thumbnailUrlForPreviewablePath(expandedPath) ||
+      thumbnailUrlForPreviewablePath(expandedPath, stat) ||
       fileUrlForPath(expandedPath),
     fileUrl: fileUrlForPath(expandedPath),
     videoUrl: isVideoPath(expandedPath) ? fileUrlForPath(expandedPath) : null,
-    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath),
+    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath, stat),
     kind: isImagePath(expandedPath)
       ? 'image'
       : isVideoPath(expandedPath)
@@ -8440,11 +8453,11 @@ async function scanFiles(options: any = {}) {
       return sorted.slice(0, limit).map((file) => ({
         ...file,
         url:
-          thumbnailUrlForPreviewablePath(file.path) ||
+          thumbnailUrlForPreviewablePath(file.path, file.stat) ||
           fileUrlForPath(file.path),
         fileUrl: fileUrlForPath(file.path),
         videoUrl: isVideoPath(file.path) ? fileUrlForPath(file.path) : null,
-        thumbnailUrl: thumbnailUrlForPreviewablePath(file.path),
+        thumbnailUrl: thumbnailUrlForPreviewablePath(file.path, file.stat),
       }));
     },
   );
