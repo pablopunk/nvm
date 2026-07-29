@@ -333,6 +333,12 @@ body,
 
 .realTokenPreview {
   position: relative;
+  isolation: isolate;
+  background: rgb(12, 13, 17);
+}
+
+.realTokenPreview .card {
+  background-color: rgb(17, 18, 23);
 }
 
 .realTokenPreview .shell {

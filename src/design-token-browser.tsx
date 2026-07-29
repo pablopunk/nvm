@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDom from 'react-dom/client';
 import { App } from './App';
+import { createMockBrowserNevermindApi } from './browser-adapter/mock-nevermind-api';
 import { createBrowserNevermindApi } from './browser-adapter/nevermind-api';
 import {
   DesignTokenEditor,
@@ -19,13 +20,6 @@ const rpcUrl = parameters.get('rpc');
 const eventUrl = parameters.get('events');
 const apiToken = parameters.get('token');
 
-if (rpcUrl && eventUrl) {
-  window.nvm = createBrowserNevermindApi({
-    rpcUrl,
-    eventUrl,
-    token: apiToken || undefined,
-  });
-}
 const previewState: DesignTokenState = {
   enabled: true,
   defaults: { ...DESIGN_TOKEN_DEFAULTS },
@@ -33,8 +27,18 @@ const previewState: DesignTokenState = {
   values: resolveDesignTokens({}),
 };
 
+window.nvm =
+  rpcUrl && eventUrl
+    ? createBrowserNevermindApi({
+        rpcUrl,
+        eventUrl,
+        token: apiToken || undefined,
+      })
+    : createMockBrowserNevermindApi(previewState);
+
 const api: DesignTokenEditorApi = {
   setDesignTokens(overrides) {
+    if (!(apiUrl && apiToken)) return window.nvm.setDesignTokens(overrides);
     return request<DesignTokenState>({
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -42,6 +46,7 @@ const api: DesignTokenEditorApi = {
     });
   },
   resetDesignTokens() {
+    if (!(apiUrl && apiToken)) return window.nvm.resetDesignTokens();
     return request<DesignTokenState>({ method: 'DELETE' });
   },
 };
@@ -72,16 +77,7 @@ function BrowserDesignTokenStudio() {
         <DesignTokenEditor api={api} initial={state} />
       </aside>
       <section className="realTokenPreview" data-testid="real-token-preview">
-        {rpcUrl && eventUrl ? (
-          <App />
-        ) : (
-          <div className="realTokenPreviewEmpty">
-            <strong>Preview connection missing</strong>
-            <span>
-              Close this tab and reopen Design Token Editor from Nevermind.
-            </span>
-          </div>
-        )}
+        <App />
       </section>
     </main>
   );
