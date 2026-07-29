@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import { createReadStream, statSync, watch } from 'node:fs';
+import { createReadStream, watch } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -4675,17 +4675,7 @@ function thumbnailRevisionForStat(stat) {
 function thumbnailUrlForPreviewablePath(filePath, knownStat?) {
   const expandedPath = expandUserPath(filePath);
   if (!(isImagePath(expandedPath) || isVideoPath(expandedPath))) return null;
-  const stat =
-    knownStat === undefined
-      ? (() => {
-          try {
-            return statSync(expandedPath);
-          } catch {
-            return null;
-          }
-        })()
-      : knownStat;
-  return thumbnailUrlForPath(expandedPath, thumbnailRevisionForStat(stat));
+  return thumbnailUrlForPath(expandedPath, thumbnailRevisionForStat(knownStat));
 }
 
 function dataUrlExtension(dataUrl: string) {

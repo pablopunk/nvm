@@ -28,11 +28,13 @@ const VIDEO_EXTENSIONS = new Set([
 const LOCAL_FILE_PROTOCOL = 'nvm-file';
 const LOCAL_THUMB_PROTOCOL = 'nvm-thumb';
 const LOCAL_FILE_URL_SECRET_BYTES = 32;
+const MAX_CACHED_THUMBNAIL_REVISIONS = 20_000;
 const LEADING_PERIOD_PATTERN = /^\./;
 
 let localFileUrlSecret: Buffer = crypto.randomBytes(
   LOCAL_FILE_URL_SECRET_BYTES,
 );
+const thumbnailRevisionByPath = new Map<string, string>();
 
 function configureLocalFileUrlSecret(secret: string | Buffer) {
   const value = Buffer.isBuffer(secret)
@@ -103,13 +105,29 @@ function localFilePathFromUrl(urlInput: string | URL) {
   );
 }
 
+function cacheThumbnailRevision(filePath: string, revision: string) {
+  thumbnailRevisionByPath.delete(filePath);
+  thumbnailRevisionByPath.set(filePath, revision);
+  if (thumbnailRevisionByPath.size <= MAX_CACHED_THUMBNAIL_REVISIONS) {
+    return;
+  }
+  const oldestPath = thumbnailRevisionByPath.keys().next().value;
+  if (oldestPath) {
+    thumbnailRevisionByPath.delete(oldestPath);
+  }
+}
+
 function thumbnailUrlForPath(filePath: string, revision?: string) {
   const resolved = canonicalLocalPath(filePath);
+  if (revision) {
+    cacheThumbnailRevision(resolved, revision);
+  }
+  const currentRevision = revision || thumbnailRevisionByPath.get(resolved);
   const url = new URL(`${LOCAL_THUMB_PROTOCOL}://thumb`);
   url.searchParams.set('path', resolved);
   url.searchParams.set('token', localFileToken('thumb', resolved));
-  if (revision) {
-    url.searchParams.set('revision', revision);
+  if (currentRevision) {
+    url.searchParams.set('revision', currentRevision);
   }
   return url.href;
 }

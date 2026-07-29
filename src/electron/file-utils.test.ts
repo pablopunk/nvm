@@ -42,8 +42,10 @@ test('thumbnailUrlForPath changes cache identity without changing authorization'
     'screenshot.png',
   );
   const original = new URL(thumbnailUrlForPath(filePath, '1000:2048'));
+  const cached = new URL(thumbnailUrlForPath(filePath));
   const modified = new URL(thumbnailUrlForPath(filePath, '2000:2048'));
 
+  assert.equal(cached.href, original.href);
   assert.notEqual(original.href, modified.href);
   assert.equal(original.searchParams.get('revision'), '1000:2048');
   assert.equal(modified.searchParams.get('revision'), '2000:2048');
