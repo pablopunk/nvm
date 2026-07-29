@@ -4670,11 +4670,14 @@ async function imageDimensionsForPath(filePath) {
     : {};
 }
 
-function thumbnailUrlForPreviewablePath(filePath) {
+function thumbnailRevisionForStat(stat) {
+  return stat ? `${stat.mtimeMs}:${stat.size}` : undefined;
+}
+
+function thumbnailUrlForPreviewablePath(filePath, knownStat?) {
   const expandedPath = expandUserPath(filePath);
-  return isImagePath(expandedPath) || isVideoPath(expandedPath)
-    ? thumbnailUrlForPath(expandedPath)
-    : null;
+  if (!(isImagePath(expandedPath) || isVideoPath(expandedPath))) return null;
+  return thumbnailUrlForPath(expandedPath, thumbnailRevisionForStat(knownStat));
 }
 
 function dataUrlExtension(dataUrl: string) {
@@ -4763,11 +4766,11 @@ async function fileToExtensionFile(filePath, options: any = {}) {
     name: path.basename(expandedPath),
     displayPath: displayUserPath(expandedPath),
     url:
-      thumbnailUrlForPreviewablePath(expandedPath) ||
+      thumbnailUrlForPreviewablePath(expandedPath, stat) ||
       fileUrlForPath(expandedPath),
     fileUrl: fileUrlForPath(expandedPath),
     videoUrl: isVideoPath(expandedPath) ? fileUrlForPath(expandedPath) : null,
-    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath),
+    thumbnailUrl: thumbnailUrlForPreviewablePath(expandedPath, stat),
     kind: isImagePath(expandedPath)
       ? 'image'
       : isVideoPath(expandedPath)
@@ -8407,11 +8410,11 @@ async function scanFiles(options: any = {}) {
       return sorted.slice(0, limit).map((file) => ({
         ...file,
         url:
-          thumbnailUrlForPreviewablePath(file.path) ||
+          thumbnailUrlForPreviewablePath(file.path, file.stat) ||
           fileUrlForPath(file.path),
         fileUrl: fileUrlForPath(file.path),
         videoUrl: isVideoPath(file.path) ? fileUrlForPath(file.path) : null,
-        thumbnailUrl: thumbnailUrlForPreviewablePath(file.path),
+        thumbnailUrl: thumbnailUrlForPreviewablePath(file.path, file.stat),
       }));
     },
   );
