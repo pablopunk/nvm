@@ -62,7 +62,7 @@ All desktop integrations are owned by OS capabilities. The rest of the app descr
 - App discovery, app launching, and app watching are one capability family.
 - Built-in system commands such as lock, sleep, restart, settings, and quit-related affordances are capability-driven.
 - macOS root search exposes the System Settings panes available on the current computer and opens a selected pane directly; other platforms omit these macOS-specific results.
-- File actions such as preview, reveal, open with, trash, drag, thumbnails, and selected files use OS-owned labels and availability.
+- File actions such as preview, reveal, open with, trash, drag, thumbnails, and selected files use OS-owned labels and availability. Open with must honor the selected application on macOS, Windows, and Linux; platforms may return all discovered applications when reliable per-file compatibility metadata is unavailable.
 - Frontmost-app interactions such as paste are offered only when the current system can perform them reliably.
 - Camera access for host-owned extension views is capability-gated, uses OS privacy prompts where required, and must include platform packaging metadata such as macOS camera usage descriptions.
 - Palette window behavior such as focus, taskbar/dock visibility, all-workspaces behavior, and desktop-window-manager quirks is not spread through generic window lifecycle code.

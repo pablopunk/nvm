@@ -782,7 +782,7 @@ export type ExtensionApp = {
   path: string;
   [key: string]: unknown;
 };
-/** An app that can open a specific file. Returned by `ctx.desktop.files.openWithApps(filePath)`. */
+/** A platform-discovered app that can be selected to open a file. Returned by `ctx.desktop.files.openWithApps(filePath)`. */
 export type ExtensionOpenWithApp = ExtensionApp;
 /** A host-indexed file from `ctx.desktop.files.indexSnapshot/recent/searchIndex`. */
 export type ExtensionIndexedFile = {
@@ -1667,7 +1667,7 @@ export type ExtensionContext = {
         roots: string[],
         options?: Omit<ExtensionFindFilesOptions, 'kind'>,
       ): Promise<ExtensionFile[]>;
-      /** Supported apps for this file. When rendering a picker, map each app to `{ id: app.id, title: app.name, primaryAction: ctx.actions.openWith(filePath, app) }`. */
+      /** Apps available to open this file on the current desktop. When rendering a picker, map each app to `{ id: app.id, title: app.name, primaryAction: ctx.actions.openWith(filePath, app) }`; the host launches the chosen app on macOS, Windows, and Linux. */
       openWithApps(filePath: string): Promise<ExtensionOpenWithApp[]>;
       open(filePath: string): unknown;
       reveal(filePath: string): unknown;

@@ -166,6 +166,7 @@ import {
   hasCapability,
   keyboardSettingsSubtitle,
   launchApp as launchOsApp,
+  openFileWithApp as openFileWithOsApp,
   osLabel,
   pasteIntoFrontmostApp,
   prepareAppWindowPolicy,
@@ -5023,7 +5024,7 @@ async function documentTypesForApp(appPath) {
 async function openWithApps(filePath) {
   const resolvedPath = expandUserPath(filePath);
   if (!(resolvedPath && path.isAbsolute(resolvedPath))) return [];
-  if (!hasCapability('open-with')) return appIndexService.get();
+  if (!hasCapability('open-with-app-filtering')) return appIndexService.get();
   const extension = path.extname(resolvedPath).replace(/^\./, '').toLowerCase();
   const contentTypes = new Set(await contentTypesForPath(resolvedPath));
   return compatibleOpenWithApps(
@@ -5048,20 +5049,7 @@ async function openPathWithApp(filePath, appPath) {
     return {
       toast: { message: 'Cannot open this file with that app', tone: 'error' },
     };
-  if (hasCapability('open-with')) {
-    const child = spawn('open', ['-a', resolvedAppPath, resolvedPath], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.on('error', (err) =>
-      logWarn(
-        'openWith.failed',
-        { app: resolvedAppPath, file: resolvedPath, error: err?.message },
-        { source: 'host', scope: 'action' },
-      ),
-    );
-    child.unref();
-  } else await shell.openPath(resolvedPath);
+  await openFileWithOsApp(resolvedPath, resolvedAppPath);
 }
 
 async function selectedFiles() {

@@ -712,7 +712,13 @@ function openWithAppsAction(ctx: ExtensionContext) {
   return ctx.actions.run('Show Open With Apps', async (innerCtx) => {
     const filePath = path.join(WATCH_FIXTURE_ROOT, 'open-with-fixture.png');
     fs.mkdirSync(WATCH_FIXTURE_ROOT, { recursive: true });
-    if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, '');
+    fs.writeFileSync(
+      filePath,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
     const apps = (await innerCtx.desktop.files?.openWithApps(filePath)) || [];
     return innerCtx.ui.list({
       id: 'dev-ui-open-with-apps',
