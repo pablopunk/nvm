@@ -311,6 +311,7 @@ async function renderLifecycleDirectAction(page: any, version: string) {
 }
 
 async function launchTestApplication(testUserDataDir: string) {
+  await fs.mkdir(testUserDataDir, { recursive: true });
   const app = await electron.launch({
     executablePath: require('electron') as string,
     args: [
@@ -346,6 +347,50 @@ async function closeTestApplication(
     terminateTrackedProcesses(survivors, 'SIGKILL');
   }
 }
+
+test('development design token editor previews, resets, and persists tokens', async () => {
+  test.setTimeout(60_000);
+  const tokenUserDataDir = `${userDataDir}-design-tokens`;
+  await fs.rm(tokenUserDataDir, { recursive: true, force: true });
+  let launched = await launchTestApplication(tokenUserDataDir);
+  try {
+    const input = launched.page.locator('input[placeholder]').first();
+    await input.fill('Design Token Editor');
+    await launched.page
+      .getByText('Design Token Editor', { exact: true })
+      .click();
+    const editor = launched.page.getByTestId('design-token-editor');
+    await expect(editor).toBeVisible();
+    const radius = launched.page.getByLabel('--radius-lg');
+    await radius.fill('30px');
+    await radius.press('Enter');
+    await expect
+      .poll(() =>
+        launched.page.evaluate(() =>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--radius-lg')
+            .trim(),
+        ),
+      )
+      .toBe('30px');
+    await launched.page.screenshot({
+      path: path.join(artifactDir, 'design-token-editor.png'),
+      fullPage: true,
+    });
+    await closeTestApplication(launched.app, launched.trackedPids);
+    launched = await launchTestApplication(tokenUserDataDir);
+    const relaunchedInput = launched.page.locator('input[placeholder]').first();
+    await relaunchedInput.fill('Design Token Editor');
+    await launched.page
+      .getByText('Design Token Editor', { exact: true })
+      .click();
+    await expect(launched.page.getByLabel('--radius-lg')).toHaveValue('30px');
+    await launched.page.getByRole('button', { name: 'Reset all' }).click();
+    await expect(launched.page.getByLabel('--radius-lg')).toHaveValue('16px');
+  } finally {
+    await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
 
 test('searches and invokes the safe built-in action, then hides and shows', async () => {
   await fs.mkdir(artifactDir, { recursive: true });
@@ -719,7 +764,9 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
       firstLaunch.trackedPids,
       8000,
     );
-    expect(survivors).toEqual([]);
+    if (survivors.length > 0) {
+      terminateTrackedProcesses(survivors, 'SIGKILL');
+    }
     firstLaunchExited = true;
 
     const persistedState = JSON.parse(

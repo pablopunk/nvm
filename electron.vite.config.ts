@@ -39,7 +39,7 @@ export default defineConfig({
       sourcemap: false,
       cssCodeSplit: false,
       rollupOptions: {
-        input: 'index.html',
+        input: ['index.html', 'design-tokens.html'],
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) {

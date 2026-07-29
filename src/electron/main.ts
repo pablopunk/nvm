@@ -48,6 +48,7 @@ import {
   parseAuthDeepLink,
   setDeepLinkLogger,
 } from './deep-link';
+import { createDesignTokenStudioServer } from './design-token-studio-server';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -95,6 +96,11 @@ if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
 if (!isNvmTestMode) initSentry();
 
+import {
+  DESIGN_TOKEN_DEFAULTS,
+  resolveDesignTokens,
+  validateDesignTokenOverrides,
+} from '../design-tokens';
 import { feedbackView } from '../feedback';
 import { type CommandAction, canCustomizeCommandAction } from '../model';
 import { appResultMarker, priorityBoost } from './action-ranking';
@@ -240,6 +246,7 @@ import {
 
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
+const designTokenEditorEnabled = isDev || isNvmTestMode;
 configureLogger(isDev);
 setDeepLinkLogger({ warn: logWarn });
 
@@ -256,6 +263,12 @@ const updateManager: any = isNvmTestMode
     }
   : createUpdateManager(autoUpdater as any);
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+const designTokenStudioOrigin = rendererUrl
+  ? new URL(rendererUrl).origin
+  : undefined;
+let designTokenStudioServer: Awaited<
+  ReturnType<typeof createDesignTokenStudioServer>
+> | null = null;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
 const paletteWindow = createPaletteWindowController({
@@ -502,6 +515,7 @@ let userState: AnyRecord = {
   settings: {},
   jobSettings: {},
   rateCache: {},
+  designTokens: {},
   extensionManager: { schemaVersion: 1, files: {}, proposals: {} },
   nevermindEnvironment: {
     environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
@@ -2616,6 +2630,7 @@ function testModeExtensionIsSafe(extensionId: string) {
     'nevermind.system',
     'nevermind.extensions',
     'nevermind.floating-notes',
+    'dev.design-token-editor',
     'pab53.lifecycle',
     'pab53.legacy',
     'pab53.discovered',
@@ -3846,6 +3861,11 @@ function runQuitCleanup() {
 function registerTestModeIpcHandlers() {
   const handle = (channel: string, handler: (...args: any[]) => unknown) =>
     ipcMain.handle(channel, handler);
+  handle('design-tokens:get', (event) => getDesignTokens(event));
+  handle('design-tokens:open', (event) => openDesignTokenEditor(event));
+  handle('design-tokens:set', (event, input) => setDesignTokens(event, input));
+  handle('design-tokens:reset', (event) => resetDesignTokens(event));
+  handle('design-tokens:close', (event) => closeDesignTokenEditor(event));
   handle('actions:search', (event, input) =>
     startProgressiveSearch(event.sender, input),
   );
@@ -7617,8 +7637,10 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
         paletteWindow,
       });
       registerInternalExtensions();
-      if (isNvmTestMode)
+      if (isNvmTestMode) {
         registerExtension(createProgressiveSearchTestExtension());
+        registerExtension(createDesignTokenEditorExtension());
+      }
       if (isDev)
         await measureDebugPerformance('extensions.load-dev', undefined, () =>
           loadDevExtensions(),
@@ -7853,6 +7875,119 @@ function createFixturesExtension() {
   };
 }
 
+const browserStudioSearchSender = {
+  isDestroyed: () => false,
+  send(channel: string, payload: unknown) {
+    if (channel === 'actions:search:update')
+      designTokenStudioServer?.publish('search-update', payload);
+  },
+  on: () => {},
+  removeListener: () => {},
+};
+
+async function browserStudioRpc(method: string, params: any = {}) {
+  switch (method) {
+    case 'search': {
+      const results = await searchActions(params.query, params.options);
+      return {
+        generation: Number(params.options?.generation),
+        revision: 0,
+        results: results.map(prepareRootActionForRenderer),
+        complete: true,
+      };
+    }
+    case 'cancelSearch':
+      cancelProgressiveSearch(browserStudioSearchSender, params);
+      return null;
+    case 'execute':
+      return executeActionForIpc(params.action);
+    case 'runViewAction':
+      return executeViewActionForIpc(params.action);
+    case 'refreshView':
+      return refreshViewForIpc(params);
+    case 'getSetting':
+      return getSetting(params.id);
+    case 'getShortcuts':
+      return getShortcuts();
+    case 'getNevermindAuthStatus': {
+      const auth = await getNevermindAuth();
+      return auth ? { authed: true, email: auth.email } : { authed: false };
+    }
+    case 'getGhStatus':
+      return (
+        extensionPrSubmitter?.probe() ?? { installed: false, authed: false }
+      );
+    case 'getDesignTokens':
+      return designTokenState();
+    case 'setDesignTokens':
+      return saveDesignTokenOverrides(params.overrides);
+    case 'resetDesignTokens':
+      return resetDesignTokenOverrides();
+    default:
+      throw new Error(`Unsupported browser studio method: ${method}`);
+  }
+}
+
+async function openDesignTokenStudioInBrowser() {
+  if (isNvmTestMode) {
+    const state = designTokenState();
+    paletteWindow.setDesignTokenEditorOpen(true);
+    paletteWindow.win?.webContents.send('design-tokens:open-editor', state);
+    return;
+  }
+  if (!(rendererUrl && designTokenStudioOrigin))
+    throw new Error('Design token editor is only available in development');
+  if (!designTokenStudioServer) {
+    designTokenStudioServer = await createDesignTokenStudioServer({
+      allowedOrigin: designTokenStudioOrigin,
+      getState: designTokenState,
+      setState: saveDesignTokenOverrides,
+      resetState: resetDesignTokenOverrides,
+      rpc: browserStudioRpc,
+    });
+  }
+  const studioUrl = new URL('design-tokens.html', rendererUrl);
+  const studioParameters = new URLSearchParams({
+    api: designTokenStudioServer.apiUrl,
+    rpc: designTokenStudioServer.rpcUrl,
+    events: designTokenStudioServer.eventUrl,
+    token: designTokenStudioServer.token,
+  });
+  studioUrl.search = studioParameters.toString();
+  studioUrl.hash = studioParameters.toString();
+  await shell.openExternal(studioUrl.toString(), { activate: true });
+}
+
+function designTokenEditorRootItem(ctx) {
+  return {
+    id: 'design-token-editor',
+    title: 'Design Token Editor',
+    subtitle: 'Preview and customize Nevermind UI tokens',
+    icon: 'paintbrush',
+    aliases: ['ui editor', 'design tokens', 'theme editor'],
+    score: 90,
+    customizable: true,
+    primaryAction: ctx.actions.run(
+      'Open Design Token Editor',
+      openDesignTokenStudioInBrowser,
+    ),
+  };
+}
+
+function createDesignTokenEditorExtension() {
+  return {
+    id: 'dev.design-token-editor',
+    title: 'Design Token Editor',
+    subtitle: 'Dev-only design system tooling',
+    rootItems(ctx) {
+      return [designTokenEditorRootItem(ctx)];
+    },
+    searchItems(ctx) {
+      return [designTokenEditorRootItem(ctx)];
+    },
+  };
+}
+
 async function loadDevExtensions() {
   const fixturesDir = path.join(app.getAppPath(), 'src', 'fixtures');
   const entries = await fs
@@ -7877,6 +8012,7 @@ async function loadDevExtensions() {
     }
   }
   if (fixtureExtensions.length) registerExtension(createFixturesExtension());
+  registerExtension(createDesignTokenEditorExtension());
 }
 
 function registerInternalExtensions() {
@@ -8604,6 +8740,13 @@ async function loadUserState() {
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},
+      designTokens: (() => {
+        try {
+          return validateDesignTokenOverrides(loaded.designTokens || {});
+        } catch {
+          return {};
+        }
+      })(),
       extensionManager: loaded.extensionManager || {
         schemaVersion: 0,
         files: {},
@@ -9261,6 +9404,66 @@ async function runPaletteDebugCli() {
   );
 }
 
+function requireDesignTokenEditor(event: { sender: Electron.WebContents }) {
+  if (
+    !designTokenEditorEnabled ||
+    event.sender !== paletteWindow.win?.webContents
+  ) {
+    throw new Error('Design token editor is only available in development');
+  }
+}
+
+function designTokenState() {
+  const overrides = validateDesignTokenOverrides(userState.designTokens || {});
+  return {
+    enabled: designTokenEditorEnabled,
+    defaults: { ...DESIGN_TOKEN_DEFAULTS },
+    overrides,
+    values: resolveDesignTokens(overrides),
+  };
+}
+
+function getDesignTokens(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  return designTokenState();
+}
+
+function openDesignTokenEditor(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  paletteWindow.setDesignTokenEditorOpen(true);
+  return designTokenState();
+}
+
+function saveDesignTokenOverrides(input: unknown) {
+  userState.designTokens = validateDesignTokenOverrides(input);
+  scheduleSaveState();
+  return designTokenState();
+}
+
+function setDesignTokens(
+  event: { sender: Electron.WebContents },
+  input: unknown,
+) {
+  requireDesignTokenEditor(event);
+  return saveDesignTokenOverrides(input);
+}
+
+function resetDesignTokenOverrides() {
+  userState.designTokens = {};
+  scheduleSaveState();
+  return designTokenState();
+}
+
+function resetDesignTokens(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  return resetDesignTokenOverrides();
+}
+
+function closeDesignTokenEditor(event: { sender: Electron.WebContents }) {
+  requireDesignTokenEditor(event);
+  paletteWindow.setDesignTokenEditorOpen(false);
+}
+
 async function pickFormFieldPaths(event, input: any = {}) {
   const senderWindow =
     BrowserWindow.fromWebContents(event.sender) ||
@@ -9372,6 +9575,11 @@ app.whenReady().then(async () => {
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
+    getDesignTokens,
+    openDesignTokenEditor,
+    setDesignTokens,
+    resetDesignTokens,
+    closeDesignTokenEditor,
     startSearch: startProgressiveSearch,
     cancelSearch: cancelProgressiveSearch,
     executeActionForIpc,
@@ -9445,6 +9653,8 @@ app.on('before-quit', (event) => {
 });
 app.on('will-quit', () => {
   nevermindApp.isQuiting = true;
+  void designTokenStudioServer?.close();
+  designTokenStudioServer = null;
   stateSafeQuit.handleWillQuit();
 });
 
