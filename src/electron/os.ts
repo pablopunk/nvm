@@ -58,7 +58,7 @@ const macOnlyCapabilities = new Set([
   'frontmost-paste',
   'keyboard.type-text',
   'applescript',
-  'open-with',
+  'open-with-app-filtering',
   'keyboard-settings',
   'window-panel-policy',
   'file-date-added',
@@ -233,6 +233,57 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
     }
   }
 
+  function executeOpenWithCommand(
+    command: string,
+    args: string[],
+    environmentOverrides?: NodeJS.ProcessEnv,
+  ) {
+    return new Promise<void>((resolve, reject) => {
+      execFileDependency(
+        command,
+        args,
+        {
+          timeout: 8000,
+          windowsHide: true,
+          ...(environmentOverrides
+            ? { env: { ...environment, ...environmentOverrides } }
+            : {}),
+        },
+        (error) => (error ? reject(error) : resolve()),
+      );
+    });
+  }
+
+  function openFileWithAppForPlatform(filePath: string, appPath: string) {
+    return dependent(
+      {
+        darwin: () =>
+          executeOpenWithCommand('/usr/bin/open', ['-a', appPath, filePath]),
+        win32: () =>
+          executeOpenWithCommand(
+            'powershell.exe',
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              [
+                '$shell = New-Object -ComObject Shell.Application',
+                "$file = '\"' + $env:NVM_OPEN_WITH_FILE + '\"'",
+                "$shell.ShellExecute($env:NVM_OPEN_WITH_APP, $file, '', 'open', 1)",
+              ].join('; '),
+            ],
+            {
+              NVM_OPEN_WITH_APP: appPath,
+              NVM_OPEN_WITH_FILE: filePath,
+            },
+          ),
+        linux: () =>
+          executeOpenWithCommand('gio', ['launch', appPath, filePath]),
+      },
+      () => Promise.reject(new Error('Open With is unavailable')),
+    )();
+  }
+
   function knownUserFolder(name: 'Desktop' | 'Documents' | 'Downloads') {
     return pathFacade.join(homeDirectory, name);
   }
@@ -243,6 +294,7 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
     hasCapability: hasCapabilityForPlatform,
     knownUserFolder,
     launchWindowsApp: (appPath: string) => shellDependency.openPath(appPath),
+    openFileWithApp: openFileWithAppForPlatform,
     osLabel: () =>
       dependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux'),
     scanWindowsApps: scanWindowsAppsForPlatform,
@@ -509,6 +561,10 @@ export async function launchApp(item: any) {
       return shell.openPath(appItem.path);
     },
   )(item);
+}
+
+export function openFileWithApp(filePath: string, appPath: string) {
+  return defaultOsAdapter.openFileWithApp(filePath, appPath);
 }
 
 export function knownUserFolderPath(
