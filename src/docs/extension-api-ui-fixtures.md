@@ -27,7 +27,6 @@ When adding or changing an extension API method that renders UI:
 - `ctx.input.prompt`
 - `ctx.ui.editor`
 - `ctx.ui.progress`
-- `ctx.ui.indicator`
 - `ctx.ui.webview`
 - `ctx.ui.camera`
 - `ctx.ui.confirm`
