@@ -876,6 +876,29 @@ function listView(ctx: ExtensionContext) {
   });
 }
 
+function loadingView(ctx: ExtensionContext) {
+  return ctx.ui.list({
+    id: 'dev-ui-loading',
+    title: 'Dev UI · Loading',
+    subtitle: 'The view paints immediately while its items load in the host.',
+    emptyView: {
+      title: 'Loading fixture items…',
+      subtitle: 'Only the perimeter sweep should appear while waiting.',
+    },
+    items: ctx.data.loader(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return [
+        {
+          id: 'loaded',
+          title: 'Loading finished',
+          subtitle: 'The host replaced the loader with the resolved items.',
+          icon: 'check',
+        },
+      ];
+    }),
+  });
+}
+
 function fileMetadataMarkdown(file: ExtensionFile) {
   return [
     `# ${file.name}`,
@@ -1343,6 +1366,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: List',
       icon: 'list',
       run: (ctx) => listView(ctx),
+    },
+    {
+      id: 'loading',
+      title: 'Dev UI: Loading',
+      icon: 'loader',
+      run: (ctx) => loadingView(ctx),
     },
     {
       id: 'crud-collection',
