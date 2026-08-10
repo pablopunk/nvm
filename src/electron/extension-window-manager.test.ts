@@ -187,6 +187,10 @@ test('extension window helpers clamp size and derive stable ids', () => {
     width: 320,
     height: 240,
   });
+  assert.deepEqual(
+    extensionWindowSize({ focusable: false, width: 10, height: 10 }),
+    { width: 160, height: 64 },
+  );
   assert.deepEqual(extensionWindowSize({ size: 'large' }), {
     width: 900,
     height: 680,
@@ -251,15 +255,28 @@ test('indicators show without focus and ignore mouse events', () => {
   assert.equal(win.options.transparent, true);
   assert.equal(win.options.skipTaskbar, true);
   assert.equal(win.options.resizable, false);
-  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 92 });
+  assert.deepEqual(win.bounds, { x: 430, y: 44, width: 160, height: 92 });
   assert.deepEqual(win.ignoredMouseEvents, [true]);
 
+  manager.updateIndicator(
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'Downloading speech model...',
+    },
+    'nevermind.dictation',
+  );
+  assert.equal(FakeBrowserWindow.instances.length, 1);
+  assert.equal(
+    (win.sent.at(-1)?.payload as any).view.label,
+    'Downloading speech model...',
+  );
+  assert.deepEqual(win.bounds, { x: 374, y: 44, width: 272, height: 92 });
   manager.updateIndicator(
     { id: 'dictation', title: 'Dictation', subtitle: 'Transcribing' },
     'nevermind.dictation',
   );
-  assert.equal(FakeBrowserWindow.instances.length, 1);
-  assert.equal((win.sent.at(-1)?.payload as any).view.label, 'Transcribing');
+  assert.deepEqual(win.bounds, { x: 430, y: 44, width: 160, height: 92 });
   manager.hideIndicator('nevermind.dictation', 'dictation');
   assert.equal(win.visible, false);
 });

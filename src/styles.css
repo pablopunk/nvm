@@ -2383,6 +2383,9 @@ kbd {
   display: flex;
   align-items: center;
   height: 100%;
+  width: max-content;
+  max-width: 100%;
+  margin-inline: auto;
   min-height: 0;
   gap: 10px;
   padding: 10px 14px;
@@ -2397,7 +2400,9 @@ kbd {
 .extensionWindowChromeNone .progressOverview {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   gap: 10px;
   padding: 0;

@@ -170,6 +170,10 @@ const WINDOW_OPTION_KEYS = new Set([
   'remembersFrame',
 ]);
 const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const PASSIVE_WINDOW_MIN_WIDTH = 160;
+const INDICATOR_WINDOW_MAX_WIDTH = 420;
+const INDICATOR_HORIZONTAL_CHROME = 56;
+const INDICATOR_APPROXIMATE_CHARACTER_WIDTH = 8;
 
 function invalidWindowInput(message: string): never {
   throw new Error(`Invalid extension window input: ${message}`);
@@ -255,7 +259,7 @@ export function extensionWindowSize(options: any = {}) {
   const passive = options.focusable === false;
   return {
     width: Math.max(
-      passive ? 240 : 320,
+      passive ? PASSIVE_WINDOW_MIN_WIDTH : 320,
       Math.min(
         1600,
         finiteDimension(options.width, large ? 900 : 560, 'width'),
@@ -546,6 +550,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   function applyOptions(win: ExtensionWindowLike, options: any = {}) {
     const size = extensionWindowSize(options);
     const bounds = win.getBounds();
+    let resized = false;
     if (bounds.width !== size.width || bounds.height !== size.height) {
       win.setBounds({
         x: bounds.x || 0,
@@ -553,6 +558,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         width: size.width,
         height: size.height,
       });
+      resized = true;
     }
     const alwaysOnTop = options.alwaysOnTop !== false;
     if (deps.hasCapability('windows.always-on-top'))
@@ -564,6 +570,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     win.setIgnoreMouseEvents?.(Boolean(options.ignoreMouseEvents), {
       forward: false,
     });
+    return resized;
   }
 
   function createOrUpdate(
@@ -582,7 +589,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       existing.options = { ...existing.options, ...safeOptions, id };
       existing.ownerExtensionId = ownerExtensionId || existing.ownerExtensionId;
       existing.compatibility = compatibilityForOptions(id, existing.options);
-      applyOptions(existing.win, existing.options);
+      const resized = applyOptions(existing.win, existing.options);
       existing.win.setTitle(
         String(existing.options.title || normalizedView.title || 'Nevermind'),
       );
@@ -593,6 +600,11 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       if (visibility === 'show') {
         revealWindow(existing.win, existing.options);
       }
+      if (resized && existing.options.focusable === false)
+        positionWindow(
+          existing.win,
+          String(existing.options.position || 'center'),
+        );
       persistWindowRecord(existing);
       return existing;
     }
@@ -609,7 +621,8 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     const win = new deps.BrowserWindow({
       width: size.width,
       height: size.height,
-      minWidth: safeOptions.focusable === false ? 240 : 320,
+      minWidth:
+        safeOptions.focusable === false ? PASSIVE_WINDOW_MIN_WIDTH : 320,
       minHeight: safeOptions.focusable === false ? 64 : 240,
       show: false,
       focusable: safeOptions.focusable !== false,
@@ -831,6 +844,25 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     };
   }
 
+  function indicatorWindowWidth(input: any) {
+    const longestLabelLength = [
+      input?.title,
+      input?.subtitle,
+      input?.status,
+    ].reduce(
+      (longest, value) => Math.max(longest, String(value || '').length),
+      0,
+    );
+    return Math.min(
+      INDICATOR_WINDOW_MAX_WIDTH,
+      Math.max(
+        PASSIVE_WINDOW_MIN_WIDTH,
+        INDICATOR_HORIZONTAL_CHROME +
+          longestLabelLength * INDICATOR_APPROXIMATE_CHARACTER_WIDTH,
+      ),
+    );
+  }
+
   function showIndicator(input: any, ownerExtensionId: string) {
     const id = indicatorWindowId(ownerExtensionId, input?.id);
     createOrUpdate(
@@ -840,7 +872,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         title: String(input?.title || 'Status'),
         titleBar: 'hidden',
         chrome: 'none',
-        width: 360,
+        width: indicatorWindowWidth(input),
         height: 92,
         alwaysOnTop: true,
         focusable: false,
