@@ -165,7 +165,7 @@ export type ExtensionActionContribution = {
   customizable?: boolean;
   /** Muted semantic color applied to the action result title and Lucide/fallback icon. Images keep their original colors. */
   appearance?: ExtensionItemAppearance;
-  /** Where this durable action should be discoverable. Defaults to `['search']`. */
+  /** Where this durable action should be discoverable. Defaults to `['search']`; use `['root']` for an action referenced by a root item's `primaryAction` without creating a duplicate search result. */
   placement?: ExtensionActionPlacement[];
   /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode;
@@ -523,9 +523,9 @@ export type ExtensionItem = {
   path?: string;
   filePath?: string;
   fileUrl?: string;
-  /** Enter/default behavior. */
+  /** Enter/default behavior. For a stable root action, reference a durable `actions(ctx)` contribution with `ctx.actions.ref(...)` so the host can expose aliases, shortcuts, and Options. */
   primaryAction?: ExtensionAction;
-  /** Secondary actions shown by Cmd+K. */
+  /** Secondary actions shown by Cmd+K. Do not repeat `primaryAction`; the host removes duplicate primary entries. */
   actions?: ExtensionAction[];
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
@@ -1415,7 +1415,7 @@ export type ExtensionContext = {
       title?: string,
       options?: ExtensionPasteOptions & Record<string, unknown>,
     ): ExtensionAction;
-    /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use inside views so rows share aliases/shortcuts with the durable action. */
+    /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use for root `primaryAction` values and inside views so rows share aliases/shortcuts/options with the durable action. */
     ref(
       registeredActionId: string,
       title?: string,

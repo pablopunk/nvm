@@ -1461,9 +1461,17 @@ function searchableExtensions() {
 
 function searchableExtensionActionEntries() {
   const entries = visibleExtensionActionEntries();
+  const searchable = entries.filter((entry) => {
+    const placement = entry.item?.placement;
+    return (
+      !Array.isArray(placement) ||
+      placement.length === 0 ||
+      placement.includes('search')
+    );
+  });
   return isNvmTestMode
-    ? entries.filter((entry) => testModeExtensionIsSafe(entry.extension.id))
-    : entries;
+    ? searchable.filter((entry) => testModeExtensionIsSafe(entry.extension.id))
+    : searchable;
 }
 
 function extensionCommandActionId(extension, command) {
@@ -2984,15 +2992,67 @@ function normalizeItemAppearance(appearance) {
   return { foreground };
 }
 
+function actionsAreSame(left, right) {
+  if (left === right) return true;
+  if (
+    left?.type === 'runExtensionRegisteredAction' &&
+    right?.type === 'runExtensionRegisteredAction'
+  )
+    return (
+      left.extensionId === right.extensionId &&
+      (left.registeredActionId || left.actionId) ===
+        (right.registeredActionId || right.actionId)
+    );
+  return Boolean(left?.actionId && left.actionId === right?.actionId);
+}
+
+function withoutPrimaryAction(actions, primaryAction) {
+  return Array.isArray(actions)
+    ? actions.filter((action) => !actionsAreSame(action, primaryAction))
+    : actions;
+}
+
+function withoutPrimaryActionFromPanel(panel, primaryAction) {
+  if (!panel?.sections) return panel;
+  return {
+    ...panel,
+    sections: panel.sections.map((section) => ({
+      ...section,
+      actions: withoutPrimaryAction(section.actions, primaryAction),
+      ...(section.lazyActions
+        ? {
+            lazyActions: withoutPrimaryAction(
+              section.lazyActions,
+              primaryAction,
+            ),
+          }
+        : {}),
+    })),
+  };
+}
+
+function persistentActionForRootItem(entry, item, primaryAction) {
+  const referencedAction = persistentActionForRef(primaryAction, entry);
+  if (referencedAction) return referencedAction;
+  if (!item.actionId) return null;
+  const registered = extensionActionRegistry.get(
+    `${entry.extension.id}:${item.actionId}`,
+  );
+  return registered ? extensionActionFromContribution(registered) : null;
+}
+
 function extensionRootActionFromItem(entry, item) {
   if (!(item?.id && item.title)) return null;
-  const primaryAction = normalizeViewAction(
-    item.primaryAction || item.action,
+  const primarySource = item.primaryAction || item.action;
+  const persistentAction = persistentActionForRootItem(
     entry,
+    item,
+    primarySource,
   );
+  const primaryAction = normalizeViewAction(primarySource, entry);
   const actionPanel = normalizeActionPanel(
-    item.actionPanel,
-    item.actions || [],
+    withoutPrimaryActionFromPanel(item.actionPanel, primarySource),
+    withoutPrimaryAction(item.actions || [], primarySource),
     entry,
   );
   return {
@@ -3005,6 +3065,7 @@ function extensionRootActionFromItem(entry, item) {
       ? path.basename(entry.extension.__filePath)
       : undefined,
     rootAction: primaryAction,
+    persistentAction,
     removable: Boolean(entry.extension.__generated),
     title: item.title,
     subtitle: item.subtitle || entry.extension.title || 'Extension item',
@@ -3019,7 +3080,7 @@ function extensionRootActionFromItem(entry, item) {
     score: Math.min(Number(item.score || 35), 90),
     lastUsed: Number(item.lastUsed || 0),
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
-    customizable: Boolean(item.customizable),
+    customizable: item.customizable ?? Boolean(persistentAction),
     actionPanel,
     appearance: normalizeItemAppearance(item.appearance),
   };

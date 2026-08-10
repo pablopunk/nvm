@@ -189,7 +189,7 @@ async function runDictation(ctx: any) {
 }
 
 function dictationRootItem(ctx: any) {
-  const dictateAction = ctx.actions.background('Dictate', runDictation);
+  const dictateAction = ctx.actions.ref('dictate', 'Dictate');
   const settingsAction = ctx.actions.run(
     'Settings',
     async (innerCtx: any) => ({
@@ -203,12 +203,29 @@ function dictationRootItem(ctx: any) {
     title: 'Dictate',
     subtitle: 'Start or stop local voice dictation',
     icon: 'mic',
+    aliases: ['dictate', 'dictation', 'voice dictation'],
     primaryAction: dictateAction,
     actionPanel: {
       title: 'Dictation',
-      sections: [{ actions: [dictateAction, settingsAction] }],
+      sections: [{ actions: [settingsAction] }],
     },
   };
+}
+
+function dictationActionContribution(ctx: any) {
+  return ctx.action({
+    id: 'dictate',
+    actionId: 'dictation',
+    title: 'Dictate',
+    subtitle: 'Start or stop local voice dictation',
+    icon: 'mic',
+    aliases: ['dictate', 'dictation', 'voice dictation'],
+    background: true,
+    dismissAfterRun: 'auto',
+    customizable: true,
+    placement: ['root'],
+    run: runDictation,
+  });
 }
 
 export function createDictationExtension() {
@@ -217,6 +234,9 @@ export function createDictationExtension() {
     title: 'Dictation',
     subtitle: 'Local Parakeet speech-to-text',
     capabilities: ['dictation', 'ai'] as const,
+    actions(ctx: any) {
+      return [dictationActionContribution(ctx)];
+    },
     rootItems(ctx: any) {
       return [dictationRootItem(ctx)];
     },

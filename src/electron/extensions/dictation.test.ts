@@ -12,6 +12,12 @@ function actionBuilders(overrides: Record<string, unknown> = {}) {
       actionFactory(title, handler, { ...options, dismissAfterRun: 'auto' }),
     run: (title: string, handler: unknown, options = {}) =>
       actionFactory(title, handler, options),
+    ref: (registeredActionId: string, title: string, options = {}) => ({
+      ...options,
+      type: 'runExtensionRegisteredAction',
+      registeredActionId,
+      title,
+    }),
     ...overrides,
   };
 }
@@ -23,39 +29,61 @@ function rootItemFor(context: any) {
   return items[0] as any;
 }
 
+function dictationHandlerFor(context: any) {
+  const extension = createDictationExtension();
+  const contribution = extension.actions({
+    ...context,
+    action: (input: unknown) => input,
+  })[0];
+  if (!contribution.run) throw new Error('Dictation action handler missing');
+  return contribution.run;
+}
+
 test('exposes one Dictate root item with settings under Cmd-K', () => {
   const extension = createDictationExtension();
   const item = rootItemFor({ actions: actionBuilders() });
   const panelActions = item.actionPanel.sections[0].actions;
+  const contribution = extension.actions({
+    action: (input: unknown) => input,
+  })[0];
 
   assert.equal('commands' in extension, false);
+  assert.equal(contribution.id, 'dictate');
+  assert.deepEqual(contribution.placement, ['root']);
+  assert.equal(contribution.customizable, true);
   assert.equal(item.id, 'dictation');
   assert.equal(item.title, 'Dictate');
   assert.equal(item.primaryAction.title, 'Dictate');
+  assert.equal(item.primaryAction.type, 'runExtensionRegisteredAction');
+  assert.equal(item.primaryAction.registeredActionId, 'dictate');
   const searchItems = extension.searchItems(
     { actions: actionBuilders() },
     'dictate',
   );
   assert.equal(searchItems.length, 1);
   assert.equal(searchItems[0].id, item.id);
-  assert.equal(
-    searchItems[0].actionPanel.sections[0].actions[1].title,
-    'Settings',
-  );
+  const searchPanelActions = searchItems[0].actionPanel.sections[0].actions;
+  assert.equal(searchPanelActions.length, 1);
+  assert.equal(searchPanelActions[0].title, 'Settings');
   assert.deepEqual(
     panelActions.map((action: any) => action.title),
-    ['Dictate', 'Settings'],
+    ['Settings'],
   );
-  assert.equal(panelActions[1].icon, 'settings-2');
+  assert.equal(panelActions[0].icon, 'settings-2');
 });
 
 test('does not declare a default dictation shortcut', () => {
   const extension = createDictationExtension();
   const item = rootItemFor({ actions: actionBuilders() });
+  const contribution = extension.actions({
+    action: (input: unknown) => input,
+  })[0];
   assert.equal(extension.id, 'nevermind.dictation');
   assert.equal(item.globalShortcut, undefined);
   assert.equal(item.shortcutScope, undefined);
-  assert.equal(item.primaryAction.dismissAfterRun, 'auto');
+  assert.equal(contribution.globalShortcut, undefined);
+  assert.equal(contribution.shortcutScope, undefined);
+  assert.equal(contribution.dismissAfterRun, 'auto');
 });
 
 test('toggles recording and returns a concealed paste action', async () => {
@@ -108,12 +136,13 @@ test('toggles recording and returns a concealed paste action', async () => {
     },
   };
   const item = rootItemFor(context);
+  const handler = dictationHandlerFor(context);
 
-  await item.primaryAction.__handler(context, {});
+  await handler(context, {});
   assert.deepEqual(starts, [
     { deviceId: 'default', modelKeepAliveMs: 300_000 },
   ]);
-  const result = await item.primaryAction.__handler(context, {});
+  const result = await handler(context, {});
   assert.deepEqual(result, { action: pastes[0] });
   assert.deepEqual(pastes, [
     {
@@ -165,8 +194,9 @@ test('prepares a missing model before opening the microphone', async () => {
     actions: actionBuilders(),
   };
   const item = rootItemFor(context);
+  const handler = dictationHandlerFor(context);
 
-  const result = await item.primaryAction.__handler(context, {});
+  const result = await handler(context, {});
   assert.deepEqual(events, ['cache-status', 'prepare-model', 'start']);
   assert.deepEqual(prepared, [{ modelKeepAliveMs: 300_000 }]);
   assert.deepEqual(result, { message: 'Listening...', tone: 'info' });
@@ -220,9 +250,10 @@ test('leaves the transcription on the clipboard when enabled', async () => {
     },
   };
   const item = rootItemFor(context);
+  const handler = dictationHandlerFor(context);
 
-  await item.primaryAction.__handler(context, {});
-  await item.primaryAction.__handler(context, {});
+  await handler(context, {});
+  await handler(context, {});
   assert.deepEqual(pastes[0], {
     type: 'pasteText',
     text: 'hello world',
@@ -269,7 +300,7 @@ test('renders and saves multiline dictionary settings', async () => {
     },
   };
   const item = rootItemFor(context);
-  const settingsAction = item.actionPanel.sections[0].actions[1];
+  const settingsAction = item.actionPanel.sections[0].actions[0];
 
   const result = await settingsAction.__handler(context, {});
   const view = result.view as any;
