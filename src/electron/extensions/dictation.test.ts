@@ -32,6 +32,16 @@ test('exposes one Dictate root item with settings under Cmd-K', () => {
   assert.equal(item.id, 'dictation');
   assert.equal(item.title, 'Dictate');
   assert.equal(item.primaryAction.title, 'Dictate');
+  const searchItems = extension.searchItems(
+    { actions: actionBuilders() },
+    'dictate',
+  );
+  assert.equal(searchItems.length, 1);
+  assert.equal(searchItems[0].id, item.id);
+  assert.equal(
+    searchItems[0].actionPanel.sections[0].actions[1].title,
+    'Settings',
+  );
   assert.deepEqual(
     panelActions.map((action: any) => action.title),
     ['Dictate', 'Settings'],

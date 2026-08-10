@@ -220,5 +220,8 @@ export function createDictationExtension() {
     rootItems(ctx: any) {
       return [dictationRootItem(ctx)];
     },
+    searchItems(ctx: any, _query: string) {
+      return [dictationRootItem(ctx)];
+    },
   };
 }
