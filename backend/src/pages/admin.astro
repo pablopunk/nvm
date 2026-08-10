@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError, type ModelRouteSlot } from '../lib/settings';
+import { DEFAULT_THINKING_LEVEL, getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError, THINKING_LEVELS, type ModelRouteConfig, type ModelRouteSlot } from '../lib/settings';
 import { listModelsForProvider } from '../lib/pricing';
 import { CREDIT_USD } from '../lib/cost';
 
@@ -10,13 +10,21 @@ const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-const safeModelRef = async (slot: ModelRouteSlot) => {
-  try { return modelRouteToRef(await getModelRoute(slot)); } catch (err) { if (err instanceof ModelNotConfiguredError) return null; throw err; }
+const safeModelRoute = async (slot: ModelRouteSlot): Promise<(ModelRouteConfig & { ref: string }) | null> => {
+  try {
+    const route = await getModelRoute(slot);
+    return { ...route, ref: modelRouteToRef(route) };
+  } catch (err) {
+    if (err instanceof ModelNotConfiguredError) return null;
+    throw err;
+  }
 };
-const activeModelRef = await safeModelRef('paid');
-const freeModelRef = await safeModelRef('free');
-const smartModelRef = await safeModelRef('smart');
-const fastModelRef = await safeModelRef('fast');
+const [paidRoute, freeRoute, smartRoute, fastRoute] = await Promise.all([
+  safeModelRoute('paid'),
+  safeModelRoute('free'),
+  safeModelRoute('smart'),
+  safeModelRoute('fast'),
+]);
 const modelOptions = (await Promise.all(listKnownProviders().map(async (provider) => {
   const models = await listModelsForProvider(provider);
   return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
@@ -43,39 +51,63 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
 
   <div class="section card">
     <h3>Models</h3>
-    <p class="muted">Each selector includes provider and model. Extensions can call <code>ctx.ai(prompt, 'smart')</code> or <code>ctx.ai(prompt, 'fast')</code>; unset smart/fast routes fall back to pro/free.</p>
+    <p class="muted">Set a model and thinking level independently for each route. Reuse the same model with different levels; unset smart/fast routes fall back to pro/free.</p>
     <div class="stack">
-      <div class="row">
-        <label class="field field--inline">Smart →
-          <select id="model-select-smart" class="input combo autosave" data-purpose="smart">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === smartModelRef}>{m.ref}</option>)}
+      <div class="model-route-row" data-model-route="smart">
+        <strong class="model-route-row__name">Smart</strong>
+        <label class="field">Model
+          <select id="model-select-smart" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === smartRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="model-select-smart"></span>
+        <label class="field">Thinking
+          <select id="thinking-select-smart" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (smartRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          </select>
+        </label>
+        <span class="status" data-status-for="smart"></span>
       </div>
-      <div class="row">
-        <label class="field field--inline">Fast →
-          <select id="model-select-fast" class="input combo autosave" data-purpose="fast">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === fastModelRef}>{m.ref}</option>)}
+      <div class="model-route-row" data-model-route="fast">
+        <strong class="model-route-row__name">Fast</strong>
+        <label class="field">Model
+          <select id="model-select-fast" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === fastRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="model-select-fast"></span>
+        <label class="field">Thinking
+          <select id="thinking-select-fast" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (fastRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          </select>
+        </label>
+        <span class="status" data-status-for="fast"></span>
       </div>
-      <div class="row">
-        <label class="field field--inline">Pro default →
-          <select id="model-select-paid" class="input combo autosave" data-purpose="paid">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === activeModelRef}>{m.ref}</option>)}
+      <div class="model-route-row" data-model-route="paid">
+        <strong class="model-route-row__name">Pro default</strong>
+        <label class="field">Model
+          <select id="model-select-paid" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === paidRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="model-select-paid"></span>
+        <label class="field">Thinking
+          <select id="thinking-select-paid" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (paidRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          </select>
+        </label>
+        <span class="status" data-status-for="paid"></span>
       </div>
-      <div class="row">
-        <label class="field field--inline">Free default →
-          <select id="model-select-free" class="input combo autosave" data-purpose="free">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeModelRef}>{m.ref}</option>)}
+      <div class="model-route-row" data-model-route="free">
+        <strong class="model-route-row__name">Free default</strong>
+        <label class="field">Model
+          <select id="model-select-free" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="model-select-free"></span>
+        <label class="field">Thinking
+          <select id="thinking-select-free" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (freeRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          </select>
+        </label>
+        <span class="status" data-status-for="free"></span>
       </div>
     </div>
   </div>
@@ -162,8 +194,8 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
         return `<tr><td>${esc(r.provider) || '—'}</td><td><code>${esc(r.model)}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
       }).join('') || '<tr><td colspan="8" class="muted">No usage yet</td></tr>';
     }
-    function statusEl(selectId) {
-      return document.querySelector(`[data-status-for="${selectId}"]`);
+    function statusEl(purpose) {
+      return document.querySelector(`[data-status-for="${purpose}"]`);
     }
     function setState(el, state) {
       const map = {
@@ -176,27 +208,43 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       el.className = s.cls;
       el.textContent = s.text;
     }
-    async function autosave(select, fetcher) {
-      const status = statusEl(select.id);
+    function setSelectDisabled(select, disabled) {
       const ts = select.tomselect;
+      if (ts) return disabled ? ts.disable() : ts.enable();
+      select.disabled = disabled;
+    }
+    async function autosave(row) {
+      const purpose = row.dataset.modelRoute;
+      const modelSelect = row.querySelector('.model-select');
+      const thinkingSelect = row.querySelector('.thinking-select');
+      const status = statusEl(purpose);
       setState(status, 'saving');
-      ts ? ts.disable() : (select.disabled = true);
+      setSelectDisabled(modelSelect, true);
+      setSelectDisabled(thinkingSelect, true);
       try {
-        const res = await fetcher(select.value);
+        const res = await fetch('/api/admin/model', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modelRef: modelSelect.value,
+            thinkingLevel: thinkingSelect.value,
+            purpose,
+          }),
+        });
         setState(status, res.ok ? 'saved' : 'error');
       } catch {
         setState(status, 'error');
       } finally {
-        ts ? ts.enable() : (select.disabled = false);
+        setSelectDisabled(modelSelect, false);
+        setSelectDisabled(thinkingSelect, false);
         setTimeout(() => setState(status, 'idle'), 1500);
       }
     }
     function wireAutosave() {
-      document.querySelectorAll('.autosave').forEach((el) => {
-        el.addEventListener('change', () => autosave(el, (model) => fetch('/api/admin/model', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modelRef: model, purpose: el.dataset.purpose || el.dataset.tier }),
-        })));
+      document.querySelectorAll('.model-route-row').forEach((row) => {
+        row.querySelectorAll('select').forEach((select) => {
+          select.addEventListener('change', () => autosave(row));
+        });
       });
     }
     wireAutosave();

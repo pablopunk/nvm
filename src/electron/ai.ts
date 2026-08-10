@@ -121,6 +121,27 @@ type GeneratedExtensionActivation = {
 };
 
 type AiModelRole = 'smart' | 'fast';
+type ThinkingLevel =
+  | 'off'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
+const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
+
+function normalizeThinkingLevel(value: unknown): ThinkingLevel {
+  return value === 'off' ||
+    value === 'minimal' ||
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'xhigh' ||
+    value === 'max'
+    ? value
+    : DEFAULT_THINKING_LEVEL;
+}
 
 type AiPromptOptions = {
   sessionId?: string;
@@ -530,6 +551,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       model,
       source: modelSource,
       creditInfo,
+      thinkingLevel,
     } = await resolveAiModelAndAuth(modelRuntime);
     if (creditInfo)
       creditInfoRef.current = {
@@ -588,7 +610,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       cwd: workspaceDir,
       agentDir,
       model,
-      thinkingLevel: 'low',
+      thinkingLevel,
       modelRuntime,
       resourceLoader,
       noTools: 'builtin',
@@ -760,7 +782,7 @@ async function createGeneralSession(
     modelsPath: null,
     allowModelNetwork: false,
   });
-  const { model } = await resolveAiModelAndAuth(
+  const { model, thinkingLevel } = await resolveAiModelAndAuth(
     modelRuntime,
     sessionOptions.model,
   );
@@ -785,7 +807,7 @@ async function createGeneralSession(
     cwd: workspaceDir,
     agentDir,
     model,
-    thinkingLevel: 'low',
+    thinkingLevel,
     modelRuntime,
     resourceLoader,
     noTools: 'builtin',
@@ -812,6 +834,7 @@ type BackendDescriptor = {
   contextWindow: number;
   maxTokens: number;
   reasoning: boolean;
+  thinkingLevel?: ThinkingLevel;
   input: string[];
   api: string;
   provider: string;
@@ -854,6 +877,7 @@ async function resolveAiModelAndAuth(
       model: byoModelDescriptor(byo),
       source: 'byo' as const,
       creditInfo: null,
+      thinkingLevel: DEFAULT_THINKING_LEVEL,
     };
   }
 
@@ -892,7 +916,12 @@ async function resolveAiModelAndAuth(
         notice: descriptor.notice ?? 'ok',
       }
     : null;
-  return { model, source: 'nevermind' as const, creditInfo };
+  return {
+    model,
+    source: 'nevermind' as const,
+    creditInfo,
+    thinkingLevel: normalizeThinkingLevel(descriptor.thinkingLevel),
+  };
 }
 
 function byoModelDescriptor(byo: ByoKeySnapshot) {

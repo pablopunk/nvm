@@ -74,6 +74,17 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
 .section--sm { margin-top: 32px; }
 .stack { display: flex; flex-direction: column; gap: 12px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.model-route-row { display: grid; grid-template-columns: 120px minmax(220px, 1fr) 120px auto; gap: 12px; align-items: end; }
+.model-route-row__name { padding-bottom: 8px; font-size: 14px; font-weight: 500; }
+.model-route-row .field { min-width: 0; }
+.model-route-row .ts-wrapper { width: 100%; min-width: 0; }
+.model-route-row .thinking-select { width: 100%; }
+
+@media (max-width: 700px) {
+  .model-route-row { grid-template-columns: 1fr 1fr; }
+  .model-route-row__name { grid-column: 1 / -1; padding-bottom: 0; }
+  .model-route-row .model-route-row__name + .field { grid-column: 1 / -1; }
+}
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
 .card--sm { padding: 16px; }
