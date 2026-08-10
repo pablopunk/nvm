@@ -96,6 +96,16 @@ test('renders feedback as a cmdk list with an accessible recovery action', () =>
   assert.match(html, /aria-disabled="true"/);
 });
 
+test('does not render the legacy thin loading bar', () => {
+  const activeLoading = renderExtensionView({
+    type: 'list',
+    title: 'Running action',
+    isLoading: true,
+    items: [{ id: 'one', title: 'One' }],
+  });
+  assert.doesNotMatch(activeLoading, /viewLoadingBar/);
+});
+
 test('nested navigation preserves the parent view when pushing a child', () => {
   const root: CommandView = {
     id: 'ai-chats',

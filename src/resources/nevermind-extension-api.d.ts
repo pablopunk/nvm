@@ -380,7 +380,7 @@ export type ExtensionViewPatch = {
   items?: Array<Partial<Omit<ExtensionItem, 'id'>> & { id: string }>;
   /** Stable item ids to remove from the current view. */
   removeItemIds?: string[];
-  /** Explicit work-in-progress state; avoid using it for passive background refreshes. */
+  /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   /** Only set when intentionally moving focus to a visible item id; host otherwise preserves selection. */
   selectedItemId?: string;
@@ -651,6 +651,7 @@ export type ExtensionView = {
   /** View items or a lazy loader handle from `ctx.data.loader()` or `ctx.data.staleWhileRevalidate()`. When a loader handle is used, the host owns the loading lifecycle and `emptyView` is required. */
   items?: ExtensionItem[] | ExtensionDataLoaderHandle;
   sections?: ExtensionItemSection[];
+  /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   emptyView?: { title?: string; subtitle?: string };
   /** Optional item detail pane for richer list views. */

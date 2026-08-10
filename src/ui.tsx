@@ -930,10 +930,6 @@ export function ListView<T>({
   return (
     <>
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {isLoading && hasItems && (
-        <div className="viewLoadingBar" role="status" aria-label="Loading" />
-      )}
-
       {hasItems ? (
         visibleSections.map((section, index) => (
           <div key={index} className="itemSection">
@@ -974,10 +970,6 @@ export function GridView<T>({
   return (
     <div className="extensionView">
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {isLoading && hasItems && (
-        <div className="viewLoadingBar" role="status" aria-label="Loading" />
-      )}
-
       {hasItems ? (
         visibleSections.map((section, index) => (
           <div key={index} className="itemSection">

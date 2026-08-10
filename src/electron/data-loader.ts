@@ -135,7 +135,7 @@ export function createViewLoaderRegistry(deps: {
     if (cachedItems && registry.get(viewId) === loader) {
       deps.sendHydrate(viewId, {
         items: deps.normalizeItems(cachedItems, loader.entry),
-        isLoading: !isFresh, // fresh → done; stale → show loading indicator
+        isLoading: !isFresh, // fresh → done; stale → show perimeter sweep
       });
     }
 
