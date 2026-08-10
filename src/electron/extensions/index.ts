@@ -14,6 +14,7 @@ import { createPlacesExtension, createSystemExtension } from './system';
 import { createUpdatesExtension } from './updates';
 import { createWebSearchExtension } from './web-search';
 
+import { createQuitAppsExtension } from './quit-apps';
 export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createSystemExtension,
   createPlacesExtension,
