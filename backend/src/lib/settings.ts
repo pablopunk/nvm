@@ -26,6 +26,10 @@ export type ModelTier = 'free' | 'paid';
 export type ExtensionAiModelRole = 'smart' | 'fast';
 export type ModelRouteSlot = ModelTier | ExtensionAiModelRole;
 export type ModelRoute = { provider: string; modelId: string };
+export const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+export const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
+export type ModelRouteConfig = ModelRoute & { thinkingLevel: ThinkingLevel };
 
 export class ModelNotConfiguredError extends Error {
   constructor(public key: 'active_model' | 'free_model' | 'active_model_route' | 'free_model_route' | 'smart_model_route' | 'fast_model_route') {
@@ -80,15 +84,26 @@ export function parseModelRouteRef(ref: string): ModelRoute | null {
   return { provider, modelId };
 }
 
-function parseStoredModelRoute(value: string | null): ModelRoute | null {
+function parseThinkingLevel(value: unknown): ThinkingLevel {
+  return typeof value === 'string' && THINKING_LEVELS.includes(value as ThinkingLevel)
+    ? (value as ThinkingLevel)
+    : DEFAULT_THINKING_LEVEL;
+}
+
+function parseStoredModelRoute(value: string | null): ModelRouteConfig | null {
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as Partial<ModelRoute>;
+    const parsed = JSON.parse(value) as Partial<ModelRoute> & { thinkingLevel?: unknown };
     if (parsed.provider && parsed.modelId && KNOWN_PROVIDERS.has(parsed.provider)) {
-      return { provider: parsed.provider, modelId: parsed.modelId };
+      return {
+        provider: parsed.provider,
+        modelId: parsed.modelId,
+        thinkingLevel: parseThinkingLevel(parsed.thinkingLevel),
+      };
     }
   } catch {
-    return parseModelRouteRef(value);
+    const route = parseModelRouteRef(value);
+    return route ? { ...route, thinkingLevel: DEFAULT_THINKING_LEVEL } : null;
   }
   return null;
 }
@@ -112,16 +127,21 @@ async function getLegacyModelId(tier: ModelTier): Promise<string> {
   return v;
 }
 
-export async function getModelRoute(slot: ModelRouteSlot): Promise<ModelRoute> {
+export async function getModelRoute(slot: ModelRouteSlot): Promise<ModelRouteConfig> {
   const stored = parseStoredModelRoute(await getSetting(modelRouteKey(slot)));
   if (stored) return stored;
   const fallback = fallbackRouteSlot(slot);
   if (fallback) return getModelRoute(fallback);
-  return { provider: await getActiveProvider(), modelId: await getLegacyModelId(slot as ModelTier) };
+  return {
+    provider: await getActiveProvider(),
+    modelId: await getLegacyModelId(slot as ModelTier),
+    thinkingLevel: DEFAULT_THINKING_LEVEL,
+  };
 }
 
-export async function setModelRoute(slot: ModelRouteSlot, route: ModelRoute) {
+export async function setModelRoute(slot: ModelRouteSlot, route: ModelRouteConfig) {
   if (!KNOWN_PROVIDERS.has(route.provider)) throw new Error(`Unknown provider: ${route.provider}`);
+  if (!THINKING_LEVELS.includes(route.thinkingLevel)) throw new Error(`Unknown thinking level: ${route.thinkingLevel}`);
   await setSetting(modelRouteKey(slot), JSON.stringify(route));
 }
 
