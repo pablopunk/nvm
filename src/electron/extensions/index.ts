@@ -5,6 +5,7 @@ import { createAppsExtension } from './apps';
 import { createBackgroundTasksExtension } from './background-tasks';
 import { createCalculatorExtension } from './calculator';
 import { createClipboardExtension } from './clipboard';
+import { createDictationExtension } from './dictation';
 import { createExtensionsExtension } from './extensions';
 import { createFilesExtension } from './files';
 import { createFloatingNotesExtension } from './floating-notes';
@@ -20,6 +21,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createCalculatorExtension,
   createWebSearchExtension,
   createClipboardExtension,
+  createDictationExtension,
   createAppsExtension,
   createFilesExtension,
   createFloatingNotesExtension,

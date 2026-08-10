@@ -2396,6 +2396,81 @@ kbd {
   min-width: 96px;
 }
 
+.extensionWindowShell.extensionWindowChromeNone {
+  padding: 0;
+  background: transparent;
+}
+
+.extensionWindowChromeNone .extensionWindowFooter {
+  display: none;
+}
+
+.extensionWindowChromeNone .progressView {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-height: 0;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  background: rgba(17, 18, 23, 0.92);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.extensionWindowChromeNone .progressOverview {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+}
+
+.extensionWindowChromeNone .progressOverview::before {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-faint);
+  content: "";
+  animation: indicatorPulse 1.6s ease-in-out infinite;
+}
+
+.extensionWindowChromeNone .progressOverview > div:first-child {
+  display: block;
+  min-width: 0;
+}
+
+.extensionWindowChromeNone .progressOverview strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.extensionWindowChromeNone .progressBar {
+  display: none;
+}
+
+@keyframes indicatorPulse {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .extensionWindowSearchRow {
   display: flex;
   align-items: center;

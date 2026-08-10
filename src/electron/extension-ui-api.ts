@@ -5,6 +5,9 @@ export type ExtensionUiApiDeps = {
   buildPreviewItemAction: (item: unknown) => unknown;
   progressView: (input?: unknown) => unknown;
   buildConfirmAction: (input?: unknown) => unknown;
+  showIndicator?: (input: unknown) => void;
+  updateIndicator?: (input: unknown) => void;
+  hideIndicator?: (id?: string) => void;
 };
 
 function isPreviewableItem(value: any) {
@@ -68,6 +71,9 @@ export function createExtensionUiApi({
   buildPreviewItemAction,
   progressView,
   buildConfirmAction,
+  showIndicator = () => {},
+  updateIndicator = () => {},
+  hideIndicator = () => {},
 }: ExtensionUiApiDeps) {
   return {
     list: (view: any) => ({ ...view, type: 'list' }),
@@ -119,6 +125,11 @@ export function createExtensionUiApi({
         tone: input?.tone || 'default',
       },
     }),
+    indicator: {
+      show: showIndicator,
+      update: updateIndicator,
+      hide: hideIndicator,
+    },
     webview: (view: any) => ({ ...view, type: 'webview' }),
     camera: (view = {}) => ({
       title: 'Camera',

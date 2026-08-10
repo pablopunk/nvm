@@ -19,6 +19,7 @@ import {
 } from './os';
 import {
   isNvmTestMode,
+  isNvmHeadlessTestMode,
   recordPackagedStartupReady,
   recordTestWindowEvent,
 } from './test-mode';
@@ -271,11 +272,13 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         if (showOptions.skipShownEvent)
           win.webContents.send('palette:shortcut-show');
         else win.webContents.send('palette:shown');
-        win.show();
+        if (!isNvmHeadlessTestMode) win.show();
         if (isNvmTestMode) recordTestWindowEvent('shown');
         win.moveTop();
-        win.focus();
-        win.webContents.focus();
+        if (!isNvmHeadlessTestMode) {
+          win.focus();
+          win.webContents.focus();
+        }
         debugLog('showPalette.after', {
           visible: win.isVisible(),
           focused: win.isFocused(),

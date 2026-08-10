@@ -56,6 +56,7 @@ export type ExtensionCapability =
   | 'places'
   | 'updates'
   | 'settings.write'
+  | 'dictation'
   | 'camera'
   /** Declares intent to use `ctx.ocr` image/screen/region text recognition helpers. */
   | 'ocr';
@@ -242,7 +243,7 @@ export type ExtensionWindowOptions = {
   chrome?: 'default' | 'none';
   /** Window width. Defaults to 560 (`size: 'large'`: 900) and is clamped to 320–1600; explicit zero is accepted and clamps to 320. */
   width?: number;
-  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200; explicit zero is accepted and clamps to 240. */
+  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200; passive non-focusable windows may use 64–1200. */
   height?: number;
   /** Named dimension preset. Defaults to `default`. Explicit width/height take precedence. */
   size?: ViewSize;
@@ -252,6 +253,14 @@ export type ExtensionWindowOptions = {
   visibleOnAllSpaces?: boolean;
   /** Hide the live window when it loses focus. Defaults to false. */
   hideOnBlur?: boolean;
+  /** Do not allow this companion window to receive keyboard focus. */
+  focusable?: boolean;
+  /** Show without activating the application. Useful for passive indicators. */
+  showInactive?: boolean;
+  /** Ignore mouse input so the window cannot intercept the user's current target. */
+  ignoreMouseEvents?: boolean;
+  /** Position a passive companion relative to the current display work area. */
+  position?: 'center' | 'top-center' | 'bottom-center';
   /**
    * Retain the window for relaunch restoration. Defaults to false.
    *
@@ -345,6 +354,22 @@ export type ExtensionWindowActionResult = {
 /** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
 export type ExtensionToastResult = {
   toast: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
+};
+
+export type ExtensionIndicatorStatus =
+  | 'recording'
+  | 'transcribing'
+  | 'loading'
+  | 'success'
+  | 'error';
+
+export type ExtensionIndicatorInput = {
+  id?: string;
+  title: string;
+  subtitle?: string;
+  status?: ExtensionIndicatorStatus;
+  value?: number;
+  total?: number;
 };
 
 /** In-place list/grid update returned from an action handler. */
@@ -660,6 +685,8 @@ export type ExtensionView = {
   value?: number;
   /** Total progress value for progress views. Pair with `value` for a determinate bar. */
   total?: number;
+  /** Human-readable progress label rendered in compact progress surfaces. */
+  label?: string;
   /** Human-readable progress summary, e.g. `Downloading assets…`. */
   status?: string;
   [key: string]: unknown;
@@ -863,6 +890,33 @@ export type ExtensionSettings = {
   get<T = unknown>(id: string): T;
   set<T = unknown>(id: string, value: T): T;
   toggle(id: string): unknown;
+};
+
+export type ExtensionDictationDevice = {
+  id: string;
+  title: string;
+  isDefault: boolean;
+};
+
+export type ExtensionDictationStatus =
+  | 'idle'
+  | 'recording'
+  | 'transcribing'
+  | 'error';
+
+export type ExtensionDictation = {
+  status(): Promise<ExtensionDictationStatus>;
+  devices(): Promise<ExtensionDictationDevice[]>;
+  /** Check IndexedDB only; this does not load the model into memory. */
+  modelCacheStatus(): Promise<'cached' | 'missing'>;
+  /** Download and initialize the model, retaining it according to the requested policy. */
+  prepareModel(options?: { modelKeepAliveMs?: number }): Promise<void>;
+  start(options?: {
+    deviceId?: string;
+    modelKeepAliveMs?: number;
+  }): Promise<void>;
+  stop(): Promise<string>;
+  cancel(): Promise<void>;
 };
 
 export type ExtensionShortcutRecord = {
@@ -1298,6 +1352,12 @@ export type ExtensionContext = {
       message?: string;
       tone?: 'default' | 'info' | 'success' | 'error';
     }): ExtensionToastResult;
+    /** Passive always-on-top status indicator that never takes focus. */
+    indicator: {
+      show(input: ExtensionIndicatorInput): void;
+      update(input: ExtensionIndicatorInput): void;
+      hide(id?: string): void;
+    };
     /** Sandboxed HTML/JS iframe with no Node access. Use only when host-owned primitives do not fit. */
     webview(view: ExtensionView): ExtensionView;
     /** Host-owned live camera view. Declare `camera`; use `ctx.actions.camera.*` for switching/mute controls. */
@@ -1733,6 +1793,8 @@ export type ExtensionContext = {
     discard(key: string): Promise<void> | void;
   };
   settings: ExtensionSettings;
+  /** Cross-platform local speech dictation. Declare `dictation` for review. */
+  dictation?: ExtensionDictation;
   shortcuts: {
     /** Active global action shortcuts, including user overrides and declared extension shortcuts. */
     list(): ExtensionShortcutRecord[];

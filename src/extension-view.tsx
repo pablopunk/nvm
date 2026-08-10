@@ -1082,6 +1082,7 @@ function ExtensionViewSurface(props: ExtensionViewRendererProps) {
         steps={props.view.steps || []}
         value={props.view.value}
         total={props.view.total}
+        label={props.view.label}
         status={props.view.status}
       />
     );

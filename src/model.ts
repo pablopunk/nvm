@@ -635,6 +635,7 @@ export interface CommandView {
   steps?: { title: string; status?: string }[];
   value?: number;
   total?: number;
+  label?: string;
   status?: string;
   actions?: CommandAction[];
   actionPanel?: CommandActionPanel;

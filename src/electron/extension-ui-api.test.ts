@@ -83,6 +83,27 @@ test('extension ui api keeps utility helpers stable', () => {
   assert.equal(error.items[1].primaryAction.type, 'popView');
 });
 
+test('indicator helpers delegate passive status lifecycle to the host', () => {
+  const calls: Array<[string, unknown]> = [];
+  const ui = createExtensionUiApi({
+    buildPreviewItemAction: (item) => ({ previewItem: item }),
+    progressView: (input) => ({ type: 'progress', ...(input as object) }),
+    buildConfirmAction: (input) => ({ type: 'confirm', input }),
+    showIndicator: (input) => calls.push(['show', input]),
+    updateIndicator: (input) => calls.push(['update', input]),
+    hideIndicator: (id) => calls.push(['hide', id]),
+  });
+
+  ui.indicator.show({ id: 'dictation', title: 'Listening' });
+  ui.indicator.update({ id: 'dictation', title: 'Transcribing' });
+  ui.indicator.hide('dictation');
+  assert.deepEqual(calls, [
+    ['show', { id: 'dictation', title: 'Listening' }],
+    ['update', { id: 'dictation', title: 'Transcribing' }],
+    ['hide', 'dictation'],
+  ]);
+});
+
 test('extension ui collection gives records consistent CRUD actions', () => {
   const ui = createUi();
   const add = { title: 'Add task' };

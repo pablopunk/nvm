@@ -76,6 +76,7 @@ export interface ProgressViewProps {
   steps: { title: string; status?: string }[];
   value?: number;
   total?: number;
+  label?: string;
   status?: string;
 }
 export type FormValue = string | boolean | string[];
@@ -518,19 +519,20 @@ export function ProgressView({
   steps,
   value,
   total,
+  label,
   status,
 }: ProgressViewProps) {
   const hasProgress =
     typeof value === 'number' && typeof total === 'number' && total > 0;
   const ratio = hasProgress ? Math.max(0, Math.min(1, value / total)) : 0;
   const percent = Math.round(ratio * 100);
-  const showSummary = Boolean(status) || hasProgress;
+  const showSummary = Boolean(label || status) || hasProgress;
   return (
     <div className="extensionView progressView">
       {showSummary ? (
         <div className="progressOverview">
           <div>
-            <strong>{status || 'Working…'}</strong>
+            <strong>{label || status || 'Working…'}</strong>
             {hasProgress ? (
               <small>
                 {value} of {total} · {percent}%

@@ -3,8 +3,9 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app, session } from 'electron';
+import { isNvmHeadlessTestMode, isNvmTestMode } from './test-mode-flags';
 
-export const isNvmTestMode = process.env.NVM_TEST_MODE === '1';
+export { isNvmHeadlessTestMode, isNvmTestMode } from './test-mode-flags';
 
 function testUserDataPath() {
   const value = process.env.NVM_TEST_USER_DATA_DIR;
