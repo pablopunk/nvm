@@ -408,6 +408,7 @@ export type ExtensionAction = {
   /** Host action type. Prefer `ctx.actions.*` helpers instead of spelling this manually. */
   type?: string;
   title?: string;
+  icon?: string;
   subtitle?: string;
   shortcut?: string;
   shortcutScope?: ShortcutScope;
@@ -907,7 +908,7 @@ export type ExtensionDictationStatus =
 export type ExtensionDictation = {
   status(): Promise<ExtensionDictationStatus>;
   devices(): Promise<ExtensionDictationDevice[]>;
-  /** Check IndexedDB only; this does not load the model into memory. */
+  /** Check required backend assets in IndexedDB; this does not load the model into memory. */
   modelCacheStatus(): Promise<'cached' | 'missing'>;
   /** Download and initialize the model, retaining it according to the requested policy. */
   prepareModel(options?: { modelKeepAliveMs?: number }): Promise<void>;
@@ -1845,8 +1846,9 @@ export type ExtensionCommand = {
 /**
  * Extension manifest. `actions(ctx)` is the durable action registry. `commands` are
  * ergonomic shorthand for durable actions that appear in search automatically; the
- * host normalizes both into the same shortcut/alias/execution pipeline. Provider
- * methods should contribute distinct child/status/query items, not duplicate command launchers.
+ * host normalizes both into the same shortcut/alias/execution pipeline. For a capability
+ * with one primary root surface, prefer one `rootItems()` item and put Settings and
+ * secondary actions in its `actionPanel` instead of exposing sibling command launchers.
  */
 export type NevermindExtension = {
   id: string;
@@ -1879,7 +1881,7 @@ export type NevermindExtension = {
   actions?(
     ctx: ExtensionContext,
   ): ExtensionActionContribution[] | { actions: ExtensionActionContribution[] };
-  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
+  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Prefer one primary item per capability; expose Settings and secondary actions through that item's `actionPanel` so they appear under Cmd+K. If a secondary action should also be independently searchable, register it with `actions(ctx)` and reference it with `ctx.actions.ref(...)`. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
   rootItems?(
     ctx: ExtensionContext,
   ):

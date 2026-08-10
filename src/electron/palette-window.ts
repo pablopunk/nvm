@@ -55,6 +55,28 @@ function addWindowBlurMargin(size: { width: number; height: number }) {
   };
 }
 
+function installPaletteRendererIsolationHeaders(window: BrowserWindow) {
+  const windowId = window.webContents.id;
+  window.webContents.session.webRequest.onHeadersReceived(
+    function handlePaletteHeaders(details, callback) {
+      if (
+        details.webContentsId !== windowId ||
+        details.resourceType !== 'mainFrame'
+      ) {
+        callback({});
+        return;
+      }
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Cross-Origin-Opener-Policy': ['same-origin'],
+          'Cross-Origin-Embedder-Policy': ['credentialless'],
+        },
+      });
+    },
+  );
+}
+
 export function installPermissionHandlers(
   isDev: boolean,
   rendererUrl = process.env.ELECTRON_RENDERER_URL || '',
@@ -139,6 +161,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       },
     } satisfies BrowserWindowConstructorOptions);
 
+    installPaletteRendererIsolationHeaders(win);
     applyPaletteWindowPolicy();
 
     win.on('blur', () => dismissAfterFocusLoss('window-blur'));

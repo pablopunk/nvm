@@ -311,6 +311,15 @@ function selectedItemIdForView(view: ExtensionView | null, current = '') {
   );
 }
 
+function isEditableKeyTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
 export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [view, setView] = useState<ExtensionView | null>(null);
   const [compactView, setCompactView] = useState<ExtensionView | null>(null);
@@ -608,6 +617,14 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   function onShellKeyDown(event: React.KeyboardEvent) {
+    if (
+      isEditableKeyTarget(event.target) &&
+      event.key !== 'Escape' &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    )
+      return;
     if (event.key === 'Escape') {
       if (confirmFor) setConfirmFor(null);
       else if (actionSubmenuFor) {

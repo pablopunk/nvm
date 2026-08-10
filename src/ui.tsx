@@ -651,6 +651,11 @@ function formFieldControl(
         placeholder={field.placeholder}
         required={field.required}
         rows={field.rows || 4}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') return;
+          if (event.metaKey || event.ctrlKey || event.altKey) return;
+          event.stopPropagation();
+        }}
         onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
       />
     );
