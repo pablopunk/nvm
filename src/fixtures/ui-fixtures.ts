@@ -1242,6 +1242,68 @@ function progressView(ctx: ExtensionContext) {
   });
 }
 
+const INDICATOR_ID = 'dev-ui-indicator';
+
+function indicatorView(ctx: ExtensionContext) {
+  const show = ctx.actions.run('Show Indicator', (innerCtx) => {
+    innerCtx.ui.indicator.show({
+      id: INDICATOR_ID,
+      title: 'Dev UI Indicator',
+      subtitle: 'Listening for fixture updates',
+      status: 'recording',
+      value: 1,
+      total: 3,
+    });
+    return innerCtx.ui.toast({ message: 'Indicator shown' });
+  });
+  const update = ctx.actions.run('Update Indicator', (innerCtx) => {
+    innerCtx.ui.indicator.update({
+      id: INDICATOR_ID,
+      title: 'Dev UI Indicator',
+      subtitle: 'Transcribing fixture input',
+      status: 'transcribing',
+      value: 2,
+      total: 3,
+    });
+    return innerCtx.ui.toast({ message: 'Indicator updated' });
+  });
+  const hide = ctx.actions.run('Hide Indicator', (innerCtx) => {
+    innerCtx.ui.indicator.hide(INDICATOR_ID);
+    return innerCtx.ui.toast({ message: 'Indicator hidden' });
+  });
+  return ctx.ui.list({
+    id: 'dev-ui-indicator',
+    title: 'Dev UI · Indicator',
+    subtitle: 'Passive always-on-top status window lifecycle',
+    items: [
+      {
+        id: 'show',
+        title: 'Show Indicator',
+        subtitle: 'Creates a non-focusable recording status window',
+        icon: 'circle-dot',
+        primaryAction: show,
+        actions: [show],
+      },
+      {
+        id: 'update',
+        title: 'Update Indicator',
+        subtitle: 'Changes the subtitle and progress state in place',
+        icon: 'refresh-cw',
+        primaryAction: update,
+        actions: [update],
+      },
+      {
+        id: 'hide',
+        title: 'Hide Indicator',
+        subtitle: 'Hides the current status window',
+        icon: 'eye-off',
+        primaryAction: hide,
+        actions: [hide],
+      },
+    ],
+  });
+}
+
 function webviewView(ctx: ExtensionContext) {
   return ctx.ui.webview({
     id: 'dev-ui-webview',
@@ -1427,6 +1489,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Progress',
       icon: 'loader',
       run: (ctx) => progressView(ctx),
+    },
+    {
+      id: 'indicator',
+      title: 'Dev UI: Indicator',
+      icon: 'activity',
+      run: (ctx) => indicatorView(ctx),
     },
     {
       id: 'webview',

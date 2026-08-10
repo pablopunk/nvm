@@ -15,6 +15,7 @@ const FIXTURE_REQUIRED = new Set([
   'input.prompt',
   'ui.editor',
   'ui.progress',
+  'ui.indicator',
   'ui.webview',
   'ui.camera',
   'ui.confirm',
@@ -149,6 +150,19 @@ function collectFixtureCalls(fixtureSource) {
     ) {
       const methodAccess = node.expression; // ctx.ui.list
       const nsAccess = methodAccess.expression; // ctx.ui
+
+      if (
+        ts.isPropertyAccessExpression(nsAccess) &&
+        ts.isPropertyAccessExpression(nsAccess.expression) &&
+        ts.isIdentifier(nsAccess.expression.expression) &&
+        isContextVar(nsAccess.expression.expression.text) &&
+        ts.isIdentifier(nsAccess.expression.name) &&
+        (nsAccess.expression.name.text === 'ui' ||
+          nsAccess.expression.name.text === 'input') &&
+        ts.isIdentifier(nsAccess.name)
+      ) {
+        calls.add(`${nsAccess.expression.name.text}.${nsAccess.name.text}`);
+      }
 
       if (
         ts.isPropertyAccessExpression(nsAccess) &&
