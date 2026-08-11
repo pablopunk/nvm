@@ -1809,10 +1809,9 @@ export function App() {
     };
   }, [shortcutFor?.id]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shortcutFor) return;
-    const frame = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
+    inputRef.current?.focus();
   }, [shortcutFor?.id]);
 
   useEffect(() => {
