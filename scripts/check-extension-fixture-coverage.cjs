@@ -170,6 +170,18 @@ function collectFixtureCalls(fixtureSource) {
         const method = methodAccess.name.text; // 'list' | 'prompt' | ...
         calls.add(`${ns}.${method}`);
       }
+
+      if (
+        ts.isPropertyAccessExpression(nsAccess) &&
+        ts.isPropertyAccessExpression(nsAccess.expression) &&
+        ts.isIdentifier(nsAccess.expression.expression) &&
+        isContextVar(nsAccess.expression.expression.text) &&
+        ts.isIdentifier(nsAccess.expression.name) &&
+        nsAccess.expression.name.text === 'ui' &&
+        ts.isIdentifier(nsAccess.name)
+      ) {
+        calls.add(`ui.${nsAccess.name.text}`);
+      }
     }
     ts.forEachChild(node, visit);
   }
