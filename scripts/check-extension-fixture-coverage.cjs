@@ -15,6 +15,7 @@ const FIXTURE_REQUIRED = new Set([
   'input.prompt',
   'ui.editor',
   'ui.progress',
+  'ui.indicator',
   'ui.webview',
   'ui.camera',
   'ui.confirm',
