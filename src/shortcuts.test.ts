@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { acceleratorFromKeyboardEvent } from './shortcuts';
+import {
+  acceleratorFromKeyboardEvent,
+  isShortcutRecorderSaveKey,
+} from './shortcuts';
 
 function keyboardEvent(
   init: Partial<{
@@ -91,5 +94,24 @@ test('acceleratorFromKeyboardEvent ignores bare keys and lone modifiers', () => 
       keyboardEvent({ key: 'Control', code: 'ControlLeft', ctrlKey: true }),
     ),
     '',
+  );
+});
+
+test('isShortcutRecorderSaveKey accepts Return and numpad Enter variants', () => {
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Enter', code: 'Enter' }),
+    true,
+  );
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Return', code: 'Enter' }),
+    true,
+  );
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Enter', code: 'NumpadEnter' }),
+    true,
+  );
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Escape', code: 'Escape' }),
+    false,
   );
 });
