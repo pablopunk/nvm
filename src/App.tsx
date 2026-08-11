@@ -1809,6 +1809,11 @@ export function App() {
     };
   }, [shortcutFor?.id]);
 
+  useLayoutEffect(() => {
+    if (!shortcutFor) return;
+    inputRef.current?.focus();
+  }, [shortcutFor?.id]);
+
   useEffect(() => {
     for (const action of actions) {
       const appPath = appPathForIcon(action);

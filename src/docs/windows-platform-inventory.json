@@ -1057,6 +1057,14 @@
       "selector": "variable:SYSTEM_SETTINGS_SIDEBAR::os-label::const SYSTEM_SETTINGS_SIDEBAR = '/System/Applications/System Settings.app/Contents/Resources/Sidebar.plist';::declarationList.declarations[0].initializer",
       "disposition": "mac-capability-metadata",
       "surface": "system-actions-settings"
+    },
+    {
+      "key": "quit-apps-os-label-777de162467b",
+      "file": "src/electron/extensions/quit-apps.ts",
+      "category": "os-label",
+      "selector": "function:createQuitAppsExtension/method:actions/property:run/property:onConfirm/call:ctx.actions.run('Quitting Apps')/variable:script::os-label::const script = ` set quitList to {} tell application \"System Events\" set appProcesses to every p…#777de162467b::declarationList.declarations[0].initializer",
+      "disposition": "extension-author-documentation",
+      "surface": "extensions-generated"
     }
   ],
   "resolvedEntries": [
