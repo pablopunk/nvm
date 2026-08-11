@@ -1,6 +1,10 @@
 // biome-ignore-all lint: Preload instrumentation intentionally uses Electron environment flags and best-effort Performance APIs.
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from 'electron';
-import type { NevermindApi } from '../preload-api';
+import type {
+  DictationCommand,
+  DictationReply,
+  NevermindApi,
+} from '../preload-api';
 
 const DEBUG_PERFORMANCE_SLOW_MS = 8;
 
@@ -197,6 +201,15 @@ const api: NevermindApi = {
     ) => callback(payload);
     ipcRenderer.on('ai:chat:event', listener);
     return () => ipcRenderer.removeListener('ai:chat:event', listener);
+  },
+  onDictationCommand: (callback) => {
+    const listener = (_event: IpcRendererEvent, command: DictationCommand) =>
+      callback(command);
+    ipcRenderer.on('dictation:command', listener);
+    return () => ipcRenderer.removeListener('dictation:command', listener);
+  },
+  replyDictation: (reply: DictationReply) => {
+    ipcRenderer.send('dictation:reply', reply);
   },
   onExtensionWindowView: (callback) => {
     const listener = (

@@ -24,6 +24,19 @@ export function scoreNormalized(value: unknown, q: string): number {
   return scoreFuzzy(v, q);
 }
 
+export function prioritizedTitleSearchScore(value: unknown, q: string): number {
+  if (!q) return 0;
+  const normalizedTitle = normalize(value);
+  const score = scoreNormalized(normalizedTitle, q);
+  if (score === 100) return 1000;
+  if (normalizedTitle.startsWith(q)) return 950;
+  if (score === 90) return 900;
+  if (score === 50) return 850;
+  if (score === 20) return 820;
+  if (score === 10) return 810;
+  return 0;
+}
+
 export function score(value: unknown, query: unknown) {
   return scoreNormalized(value, normalize(query));
 }

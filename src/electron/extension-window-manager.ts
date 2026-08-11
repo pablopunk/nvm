@@ -1,5 +1,6 @@
 // biome-ignore-all lint: This legacy structural Electron boundary retains established dynamic extension payload and imperative lifecycle conventions.
 import type { ExtensionWindowCapability } from './extension-window-capabilities';
+import { isNvmHeadlessTestMode } from './test-mode-flags';
 
 type ExtensionWindowLike = {
   webContents: {
@@ -27,8 +28,13 @@ type ExtensionWindowLike = {
   isDestroyed(): boolean;
   isVisible(): boolean;
   show(): void;
+  showInactive?: () => void;
   hide(): void;
   focus(): void;
+  setIgnoreMouseEvents?: (
+    ignore: boolean,
+    options?: { forward?: boolean },
+  ) => void;
   close(): void;
   loadURL(url: string): unknown;
   loadFile(filePath: string, options?: unknown): unknown;
@@ -78,6 +84,20 @@ type ExtensionWindowCompatibility = {
   >;
 };
 
+function revealWindow(
+  win: ExtensionWindowLike,
+  options: Record<string, unknown> = {},
+  focus = true,
+) {
+  if (isNvmHeadlessTestMode) return;
+  const focusable = options.focusable !== false;
+  if (options.showInactive || !focusable) {
+    if (win.showInactive) win.showInactive();
+    else win.show();
+  } else win.show();
+  if (focus && focusable && !options.showInactive) win.focus();
+}
+
 type CloneSafeRecord = { [key: string]: CloneSafeValue };
 type CloneSafeValue =
   | null
@@ -124,6 +144,10 @@ export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
   hideOnBlur: false,
   persistent: false,
   remembersFrame: false,
+  focusable: true,
+  showInactive: false,
+  ignoreMouseEvents: false,
+  position: 'center',
 } as const);
 
 const WINDOW_OPTION_KEYS = new Set([
@@ -138,10 +162,18 @@ const WINDOW_OPTION_KEYS = new Set([
   'alwaysOnTop',
   'visibleOnAllSpaces',
   'hideOnBlur',
+  'focusable',
+  'showInactive',
+  'ignoreMouseEvents',
+  'position',
   'persistent',
   'remembersFrame',
 ]);
 const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const PASSIVE_WINDOW_MIN_WIDTH = 160;
+const INDICATOR_WINDOW_MAX_WIDTH = 420;
+const INDICATOR_HORIZONTAL_CHROME = 56;
+const INDICATOR_APPROXIMATE_CHARACTER_WIDTH = 8;
 
 function invalidWindowInput(message: string): never {
   throw new Error(`Invalid extension window input: ${message}`);
@@ -193,12 +225,22 @@ export function normalizeExtensionWindowOptions(value: unknown) {
     'alwaysOnTop',
     'visibleOnAllSpaces',
     'hideOnBlur',
+    'focusable',
+    'showInactive',
+    'ignoreMouseEvents',
     'persistent',
     'remembersFrame',
   ]) {
     if (options[key] !== undefined && typeof options[key] !== 'boolean')
       invalidWindowInput(`${key} must be a boolean`);
   }
+  if (
+    options.position !== undefined &&
+    !['center', 'top-center', 'bottom-center'].includes(
+      String(options.position),
+    )
+  )
+    invalidWindowInput('position must be center, top-center, or bottom-center');
   finiteDimension(
     options.width,
     EXTENSION_WINDOW_OPTION_DEFAULTS.width,
@@ -214,16 +256,17 @@ export function normalizeExtensionWindowOptions(value: unknown) {
 
 export function extensionWindowSize(options: any = {}) {
   const large = options.size === 'large';
+  const passive = options.focusable === false;
   return {
     width: Math.max(
-      320,
+      passive ? PASSIVE_WINDOW_MIN_WIDTH : 320,
       Math.min(
         1600,
         finiteDimension(options.width, large ? 900 : 560, 'width'),
       ),
     ),
     height: Math.max(
-      240,
+      passive ? 64 : 240,
       Math.min(
         1200,
         finiteDimension(options.height, large ? 680 : 420, 'height'),
@@ -485,9 +528,29 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     });
   }
 
+  function positionWindow(win: ExtensionWindowLike, position = 'center') {
+    if (position === 'center') {
+      center(win);
+      return;
+    }
+    const cursor = deps.getCursorScreenPoint();
+    const display = deps.getDisplayNearestPoint(cursor);
+    const bounds = win.getBounds();
+    const { x, y, width, height } = display.workArea;
+    win.setBounds({
+      x: Math.round(x + (width - bounds.width) / 2),
+      y: Math.round(
+        position === 'top-center' ? y + 24 : y + height - bounds.height - 24,
+      ),
+      width: bounds.width,
+      height: bounds.height,
+    });
+  }
+
   function applyOptions(win: ExtensionWindowLike, options: any = {}) {
     const size = extensionWindowSize(options);
     const bounds = win.getBounds();
+    let resized = false;
     if (bounds.width !== size.width || bounds.height !== size.height) {
       win.setBounds({
         x: bounds.x || 0,
@@ -495,6 +558,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         width: size.width,
         height: size.height,
       });
+      resized = true;
     }
     const alwaysOnTop = options.alwaysOnTop !== false;
     if (deps.hasCapability('windows.always-on-top'))
@@ -503,6 +567,10 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       win.setVisibleOnAllWorkspaces(Boolean(options.visibleOnAllSpaces), {
         visibleOnFullScreen: true,
       });
+    win.setIgnoreMouseEvents?.(Boolean(options.ignoreMouseEvents), {
+      forward: false,
+    });
+    return resized;
   }
 
   function createOrUpdate(
@@ -521,7 +589,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       existing.options = { ...existing.options, ...safeOptions, id };
       existing.ownerExtensionId = ownerExtensionId || existing.ownerExtensionId;
       existing.compatibility = compatibilityForOptions(id, existing.options);
-      applyOptions(existing.win, existing.options);
+      const resized = applyOptions(existing.win, existing.options);
       existing.win.setTitle(
         String(existing.options.title || normalizedView.title || 'Nevermind'),
       );
@@ -530,9 +598,13 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         extensionWindowViewPayload(id, normalizedView, existing.options),
       );
       if (visibility === 'show') {
-        existing.win.show();
-        existing.win.focus();
+        revealWindow(existing.win, existing.options);
       }
+      if (resized && existing.options.focusable === false)
+        positionWindow(
+          existing.win,
+          String(existing.options.position || 'center'),
+        );
       persistWindowRecord(existing);
       return existing;
     }
@@ -544,14 +616,27 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     const restoredFrame = savedFrame ? clampedFrame(savedFrame) : null;
     const size = restoredFrame || extensionWindowSize(safeOptions);
     const hiddenTitleBar = safeOptions.titleBar === 'hidden';
+    const frameless = safeOptions.chrome === 'none';
+    const passive = safeOptions.focusable === false;
     const win = new deps.BrowserWindow({
       width: size.width,
       height: size.height,
-      minWidth: 320,
-      minHeight: 240,
+      minWidth:
+        safeOptions.focusable === false ? PASSIVE_WINDOW_MIN_WIDTH : 320,
+      minHeight: safeOptions.focusable === false ? 64 : 240,
       show: false,
-      frame: true,
-      ...(hiddenTitleBar
+      focusable: safeOptions.focusable !== false,
+      frame: !frameless,
+      transparent: frameless,
+      resizable: !passive,
+      movable: !passive,
+      closable: !passive,
+      minimizable: !passive,
+      maximizable: !passive,
+      fullscreenable: !passive,
+      skipTaskbar: passive,
+      hasShadow: !frameless,
+      ...(hiddenTitleBar && !frameless
         ? {
             titleBarStyle: 'hiddenInset',
             trafficLightPosition: { x: 12, y: 12 },
@@ -560,7 +645,11 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       title: String(
         (safeOptions as any).title || normalizedView.title || 'Nevermind',
       ),
-      backgroundColor: deps.shouldUseDarkColors() ? '#111111' : '#f7f7f7',
+      backgroundColor: frameless
+        ? '#00000000'
+        : deps.shouldUseDarkColors()
+          ? '#111111'
+          : '#f7f7f7',
       webPreferences: {
         preload: deps.preloadPath,
         contextIsolation: true,
@@ -584,8 +673,9 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     applyOptions(win, record.options);
     if (restoredFrame) win.setBounds(restoredFrame);
     win.once('ready-to-show', () => {
-      if (!record.restoredFrame) center(win);
-      win.show();
+      if (!record.restoredFrame)
+        positionWindow(win, String(record.options.position || 'center'));
+      revealWindow(win, record.options, false);
     });
     if ((safeOptions as any).hideOnBlur) win.on('blur', () => win.hide());
     if (safeOptions.remembersFrame) {
@@ -659,8 +749,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       return { toast: { message: 'Window is not open', tone: 'error' } };
     }
     if (action.type === 'showWindow') {
-      record.win.show();
-      record.win.focus();
+      revealWindow(record.win, record.options);
       return {
         toast: { message: 'Shown window' },
         ...record.compatibility,
@@ -686,10 +775,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
           action.ownerExtensionId,
         );
       if (record.win.isVisible()) record.win.hide();
-      else {
-        record.win.show();
-        record.win.focus();
-      }
+      else revealWindow(record.win, record.options);
       return {
         toast: { message: 'Toggled window' },
         ...record.compatibility,
@@ -736,6 +822,77 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     return false;
   }
 
+  function indicatorWindowId(ownerExtensionId: string, localId: unknown) {
+    const owner = String(ownerExtensionId || 'extension').replace(
+      /[^A-Za-z0-9._:-]/g,
+      '-',
+    );
+    const id = String(localId || 'default').replace(/[^A-Za-z0-9._:-]/g, '-');
+    return `indicator:${owner}:${id}`.slice(0, 128);
+  }
+
+  function indicatorView(input: any, id: string) {
+    const status = String(input?.status || '');
+    return {
+      id,
+      type: 'progress',
+      title: String(input?.title || 'Status'),
+      label: String(input?.subtitle || status || ''),
+      status,
+      ...(input?.value === undefined ? {} : { value: Number(input.value) }),
+      ...(input?.total === undefined ? {} : { total: Number(input.total) }),
+    };
+  }
+
+  function indicatorWindowWidth(input: any) {
+    const longestLabelLength = [
+      input?.title,
+      input?.subtitle,
+      input?.status,
+    ].reduce(
+      (longest, value) => Math.max(longest, String(value || '').length),
+      0,
+    );
+    return Math.min(
+      INDICATOR_WINDOW_MAX_WIDTH,
+      Math.max(
+        PASSIVE_WINDOW_MIN_WIDTH,
+        INDICATOR_HORIZONTAL_CHROME +
+          longestLabelLength * INDICATOR_APPROXIMATE_CHARACTER_WIDTH,
+      ),
+    );
+  }
+
+  function showIndicator(input: any, ownerExtensionId: string) {
+    const id = indicatorWindowId(ownerExtensionId, input?.id);
+    createOrUpdate(
+      indicatorView(input, id),
+      {
+        id,
+        title: String(input?.title || 'Status'),
+        titleBar: 'hidden',
+        chrome: 'none',
+        width: indicatorWindowWidth(input),
+        height: 92,
+        alwaysOnTop: true,
+        focusable: false,
+        showInactive: true,
+        ignoreMouseEvents: true,
+        position: 'top-center',
+      },
+      'show',
+      ownerExtensionId,
+    );
+  }
+
+  function updateIndicator(input: any, ownerExtensionId: string) {
+    showIndicator(input, ownerExtensionId);
+  }
+
+  function hideIndicator(ownerExtensionId: string, localId = 'default') {
+    records.get(indicatorWindowId(ownerExtensionId, localId))?.win.hide();
+  }
+
   function closeAll() {
     quitting = true;
     for (const record of records.values()) record.win.close();
@@ -749,6 +906,9 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     getState,
     getStateForSender,
     closeForSender,
+    showIndicator,
+    updateIndicator,
+    hideIndicator,
     closeAll,
     persistentWindowRecords,
     forgetPersistentWindow,

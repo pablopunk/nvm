@@ -110,6 +110,24 @@ export type AiChatEvent = {
   data?: unknown;
 };
 
+export type DictationCommand =
+  | { type: 'start'; deviceId?: string; modelKeepAliveMs?: number }
+  | { type: 'stop' }
+  | { type: 'cancel' }
+  | { type: 'devices' }
+  | { type: 'model-cache-status' }
+  | { type: 'prepare-model'; modelKeepAliveMs?: number };
+
+export type DictationReply =
+  | { type: 'result'; text: string }
+  | {
+      type: 'devices';
+      devices: Array<{ id: string; title: string; isDefault: boolean }>;
+    }
+  | { type: 'model-cache-status'; cached: boolean }
+  | { type: 'model-ready' }
+  | { type: 'error'; message: string };
+
 export type ViewHydratePayload = {
   viewId: string;
   items?: CommandView['items'];
@@ -223,6 +241,10 @@ export type NevermindApi = {
     callback: (payload?: OpenActionViewPayload) => void,
   ) => () => void;
   onAiChatEvent: (callback: (event: AiChatEvent) => void) => () => void;
+  onDictationCommand: (
+    callback: (command: DictationCommand) => void,
+  ) => () => void;
+  replyDictation: (reply: DictationReply) => void;
   getExtensionWindowState: () => Promise<{
     id: string;
     view: CommandView;

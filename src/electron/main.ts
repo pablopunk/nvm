@@ -115,6 +115,10 @@ import {
   resolveLoaderEmptyView,
 } from './data-loader';
 import {
+  createDictationService,
+  type DictationRendererReply,
+} from './dictation-service';
+import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
@@ -212,6 +216,7 @@ import {
   hashValue,
   normalize,
   parseRateExpression,
+  prioritizedTitleSearchScore,
   score,
   scoreNormalized,
 } from './search-utils';
@@ -264,6 +269,9 @@ const paletteWindow = createPaletteWindowController({
   rendererUrl,
   rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
+});
+const dictationService = createDictationService((command) => {
+  paletteWindow.win?.webContents.send('dictation:command', command);
 });
 const extensionWindowManager = createExtensionWindowManager({
   BrowserWindow,
@@ -1292,6 +1300,7 @@ const REQUIRED_INTERNAL_EXTENSIONS = [
   'nevermind.calculator',
   'nevermind.web',
   'nevermind.clipboard',
+  'nevermind.dictation',
   'nevermind.apps',
   'nevermind.files',
   'nevermind.floating-notes',
@@ -1315,11 +1324,10 @@ function actionAliases(actionId: any) {
 function actionSearchScore(action: any, query: any) {
   const q = normalize(query);
   if (!q) return action.score || 0;
-  let best = scoreNormalized(action.title, q);
-  if (best === 100) return best;
+  let best = prioritizedTitleSearchScore(action.title, q);
   const subtitleScore = scoreNormalized(action.subtitle, q);
   if (subtitleScore > best) best = subtitleScore;
-  if (best === 100) return best;
+  if (best >= 1000) return best;
   const aliases = action.aliases;
   if (aliases) {
     for (const alias of aliases) {
@@ -1453,9 +1461,17 @@ function searchableExtensions() {
 
 function searchableExtensionActionEntries() {
   const entries = visibleExtensionActionEntries();
+  const searchable = entries.filter((entry) => {
+    const placement = entry.item?.placement;
+    return (
+      !Array.isArray(placement) ||
+      placement.length === 0 ||
+      placement.includes('search')
+    );
+  });
   return isNvmTestMode
-    ? entries.filter((entry) => testModeExtensionIsSafe(entry.extension.id))
-    : entries;
+    ? searchable.filter((entry) => testModeExtensionIsSafe(entry.extension.id))
+    : searchable;
 }
 
 function extensionCommandActionId(extension, command) {
@@ -2976,15 +2992,67 @@ function normalizeItemAppearance(appearance) {
   return { foreground };
 }
 
+function actionsAreSame(left, right) {
+  if (left === right) return true;
+  if (
+    left?.type === 'runExtensionRegisteredAction' &&
+    right?.type === 'runExtensionRegisteredAction'
+  )
+    return (
+      left.extensionId === right.extensionId &&
+      (left.registeredActionId || left.actionId) ===
+        (right.registeredActionId || right.actionId)
+    );
+  return Boolean(left?.actionId && left.actionId === right?.actionId);
+}
+
+function withoutPrimaryAction(actions, primaryAction) {
+  return Array.isArray(actions)
+    ? actions.filter((action) => !actionsAreSame(action, primaryAction))
+    : actions;
+}
+
+function withoutPrimaryActionFromPanel(panel, primaryAction) {
+  if (!panel?.sections) return panel;
+  return {
+    ...panel,
+    sections: panel.sections.map((section) => ({
+      ...section,
+      actions: withoutPrimaryAction(section.actions, primaryAction),
+      ...(section.lazyActions
+        ? {
+            lazyActions: withoutPrimaryAction(
+              section.lazyActions,
+              primaryAction,
+            ),
+          }
+        : {}),
+    })),
+  };
+}
+
+function persistentActionForRootItem(entry, item, primaryAction) {
+  const referencedAction = persistentActionForRef(primaryAction, entry);
+  if (referencedAction) return referencedAction;
+  if (!item.actionId) return null;
+  const registered = extensionActionRegistry.get(
+    `${entry.extension.id}:${item.actionId}`,
+  );
+  return registered ? extensionActionFromContribution(registered) : null;
+}
+
 function extensionRootActionFromItem(entry, item) {
   if (!(item?.id && item.title)) return null;
-  const primaryAction = normalizeViewAction(
-    item.primaryAction || item.action,
+  const primarySource = item.primaryAction || item.action;
+  const persistentAction = persistentActionForRootItem(
     entry,
+    item,
+    primarySource,
   );
+  const primaryAction = normalizeViewAction(primarySource, entry);
   const actionPanel = normalizeActionPanel(
-    item.actionPanel,
-    item.actions || [],
+    withoutPrimaryActionFromPanel(item.actionPanel, primarySource),
+    withoutPrimaryAction(item.actions || [], primarySource),
     entry,
   );
   return {
@@ -2997,6 +3065,7 @@ function extensionRootActionFromItem(entry, item) {
       ? path.basename(entry.extension.__filePath)
       : undefined,
     rootAction: primaryAction,
+    persistentAction,
     removable: Boolean(entry.extension.__generated),
     title: item.title,
     subtitle: item.subtitle || entry.extension.title || 'Extension item',
@@ -3011,7 +3080,7 @@ function extensionRootActionFromItem(entry, item) {
     score: Math.min(Number(item.score || 35), 90),
     lastUsed: Number(item.lastUsed || 0),
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
-    customizable: Boolean(item.customizable),
+    customizable: item.customizable ?? Boolean(persistentAction),
     actionPanel,
     appearance: normalizeItemAppearance(item.appearance),
   };
@@ -3966,9 +4035,11 @@ async function executeViewAction(action, launchContext?: any) {
       clipboard.writeText(action.text || '');
       break;
     case 'pasteText':
+      if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
       pasteTextAction(action);
       return { toast: { message: 'Pasted' } };
     case 'pasteClipboard':
+      if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
       pasteClipboardAction(action);
       return { toast: { message: 'Pasted' } };
     case 'typeText': {
@@ -5940,6 +6011,7 @@ function createExtensionContext(
   const canUseUpdates = true;
   const canUseShortcuts = true;
   const canUseAi = true;
+  const canUseDictation = true;
   const canWriteSettings = true;
   const canManageExtensionOwnership = true;
   const denyShortcut = (name: string) => () => {
@@ -5954,6 +6026,12 @@ function createExtensionContext(
       buildPreviewItemAction,
       progressView,
       buildConfirmAction,
+      showIndicator: (input) =>
+        extensionWindowManager.showIndicator(input, extension.id),
+      updateIndicator: (input) =>
+        extensionWindowManager.updateIndicator(input, extension.id),
+      hideIndicator: (id) =>
+        extensionWindowManager.hideIndicator(extension.id, id),
     }),
     actions: {
       openPath: (filePath, title = 'Open', options: any = {}) => ({
@@ -6460,6 +6538,7 @@ function createExtensionContext(
             throw trustedExtensionApiUnavailable('settings.write');
           },
     },
+    dictation: canUseDictation ? dictationService : undefined,
     shortcuts: canUseShortcuts
       ? {
           list: () => extensionShortcutRecords(),
@@ -7568,6 +7647,7 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
         userState,
         fileIndex,
         clipboardService,
+        dictationService,
         nevermindAi,
         activeAiChatId,
         draftAiChats,
@@ -8736,6 +8816,10 @@ function unregisterShortcutForAction(actionId) {
 
 async function executeShortcutAction(action) {
   const currentAction = currentActionForStoredShortcut(action);
+  if (currentAction?.background || currentAction?.mode === 'background') {
+    runInBackground(() => executeAction(currentAction));
+    return;
+  }
   const wasVisible = Boolean(paletteWindow.win?.isVisible());
   if (!wasVisible) {
     paletteWindow.showPalette({ skipShownEvent: true, deferReveal: true });
@@ -9430,6 +9514,32 @@ app.whenReady().then(async () => {
     probeGh: () =>
       extensionPrSubmitter?.probe() ??
       Promise.resolve({ installed: false, authed: false }),
+  });
+
+  ipcMain.on('dictation:reply', (event, reply) => {
+    if (event.sender !== paletteWindow.win?.webContents) return;
+    if (!reply || typeof reply !== 'object') return;
+    if (reply.type === 'result' && typeof reply.text === 'string') {
+      dictationService.reply(reply as DictationRendererReply);
+      return;
+    }
+    if (reply.type === 'devices' && Array.isArray(reply.devices)) {
+      dictationService.reply(reply as DictationRendererReply);
+      return;
+    }
+    if (
+      reply.type === 'model-cache-status' &&
+      typeof reply.cached === 'boolean'
+    ) {
+      dictationService.reply(reply as DictationRendererReply);
+      return;
+    }
+    if (reply.type === 'model-ready') {
+      dictationService.reply(reply as DictationRendererReply);
+      return;
+    }
+    if (reply.type === 'error' && typeof reply.message === 'string')
+      dictationService.reply(reply as DictationRendererReply);
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) => {

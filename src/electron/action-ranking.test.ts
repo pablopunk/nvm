@@ -6,7 +6,7 @@ import {
   compareRankedActions,
   priorityBoost,
 } from './action-ranking';
-import { scoreNormalized } from './search-utils';
+import { prioritizedTitleSearchScore, scoreNormalized } from './search-utils';
 
 const EXACT_MATCH_SCORE = 100;
 
@@ -66,6 +66,17 @@ test('AI builder chat continuation title no longer exact-matches the prompt', ()
   assert.ok(
     scoreNormalized('Continue AI chat: quit all apps', query) <
       EXACT_MATCH_SCORE,
+  );
+});
+
+test('title prefixes outrank whole-word matches in longer titles', () => {
+  assert.ok(
+    prioritizedTitleSearchScore('Dictate', 'dictat') >
+      prioritizedTitleSearchScore('Press Tab to automate "dictat"', 'dictat'),
+  );
+  assert.ok(
+    prioritizedTitleSearchScore('Dictate', 'dictate') >
+      prioritizedTitleSearchScore('Dictation Settings', 'dictate'),
   );
 });
 

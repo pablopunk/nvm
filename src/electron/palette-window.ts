@@ -19,6 +19,7 @@ import {
 } from './os';
 import {
   isNvmTestMode,
+  isNvmHeadlessTestMode,
   recordPackagedStartupReady,
   recordTestWindowEvent,
 } from './test-mode';
@@ -52,6 +53,28 @@ function addWindowBlurMargin(size: { width: number; height: number }) {
     width: size.width + WINDOW_BLUR_MARGIN * 2,
     height: size.height + WINDOW_BLUR_MARGIN * 2,
   };
+}
+
+function installPaletteRendererIsolationHeaders(window: BrowserWindow) {
+  const windowId = window.webContents.id;
+  window.webContents.session.webRequest.onHeadersReceived(
+    function handlePaletteHeaders(details, callback) {
+      if (
+        details.webContentsId !== windowId ||
+        details.resourceType !== 'mainFrame'
+      ) {
+        callback({});
+        return;
+      }
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Cross-Origin-Opener-Policy': ['same-origin'],
+          'Cross-Origin-Embedder-Policy': ['credentialless'],
+        },
+      });
+    },
+  );
 }
 
 export function installPermissionHandlers(
@@ -138,6 +161,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       },
     } satisfies BrowserWindowConstructorOptions);
 
+    installPaletteRendererIsolationHeaders(win);
     applyPaletteWindowPolicy();
 
     win.on('blur', () => dismissAfterFocusLoss('window-blur'));
@@ -271,11 +295,13 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         if (showOptions.skipShownEvent)
           win.webContents.send('palette:shortcut-show');
         else win.webContents.send('palette:shown');
-        win.show();
+        if (!isNvmHeadlessTestMode) win.show();
         if (isNvmTestMode) recordTestWindowEvent('shown');
         win.moveTop();
-        win.focus();
-        win.webContents.focus();
+        if (!isNvmHeadlessTestMode) {
+          win.focus();
+          win.webContents.focus();
+        }
         debugLog('showPalette.after', {
           visible: win.isVisible(),
           focused: win.isFocused(),

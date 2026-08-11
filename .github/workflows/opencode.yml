@@ -30,4 +30,5 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode-go/deepseek-v4-pro
+          model: opencode-go/gpt-5.6-luna
+          variant: max

@@ -76,6 +76,7 @@ export interface ProgressViewProps {
   steps: { title: string; status?: string }[];
   value?: number;
   total?: number;
+  label?: string;
   status?: string;
 }
 export type FormValue = string | boolean | string[];
@@ -518,19 +519,20 @@ export function ProgressView({
   steps,
   value,
   total,
+  label,
   status,
 }: ProgressViewProps) {
   const hasProgress =
     typeof value === 'number' && typeof total === 'number' && total > 0;
   const ratio = hasProgress ? Math.max(0, Math.min(1, value / total)) : 0;
   const percent = Math.round(ratio * 100);
-  const showSummary = Boolean(status) || hasProgress;
+  const showSummary = Boolean(label || status) || hasProgress;
   return (
     <div className="extensionView progressView">
       {showSummary ? (
         <div className="progressOverview">
           <div>
-            <strong>{status || 'Working…'}</strong>
+            <strong>{label || status || 'Working…'}</strong>
             {hasProgress ? (
               <small>
                 {value} of {total} · {percent}%
@@ -649,6 +651,11 @@ function formFieldControl(
         placeholder={field.placeholder}
         required={field.required}
         rows={field.rows || 4}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') return;
+          if (event.metaKey || event.ctrlKey || event.altKey) return;
+          event.stopPropagation();
+        }}
         onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
       />
     );
@@ -923,10 +930,6 @@ export function ListView<T>({
   return (
     <>
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {isLoading && hasItems && (
-        <div className="viewLoadingBar" role="status" aria-label="Loading" />
-      )}
-
       {hasItems ? (
         visibleSections.map((section, index) => (
           <div key={index} className="itemSection">
@@ -967,10 +970,6 @@ export function GridView<T>({
   return (
     <div className="extensionView">
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {isLoading && hasItems && (
-        <div className="viewLoadingBar" role="status" aria-label="Loading" />
-      )}
-
       {hasItems ? (
         visibleSections.map((section, index) => (
           <div key={index} className="itemSection">

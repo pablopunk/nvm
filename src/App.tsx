@@ -22,6 +22,11 @@ import {
   useState,
 } from 'react';
 import { actionMenuPresentation } from './action-menu-presentation';
+import {
+  isDictationModelCached,
+  prepareDictationModel,
+  recordDictation,
+} from './dictation-renderer';
 import { ActionPanel } from './action-panel';
 import { isAppIconPath } from './app-icons';
 import {
@@ -76,7 +81,12 @@ import {
   rootResultSelection,
 } from './palette-lifecycle';
 import { usePalettePrompt } from './palette-prompt';
-import type { NevermindApi, PaletteMode, ShortcutRecord } from './preload-api';
+import type {
+  DictationCommand,
+  NevermindApi,
+  PaletteMode,
+  ShortcutRecord,
+} from './preload-api';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -298,6 +308,15 @@ function selectedItemIdForView(view: ExtensionView | null, current = '') {
     (current && items.some((item) => item.id === current)
       ? current
       : items[0]?.id || '')
+  );
+}
+
+function isEditableKeyTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
   );
 }
 
@@ -598,6 +617,14 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   function onShellKeyDown(event: React.KeyboardEvent) {
+    if (
+      isEditableKeyTarget(event.target) &&
+      event.key !== 'Escape' &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    )
+      return;
     if (event.key === 'Escape') {
       if (confirmFor) setConfirmFor(null);
       else if (actionSubmenuFor) {
@@ -742,12 +769,22 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const searchable = searchableView;
   const hasActions =
     actionsFromPanel(view.actionPanel, view.actions || []).length > 0;
+  const framelessWindow = windowOptions.chrome === 'none';
+  const shellClassName = [
+    'extensionWindowShell',
+    windowOptions.titleBar === 'hidden' && !framelessWindow
+      ? 'extensionWindowTitleBarHidden'
+      : '',
+    framelessWindow ? 'extensionWindowChromeNone' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <Command
       ref={shellRef}
       tabIndex={-1}
-      className={`extensionWindowShell ${windowOptions.titleBar === 'hidden' ? 'extensionWindowTitleBarHidden' : ''} ${windowOptions.chrome === 'none' ? 'extensionWindowChromeNone' : ''}`}
+      className={shellClassName}
       value={selectedValue}
       onValueChange={setSelectedValue}
       shouldFilter={false}
@@ -930,6 +967,145 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       </footer>
     </Command>
   );
+}
+
+function DictationRendererController() {
+  const recordingRef = useRef<Awaited<
+    ReturnType<typeof recordDictation>
+  > | null>(null);
+  const startPromiseRef = useRef<Promise<
+    Awaited<ReturnType<typeof recordDictation>>
+  > | null>(null);
+
+  useEffect(() => {
+    async function handleCommand(command: DictationCommand) {
+      if (command.type === 'model-cache-status') {
+        try {
+          window.nvm.replyDictation({
+            type: 'model-cache-status',
+            cached: await isDictationModelCached(),
+          });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      if (command.type === 'prepare-model') {
+        try {
+          await prepareDictationModel(command.modelKeepAliveMs);
+          window.nvm.replyDictation({ type: 'model-ready' });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      if (command.type === 'devices') {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const microphones = devices
+            .filter((device) => device.kind === 'audioinput')
+            .map((device, index) => ({
+              id: device.deviceId || `microphone-${index + 1}`,
+              title: device.label || `Microphone ${index + 1}`,
+              isDefault: device.deviceId === 'default',
+            }));
+          window.nvm.replyDictation({
+            type: 'devices',
+            devices: [
+              { id: 'default', title: 'System Default', isDefault: true },
+              ...microphones.filter((device) => device.id !== 'default'),
+            ],
+          });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      if (command.type === 'start') {
+        if (startPromiseRef.current || recordingRef.current) return;
+        const startPromise = recordDictation(
+          command.deviceId === 'default' ? undefined : command.deviceId,
+          undefined,
+          command.modelKeepAliveMs,
+        );
+        startPromiseRef.current = startPromise;
+        try {
+          recordingRef.current = await startPromise;
+        } catch (error) {
+          if (command.deviceId && command.deviceId !== 'default') {
+            try {
+              recordingRef.current = await recordDictation(
+                undefined,
+                undefined,
+                command.modelKeepAliveMs,
+              );
+              startPromiseRef.current = null;
+              return;
+            } catch {}
+          }
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          startPromiseRef.current = null;
+        }
+        return;
+      }
+
+      if (command.type === 'stop') {
+        try {
+          const recording =
+            recordingRef.current || (await startPromiseRef.current);
+          if (!recording) throw new Error('Dictation is not recording');
+          recordingRef.current = null;
+          window.nvm.replyDictation({
+            type: 'result',
+            text: await recording.stop(),
+          });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      try {
+        const recording =
+          recordingRef.current || (await startPromiseRef.current);
+        recording?.cancel();
+      } finally {
+        recordingRef.current = null;
+        startPromiseRef.current = null;
+      }
+    }
+
+    const unsubscribe = window.nvm.onDictationCommand((command) => {
+      void handleCommand(command);
+    });
+    return () => {
+      unsubscribe();
+      recordingRef.current?.cancel();
+      recordingRef.current = null;
+      startPromiseRef.current = null;
+    };
+  }, []);
+
+  return null;
 }
 
 export function App() {
@@ -4514,6 +4690,7 @@ export function App() {
 
   return (
     <main className="shell" onMouseDown={dismissFromEmptyWindowSpace}>
+      <DictationRendererController />
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
       <Command
         ref={paletteRef}

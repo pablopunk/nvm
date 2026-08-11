@@ -56,6 +56,7 @@ export type ExtensionCapability =
   | 'places'
   | 'updates'
   | 'settings.write'
+  | 'dictation'
   | 'camera'
   /** Declares intent to use `ctx.ocr` image/screen/region text recognition helpers. */
   | 'ocr';
@@ -164,7 +165,7 @@ export type ExtensionActionContribution = {
   customizable?: boolean;
   /** Muted semantic color applied to the action result title and Lucide/fallback icon. Images keep their original colors. */
   appearance?: ExtensionItemAppearance;
-  /** Where this durable action should be discoverable. Defaults to `['search']`. */
+  /** Where this durable action should be discoverable. Defaults to `['search']`; use `['root']` for an action referenced by a root item's `primaryAction` without creating a duplicate search result. */
   placement?: ExtensionActionPlacement[];
   /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode;
@@ -242,7 +243,7 @@ export type ExtensionWindowOptions = {
   chrome?: 'default' | 'none';
   /** Window width. Defaults to 560 (`size: 'large'`: 900) and is clamped to 320–1600; explicit zero is accepted and clamps to 320. */
   width?: number;
-  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200; explicit zero is accepted and clamps to 240. */
+  /** Window height. Defaults to 420 (`size: 'large'`: 680) and is clamped to 240–1200; passive non-focusable windows may use 64–1200. */
   height?: number;
   /** Named dimension preset. Defaults to `default`. Explicit width/height take precedence. */
   size?: ViewSize;
@@ -252,6 +253,14 @@ export type ExtensionWindowOptions = {
   visibleOnAllSpaces?: boolean;
   /** Hide the live window when it loses focus. Defaults to false. */
   hideOnBlur?: boolean;
+  /** Do not allow this companion window to receive keyboard focus. */
+  focusable?: boolean;
+  /** Show without activating the application. Useful for passive indicators. */
+  showInactive?: boolean;
+  /** Ignore mouse input so the window cannot intercept the user's current target. */
+  ignoreMouseEvents?: boolean;
+  /** Position a passive companion relative to the current display work area. */
+  position?: 'center' | 'top-center' | 'bottom-center';
   /**
    * Retain the window for relaunch restoration. Defaults to false.
    *
@@ -347,6 +356,22 @@ export type ExtensionToastResult = {
   toast: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
 };
 
+export type ExtensionIndicatorStatus =
+  | 'recording'
+  | 'transcribing'
+  | 'loading'
+  | 'success'
+  | 'error';
+
+export type ExtensionIndicatorInput = {
+  id?: string;
+  title: string;
+  subtitle?: string;
+  status?: ExtensionIndicatorStatus;
+  value?: number;
+  total?: number;
+};
+
 /** In-place list/grid update returned from an action handler. */
 export type ExtensionViewPatch = {
   /** How to apply item changes. Defaults to host behavior, usually patch. */
@@ -355,7 +380,7 @@ export type ExtensionViewPatch = {
   items?: Array<Partial<Omit<ExtensionItem, 'id'>> & { id: string }>;
   /** Stable item ids to remove from the current view. */
   removeItemIds?: string[];
-  /** Explicit work-in-progress state; avoid using it for passive background refreshes. */
+  /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   /** Only set when intentionally moving focus to a visible item id; host otherwise preserves selection. */
   selectedItemId?: string;
@@ -383,6 +408,7 @@ export type ExtensionAction = {
   /** Host action type. Prefer `ctx.actions.*` helpers instead of spelling this manually. */
   type?: string;
   title?: string;
+  icon?: string;
   subtitle?: string;
   shortcut?: string;
   shortcutScope?: ShortcutScope;
@@ -497,9 +523,9 @@ export type ExtensionItem = {
   path?: string;
   filePath?: string;
   fileUrl?: string;
-  /** Enter/default behavior. */
+  /** Enter/default behavior. For a stable root action, reference a durable `actions(ctx)` contribution with `ctx.actions.ref(...)` so the host can expose aliases, shortcuts, and Options. */
   primaryAction?: ExtensionAction;
-  /** Secondary actions shown by Cmd+K. */
+  /** Secondary actions shown by Cmd+K. Do not repeat `primaryAction`; the host removes duplicate primary entries. */
   actions?: ExtensionAction[];
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
@@ -625,6 +651,7 @@ export type ExtensionView = {
   /** View items or a lazy loader handle from `ctx.data.loader()` or `ctx.data.staleWhileRevalidate()`. When a loader handle is used, the host owns the loading lifecycle and `emptyView` is required. */
   items?: ExtensionItem[] | ExtensionDataLoaderHandle;
   sections?: ExtensionItemSection[];
+  /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   emptyView?: { title?: string; subtitle?: string };
   /** Optional item detail pane for richer list views. */
@@ -660,6 +687,8 @@ export type ExtensionView = {
   value?: number;
   /** Total progress value for progress views. Pair with `value` for a determinate bar. */
   total?: number;
+  /** Human-readable progress label rendered in compact progress surfaces. */
+  label?: string;
   /** Human-readable progress summary, e.g. `Downloading assets…`. */
   status?: string;
   [key: string]: unknown;
@@ -863,6 +892,33 @@ export type ExtensionSettings = {
   get<T = unknown>(id: string): T;
   set<T = unknown>(id: string, value: T): T;
   toggle(id: string): unknown;
+};
+
+export type ExtensionDictationDevice = {
+  id: string;
+  title: string;
+  isDefault: boolean;
+};
+
+export type ExtensionDictationStatus =
+  | 'idle'
+  | 'recording'
+  | 'transcribing'
+  | 'error';
+
+export type ExtensionDictation = {
+  status(): Promise<ExtensionDictationStatus>;
+  devices(): Promise<ExtensionDictationDevice[]>;
+  /** Check required backend assets in IndexedDB; this does not load the model into memory. */
+  modelCacheStatus(): Promise<'cached' | 'missing'>;
+  /** Download and initialize the model, retaining it according to the requested policy. */
+  prepareModel(options?: { modelKeepAliveMs?: number }): Promise<void>;
+  start(options?: {
+    deviceId?: string;
+    modelKeepAliveMs?: number;
+  }): Promise<void>;
+  stop(): Promise<string>;
+  cancel(): Promise<void>;
 };
 
 export type ExtensionShortcutRecord = {
@@ -1298,6 +1354,12 @@ export type ExtensionContext = {
       message?: string;
       tone?: 'default' | 'info' | 'success' | 'error';
     }): ExtensionToastResult;
+    /** Passive always-on-top status indicator that never takes focus. */
+    indicator: {
+      show(input: ExtensionIndicatorInput): void;
+      update(input: ExtensionIndicatorInput): void;
+      hide(id?: string): void;
+    };
     /** Sandboxed HTML/JS iframe with no Node access. Use only when host-owned primitives do not fit. */
     webview(view: ExtensionView): ExtensionView;
     /** Host-owned live camera view. Declare `camera`; use `ctx.actions.camera.*` for switching/mute controls. */
@@ -1353,7 +1415,7 @@ export type ExtensionContext = {
       title?: string,
       options?: ExtensionPasteOptions & Record<string, unknown>,
     ): ExtensionAction;
-    /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use inside views so rows share aliases/shortcuts with the durable action. */
+    /** Reference a persistent action declared by `actions(ctx)` using its local contribution `id` (`registeredActionId`), not the optional global `actionId`. Use for root `primaryAction` values and inside views so rows share aliases/shortcuts/options with the durable action. */
     ref(
       registeredActionId: string,
       title?: string,
@@ -1733,6 +1795,8 @@ export type ExtensionContext = {
     discard(key: string): Promise<void> | void;
   };
   settings: ExtensionSettings;
+  /** Cross-platform local speech dictation. Declare `dictation` for review. */
+  dictation?: ExtensionDictation;
   shortcuts: {
     /** Active global action shortcuts, including user overrides and declared extension shortcuts. */
     list(): ExtensionShortcutRecord[];
@@ -1783,8 +1847,9 @@ export type ExtensionCommand = {
 /**
  * Extension manifest. `actions(ctx)` is the durable action registry. `commands` are
  * ergonomic shorthand for durable actions that appear in search automatically; the
- * host normalizes both into the same shortcut/alias/execution pipeline. Provider
- * methods should contribute distinct child/status/query items, not duplicate command launchers.
+ * host normalizes both into the same shortcut/alias/execution pipeline. For a capability
+ * with one primary root surface, prefer one `rootItems()` item and put Settings and
+ * secondary actions in its `actionPanel` instead of exposing sibling command launchers.
  */
 export type NevermindExtension = {
   id: string;
@@ -1817,7 +1882,7 @@ export type NevermindExtension = {
   actions?(
     ctx: ExtensionContext,
   ): ExtensionActionContribution[] | { actions: ExtensionActionContribution[] };
-  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
+  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Prefer one primary item per capability; expose Settings and secondary actions through that item's `actionPanel` so they appear under Cmd+K. If a secondary action should also be independently searchable, register it with `actions(ctx)` and reference it with `ctx.actions.ref(...)`. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
   rootItems?(
     ctx: ExtensionContext,
   ):
