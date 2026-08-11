@@ -9,6 +9,9 @@ import {
   parseModelRouteRef,
   setModelRoute,
   ModelNotConfiguredError,
+  DEFAULT_THINKING_LEVEL,
+  THINKING_LEVELS,
+  type ThinkingLevel,
   type ModelRouteSlot,
 } from '../../../lib/settings';
 import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
@@ -20,6 +23,10 @@ const putModelSchema = z.object({
   purpose: z.string().optional(),
   model: z.string().optional(),
   modelRef: z.string().optional(),
+  thinkingLevel: z.string().optional().refine(
+    (value) => value === undefined || THINKING_LEVELS.includes(value as ThinkingLevel),
+    'Invalid thinking level',
+  ),
 });
 
 async function listModelRefs() {
@@ -74,13 +81,16 @@ export const PUT: APIRoute = async ({ request }) => {
   const cost = await lookupModelCost(route.provider, route.modelId);
   if (!cost) return new Response(`No pricing for ${route.provider}/${route.modelId}`, { status: 400 });
 
-  await setModelRoute(slot, route);
+  const thinkingLevel = (body.thinkingLevel as ThinkingLevel | undefined)
+    ?? (await safeRoute(slot))?.thinkingLevel
+    ?? DEFAULT_THINKING_LEVEL;
+  await setModelRoute(slot, { ...route, thinkingLevel });
   await recordAudit({
     actorUserId: actor.id,
     action: 'model.changed',
     targetType: 'model',
     targetId: modelRouteToRef(route),
-    meta: { slot, provider: route.provider, ...(slot === 'free' || slot === 'paid' ? { tier: slot } : {}) },
+    meta: { slot, provider: route.provider, thinkingLevel, ...(slot === 'free' || slot === 'paid' ? { tier: slot } : {}) },
   });
   return Response.json({ ok: true });
 };

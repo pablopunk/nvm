@@ -10,6 +10,7 @@ import {
   ModelNotConfiguredError,
   parseExtensionAiModelRole,
   parseModelRouteRef,
+  setModelRoute,
   setModelProviderChain,
   getSignupsEnabled,
   SignupsPolicyError,
@@ -30,6 +31,7 @@ function promiseChain(result: unknown, onValues?: (v: unknown) => void) {
     set: () => chain,
     returning: () => p(),
     onConflictDoNothing: () => chain,
+    onConflictDoUpdate: () => chain,
     then: (r: any, j: any) => p().then(r, j),
   };
   return chain;
@@ -170,7 +172,7 @@ describe('getModelRoute', () => {
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
-    assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6' });
+    assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6', thinkingLevel: 'low' });
   });
 
   test('returns stored ref-string route', async () => {
@@ -180,7 +182,17 @@ describe('getModelRoute', () => {
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
-    assert.deepEqual(route, { provider: 'openai', modelId: 'gpt-4o' });
+    assert.deepEqual(route, { provider: 'openai', modelId: 'gpt-4o', thinkingLevel: 'low' });
+  });
+
+  test('returns the stored thinking level', async () => {
+    const db = fakeDb([
+      [{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6","thinkingLevel":"high"}' }],
+    ]);
+    setDbForTests(db);
+
+    const route = await getModelRoute('paid');
+    assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6', thinkingLevel: 'high' });
   });
 
   test('falls back to legacy modelId + active provider when no route stored', async () => {
@@ -192,7 +204,7 @@ describe('getModelRoute', () => {
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
-    assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6' });
+    assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6', thinkingLevel: 'low' });
   });
 
   test('falls back to default provider when active_provider is unset', async () => {
@@ -204,7 +216,7 @@ describe('getModelRoute', () => {
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
-    assert.deepEqual(route, { provider: 'opencode_zen', modelId: 'some-model' });
+    assert.deepEqual(route, { provider: 'opencode_zen', modelId: 'some-model', thinkingLevel: 'low' });
   });
 
   test('smart slot falls back to paid chain', async () => {
@@ -217,7 +229,7 @@ describe('getModelRoute', () => {
     setDbForTests(db);
 
     const route = await getModelRoute('smart');
-    assert.deepEqual(route, { provider: 'openai', modelId: 'gpt-4o' });
+    assert.deepEqual(route, { provider: 'openai', modelId: 'gpt-4o', thinkingLevel: 'low' });
   });
 
   test('fast slot falls back to free chain', async () => {
@@ -230,7 +242,7 @@ describe('getModelRoute', () => {
     setDbForTests(db);
 
     const route = await getModelRoute('fast');
-    assert.deepEqual(route, { provider: 'opencode_zen', modelId: 'gemini-flash' });
+    assert.deepEqual(route, { provider: 'opencode_zen', modelId: 'gemini-flash', thinkingLevel: 'low' });
   });
 
   test('throws ModelNotConfiguredError when legacy modelId is missing', async () => {
@@ -259,6 +271,24 @@ describe('getModelRoute', () => {
       () => getModelRoute('paid'),
       ModelNotConfiguredError,
     );
+  });
+});
+
+test('persists the thinking level with a model route', async () => {
+  let inserted: any;
+  setDbForTests(fakeDb([], (values) => { inserted = values; }));
+
+  await setModelRoute('smart', {
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-6',
+    thinkingLevel: 'high',
+  });
+
+  assert.equal(inserted.key, 'smart_model_route');
+  assert.deepEqual(JSON.parse(inserted.value), {
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-6',
+    thinkingLevel: 'high',
   });
 });
 

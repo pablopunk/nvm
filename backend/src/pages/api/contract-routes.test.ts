@@ -118,8 +118,8 @@ function installModelsDevFetch() {
   };
 }
 
-function proxySelects(options: { free?: number; paid?: number; model?: string | null; routeProvider?: string } = {}) {
-  const modelRoute = options.model === null ? [] : [{ value: JSON.stringify({ provider: options.routeProvider ?? 'opencode_zen', modelId: options.model ?? 'gemini-3-flash' }) }];
+function proxySelects(options: { free?: number; paid?: number; model?: string | null; routeProvider?: string; thinkingLevel?: string } = {}) {
+  const modelRoute = options.model === null ? [] : [{ value: JSON.stringify({ provider: options.routeProvider ?? 'opencode_zen', modelId: options.model ?? 'gemini-3-flash', thinkingLevel: options.thinkingLevel ?? 'low' }) }];
   return [
     [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
     [{ id: 1 }],
@@ -451,6 +451,19 @@ test('active-model route returns descriptor contract with compatibility headers'
   assert.equal(body.provider, 'nevermind');
   assert.equal(body.api, 'google-generative-ai');
   assert.equal(body.baseUrl, 'https://api.nvm.fyi/api/v1');
+  assert.equal(body.thinkingLevel, 'low');
+});
+
+test('active-model returns the configured thinking level for a route', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: proxySelects({ thinkingLevel: 'high' }) }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model', {
+    headers: { authorization: 'Bearer nvm_pat_test' },
+  })));
+  const body = await response.json() as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.thinkingLevel, 'high');
 });
 
 test('active-model route resolves admin-defined extension model roles', async () => {

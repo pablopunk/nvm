@@ -35,10 +35,12 @@ export const GET: APIRoute = async ({ request }) => {
   const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model') || url.searchParams.get('model'));
   let provider: string;
   let modelId: string;
+  let thinkingLevel: string;
   try {
     const route = await getModelRoute(requestedModel ?? tier);
     provider = route.provider;
     modelId = route.modelId;
+    thinkingLevel = route.thinkingLevel;
   } catch (err) {
     if (err instanceof ModelNotConfiguredError) {
       return Response.json(
@@ -88,6 +90,7 @@ export const GET: APIRoute = async ({ request }) => {
   const requestId = requestIdFromHeaders(request.headers);
   return Response.json({
     ...descriptor,
+    thinkingLevel,
     api,
     provider: NEVERMIND_PROVIDER_ID,
     baseUrl,
