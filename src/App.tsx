@@ -2771,10 +2771,7 @@ export function App() {
         );
       const result = await resultPromise;
       const resultAfterLoading =
-        showsLoading &&
-        loadingNavigation === 'push' &&
-        result?.navigation === 'push' &&
-        result.view
+        showsLoading && result?.navigation === 'push' && result.view
           ? { ...result, navigation: 'replace' as const }
           : result;
       if (
