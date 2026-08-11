@@ -96,6 +96,7 @@ import {
 } from './shortcut-manager';
 import {
   acceleratorFromKeyboardEvent,
+  isShortcutRecorderSaveKey,
   keyNameForShortcut,
   normalizedShortcut,
 } from './shortcuts';
@@ -1193,6 +1194,8 @@ export function App() {
   const [actionQuery, setActionQuery] = useState('');
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null);
   const [recordedShortcut, setRecordedShortcut] = useState('');
+  const [savingShortcut, setSavingShortcut] = useState(false);
+  const savingShortcutRef = useRef(false);
   const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false);
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([]);
   const [shortcutOptionsFor, setShortcutOptionsFor] =
@@ -2943,55 +2946,103 @@ export function App() {
   }
 
   function startShortcutRecorder(action: Action) {
+    savingShortcutRef.current = false;
+    setSavingShortcut(false);
     setShortcutFor(action);
     setRecordedShortcut('');
   }
 
+  function cancelShortcutRecorder() {
+    savingShortcutRef.current = false;
+    setSavingShortcut(false);
+    setShortcutFor(null);
+    setRecordedShortcut('');
+  }
+
   async function saveRecordedShortcut() {
-    if (!(shortcutFor && recordedShortcut)) return;
-    if (shortcutFor.id === PALETTE_HOTKEY_ACTION_ID) {
-      const result = await window.nvm.setPaletteHotkey(recordedShortcut);
-      showToast(result.message, result.ok ? 'default' : 'error');
-      if (!(result.ok || result.spotlightConflict)) return;
-      setShortcutFor(null);
-      setOptionsFor(null);
-      const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
-      if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
-      if (result.spotlightConflict)
-        showExtensionView(spotlightConflictView(recordedShortcut), 'push');
-      return;
-    }
-    if (shortcutFor.id === HYPER_KEY_ACTION_ID) {
+    const targetAction = shortcutFor;
+    const accelerator = recordedShortcut;
+    if (!(targetAction && accelerator) || savingShortcutRef.current) return;
+
+    savingShortcutRef.current = true;
+    setSavingShortcut(true);
+    void window.nvm.log('debug', 'shortcut.recorder.save.started', {
+      actionId: targetAction.id,
+      accelerator,
+    });
+    try {
+      if (targetAction.id === PALETTE_HOTKEY_ACTION_ID) {
+        const result = await window.nvm.setPaletteHotkey(accelerator);
+        showToast(result.message, result.ok ? 'default' : 'error');
+        if (!(result.ok || result.spotlightConflict)) return;
+        setShortcutFor(null);
+        setRecordedShortcut('');
+        setOptionsFor(null);
+        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
+        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+        if (result.spotlightConflict)
+          showExtensionView(spotlightConflictView(accelerator), 'push');
+        return;
+      }
+      if (targetAction.id === HYPER_KEY_ACTION_ID) {
+        const result = (await window.nvm.runViewAction({
+          type: 'setSettingShortcut',
+          title: 'Save Hyper Key',
+          settingId: 'hyperKey',
+          shortcut: accelerator,
+        })) as any;
+        const message = result?.toast?.message || 'Hyper key saved';
+        showToast(message, result?.ok ? 'default' : 'error');
+        if (!result?.ok) {
+          void window.nvm.log('warn', 'shortcut.recorder.save.failed', {
+            actionId: targetAction.id,
+            accelerator,
+            message,
+          });
+          return;
+        }
+        setShortcutLabelHyperKey(accelerator);
+        setShortcutFor(null);
+        setRecordedShortcut('');
+        setOptionsFor(null);
+        setRefreshNonce((nonce) => nonce + 1);
+        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
+        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+        return;
+      }
       const result = (await window.nvm.runViewAction({
-        type: 'setSettingShortcut',
-        title: 'Save Hyper Key',
-        settingId: 'hyperKey',
-        shortcut: recordedShortcut,
+        type: 'setActionShortcut',
+        title: 'Save Shortcut',
+        targetAction,
+        accelerator,
       })) as any;
-      showToast(
-        result?.toast?.message || 'Hyper key saved',
-        result?.ok ? 'default' : 'error',
+      const message = result?.toast?.message || 'Could not save shortcut';
+      showToast(message, result?.ok ? 'default' : 'error');
+      void window.nvm.log(
+        result?.ok ? 'debug' : 'warn',
+        result?.ok
+          ? 'shortcut.recorder.save.succeeded'
+          : 'shortcut.recorder.save.failed',
+        { actionId: targetAction.id, accelerator, message },
       );
       if (!result?.ok) return;
-      setShortcutLabelHyperKey(recordedShortcut);
       setShortcutFor(null);
+      setRecordedShortcut('');
       setOptionsFor(null);
       setRefreshNonce((nonce) => nonce + 1);
-      const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
-      if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
-      return;
+      if (shortcutManagerOpen) await refreshShortcuts();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Could not save shortcut: ${message}`, 'error');
+      void window.nvm.log('error', 'shortcut.recorder.save.failed', {
+        actionId: targetAction.id,
+        accelerator,
+        message,
+      });
+    } finally {
+      savingShortcutRef.current = false;
+      setSavingShortcut(false);
     }
-    const result = (await window.nvm.runViewAction({
-      type: 'setActionShortcut',
-      title: 'Save Shortcut',
-      targetAction: shortcutFor,
-      accelerator: recordedShortcut,
-    })) as any;
-    if (!result?.ok) return;
-    setShortcutFor(null);
-    setOptionsFor(null);
-    setRefreshNonce((nonce) => nonce + 1);
-    if (shortcutManagerOpen) await refreshShortcuts();
   }
 
   async function removeShortcut(record: ShortcutRecord) {
@@ -3586,7 +3637,8 @@ export function App() {
       recordedShortcut,
       shortcutFor,
       saveRecordedShortcut,
-      () => setShortcutFor(null),
+      cancelShortcutRecorder,
+      savingShortcut,
     );
   }
 
@@ -4303,7 +4355,7 @@ export function App() {
   function dismissFromEmptyWindowSpace(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('.card, .toast')) return;
+    if (target?.closest('.card, .toast, .extensionWindowCompactPanel')) return;
     event.preventDefault();
     void window.nvm.hide();
   }
@@ -4313,12 +4365,11 @@ export function App() {
       event.preventDefault();
       event.stopPropagation();
       if (event.key === 'Escape') {
-        setShortcutFor(null);
-        setRecordedShortcut('');
+        cancelShortcutRecorder();
         return;
       }
-      if (event.key === 'Enter') {
-        saveRecordedShortcut();
+      if (isShortcutRecorderSaveKey(event.nativeEvent)) {
+        void saveRecordedShortcut();
         return;
       }
       if (event.key === 'Backspace' || event.key === 'Delete') {
@@ -4688,6 +4739,11 @@ export function App() {
     }
   }
 
+  function onShortcutRecorderKeyDown(event: React.KeyboardEvent) {
+    if (!shortcutFor) return;
+    onCommandKeyDown(event);
+  }
+
   return (
     <main className="shell" onMouseDown={dismissFromEmptyWindowSpace}>
       <DictationRendererController />
@@ -4708,6 +4764,7 @@ export function App() {
           <Zap className="brandIcon" size={22} />
           <Command.Input
             ref={inputRef}
+            onKeyDown={shortcutFor ? onShortcutRecorderKeyDown : undefined}
             className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
             value={inputValue}
             onValueChange={(value) => {
@@ -4749,7 +4806,7 @@ export function App() {
           className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
         >
           {shortcutFor ? (
-            <div className="shortcutRecorder">
+            <div className="shortcutRecorder" aria-busy={savingShortcut}>
               <div className="shortcutKeys">
                 {(recordedShortcut
                   ? recordedShortcut.split('+')

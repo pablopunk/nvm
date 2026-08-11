@@ -15,11 +15,11 @@ const FIXTURE_REQUIRED = new Set([
   'input.prompt',
   'ui.editor',
   'ui.progress',
+  'ui.indicator',
   'ui.webview',
   'ui.camera',
   'ui.confirm',
   'ui.toast',
-  'ui.indicator',
 ]);
 
 // Helpers (ui.item, ui.actions, ui.empty, ui.loading, ui.error) are
@@ -33,7 +33,7 @@ const API_DTS = path.join(
   'resources',
   'nevermind-extension-api.d.ts',
 );
-const FIXTURE_FILE = path.join(ROOT, 'src', 'fixtures', 'ui-fixtures.ts');
+const FIXTURE_DIR = path.join(ROOT, 'src', 'fixtures');
 const DOC_FILE = path.join(ROOT, 'src', 'docs', 'extension-api-ui-fixtures.md');
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -45,6 +45,14 @@ function fail(message) {
 
 function readFile(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function fixtureFiles() {
+  return fs
+    .readdirSync(FIXTURE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .map((entry) => path.join(FIXTURE_DIR, entry.name))
+    .sort();
 }
 
 /** Context variable names used to access extension APIs in fixture code. */
@@ -133,48 +141,52 @@ function extractNamespaceMembers(decl, namespaces) {
 
 // ── 2.  Collect fixture call sites (namespace + method) ─────────────────────
 
-function collectFixtureCalls(fixtureFiles) {
+function collectFixtureCalls(fixtureSource) {
+  const sf = ts.createSourceFile(
+    'fixture.ts',
+    fixtureSource,
+    ts.ScriptTarget.Latest,
+    true,
+  );
   const calls = new Set();
 
-  /**
-   * Walk a call target's property-access chain back to its context variable.
-   * e.g. `ctx.ui.list(...)` -> ['ui','list']; `ctx.ui.indicator.show(...)` ->
-   * ['ui','indicator','show']. Returns null for chains that do not start from
-   * a context variable or a `ui` / `input` namespace.
-   */
-  function collectChainSegments(expression) {
-    const segments = [];
-    let current = expression;
-    while (ts.isPropertyAccessExpression(current)) {
-      if (!ts.isIdentifier(current.name)) return null;
-      segments.unshift(current.name.text);
-      current = current.expression;
-    }
-    if (!ts.isIdentifier(current) || !isContextVar(current.text)) return null;
-    if (segments.length < 2) return null;
-    if (segments[0] !== 'ui' && segments[0] !== 'input') return null;
-    return segments;
-  }
-
   function visit(node) {
-    if (ts.isCallExpression(node)) {
-      const segments = collectChainSegments(node.expression);
-      if (segments) {
-        // Record the full chain and every intermediate namespace prefix so a
-        // nested namespace such as `ui.indicator` counts as exercised.
-        for (let i = 2; i <= segments.length; i++) {
-          calls.add(segments.slice(0, i).join('.'));
-        }
+    // ctx.ui.X(...) or ctx.input.X(...)
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression)
+    ) {
+      const methodAccess = node.expression; // ctx.ui.list
+      const nsAccess = methodAccess.expression; // ctx.ui
+
+      if (
+        ts.isPropertyAccessExpression(nsAccess) &&
+        ts.isIdentifier(nsAccess.expression) &&
+        isContextVar(nsAccess.expression.text) &&
+        ts.isIdentifier(nsAccess.name) &&
+        ts.isIdentifier(methodAccess.name)
+      ) {
+        const ns = nsAccess.name.text; // 'ui' | 'input'
+        const method = methodAccess.name.text; // 'list' | 'prompt' | ...
+        calls.add(`${ns}.${method}`);
+      }
+
+      if (
+        ts.isPropertyAccessExpression(nsAccess) &&
+        ts.isPropertyAccessExpression(nsAccess.expression) &&
+        ts.isIdentifier(nsAccess.expression.expression) &&
+        isContextVar(nsAccess.expression.expression.text) &&
+        ts.isIdentifier(nsAccess.expression.name) &&
+        nsAccess.expression.name.text === 'ui' &&
+        ts.isIdentifier(nsAccess.name)
+      ) {
+        calls.add(`ui.${nsAccess.name.text}`);
       }
     }
     ts.forEachChild(node, visit);
   }
 
-  for (const file of fixtureFiles) {
-    const source = readFile(file);
-    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-    visit(sf);
-  }
+  visit(sf);
   return calls;
 }
 
@@ -215,7 +227,7 @@ function checkNewAPIMethods(uiMethods) {
         fail(
           `New API method "${qualified}" found in ExtensionContext but not in the fixture allowlist. ` +
             `If it renders host-owned UI, add it to FIXTURE_REQUIRED in this script, ` +
-            `add a fixture command in ${path.relative(ROOT, FIXTURE_FILE)}, ` +
+            `add a fixture command under ${path.relative(ROOT, FIXTURE_DIR)}, ` +
             `and update ${path.relative(ROOT, DOC_FILE)}. ` +
             `If it is a pass‑through helper, add "${qualified}" to SKIP_METHODS.`,
         );
@@ -230,7 +242,7 @@ function checkFixtureCoverage(calls) {
   for (const qualified of FIXTURE_REQUIRED) {
     if (!calls.has(qualified)) {
       fail(
-        `"${qualified}" is required by the fixture doc but not called in ${path.relative(ROOT, FIXTURE_FILE)}. ` +
+        `"${qualified}" is required by the fixture doc but not called in fixture files under ${path.relative(ROOT, FIXTURE_DIR)}. ` +
           `Add a command that exercises ${qualified} and update ${path.relative(ROOT, DOC_FILE)}.`,
       );
     }
@@ -276,15 +288,15 @@ function verifyDocList() {
 
 function main() {
   const dtsSource = readFile(API_DTS);
-
-  const fixturesDir = path.dirname(FIXTURE_FILE);
-  const fixtureFiles = fs
-    .readdirSync(fixturesDir)
-    .filter((name) => name.endsWith('.ts'))
-    .map((name) => path.join(fixturesDir, name));
+  const fixtureSources = fixtureFiles();
 
   const uiMethods = extractUIMethods(dtsSource);
-  const calls = collectFixtureCalls(fixtureFiles);
+  const calls = new Set();
+  for (const fixtureSource of fixtureSources) {
+    for (const call of collectFixtureCalls(readFile(fixtureSource))) {
+      calls.add(call);
+    }
+  }
 
   verifyAllowlistAgainstAPI(uiMethods);
   checkNewAPIMethods(uiMethods);

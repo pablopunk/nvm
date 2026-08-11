@@ -16,7 +16,7 @@ When adding or changing an extension API method that renders UI:
 
 ## Current Fixture
 
-`src/fixtures/ui-fixtures.ts` covers the current host-rendered UI surface:
+`src/fixtures/*.ts` covers the current host-rendered UI surface:
 
 - `ctx.ui.list`
 - `ctx.ui.collection`

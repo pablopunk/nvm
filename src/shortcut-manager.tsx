@@ -103,19 +103,25 @@ export function shortcutRecorderRows(
   action: ShortcutAction | null,
   saveShortcut: () => void,
   cancel: () => void,
+  saving = false,
 ): ActionPanelRow[] {
   return [
     {
       value: 'shortcut:save',
       icon: <Keyboard size={18} />,
-      title: recordedShortcut
-        ? shortcutLabel(recordedShortcut)
-        : 'Press a keyboard shortcut',
-      subtitle: recordedShortcut
-        ? `Save shortcut for “${action?.title}”`
-        : 'Use at least one modifier, then press Enter',
+      title: saving
+        ? 'Saving shortcut…'
+        : recordedShortcut
+          ? shortcutLabel(recordedShortcut)
+          : 'Press a keyboard shortcut',
+      subtitle: saving
+        ? `Saving shortcut for “${action?.title}”`
+        : recordedShortcut
+          ? `Save shortcut for “${action?.title}”`
+          : 'Use at least one modifier, then press Enter',
       onSelect: saveShortcut,
       className: 'result',
+      disabled: saving,
     },
     {
       value: 'shortcut:cancel',
@@ -124,6 +130,7 @@ export function shortcutRecorderRows(
       subtitle: 'Keep the current shortcut settings',
       onSelect: cancel,
       className: 'result',
+      disabled: saving,
     },
   ];
 }

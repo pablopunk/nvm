@@ -83,6 +83,17 @@ export function acceleratorFromKeyboardEvent(
   return parts.join('+');
 }
 
+export function isShortcutRecorderSaveKey(
+  event: Pick<KeyboardEvent, 'key' | 'code'>,
+) {
+  return (
+    event.key === 'Enter' ||
+    event.key === 'Return' ||
+    event.code === 'Enter' ||
+    event.code === 'NumpadEnter'
+  );
+}
+
 export function normalizedShortcut(value?: string) {
   return String(value || '')
     .replace(/\s+/g, '')
