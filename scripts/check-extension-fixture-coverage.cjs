@@ -19,6 +19,7 @@ const FIXTURE_REQUIRED = new Set([
   'ui.camera',
   'ui.confirm',
   'ui.toast',
+  'ui.indicator',
 ]);
 
 // Helpers (ui.item, ui.actions, ui.empty, ui.loading, ui.error) are
@@ -132,40 +133,48 @@ function extractNamespaceMembers(decl, namespaces) {
 
 // ── 2.  Collect fixture call sites (namespace + method) ─────────────────────
 
-function collectFixtureCalls(fixtureSource) {
-  const sf = ts.createSourceFile(
-    'fixture.ts',
-    fixtureSource,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+function collectFixtureCalls(fixtureFiles) {
   const calls = new Set();
 
-  function visit(node) {
-    // ctx.ui.X(...) or ctx.input.X(...)
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
-    ) {
-      const methodAccess = node.expression; // ctx.ui.list
-      const nsAccess = methodAccess.expression; // ctx.ui
+  /**
+   * Walk a call target's property-access chain back to its context variable.
+   * e.g. `ctx.ui.list(...)` -> ['ui','list']; `ctx.ui.indicator.show(...)` ->
+   * ['ui','indicator','show']. Returns null for chains that do not start from
+   * a context variable or a `ui` / `input` namespace.
+   */
+  function collectChainSegments(expression) {
+    const segments = [];
+    let current = expression;
+    while (ts.isPropertyAccessExpression(current)) {
+      if (!ts.isIdentifier(current.name)) return null;
+      segments.unshift(current.name.text);
+      current = current.expression;
+    }
+    if (!ts.isIdentifier(current) || !isContextVar(current.text)) return null;
+    if (segments.length < 2) return null;
+    if (segments[0] !== 'ui' && segments[0] !== 'input') return null;
+    return segments;
+  }
 
-      if (
-        ts.isPropertyAccessExpression(nsAccess) &&
-        ts.isIdentifier(nsAccess.expression) &&
-        isContextVar(nsAccess.expression.text) &&
-        ts.isIdentifier(nsAccess.name) &&
-        ts.isIdentifier(methodAccess.name)
-      ) {
-        const ns = nsAccess.name.text; // 'ui' | 'input'
-        const method = methodAccess.name.text; // 'list' | 'prompt' | ...
-        calls.add(`${ns}.${method}`);
+  function visit(node) {
+    if (ts.isCallExpression(node)) {
+      const segments = collectChainSegments(node.expression);
+      if (segments) {
+        // Record the full chain and every intermediate namespace prefix so a
+        // nested namespace such as `ui.indicator` counts as exercised.
+        for (let i = 2; i <= segments.length; i++) {
+          calls.add(segments.slice(0, i).join('.'));
+        }
       }
     }
     ts.forEachChild(node, visit);
   }
 
-  visit(sf);
+  for (const file of fixtureFiles) {
+    const source = readFile(file);
+    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    visit(sf);
+  }
   return calls;
 }
 
@@ -267,10 +276,15 @@ function verifyDocList() {
 
 function main() {
   const dtsSource = readFile(API_DTS);
-  const fixtureSource = readFile(FIXTURE_FILE);
+
+  const fixturesDir = path.dirname(FIXTURE_FILE);
+  const fixtureFiles = fs
+    .readdirSync(fixturesDir)
+    .filter((name) => name.endsWith('.ts'))
+    .map((name) => path.join(fixturesDir, name));
 
   const uiMethods = extractUIMethods(dtsSource);
-  const calls = collectFixtureCalls(fixtureSource);
+  const calls = collectFixtureCalls(fixtureFiles);
 
   verifyAllowlistAgainstAPI(uiMethods);
   checkNewAPIMethods(uiMethods);
