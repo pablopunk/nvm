@@ -899,6 +899,19 @@ function loadingView(ctx: ExtensionContext) {
   });
 }
 
+function emptyListView(ctx: ExtensionContext) {
+  return ctx.ui.list({
+    id: 'dev-ui-empty-list',
+    title: 'Dev UI · Empty List',
+    subtitle: 'A deterministic empty list for reviewing the empty state.',
+    emptyView: {
+      title: 'No items',
+      subtitle: 'This list intentionally has no items.',
+    },
+    items: [],
+  });
+}
+
 function fileMetadataMarkdown(file: ExtensionFile) {
   return [
     `# ${file.name}`,
@@ -1372,6 +1385,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Loading',
       icon: 'loader',
       run: (ctx) => loadingView(ctx),
+    },
+    {
+      id: 'empty-list',
+      title: 'Dev UI: Empty List',
+      icon: 'list-x',
+      run: (ctx) => emptyListView(ctx),
     },
     {
       id: 'crud-collection',
