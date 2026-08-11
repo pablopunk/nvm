@@ -1810,6 +1810,12 @@ export function App() {
   }, [shortcutFor?.id]);
 
   useEffect(() => {
+    if (!shortcutFor) return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [shortcutFor?.id]);
+
+  useEffect(() => {
     for (const action of actions) {
       const appPath = appPathForIcon(action);
       if (!appPath || requestedIcons.current.has(appPath)) continue;
