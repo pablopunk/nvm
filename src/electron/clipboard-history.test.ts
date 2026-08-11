@@ -579,6 +579,40 @@ test('createClipboardExtension returns extension descriptor', () => {
   assert.equal(extension.commands[0].id, 'clipboard-history');
 });
 
+test('createClipboardExtension respects independent root visibility settings', () => {
+  const settings: Record<string, boolean> = {
+    showClipboardInRoot: true,
+    showClipboardInRootSearch: true,
+  };
+  const { clipboardHistory } = createFakes({
+    getSetting: (id) => settings[id],
+  });
+  const extension = clipboardHistory.createClipboardExtension();
+  const context = {
+    clipboard: {
+      history: {
+        list: () => [
+          {
+            id: 'text:abc',
+            type: 'text',
+            text: 'clipboard value',
+            createdAt: Date.now(),
+          },
+        ],
+      },
+    },
+  };
+
+  settings.showClipboardInRoot = false;
+  assert.deepEqual(extension.rootItems(context), []);
+  assert.equal(extension.searchItems(context, 'clipboard').length, 1);
+
+  settings.showClipboardInRoot = true;
+  settings.showClipboardInRootSearch = false;
+  assert.equal(extension.rootItems(context).length, 1);
+  assert.deepEqual(extension.searchItems(context, 'clipboard'), []);
+});
+
 // ═══════════════════════════════════════════════════════════
 // clipboardHistoryItem (UI builder)
 // ═══════════════════════════════════════════════════════════

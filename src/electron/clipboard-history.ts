@@ -762,6 +762,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         return ctx.clipboard.history.list({ limit: 10 }).map(clipboardRootItem);
       },
       searchItems(ctx: any, query: string) {
+        if (!deps.getSetting('showClipboardInRootSearch')) return [];
         return ctx.clipboard.history
           .list()
           .map(clipboardRootItem)

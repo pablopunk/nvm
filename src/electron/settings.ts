@@ -8,7 +8,7 @@ export type SettingDefinition =
       default: string;
     }
   | {
-      id: 'showClipboardInRoot' | 'startAtLogin';
+      id: 'showClipboardInRoot' | 'showClipboardInRootSearch' | 'startAtLogin';
       title: string;
       description: string;
       icon: string;
@@ -39,8 +39,16 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
   },
   {
     id: 'showClipboardInRoot',
-    title: 'Show Clipboard Items in Main List',
+    title: 'Show Clipboard Items in Root List',
     description: 'Show copied items inline in the root list',
+    icon: 'clipboard',
+    type: 'boolean',
+    default: true,
+  },
+  {
+    id: 'showClipboardInRootSearch',
+    title: 'Show Clipboard Items in Root Search',
+    description: 'Show copied items when searching from the root list',
     icon: 'clipboard',
     type: 'boolean',
     default: true,
