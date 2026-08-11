@@ -246,6 +246,14 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     );
   }
 
+  function setDesignTokenEditorOpen(open: boolean) {
+    if (!win) return;
+    win.setResizable(open);
+    const size = open ? { width: 1180, height: 760 } : DEFAULT_WINDOW_SIZE;
+    win.setSize(size.width, size.height, false);
+    centerWindow();
+  }
+
   function centerWindow() {
     measureDebugPerformanceSync('palette-window.center', undefined, () => {
       if (!win) return;
@@ -404,6 +412,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     createWindow,
     debugLog,
     setPaletteSizeForMode,
+    setDesignTokenEditorOpen,
     centerWindow,
     applyPaletteWindowPolicy,
     showPalette,
