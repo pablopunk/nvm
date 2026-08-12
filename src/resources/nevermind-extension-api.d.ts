@@ -984,7 +984,7 @@ export type ExtensionAiStreamEvent =
 export type ExtensionAiModel = 'smart' | 'fast';
 
 export type ExtensionAiOptions = {
-  /** Admin-defined backend model route. `smart` favors capability; `fast` favors latency/cost. */
+  /** Selects Smart or Fast; the backend applies the user's Pro or Free entitlement. */
   model?: ExtensionAiModel;
   system?: string;
   /** Text, file, image, selected, clipboard, or OCR context. Declare the matching capabilities for review; declarations do not gate attachment helpers. */

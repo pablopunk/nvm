@@ -6,6 +6,7 @@ import {
   getModelRoute,
   listKnownProviders,
   modelRouteToRef,
+  parseModelRouteSlot,
   parseModelRouteRef,
   setModelRoute,
   ModelNotConfiguredError,
@@ -19,8 +20,8 @@ import { recordAudit } from '../../../lib/audit';
 import { safeJsonBody } from '../../../lib/validation';
 
 const putModelSchema = z.object({
-  tier: z.string().optional(),
-  purpose: z.string().optional(),
+  tier: z.enum(['paid', 'free']).optional(),
+  purpose: z.enum(['paid', 'free', 'smart', 'fast', 'pro-smart', 'pro-fast', 'free-smart', 'free-fast']).optional(),
   model: z.string().optional(),
   modelRef: z.string().optional(),
   thinkingLevel: z.string().optional().refine(
@@ -49,7 +50,7 @@ async function safeRoute(slot: ModelRouteSlot) {
 }
 
 function modelRouteSlotFromBody(value: unknown): ModelRouteSlot {
-  return value === 'free' || value === 'smart' || value === 'fast' ? value : 'paid';
+  return parseModelRouteSlot(value) ?? 'paid';
 }
 
 export const GET: APIRoute = async ({ request }) => {
@@ -59,6 +60,10 @@ export const GET: APIRoute = async ({ request }) => {
     free: await safeRoute('free'),
     smart: await safeRoute('smart'),
     fast: await safeRoute('fast'),
+    proSmart: await safeRoute('pro-smart'),
+    proFast: await safeRoute('pro-fast'),
+    freeSmart: await safeRoute('free-smart'),
+    freeFast: await safeRoute('free-fast'),
     models: await listModelRefs(),
   });
 };

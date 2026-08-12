@@ -2,7 +2,16 @@ import { randomUUID, createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { requestDedup } from '../db/schema';
-import { getModelRoute, getModelProviderChain, ModelNotConfiguredError, parseExtensionAiModelRole, type ModelRouteSlot } from './settings';
+import {
+  getModelRoute,
+  getModelProviderChain,
+  modelRouteSlotForAccount,
+  ModelNotConfiguredError,
+  parseExtensionAiModelRole,
+  tieredModelRouteSlot,
+  type ExtensionAiModelRole,
+  type ModelRouteSlot,
+} from './settings';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
   lookupModelCost,
@@ -138,6 +147,7 @@ async function markDedupFailed(ctx: Pick<BillContext, 'user' | 'requestId' | 'de
 
 type ResolvedRouting = {
   user: { id: string };
+  routeSlot: ModelRouteSlot;
   provider: string;
   activeModelId: string;
   costRow: ModelCost;
@@ -294,13 +304,21 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     );
   }
 
-  const kind: 'free' | 'paid' = balances.paid > 0 ? 'paid' : 'free';
-  const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model'));
-  const modelRouting = await resolveModelRouting(requestedModel ?? kind);
+  const advertisedCreditKind = request.headers.get('x-nevermind-ai-credit-kind');
+  const kind: 'free' | 'paid' = advertisedCreditKind === 'free' || advertisedCreditKind !== 'paid' && balances.paid <= 0 ? 'free' : 'paid';
+  const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ?? 'smart';
+  const advertisedModelTier = request.headers.get('x-nevermind-ai-model-tier');
+  const routeSlot = advertisedModelTier === 'pro' && user.plan === 'pro'
+    ? tieredModelRouteSlot('pro', requestedModel)
+    : advertisedModelTier === 'free'
+      ? tieredModelRouteSlot('free', requestedModel)
+      : modelRouteSlotForAccount(user.plan, balances.paid, requestedModel, kind === 'free');
+  const modelRouting = await resolveModelRouting(routeSlot);
   if (modelRouting instanceof Response) return modelRouting;
 
   return {
     user,
+    routeSlot,
     ...modelRouting,
     kind,
     balanceAvailable: kind === 'paid' ? balances.paid : balances.free,
@@ -378,7 +396,7 @@ async function tryUpstreamProviders(
   let chainProviders: string[] = [];
   if (failoverEnabled) {
     try {
-      chainProviders = await getModelProviderChain(routing.kind, routing.activeModelId);
+      chainProviders = await getModelProviderChain(routing.routeSlot, routing.activeModelId);
     } catch (err) {
       log.warn('provider_chain_fetch_failed', { request_id: requestId, error: err instanceof Error ? err.message : String(err) });
     }
@@ -508,15 +526,18 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       credits: estimatedCredits,
     });
     if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.kind === 'paid') {
-      const freeRouting = await resolveModelRouting(parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'free');
+      const requestedModel: ExtensionAiModelRole = parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'smart';
+      const freeRouting = await resolveModelRouting(tieredModelRouteSlot('free', requestedModel));
       if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
-      maxOutputTokens = await maxOutputFor(freeRouting);
-      const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, freeRouting.costRow);
-      const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
-      if (freeReservation.ok) {
-        routing = { user: routing.user, ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
-        estimatedCredits = freeEstimatedCredits;
-        reservation = freeReservation;
+      if (selectApiForModel(freeRouting.provider, freeRouting.activeModelId) === selectApiForModel(routing.provider, routing.activeModelId)) {
+        maxOutputTokens = await maxOutputFor(freeRouting);
+        const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, freeRouting.costRow);
+        const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
+        if (freeReservation.ok) {
+          routing = { user: routing.user, routeSlot: tieredModelRouteSlot('free', requestedModel), ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
+          estimatedCredits = freeEstimatedCredits;
+          reservation = freeReservation;
+        }
       }
     }
     if (!reservation.ok && reservation.reason === 'request_already_reserved') {

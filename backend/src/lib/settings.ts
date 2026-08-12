@@ -18,21 +18,38 @@ const ACTIVE_MODEL_ROUTE_KEY = 'active_model_route';
 const FREE_MODEL_ROUTE_KEY = 'free_model_route';
 const SMART_MODEL_ROUTE_KEY = 'smart_model_route';
 const FAST_MODEL_ROUTE_KEY = 'fast_model_route';
+const PRO_SMART_MODEL_ROUTE_KEY = 'pro_smart_model_route';
+const PRO_FAST_MODEL_ROUTE_KEY = 'pro_fast_model_route';
+const FREE_SMART_MODEL_ROUTE_KEY = 'free_smart_model_route';
+const FREE_FAST_MODEL_ROUTE_KEY = 'free_fast_model_route';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
 const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter', 'anthropic', 'openai', 'google']);
 
-export type ModelTier = 'free' | 'paid';
+export type ModelTier = 'free' | 'pro';
 export type ExtensionAiModelRole = 'smart' | 'fast';
-export type ModelRouteSlot = ModelTier | ExtensionAiModelRole;
+export type TieredModelRouteSlot = `${ModelTier}-${ExtensionAiModelRole}`;
+type LegacyModelTier = 'free' | 'paid';
+export type ModelRouteSlot = LegacyModelTier | ExtensionAiModelRole | TieredModelRouteSlot;
 export type ModelRoute = { provider: string; modelId: string };
 export const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
 export type ModelRouteConfig = ModelRoute & { thinkingLevel: ThinkingLevel };
+type ModelSettingKey =
+  | 'active_model'
+  | 'free_model'
+  | 'active_model_route'
+  | 'free_model_route'
+  | 'smart_model_route'
+  | 'fast_model_route'
+  | 'pro_smart_model_route'
+  | 'pro_fast_model_route'
+  | 'free_smart_model_route'
+  | 'free_fast_model_route';
 
 export class ModelNotConfiguredError extends Error {
-  constructor(public key: 'active_model' | 'free_model' | 'active_model_route' | 'free_model_route' | 'smart_model_route' | 'fast_model_route') {
+  constructor(public key: ModelSettingKey) {
     super(`No ${key} configured in app_settings`);
   }
 }
@@ -111,16 +128,24 @@ function parseStoredModelRoute(value: string | null): ModelRouteConfig | null {
 function modelRouteKey(slot: ModelRouteSlot): string {
   if (slot === 'smart') return SMART_MODEL_ROUTE_KEY;
   if (slot === 'fast') return FAST_MODEL_ROUTE_KEY;
+  if (slot === 'pro-smart') return PRO_SMART_MODEL_ROUTE_KEY;
+  if (slot === 'pro-fast') return PRO_FAST_MODEL_ROUTE_KEY;
+  if (slot === 'free-smart') return FREE_SMART_MODEL_ROUTE_KEY;
+  if (slot === 'free-fast') return FREE_FAST_MODEL_ROUTE_KEY;
   return slot === 'free' ? FREE_MODEL_ROUTE_KEY : ACTIVE_MODEL_ROUTE_KEY;
 }
 
-function fallbackRouteSlot(slot: ModelRouteSlot): ModelTier | null {
-  if (slot === 'smart') return 'paid';
-  if (slot === 'fast') return 'free';
-  return null;
+function legacyFallbackRouteSlots(slot: ModelRouteSlot): ModelRouteSlot[] {
+  if (slot === 'pro-smart') return ['smart', 'paid'];
+  if (slot === 'pro-fast') return ['paid'];
+  if (slot === 'free-smart') return ['free'];
+  if (slot === 'free-fast') return ['fast', 'free'];
+  if (slot === 'smart') return ['paid'];
+  if (slot === 'fast') return ['free'];
+  return [];
 }
 
-async function getLegacyModelId(tier: ModelTier): Promise<string> {
+async function getLegacyModelId(tier: LegacyModelTier): Promise<string> {
   const key = tier === 'free' ? FREE_MODEL_KEY : ACTIVE_MODEL_KEY;
   const v = await getSetting(key);
   if (!v) throw new ModelNotConfiguredError(tier === 'free' ? 'free_model_route' : 'active_model_route');
@@ -130,11 +155,22 @@ async function getLegacyModelId(tier: ModelTier): Promise<string> {
 export async function getModelRoute(slot: ModelRouteSlot): Promise<ModelRouteConfig> {
   const stored = parseStoredModelRoute(await getSetting(modelRouteKey(slot)));
   if (stored) return stored;
-  const fallback = fallbackRouteSlot(slot);
-  if (fallback) return getModelRoute(fallback);
+  const fallbacks = legacyFallbackRouteSlots(slot);
+  for (const fallback of fallbacks) {
+    const fallbackStored = parseStoredModelRoute(await getSetting(modelRouteKey(fallback)));
+    if (fallbackStored) return fallbackStored;
+  }
+  const tierFallback = fallbacks.at(-1);
+  if (tierFallback === 'paid' || tierFallback === 'free') {
+    return {
+      provider: await getActiveProvider(),
+      modelId: await getLegacyModelId(tierFallback),
+      thinkingLevel: DEFAULT_THINKING_LEVEL,
+    };
+  }
   return {
     provider: await getActiveProvider(),
-    modelId: await getLegacyModelId(slot as ModelTier),
+    modelId: await getLegacyModelId(slot as LegacyModelTier),
     thinkingLevel: DEFAULT_THINKING_LEVEL,
   };
 }
@@ -147,6 +183,37 @@ export async function setModelRoute(slot: ModelRouteSlot, route: ModelRouteConfi
 
 export function parseExtensionAiModelRole(value: string | null | undefined): ExtensionAiModelRole | null {
   return value === 'smart' || value === 'fast' ? value : null;
+}
+
+export function parseModelRouteSlot(value: unknown): ModelRouteSlot | null {
+  return value === 'paid'
+    || value === 'free'
+    || value === 'smart'
+    || value === 'fast'
+    || value === 'pro-smart'
+    || value === 'pro-fast'
+    || value === 'free-smart'
+    || value === 'free-fast'
+    ? value
+    : null;
+}
+
+export function tieredModelRouteSlot(tier: ModelTier, role: ExtensionAiModelRole): TieredModelRouteSlot {
+  return `${tier}-${role}`;
+}
+
+export function modelTierForPlan(plan: string): ModelTier {
+  return plan === 'pro' ? 'pro' : 'free';
+}
+
+export function modelRouteSlotForAccount(
+  plan: string,
+  paidCredits: number,
+  role: ExtensionAiModelRole,
+  forceFree = false,
+): TieredModelRouteSlot {
+  const tier = !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0 ? 'pro' : 'free';
+  return tieredModelRouteSlot(tier, role);
 }
 
 export async function getActiveModelId(): Promise<string> {
@@ -182,20 +249,22 @@ export function listKnownProviders(): string[] {
 // ── Provider chain (failover) ──
 
 export async function getModelProviderChain(slot: ModelRouteSlot, modelId: string): Promise<string[]> {
-  const rows = await db
-    .select({ providerId: modelProviders.providerId })
-    .from(modelProviders)
-    .innerJoin(providers, eq(modelProviders.providerId, providers.id))
-    .where(
-      and(
-        eq(modelProviders.routeSlot, slot),
-        eq(modelProviders.modelId, modelId),
-        eq(providers.enabled, 'true'),
-      ),
-    )
-    .orderBy(modelProviders.priority);
-
-  return rows.map((r) => r.providerId);
+  for (const candidateSlot of [slot, ...legacyFallbackRouteSlots(slot)]) {
+    const rows = await db
+      .select({ providerId: modelProviders.providerId })
+      .from(modelProviders)
+      .innerJoin(providers, eq(modelProviders.providerId, providers.id))
+      .where(
+        and(
+          eq(modelProviders.routeSlot, candidateSlot),
+          eq(modelProviders.modelId, modelId),
+          eq(providers.enabled, 'true'),
+        ),
+      )
+      .orderBy(modelProviders.priority);
+    if (rows.length > 0) return rows.map((row) => row.providerId);
+  }
+  return [];
 }
 
 export async function setModelProviderChain(

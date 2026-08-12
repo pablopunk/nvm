@@ -19,11 +19,11 @@ const safeModelRoute = async (slot: ModelRouteSlot): Promise<(ModelRouteConfig &
     throw err;
   }
 };
-const [paidRoute, freeRoute, smartRoute, fastRoute] = await Promise.all([
-  safeModelRoute('paid'),
-  safeModelRoute('free'),
-  safeModelRoute('smart'),
-  safeModelRoute('fast'),
+const [proSmartRoute, proFastRoute, freeSmartRoute, freeFastRoute] = await Promise.all([
+  safeModelRoute('pro-smart'),
+  safeModelRoute('pro-fast'),
+  safeModelRoute('free-smart'),
+  safeModelRoute('free-fast'),
 ]);
 const modelOptions = (await Promise.all(listKnownProviders().map(async (provider) => {
   const models = await listModelsForProvider(provider);
@@ -51,63 +51,63 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
 
   <div class="section card">
     <h3>Models</h3>
-    <p class="muted">Set a model and thinking level independently for each route. Reuse the same model with different levels; unset smart/fast routes fall back to pro/free.</p>
+    <p class="muted">Choose Smart and Fast models independently for Pro and Free users.</p>
     <div class="stack">
-      <div class="model-route-row" data-model-route="smart">
-        <strong class="model-route-row__name">Smart</strong>
+      <div class="model-route-row" data-model-route="pro-smart">
+        <strong class="model-route-row__name">Pro smart</strong>
         <label class="field">Model
-          <select id="model-select-smart" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === smartRoute?.ref}>{m.ref}</option>)}
+          <select id="model-select-pro-smart" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === proSmartRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
         <label class="field">Thinking
-          <select id="thinking-select-smart" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (smartRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          <select id="thinking-select-pro-smart" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (proSmartRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="smart"></span>
+        <span class="status" data-status-for="pro-smart"></span>
       </div>
-      <div class="model-route-row" data-model-route="fast">
-        <strong class="model-route-row__name">Fast</strong>
+      <div class="model-route-row" data-model-route="pro-fast">
+        <strong class="model-route-row__name">Pro fast</strong>
         <label class="field">Model
-          <select id="model-select-fast" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === fastRoute?.ref}>{m.ref}</option>)}
+          <select id="model-select-pro-fast" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === proFastRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
         <label class="field">Thinking
-          <select id="thinking-select-fast" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (fastRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          <select id="thinking-select-pro-fast" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (proFastRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="fast"></span>
+        <span class="status" data-status-for="pro-fast"></span>
       </div>
-      <div class="model-route-row" data-model-route="paid">
-        <strong class="model-route-row__name">Pro default</strong>
+      <div class="model-route-row" data-model-route="free-smart">
+        <strong class="model-route-row__name">Free smart</strong>
         <label class="field">Model
-          <select id="model-select-paid" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === paidRoute?.ref}>{m.ref}</option>)}
+          <select id="model-select-free-smart" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeSmartRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
         <label class="field">Thinking
-          <select id="thinking-select-paid" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (paidRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          <select id="thinking-select-free-smart" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (freeSmartRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="paid"></span>
+        <span class="status" data-status-for="free-smart"></span>
       </div>
-      <div class="model-route-row" data-model-route="free">
-        <strong class="model-route-row__name">Free default</strong>
+      <div class="model-route-row" data-model-route="free-fast">
+        <strong class="model-route-row__name">Free fast</strong>
         <label class="field">Model
-          <select id="model-select-free" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeRoute?.ref}>{m.ref}</option>)}
+          <select id="model-select-free-fast" class="input combo model-select">
+            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeFastRoute?.ref}>{m.ref}</option>)}
           </select>
         </label>
         <label class="field">Thinking
-          <select id="thinking-select-free" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (freeRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+          <select id="thinking-select-free-fast" class="input thinking-select">
+            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (freeFastRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
           </select>
         </label>
-        <span class="status" data-status-for="free"></span>
+        <span class="status" data-status-for="free-fast"></span>
       </div>
     </div>
   </div>

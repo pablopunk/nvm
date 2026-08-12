@@ -6,12 +6,16 @@ import {
   getModelProviderChain,
   getModelRoute,
   listKnownProviders,
+  modelRouteSlotForAccount,
+  modelTierForPlan,
   modelRouteToRef,
   ModelNotConfiguredError,
   parseExtensionAiModelRole,
+  parseModelRouteSlot,
   parseModelRouteRef,
   setModelRoute,
   setModelProviderChain,
+  tieredModelRouteSlot,
   getSignupsEnabled,
   SignupsPolicyError,
 } from './settings';
@@ -153,6 +157,34 @@ describe('parseExtensionAiModelRole', () => {
   });
 });
 
+test('combines a model tier and extension model role into a route slot', () => {
+  assert.strictEqual(tieredModelRouteSlot('pro', 'smart'), 'pro-smart');
+  assert.strictEqual(tieredModelRouteSlot('free', 'fast'), 'free-fast');
+});
+
+test('parses current and legacy model route slots', () => {
+  assert.strictEqual(parseModelRouteSlot('pro-smart'), 'pro-smart');
+  assert.strictEqual(parseModelRouteSlot('free-fast'), 'free-fast');
+  assert.strictEqual(parseModelRouteSlot('paid'), 'paid');
+  assert.strictEqual(parseModelRouteSlot('typo'), null);
+});
+
+test('maps only Pro subscriptions to the Pro model tier', () => {
+  assert.strictEqual(modelTierForPlan('pro'), 'pro');
+  assert.strictEqual(modelTierForPlan('free'), 'free');
+  assert.strictEqual(modelTierForPlan('unknown'), 'free');
+});
+
+test('selects model routes from subscription entitlement, credits, and requested role', () => {
+  assert.strictEqual(modelRouteSlotForAccount('pro', 100, 'smart'), 'pro-smart');
+  assert.strictEqual(modelRouteSlotForAccount('pro', 100, 'fast'), 'pro-fast');
+  assert.strictEqual(modelRouteSlotForAccount('free', 100, 'smart'), 'free-smart');
+  assert.strictEqual(modelRouteSlotForAccount('free', 100, 'fast'), 'free-fast');
+  assert.strictEqual(modelRouteSlotForAccount('pro', 0, 'smart'), 'free-smart');
+  assert.strictEqual(modelRouteSlotForAccount('pro', 0, 'fast'), 'free-fast');
+  assert.strictEqual(modelRouteSlotForAccount('pro', 100, 'smart', true), 'free-smart');
+});
+
 describe('listKnownProviders', () => {
   test('returns the set of known providers', () => {
     const known = listKnownProviders();
@@ -245,6 +277,46 @@ describe('getModelRoute', () => {
     assert.deepEqual(route, { provider: 'opencode_zen', modelId: 'gemini-flash', thinkingLevel: 'low' });
   });
 
+  test('tiered slot returns its independently stored route', async () => {
+    setDbForTests(fakeDb([
+      [{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6","thinkingLevel":"high"}' }],
+    ]));
+
+    const route = await getModelRoute('free-smart');
+    assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6', thinkingLevel: 'high' });
+  });
+
+  test('Pro Fast falls back to the legacy paid route', async () => {
+    setDbForTests(fakeDb([
+      [],
+      [{ value: '{"provider":"openai","modelId":"gpt-4o","thinkingLevel":"medium"}' }],
+    ]));
+
+    const route = await getModelRoute('pro-fast');
+    assert.deepEqual(route, { provider: 'openai', modelId: 'gpt-4o', thinkingLevel: 'medium' });
+  });
+
+  test('Free Smart never falls back through the legacy paid Smart route', async () => {
+    setDbForTests(fakeDb([
+      [],
+      [{ value: '{"provider":"google","modelId":"gemini-flash","thinkingLevel":"low"}' }],
+    ]));
+
+    const route = await getModelRoute('free-smart');
+    assert.deepEqual(route, { provider: 'google', modelId: 'gemini-flash', thinkingLevel: 'low' });
+  });
+
+  test('Free Smart falls back to the legacy free route', async () => {
+    setDbForTests(fakeDb([
+      [],
+      [],
+      [{ value: '{"provider":"google","modelId":"gemini-pro","thinkingLevel":"low"}' }],
+    ]));
+
+    const route = await getModelRoute('free-smart');
+    assert.deepEqual(route, { provider: 'google', modelId: 'gemini-pro', thinkingLevel: 'low' });
+  });
+
   test('throws ModelNotConfiguredError when legacy modelId is missing', async () => {
     const db = fakeDb([
       [],  // active_model_route: none
@@ -292,6 +364,26 @@ test('persists the thinking level with a model route', async () => {
   });
 });
 
+test('persists all four tiered model routes independently', async () => {
+  const inserted: any[] = [];
+  setDbForTests(fakeDb([], (values) => { inserted.push(values); }));
+
+  for (const slot of ['pro-smart', 'pro-fast', 'free-smart', 'free-fast'] as const) {
+    await setModelRoute(slot, {
+      provider: 'openai',
+      modelId: `model-${slot}`,
+      thinkingLevel: 'minimal',
+    });
+  }
+
+  assert.deepEqual(inserted.map((value) => value.key), [
+    'pro_smart_model_route',
+    'pro_fast_model_route',
+    'free_smart_model_route',
+    'free_fast_model_route',
+  ]);
+});
+
 describe('getModelProviderChain', () => {
   test('returns provider ids ordered by priority', async () => {
     const db = fakeDb([
@@ -317,6 +409,17 @@ describe('getModelProviderChain', () => {
 
     const chain = await getModelProviderChain('fast', 'gemini-flash');
     assert.deepEqual(chain, ['openai']);
+  });
+
+  test('tiered route falls back to its legacy provider chain', async () => {
+    const db = fakeDb([
+      [],
+      [{ providerId: 'openrouter' }],
+    ]);
+    setDbForTests(db);
+
+    const chain = await getModelProviderChain('pro-smart', 'some-model');
+    assert.deepEqual(chain, ['openrouter']);
   });
 });
 

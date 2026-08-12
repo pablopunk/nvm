@@ -168,8 +168,11 @@ type AgentSession = {
   ) => Promise<unknown>;
   abort?: () => Promise<unknown>;
   dispose?: () => void;
+  setModel: (model: unknown) => Promise<void>;
+  setThinkingLevel: (level: ThinkingLevel) => void;
   subscribe: (callback: (event: AgentSessionEvent) => void) => () => void;
-  agent: { state: { tools: Array<{ name: string }> } };
+  agent: { state: { tools: Array<{ name: string }>; messages: unknown[] } };
+  prepareModelForPrompt?: (prompt: string) => Promise<void>;
 };
 
 type AgentSessionEvent = { type: string; [key: string]: unknown };
@@ -318,7 +321,10 @@ function createNevermindAi(options: NevermindAiOptions) {
           await measureDebugPerformance(
             'ai.chat.prompt',
             { chatId, messageLength: message.length, alwaysLog: true },
-            () => session.prompt(message),
+            async () => {
+              await session.prepareModelForPrompt?.(message);
+              return session.prompt(message);
+            },
           );
           options.onEvent?.({ type: 'done', chatId });
         } catch (error) {
@@ -398,10 +404,11 @@ function createNevermindAi(options: NevermindAiOptions) {
           imageCount: askOptions.images?.length || 0,
           alwaysLog: true,
         },
-        () =>
-          session.prompt(aiPromptWithContext(message, askOptions.context), {
-            images: askOptions.images,
-          }),
+        async () => {
+          const prompt = aiPromptWithContext(message, askOptions.context);
+          await session.prepareModelForPrompt?.(prompt);
+          return session.prompt(prompt, { images: askOptions.images });
+        },
       );
       if (askOptions.signal?.aborted) throw aiAbortError();
       askOptions.onEvent?.({ type: 'done' });
@@ -618,6 +625,13 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
     })) as { session: AgentSession };
+    result.session.prepareModelForPrompt = async function prepareModelForPrompt(prompt) {
+      if (modelSource !== 'nevermind') return;
+      const chars = JSON.stringify(result.session.agent.state.messages).length + prompt.length;
+      const next = await resolveAiModelAndAuth(modelRuntime, undefined, chars);
+      await result.session.setModel(next.model);
+      result.session.setThinkingLevel(next.thinkingLevel);
+    };
 
     const toolNames = result.session.agent.state.tools.map((tool) => tool.name);
     onEvent?.({ type: 'debug', label: 'tools', data: toolNames });
@@ -823,6 +837,12 @@ async function createGeneralSession(
       retry: { enabled: true, maxRetries: 2 },
     }),
   })) as { session: AgentSession };
+  result.session.prepareModelForPrompt = async function prepareModelForPrompt(prompt) {
+    const chars = JSON.stringify(result.session.agent.state.messages).length + prompt.length;
+    const next = await resolveAiModelAndAuth(modelRuntime, sessionOptions.model, chars);
+    await result.session.setModel(next.model);
+    result.session.setThinkingLevel(next.thinkingLevel);
+  };
   return result.session;
 }
 
@@ -839,6 +859,8 @@ type BackendDescriptor = {
   api: string;
   provider: string;
   baseUrl: string;
+  modelTier?: 'pro' | 'free';
+  creditKind?: 'paid' | 'free';
   credits?: { paid: number; free: number; total: number };
   notice?: 'ok' | 'low' | 'blocked';
   costEstimate?: number;
@@ -848,14 +870,18 @@ async function fetchActiveModelDescriptor(
   baseUrl: string,
   token: string,
   modelRole?: AiModelRole,
+  chars?: number,
 ): Promise<BackendDescriptor> {
   const trimmed = baseUrl.replace(/\/$/, '');
   const manifest = await checkNevermindCompatibility(trimmed);
   requireNevermindCompatibilityFeature('active_model_descriptor', manifest);
   if (modelRole)
     requireNevermindCompatibilityFeature('extension_ai_model_roles', manifest);
-  const query = modelRole ? `?model=${encodeURIComponent(modelRole)}` : '';
-  const res = await fetch(`${trimmed}/api/v1/active-model${query}`, {
+  const query = new URLSearchParams();
+  if (modelRole) query.set('model', modelRole);
+  if (chars && chars > 0) query.set('chars', String(chars));
+  const search = query.size > 0 ? `?${query}` : '';
+  const res = await fetch(`${trimmed}/api/v1/active-model${search}`, {
     headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
   });
   if (res.status === 401) throw new NevermindAuthRequiredError();
@@ -869,6 +895,7 @@ async function fetchActiveModelDescriptor(
 async function resolveAiModelAndAuth(
   modelRuntime: Awaited<ReturnType<PiApi['ModelRuntime']['create']>>,
   modelRole?: AiModelRole,
+  chars?: number,
 ) {
   const byo = await getByoKey();
   if (byo) {
@@ -887,6 +914,7 @@ async function resolveAiModelAndAuth(
     nevermind.baseUrl,
     nevermind.token,
     modelRole,
+    chars,
   );
   const model = {
     id: descriptor.id,
@@ -899,9 +927,11 @@ async function resolveAiModelAndAuth(
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: descriptor.contextWindow,
     maxTokens: descriptor.maxTokens,
-    headers: nevermindDesktopHeaders(
-      modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {},
-    ),
+    headers: nevermindDesktopHeaders({
+      ...(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
+      ...(descriptor.modelTier ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier } : {}),
+      ...(descriptor.creditKind ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind } : {}),
+    }),
   };
   modelRuntime.registerProvider(NEVERMIND_PROVIDER_ID, {
     name: 'Nevermind',
@@ -1825,7 +1855,7 @@ function capabilities() {
       'prompt({ title, message, fields, action, submitTitle }) collects lightweight arguments sequentially through the palette input, then runs the wrapped action with submitted values in action.formValues',
     ],
     ai: [
-      "call ctx.ai(prompt, 'smart'|'fast') for simple one-shot AI; smart/fast are admin-defined backend model routes",
+      "call ctx.ai(prompt, 'smart'|'fast') for simple one-shot AI; the backend applies the user's Pro or Free entitlement",
       'ask(prompt, { model, system, attachments, signal })',
       'stream(prompt, { model, onDelta, onEvent, attachments, signal }).result/abort()',
       'session(id, { model, system }).ask/stream/reset()',

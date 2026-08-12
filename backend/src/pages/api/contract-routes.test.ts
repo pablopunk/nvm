@@ -118,10 +118,10 @@ function installModelsDevFetch() {
   };
 }
 
-function proxySelects(options: { free?: number; paid?: number; model?: string | null; routeProvider?: string; thinkingLevel?: string } = {}) {
+function proxySelects(options: { free?: number; paid?: number; plan?: string; model?: string | null; routeProvider?: string; thinkingLevel?: string } = {}) {
   const modelRoute = options.model === null ? [] : [{ value: JSON.stringify({ provider: options.routeProvider ?? 'opencode_zen', modelId: options.model ?? 'gemini-3-flash', thinkingLevel: options.thinkingLevel ?? 'low' }) }];
   return [
-    [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+    [{ user: { id: 'user_1', email: 'pablo@example.com', plan: options.plan ?? 'free', role: 'user' }, tokenId: 'token_1' }],
     [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     modelRoute,
@@ -452,6 +452,8 @@ test('active-model route returns descriptor contract with compatibility headers'
   assert.equal(body.api, 'google-generative-ai');
   assert.equal(body.baseUrl, 'https://api.nvm.fyi/api/v1');
   assert.equal(body.thinkingLevel, 'low');
+  assert.equal(body.modelTier, 'free');
+  assert.equal(body.creditKind, 'free');
 });
 
 test('active-model returns the configured thinking level for a route', async () => {
@@ -479,6 +481,60 @@ test('active-model route resolves admin-defined extension model roles', async ()
   assert.equal(body.id, 'gemini-3-fast');
   assert.equal(body.name, 'Gemini 3 Fast');
   assert.equal(body.provider, 'nevermind');
+});
+
+test('active-model route selects all four subscription and model-role combinations', async () => {
+  installModelsDevFetch();
+  const cases = [
+    { plan: 'pro', paid: 10, role: 'smart', model: 'gemini-3-flash', modelTier: 'pro', creditKind: 'paid' },
+    { plan: 'pro', paid: 10, role: 'fast', model: 'gemini-3-fast', modelTier: 'pro', creditKind: 'paid' },
+    { plan: 'free', paid: 10, role: 'smart', model: 'gemini-3-flash', modelTier: 'free', creditKind: 'paid' },
+    { plan: 'free', paid: 10, role: 'fast', model: 'gemini-3-fast', modelTier: 'free', creditKind: 'paid' },
+  ];
+
+  for (const modelCase of cases) {
+    installDb(createFakeDb({ selects: proxySelects(modelCase) }));
+    const response = await getActiveModel(routeContext(new Request(`https://api.nvm.fyi/api/v1/active-model?model=${modelCase.role}`, {
+      headers: { authorization: 'Bearer nvm_pat_test' },
+    })));
+    assert.equal(response.status, 200);
+    const body = await response.json() as any;
+    assert.equal(body.id, modelCase.model);
+    assert.equal(body.modelTier, modelCase.modelTier);
+    assert.equal(body.creditKind, modelCase.creditKind);
+  }
+});
+
+test('active-model route gives an exhausted Pro subscriber the matching Free model', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: proxySelects({ plan: 'pro', paid: 0, free: 10, model: 'gemini-3-fast' }) }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?model=fast', {
+    headers: { authorization: 'Bearer nvm_pat_test' },
+  })));
+
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).id, 'gemini-3-fast');
+});
+
+test('active-model preflight switches a Pro request to the matching Free route before execution', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: [
+    [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
+    [{ id: 1 }],
+    [{ free: 1000, paid: 1 }],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
+  ] }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?model=fast&chars=400000', {
+    headers: { authorization: 'Bearer nvm_pat_test' },
+  })));
+  const body = await response.json() as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.id, 'gemini-3-fast');
+  assert.equal(body.thinkingLevel, 'minimal');
+  assert.equal(body.modelTier, 'free');
+  assert.equal(body.creditKind, 'free');
 });
 
 test('Preview active-model advertises the exact deployment origin', async () => {
@@ -609,6 +665,28 @@ test('proxy route honors extension smart/fast model selection headers', async ()
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
   assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
+});
+
+test('proxy bills paid credits without granting a Free user Pro model entitlement', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ plan: 'free', paid: 1000, free: 500, model: 'gemini-3-fast' }) }));
+  let forwardedBody = '';
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 } } } } });
+    }
+    forwardedBody = String(init?.body);
+    return Response.json({ usage: { prompt_tokens: 2, completion_tokens: 3 } });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' })));
+
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
+  assert.equal((db.insertedValues[1] as any).kind, 'paid');
 });
 
 test('proxy preserves structured tool calls and debits the successful request', async function proxiesAndBillsToolCall() {

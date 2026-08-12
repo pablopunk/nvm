@@ -7,17 +7,18 @@ import {
   setModelProviderChain,
   getModelRoute,
   modelRouteToRef,
+  parseModelRouteSlot,
   type ModelRouteSlot,
 } from '../../../lib/settings';
 import { recordAudit } from '../../../lib/audit';
 import { safeJsonBody } from '../../../lib/validation';
 
 function slotFromBody(value: unknown): ModelRouteSlot {
-  return value === 'free' || value === 'smart' || value === 'fast' ? value : 'paid';
+  return parseModelRouteSlot(value) ?? 'paid';
 }
 
 const putProvidersSchema = z.object({
-  slot: z.string().optional(),
+  slot: z.enum(['paid', 'free', 'smart', 'fast', 'pro-smart', 'pro-fast', 'free-smart', 'free-fast']).optional(),
   modelId: z.string().optional(),
   providerIds: z.array(z.string()).optional(),
 });
