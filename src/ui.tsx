@@ -46,9 +46,9 @@ export interface CommandTileProps {
   value: string;
   title: string;
   subtitle?: string;
+  glyph?: string;
   image?: CommandImage;
   video?: string;
-  actionHint?: ReactNode;
   appearance?: ItemAppearance;
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent) => void;
@@ -337,16 +337,20 @@ export function CommandTile({
   value,
   title,
   subtitle,
+  glyph,
   image,
   video,
-  actionHint,
   appearance,
   draggable,
   onDragStart,
   onSelect,
 }: CommandTileProps) {
   const media = imageProps(image);
-  const visual = media?.src ? (
+  const visual = glyph ? (
+    <span className="tileIcon tileGlyph" aria-hidden="true">
+      {glyph}
+    </span>
+  ) : media?.src ? (
     <img
       src={media.src}
       alt={media.alt}
@@ -386,7 +390,6 @@ export function CommandTile({
         data-shape={media?.shape}
       >
         {visual}
-        {actionHint}
       </span>
       <strong>{title}</strong>
       {subtitle ? <small>{subtitle}</small> : null}

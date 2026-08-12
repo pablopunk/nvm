@@ -823,25 +823,12 @@ kbd {
   place-items: center;
 }
 
-.tileActionHint {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  padding: 4px 8px;
-  border: 1px solid var(--border-3);
-  border-radius: var(--radius-xs);
-  color: var(--text-secondary);
-  background: var(--surface-overlay);
-  backdrop-filter: blur(10px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  font-size: var(--fs-2xs);
-  font-weight: 600;
+.tileGlyph {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  font-size: 32px;
   line-height: 1;
-  opacity: 0;
-}
-
-.extensionTile[data-selected="true"] .tileActionHint {
-  opacity: 1;
+  user-select: none;
 }
 
 .extensionTile strong,

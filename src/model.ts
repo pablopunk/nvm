@@ -86,6 +86,12 @@ export const ACTION_DEFINITIONS = {
     loading: 'none',
     execute: 'main',
   },
+  insertCharacter: {
+    description: 'Copy or paste a catalog character',
+    dismiss: 'immediate',
+    loading: 'none',
+    execute: 'main',
+  },
   pasteClipboard: {
     description: 'Paste into the frontmost app',
     dismiss: 'immediate',
@@ -514,6 +520,7 @@ export interface CommandItem {
   keywords?: string[];
   text?: string;
   icon?: string;
+  glyph?: string;
   image?: CommandImage;
   video?: string;
   videoUrl?: string;
@@ -610,6 +617,7 @@ export interface CommandView {
   searchBarPlaceholder?: string;
   presentation?: ViewPresentation;
   selectedItemId?: string;
+  maxVisibleItems?: number;
   onSelectionChange?: CommandAction;
   pagination?: {
     hasMore?: boolean;

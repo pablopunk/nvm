@@ -36,7 +36,6 @@ import {
   ListView,
   PreviewView,
   ProgressView,
-  shortcutLabel,
 } from './ui';
 import type { AiLimitState } from './use-ai-chat';
 
@@ -84,18 +83,6 @@ export type ExtensionViewRendererProps = {
   /** Rendering host; windows get compact headers and no palette chrome. */
   surface?: 'palette' | 'window';
 };
-
-function tileActionHint(item: CommandItem) {
-  if (item.actionPanelVisibility === 'hidden') return null;
-  const actions = actionsFromPanel(item.actionPanel, item.actions || []);
-  if (actions.length === 0) return null;
-  const shortcut = actions.find((action) => action.shortcut)?.shortcut;
-  return (
-    <span className="tileActionHint">
-      {shortcut ? shortcutLabel(shortcut) : '⌘K'}
-    </span>
-  );
-}
 
 function visibleActionPanelRows(view: CommandView, rows: unknown[]) {
   return view.actionPanelVisibility === 'hidden' ||
@@ -659,9 +646,13 @@ function GridExtensionView({
   runAction,
   onSelectItem,
 }: ExtensionViewSurfaceProps) {
+  const filteredItems = filterItems(view.items);
+  const visibleItems = view.maxVisibleItems
+    ? filteredItems.slice(0, view.maxVisibleItems)
+    : filteredItems;
   return (
     <GridView
-      items={filterItems(view.items)}
+      items={visibleItems}
       sections={filterSections(view)}
       subtitle={view.subtitle}
       layout={view.layout || 'square'}
@@ -675,9 +666,9 @@ function GridExtensionView({
           value={item.id}
           title={item.title}
           subtitle={item.subtitle}
+          glyph={item.glyph}
           image={item.image}
           video={item.video || item.videoUrl}
-          actionHint={tileActionHint(item)}
           appearance={item.appearance}
           draggable={Boolean(dragPathForItem(item))}
           onDragStart={(event) => startItemDrag(event, item)}

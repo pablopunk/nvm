@@ -130,6 +130,11 @@ import {
   summarizeDebugValue,
 } from './debug-performance';
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
+import {
+  CHARACTER_RECORDS_BY_ID,
+  characterCodePoints,
+  characterWithSkinTone,
+} from './emoji-symbol-catalog';
 import { createExtensionDraftStore } from './extension-draft-store';
 import { createExtensionJsonStore } from './extension-json-store';
 import { createStandaloneExtensionFork } from './extension-manifest';
@@ -1059,6 +1064,7 @@ const RENDERER_ONLY_VIEW_ACTION_TYPES = new Set([
   'recordShortcut',
   'previewClipboardItem',
 ]);
+const CHARACTER_INSERT_ACTION_TYPES = new Set(['insertCharacter']);
 const TOKEN_REQUIRED_VIEW_ACTION_TYPES = new Set([
   'runExtensionAction',
   'openPath',
@@ -1127,6 +1133,8 @@ function extensionExecutionOwner(action, entry?: any) {
 function registerViewActionForRenderer(action, entry?: any) {
   if (!action || typeof action !== 'object') return action;
   if (RENDERER_ONLY_VIEW_ACTION_TYPES.has(String(action.type || '')))
+    return action;
+  if (CHARACTER_INSERT_ACTION_TYPES.has(String(action.type || '')))
     return action;
   pruneExecutionRecords(viewActionExecutionRecords);
   const executionId = crypto.randomUUID();
@@ -1220,6 +1228,28 @@ function resolveViewActionForIpc(action) {
   if (record)
     return mergeRendererActionInput(clonePlain(record.action), action);
   const fallback = withoutExecutionId(action);
+  if (CHARACTER_INSERT_ACTION_TYPES.has(String(fallback.type || ''))) {
+    const record = CHARACTER_RECORDS_BY_ID.get(String(fallback.characterId || ''));
+    if (!record) throw new Error('Untrusted character insertion action');
+    const skinTone = Number(fallback.skinTone || 0);
+    if (!Number.isInteger(skinTone) || skinTone < 0 || skinTone > 5)
+      throw new Error('Untrusted character skin tone');
+    if (skinTone > 0 && !record.supportsSkinTone)
+      throw new Error('Character does not support skin tones');
+    const mode = fallback.mode === 'copyUnicode' ? 'copyUnicode' : fallback.mode;
+    if (!['copy', 'paste', 'copyUnicode'].includes(mode))
+      throw new Error('Untrusted character insertion mode');
+    if (mode === 'paste' && !hasCapability('frontmost-paste'))
+      throw new Error('Frontmost paste is unavailable');
+    return {
+      ...fallback,
+      mode,
+      text:
+        mode === 'copyUnicode'
+          ? characterCodePoints(record.glyph)
+          : characterWithSkinTone(record.glyph, skinTone),
+    };
+  }
   if (fallback.type === 'nativeAction')
     return {
       ...fallback,
@@ -1309,6 +1339,7 @@ const REQUIRED_INTERNAL_EXTENSIONS = [
   'nevermind.web',
   'nevermind.clipboard',
   'nevermind.dictation',
+  'nevermind.emoji-symbols',
   'nevermind.apps',
   'nevermind.files',
   'nevermind.floating-notes',
@@ -4078,6 +4109,19 @@ async function executeViewAction(action, launchContext?: any) {
     case 'pasteText':
       if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
       pasteTextAction(action);
+      return { toast: { message: 'Pasted' } };
+    case 'insertCharacter':
+      if (action.mode !== 'paste') {
+        clipboard.writeText(action.text || '');
+        break;
+      }
+      if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
+      pasteTextAction({
+        ...action,
+        type: 'pasteText',
+        concealed: true,
+        restoreClipboard: true,
+      });
       return { toast: { message: 'Pasted' } };
     case 'pasteClipboard':
       if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();

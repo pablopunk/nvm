@@ -516,6 +516,8 @@ export type ExtensionItem = {
   text?: string;
   /** Any Lucide icon name in camel/Pascal/kebab case, e.g. `camera`, `volume-2`, `audio-lines`. */
   icon?: string;
+  /** A single text glyph rendered natively as the visual for a grid tile. Use for emoji, symbols, and characters instead of generating image data URLs. */
+  glyph?: string;
   /** Display image URL/data URL or image descriptor. For local files use `file.url` or `ctx.desktop.files.toFileUrl(path)`, not raw paths. */
   image?: ExtensionImage;
   video?: string;
@@ -659,6 +661,8 @@ export type ExtensionView = {
   searchBarPlaceholder?: string;
   /** Initial focused item for list/grid views. Must match a stable visible item id; sorting remains independent. */
   selectedItemId?: string;
+  /** Maximum filtered items rendered at once for an item-backed grid. Keep the complete item set searchable while bounding large grid DOM work; use search or category filters to reach items beyond the visible cap. */
+  maxVisibleItems?: number;
   onSelectionChange?: ExtensionAction;
   pagination?: ExtensionPagination;
   searchAccessory?: ExtensionSearchAccessory;

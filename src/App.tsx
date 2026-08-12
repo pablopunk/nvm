@@ -642,7 +642,60 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     requestAnimationFrame(() => shellRef.current?.focus());
   }
 
+  function moveGridSelection(key: string) {
+    if (view?.type !== 'grid' || overlayOpen) return false;
+    const filteredItems = filterCommandItems(allViewItems(view), query, {
+      minScore: 50,
+    });
+    const items = view.maxVisibleItems
+      ? filteredItems.slice(0, view.maxVisibleItems)
+      : filteredItems;
+    if (items.length === 0) return false;
+    const currentIndex = Math.max(
+      0,
+      items.findIndex((item) => item.id === selectedValue),
+    );
+    const grid = shellRef.current?.querySelector<HTMLElement>('.extensionGrid');
+    const columns = grid
+      ? Math.max(
+          1,
+          getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean)
+            .length,
+        )
+      : 4;
+    const delta =
+      key === 'ArrowRight'
+        ? 1
+        : key === 'ArrowLeft'
+          ? -1
+          : key === 'ArrowDown'
+            ? columns
+            : -columns;
+    const next =
+      items[
+        Math.max(0, Math.min(items.length - 1, currentIndex + delta))
+      ];
+    if (!next) return false;
+    setSelectedValue(next.id);
+    requestAnimationFrame(() =>
+      shellRef.current
+        ?.querySelector(
+          `[data-extension-item-id="${CSS.escape(next.id)}"]`,
+        )
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    );
+    return true;
+  }
+
   function onShellKeyDown(event: React.KeyboardEvent) {
+    if (
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+      moveGridSelection(event.key)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (
       isEditableKeyTarget(event.target) &&
       event.key !== 'Escape' &&
@@ -4336,7 +4389,10 @@ export function App() {
       previewFor
     )
       return false;
-    const items = filterExtensionItems(allViewItems(extensionView));
+    const filteredItems = filterExtensionItems(allViewItems(extensionView));
+    const items = extensionView.maxVisibleItems
+      ? filteredItems.slice(0, extensionView.maxVisibleItems)
+      : filteredItems;
     if (items.length === 0) return false;
     const currentIndex = Math.max(
       0,
@@ -4371,6 +4427,18 @@ export function App() {
         ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
     );
     return true;
+  }
+
+  function onGridKeyDownCapture(event: React.KeyboardEvent) {
+    if (
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+      ((!isEditableKeyTarget(event.target) &&
+        moveBuilderPreviewSelection(event.key)) ||
+        moveGridSelection(event.key))
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }
 
   function selectedDiskPath() {
@@ -4537,7 +4605,7 @@ export function App() {
     if (
       !builderPreviewEventTargetsEditableControl &&
       ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
-      (moveBuilderPreviewSelection(event.key) || moveGridSelection(event.key))
+      moveBuilderPreviewSelection(event.key)
     ) {
       event.preventDefault();
       return;
@@ -4798,6 +4866,7 @@ export function App() {
         shouldFilter={false}
         value={selectedValue}
         onValueChange={selectValue}
+        onKeyDownCapture={onGridKeyDownCapture}
         onKeyDown={onCommandKeyDown}
       >
         <div

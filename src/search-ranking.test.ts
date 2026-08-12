@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalize, scoreNormalized } from './electron/search-utils';
-import { scoreText } from './filtering';
+import { filterCommandItems, scoreText } from './filtering';
 import { scoreFuzzy, scoreNormalizedNonEmpty } from './search-ranking';
 
 // ── Core bands ───────────────────────────────────────────────────────
@@ -38,6 +38,18 @@ test('scoreNormalizedNonEmpty fuzzy match', () => {
   assert.equal(scoreNormalizedNonEmpty('hello', 'hlo'), 20);
   assert.equal(scoreNormalizedNonEmpty('typescript', 'ts'), 20);
   assert.equal(scoreNormalizedNonEmpty('settings', 'stng'), 20);
+});
+
+test('scoreNormalizedNonEmpty matches unordered word prefixes', () => {
+  assert.equal(scoreNormalizedNonEmpty('rightwards arrow', 'right arrow'), 50);
+  assert.equal(scoreNormalizedNonEmpty('rightwards arrow', 'arrow right'), 50);
+});
+
+test('strict view filtering finds rightwards arrow from natural word order', () => {
+  const item = { id: 'rightwards-arrow', title: 'Rightwards Arrow' };
+  assert.deepEqual(filterCommandItems([item], 'right arrow', { minScore: 50 }), [
+    item,
+  ]);
 });
 
 test('scoreNormalizedNonEmpty no match', () => {

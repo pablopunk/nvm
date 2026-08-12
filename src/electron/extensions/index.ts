@@ -6,6 +6,7 @@ import { createBackgroundTasksExtension } from './background-tasks';
 import { createCalculatorExtension } from './calculator';
 import { createClipboardExtension } from './clipboard';
 import { createDictationExtension } from './dictation';
+import { createEmojiSymbolsExtension } from './emoji-symbols';
 import { createExtensionsExtension } from './extensions';
 import { createFilesExtension } from './files';
 import { createFloatingNotesExtension } from './floating-notes';
@@ -23,6 +24,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createWebSearchExtension,
   createClipboardExtension,
   createDictationExtension,
+  createEmojiSymbolsExtension,
   createAppsExtension,
   createFilesExtension,
   createFloatingNotesExtension,

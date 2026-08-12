@@ -1161,20 +1161,31 @@ async function gridView(ctx: ExtensionContext) {
     layout: 'wide',
     aspectRatio: '16 / 9',
     columns: 3,
+    maxVisibleItems: 24,
     sections: [
       {
         title: 'Fallback Tiles',
-        items: colors.map((color) => ({
-          id: color,
-          title: `${color[0].toUpperCase()}${color.slice(1)} Tile`,
-          subtitle:
-            'Generated placeholder tile; add media to Pictures/Desktop/Downloads to exercise file helpers',
-          icon: 'image',
-          image: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" rx="28" fill="${color}"/><text x="50%" y="54%" text-anchor="middle" font-family="system-ui" font-size="42" fill="black">${color}</text></svg>`)}`,
-          appearance: { foreground: color },
-          primaryAction: ctx.actions.copyText(color, `Copy ${color}`),
-          actions: [ctx.actions.copyText(color, `Copy ${color}`)],
-        })),
+        items: [
+          {
+            id: 'glyph',
+            title: 'Sparkles',
+            subtitle: 'Native glyph tile',
+            glyph: '✨',
+            primaryAction: ctx.actions.copyText('✨', 'Copy Sparkles'),
+            actions: [ctx.actions.copyText('✨', 'Copy Sparkles')],
+          },
+          ...colors.map((color) => ({
+            id: color,
+            title: `${color[0].toUpperCase()}${color.slice(1)} Tile`,
+            subtitle:
+              'Generated placeholder tile; add media to Pictures/Desktop/Downloads to exercise file helpers',
+            icon: 'image',
+            image: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" rx="28" fill="${color}"/><text x="50%" y="54%" text-anchor="middle" font-family="system-ui" font-size="42" fill="black">${color}</text></svg>`)}`,
+            appearance: { foreground: color },
+            primaryAction: ctx.actions.copyText(color, `Copy ${color}`),
+            actions: [ctx.actions.copyText(color, `Copy ${color}`)],
+          })),
+        ],
       },
     ],
   });

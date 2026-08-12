@@ -120,6 +120,33 @@ test('loading views do not render an inline placeholder', () => {
   assert.doesNotMatch(loadingView, /loadingSpinner|spinnerIcon/);
 });
 
+test('renders a native glyph as a grid tile visual', () => {
+  const html = renderExtensionView({
+    type: 'grid',
+    title: 'Characters',
+    items: [{ id: 'sparkles', title: 'Sparkles', glyph: '✨' }],
+  });
+
+  assert.match(html, /tileIcon tileGlyph/);
+  assert.match(html, /aria-hidden="true">✨<\/span>/);
+  assert.match(html, />Sparkles<\/strong>/);
+});
+
+test('bounds rendered grid items without removing them from the searchable view', () => {
+  const html = renderExtensionView({
+    type: 'grid',
+    title: 'Characters',
+    maxVisibleItems: 1,
+    items: [
+      { id: 'one', title: 'One', glyph: '1' },
+      { id: 'two', title: 'Two', glyph: '2' },
+    ],
+  });
+
+  assert.match(html, />One<\/strong>/);
+  assert.doesNotMatch(html, />Two<\/strong>/);
+});
+
 test('renders markdown headings with host typography hooks', () => {
   const html = renderToStaticMarkup(
     <MarkdownContent content="# Preview Fixture\n\nA compact preview body." />,

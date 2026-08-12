@@ -7,6 +7,15 @@
  */
 const WORD_CHARACTER = /[\p{L}\p{N}]/u;
 
+function allQueryWordsMatchTextWordPrefixes(text: string, query: string) {
+  const queryWords = query.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (queryWords.length < 2) return false;
+  const textWords = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  return queryWords.every((queryWord) =>
+    textWords.some((textWord) => textWord.startsWith(queryWord)),
+  );
+}
+
 export function scoreNormalizedNonEmpty(text: string, query: string): number {
   if (text === query) {
     return 100;
@@ -29,6 +38,9 @@ export function scoreNormalizedNonEmpty(text: string, query: string): number {
     return 80;
   }
   if (text.includes(query)) {
+    return 50;
+  }
+  if (allQueryWordsMatchTextWordPrefixes(text, query)) {
     return 50;
   }
   let pos = 0;
