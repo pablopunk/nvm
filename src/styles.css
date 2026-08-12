@@ -368,6 +368,11 @@ kbd {
   padding: 8px;
 }
 
+.results > [cmdk-list-sizer] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .optionsCard {
   flex: 0 1 auto;
   height: auto !important;
@@ -572,6 +577,30 @@ kbd {
   grid-template-rows: minmax(0, 1fr) auto auto;
   min-height: 0;
   height: 100%;
+}
+
+.previewView {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.previewView > .result {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  min-height: 44px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.previewView > .result[data-selected="true"] {
+  border-color: var(--border-2);
+  background: var(--surface-3);
+}
+
+.previewView > .result .resultIcon {
+  width: 28px;
+  height: 28px;
 }
 
 .previewMode .previewMedia {
@@ -1290,6 +1319,8 @@ kbd {
 
 .markdownContent p {
   margin: 0;
+  color: var(--text-primary);
+  line-height: 1.5;
 }
 
 .markdownContent ol,
@@ -1352,8 +1383,26 @@ kbd {
 
 .markdownHeading {
   display: block;
+  margin: 0;
+  color: var(--text-strong);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.markdownHeading1 {
+  font-size: var(--fs-2xl);
+}
+
+.markdownHeading2 {
+  font-size: var(--fs-xl);
+}
+
+.markdownHeading3,
+.markdownHeading4,
+.markdownHeading5,
+.markdownHeading6 {
   font-size: var(--fs-lg);
-  font-weight: 600;
 }
 
 .markdownBullet {
@@ -1642,39 +1691,7 @@ kbd {
   opacity: 1;
 }
 
-.loadingSpinner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-  animation: loadingSpinnerFadeIn 0.15s ease-out;
-}
-
-.spinnerIcon {
-  animation: spinnerRotate 1s linear infinite;
-  opacity: 0.4;
-  color: var(--color-text-secondary);
-}
-
-@keyframes loadingSpinnerFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes spinnerRotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.card.loadingBorder::after {
+.loadingBorder::after {
   content: "";
   position: absolute;
   inset: -1px;
@@ -1700,6 +1717,10 @@ kbd {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
+}
+
+.extensionWindowShell.loadingBorder::after {
+  inset: 0;
 }
 
 @property --loading-border-angle {

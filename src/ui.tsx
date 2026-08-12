@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This legacy shared UI module retains established renderer conventions.
 import { Command } from 'cmdk';
-import { Folder, Loader2 } from 'lucide-react';
-import React, { type ReactNode, useEffect, useState } from 'react';
+import { Folder } from 'lucide-react';
+import React, { type ReactNode } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MarkdownEditor } from './markdown-editor';
@@ -453,6 +453,24 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         remarkPlugins={[remarkGfm]}
         urlTransform={defaultUrlTransform}
         components={{
+          h1: ({ children }) => (
+            <h1 className="markdownHeading markdownHeading1">{children}</h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="markdownHeading markdownHeading2">{children}</h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="markdownHeading markdownHeading3">{children}</h3>
+          ),
+          h4: ({ children }) => (
+            <h4 className="markdownHeading markdownHeading4">{children}</h4>
+          ),
+          h5: ({ children }) => (
+            <h5 className="markdownHeading markdownHeading5">{children}</h5>
+          ),
+          h6: ({ children }) => (
+            <h6 className="markdownHeading markdownHeading6">{children}</h6>
+          ),
           a: ({ children, href }) => (
             <a href={href} target="_blank" rel="noreferrer">
               {children}
@@ -900,20 +918,6 @@ function normalizedSections<T>(items?: T[], sections?: ItemSection<T>[]) {
   return sections?.length ? sections : [{ items: items || [] }];
 }
 
-function LoadingSpinner({ delayMs = 200 }: { delayMs?: number }) {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), delayMs);
-    return () => clearTimeout(timer);
-  }, [delayMs]);
-  if (!visible) return null;
-  return (
-    <div className="loadingSpinner">
-      <Loader2 size={20} className="spinnerIcon" />
-    </div>
-  );
-}
-
 export function ListView<T>({
   items,
   sections,
@@ -942,11 +946,7 @@ export function ListView<T>({
             {section.items.map(renderItem)}
           </div>
         ))
-      ) : isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        empty
-      )}
+      ) : isLoading ? null : empty}
       {pagination}
     </>
   );
@@ -987,11 +987,7 @@ export function GridView<T>({
             </div>
           </div>
         ))
-      ) : isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        empty
-      )}
+      ) : isLoading ? null : empty}
       {pagination}
     </div>
   );

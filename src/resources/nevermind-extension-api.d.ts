@@ -1012,9 +1012,8 @@ export type ExtensionData = {
   /**
    * Declare items that resolve asynchronously. The view skeleton paints immediately;
    * the loader runs in the background. When it resolves, items are patched into the
-   * already-visible view. The host shows a deferred spinner (200ms) while the loader
-   * runs and renders `view.emptyView` content behind it. On failure, the host shows
-   * an error view with an optional retry button.
+   * already-visible view. While it runs, the host shows only the perimeter sweep.
+   * On failure, the host shows an error view with an optional retry button.
    *
    * The returned handle is opaque to extensions. Assign it to `view.items`.
    */
@@ -1031,11 +1030,11 @@ export type ExtensionData = {
    * loading indicator, no background refresh.
    *
    * **Stale cache** (between `ttlMs` and `staleTtlMs`): Cached items render
-   * immediately with a subtle loading bar. The loader refreshes in the
+   * immediately with the perimeter sweep. The loader refreshes in the
    * background and patches in fresh items.
    *
    * **No cache or expired** (age > `staleTtlMs`): Behavior matches
-   * `loader()` — the host shows a deferred spinner, then renders items.
+   * `loader()` — the host shows the perimeter sweep, then renders items.
    *
    * **Loader failure with stale cache**: Shows stale items as a graceful
    * fallback instead of an error view.
@@ -1367,6 +1366,7 @@ export type ExtensionContext = {
     item<T extends ExtensionItem>(item: T): T;
     actions<T extends ExtensionAction[]>(actions: T): T;
     empty(title?: string, subtitle?: string): ExtensionView;
+    /** Loading-only list surface; the host renders the perimeter sweep instead of an inline spinner or progress screen. */
     loading(title?: string): ExtensionView;
     error(title?: string, message?: string): ExtensionView;
   };

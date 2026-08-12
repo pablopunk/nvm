@@ -252,8 +252,8 @@ test('stale-while-revalidate registry hydrates stale cached items before loader'
 
   await registry.spawn('view:swr');
 
-  // Phase 1: stale items hydrated with isLoading: true
-  // Phase 2: fresh items hydrated with isLoading: false
+  // Phase 1: stale items hydrated with the perimeter sweep active
+  // Phase 2: fresh items hydrated with the sweep inactive
   assert.equal(payloads.length, 2);
   assert.deepEqual(payloads[0], {
     viewId: 'view:swr',

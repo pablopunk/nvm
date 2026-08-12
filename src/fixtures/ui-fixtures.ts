@@ -137,7 +137,7 @@ const FLOATING_WINDOW_OPTIONS = {
   id: FLOATING_WINDOW_ID,
   title: 'Nevermind Floating Note',
   titleBar: 'hidden' as const,
-  chrome: 'none' as const,
+  chrome: 'default' as const,
   width: 560,
   height: 520,
   alwaysOnTop: true,

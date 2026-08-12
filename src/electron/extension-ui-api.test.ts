@@ -69,9 +69,12 @@ test('extension ui api keeps utility helpers stable', () => {
     content: '# Empty\n\nTry again',
   });
   assert.deepEqual(ui.loading('Loading files'), {
-    type: 'progress',
+    type: 'list',
+    id: 'extension-loading:Loading files',
     title: 'Loading files',
-    label: 'Loading files',
+    searchBarPlaceholder: 'Loading files',
+    isLoading: true,
+    items: [],
   });
   assert.deepEqual(ui.toast({ message: 123, tone: 'error' }), {
     toast: { message: '123', tone: 'error' },

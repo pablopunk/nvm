@@ -96,7 +96,11 @@ if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
 if (!isNvmTestMode) initSentry();
 
 import { feedbackView } from '../feedback';
-import { type CommandAction, canCustomizeCommandAction } from '../model';
+import {
+  type CommandAction,
+  canCustomizeCommandAction,
+  extensionLoadingView,
+} from '../model';
 import { appResultMarker, priorityBoost } from './action-ranking';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
@@ -228,6 +232,10 @@ import {
 } from './settings';
 import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
 import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils';
+import {
+  shortcutActionRunsWithoutView,
+  withInheritedShortcutLifecycle,
+} from './shortcut-lifecycle';
 import { createStateSafeQuit } from './state-safe-quit';
 import { systemSettingsPaneUrl } from './system-settings';
 import { createUpdateManager } from './update-manager';
@@ -2784,6 +2792,21 @@ function extensionModuleForAction(action) {
 }
 
 function currentActionForStoredShortcut(action) {
+  if (action?.kind === 'extension-root-item') {
+    const persistentAction = action.persistentAction;
+    if (persistentAction)
+      return currentActionForStoredShortcut(persistentAction);
+    const reference = action.rootAction;
+    if (reference?.type === 'runExtensionRegisteredAction') {
+      const extensionId = reference.extensionId || action.extensionId;
+      const registeredActionId =
+        reference.registeredActionId || reference.actionId;
+      const entry = extensionActionRegistry.get(
+        `${extensionId}:${registeredActionId}`,
+      );
+      if (entry) return extensionActionFromContribution(entry);
+    }
+  }
   if (action?.kind === 'extension-command') {
     const entry = extensionActionEntryForAction(action);
     return entry ? extensionActionFromContribution(entry) : null;
@@ -2793,6 +2816,18 @@ function currentActionForStoredShortcut(action) {
     return entry ? extensionActionFromContribution(entry) : null;
   }
   return action;
+}
+
+function isClipboardHistoryAction(action: any) {
+  if (!action || typeof action !== 'object') return false;
+  if (
+    action.extensionId === 'nevermind.clipboard' &&
+    [action.commandId, action.registeredActionId, action.actionId].includes(
+      'clipboard-history',
+    )
+  )
+    return true;
+  return isClipboardHistoryAction(action.rootAction);
 }
 
 async function executeExtensionRootItem(action) {
@@ -3055,35 +3090,40 @@ function extensionRootActionFromItem(entry, item) {
     withoutPrimaryAction(item.actions || [], primarySource),
     entry,
   );
-  return {
-    id: `extension-root:${entry.extension.id}:${item.id}`,
-    kind: 'extension-root-item',
-    extensionId: entry.extension.id,
-    ...appResultMarker(item),
-    commandId: item.id,
-    extensionFile: entry.extension.__filePath
-      ? path.basename(entry.extension.__filePath)
-      : undefined,
-    rootAction: primaryAction,
+  return withInheritedShortcutLifecycle(
+    {
+      id: `extension-root:${entry.extension.id}:${item.id}`,
+      kind: 'extension-root-item',
+      extensionId: entry.extension.id,
+      ...appResultMarker(item),
+      commandId: item.id,
+      extensionFile: entry.extension.__filePath
+        ? path.basename(entry.extension.__filePath)
+        : undefined,
+      rootAction: primaryAction,
+      persistentAction,
+      removable: Boolean(entry.extension.__generated),
+      title: item.title,
+      subtitle: item.subtitle || entry.extension.title || 'Extension item',
+      aliases: item.aliases || item.keywords || [],
+      icon: item.icon || 'sparkles',
+      iconUrl: item.image || item.iconUrl || null,
+      thumbnailUrl: item.thumbnailUrl || null,
+      videoUrl: item.videoUrl || null,
+      imageDataUrl: item.imageDataUrl || null,
+      filePath: item.filePath || item.path || null,
+      text: item.text || '',
+      score: Math.min(Number(item.score || 35), 90),
+      lastUsed: Number(item.lastUsed || 0),
+      background: item.background,
+      mode: item.mode,
+      dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
+      customizable: item.customizable ?? Boolean(persistentAction),
+      actionPanel,
+      appearance: normalizeItemAppearance(item.appearance),
+    },
     persistentAction,
-    removable: Boolean(entry.extension.__generated),
-    title: item.title,
-    subtitle: item.subtitle || entry.extension.title || 'Extension item',
-    aliases: item.aliases || item.keywords || [],
-    icon: item.icon || 'sparkles',
-    iconUrl: item.image || item.iconUrl || null,
-    thumbnailUrl: item.thumbnailUrl || null,
-    videoUrl: item.videoUrl || null,
-    imageDataUrl: item.imageDataUrl || null,
-    filePath: item.filePath || item.path || null,
-    text: item.text || '',
-    score: Math.min(Number(item.score || 35), 90),
-    lastUsed: Number(item.lastUsed || 0),
-    dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
-    customizable: item.customizable ?? Boolean(persistentAction),
-    actionPanel,
-    appearance: normalizeItemAppearance(item.appearance),
-  };
+  );
 }
 
 function extensionActionFromContribution(entry) {
@@ -3120,6 +3160,7 @@ function extensionActionFromContribution(entry) {
     score: item.score || 12,
     dismissAfterRun: item.dismissAfterRun || primaryAction?.dismissAfterRun,
     background: item.background,
+    mode: item.mode,
     actionPanel: normalizeActionPanel(
       item.actionPanel,
       item.actions || [],
@@ -8816,25 +8857,28 @@ function unregisterShortcutForAction(actionId) {
 
 async function executeShortcutAction(action) {
   const currentAction = currentActionForStoredShortcut(action);
-  if (currentAction?.background || currentAction?.mode === 'background') {
+  const instantView = isClipboardHistoryAction(currentAction)
+    ? clipboardHistoryView()
+    : null;
+  if (instantView) recordRecent(currentAction);
+  if (shortcutActionRunsWithoutView(currentAction)) {
     runInBackground(() => executeAction(currentAction));
     return;
   }
   const wasVisible = Boolean(paletteWindow.win?.isVisible());
-  if (!wasVisible) {
-    paletteWindow.showPalette({ skipShownEvent: true, deferReveal: true });
-    paletteWindow.win?.webContents.send(
-      'action:view-open',
-      normalizeHostViewResult({
-        view: progressView({
-          title: currentAction?.title || 'Opening...',
-          label: 'Opening...',
-        }),
-        revealWhenReady: true,
-        asSibling: false,
-      }),
-    );
-  }
+  if (!wasVisible)
+    paletteWindow.showPalette({
+      skipShownEvent: true,
+      deferReveal: true,
+    });
+  const initialResult = normalizeHostViewResult({
+    view: instantView || extensionLoadingView(currentAction?.title || 'Opening...'),
+    revealWhenReady: !wasVisible,
+    asSibling: false,
+    isPrimary: true,
+  });
+  paletteWindow.win?.webContents.send('action:view-open', initialResult);
+  if (instantView) return;
   const result = normalizeHostViewResult(
     await executeAction(currentAction, { keepPaletteOpen: true }),
   );
@@ -8843,9 +8887,10 @@ async function executeShortcutAction(action) {
     paletteWindow.win?.webContents.send('action:view-open', {
       ...result,
       revealWhenReady: false,
-      asSibling: wasVisible,
+      asSibling: false,
+      isPrimary: true,
     });
-  } else if (!wasVisible) {
+  } else {
     paletteWindow.hidePalette();
   }
 }

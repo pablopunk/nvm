@@ -75,6 +75,7 @@ import {
   type CommandView,
   type CommandViewPatch,
   canCustomizeCommandAction,
+  extensionLoadingView,
 } from './model';
 import {
   resetTransientPaletteState,
@@ -177,6 +178,7 @@ type Action = {
   removable?: boolean;
   customizable?: boolean;
   background?: boolean;
+  mode?: 'view' | 'noView' | 'background';
   dismissAfterRun?: 'auto';
   rootAction?: CommandAction;
   actionPanel?: CommandActionPanel;
@@ -189,6 +191,29 @@ type ExtensionViewAction = CommandAction;
 type ExtensionViewItem = CommandItem;
 type ExtensionView = CommandView;
 type BuilderPreviewAction = Action;
+
+type ClipboardHistoryActionPayload = {
+  extensionId?: string;
+  commandId?: string;
+  registeredActionId?: string;
+  actionId?: string;
+  rootAction?: unknown;
+};
+
+function isClipboardHistoryActionPayload(action: unknown): boolean {
+  if (!action || typeof action !== 'object') return false;
+  const candidate = action as ClipboardHistoryActionPayload;
+  if (
+    candidate.extensionId === 'nevermind.clipboard' &&
+    [
+      candidate.commandId,
+      candidate.registeredActionId,
+      candidate.actionId,
+    ].includes('clipboard-history')
+  )
+    return true;
+  return isClipboardHistoryActionPayload(candidate.rootAction);
+}
 
 type BuilderPreviewState = {
   filename: string;
@@ -773,6 +798,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const framelessWindow = windowOptions.chrome === 'none';
   const shellClassName = [
     'extensionWindowShell',
+    view.isLoading ? 'loadingBorder' : '',
     windowOptions.titleBar === 'hidden' && !framelessWindow
       ? 'extensionWindowTitleBarHidden'
       : '',
@@ -1190,6 +1216,7 @@ export function App() {
     SEARCH_PLACEHOLDERS.length - 1,
   );
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false);
+  const [isPrimaryExtensionView, setIsPrimaryExtensionView] = useState(false);
   const [childQuery, setChildQuery] = useState('');
   const [actionQuery, setActionQuery] = useState('');
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null);
@@ -1418,6 +1445,7 @@ export function App() {
         extensionNavigation.clearView();
         aiChat.setMessages([]);
       }
+      setIsPrimaryExtensionView(false);
       setRefreshNonce((nonce) => nonce + 1);
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length);
       if (!aiChatOpenRef.current) {
@@ -1445,6 +1473,7 @@ export function App() {
         extensionNavigation.clearView();
         aiChat.setMessages([]);
       }
+      setIsPrimaryExtensionView(false);
       extensionNavigation.setBackStack([]);
       setSiblingViews([]);
       if (closedAiChatId) void window.nvm.aiChatExited(closedAiChatId);
@@ -1462,19 +1491,33 @@ export function App() {
       markDebugPerformance('view.open-event', {
         hasView: Boolean(payload?.view),
         asSibling: Boolean(payload?.asSibling),
+        isPrimary: Boolean(payload?.isPrimary),
         revealWhenReady: Boolean(payload?.revealWhenReady),
         viewType: payload?.view?.type,
         viewId: payload?.view?.id,
       });
       if (!payload?.view) return;
       resetTransientSurfaces();
+      setIsPrimaryExtensionView(Boolean(payload.isPrimary));
+      if (payload.isPrimary) {
+        setRootQuery('');
+        setChildQuery('');
+        setActionQuery('');
+      }
       const current = extensionViewRef.current;
-      if (payload.asSibling && current && current.id !== payload.view.id) {
+      if (
+        !payload.isPrimary &&
+        payload.asSibling &&
+        current &&
+        current.id !== payload.view.id
+      ) {
         setSiblingViews((siblings) => [...siblings, current]);
-      } else if (!payload.asSibling) {
+      } else if (payload.isPrimary || !payload.asSibling) {
         setSiblingViews([]);
       }
       if (payload.view.aiChat) await openAiChat(payload.view, 'root');
+      else if (payload.isPrimary)
+        showPrimaryExtensionView(payload.view);
       else showExtensionView(payload.view, 'root');
       markShortcutReady(Boolean(payload?.revealWhenReady));
     });
@@ -1993,7 +2036,8 @@ export function App() {
     extensionView?.type === 'list' ||
     extensionView?.type === 'grid' ||
     palettePrompt.active;
-  const isRootLikeExtensionView = extensionView?.id === 'clipboard-history';
+  const isRootLikeExtensionView =
+    isPrimaryExtensionView || extensionView?.id === 'clipboard-history';
   const isActionWorkflowOpen = Boolean(
     aliasFor ||
       confirmRemoveFor ||
@@ -2429,28 +2473,21 @@ export function App() {
 
   function showActionLoadingView(
     title = 'Running…',
-    subtitle = 'Waiting for the action to finish',
     navigation: 'root' | 'push' | 'replace' = 'root',
   ) {
     showExtensionView(
       {
-        type: 'list',
-        id: `action-loading:${title}`,
-        title,
+        ...extensionLoadingView(title),
         presentation: navigation === 'root' ? 'root' : undefined,
-        searchBarPlaceholder: title,
-        isLoading: true,
-        items: [
-          {
-            id: 'action-loading',
-            title,
-            subtitle,
-            icon: 'sparkles',
-          },
-        ],
       },
       navigation,
     );
+  }
+
+  function showPrimaryExtensionView(view: ExtensionView) {
+    extensionNavigation.showView(view, 'root');
+    setIsPrimaryExtensionView(true);
+    setSiblingViews([]);
   }
 
   function popExtensionView() {
@@ -2459,6 +2496,10 @@ export function App() {
       const next = siblingViews[siblingViews.length - 1];
       setSiblingViews((siblings) => siblings.slice(0, -1));
       extensionNavigation.showView(next, 'root');
+      return;
+    }
+    if (isPrimaryExtensionView && extensionViewBackStack.length === 0) {
+      void window.nvm.hide();
       return;
     }
     extensionNavigation.popView();
@@ -2638,6 +2679,7 @@ export function App() {
       setActionSubmenuFor(null);
       setPreviewFor(null);
       if (extensionView) extensionNavigation.clearView();
+      setIsPrimaryExtensionView(false);
       setSiblingViews([]);
       requestAnimationFrame(() => {
         const input = inputRef.current;
@@ -2735,9 +2777,15 @@ export function App() {
       nativeAction && 'rootAction' in nativeAction
         ? nativeAction.rootAction
         : action;
+    const instantClipboardHistory =
+      isClipboardHistoryActionPayload(action) ||
+      isClipboardHistoryActionPayload(nativeAction) ||
+      isClipboardHistoryActionPayload(nestedAction);
     const definition = actionDefinition(nestedAction);
     const showsLoading =
-      !dismissedImmediately && definition?.loading === 'view';
+      !dismissedImmediately &&
+      !instantClipboardHistory &&
+      definition?.loading === 'view';
     try {
       markDebugPerformance('view-action.start', {
         actionType: action.type,
@@ -2764,11 +2812,7 @@ export function App() {
         () => window.nvm.runViewAction(action),
       );
       if (!dismissedImmediately && showsLoading)
-        showActionLoadingView(
-          action.title || 'Running…',
-          'Waiting for the action to finish',
-          loadingNavigation,
-        );
+        showActionLoadingView(action.title || 'Running…', loadingNavigation);
       const result = await resultPromise;
       const resultAfterLoading =
         showsLoading && result?.navigation === 'push' && result.view
@@ -2892,12 +2936,8 @@ export function App() {
       },
       () => window.nvm.execute(action),
     );
-    if (!dismissedImmediately)
-      showActionLoadingView(
-        action.title || 'Running…',
-        action.subtitle || 'Waiting for the action to finish',
-        'root',
-      );
+    if (!dismissedImmediately && !isClipboardHistoryActionPayload(action))
+      showActionLoadingView(action.title || 'Running…', 'root');
     try {
       const result = await resultPromise;
       if (result?.view) {

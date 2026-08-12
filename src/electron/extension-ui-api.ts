@@ -1,5 +1,6 @@
 // biome-ignore-all lint: Host-side extension payload boundary keeps dynamic view shapes by design.
 import { feedbackView } from '../feedback';
+import { extensionLoadingView } from '../model';
 
 export type ExtensionUiApiDeps = {
   buildPreviewItemAction: (item: unknown) => unknown;
@@ -145,7 +146,7 @@ export function createExtensionUiApi({
       title,
       content: `# ${title}${subtitle ? `\n\n${subtitle}` : ''}`,
     }),
-    loading: (title = 'Loading…') => progressView({ title, label: title }),
+    loading: (title = 'Loading…') => extensionLoadingView(title),
     error: (title = 'Something went wrong', message = '') =>
       feedbackView({
         id: 'extension-error',

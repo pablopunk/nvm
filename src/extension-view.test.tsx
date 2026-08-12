@@ -13,6 +13,7 @@ import {
 } from './extension-view';
 import { feedbackView } from './feedback';
 import type { CommandAction, CommandView } from './model';
+import { MarkdownContent } from './ui';
 import {
   nextNavigationState,
   previousNavigationState,
@@ -104,6 +105,30 @@ test('does not render the legacy thin loading bar', () => {
     items: [{ id: 'one', title: 'One' }],
   });
   assert.doesNotMatch(activeLoading, /viewLoadingBar/);
+});
+
+test('loading views do not render an inline placeholder', () => {
+  const loadingView = renderExtensionView({
+    type: 'list',
+    title: 'Loading fixture',
+    isLoading: true,
+    emptyView: { title: 'No items yet' },
+    items: [],
+  });
+
+  assert.doesNotMatch(loadingView, /No items yet/);
+  assert.doesNotMatch(loadingView, /loadingSpinner|spinnerIcon/);
+});
+
+test('renders markdown headings with host typography hooks', () => {
+  const html = renderToStaticMarkup(
+    <MarkdownContent content="# Preview Fixture\n\nA compact preview body." />,
+  );
+
+  assert.match(
+    html,
+    /<h1 class="markdownHeading markdownHeading1">Preview Fixture<\/h1>/,
+  );
 });
 
 test('nested navigation preserves the parent view when pushing a child', () => {

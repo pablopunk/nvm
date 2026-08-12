@@ -711,6 +711,7 @@ function ListExtensionView({
         items={items}
         iconForItem={renderRootIcon}
         onSelect={runDefaultAction}
+        isLoading={view.isLoading}
         emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE}
         emptySubtitle={view.emptyView?.subtitle}
       />

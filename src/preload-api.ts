@@ -53,6 +53,7 @@ export type RootAction = {
   extensionFile?: string;
   removable?: boolean;
   background?: boolean;
+  mode?: 'view' | 'noView' | 'background';
   dismissAfterRun?: 'auto';
   actionPanel?: CommandView['actionPanel'];
   shortcut?: string;
@@ -98,6 +99,7 @@ export type OpenActionViewPayload = {
   view?: CommandView;
   revealWhenReady?: boolean;
   asSibling?: boolean;
+  isPrimary?: boolean;
 };
 
 export type AiChatEvent = {

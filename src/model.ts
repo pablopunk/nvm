@@ -647,6 +647,17 @@ export interface CommandView {
   columns?: NonNullable<ExtensionView['columns']>;
 }
 
+export function extensionLoadingView(title = 'Loading…'): CommandView {
+  return {
+    type: 'list',
+    id: `extension-loading:${title}`,
+    title,
+    searchBarPlaceholder: title,
+    isLoading: true,
+    items: [],
+  };
+}
+
 export interface RowModel {
   value: string;
   icon: ReactNode;

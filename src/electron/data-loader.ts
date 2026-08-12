@@ -122,7 +122,7 @@ export function createViewLoaderRegistry(deps: {
             isFresh = true;
             cachedItems = cached.value;
           } else if (age < maxStale) {
-            // Stale cache: show items now with loading indicator, then revalidate
+            // Stale cache: show items now with the perimeter sweep, then revalidate
             cachedItems = cached.value;
           }
         }

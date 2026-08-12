@@ -29,7 +29,7 @@ be one extra method call. The host owns the loading/error/empty lifecycle.
 type ExtensionData = {
   /**
    * Declare items that resolve asynchronously. The host:
-   * 1. Paints the skeleton immediately (spinner deferred 200ms).
+   * 1. Paints the skeleton immediately and uses the perimeter sweep while loading.
    * 2. Calls loader() in the background.
    * 3. Patches items when resolved.
    * 4. Renders emptyView when loader returns [].
@@ -53,7 +53,7 @@ type ExtensionDataLoaderHandle = {
 ### Required `emptyView`
 
 Views that use `ctx.data.loader()` must declare `emptyView`. The skeleton paints the `emptyView`
-content immediately (behind the deferred spinner), so there's never a flash of nothing:
+content after loading completes; while loading, only the perimeter sweep is shown:
 
 ```ts
 commands: [{
@@ -76,23 +76,20 @@ commands: [{
 paints the skeleton, then invokes the loader. The extension does not manage timing or loading
 state.
 
-### Spinner debounce
+### Perimeter sweep
 
-The renderer defers the loading spinner by 200ms. If the loader resolves before the threshold,
-the spinner is never shown. This prevents flicker on fast data.
-
-```
-t=0      Paint skeleton + emptyView (no spinner)
-t=120    Loader resolves → patch items, spinner never appeared
-```
+The renderer uses the shared perimeter sweep for extension loading. There is no inline spinner or
+loading placeholder, so all extension loading surfaces have one consistent visual treatment.
 
 ```
-t=0      Paint skeleton + emptyView
-t=200    Spinner fades in
-t=850    Loader resolves → patch items, spinner dismissed
+t=0      Paint loading surface + perimeter sweep
+t=120    Loader resolves → patch items, sweep stops
 ```
 
-The threshold is host-owned, not configurable by the extension (to guarantee consistency).
+```
+t=0      Paint loading surface + perimeter sweep
+t=850    Loader resolves → patch items, sweep stops
+```
 
 ### Error state
 
@@ -100,8 +97,7 @@ When the loader throws, the host renders a standard error view. If `options.retr
 view includes a "Retry" button that re-runs the loader.
 
 ```
-t=0      Paint skeleton
-t=200    Spinner appears
+t=0      Paint loading surface + perimeter sweep
 t=500    Loader throws → error view with message, optional retry button
 ```
 
@@ -191,13 +187,13 @@ double-`run()` pattern. Existing extensions using `refresh` continue to work unc
 
 6. **IPC** — add `view:hydrate` channel to preload, main sender, renderer listener.
 
-7. **Spinner delay** — in `ExtensionViewRenderer`, when `items.length === 0 && emptyView` and no error, start a 200ms timer before showing spinner. Cancel on hydrate.
+7. **Loading presentation** — render the shared perimeter sweep while `isLoading` is true; do not render an inline spinner or empty placeholder.
 
 8. **Error rendering** — host generates error view from `payload.error`, includes optional retry button that re-registers and re-runs the loader.
 
 9. **`emptyView` required** — at runtime, if a view has `ctx.data.loader()` items but no `emptyView`, warn and use a default empty state. TypeScript types should mark it as required in the relevant overload.
 
-10. **Tests** — new unit test for loader lifecycle, hydration IPC, spinner debounce, error/retry, empty state.
+10. **Tests** — new unit test for loader lifecycle, hydration IPC, perimeter sweep, error/retry, and empty state.
 
 ## Risks
 

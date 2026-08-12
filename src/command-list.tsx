@@ -18,6 +18,7 @@ export type RootCommandListProps = {
   onSelect: (item: CommandItem) => void;
   emptyTitle?: string;
   emptySubtitle?: string;
+  isLoading?: boolean;
   extraForItem?: (item: CommandItem) => string[];
 };
 
@@ -31,8 +32,10 @@ export function RootCommandList({
   onSelect,
   emptyTitle = EMPTY_ROOT_TITLE,
   emptySubtitle = EMPTY_ROOT_SUBTITLE,
+  isLoading = false,
   extraForItem,
 }: RootCommandListProps) {
+  if (items.length === 0 && isLoading) return null;
   if (items.length === 0)
     return (
       <EmptyState

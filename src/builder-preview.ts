@@ -1,10 +1,11 @@
 import { feedbackView } from './feedback';
 import { allViewItems } from './filtering';
-import type {
-  BuilderPreview,
-  CommandAction,
-  CommandView,
-  CommandViewPatch,
+import {
+  type BuilderPreview,
+  type CommandAction,
+  type CommandView,
+  type CommandViewPatch,
+  extensionLoadingView,
 } from './model';
 import { patchCommandView } from './view-patches';
 
@@ -139,13 +140,8 @@ export function retryBuilderPreviewHydration<
       return preview;
     }
     matched = true;
-    const view: CommandView = {
-      type: 'list',
-      id: viewId,
-      title: 'Loading...',
-      isLoading: true,
-      items: [],
-    };
+    const view: CommandView = extensionLoadingView('Loading...');
+    view.id = viewId;
     return { ...preview, view, selectedItemId: '' };
   });
   return matched ? next : previews;
