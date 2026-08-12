@@ -477,9 +477,11 @@ export type CommandMetadataItem =
 export interface CommandDetail {
   title?: string;
   subtitle?: string;
+  text?: string;
   markdown?: string;
   metadata?: CommandMetadataItem[];
   image?: CommandImage;
+  video?: string;
   actions?: CommandAction[];
 }
 export type CommandItemForeground = ForegroundColor;

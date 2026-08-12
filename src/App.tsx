@@ -1858,14 +1858,17 @@ export function App() {
     )
       void window.nvm.aiChatExited(previousAiChatId);
     lastVisibleAiChatIdRef.current = visibleAiChat?.chatId;
-    const mode: PaletteMode =
-      previewFor || isLarge || (isAiChat && builderPreviews.length > 0)
-        ? 'preview'
-        : siblingViews.length > 0
-          ? 'stacked'
-          : isAiChat
-            ? 'ai-chat'
-            : 'default';
+    const mode: PaletteMode = previewFor
+      ? 'preview'
+      : extensionView?.presentation === 'side-preview'
+        ? 'side-preview'
+        : isLarge || (isAiChat && builderPreviews.length > 0)
+          ? 'preview'
+          : siblingViews.length > 0
+            ? 'stacked'
+            : isAiChat
+              ? 'ai-chat'
+              : 'default';
     if (paletteModeRef.current !== mode) {
       paletteModeRef.current = mode;
       window.nvm.setPaletteMode(mode);
@@ -2090,7 +2093,9 @@ export function App() {
     extensionView?.type === 'grid' ||
     palettePrompt.active;
   const isRootLikeExtensionView =
-    isPrimaryExtensionView || extensionView?.id === 'clipboard-history';
+    isPrimaryExtensionView ||
+    extensionView?.id === 'clipboard-history' ||
+    extensionView?.presentation === 'side-preview';
   const isActionWorkflowOpen = Boolean(
     aliasFor ||
       confirmRemoveFor ||
@@ -2115,6 +2120,8 @@ export function App() {
       isFilterableExtensionView,
   );
   const isLargeExtensionView = extensionView?.size === 'large';
+  const isSidePreviewView =
+    !previewFor && extensionView?.presentation === 'side-preview';
   const isChildOpen = Boolean(
     shortcutFor ||
       shortcutOptionsFor ||
@@ -4914,7 +4921,7 @@ export function App() {
 
         <Command.List
           ref={resultsListRef}
-          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
         >
           {shortcutFor ? (
             <div className="shortcutRecorder" aria-busy={savingShortcut}>

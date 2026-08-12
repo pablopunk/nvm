@@ -28,7 +28,12 @@ import {
   isTrustedAppPage,
 } from './window-navigation-policy';
 
-export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview';
+export type PaletteMode =
+  | 'default'
+  | 'ai-chat'
+  | 'stacked'
+  | 'preview'
+  | 'side-preview';
 
 type PaletteWindowOptions = {
   isDev: boolean;
@@ -43,10 +48,14 @@ const DEFAULT_PALETTE_SIZE = { width: 720, height: 480 };
 const AI_CHAT_PALETTE_SIZE = { width: 760, height: 560 };
 const STACKED_PALETTE_SIZE = { width: 760, height: 720 };
 const PREVIEW_PALETTE_SIZE = { width: 1080, height: 760 };
+const SIDE_PREVIEW_PALETTE_SIZE = { width: 960, height: 640 };
 const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE);
 const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE);
 const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE);
 const PREVIEW_WINDOW_SIZE = addWindowBlurMargin(PREVIEW_PALETTE_SIZE);
+const SIDE_PREVIEW_WINDOW_SIZE = addWindowBlurMargin(
+  SIDE_PREVIEW_PALETTE_SIZE,
+);
 
 function addWindowBlurMargin(size: { width: number; height: number }) {
   return {
@@ -235,11 +244,13 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         const size =
           mode === 'preview'
             ? PREVIEW_WINDOW_SIZE
-            : mode === 'stacked'
-              ? STACKED_WINDOW_SIZE
-              : mode === 'ai-chat'
-                ? AI_CHAT_WINDOW_SIZE
-                : DEFAULT_WINDOW_SIZE;
+            : mode === 'side-preview'
+              ? SIDE_PREVIEW_WINDOW_SIZE
+              : mode === 'stacked'
+                ? STACKED_WINDOW_SIZE
+                : mode === 'ai-chat'
+                  ? AI_CHAT_WINDOW_SIZE
+                  : DEFAULT_WINDOW_SIZE;
         win.setSize(size.width, size.height, false);
         if (win.isVisible()) centerWindow();
       },

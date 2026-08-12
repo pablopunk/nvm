@@ -85,7 +85,12 @@ export type ShortcutRecord = {
   action: RootAction;
 };
 
-export type PaletteMode = 'default' | 'ai-chat' | 'stacked' | 'preview';
+export type PaletteMode =
+  | 'default'
+  | 'ai-chat'
+  | 'stacked'
+  | 'preview'
+  | 'side-preview';
 
 export type ViewActionResult = {
   view?: CommandView;

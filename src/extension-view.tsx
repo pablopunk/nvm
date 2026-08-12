@@ -208,11 +208,13 @@ function ExtensionItemDetail({
   renderMarkdown,
   renderActionPanel,
   actionPanelRows,
+  mediaPreview = false,
 }: {
   item?: CommandItem;
   renderMarkdown: (content: string) => ReactNode;
   renderActionPanel: (rows: unknown[], emptyMessage?: string) => ReactNode;
   actionPanelRows: ExtensionViewRendererProps['actionPanelRows'];
+  mediaPreview?: boolean;
 }) {
   const detail = item?.detail;
   if (!(item && detail)) return null;
@@ -227,22 +229,59 @@ function ExtensionItemDetail({
       )
     : null;
   const image = imageSource(detail.image || item.image);
+  const video = mediaPreview ? detail.video : undefined;
+  const textOnlyPreview =
+    mediaPreview && detail.text !== undefined && !image && !video;
   return (
-    <aside className="extensionDetailPane">
-      <div className="extensionDetailHeader">
-        {image ? <img src={image} alt="" /> : null}
-        <div>
-          <strong>{detail.title || item.title}</strong>
-          {detail.subtitle || item.subtitle ? (
-            <small>{detail.subtitle || item.subtitle}</small>
-          ) : null}
-        </div>
-      </div>
-      {detail.markdown ? (
-        <div className="previewText detailMarkdown">
-          {renderMarkdown(detail.markdown)}
+    <aside
+      className={`extensionDetailPane ${mediaPreview ? 'sidePreviewDetailPane' : ''} ${textOnlyPreview ? 'sidePreviewTextOnly' : ''}`}
+    >
+      {!textOnlyPreview ? (
+        <div className="extensionDetailHeader">
+          {image && !mediaPreview ? <img src={image} alt="" /> : null}
+          <div>
+            <strong>{detail.title || item.title}</strong>
+            {detail.subtitle || item.subtitle ? (
+              <small>{detail.subtitle || item.subtitle}</small>
+            ) : null}
+          </div>
         </div>
       ) : null}
+      {mediaPreview ? (
+        <div className="extensionDetailPreview">
+          {video ? (
+            <video
+              className="extensionDetailMedia"
+              src={video}
+              poster={image || undefined}
+              controls={true}
+              autoPlay={true}
+              muted={true}
+              loop={true}
+              playsInline={true}
+            />
+          ) : image ? (
+            <img className="extensionDetailMedia" src={image} alt="" />
+          ) : detail.text !== undefined ? (
+            <pre className="previewText extensionDetailText">{detail.text}</pre>
+          ) : detail.markdown ? (
+            <div className="previewText detailMarkdown">
+              {renderMarkdown(detail.markdown)}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          {detail.markdown ? (
+            <div className="previewText detailMarkdown">
+              {renderMarkdown(detail.markdown)}
+            </div>
+          ) : null}
+          {detail.text !== undefined ? (
+            <pre className="previewText extensionDetailText">{detail.text}</pre>
+          ) : null}
+        </>
+      )}
       <MetadataRows items={detail.metadata} />
       {actions}
     </aside>
@@ -738,10 +777,13 @@ function ListExtensionView({
       )}
     />
   );
-  if (view.detail?.visible && selected?.detail)
+  if (
+    (view.presentation === 'side-preview' || view.detail?.visible) &&
+    selected?.detail
+  )
     return (
       <div
-        className={`extensionListWithDetail extensionListDetail-${view.detail.placement || 'side'}`}
+        className={`extensionListWithDetail extensionListDetail-${view.detail?.placement || 'side'}`}
       >
         <div className="extensionListPane">{list}</div>
         <ExtensionItemDetail
@@ -749,6 +791,7 @@ function ListExtensionView({
           renderMarkdown={renderMarkdown}
           renderActionPanel={renderActionPanel}
           actionPanelRows={actionPanelRows}
+          mediaPreview={view.presentation === 'side-preview'}
         />
       </div>
     );

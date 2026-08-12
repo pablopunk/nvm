@@ -441,6 +441,24 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       subtitle: clipboardItemSubtitle(item),
       icon: 'clipboard',
       image: item.thumbnailUrl,
+      detail: isImage
+        ? {
+            title: clipboardItemTitle(item),
+            subtitle: clipboardItemSubtitle(item),
+            image: item.imageDataUrl || item.thumbnailUrl,
+          }
+        : isVideo
+          ? {
+              title: clipboardItemTitle(item),
+              subtitle: clipboardItemSubtitle(item),
+              image: item.thumbnailUrl,
+              video: item.videoUrl,
+            }
+          : {
+              title: clipboardItemTitle(item),
+              subtitle: clipboardItemSubtitle(item),
+              text: item.text,
+            },
       keywords: [
         item.text || '',
         item.type || '',
@@ -477,7 +495,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       type: 'list',
       id: 'clipboard-history',
       title: 'Clipboard History',
-      presentation: 'root',
+      presentation: 'side-preview',
       searchBarPlaceholder: 'Search Clipboard History',
       emptyView: {
         title: 'No clipboard items found.',

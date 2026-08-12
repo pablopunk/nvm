@@ -120,6 +120,48 @@ test('loading views do not render an inline placeholder', () => {
   assert.doesNotMatch(loadingView, /loadingSpinner|spinnerIcon/);
 });
 
+test('renders an opted-in side preview for the selected list item', () => {
+  const html = renderExtensionView({
+    type: 'list',
+    presentation: 'side-preview',
+    title: 'Clipboard History',
+    selectedItemId: 'one',
+    items: [
+      {
+        id: 'one',
+        title: 'Clipboard text',
+        detail: { text: 'Preview content' },
+      },
+    ],
+  });
+
+  assert.match(html, /extensionListWithDetail/);
+  assert.match(html, /Preview content/);
+  assert.doesNotMatch(html, /extensionDetailHeader/);
+});
+
+test('renders side-preview media and text details', () => {
+  const html = renderExtensionView({
+    type: 'list',
+    presentation: 'side-preview',
+    title: 'Clipboard History',
+    items: [
+      {
+        id: 'video',
+        title: 'Clipboard video',
+        detail: {
+          image: 'thumb://video',
+          video: 'file://video.mp4',
+        },
+      },
+    ],
+  });
+
+  assert.match(html, /class="extensionDetailMedia"/);
+  assert.match(html, /extensionDetailHeader/);
+  assert.match(html, /file:\/\/video\.mp4/);
+});
+
 test('renders a native glyph as a grid tile visual', () => {
   const html = renderExtensionView({
     type: 'grid',

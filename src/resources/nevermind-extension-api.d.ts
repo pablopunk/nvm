@@ -67,7 +67,8 @@ export type ExtensionPermission = ExtensionCapability;
 /** Action panels can be visible, menu-only, or hidden while still allowing shortcuts. */
 export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden';
 export type ViewSize = 'default' | 'large';
-export type ViewPresentation = 'root' | 'stacked' | 'preview';
+/** Controls the palette framing for a host-rendered view; side-preview pairs a selectable list with its selected item's detail pane. */
+export type ViewPresentation = 'root' | 'stacked' | 'preview' | 'side-preview';
 export type PatchMode = 'patch' | 'replace' | 'prepend' | 'append';
 /** Independent-window behavior reported by the host OS/session capability layer. */
 export type ExtensionWindowCapability =
@@ -492,9 +493,13 @@ export type ExtensionMetadataItem =
 export type ExtensionDetail = {
   title?: string;
   subtitle?: string;
+  /** Plain text content rendered in an opt-in side detail/preview pane. */
+  text?: string;
   markdown?: string;
   metadata?: ExtensionMetadataItem[];
   image?: ExtensionImage;
+  /** Video URL rendered in an opt-in side detail/preview pane. */
+  video?: string;
   actions?: ExtensionAction[];
 };
 export type ExtensionItemAppearance = {
@@ -656,7 +661,7 @@ export type ExtensionView = {
   /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   emptyView?: { title?: string; subtitle?: string };
-  /** Optional item detail pane for richer list views. */
+  /** Optional item detail pane for richer list views. `presentation: 'side-preview'` uses this as the selected-item preview. */
   detail?: { placement?: 'side' | 'bottom'; visible?: boolean };
   searchBarPlaceholder?: string;
   /** Initial focused item for list/grid views. Must match a stable visible item id; sorting remains independent. */

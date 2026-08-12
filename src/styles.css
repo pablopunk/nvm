@@ -373,6 +373,16 @@ kbd {
   min-height: 0;
 }
 
+.results.sidePreviewCard {
+  flex: 1 1 0;
+}
+
+.sidePreviewCard > [cmdk-list-sizer] {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+}
+
 .optionsCard {
   flex: 0 1 auto;
   height: auto !important;
@@ -380,6 +390,10 @@ kbd {
   width: calc(100% - 58px);
   margin-left: 34px;
   overflow: visible;
+}
+
+.optionsCard.loadingBorder {
+  flex: 1 1 auto;
 }
 
 .optionsCard > [cmdk-list-sizer] {
@@ -1760,6 +1774,17 @@ kbd {
   min-width: 0;
 }
 
+.sidePreviewCard .extensionListWithDetail {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 40%);
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidePreviewCard .extensionListPane {
+  min-height: 0;
+  overflow: auto;
+}
+
 .extensionDetailPane {
   align-self: start;
   display: grid;
@@ -1772,6 +1797,49 @@ kbd {
   color: var(--text-secondary);
   background: var(--surface-1);
   -webkit-app-region: no-drag;
+}
+
+.sidePreviewCard .extensionDetailPane {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+
+.extensionDetailPreview {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  place-items: center;
+  overflow: auto;
+}
+
+.sidePreviewTextOnly .extensionDetailPreview {
+  place-items: start;
+}
+
+.extensionDetailMedia {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
+.extensionDetailText {
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.sidePreviewDetailPane .extensionDetailText {
+  width: 100%;
 }
 
 .extensionDetailHeader {
@@ -1859,6 +1927,21 @@ kbd {
 @media (max-width: 720px) {
   .extensionListWithDetail {
     grid-template-columns: 1fr;
+  }
+
+  .sidePreviewCard .extensionListWithDetail {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .sidePreviewCard .extensionListPane {
+    overflow: visible;
+  }
+
+  .sidePreviewCard .extensionDetailPane {
+    height: auto;
+    max-height: calc(100vh - var(--window-blur-margin) * 2 - 116px);
   }
 }
 

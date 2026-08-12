@@ -413,6 +413,39 @@ function renderingPolishView(ctx: ExtensionContext) {
   });
 }
 
+function sidePreviewView(ctx: ExtensionContext) {
+  return ctx.ui.list({
+    id: 'dev-ui-side-preview',
+    title: 'Dev UI · Side Preview',
+    subtitle: 'Select an item to preview it beside the list.',
+    presentation: 'side-preview',
+    selectedItemId: 'text',
+    items: [
+      ctx.ui.item({
+        id: 'text',
+        title: 'Text Preview',
+        subtitle: 'Plain text renders in the side pane',
+        icon: 'clipboard',
+        detail: {
+          title: 'Text Preview',
+          subtitle: 'Side preview fixture',
+          text: 'This is a text preview rendered beside the selectable list.',
+        },
+      }),
+      ctx.ui.item({
+        id: 'markdown',
+        title: 'Markdown Preview',
+        subtitle: 'Existing detail markdown remains supported',
+        icon: 'file-text',
+        detail: {
+          title: 'Markdown Preview',
+          markdown: 'Side previews can also reuse **host-rendered Markdown**.',
+        },
+      }),
+    ],
+  });
+}
+
 function clipboardView(ctx: ExtensionContext) {
   const clipboardApi = ctx.desktop.clipboard;
   const writeHtml = ctx.actions.run(
@@ -1414,6 +1447,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Rendering Polish',
       icon: 'sparkles',
       run: (ctx) => renderingPolishView(ctx),
+    },
+    {
+      id: 'side-preview',
+      title: 'Dev UI: Side Preview',
+      icon: 'panel-right',
+      run: (ctx) => sidePreviewView(ctx),
     },
     {
       id: 'grid',
