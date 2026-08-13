@@ -129,8 +129,7 @@ function proxySelects(options: { free?: number; paid?: number; plan?: string; mo
     [],
     [{ balance: (options.paid ?? 0) > 0 ? options.paid ?? 0 : options.free ?? 10 }],
     [{ reserved: 0 }],
-    [],
-    [],
+    ...(options.model === 'gemini-3-fast' ? [[], [], []] : [[], []]),
     [{ id: 'user_1' }],
     [{ requestId: 'test-reservation', userId: 'user_1', kind: (options.paid ?? 0) > 0 ? 'paid' : 'free', reservedCredits: 1, status: 'pending' }],
   ];
@@ -824,7 +823,7 @@ test('proxy releases a committed reservation when request rewriting throws', asy
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const selects = proxySelects({ free: 1000 });
-  selects.splice(8, 1); // Rewriting fails before provider-chain lookup.
+  selects.splice(8, 2); // Rewriting fails before provider-chain lookup.
   const db = installDb(createFakeDb({ selects }));
 
   await assert.rejects(
