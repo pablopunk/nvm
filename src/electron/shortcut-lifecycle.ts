@@ -3,6 +3,7 @@ export type ShortcutLifecycleAction = {
   mode?: string;
   rootAction?: unknown;
   persistentAction?: unknown;
+  [key: string]: unknown;
 };
 
 export type ShortcutLifecycle = Pick<

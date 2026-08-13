@@ -32,10 +32,7 @@ function pickerContext(canPaste = true) {
 
 async function pickerView(context: any) {
   const command = createEmojiSymbolsExtension().commands[0];
-  return (await command.run(context, {
-    type: 'runExtensionRegisteredAction',
-    title: 'Emoji & Symbols',
-  })) as any;
+  return (await command.run(context)) as any;
 }
 
 test('exposes a searchable grid with emoji and Unicode symbols', async () => {
