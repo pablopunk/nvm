@@ -14,6 +14,15 @@ export interface AppIpcHandlersDeps {
     fn: () => T | Promise<T>,
   ) => T | Promise<T>;
   summarizeDebugValue: (value: unknown) => unknown;
+  performanceTrace?: {
+    run<T>(
+      operation: string,
+      data: Record<string, unknown>,
+      fn: () => T | Promise<T>,
+      context?: { traceId: string },
+    ): T | Promise<T>;
+    record(event: unknown): void;
+  };
   startSearch: (sender: unknown, input: unknown) => unknown;
   cancelSearch: (sender: unknown, input: unknown) => unknown;
   executeActionForIpc: (action: unknown) => unknown;
@@ -22,7 +31,11 @@ export interface AppIpcHandlersDeps {
   pickFormFieldPaths: (event: unknown, input?: unknown) => unknown;
   // biome-ignore lint/suspicious/noExplicitAny: deps-object pattern uses any for maximum caller flexibility
   startFileDrag: (...args: any[]) => unknown;
-  sendAiChatMessage: (message: unknown, chatId: unknown) => unknown;
+  sendAiChatMessage: (
+    message: unknown,
+    chatId: unknown,
+    traceId?: unknown,
+  ) => unknown;
   noteAiChatExited: (chatId: unknown) => unknown;
   abortAiChat: (chatId: unknown) => unknown;
   resetAiChat: (chatId: unknown) => unknown;
@@ -93,7 +106,12 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     ipcMain: deps.ipcMain,
     measure: deps.measureDebugPerformance,
     summarize: deps.summarizeDebugValue,
+    trace: deps.performanceTrace,
   });
+  if (deps.performanceTrace)
+    deps.ipcMain.on('performance:trace', (_event, event) =>
+      deps.performanceTrace?.record(event),
+    );
 
   ipcHandleMeasured('actions:search', (event, input) =>
     deps.startSearch(event.sender, input),
@@ -107,17 +125,13 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('view-action:execute', (_event, action) =>
     deps.executeViewActionForIpc(action),
   );
-  deps.ipcMain.handle('view:refresh', (event, input) =>
-    deps.measureDebugPerformance(
-      'ipc.view:refresh.handler',
-      { args: [deps.summarizeDebugValue(input)], alwaysLog: true },
-      () => deps.refreshViewForIpc(input),
-    ),
+  ipcHandleMeasured('view:refresh', (_event, input) =>
+    deps.refreshViewForIpc(input),
   );
   ipcHandleMeasured('dialog:pick-form-field-paths', deps.pickFormFieldPaths);
   deps.ipcMain.on('drag:file', deps.startFileDrag);
-  ipcHandleMeasured('ai:chat:send', (_event, message, chatId) =>
-    deps.sendAiChatMessage(message, chatId),
+  ipcHandleMeasured('ai:chat:send', (_event, message, chatId, traceId) =>
+    deps.sendAiChatMessage(message, chatId, traceId),
   );
   ipcHandleMeasured('ai:chat:exited', (_event, chatId) =>
     deps.noteAiChatExited(chatId),
@@ -271,6 +285,13 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     deps.saveExtensionDraft(input),
   );
   ipcHandleMeasured('logs:write', (_event, level, message, data) => {
+    if (message === 'performance.trace') {
+      deps.loggerDebug(String(message), data, {
+        source: 'renderer',
+        scope: 'performance',
+      });
+      return;
+    }
     let method = deps.logInfo;
     if (level === 'error') {
       method = deps.logError;

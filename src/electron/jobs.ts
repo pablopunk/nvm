@@ -42,6 +42,12 @@ export type JobDefinition = {
   run: (context: JobRunContext) => unknown | Promise<unknown>;
 };
 
+export type JobPerformanceRunner = <T>(
+  operation: string,
+  attributes: Record<string, unknown>,
+  task: () => T | Promise<T>,
+) => T | Promise<T>;
+
 export type JobSnapshot = {
   id: string;
   title: string;
@@ -96,7 +102,11 @@ function timeout<T>(promise: Promise<T>, timeoutMs: number, title: string) {
   let timer: NodeJS.Timeout | undefined;
   const guard = new Promise<T>((_, reject) => {
     timer = setTimeout(
-      () => reject(new Error(`${title} timed out after ${timeoutMs}ms`)),
+      () => {
+        const error = new Error(`${title} timed out after ${timeoutMs}ms`);
+        error.name = 'TimeoutError';
+        reject(error);
+      },
       timeoutMs,
     );
     timer.unref?.();
@@ -153,6 +163,11 @@ export class JobRegistry {
   private records = new Map<string, JobRecord>();
   private listeners = new Set<() => void>();
   private enabledOverrides: EnabledOverrides = {};
+  private performanceTrace?: JobPerformanceRunner;
+
+  constructor(options: { performanceTrace?: JobPerformanceRunner } = {}) {
+    this.performanceTrace = options.performanceTrace;
+  }
 
   hydrateEnabled(overrides: EnabledOverrides = {}) {
     this.enabledOverrides = { ...overrides };
@@ -250,22 +265,37 @@ export class JobRegistry {
     record.lastError = undefined;
     this.notify();
     try {
-      const promise = Promise.resolve(
+      const run = () =>
         record.definition.run({
           id,
           reason,
           event: eventPayload?.event,
           payload: eventPayload?.payload,
           startedAt: record.lastStartedAt,
-        }),
+        });
+      const runWithTimeout = () => {
+        const promise = Promise.resolve(run());
+        return record.definition.timeoutMs
+          ? timeout(
+              promise,
+              record.definition.timeoutMs,
+              record.definition.title,
+            )
+          : promise;
+      };
+      const result = await Promise.resolve(
+        this.performanceTrace
+          ? this.performanceTrace(
+              'job.run',
+              {
+                jobId: id,
+                jobOwner: record.definition.owner || 'host',
+                reason,
+              },
+              runWithTimeout,
+            )
+          : runWithTimeout(),
       );
-      const result = record.definition.timeoutMs
-        ? await timeout(
-            promise,
-            record.definition.timeoutMs,
-            record.definition.title,
-          )
-        : await promise;
       record.status = 'succeeded';
       record.runCount += 1;
       record.consecutiveFailures = 0;

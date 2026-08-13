@@ -4,6 +4,36 @@ type DebugPerformanceDetail = Record<string, unknown> | undefined;
 const DEBUG_PERFORMANCE_STORAGE_KEY = 'nvm.debugPerformance';
 const DEFAULT_SLOW_LOG_THRESHOLD_MS = 8;
 let sequence = 0;
+const pendingTraceEvents: Array<Record<string, unknown>> = [];
+let traceFlushScheduled = false;
+
+function flushPerformanceTraceEvents() {
+  traceFlushScheduled = false;
+  if (!pendingTraceEvents.length) return;
+  const events = pendingTraceEvents.splice(0, pendingTraceEvents.length);
+  try {
+    window.nvm?.performanceTrace(events);
+  } catch {}
+}
+
+export function recordPerformanceTrace(
+  traceId: string,
+  operation: string,
+  startedAt: number,
+  status: 'ok' | 'error' | 'cancelled' = 'ok',
+  detail: Record<string, unknown> = {},
+) {
+  pendingTraceEvents.push({
+    traceId,
+    operation,
+    durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+    status,
+    ...detail,
+  });
+  if (traceFlushScheduled) return;
+  traceFlushScheduled = true;
+  queueMicrotask(flushPerformanceTraceEvents);
+}
 
 export function debugPerformanceEnabled() {
   if (typeof window === 'undefined') {
@@ -38,9 +68,7 @@ export async function measureDebugPerformance<T>(
   detail: DebugPerformanceDetail,
   task: () => Promise<T>,
 ) {
-  if (!debugPerformanceEnabled()) {
-    return task();
-  }
+  if (!debugPerformanceEnabled()) return task();
   const measurement = startDebugPerformanceMeasure(name, detail);
   try {
     return await task();
@@ -54,9 +82,7 @@ export function measureDebugPerformanceSync<T>(
   detail: DebugPerformanceDetail,
   task: () => T,
 ) {
-  if (!debugPerformanceEnabled()) {
-    return task();
-  }
+  if (!debugPerformanceEnabled()) return task();
   const measurement = startDebugPerformanceMeasure(name, detail);
   try {
     return task();
@@ -137,12 +163,14 @@ function logSlowDebugPerformance(
     return;
   }
   queueMicrotask(() => {
-    window.nvm
-      ?.log?.('debug', 'performance.measure', {
-        name,
-        durationMs: Math.round(durationMs * 100) / 100,
-        ...detail,
-      })
-      .catch(() => {});
+    try {
+      window.nvm
+        ?.log?.('debug', 'performance.measure', {
+          name,
+          durationMs: Math.round(durationMs * 100) / 100,
+          ...detail,
+        })
+        .catch(() => {});
+    } catch {}
   });
 }

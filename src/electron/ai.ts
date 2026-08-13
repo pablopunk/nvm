@@ -1,6 +1,7 @@
 // biome-ignore-all lint: This legacy AI integration retains established provider and session conventions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
 import type { CommandAction } from '../model';
 import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
@@ -28,6 +29,7 @@ type AiEvent = {
   label?: string;
   data?: unknown;
   isError?: boolean;
+  traceId?: string;
 };
 
 type AiLimitNotice = {
@@ -253,6 +255,8 @@ function isAssistantErrorEndEvent(
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>();
   const generalSessions = new Map<string, Promise<AgentSession>>();
+  const activeTraceIds = new Map<string, string>();
+  const firstDeltaTimes = new Map<string, number>();
   const creditInfoRef: {
     current: {
       credits: { paid: number; free: number; total: number };
@@ -274,7 +278,13 @@ function createNevermindAi(options: NevermindAiOptions) {
         { chatId, alwaysLog: true },
         () =>
           createSession({ ...options, chatId }, (event) =>
-            options.onEvent?.({ ...event, chatId }),
+            options.onEvent?.({
+              ...event,
+              chatId,
+              ...(activeTraceIds.get(chatId)
+                ? { traceId: activeTraceIds.get(chatId) }
+                : {}),
+            }),
           ),
       ),
     };
@@ -285,7 +295,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     return entry.promise;
   }
 
-  async function send(message: string, chatId = 'default') {
+  async function send(message: string, chatId = 'default', traceId?: string) {
     const credit = creditInfoRef.current;
     if (credit?.notice === 'blocked') {
       const limit: AiLimitNotice = {
@@ -299,6 +309,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       options.onEvent?.({
         type: 'error',
         chatId,
+        traceId,
         message: limit.message,
         data: limit,
       });
@@ -311,7 +322,10 @@ function createNevermindAi(options: NevermindAiOptions) {
         message: `Low credit balance: ${credit.credits.total} credits remaining. Consider adding credits at www.nvm.fyi/dashboard.`,
       });
     }
-    options.onEvent?.({ type: 'start', chatId });
+    options.onEvent?.({ type: 'start', chatId, traceId });
+    activeTraceIds.set(chatId, traceId || '');
+    firstDeltaTimes.delete(chatId);
+    const startedAt = performance.now();
     await measureDebugPerformance(
       'ai.chat.send',
       { chatId, messageLength: message.length, alwaysLog: true },
@@ -326,7 +340,17 @@ function createNevermindAi(options: NevermindAiOptions) {
               return session.prompt(message);
             },
           );
-          options.onEvent?.({ type: 'done', chatId });
+          options.onEvent?.({
+            type: 'done',
+            chatId,
+            traceId,
+            data: {
+              durationMs: performance.now() - startedAt,
+              timeToFirstDeltaMs: firstDeltaTimes.get(chatId)
+                ? firstDeltaTimes.get(chatId)! - startedAt
+                : undefined,
+            },
+          });
         } catch (error) {
           logger.error('ai.chat.send.failed', error, {
             source: 'host',
@@ -336,6 +360,7 @@ function createNevermindAi(options: NevermindAiOptions) {
           options.onEvent?.({
             type: 'error',
             chatId,
+            traceId,
             message:
               limit?.message ||
               (error instanceof Error ? error.message : String(error)),
@@ -344,12 +369,15 @@ function createNevermindAi(options: NevermindAiOptions) {
         }
       },
     );
+    activeTraceIds.delete(chatId);
+    firstDeltaTimes.delete(chatId);
   }
 
   async function abort(chatId = 'default') {
+    const traceId = activeTraceIds.get(chatId) || undefined;
     const session = await sessions.get(chatId)?.promise.catch(() => null);
     await session?.abort?.();
-    options.onEvent?.({ type: 'aborted', chatId });
+    options.onEvent?.({ type: 'aborted', chatId, traceId });
   }
 
   async function reset(chatId = 'default') {
@@ -625,9 +653,13 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
     })) as { session: AgentSession };
-    result.session.prepareModelForPrompt = async function prepareModelForPrompt(prompt) {
+    result.session.prepareModelForPrompt = async function prepareModelForPrompt(
+      prompt,
+    ) {
       if (modelSource !== 'nevermind') return;
-      const chars = JSON.stringify(result.session.agent.state.messages).length + prompt.length;
+      const chars =
+        JSON.stringify(result.session.agent.state.messages).length +
+        prompt.length;
       const next = await resolveAiModelAndAuth(modelRuntime, undefined, chars);
       await result.session.setModel(next.model);
       result.session.setThinkingLevel(next.thinkingLevel);
@@ -641,6 +673,8 @@ function createNevermindAi(options: NevermindAiOptions) {
       entry.unsubscribe = result.session.subscribe((event) => {
         if (isMessageUpdateEvent(event)) {
           const delta = event.assistantMessageEvent.delta;
+          if (!firstDeltaTimes.has(chatId))
+            firstDeltaTimes.set(chatId, performance.now());
           if (delta.includes('<tool_calls>') || delta.includes('<tool name=')) {
             logger.warn(
               'ai.rawToolCallText',
@@ -837,9 +871,17 @@ async function createGeneralSession(
       retry: { enabled: true, maxRetries: 2 },
     }),
   })) as { session: AgentSession };
-  result.session.prepareModelForPrompt = async function prepareModelForPrompt(prompt) {
-    const chars = JSON.stringify(result.session.agent.state.messages).length + prompt.length;
-    const next = await resolveAiModelAndAuth(modelRuntime, sessionOptions.model, chars);
+  result.session.prepareModelForPrompt = async function prepareModelForPrompt(
+    prompt,
+  ) {
+    const chars =
+      JSON.stringify(result.session.agent.state.messages).length +
+      prompt.length;
+    const next = await resolveAiModelAndAuth(
+      modelRuntime,
+      sessionOptions.model,
+      chars,
+    );
     await result.session.setModel(next.model);
     result.session.setThinkingLevel(next.thinkingLevel);
   };
@@ -929,8 +971,12 @@ async function resolveAiModelAndAuth(
     maxTokens: descriptor.maxTokens,
     headers: nevermindDesktopHeaders({
       ...(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
-      ...(descriptor.modelTier ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier } : {}),
-      ...(descriptor.creditKind ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind } : {}),
+      ...(descriptor.modelTier
+        ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier }
+        : {}),
+      ...(descriptor.creditKind
+        ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind }
+        : {}),
     }),
   };
   modelRuntime.registerProvider(NEVERMIND_PROVIDER_ID, {

@@ -3,12 +3,14 @@ export interface SearchSnapshot<T> {
   revision: number;
   results: T[];
   complete: boolean;
+  traceId?: string;
 }
 
 export interface SearchRequest {
   query: string;
   generation: number;
   clipboardOnly?: boolean;
+  traceId?: string;
 }
 
 export interface SearchProvider<T> {
@@ -49,6 +51,7 @@ export interface SearchCoordinatorOptions<T> {
 
 interface ActiveSearch<T> {
   generation: number;
+  traceId?: string;
   revision: number;
   controller: AbortController;
   resultsByProvider: Map<string, T[]>;
@@ -145,6 +148,7 @@ export function createSearchCoordinator<T>(
       revision: active.revision,
       results,
       complete,
+      ...(active.traceId ? { traceId: active.traceId } : {}),
     };
     state.sender.send(updateChannel, snapshot);
     if (complete) {
@@ -218,6 +222,7 @@ export function createSearchCoordinator<T>(
       revision: 0,
       results: work.initialResults,
       complete: Boolean(work.completeImmediately),
+      ...(request.traceId ? { traceId: request.traceId } : {}),
     };
     if (snapshot.complete) {
       state.active = undefined;
@@ -232,6 +237,7 @@ export function createSearchCoordinator<T>(
       pendingProviders: work.providers.length,
       lastFingerprint: options.fingerprint(work.initialResults),
       work,
+      traceId: request.traceId,
     };
     state.active = active;
     queueMicrotask(() => launchProviders(state, active));

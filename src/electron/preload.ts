@@ -23,7 +23,40 @@ async function invokeMeasured<T>(
   channel: string,
   ...args: unknown[]
 ): Promise<T> {
-  if (!debugPerformanceEnabled()) return ipcRenderer.invoke(channel, ...args);
+  const traceId =
+    args.reduce<string | undefined>((current, value) => {
+      if (current || !value || typeof value !== 'object') return current;
+      const candidate = (value as { traceId?: unknown }).traceId;
+      return typeof candidate === 'string' ? candidate : undefined;
+    }, undefined) ||
+    (channel === 'ai:chat:send' && typeof args[2] === 'string'
+      ? String(args[2])
+      : undefined);
+  const traceStartedAt = performance.now();
+  let roundTripStatus: 'ok' | 'error' = 'ok';
+  const sendRoundTripTrace = (status: 'ok' | 'error') => {
+    if (channel === 'logs:write' || !traceId) return;
+    try {
+      ipcRenderer.send('performance:trace', {
+        traceId,
+        operation: `ipc.${channel}.roundtrip`,
+        durationMs:
+          Math.round((performance.now() - traceStartedAt) * 100) / 100,
+        status,
+      });
+    } catch {}
+  };
+  if (!debugPerformanceEnabled()) {
+    try {
+      return await ipcRenderer.invoke(channel, ...args);
+    } catch (error) {
+      roundTripStatus = 'error';
+      throw error;
+    } finally {
+      if (channel !== 'logs:write' && traceId)
+        sendRoundTripTrace(roundTripStatus);
+    }
+  }
   const startedAt = performance.now();
   const markId = `nvm:ipc.${channel}:${startedAt}`;
   try {
@@ -31,6 +64,9 @@ async function invokeMeasured<T>(
   } catch {}
   try {
     return await ipcRenderer.invoke(channel, ...args);
+  } catch (error) {
+    roundTripStatus = 'error';
+    throw error;
   } finally {
     const durationMs = performance.now() - startedAt;
     try {
@@ -44,13 +80,17 @@ async function invokeMeasured<T>(
       performance.clearMarks(`${markId}:end`);
     } catch {}
     if (channel !== 'logs:write' && durationMs >= DEBUG_PERFORMANCE_SLOW_MS) {
-      ipcRenderer
-        .invoke('logs:write', 'debug', 'performance.measure', {
-          name: `ipc.${channel}`,
-          durationMs: Math.round(durationMs * 100) / 100,
-        })
-        .catch(() => {});
+      try {
+        ipcRenderer
+          .invoke('logs:write', 'debug', 'performance.measure', {
+            name: `ipc.${channel}`,
+            durationMs: Math.round(durationMs * 100) / 100,
+          })
+          .catch(() => {});
+      } catch {}
     }
+    if (channel !== 'logs:write' && traceId)
+      sendRoundTripTrace(roundTripStatus);
   }
 }
 
@@ -77,8 +117,8 @@ const api: NevermindApi = {
   pickFormFieldPaths: (input) =>
     invokeMeasured('dialog:pick-form-field-paths', input),
   startFileDrag: (filePath) => ipcRenderer.send('drag:file', filePath),
-  sendAiMessage: (message, chatId) =>
-    invokeMeasured('ai:chat:send', message, chatId),
+  sendAiMessage: (message, chatId, traceId) =>
+    invokeMeasured('ai:chat:send', message, chatId, traceId),
   aiChatExited: (chatId) => invokeMeasured('ai:chat:exited', chatId),
   abortAiChat: (chatId) => invokeMeasured('ai:chat:abort', chatId),
   resetAiChat: (chatId) => invokeMeasured('ai:chat:reset', chatId),
@@ -130,6 +170,11 @@ const api: NevermindApi = {
     invokeMeasured('extension-draft:save', { ref, content }),
   log: (level, message, data) =>
     invokeMeasured('logs:write', level, message, data),
+  performanceTrace: (event) => {
+    try {
+      ipcRenderer.send('performance:trace', event);
+    } catch {}
+  },
   getNevermindAuthStatus: () => invokeMeasured('nevermind:auth-status'),
   getNevermindDebugStatus: () => invokeMeasured('nevermind:debug-status'),
   signInToNevermind: () => invokeMeasured('nevermind:sign-in'),

@@ -60,11 +60,13 @@ export type RootAction = {
   userAliases?: string[];
   appearance?: CommandItemAppearance;
   executionId?: string;
+  traceId?: string;
 };
 
 export type SearchOptions = {
   generation: number;
   clipboardOnly?: boolean;
+  traceId?: string;
 };
 
 export type SearchSnapshot<T = RootAction> = {
@@ -72,6 +74,7 @@ export type SearchSnapshot<T = RootAction> = {
   revision: number;
   results: T[];
   complete: boolean;
+  traceId?: string;
 };
 
 export type SaveResult = {
@@ -98,6 +101,7 @@ export type ViewActionResult = {
   navigation?: 'root' | 'push' | 'replace' | 'pop';
   toast?: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
   skipped?: boolean;
+  traceId?: string;
 };
 
 export type OpenActionViewPayload = {
@@ -105,6 +109,7 @@ export type OpenActionViewPayload = {
   revealWhenReady?: boolean;
   asSibling?: boolean;
   isPrimary?: boolean;
+  traceId?: string;
 };
 
 export type AiChatEvent = {
@@ -115,6 +120,7 @@ export type AiChatEvent = {
   chatId?: string;
   label?: string;
   data?: unknown;
+  traceId?: string;
 };
 
 export type DictationCommand =
@@ -157,6 +163,7 @@ export type NevermindApi = {
   refreshView: (input: {
     id: string;
     viewId?: string;
+    traceId?: string;
   }) => Promise<ViewActionResult>;
   pickFormFieldPaths: (input: {
     type?: 'file' | 'files' | 'folder';
@@ -168,7 +175,11 @@ export type NevermindApi = {
     canCreateDirectories?: boolean;
   }) => Promise<{ canceled: boolean; paths: string[] }>;
   startFileDrag: (filePath: string) => void;
-  sendAiMessage: (message: string, chatId?: string) => Promise<void>;
+  sendAiMessage: (
+    message: string,
+    chatId?: string,
+    traceId?: string,
+  ) => Promise<void>;
   aiChatExited: (chatId?: string) => Promise<void>;
   abortAiChat: (chatId?: string) => Promise<void>;
   resetAiChat: (chatId?: string) => Promise<void>;
@@ -222,6 +233,9 @@ export type NevermindApi = {
     message: string,
     data?: unknown,
   ) => Promise<void>;
+  performanceTrace: (
+    event: Record<string, unknown> | Array<Record<string, unknown>>,
+  ) => void;
   getNevermindAuthStatus: () => Promise<{ authed: boolean; email?: string }>;
   getNevermindDebugStatus: () => Promise<{
     client: { environment: string; baseUrl: string };

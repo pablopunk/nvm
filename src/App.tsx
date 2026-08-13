@@ -53,7 +53,9 @@ import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
+  recordPerformanceTrace,
 } from './debug-performance';
+import { createRendererPerformanceTrace } from './performance-trace';
 import { ExtensionViewRenderer } from './extension-view';
 import { feedbackView } from './feedback';
 import {
@@ -185,6 +187,7 @@ type Action = {
   shortcut?: string;
   userAliases?: string[];
   appearance?: CommandItemAppearance;
+  traceId?: string;
 };
 
 type ExtensionViewAction = CommandAction;
@@ -1199,6 +1202,10 @@ export function App() {
   const aiChatIdRef = useRef<string | undefined>(undefined);
   const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined);
   const runningViewActionsRef = useRef(new Set<string>());
+  const interactionTracesRef = useRef(
+    new Map<string, ReturnType<typeof createRendererPerformanceTrace>>(),
+  );
+  const latestInteractionTraceIdRef = useRef<string | undefined>(undefined);
   const paletteModeRef = useRef<PaletteMode | null>(null);
   const queryRef = useRef('');
   const queryHistoryRef = useRef<string[]>([]);
@@ -1297,6 +1304,29 @@ export function App() {
     selectedValueRef.current = value;
     setSelectedValue(value);
   }
+  function createInteractionTrace(traceId?: string) {
+    const existing = traceId
+      ? interactionTracesRef.current.get(traceId)
+      : undefined;
+    if (existing) {
+      latestInteractionTraceIdRef.current = existing.traceId;
+      return existing;
+    }
+    const trace = createRendererPerformanceTrace(traceId);
+    interactionTracesRef.current.set(trace.traceId, trace);
+    latestInteractionTraceIdRef.current = trace.traceId;
+    while (interactionTracesRef.current.size > 32) {
+      const oldest = interactionTracesRef.current.keys().next().value;
+      if (!oldest) break;
+      interactionTracesRef.current.delete(oldest);
+    }
+    return trace;
+  }
+  function clearInteractionTrace(traceId: string) {
+    interactionTracesRef.current.delete(traceId);
+    if (latestInteractionTraceIdRef.current === traceId)
+      latestInteractionTraceIdRef.current = undefined;
+  }
   function resetTransientSurfaces() {
     resetTransientPaletteState({
       setOptionsFor,
@@ -1341,6 +1371,36 @@ export function App() {
       extensionViewId: extensionView?.id,
       siblingViewCount: siblingViews.length,
     });
+    const trace = latestInteractionTraceIdRef.current
+      ? interactionTracesRef.current.get(latestInteractionTraceIdRef.current)
+      : undefined;
+    if (trace) {
+      markDebugPerformance('interaction.commit', {
+        traceId: trace.traceId,
+        extensionViewType: extensionView?.type,
+      });
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.commit',
+        trace.startedAt,
+        'ok',
+        { viewType: extensionView?.type },
+      );
+      requestAnimationFrame(() => {
+        markDebugPerformance('interaction.paint', {
+          traceId: trace.traceId,
+          extensionViewType: extensionView?.type,
+        });
+        recordPerformanceTrace(
+          trace.traceId,
+          'interaction.paint',
+          trace.startedAt,
+          'ok',
+          { viewType: extensionView?.type },
+        );
+      });
+      clearInteractionTrace(trace.traceId);
+    }
   });
 
   useEffect(() => {
@@ -1368,23 +1428,53 @@ export function App() {
       )
         return;
       running = true;
+      const trace = createRendererPerformanceTrace();
+      let result: any;
       try {
-        const result = await measureDebugPerformance(
+        result = await measureDebugPerformance(
           'view.refresh',
           { refreshId, viewId: current.id, viewKey, alwaysLog: true },
-          () => window.nvm.refreshView({ id: refreshId, viewId: current.id }),
+          () =>
+            window.nvm.refreshView({
+              id: refreshId,
+              viewId: current.id,
+              traceId: trace.traceId,
+            }),
         );
         if (
           !(result?.skipped || cancelled) &&
           viewIdentity(extensionViewRef.current) === viewKey
         )
           await handleViewActionResult(result, 'replace');
+        if (!cancelled && !result?.skipped)
+          requestAnimationFrame(() =>
+            recordPerformanceTrace(
+              trace.traceId,
+              'view.refresh.paint',
+              trace.startedAt,
+              'ok',
+              { viewType: extensionView?.type },
+            ),
+          );
       } catch (error) {
+        recordPerformanceTrace(
+          trace.traceId,
+          'view.refresh.error',
+          trace.startedAt,
+          'error',
+          { viewType: extensionView?.type },
+        );
         await window.nvm.log('warn', 'Extension view refresh failed', {
           viewKey,
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
+        if (
+          cancelled ||
+          result?.skipped ||
+          (!result?.view && !result?.patch)
+        )
+          clearInteractionTrace(trace.traceId);
         running = false;
       }
     };
@@ -1552,6 +1642,7 @@ export function App() {
       if (!payload?.view) return;
       resetTransientSurfaces();
       setIsPrimaryExtensionView(Boolean(payload.isPrimary));
+      if (payload.traceId) createInteractionTrace(payload.traceId);
       if (payload.isPrimary) {
         setRootQuery('');
         setChildQuery('');
@@ -1569,8 +1660,7 @@ export function App() {
         setSiblingViews([]);
       }
       if (payload.view.aiChat) await openAiChat(payload.view, 'root');
-      else if (payload.isPrimary)
-        showPrimaryExtensionView(payload.view);
+      else if (payload.isPrimary) showPrimaryExtensionView(payload.view);
       else showExtensionView(payload.view, 'root');
       markShortcutReady(Boolean(payload?.revealWhenReady));
     });
@@ -2710,6 +2800,8 @@ export function App() {
   }
 
   async function runViewAction(action: ExtensionViewAction, confirmed = false) {
+    const trace = createInteractionTrace(action.traceId);
+    action = { ...action, traceId: trace.traceId };
     if (action.requiresConfirmation && !confirmed) {
       setConfirmViewActionFor(action);
       setActionQuery('');
@@ -2727,6 +2819,12 @@ export function App() {
       requestAnimationFrame(() =>
         document.querySelector<HTMLElement>('.builderPreviewPane')?.focus(),
       );
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.focus',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (action.type === 'setSearchQuery') {
@@ -2748,6 +2846,12 @@ export function App() {
           input?.setSelectionRange(nextQuery.length, nextQuery.length);
         else input?.select();
       });
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.search-query',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (action.type === 'recordShortcut') {
@@ -2759,34 +2863,69 @@ export function App() {
             ? HYPER_KEY_PSEUDO_ACTION
             : targetAction;
       if (target) startShortcutRecorder(target);
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.shortcut-recorder',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (nativeAction?.kind === 'record-palette-hotkey') {
       startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION);
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.shortcut-recorder',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (nativeAction?.kind === 'record-shortcut' && nativeAction.action) {
       startShortcutRecorder(nativeAction.action as Action);
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.shortcut-recorder',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (nativeAction?.kind === 'remove-shortcut' && nativeAction.actionId) {
-      const result = await window.nvm.removeShortcut(
-        String(nativeAction.actionId),
-      );
-      showToast(result.message, result.ok ? 'default' : 'error');
-      if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
-        const refreshed = await window.nvm.execute({
-          id: 'keyboard-shortcuts',
-          kind: 'extension-action',
-          extensionId: 'nevermind.shortcuts',
-          registeredActionId: 'keyboard-shortcuts',
-          title: 'Keyboard Shortcuts',
-          subtitle: 'View, change, or remove global shortcuts',
-          icon: 'keyboard',
-          score: 16,
-        } as Action);
-        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+      try {
+        const result = await window.nvm.removeShortcut(
+          String(nativeAction.actionId),
+        );
+        showToast(result.message, result.ok ? 'default' : 'error');
+        if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
+          const refreshed = await window.nvm.execute({
+            id: 'keyboard-shortcuts',
+            kind: 'extension-action',
+            extensionId: 'nevermind.shortcuts',
+            registeredActionId: 'keyboard-shortcuts',
+            title: 'Keyboard Shortcuts',
+            subtitle: 'View, change, or remove global shortcuts',
+            icon: 'keyboard',
+            score: 16,
+            traceId: trace.traceId,
+          } as Action);
+          if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+        }
+      } catch (error) {
+        recordPerformanceTrace(
+          trace.traceId,
+          'interaction.error',
+          trace.startedAt,
+          'error',
+          { errorType: error instanceof Error ? error.name : typeof error },
+        );
+        clearInteractionTrace(trace.traceId);
+        showToast(
+          error instanceof Error ? error.message : 'Could not remove shortcut',
+          'error',
+        );
       }
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (action.type === 'previewClipboardItem') {
@@ -2806,6 +2945,7 @@ export function App() {
         thumbnailUrl: action.thumbnailUrl,
       } as Action);
       setExtensionItemOptionsFor(null);
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (
@@ -2816,18 +2956,28 @@ export function App() {
     ) {
       setPreviewFor(nativeAction as Action);
       setExtensionItemOptionsFor(null);
+      clearInteractionTrace(trace.traceId);
       return;
     }
     if (String(nativeAction?.kind || '').startsWith('camera.')) {
       window.dispatchEvent(
         new CustomEvent('nvm:camera-action', { detail: nativeAction }),
       );
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.camera',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
       return;
     }
     const actionKey =
       action.handlerId ||
       `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`;
-    if (runningViewActionsRef.current.has(actionKey)) return;
+    if (runningViewActionsRef.current.has(actionKey)) {
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
     runningViewActionsRef.current.add(actionKey);
     const dismissedImmediately =
       actionCanDismissImmediately(action) ||
@@ -2864,6 +3014,7 @@ export function App() {
         'view-action.ipc',
         {
           actionType: action.type,
+          traceId: trace.traceId,
           title: action.title,
           dismissedImmediately,
           showsLoading,
@@ -2904,6 +3055,18 @@ export function App() {
         if (result?.patch && loadingNavigation === 'push')
           queueMicrotask(() => applyViewPatch(result.patch));
       }
+      if (!result?.view && !result?.patch && !result?.navigation)
+        clearInteractionTrace(trace.traceId);
+    } catch (error) {
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.error',
+        trace.startedAt,
+        'error',
+        { errorType: error instanceof Error ? error.name : typeof error },
+      );
+      clearInteractionTrace(trace.traceId);
+      throw error;
     } finally {
       runningViewActionsRef.current.delete(actionKey);
     }
@@ -2970,6 +3133,8 @@ export function App() {
   }
 
   async function run(action: Action) {
+    const trace = createInteractionTrace(action.traceId);
+    action = { ...action, traceId: trace.traceId };
     const dismissedImmediately = rootActionCanDismissImmediately(action);
     markDebugPerformance('root-action.start', {
       id: action.id,
@@ -3008,7 +3173,16 @@ export function App() {
       } else if (!dismissedImmediately) {
         window.nvm.hide();
       }
+      if (!result?.view) clearInteractionTrace(trace.traceId);
     } catch (error) {
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.error',
+        trace.startedAt,
+        'error',
+        { errorType: error instanceof Error ? error.name : typeof error },
+      );
+      clearInteractionTrace(trace.traceId);
       showToast(
         error instanceof Error ? error.message : 'Could not run action',
         'error',

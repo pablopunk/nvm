@@ -3,7 +3,7 @@ import type { SearchSnapshot } from './preload-api';
 export interface SearchSessionTransport<T> {
   search(
     query: string,
-    options: { generation: number; clipboardOnly?: boolean },
+    options: { generation: number; clipboardOnly?: boolean; traceId?: string },
   ): Promise<SearchSnapshot<T>>;
   cancelSearch(generation: number): void;
   onSearchUpdate(callback: (snapshot: SearchSnapshot<T>) => void): () => void;
@@ -35,7 +35,10 @@ export function createSearchSession<T>(options: {
 
   const unsubscribe = options.transport.onSearchUpdate(accept);
 
-  function start(query: string, searchOptions?: { clipboardOnly?: boolean }) {
+  function start(
+    query: string,
+    searchOptions?: { clipboardOnly?: boolean; traceId?: string },
+  ) {
     const generation = ++nextGeneration;
     active = { generation, highestRevision: -1, startedAt: now() };
     options.transport

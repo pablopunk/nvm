@@ -53,9 +53,7 @@ const DEFAULT_WINDOW_SIZE = addWindowBlurMargin(DEFAULT_PALETTE_SIZE);
 const AI_CHAT_WINDOW_SIZE = addWindowBlurMargin(AI_CHAT_PALETTE_SIZE);
 const STACKED_WINDOW_SIZE = addWindowBlurMargin(STACKED_PALETTE_SIZE);
 const PREVIEW_WINDOW_SIZE = addWindowBlurMargin(PREVIEW_PALETTE_SIZE);
-const SIDE_PREVIEW_WINDOW_SIZE = addWindowBlurMargin(
-  SIDE_PREVIEW_PALETTE_SIZE,
-);
+const SIDE_PREVIEW_WINDOW_SIZE = addWindowBlurMargin(SIDE_PREVIEW_PALETTE_SIZE);
 
 function addWindowBlurMargin(size: { width: number; height: number }) {
   return {

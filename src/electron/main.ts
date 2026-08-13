@@ -126,6 +126,7 @@ import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
+  performanceTraces,
   recordDebugPerformance,
   summarizeDebugValue,
 } from './debug-performance';
@@ -312,6 +313,7 @@ const extensionWindowManager = createExtensionWindowManager({
   },
   debug: (message, data) =>
     loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
+  performanceTrace: performanceTraces,
 });
 const appIconCache = createAppIconCache({
   hasAppIcons: () => hasCapability('app-icons'),
@@ -483,7 +485,10 @@ let extensionRuntimePreparation:
   | undefined;
 let testExtensionActivationFailurePhase: string | undefined;
 let frontmostWatcherLastId = '';
-const jobRegistry = new JobRegistry();
+const jobRegistry = new JobRegistry({
+  performanceTrace: (operation, attributes, task) =>
+    performanceTraces.run(operation, attributes, task),
+});
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 const learningReviewJobs = new Map<string, Promise<void>>();
@@ -505,10 +510,18 @@ const viewLoaderRegistry = createViewLoaderRegistry({
   },
 });
 
-function spawnPendingViewLoaders(result: any) {
+function spawnPendingViewLoaders(result: any, traceId?: string) {
   const viewId = result?.view?.id;
   if (viewId && viewLoaderRegistry.has(viewId))
-    viewLoaderRegistry.spawn(viewId);
+    void Promise.resolve(
+      performanceTraces.run(
+        'view.loader.spawn',
+        { viewId },
+        () => viewLoaderRegistry.spawn(viewId),
+        traceId ? { traceId } : undefined,
+      ),
+    )
+      .catch(() => {});
 }
 let didRunQuitCleanup = false;
 let userState: AnyRecord = {
@@ -1213,7 +1226,13 @@ function resolveRootActionForIpc(action) {
   const record = action.executionId
     ? rootActionExecutionRecords.get(String(action.executionId))
     : null;
-  if (record) return clonePlain(record.action);
+  if (record)
+    return {
+      ...clonePlain(record.action),
+      ...(typeof action.traceId === 'string'
+        ? { traceId: action.traceId }
+        : {}),
+    };
   const fallback = withoutExecutionId(action);
   if (fallback.kind === 'extension-root-item' && fallback.rootAction)
     throw new Error('Untrusted extension root action');
@@ -1226,7 +1245,10 @@ function resolveViewActionForIpc(action) {
     ? viewActionExecutionRecords.get(String(action.executionId))
     : null;
   if (record)
-    return mergeRendererActionInput(clonePlain(record.action), action);
+    return mergeRendererActionInput(
+      { ...clonePlain(record.action), traceId: action.traceId },
+      action,
+    );
   const fallback = withoutExecutionId(action);
   if (CHARACTER_INSERT_ACTION_TYPES.has(String(fallback.type || ''))) {
     const record = CHARACTER_RECORDS_BY_ID.get(String(fallback.characterId || ''));
@@ -2510,7 +2532,12 @@ function createProgressiveSearchWork(input) {
               {
                 key,
                 run: (signal) =>
-                  extensionSearchActionsForExtension(extension, query, signal),
+                  extensionSearchActionsForExtension(
+                    extension,
+                    query,
+                    signal,
+                    input.traceId,
+                  ),
               },
             ];
           }
@@ -2526,6 +2553,7 @@ function createProgressiveSearchWork(input) {
                 refreshExtensionRootActions(
                   extension,
                   extension.__filePath || extension.id,
+                  input.traceId,
                 ),
             },
           ];
@@ -2591,13 +2619,21 @@ function normalizedProgressiveSearchInput(input: any = {}) {
     query: String(input.query || ''),
     generation: Number(input.generation),
     clipboardOnly: Boolean(input.clipboardOnly),
+    traceId: typeof input.traceId === 'string' ? input.traceId : undefined,
   };
 }
 
 function startProgressiveSearch(sender, input) {
-  return progressiveSearchCoordinator.search(
-    sender,
-    normalizedProgressiveSearchInput(input),
+  const normalized = normalizedProgressiveSearchInput(input);
+  return performanceTraces.run(
+    'search.request',
+    {
+      generation: normalized.generation,
+      queryLength: normalized.query.length,
+      ...(normalized.clipboardOnly ? { cache: 'clipboard' } : {}),
+    },
+    () => progressiveSearchCoordinator.search(sender, normalized),
+    normalized.traceId ? { traceId: normalized.traceId } : undefined,
   );
 }
 
@@ -2730,13 +2766,21 @@ function invalidateExtensionRootItemsForExtension(extension) {
   paletteWindow.win?.webContents.send('root-items:changed');
 }
 
-function runInBackground(task) {
+function runInBackground(task, traceId?: string) {
+  const queuedAt = performance.now();
   setImmediate(() => {
     Promise.resolve()
-      .then(task)
-      .catch((error) =>
-        logError('backgroundAction.failed', error, { source: 'host' }),
-      );
+      .then(() =>
+        performanceTraces.run(
+          'os.dispatch',
+          { queueMs: performance.now() - queuedAt },
+          task,
+          traceId ? { traceId } : undefined,
+        ),
+      )
+      .catch((error) => {
+        logError('backgroundAction.failed', error, { source: 'host' });
+      });
   });
 }
 
@@ -2752,7 +2796,7 @@ async function executeAction(action, options: any = {}) {
       }
       break;
     case 'open-keyboard-settings':
-      runInBackground(openSystemKeyboardSettings);
+      runInBackground(openSystemKeyboardSettings, action.traceId);
       break;
     case 'extension-root-item':
     case 'extension-action': {
@@ -2862,179 +2906,221 @@ function isClipboardHistoryAction(action: any) {
 }
 
 async function executeExtensionRootItem(action) {
-  return measureDebugPerformance(
-    'extension.root-item.execute',
-    { action: summarizeDebugValue(action), alwaysLog: true },
-    async () => {
-      if (!action.rootAction)
-        return {
-          view: {
-            type: 'preview',
-            title: action.title || 'Extension item',
-            content: action.subtitle || '',
-          },
-        };
-      if (action.rootAction.type !== 'runExtensionAction')
-        return executeViewAction(action.rootAction);
-      const record = extensionActionHandlers.get(action.rootAction.handlerId);
-      if (!record)
-        return {
-          view: {
-            type: 'preview',
-            title: 'Action unavailable',
-            content: 'This extension item is no longer available.',
-          },
-        };
-      if (!(record.entry && record.entry.extension)) {
-        logWarn('extension.rootItem.missingEntry', {
-          handlerId: action.rootAction.handlerId,
-          actionTitle: action.title,
-        });
-        return {
-          view: {
-            type: 'preview',
-            title: 'Action unavailable',
-            content: 'This action is not available in the current context.',
-          },
-        };
-      }
-      try {
-        const result = await measureDebugPerformance(
-          'extension.root-item.handler',
-          {
-            extensionId: record.entry.extension.id,
-            commandId: record.entry.command?.id,
-            alwaysLog: true,
-          },
-          () =>
-            record.handler(
-              createExtensionContext(
-                record.entry.extension,
-                record.entry.command || null,
-              ),
-              action,
-            ),
-        );
-        return executeViewActionResult(result, record.entry);
-      } catch (error) {
-        logError('extension.rootItem.failed', error, {
-          source: 'host',
-          scope: 'extension',
-          extensionId: record.entry.extension?.id,
-        });
-        return { view: extensionErrorView(record.entry, error) };
-      }
+  return performanceTraces.run(
+    'extension.rootItem.execute',
+    {
+      extensionId: action?.extensionId,
+      actionKind: action?.kind,
+      actionToken: action?.executionId,
     },
-  );
+    () =>
+      measureDebugPerformance(
+        'extension.root-item.execute',
+        { action: summarizeDebugValue(action), alwaysLog: true },
+        async () => {
+          if (!action.rootAction)
+            return {
+              view: {
+                type: 'preview',
+                title: action.title || 'Extension item',
+                content: action.subtitle || '',
+              },
+            };
+          if (action.rootAction.type !== 'runExtensionAction')
+            return executeViewAction(action.rootAction);
+          const record = extensionActionHandlers.get(
+            action.rootAction.handlerId,
+          );
+          if (!record)
+            return {
+              view: {
+                type: 'preview',
+                title: 'Action unavailable',
+                content: 'This extension item is no longer available.',
+              },
+            };
+          if (!(record.entry && record.entry.extension)) {
+            logWarn('extension.rootItem.missingEntry', {
+              handlerId: action.rootAction.handlerId,
+              actionTitle: action.title,
+            });
+            return {
+              view: {
+                type: 'preview',
+                title: 'Action unavailable',
+                content: 'This action is not available in the current context.',
+              },
+            };
+          }
+          try {
+            const result = await measureDebugPerformance(
+              'extension.root-item.handler',
+              {
+                extensionId: record.entry.extension.id,
+                commandId: record.entry.command?.id,
+                alwaysLog: true,
+              },
+              () =>
+                performanceTraces.run(
+                  'extension.rootItem.handler',
+                  {
+                    extensionId: record.entry.extension.id,
+                    commandId: record.entry.command?.id,
+                  },
+                  () =>
+                    record.handler(
+                      createExtensionContext(
+                        record.entry.extension,
+                        record.entry.command || null,
+                      ),
+                      action,
+                    ),
+                  action.traceId ? { traceId: action.traceId } : undefined,
+                ),
+            );
+            return executeViewActionResult(result, record.entry);
+          } catch (error) {
+            logError('extension.rootItem.failed', error, {
+              source: 'host',
+              scope: 'extension',
+              extensionId: record.entry.extension?.id,
+            });
+            return { view: extensionErrorView(record.entry, error) };
+          }
+        },
+      ),
+    action?.traceId ? { traceId: action.traceId } : undefined,
+  ) as Promise<any>;
 }
 
 function rankContributionActions(actions, query) {
   return rankSearchProviderContributions(actions, query, rankAction);
 }
 
-async function extensionSearchActionsForExtension(extension, query, signal?) {
+async function extensionSearchActionsForExtension(
+  extension,
+  query,
+  signal?,
+  traceId?: string,
+) {
   if (typeof extension.searchItems !== 'function') return [];
-  return measureDebugPerformance(
-    'extension.search.provider',
-    {
-      extensionId: extension.id,
-      queryLength: String(query || '').length,
-      phase: 'final',
-    },
-    async () => {
-      try {
-        const entry = {
-          extension,
-          command: { id: 'search', title: extension.title || extension.id },
-        };
-        const providerPromise = measureDebugPerformanceSync(
-          'extension.search.provider',
-          {
-            extensionId: extension.id,
-            queryLength: String(query || '').length,
-            phase: 'launch',
-          },
-          () =>
-            extension.searchItems(
-              createExtensionContext(extension, null, undefined, { signal }),
-              query,
-            ),
-        );
-        const items = await withAbortableTimeout(
-          providerPromise,
-          EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
-          { signal },
-        );
-        const list = Array.isArray(items)
-          ? items
-          : Array.isArray(items?.items)
-            ? items.items
-            : [];
-        return measureDebugPerformanceSync(
-          'extension.search.provider.rank',
-          {
-            extensionId: extension.id,
-            itemCount: list.length,
-            queryLength: String(query || '').length,
-          },
-          () =>
-            rankContributionActions(
-              list
-                .map((item) => extensionRootActionFromItem(entry, item))
-                .filter(Boolean),
-              query,
-            ),
-        );
-      } catch (error) {
-        if (!(isPromiseAbortError(error) || isPromiseTimeoutError(error)))
-          logError('extension.searchItems.failed', error, {
-            source: 'host',
-            scope: 'extension',
-            extensionId: extension.id,
-          });
-        return [];
-      }
-    },
-  );
+  return performanceTraces.run(
+    'extension.searchItems',
+    { extensionId: extension.id, queryLength: String(query || '').length },
+    () =>
+      measureDebugPerformance(
+        'extension.search.provider',
+        {
+          extensionId: extension.id,
+          queryLength: String(query || '').length,
+          phase: 'final',
+        },
+        async () => {
+          try {
+            const entry = {
+              extension,
+              command: { id: 'search', title: extension.title || extension.id },
+            };
+            const providerPromise = measureDebugPerformanceSync(
+              'extension.search.provider',
+              {
+                extensionId: extension.id,
+                queryLength: String(query || '').length,
+                phase: 'launch',
+              },
+              () =>
+                extension.searchItems(
+                  createExtensionContext(extension, null, undefined, {
+                    signal,
+                  }),
+                  query,
+                ),
+            );
+            const items = await withAbortableTimeout(
+              providerPromise,
+              EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+              { signal },
+            );
+            const list = Array.isArray(items)
+              ? items
+              : Array.isArray(items?.items)
+                ? items.items
+                : [];
+            return measureDebugPerformanceSync(
+              'extension.search.provider.rank',
+              {
+                extensionId: extension.id,
+                itemCount: list.length,
+                queryLength: String(query || '').length,
+              },
+              () =>
+                rankContributionActions(
+                  list
+                    .map((item) => extensionRootActionFromItem(entry, item))
+                    .filter(Boolean),
+                  query,
+                ),
+            );
+          } catch (error) {
+            if (!(isPromiseAbortError(error) || isPromiseTimeoutError(error)))
+              logError('extension.searchItems.failed', error, {
+                source: 'host',
+                scope: 'extension',
+                extensionId: extension.id,
+              });
+            throw error;
+          }
+        },
+      ),
+    traceId ? { traceId } : undefined,
+  ) as Promise<any[]>;
 }
 
-function refreshExtensionRootActions(extension, cacheKey) {
+function refreshExtensionRootActions(extension, cacheKey, traceId?: string) {
   const current = extensionRootItemsRefreshes.get(cacheKey);
   if (current) return current;
-  const promise = measureDebugPerformance(
-    'extension.root.provider',
-    { extensionId: extension.id },
-    async () => {
-      const entry = {
-        extension,
-        command: { id: 'root', title: extension.title || extension.id },
-      };
-      const items = await withAbortableTimeout(
-        extension.rootItems(createExtensionContext(extension, null)),
-        EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
-      );
-      const list = Array.isArray(items)
-        ? items
-        : Array.isArray(items?.items)
-          ? items.items
-          : [];
-      const actions = measureDebugPerformanceSync(
-        'extension.root.provider.rank',
-        { extensionId: extension.id, itemCount: list.length },
-        () =>
-          rankContributionActions(
-            list
-              .map((item) => extensionRootActionFromItem(entry, item))
-              .filter(Boolean),
-            '',
-          ),
-      );
-      extensionRootItemsCache.set(cacheKey, {
-        updatedAt: Date.now(),
-        items: actions,
-      });
-      return actions;
-    },
+  const promise = Promise.resolve(
+    performanceTraces.run(
+      'extension.rootItems',
+      { extensionId: extension.id },
+      () =>
+        measureDebugPerformance(
+          'extension.root.provider',
+          { extensionId: extension.id },
+          async () => {
+            const entry = {
+              extension,
+              command: { id: 'root', title: extension.title || extension.id },
+            };
+            const items = await withAbortableTimeout(
+              extension.rootItems(createExtensionContext(extension, null)),
+              EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+            );
+            const list = Array.isArray(items)
+              ? items
+              : Array.isArray(items?.items)
+                ? items.items
+                : [];
+            const actions = measureDebugPerformanceSync(
+              'extension.root.provider.rank',
+              { extensionId: extension.id, itemCount: list.length },
+              () =>
+                rankContributionActions(
+                  list
+                    .map((item) => extensionRootActionFromItem(entry, item))
+                    .filter(Boolean),
+                  '',
+                ),
+            );
+            extensionRootItemsCache.set(cacheKey, {
+              updatedAt: Date.now(),
+              items: actions,
+            });
+            return actions;
+          },
+        ),
+      traceId ? { traceId } : undefined,
+    ),
   )
     .catch((error) => {
       if (!isPromiseTimeoutError(error))
@@ -3208,36 +3294,46 @@ function extensionActionFromContribution(entry) {
 }
 
 async function executeActionForIpc(action) {
-  return measureDebugPerformance(
-    'ipc.actions.execute',
-    { action: summarizeDebugValue(action), alwaysLog: true },
-    async () => {
-      let trustedAction: any = null;
-      try {
-        trustedAction = resolveRootActionForIpc(action);
-        const result = normalizeHostViewResult(
-          await measureDebugPerformance(
-            'action.execute',
-            { action: summarizeDebugValue(trustedAction), alwaysLog: true },
-            () => executeAction(trustedAction),
-          ),
-        );
-        structuredClone(result);
-        spawnPendingViewLoaders(result);
-        return result;
-      } catch (error) {
-        if (trustedAction?.kind === 'extension-command') {
-          const entry = extensionEntryForAction(trustedAction);
-          if (entry) return { view: extensionErrorView(entry, error) };
-        }
-        if (action?.kind === 'extension-action') {
-          const entry = extensionActionEntryForAction(action);
-          if (entry) return { view: extensionErrorView(entry, error) };
-        }
-        return { view: actionFailedFeedbackView() };
-      }
+  return performanceTraces.run(
+    'action.root',
+    {
+      actionKind: action?.kind,
+      actionToken: action?.executionId,
+      extensionId: action?.extensionId,
     },
-  );
+    () =>
+      measureDebugPerformance(
+        'ipc.actions.execute',
+        { action: summarizeDebugValue(action), alwaysLog: true },
+        async () => {
+          let trustedAction: any = null;
+          try {
+            trustedAction = resolveRootActionForIpc(action);
+            const result = normalizeHostViewResult(
+              await measureDebugPerformance(
+                'action.execute',
+                { action: summarizeDebugValue(trustedAction), alwaysLog: true },
+                () => executeAction(trustedAction),
+              ),
+            );
+            structuredClone(result);
+            spawnPendingViewLoaders(result, trustedAction?.traceId);
+            return result;
+          } catch (error) {
+            if (trustedAction?.kind === 'extension-command') {
+              const entry = extensionEntryForAction(trustedAction);
+              if (entry) return { view: extensionErrorView(entry, error) };
+            }
+            if (action?.kind === 'extension-action') {
+              const entry = extensionActionEntryForAction(action);
+              if (entry) return { view: extensionErrorView(entry, error) };
+            }
+            return { view: actionFailedFeedbackView() };
+          }
+        },
+      ),
+    action?.traceId ? { traceId: action.traceId } : undefined,
+  ) as Promise<any>;
 }
 
 function extensionErrorMessage(error) {
@@ -3778,29 +3874,57 @@ async function executeViewActionResult(result, entry, launchContext?: any) {
     : { ...result, patch: normalizeViewPatch(result?.patch, entry) };
 }
 
-async function executeHostRefreshAction(record, launchContext?: any) {
+async function executeHostRefreshAction(
+  record,
+  launchContext?: any,
+  traceId?: string,
+) {
   if (record.action?.type === 'runExtensionAction') {
     const handlerRecord = extensionActionHandlers.get(record.action.handlerId);
     if (!handlerRecord) return { skipped: true };
-    const result = await handlerRecord.handler(
-      createExtensionContext(
-        handlerRecord.entry.extension,
-        handlerRecord.entry.command,
-        launchContext,
-      ),
-      record.action,
+    const result = await performanceTraces.run(
+      'extension.refresh.handler',
+      {
+        extensionId: handlerRecord.entry.extension.id,
+        commandId: handlerRecord.entry.command?.id,
+      },
+      () =>
+        handlerRecord.handler(
+          createExtensionContext(
+            handlerRecord.entry.extension,
+            handlerRecord.entry.command,
+            launchContext,
+          ),
+          record.action,
+        ),
+        traceId
+          ? { traceId }
+          : undefined,
     );
     return executeViewActionResult(result, handlerRecord.entry, launchContext);
   }
-  if (record.action) return executeViewAction(record.action, launchContext);
+  if (record.action)
+    return executeViewAction(
+      traceId ? { ...record.action, traceId } : record.action,
+      launchContext,
+    );
   if (!record.entry?.command || typeof record.entry.command.run !== 'function')
     return { skipped: true };
-  const result = await record.entry.command.run(
-    createExtensionContext(
-      record.entry.extension,
-      record.entry.command,
-      launchContext,
-    ),
+  const result = await performanceTraces.run(
+    'extension.refresh.command',
+    {
+      extensionId: record.entry.extension.id,
+      commandId: record.entry.command.id,
+    },
+    () =>
+      record.entry.command.run(
+        createExtensionContext(
+          record.entry.extension,
+          record.entry.command,
+          launchContext,
+        ),
+      ),
+    traceId ? { traceId } : undefined,
   );
   const view = result?.type ? result : result?.view?.type ? result.view : null;
   if (
@@ -3826,116 +3950,139 @@ function refreshBackoffDelay(failureCount: number) {
 }
 
 async function refreshViewForIpc(input: any = {}) {
-  return measureDebugPerformance(
-    'ipc.view.refresh',
-    { input: summarizeDebugValue(input), alwaysLog: true },
-    async () => {
-      pruneViewRefreshRecords();
-      const refreshId =
-        typeof input === 'string' ? input : String(input?.id || '');
-      const record = refreshId ? viewRefreshRecords.get(refreshId) : null;
-      if (!record) return { skipped: true };
-      if (input?.viewId && record.viewId && input.viewId !== record.viewId)
-        return { skipped: true };
-      const now = Date.now();
-      if (record.backoffUntil && record.backoffUntil > now)
-        return { skipped: true };
-      if (record.running) return { skipped: true };
-      record.running = measureDebugPerformance(
-        'view.refresh.host-action',
-        {
-          refreshId,
-          viewId: record.viewId,
-          extensionId: record.entry?.extension?.id,
-          commandId: record.entry?.command?.id,
-          alwaysLog: true,
-        },
+  return performanceTraces.run(
+    'view.refresh',
+    { viewId: input?.viewId },
+    () =>
+      measureDebugPerformance(
+        'ipc.view.refresh',
+        { input: summarizeDebugValue(input), alwaysLog: true },
         async () => {
-          try {
-            const result = normalizeHostViewResult(
-              await executeHostRefreshAction(record, {
-                refresh: true,
-                reason: 'refresh',
-                startedAt: Date.now(),
-              }),
-            );
-            structuredClone(result);
-            spawnPendingViewLoaders(result);
-            record.failureCount = 0;
-            record.backoffUntil = undefined;
-            return result;
-          } catch (error) {
-            record.failureCount += 1;
-            record.backoffUntil =
-              Date.now() + refreshBackoffDelay(record.failureCount);
-            logWarn(
-              'extension.viewRefresh.failed',
-              {
-                viewId: record.viewId,
-                error: error instanceof Error ? error.message : String(error),
-              },
-              {
-                source: 'host',
-                scope: 'extension',
-                extensionId: record.entry?.extension?.id,
-                commandId: record.entry?.command?.id,
-              },
-            );
+          pruneViewRefreshRecords();
+          const refreshId =
+            typeof input === 'string' ? input : String(input?.id || '');
+          const record = refreshId ? viewRefreshRecords.get(refreshId) : null;
+          if (!record) return { skipped: true };
+          if (input?.viewId && record.viewId && input.viewId !== record.viewId)
             return { skipped: true };
-          } finally {
-            record.running = null;
-          }
+          const now = Date.now();
+          if (record.backoffUntil && record.backoffUntil > now)
+            return { skipped: true };
+          if (record.running) return { skipped: true };
+          record.running = measureDebugPerformance(
+            'view.refresh.host-action',
+            {
+              refreshId,
+              viewId: record.viewId,
+              extensionId: record.entry?.extension?.id,
+              commandId: record.entry?.command?.id,
+              alwaysLog: true,
+            },
+            async () => {
+              try {
+                const result = normalizeHostViewResult(
+                  await executeHostRefreshAction(
+                    record,
+                    {
+                      refresh: true,
+                      reason: 'refresh',
+                      startedAt: Date.now(),
+                    },
+                    input?.traceId,
+                  ),
+                );
+                structuredClone(result);
+                spawnPendingViewLoaders(result, input?.traceId);
+                record.failureCount = 0;
+                record.backoffUntil = undefined;
+                return result;
+              } catch (error) {
+                record.failureCount += 1;
+                record.backoffUntil =
+                  Date.now() + refreshBackoffDelay(record.failureCount);
+                logWarn(
+                  'extension.viewRefresh.failed',
+                  {
+                    viewId: record.viewId,
+                    error: error instanceof Error ? error.message : String(error),
+                  },
+                  {
+                    source: 'host',
+                    scope: 'extension',
+                    extensionId: record.entry?.extension?.id,
+                    commandId: record.entry?.command?.id,
+                  },
+                );
+                return { skipped: true };
+              } finally {
+                record.running = null;
+              }
+            },
+          );
+          return record.running;
         },
-      );
-      return record.running;
-    },
-  );
+      ),
+    input?.traceId ? { traceId: input.traceId } : undefined,
+  ) as Promise<any>;
 }
 
 async function executeViewActionForIpc(action) {
-  return measureDebugPerformance(
-    'ipc.view-action.execute',
-    { action: summarizeDebugValue(action), alwaysLog: true },
-    async () => {
-      let trustedAction: any = null;
-      try {
-        trustedAction = resolveViewActionForIpc(action);
-        const result = normalizeHostViewResult(
-          await measureDebugPerformance(
-            'view-action.execute',
-            { action: summarizeDebugValue(trustedAction), alwaysLog: true },
-            () => executeViewAction(trustedAction),
-          ),
-        );
-        structuredClone(result);
-        spawnPendingViewLoaders(result);
-        return result;
-      } catch (error) {
-        const record =
-          trustedAction?.type === 'runExtensionAction'
-            ? extensionActionHandlers.get(trustedAction.handlerId)
-            : null;
-        logError('extension.viewAction.failed', error, {
-          source: 'host',
-          scope: 'extension',
-          extensionId: record?.entry?.extension?.id,
-          data: {
-            actionType: trustedAction?.type || action?.type,
-            actionTitle: trustedAction?.title || action?.title,
-          },
-        });
-        if (record)
-          return {
-            view: extensionErrorView(record.entry, error),
-            navigation: 'push',
-          };
-        return {
-          view: actionFailedFeedbackView(),
-          navigation: 'push',
-        };
-      }
+  return performanceTraces.run(
+    'action.view',
+    {
+      actionType: action?.type,
+      actionToken: action?.executionId,
+      extensionId: action?.extensionId,
     },
-  );
+    () =>
+      measureDebugPerformance(
+        'ipc.view-action.execute',
+        { action: summarizeDebugValue(action), alwaysLog: true },
+        async () => {
+          let trustedAction: any = null;
+          try {
+            trustedAction = resolveViewActionForIpc(action);
+            const result = normalizeHostViewResult(
+              await measureDebugPerformance(
+                'view-action.execute',
+                { action: summarizeDebugValue(trustedAction), alwaysLog: true },
+                () => executeViewAction(trustedAction),
+              ),
+            );
+            structuredClone(result);
+            spawnPendingViewLoaders(
+              result,
+              trustedAction?.traceId || action?.traceId,
+            );
+            return result;
+          } catch (error) {
+            const record =
+              trustedAction?.type === 'runExtensionAction'
+                ? extensionActionHandlers.get(trustedAction.handlerId)
+                : null;
+            logError('extension.viewAction.failed', error, {
+              source: 'host',
+              scope: 'extension',
+              extensionId: record?.entry?.extension?.id,
+              data: {
+                actionType: trustedAction?.type || action?.type,
+                actionTitle: trustedAction?.title || action?.title,
+              },
+            });
+            if (record)
+              return {
+                view: extensionErrorView(record.entry, error),
+                navigation: 'push',
+              };
+            return {
+              view: actionFailedFeedbackView(),
+              navigation: 'push',
+            };
+          }
+        },
+      ),
+    action?.traceId ? { traceId: action.traceId } : undefined,
+  ) as Promise<any>;
 }
 
 function clipboardSnapshot() {
@@ -3961,7 +4108,16 @@ function pasteTextAction(action: any) {
 }
 
 function executeWindowAction(action: any) {
-  return extensionWindowManager.executeWindowAction(action);
+  return performanceTraces.run(
+    'extension.window.action',
+    {
+      actionType: action?.type,
+      extensionId: action?.ownerExtensionId,
+      windowType: action?.type,
+    },
+    () => extensionWindowManager.executeWindowAction(action),
+    action?.traceId ? { traceId: action.traceId } : undefined,
+  );
 }
 
 function shellResultView(title, result) {
@@ -4065,7 +4221,15 @@ async function executeViewAction(action, launchContext?: any) {
         | undefined;
       if (native?.kind === 'view-hydrate-retry' && native.viewId) {
         if (viewLoaderRegistry.has(native.viewId))
-          viewLoaderRegistry.retry(native.viewId);
+          void Promise.resolve(
+            performanceTraces.run(
+              'view.loader.retry',
+              { viewId: native.viewId },
+              () => viewLoaderRegistry.retry(native.viewId),
+              action?.traceId ? { traceId: action.traceId } : undefined,
+            ),
+          )
+            .catch(() => {});
         // Return a loading skeleton so the renderer replaces the error view
         return {
           view: {
@@ -4078,19 +4242,26 @@ async function executeViewAction(action, launchContext?: any) {
           navigation: 'replace' as const,
         };
       }
-      return executeAction(action.nativeAction, { keepPaletteOpen: true });
+      return executeAction(
+        { ...action.nativeAction, traceId: action.traceId },
+        { keepPaletteOpen: true },
+      );
     }
     case 'openPath':
-      runInBackground(() => shell.openPath(action.path));
+      runInBackground(() => shell.openPath(action.path), action.traceId);
       break;
     case 'revealPath':
-      runInBackground(() => shell.showItemInFolder(action.path));
+      runInBackground(
+        () => shell.showItemInFolder(action.path),
+        action.traceId,
+      );
       break;
     case 'quickLook':
       return quickLookPath(action.path);
     case 'openWith':
-      runInBackground(() =>
-        openPathWithApp(action.path, action.appPath || action.app?.path),
+      runInBackground(
+        () => openPathWithApp(action.path, action.appPath || action.app?.path),
+        action.traceId,
       );
       break;
     case 'openUrl':
@@ -4101,7 +4272,7 @@ async function executeViewAction(action, launchContext?: any) {
             { url: action.url },
             { source: 'host', scope: 'action' },
           );
-      });
+      }, action.traceId);
       break;
     case 'copyText':
       clipboard.writeText(action.text || '');
@@ -4257,18 +4428,21 @@ async function executeViewAction(action, launchContext?: any) {
       };
     }
     case 'lockScreen':
-      runInBackground(() =>
-        executeSystemBuiltin({ builtin: 'lock-screen' }, () => {}),
+      runInBackground(
+        () => executeSystemBuiltin({ builtin: 'lock-screen' }, () => {}),
+        action.traceId,
       );
       break;
     case 'sleepSystem':
-      runInBackground(() =>
-        executeSystemBuiltin({ builtin: 'sleep' }, () => {}),
+      runInBackground(
+        () => executeSystemBuiltin({ builtin: 'sleep' }, () => {}),
+        action.traceId,
       );
       break;
     case 'restartSystem':
-      runInBackground(() =>
-        executeSystemBuiltin({ builtin: 'restart' }, () => {}),
+      runInBackground(
+        () => executeSystemBuiltin({ builtin: 'restart' }, () => {}),
+        action.traceId,
       );
       break;
     case 'openSystemSettings':
@@ -4277,10 +4451,10 @@ async function executeViewAction(action, launchContext?: any) {
         return paneUrl
           ? shell.openExternal(paneUrl)
           : executeSystemBuiltin({ builtin: 'settings' }, () => {});
-      });
+      }, action.traceId);
       break;
     case 'openKeyboardSettings':
-      runInBackground(openSystemKeyboardSettings);
+      runInBackground(openSystemKeyboardSettings, action.traceId);
       break;
     case 'quitApp':
       return requestQuitApp('view-action');
@@ -4537,13 +4711,22 @@ async function executeViewAction(action, launchContext?: any) {
             alwaysLog: true,
           },
           () =>
-            record.handler(
-              createExtensionContext(
-                record.entry.extension,
-                record.entry.command || null,
-                launchContext,
-              ),
-              action,
+            performanceTraces.run(
+              'extension.action.handler',
+              {
+                extensionId: record.entry.extension.id,
+                commandId: record.entry.command?.id,
+              },
+              () =>
+                record.handler(
+                  createExtensionContext(
+                    record.entry.extension,
+                    record.entry.command || null,
+                    launchContext,
+                  ),
+                  action,
+                ),
+              action.traceId ? { traceId: action.traceId } : undefined,
             ),
         );
         return executeViewActionResult(result, record.entry, launchContext);
@@ -7237,15 +7420,23 @@ function addAliasForGeneratedAction(chatId) {
   scheduleSaveState();
 }
 
-async function sendAiChatMessage(message, chatId) {
-  if (!nevermindAi) await initNevermindAi();
-  activeAiChatId = chatId || activeAiChatId;
-  if (activeAiChatId?.startsWith('draft:')) promoteDraftAiChat(activeAiChatId);
-  const prompt = activeAiChatId
-    ? aiChatPromptWithContext(message, activeAiChatId)
-    : message;
-  if (activeAiChatId) appendAiChatMessage(activeAiChatId, 'user', message);
-  return nevermindAi.send(prompt, activeAiChatId);
+async function sendAiChatMessage(message, chatId, traceId) {
+  return performanceTraces.run(
+    'ai.chat',
+    { messageLength: String(message || '').length },
+    async () => {
+      if (!nevermindAi) await initNevermindAi();
+      activeAiChatId = chatId || activeAiChatId;
+      if (activeAiChatId?.startsWith('draft:'))
+        promoteDraftAiChat(activeAiChatId);
+      const prompt = activeAiChatId
+        ? aiChatPromptWithContext(message, activeAiChatId)
+        : message;
+      if (activeAiChatId) appendAiChatMessage(activeAiChatId, 'user', message);
+      return nevermindAi.send(prompt, activeAiChatId, traceId);
+    },
+    typeof traceId === 'string' ? { traceId } : undefined,
+  );
 }
 
 async function abortAiChat(chatId) {
@@ -8346,108 +8537,118 @@ function assertInternalExtensionsRegistered() {
 }
 
 function registerExtension(extension) {
-  measureDebugPerformanceSync(
+  performanceTraces.run(
     'extension.register',
-    {
-      extensionId: extension?.id,
-      commandCount: extension?.commands?.length || 0,
-    },
-    () => {
-      if (!extension?.id) return;
-      extensionModules.set(extension.id, extension);
-      for (const command of extension.commands || []) {
-        if (
-          !(command?.id && command.title) ||
-          typeof command.run !== 'function'
-        )
-          continue;
-        const entry = { extension, command, source: 'command' };
-        const action = {
-          type: 'runExtensionAction',
-          title: command.title,
-          __handler: async (ctx, actionArg) => command.run(ctx, actionArg),
-        };
-        const item = {
-          id: command.id,
-          actionId:
-            command.actionId || extensionCommandActionId(extension, command),
-          title: command.title,
-          subtitle: command.subtitle || extension.title || 'Extension command',
-          aliases: command.aliases || [],
-          icon: command.icon || 'sparkles',
-          score: command.score || 12,
-          shortcut: command.shortcut,
-          shortcutScope: command.shortcutScope,
-          globalShortcut: command.globalShortcut,
-          dismissAfterRun: command.dismissAfterRun,
-          appearance: normalizeItemAppearance(command.appearance),
-          background:
-            command.background ||
-            command.mode === 'background' ||
-            command.mode === 'noView',
-          mode: command.mode,
-          triggers: command.triggers,
-          primaryAction: action,
-        };
-        const normalizedItem = normalizeViewItems([item], entry)[0];
-        extensionActionRegistry.set(`${extension.id}:${command.id}`, {
-          ...entry,
-          item: normalizedItem,
-        });
-        registerExtensionBackgroundJob(entry, normalizedItem);
-      }
-      if (typeof extension.actions === 'function') {
-        try {
-          const result = extension.actions(
-            createExtensionContext(extension, null),
-          );
-          const items = Array.isArray(result)
-            ? result
-            : Array.isArray(result?.actions)
-              ? result.actions
-              : [];
-          const entry = {
-            extension,
-            command: { id: 'actions', title: extension.title || extension.id },
-            source: 'action',
-          };
-          for (const item of items) {
-            if (!(item?.id && item.title)) continue;
-            const action = item.run
-              ? {
-                  type: 'runExtensionAction',
-                  title: item.title,
-                  __handler: item.run,
-                }
-              : item.action;
-            const normalizedItem = normalizeViewItems(
-              [
-                {
-                  ...item,
-                  background:
-                    item.background ||
-                    item.mode === 'background' ||
-                    item.mode === 'noView',
-                  primaryAction: action,
-                },
-              ],
-              entry,
-            )[0];
-            extensionActionRegistry.set(`${extension.id}:${item.id}`, {
+    { extensionId: extension?.id },
+    () =>
+      measureDebugPerformanceSync(
+        'extension.register',
+        {
+          extensionId: extension?.id,
+          commandCount: extension?.commands?.length || 0,
+        },
+        () => {
+          if (!extension?.id) return;
+          extensionModules.set(extension.id, extension);
+          for (const command of extension.commands || []) {
+            if (
+              !(command?.id && command.title) ||
+              typeof command.run !== 'function'
+            )
+              continue;
+            const entry = { extension, command, source: 'command' };
+            const action = {
+              type: 'runExtensionAction',
+              title: command.title,
+              __handler: async (ctx, actionArg) => command.run(ctx, actionArg),
+            };
+            const item = {
+              id: command.id,
+              actionId:
+                command.actionId ||
+                extensionCommandActionId(extension, command),
+              title: command.title,
+              subtitle:
+                command.subtitle || extension.title || 'Extension command',
+              aliases: command.aliases || [],
+              icon: command.icon || 'sparkles',
+              score: command.score || 12,
+              shortcut: command.shortcut,
+              shortcutScope: command.shortcutScope,
+              globalShortcut: command.globalShortcut,
+              dismissAfterRun: command.dismissAfterRun,
+              appearance: normalizeItemAppearance(command.appearance),
+              background:
+                command.background ||
+                command.mode === 'background' ||
+                command.mode === 'noView',
+              mode: command.mode,
+              triggers: command.triggers,
+              primaryAction: action,
+            };
+            const normalizedItem = normalizeViewItems([item], entry)[0];
+            extensionActionRegistry.set(`${extension.id}:${command.id}`, {
               ...entry,
               item: normalizedItem,
             });
             registerExtensionBackgroundJob(entry, normalizedItem);
           }
-        } catch (error) {
-          logError('extension.actions.failed', error, {
-            source: 'host',
-            scope: 'extension',
-            extensionId: extension.id,
-          });
-        }
-      }
-    },
+          if (typeof extension.actions === 'function') {
+            try {
+              const result = extension.actions(
+                createExtensionContext(extension, null),
+              );
+              const items = Array.isArray(result)
+                ? result
+                : Array.isArray(result?.actions)
+                  ? result.actions
+                  : [];
+              const entry = {
+                extension,
+                command: {
+                  id: 'actions',
+                  title: extension.title || extension.id,
+                },
+                source: 'action',
+              };
+              for (const item of items) {
+                if (!(item?.id && item.title)) continue;
+                const action = item.run
+                  ? {
+                      type: 'runExtensionAction',
+                      title: item.title,
+                      __handler: item.run,
+                    }
+                  : item.action;
+                const normalizedItem = normalizeViewItems(
+                  [
+                    {
+                      ...item,
+                      background:
+                        item.background ||
+                        item.mode === 'background' ||
+                        item.mode === 'noView',
+                      primaryAction: action,
+                    },
+                  ],
+                  entry,
+                )[0];
+                extensionActionRegistry.set(`${extension.id}:${item.id}`, {
+                  ...entry,
+                  item: normalizedItem,
+                });
+                registerExtensionBackgroundJob(entry, normalizedItem);
+              }
+            } catch (error) {
+              logError('extension.actions.failed', error, {
+                source: 'host',
+                scope: 'extension',
+                extensionId: extension.id,
+              });
+            }
+          }
+        },
+      ),
   );
 }
 
@@ -8900,13 +9101,22 @@ function unregisterShortcutForAction(actionId) {
 }
 
 async function executeShortcutAction(action) {
+  const traceId = crypto.randomUUID();
+  performanceTraces.event(
+    'shortcut.invoked',
+    {
+      actionKind: action?.kind,
+      extensionId: action?.extensionId,
+    },
+    { traceId },
+  );
   const currentAction = currentActionForStoredShortcut(action);
   const instantView = isClipboardHistoryAction(currentAction)
     ? clipboardHistoryView()
     : null;
   if (instantView) recordRecent(currentAction);
   if (shortcutActionRunsWithoutView(currentAction)) {
-    runInBackground(() => executeAction(currentAction));
+    runInBackground(() => executeAction({ ...currentAction, traceId }));
     return;
   }
   const wasVisible = Boolean(paletteWindow.win?.isVisible());
@@ -8916,20 +9126,26 @@ async function executeShortcutAction(action) {
       deferReveal: true,
     });
   const initialResult = normalizeHostViewResult({
-    view: instantView || extensionLoadingView(currentAction?.title || 'Opening...'),
+    view:
+      instantView || extensionLoadingView(currentAction?.title || 'Opening...'),
     revealWhenReady: !wasVisible,
     asSibling: false,
     isPrimary: true,
+    traceId,
   });
   paletteWindow.win?.webContents.send('action:view-open', initialResult);
   if (instantView) return;
   const result = normalizeHostViewResult(
-    await executeAction(currentAction, { keepPaletteOpen: true }),
+    await executeAction(
+      { ...currentAction, traceId },
+      { keepPaletteOpen: true },
+    ),
   );
   if (result?.view) {
     if (wasVisible) paletteWindow.showPalette({ skipShownEvent: true });
     paletteWindow.win?.webContents.send('action:view-open', {
       ...result,
+      traceId,
       revealWhenReady: false,
       asSibling: false,
       isPrimary: true,
@@ -9545,6 +9761,7 @@ app.whenReady().then(async () => {
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
+    performanceTrace: performanceTraces,
     startSearch: startProgressiveSearch,
     cancelSearch: cancelProgressiveSearch,
     executeActionForIpc,
@@ -9631,10 +9848,16 @@ app.whenReady().then(async () => {
       dictationService.reply(reply as DictationRendererReply);
   });
 
-  ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) => {
-    if (!viewLoaderRegistry.has(viewId)) return;
-    await viewLoaderRegistry.retry(viewId);
-  });
+  ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>
+    performanceTraces.run(
+      'view.loader.retry',
+      { viewId },
+      async () => {
+        if (!viewLoaderRegistry.has(viewId)) return;
+        await viewLoaderRegistry.retry(viewId);
+      },
+    ),
+  );
 });
 
 app.on('activate', () => paletteWindow.showPalette());

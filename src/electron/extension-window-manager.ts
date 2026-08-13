@@ -131,6 +131,13 @@ type ExtensionWindowManagerDeps = {
     write(state: PersistedExtensionWindowState): void;
   };
   debug?: (message: string, data?: Record<string, unknown>) => void;
+  performanceTrace?: {
+    run<T>(
+      operation: string,
+      data: Record<string, unknown>,
+      task: () => T | Promise<T>,
+    ): T | Promise<T>;
+  };
 };
 
 export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
@@ -579,7 +586,13 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     visibility: 'show' | 'preserve' = 'show',
     ownerExtensionId?: string,
   ) {
-    const normalizedView = deps.normalizeView(view);
+    const normalizedView = deps.performanceTrace
+      ? deps.performanceTrace.run(
+          'extension.window.normalize',
+          { viewType: view?.type },
+          () => deps.normalizeView(view),
+        )
+      : deps.normalizeView(view);
     structuredClone(normalizedView);
     const safeOptions = normalizeExtensionWindowOptions(options);
     const id = extensionWindowId(normalizedView, safeOptions, deps.hashValue);
@@ -593,10 +606,12 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       existing.win.setTitle(
         String(existing.options.title || normalizedView.title || 'Nevermind'),
       );
-      existing.win.webContents.send(
-        'extension-window:view',
-        extensionWindowViewPayload(id, normalizedView, existing.options),
+      const payload = extensionWindowViewPayload(
+        id,
+        normalizedView,
+        existing.options,
       );
+      existing.win.webContents.send('extension-window:view', payload);
       if (visibility === 'show') {
         revealWindow(existing.win, existing.options);
       }
@@ -667,12 +682,15 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       restoredFrame: Boolean(restoredFrame),
     };
     records.set(id, record);
-    structuredClone(
-      extensionWindowViewPayload(id, normalizedView, record.options),
-    );
+    structuredClone(extensionWindowViewPayload(id, normalizedView, record.options));
     applyOptions(win, record.options);
     if (restoredFrame) win.setBounds(restoredFrame);
     win.once('ready-to-show', () => {
+      deps.performanceTrace?.run(
+        'extension.window.ready',
+        { windowType: normalizedView.type },
+        () => undefined,
+      );
       if (!record.restoredFrame)
         positionWindow(win, String(record.options.position || 'center'));
       revealWindow(win, record.options, false);

@@ -1,11 +1,21 @@
 // biome-ignore-all lint: Performance instrumentation intentionally uses best-effort platform APIs and compact hot-path guards.
 import { performance } from 'node:perf_hooks';
-import { debug as logDebug } from './logger';
+import { debug as logDebug, performanceTrace } from './logger';
+import {
+  createPerformanceTraceService,
+  type PerformanceTraceContext,
+} from './performance-trace';
 
 export type DebugPerformanceDetail = Record<string, unknown> | undefined;
+export type { PerformanceTraceContext } from './performance-trace';
 
 const DEFAULT_SLOW_LOG_THRESHOLD_MS = 8;
 let sequence = 0;
+
+export const performanceTraces = createPerformanceTraceService({
+  enabled: () => true,
+  log: performanceTrace,
+});
 
 export function debugPerformanceEnabled() {
   if (

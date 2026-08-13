@@ -3,7 +3,9 @@ import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
+  recordPerformanceTrace,
 } from './debug-performance';
+import { createRendererPerformanceTrace } from './performance-trace';
 import type { CommandAction, CommandView } from './model';
 
 export type AiLimitState = {
@@ -22,6 +24,7 @@ export type AiChatEvent = {
   chatId?: string;
   label?: string;
   data?: unknown;
+  traceId?: string;
 };
 
 function isSafeLimitAction(action: unknown): action is CommandAction {
@@ -54,7 +57,11 @@ function limitStateFromEvent(event: AiChatEvent): AiLimitState | null {
 }
 
 export function useAiChat(
-  sendMessage: (message: string, chatId?: string) => Promise<void>,
+  sendMessage: (
+    message: string,
+    chatId?: string,
+    traceId?: string,
+  ) => Promise<void>,
   resetChat: (chatId?: string) => Promise<void>,
 ) {
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -68,6 +75,29 @@ export function useAiChat(
   const [creditNotice, setCreditNotice] = useState<string | null>(null);
   const pendingDeltaRef = useRef('');
   const deltaFrameRef = useRef<number | null>(null);
+  const activeTraceIdRef = useRef<string | undefined>(undefined);
+  const activeTraceStartedAtRef = useRef<number | undefined>(undefined);
+  const firstPaintRecordedRef = useRef(false);
+
+  function finishActiveAiTrace(
+    operation: string,
+    status: 'error' | 'cancelled' | 'ok',
+    traceId?: string,
+  ) {
+    if (
+      traceId &&
+      activeTraceIdRef.current &&
+      traceId !== activeTraceIdRef.current
+    )
+      return;
+    const startedAt = activeTraceStartedAtRef.current;
+    const activeTraceId = traceId || activeTraceIdRef.current;
+    if (activeTraceId && startedAt !== undefined)
+      recordPerformanceTrace(activeTraceId, operation, startedAt, status);
+    activeTraceIdRef.current = undefined;
+    activeTraceStartedAtRef.current = undefined;
+    firstPaintRecordedRef.current = false;
+  }
 
   function appendDeltaToMessages(
     current: NonNullable<CommandView['messages']>,
@@ -93,6 +123,20 @@ export function useAiChat(
     const text = pendingDeltaRef.current;
     pendingDeltaRef.current = '';
     if (text) {
+      if (
+        activeTraceIdRef.current &&
+        activeTraceStartedAtRef.current !== undefined &&
+        !firstPaintRecordedRef.current
+      ) {
+        const traceId = activeTraceIdRef.current;
+        const startedAt = activeTraceStartedAtRef.current;
+        requestAnimationFrame(() => {
+          recordPerformanceTrace(traceId, 'ai.first-painted-delta', startedAt, 'ok', {
+            deltaLength: text.length,
+          });
+        });
+        firstPaintRecordedRef.current = true;
+      }
       markDebugPerformance('ai.delta.flush', { textLength: text.length });
       setMessages((current) =>
         measureDebugPerformanceSync(
@@ -163,13 +207,23 @@ export function useAiChat(
     setCreditNotice(null);
     appendMessage('user', trimmed);
     setInput('');
+    const trace = createRendererPerformanceTrace();
+    activeTraceIdRef.current = trace.traceId;
+    activeTraceStartedAtRef.current = trace.startedAt;
+    firstPaintRecordedRef.current = false;
     try {
       await measureDebugPerformance(
         'ai.send-message',
-        { chatId, messageLength: trimmed.length, alwaysLog: true },
-        () => sendMessage(trimmed, chatId),
+        {
+          chatId,
+          messageLength: trimmed.length,
+          traceId: trace.traceId,
+          alwaysLog: true,
+        },
+        () => sendMessage(trimmed, chatId, trace.traceId),
       );
     } catch (error) {
+      finishActiveAiTrace('ai.send.error', 'error');
       appendMessage(
         'system',
         error instanceof Error ? error.message : String(error),
@@ -203,6 +257,12 @@ export function useAiChat(
 
   function handleEvent(event: AiChatEvent, activeChatId?: string) {
     if (!aiChatEventMatchesActiveChat(event, activeChatId)) return;
+    if (
+      event.traceId &&
+      activeTraceIdRef.current &&
+      event.traceId !== activeTraceIdRef.current
+    )
+      return;
     if (event.type === 'start') {
       setLimit(null);
       setCreditNotice(null);
@@ -214,6 +274,12 @@ export function useAiChat(
       event.type === 'aborted'
     )
       setBusy(false);
+    if (event.type === 'done')
+      finishActiveAiTrace('ai.done', 'ok', event.traceId);
+    if (event.type === 'error')
+      finishActiveAiTrace('ai.error', 'error', event.traceId);
+    if (event.type === 'aborted')
+      finishActiveAiTrace('ai.aborted', 'cancelled', event.traceId);
     if (event.type === 'delta' && event.text) appendDelta(event.text);
     if (event.type === 'tool_start' && event.name)
       appendMessage('system', `Using ${event.name}…`);
@@ -230,7 +296,15 @@ export function useAiChat(
     resizeInput();
   }, [input]);
 
-  useEffect(() => () => cancelDeltaFlush(), []);
+  useEffect(
+    () => () => {
+      cancelDeltaFlush();
+      activeTraceIdRef.current = undefined;
+      activeTraceStartedAtRef.current = undefined;
+      firstPaintRecordedRef.current = false;
+    },
+    [],
+  );
 
   return {
     messages,

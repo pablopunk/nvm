@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  recordPerformanceTrace,
   markDebugPerformance,
   measureDebugPerformance,
   recordDebugPerformance,
 } from './debug-performance';
+import { createRendererPerformanceTrace } from './performance-trace';
 import {
   createSearchSession,
   type SearchSessionTransport,
@@ -32,6 +34,9 @@ export function useSearchResults<T>(
   const sessionRef = useRef<ReturnType<typeof createSearchSession<T>> | null>(
     null,
   );
+  const traceByGenerationRef = useRef(
+    new Map<number, ReturnType<typeof createRendererPerformanceTrace>>(),
+  );
 
   useEffect(() => {
     sessionRef.current = createSearchSession({
@@ -42,6 +47,7 @@ export function useSearchResults<T>(
             'search.renderer-to-results',
             {
               generation: options.generation,
+              traceId: options.traceId,
               queryLength: nextQuery.length,
               phase: 'initial',
               alwaysLog: true,
@@ -50,6 +56,40 @@ export function useSearchResults<T>(
           ),
       },
       onSnapshot: (snapshot, timing) => {
+        const trace = traceByGenerationRef.current.get(snapshot.generation);
+        if (snapshot.traceId && snapshot.complete && trace) {
+          recordPerformanceTrace(
+            snapshot.traceId,
+            'search.results',
+            trace.startedAt,
+            'ok',
+            {
+              generation: snapshot.generation,
+              revision: snapshot.revision,
+              resultCount: snapshot.results.length,
+              complete: snapshot.complete,
+            },
+          );
+        }
+        if (trace)
+          requestAnimationFrame(() => {
+            if (traceByGenerationRef.current.get(snapshot.generation) !== trace)
+              return;
+            recordPerformanceTrace(
+              trace.traceId,
+              'search.results.paint',
+              trace.startedAt,
+              'ok',
+              {
+                generation: snapshot.generation,
+                revision: snapshot.revision,
+                resultCount: snapshot.results.length,
+                complete: snapshot.complete,
+              },
+            );
+            if (snapshot.complete)
+              traceByGenerationRef.current.delete(snapshot.generation);
+          });
         if (snapshot.complete) {
           recordDebugPerformance(
             'search.renderer-to-results',
@@ -73,8 +113,20 @@ export function useSearchResults<T>(
           visibleResultsForSearchSnapshot(current, snapshot),
         );
       },
-      onError: (_error, generation) =>
-        markDebugPerformance('search.failed', { generation }),
+      onError: (_error, generation) => {
+        const trace = traceByGenerationRef.current.get(generation);
+        if (trace) {
+          recordPerformanceTrace(
+            trace.traceId,
+            'search.results',
+            trace.startedAt,
+            'error',
+            { generation },
+          );
+          traceByGenerationRef.current.delete(generation);
+        }
+        markDebugPerformance('search.failed', { generation });
+      },
     });
     return () => {
       sessionRef.current?.dispose();
@@ -84,18 +136,31 @@ export function useSearchResults<T>(
 
   useEffect(() => {
     let generation: number | undefined;
+    const trace = createRendererPerformanceTrace();
     markDebugPerformance('search.schedule', {
       queryLength: query.length,
       refreshNonce,
     });
     const timer = window.setTimeout(() => {
-      generation = sessionRef.current?.start(query);
+      generation = sessionRef.current?.start(query, { traceId: trace.traceId });
+      if (generation !== undefined)
+        traceByGenerationRef.current.set(generation, trace);
     }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timer);
       if (generation !== undefined) {
         sessionRef.current?.cancel(generation);
+        const trace = traceByGenerationRef.current.get(generation);
+        if (trace)
+          recordPerformanceTrace(
+            trace.traceId,
+            'search.cancelled',
+            trace.startedAt,
+            'cancelled',
+            { generation },
+          );
+        traceByGenerationRef.current.delete(generation);
       }
     };
   }, [query, refreshNonce]);

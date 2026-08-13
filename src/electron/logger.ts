@@ -60,6 +60,13 @@ export function debug(
   write('debug', message, data, meta);
 }
 
+export function performanceTrace(data: unknown) {
+  debug('performance.trace', data, {
+    source: 'host',
+    scope: 'performance',
+  });
+}
+
 export function info(
   message: string,
   data?: unknown,
