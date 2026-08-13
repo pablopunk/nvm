@@ -25,9 +25,7 @@ export function shortcutActionLifecycle(
         background: current.background,
         mode: current.mode,
       };
-    return (
-      resolve(current.persistentAction) || resolve(current.rootAction)
-    );
+    return resolve(current.persistentAction) || resolve(current.rootAction);
   }
 
   return resolve(action);
@@ -42,10 +40,9 @@ export function shortcutActionRunsWithoutView(action: unknown): boolean {
   );
 }
 
-export function withInheritedShortcutLifecycle<T extends ShortcutLifecycleAction>(
-  action: T,
-  inheritedFrom: unknown,
-): T {
+export function withInheritedShortcutLifecycle<
+  T extends ShortcutLifecycleAction,
+>(action: T, inheritedFrom: unknown): T {
   const lifecycle = shortcutActionLifecycle(inheritedFrom);
   if (!lifecycle) return action;
   return {

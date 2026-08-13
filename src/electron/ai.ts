@@ -625,9 +625,13 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
     })) as { session: AgentSession };
-    result.session.prepareModelForPrompt = async function prepareModelForPrompt(prompt) {
+    result.session.prepareModelForPrompt = async function prepareModelForPrompt(
+      prompt,
+    ) {
       if (modelSource !== 'nevermind') return;
-      const chars = JSON.stringify(result.session.agent.state.messages).length + prompt.length;
+      const chars =
+        JSON.stringify(result.session.agent.state.messages).length +
+        prompt.length;
       const next = await resolveAiModelAndAuth(modelRuntime, undefined, chars);
       await result.session.setModel(next.model);
       result.session.setThinkingLevel(next.thinkingLevel);
@@ -837,9 +841,17 @@ async function createGeneralSession(
       retry: { enabled: true, maxRetries: 2 },
     }),
   })) as { session: AgentSession };
-  result.session.prepareModelForPrompt = async function prepareModelForPrompt(prompt) {
-    const chars = JSON.stringify(result.session.agent.state.messages).length + prompt.length;
-    const next = await resolveAiModelAndAuth(modelRuntime, sessionOptions.model, chars);
+  result.session.prepareModelForPrompt = async function prepareModelForPrompt(
+    prompt,
+  ) {
+    const chars =
+      JSON.stringify(result.session.agent.state.messages).length +
+      prompt.length;
+    const next = await resolveAiModelAndAuth(
+      modelRuntime,
+      sessionOptions.model,
+      chars,
+    );
     await result.session.setModel(next.model);
     result.session.setThinkingLevel(next.thinkingLevel);
   };
@@ -929,8 +941,12 @@ async function resolveAiModelAndAuth(
     maxTokens: descriptor.maxTokens,
     headers: nevermindDesktopHeaders({
       ...(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
-      ...(descriptor.modelTier ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier } : {}),
-      ...(descriptor.creditKind ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind } : {}),
+      ...(descriptor.modelTier
+        ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier }
+        : {}),
+      ...(descriptor.creditKind
+        ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind }
+        : {}),
     }),
   };
   modelRuntime.registerProvider(NEVERMIND_PROVIDER_ID, {

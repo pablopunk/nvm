@@ -88,7 +88,10 @@ function copyAction(record: CharacterCatalogRecord, skinTone = 0) {
   };
 }
 
-function skinToneAction(record: CharacterCatalogRecord, mode: 'copy' | 'paste') {
+function skinToneAction(
+  record: CharacterCatalogRecord,
+  mode: 'copy' | 'paste',
+) {
   return {
     type: 'submenu',
     title: `${mode === 'paste' ? 'Paste' : 'Copy'} with Skin Tone`,
@@ -112,9 +115,7 @@ function skinToneAction(record: CharacterCatalogRecord, mode: 'copy' | 'paste') 
 function characterItem(ctx: any, record: CharacterCatalogRecord) {
   const canPaste = ctx.system.capabilities.has('frontmost-paste');
   const skinToneMode = canPaste ? 'paste' : 'copy';
-  const primaryAction = canPaste
-    ? pasteAction(record)
-    : copyAction(record);
+  const primaryAction = canPaste ? pasteAction(record) : copyAction(record);
   const actions = [
     canPaste ? copyAction(record) : null,
     record.supportsSkinTone ? skinToneAction(record, skinToneMode) : null,
@@ -146,11 +147,14 @@ function characterItem(ctx: any, record: CharacterCatalogRecord) {
 
 async function pickerView(ctx: any, providedState?: CharacterPickerState) {
   const state = providedState || (await readPickerState(ctx));
-  const items = orderedRecords(state).map((record) => characterItem(ctx, record));
+  const items = orderedRecords(state).map((record) =>
+    characterItem(ctx, record),
+  );
   return ctx.ui.grid({
     id: 'emoji-symbols',
     title: 'Emoji & Symbols',
-    subtitle: 'Enter to paste. Command+Enter to copy. Search to narrow the catalog.',
+    subtitle:
+      'Enter to paste. Command+Enter to copy. Search to narrow the catalog.',
     searchBarPlaceholder: 'Search emoji, symbols, or Unicode values',
     layout: 'compact',
     columns: 8,
@@ -161,12 +165,17 @@ async function pickerView(ctx: any, providedState?: CharacterPickerState) {
       tooltip: 'Character category',
       value: state.category,
       items: CATEGORY_OPTIONS,
-      onChange: ctx.actions.run('Change Category', async (innerCtx: any, action: any) => {
-        const current = await readPickerState(innerCtx);
-        current.category = String(action.value || ALL_CATEGORY);
-        await savePickerState(innerCtx, current);
-        return innerCtx.navigation.replace(await pickerView(innerCtx, current));
-      }),
+      onChange: ctx.actions.run(
+        'Change Category',
+        async (innerCtx: any, action: any) => {
+          const current = await readPickerState(innerCtx);
+          current.category = String(action.value || ALL_CATEGORY);
+          await savePickerState(innerCtx, current);
+          return innerCtx.navigation.replace(
+            await pickerView(innerCtx, current),
+          );
+        },
+      ),
     },
     emptyView: {
       title: 'No matching characters',

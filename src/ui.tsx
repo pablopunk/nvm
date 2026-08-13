@@ -937,19 +937,21 @@ export function ListView<T>({
   return (
     <>
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {hasItems ? (
-        visibleSections.map((section, index) => (
-          <div key={index} className="itemSection">
-            {section.title ? (
-              <div className="actionSectionHeader">{section.title}</div>
-            ) : null}
-            {section.subtitle ? (
-              <div className="actionSectionSubtitle">{section.subtitle}</div>
-            ) : null}
-            {section.items.map(renderItem)}
-          </div>
-        ))
-      ) : isLoading ? null : empty}
+      {hasItems
+        ? visibleSections.map((section, index) => (
+            <div key={index} className="itemSection">
+              {section.title ? (
+                <div className="actionSectionHeader">{section.title}</div>
+              ) : null}
+              {section.subtitle ? (
+                <div className="actionSectionSubtitle">{section.subtitle}</div>
+              ) : null}
+              {section.items.map(renderItem)}
+            </div>
+          ))
+        : isLoading
+          ? null
+          : empty}
       {pagination}
     </>
   );
@@ -973,24 +975,26 @@ export function GridView<T>({
   return (
     <div className="extensionView">
       {subtitle ? <div className="extensionSubtitle">{subtitle}</div> : null}
-      {hasItems ? (
-        visibleSections.map((section, index) => (
-          <div key={index} className="itemSection">
-            {section.title ? (
-              <div className="actionSectionHeader">{section.title}</div>
-            ) : null}
-            {section.subtitle ? (
-              <div className="actionSectionSubtitle">{section.subtitle}</div>
-            ) : null}
-            <div
-              className={`extensionGrid extensionGrid-${layout}`}
-              style={style}
-            >
-              {section.items.map(renderItem)}
+      {hasItems
+        ? visibleSections.map((section, index) => (
+            <div key={index} className="itemSection">
+              {section.title ? (
+                <div className="actionSectionHeader">{section.title}</div>
+              ) : null}
+              {section.subtitle ? (
+                <div className="actionSectionSubtitle">{section.subtitle}</div>
+              ) : null}
+              <div
+                className={`extensionGrid extensionGrid-${layout}`}
+                style={style}
+              >
+                {section.items.map(renderItem)}
+              </div>
             </div>
-          </div>
-        ))
-      ) : isLoading ? null : empty}
+          ))
+        : isLoading
+          ? null
+          : empty}
       {pagination}
     </div>
   );

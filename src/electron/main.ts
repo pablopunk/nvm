@@ -1229,14 +1229,17 @@ function resolveViewActionForIpc(action) {
     return mergeRendererActionInput(clonePlain(record.action), action);
   const fallback = withoutExecutionId(action);
   if (CHARACTER_INSERT_ACTION_TYPES.has(String(fallback.type || ''))) {
-    const record = CHARACTER_RECORDS_BY_ID.get(String(fallback.characterId || ''));
+    const record = CHARACTER_RECORDS_BY_ID.get(
+      String(fallback.characterId || ''),
+    );
     if (!record) throw new Error('Untrusted character insertion action');
     const skinTone = Number(fallback.skinTone || 0);
     if (!Number.isInteger(skinTone) || skinTone < 0 || skinTone > 5)
       throw new Error('Untrusted character skin tone');
     if (skinTone > 0 && !record.supportsSkinTone)
       throw new Error('Character does not support skin tones');
-    const mode = fallback.mode === 'copyUnicode' ? 'copyUnicode' : fallback.mode;
+    const mode =
+      fallback.mode === 'copyUnicode' ? 'copyUnicode' : fallback.mode;
     if (!['copy', 'paste', 'copyUnicode'].includes(mode))
       throw new Error('Untrusted character insertion mode');
     if (mode === 'paste' && !hasCapability('frontmost-paste'))
@@ -8916,7 +8919,8 @@ async function executeShortcutAction(action) {
       deferReveal: true,
     });
   const initialResult = normalizeHostViewResult({
-    view: instantView || extensionLoadingView(currentAction?.title || 'Opening...'),
+    view:
+      instantView || extensionLoadingView(currentAction?.title || 'Opening...'),
     revealWhenReady: !wasVisible,
     asSibling: false,
     isPrimary: true,
