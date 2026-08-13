@@ -838,8 +838,9 @@ kbd {
 }
 
 .tileGlyph {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", sans-serif;
   font-size: 32px;
   line-height: 1;
   user-select: none;
