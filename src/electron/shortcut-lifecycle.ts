@@ -46,9 +46,11 @@ export function withInheritedShortcutLifecycle<
 >(action: T, inheritedFrom: unknown): T {
   const lifecycle = shortcutActionLifecycle(inheritedFrom);
   if (!lifecycle) return action;
+  const background = action.background || lifecycle.background;
+  const mode = action.mode || lifecycle.mode;
   return {
     ...action,
-    background: action.background || lifecycle.background,
-    mode: action.mode || lifecycle.mode,
+    ...(background !== undefined ? { background } : {}),
+    ...(mode !== undefined ? { mode } : {}),
   };
 }
