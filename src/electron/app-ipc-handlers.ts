@@ -239,7 +239,6 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   );
   ipcHandleMeasured('palette:set-mode', (_event, mode) => {
     deps.paletteWindow.setPaletteSizeForMode(mode);
-    deps.paletteWindow.centerWindow();
   });
   ipcHandleMeasured('palette:hide', () => deps.paletteWindow.hidePalette());
   ipcHandleMeasured('palette:shortcut-ready', () =>

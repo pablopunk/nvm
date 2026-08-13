@@ -144,7 +144,7 @@ test('registerAppIpcHandlers preserves palette, camera, and window behavior', as
   );
   await handles.get('extension-window:close')?.({ sender: 'sender' });
 
-  assert.deepEqual(calls, ['mode:preview', 'center', 'close-window:sender']);
+  assert.deepEqual(calls, ['mode:preview', 'close-window:sender']);
 });
 
 test('camera permission composition distinguishes Windows from unsupported platforms', async () => {

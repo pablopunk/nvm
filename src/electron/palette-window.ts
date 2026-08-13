@@ -251,8 +251,15 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
                 : mode === 'ai-chat'
                   ? AI_CHAT_WINDOW_SIZE
                   : DEFAULT_WINDOW_SIZE;
+        const { x, y, width, height } = win.getBounds();
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
         win.setSize(size.width, size.height, false);
-        if (win.isVisible()) centerWindow();
+        win.setPosition(
+          Math.round(centerX - size.width / 2),
+          Math.round(centerY - size.height / 2),
+          false,
+        );
       },
     );
   }
