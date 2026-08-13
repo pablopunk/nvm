@@ -130,6 +130,7 @@ function proxySelects(options: { free?: number; paid?: number; plan?: string; mo
     [{ balance: (options.paid ?? 0) > 0 ? options.paid ?? 0 : options.free ?? 10 }],
     [{ reserved: 0 }],
     [],
+    [],
     [{ id: 'user_1' }],
     [{ requestId: 'test-reservation', userId: 'user_1', kind: (options.paid ?? 0) > 0 ? 'paid' : 'free', reservedCredits: 1, status: 'pending' }],
   ];
@@ -1360,6 +1361,7 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
       [],
       [{ balance: 1000 }],
       [{ reserved: 0 }],
+      [],
       [],
       [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
