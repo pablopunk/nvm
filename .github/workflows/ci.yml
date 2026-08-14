@@ -400,13 +400,9 @@ jobs:
   release-mac:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [arm64, x64]
 
     steps:
       - name: Checkout
@@ -450,33 +446,30 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
-        run: mise exec -- pnpm run dist:mac:${{ matrix.arch }}
+        run: mise exec -- pnpm run dist:mac:all
 
       - name: Collect macOS artifacts
         run: |
           mkdir -p mac-artifacts
           shopt -s nullglob
           files=(
-            release/Nevermind-*-mac-${{ matrix.arch }}.zip
-            release/Nevermind-*-mac-${{ matrix.arch }}.zip.blockmap
+            release/Nevermind-*-mac-arm64.zip
+            release/Nevermind-*-mac-arm64.zip.blockmap
+            release/Nevermind-*-mac-x64.zip
+            release/Nevermind-*-mac-x64.zip.blockmap
+            release/latest-mac.yml
           )
-          if (( ${#files[@]} == 0 )); then
+          if (( ${#files[@]} < 5 )); then
             find release -maxdepth 1 -type f -print
             exit 1
           fi
           cp "${files[@]}" mac-artifacts/
 
-          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            cp release/latest-mac.yml mac-artifacts/
-          elif [[ -f release/latest-mac-x64.yml ]]; then
-            cp release/latest-mac-x64.yml mac-artifacts/
-          fi
-
       - name: Upload macOS dry-run artifacts
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: nevermind-mac-${{ matrix.arch }}-${{ github.sha }}
+          name: nevermind-mac-${{ github.sha }}
           path: mac-artifacts/*
           if-no-files-found: error
 
