@@ -675,16 +675,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
             ? columns
             : -columns;
     const next =
-      items[
-        Math.max(0, Math.min(items.length - 1, currentIndex + delta))
-      ];
+      items[Math.max(0, Math.min(items.length - 1, currentIndex + delta))];
     if (!next) return false;
     setSelectedValue(next.id);
     requestAnimationFrame(() =>
       shellRef.current
-        ?.querySelector(
-          `[data-extension-item-id="${CSS.escape(next.id)}"]`,
-        )
+        ?.querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)
         ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
     );
     return true;

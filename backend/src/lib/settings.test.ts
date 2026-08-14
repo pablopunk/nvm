@@ -310,7 +310,8 @@ describe('getModelRoute', () => {
     setDbForTests(fakeDb([
       [],
       [],
-      [{ value: '{"provider":"google","modelId":"gemini-pro","thinkingLevel":"low"}' }],
+      [{ value: 'google' }],
+      [{ value: 'gemini-pro' }],
     ]));
 
     const route = await getModelRoute('free-smart');

@@ -8,7 +8,10 @@ import {
 
 test('catalog exposes stable opaque ids for emoji and symbols', () => {
   assert.equal(CHARACTER_RECORDS_BY_ID.get('emoji:U+1F600')?.glyph, '😀');
-  assert.equal(CHARACTER_RECORDS_BY_ID.get('symbol:U+2713')?.name, 'check mark');
+  assert.equal(
+    CHARACTER_RECORDS_BY_ID.get('symbol:U+2713')?.name,
+    'check mark',
+  );
 });
 
 test('formats Unicode code points for multi-codepoint sequences', () => {

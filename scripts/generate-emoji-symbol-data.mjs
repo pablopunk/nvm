@@ -28,9 +28,7 @@ const INCLUDED_SYMBOL_CATEGORIES = new Set([
   'Sm',
   'So',
 ]);
-const SKIPPED_SYMBOL_RANGES = [
-  [0x1f000, 0x1fbff],
-];
+const SKIPPED_SYMBOL_RANGES = [[0x1f000, 0x1fbff]];
 const INCLUDED_SYMBOL_RANGES = [
   [0x00a0, 0x00ff],
   [0x2000, 0x22ff],
@@ -98,9 +96,7 @@ function emojiRecords(emojiData, keywords) {
 function skinToneVariants(emojiTest) {
   const variants = new Map();
   for (const line of emojiTest.split('\n')) {
-    const match = line.match(
-      /^([0-9A-F ]+)\s*; fully-qualified\s+#\s+(\S+)/,
-    );
+    const match = line.match(/^([0-9A-F ]+)\s*; fully-qualified\s+#\s+(\S+)/);
     if (!match) continue;
     const toneMatches = Array.from(match[1].matchAll(/1F3F([B-F])/g));
     if (!toneMatches.length) continue;

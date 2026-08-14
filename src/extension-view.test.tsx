@@ -235,7 +235,9 @@ test('bounds rendered grid items without removing them from the searchable view'
 
 test('renders markdown headings with host typography hooks', () => {
   const html = renderToStaticMarkup(
-    <MarkdownContent content="# Preview Fixture\n\nA compact preview body." />,
+    <MarkdownContent
+      content={'# Preview Fixture\n\nA compact preview body.'}
+    />,
   );
 
   assert.match(

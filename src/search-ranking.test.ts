@@ -47,9 +47,10 @@ test('scoreNormalizedNonEmpty matches unordered word prefixes', () => {
 
 test('strict view filtering finds rightwards arrow from natural word order', () => {
   const item = { id: 'rightwards-arrow', title: 'Rightwards Arrow' };
-  assert.deepEqual(filterCommandItems([item], 'right arrow', { minScore: 50 }), [
-    item,
-  ]);
+  assert.deepEqual(
+    filterCommandItems([item], 'right arrow', { minScore: 50 }),
+    [item],
+  );
 });
 
 test('scoreNormalizedNonEmpty no match', () => {
