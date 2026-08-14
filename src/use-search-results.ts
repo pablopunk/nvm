@@ -37,6 +37,7 @@ export function useSearchResults<T>(
   const traceByGenerationRef = useRef(
     new Map<number, ReturnType<typeof createRendererPerformanceTrace>>(),
   );
+  const paintFrameByGenerationRef = useRef(new Map<number, number>());
 
   useEffect(() => {
     sessionRef.current = createSearchSession({
@@ -72,24 +73,34 @@ export function useSearchResults<T>(
           );
         }
         if (trace)
-          requestAnimationFrame(() => {
-            if (traceByGenerationRef.current.get(snapshot.generation) !== trace)
-              return;
-            recordPerformanceTrace(
-              trace.traceId,
-              'search.results.paint',
-              trace.startedAt,
-              'ok',
-              {
-                generation: snapshot.generation,
-                revision: snapshot.revision,
-                resultCount: snapshot.results.length,
-                complete: snapshot.complete,
-              },
-            );
-            if (snapshot.complete)
-              traceByGenerationRef.current.delete(snapshot.generation);
-          });
+          paintFrameByGenerationRef.current.set(
+            snapshot.generation,
+            requestAnimationFrame(() => {
+              paintFrameByGenerationRef.current.delete(snapshot.generation);
+              if (performance.now() - trace.startedAt > 10_000) {
+                traceByGenerationRef.current.delete(snapshot.generation);
+                return;
+              }
+              if (
+                traceByGenerationRef.current.get(snapshot.generation) !== trace
+              )
+                return;
+              recordPerformanceTrace(
+                trace.traceId,
+                'search.results.paint',
+                trace.startedAt,
+                'ok',
+                {
+                  generation: snapshot.generation,
+                  revision: snapshot.revision,
+                  resultCount: snapshot.results.length,
+                  complete: snapshot.complete,
+                },
+              );
+              if (snapshot.complete)
+                traceByGenerationRef.current.delete(snapshot.generation);
+            }),
+          );
         if (snapshot.complete) {
           recordDebugPerformance(
             'search.renderer-to-results',
@@ -131,6 +142,10 @@ export function useSearchResults<T>(
     return () => {
       sessionRef.current?.dispose();
       sessionRef.current = null;
+      for (const frame of paintFrameByGenerationRef.current.values())
+        cancelAnimationFrame(frame);
+      paintFrameByGenerationRef.current.clear();
+      traceByGenerationRef.current.clear();
     };
   }, [transport]);
 
@@ -161,6 +176,11 @@ export function useSearchResults<T>(
             { generation },
           );
         traceByGenerationRef.current.delete(generation);
+        const frame = paintFrameByGenerationRef.current.get(generation);
+        if (frame !== undefined) {
+          cancelAnimationFrame(frame);
+          paintFrameByGenerationRef.current.delete(generation);
+        }
       }
     };
   }, [query, refreshNonce]);

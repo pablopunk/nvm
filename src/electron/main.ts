@@ -369,6 +369,7 @@ const APP_REINDEX_DEBOUNCE_MS = 1000;
 const THUMBNAIL_SIZE = 512;
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000;
 const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000;
+const EXTENSION_ROOT_ITEMS_INITIAL_TIMEOUT_MS = 100;
 const ITEM_FOREGROUND_COLORS = new Set([
   'yellow',
   'blue',
@@ -2550,11 +2551,14 @@ function createProgressiveSearchWork(input) {
             {
               key,
               run: () =>
-                refreshExtensionRootActions(
-                  extension,
-                  extension.__filePath || extension.id,
-                  input.traceId,
-                ),
+                withAbortableTimeout(
+                  refreshExtensionRootActions(
+                    extension,
+                    extension.__filePath || extension.id,
+                    input.traceId,
+                  ),
+                  EXTENSION_ROOT_ITEMS_INITIAL_TIMEOUT_MS,
+                ).catch(() => []),
             },
           ];
         },
@@ -3207,6 +3211,10 @@ function extensionRootActionFromItem(entry, item) {
     withoutPrimaryAction(item.actions || [], primarySource),
     entry,
   );
+  const globalShortcut =
+    item.globalShortcut ||
+    (item.shortcutScope === 'global' ? item.shortcut : undefined);
+  const globalAction = persistentAction || primaryAction;
   return withInheritedShortcutLifecycle(
     {
       id: `extension-root:${entry.extension.id}:${item.id}`,
@@ -3218,6 +3226,12 @@ function extensionRootActionFromItem(entry, item) {
         ? path.basename(entry.extension.__filePath)
         : undefined,
       rootAction: primaryAction,
+      ...(globalShortcut || globalAction?.shortcutScope === 'global'
+        ? {
+            shortcut: globalShortcut || globalAction.shortcut,
+            shortcutScope: 'global',
+          }
+        : {}),
       persistentAction,
       removable: Boolean(entry.extension.__generated),
       title: item.title,
@@ -3290,7 +3304,9 @@ function extensionActionFromContribution(entry) {
     : item.globalShortcut ||
       (item.shortcutScope === 'global' ? item.shortcut : null);
   const shortcut = shortcutForAction(action) || declaredShortcut;
-  return shortcut ? { ...action, shortcut } : action;
+  return shortcut
+    ? { ...action, shortcut, shortcutScope: 'global' as const }
+    : action;
 }
 
 async function executeActionForIpc(action) {
@@ -8573,8 +8589,15 @@ function registerExtension(extension) {
               aliases: command.aliases || [],
               icon: command.icon || 'sparkles',
               score: command.score || 12,
-              shortcut: command.shortcut,
-              shortcutScope: command.shortcutScope,
+              shortcut:
+                command.globalShortcut ||
+                (command.shortcutScope === 'global'
+                  ? command.shortcut
+                  : undefined),
+              shortcutScope:
+                command.globalShortcut || command.shortcutScope === 'global'
+                  ? ('global' as const)
+                  : undefined,
               globalShortcut: command.globalShortcut,
               dismissAfterRun: command.dismissAfterRun,
               appearance: normalizeItemAppearance(command.appearance),

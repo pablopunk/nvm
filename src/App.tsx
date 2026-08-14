@@ -2004,45 +2004,51 @@ export function App() {
   }, [shortcutFor?.id]);
 
   useEffect(() => {
-    for (const action of actions) {
-      const appPath = appPathForIcon(action);
-      if (!appPath || requestedIcons.current.has(appPath)) continue;
+    const timer = window.setTimeout(() => {
+      for (const action of actions.slice(0, 8)) {
+        const appPath = appPathForIcon(action);
+        if (!appPath || requestedIcons.current.has(appPath)) continue;
 
-      requestedIcons.current.add(appPath);
-      window.nvm.getAppIcon(appPath).then((iconUrl) => {
-        if (iconUrl)
-          setIconUrls((current) => ({
-            ...current,
-            [action.id]: iconUrl,
-            [appPath]: iconUrl,
-          }));
-        else requestedIcons.current.delete(appPath);
-      });
-    }
+        requestedIcons.current.add(appPath);
+        window.nvm.getAppIcon(appPath).then((iconUrl) => {
+          if (iconUrl)
+            setIconUrls((current) => ({
+              ...current,
+              [action.id]: iconUrl,
+              [appPath]: iconUrl,
+            }));
+          else requestedIcons.current.delete(appPath);
+        });
+      }
+    }, 120);
+    return () => window.clearTimeout(timer);
   }, [actions]);
 
   useEffect(() => {
     const views = [extensionView, ...siblingViews].filter(
       Boolean,
     ) as ExtensionView[];
-    for (const view of views) {
-      for (const item of allViewItems(view)) {
-        const appPath = diskPathForItem(item);
-        if (
-          !isAppIconPath(appPath) ||
-          item.image ||
-          iconUrls[appPath] ||
-          requestedIcons.current.has(appPath)
-        )
-          continue;
-        requestedIcons.current.add(appPath);
-        window.nvm.getAppIcon(appPath).then((iconUrl) => {
-          if (iconUrl)
-            setIconUrls((current) => ({ ...current, [appPath]: iconUrl }));
-          else requestedIcons.current.delete(appPath);
-        });
+    const timer = window.setTimeout(() => {
+      for (const view of views) {
+        for (const item of allViewItems(view).slice(0, 8)) {
+          const appPath = diskPathForItem(item);
+          if (
+            !isAppIconPath(appPath) ||
+            item.image ||
+            iconUrls[appPath] ||
+            requestedIcons.current.has(appPath)
+          )
+            continue;
+          requestedIcons.current.add(appPath);
+          window.nvm.getAppIcon(appPath).then((iconUrl) => {
+            if (iconUrl)
+              setIconUrls((current) => ({ ...current, [appPath]: iconUrl }));
+            else requestedIcons.current.delete(appPath);
+          });
+        }
       }
-    }
+    }, 120);
+    return () => window.clearTimeout(timer);
   }, [extensionView, siblingViews, iconUrls]);
 
   useEffect(

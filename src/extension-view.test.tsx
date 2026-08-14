@@ -162,6 +162,50 @@ test('renders side-preview media and text details', () => {
   assert.match(html, /file:\/\/video\.mp4/);
 });
 
+test('keeps local action shortcuts selected-only in extension lists', () => {
+  const html = renderExtensionView({
+    type: 'list',
+    title: 'Clipboard History',
+    items: [
+      {
+        id: 'one',
+        title: 'One',
+        actions: [{ title: 'Paste', type: 'pasteText', shortcut: 'Command+Y' }],
+      },
+      {
+        id: 'two',
+        title: 'Two',
+        actions: [{ title: 'Paste', type: 'pasteText', shortcut: 'Command+Y' }],
+      },
+    ],
+  });
+
+  assert.equal((html.match(/selectedOnlyEnter/g) || []).length, 2);
+});
+
+test('keeps durable global shortcuts visible in extension lists', () => {
+  const html = renderExtensionView({
+    type: 'list',
+    title: 'Actions',
+    items: [
+      {
+        id: 'one',
+        title: 'One',
+        persistentAction: {
+          type: 'runExtensionRegisteredAction',
+          title: 'One',
+          shortcut: 'Command+Y',
+          shortcutScope: 'global',
+        },
+        actions: [{ title: 'Run', type: 'runExtensionAction' }],
+      },
+    ],
+  });
+
+  assert.doesNotMatch(html, /selectedOnlyEnter/);
+  assert.match(html, /⌘Y/);
+});
+
 test('renders a native glyph as a grid tile visual', () => {
   const html = renderExtensionView({
     type: 'grid',

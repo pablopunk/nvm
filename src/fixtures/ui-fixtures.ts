@@ -448,6 +448,15 @@ function sidePreviewView(ctx: ExtensionContext) {
 
 function clipboardView(ctx: ExtensionContext) {
   const clipboardApi = ctx.desktop.clipboard;
+  const preview = ctx.actions.run(
+    'Preview Clipboard Item',
+    (innerCtx) =>
+      innerCtx.ui.preview({
+        title: 'Clipboard Preview',
+        content: 'This fixture action uses the selected-item shortcut.',
+      }),
+    { shortcut: 'Command+Y' },
+  );
   const writeHtml = ctx.actions.run(
     'Write HTML Clipboard',
     async (innerCtx) => {
@@ -501,6 +510,14 @@ function clipboardView(ctx: ExtensionContext) {
       ? 'Read/write text, HTML, files, and generic paste content'
       : 'Clipboard history host API unavailable',
     items: [
+      ctx.ui.item({
+        id: 'preview',
+        title: 'Preview clipboard item',
+        subtitle: 'Selected-item shortcut: Command+Y',
+        icon: 'eye',
+        primaryAction: preview,
+        actions: [preview],
+      }),
       ctx.ui.item({
         id: 'write-html',
         title: 'Write concealed HTML',

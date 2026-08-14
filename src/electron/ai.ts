@@ -1841,10 +1841,9 @@ function capabilities() {
     ],
     actionPanel: ['sections', 'submenus'],
     shortcuts: [
-      'local action shortcut',
+      'selected-item action shortcut',
       'durable action globalShortcut',
-      'command globalShortcut as shorthand',
-      'shortcutScope',
+      'command globalShortcut',
     ],
     gridOptions: {
       layout: ['square', 'wide', 'compact'],

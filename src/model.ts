@@ -520,6 +520,7 @@ export interface CommandItem {
   subtitle?: string;
   accessories?: CommandItemAccessory[];
   shortcut?: string;
+  shortcutScope?: 'local' | 'global';
   keywords?: string[];
   text?: string;
   icon?: string;
@@ -532,7 +533,7 @@ export interface CommandItem {
   fileUrl?: string;
   primaryAction?: CommandAction;
   /** Persistent root/search action represented by this view item; enables aliases/shortcuts/options for durable actions shown inside views. */
-  persistentAction?: unknown;
+  persistentAction?: CommandAction;
   actions?: CommandAction[];
   actionPanel?: CommandActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;

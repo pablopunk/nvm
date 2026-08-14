@@ -26,6 +26,17 @@ function isGlobalShortcut(action?: CommandAction) {
   return action?.shortcutScope === 'global' || action?.type === 'nativeAction';
 }
 
+function itemShortcut(item: CommandItem, primaryAction?: CommandAction) {
+  const persistentAction = item.persistentAction as CommandAction | undefined;
+  const global =
+    item.shortcutScope === 'global' ||
+    isGlobalShortcut(primaryAction) ||
+    isGlobalShortcut(persistentAction);
+  const shortcut =
+    item.shortcut || primaryAction?.shortcut || persistentAction?.shortcut;
+  return { shortcut, selectedOnly: Boolean(shortcut && !global) };
+}
+
 export function RootCommandList({
   items,
   iconForItem,
@@ -50,7 +61,7 @@ export function RootCommandList({
         const primaryAction =
           item.primaryAction ||
           actionsFromPanel(item.actionPanel, item.actions || [])[0];
-        const shortcut = item.shortcut || primaryAction?.shortcut;
+        const { shortcut, selectedOnly } = itemShortcut(item, primaryAction);
         return (
           <CommandRow
             key={item.id}
@@ -63,11 +74,7 @@ export function RootCommandList({
             shortcut={shortcut}
             appearance={item.appearance}
             extras={extraForItem?.(item)}
-            selectedOnlyShortcut={Boolean(
-              !item.shortcut &&
-                primaryAction?.shortcut &&
-                !isGlobalShortcut(primaryAction),
-            )}
+            selectedOnlyShortcut={selectedOnly}
             onSelect={() => onSelect(item)}
           />
         );

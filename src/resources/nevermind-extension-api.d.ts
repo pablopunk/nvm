@@ -64,7 +64,7 @@ export type ExtensionCapability =
 /** @deprecated Use `ExtensionCapability`; retained for existing source files. */
 export type ExtensionPermission = ExtensionCapability;
 
-/** Action panels can be visible, menu-only, or hidden while still allowing shortcuts. */
+/** Action panels can be visible, menu-only, or hidden while still allowing local shortcuts. */
 export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden';
 export type ViewSize = 'default' | 'large';
 /** Controls the palette framing for a host-rendered view; side-preview pairs a selectable list with its selected item's detail pane. */
@@ -84,6 +84,12 @@ export type ForegroundColor =
   | 'red'
   | 'orange'
   | 'pink';
+/**
+ * Shortcut scope for compatibility with older extensions. New extensions should
+ * use `shortcut` for an action available on the selected item and
+ * `globalShortcut` on commands or durable action contributions for an action
+ * available from anywhere.
+ */
 export type ShortcutScope = 'local' | 'global';
 export type ExtensionEditorFormat = 'text' | 'markdown';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -158,8 +164,7 @@ export type ExtensionActionContribution = {
   icon?: string;
   image?: string;
   score?: number;
-  shortcut?: string;
-  shortcutScope?: ShortcutScope;
+  /** Shortcut that opens/runs this durable action from anywhere. */
   globalShortcut?: string;
   dismissAfterRun?: 'auto';
   background?: boolean;
@@ -411,7 +416,9 @@ export type ExtensionAction = {
   title?: string;
   icon?: string;
   subtitle?: string;
+  /** Shortcut for this action while its owning item is selected. */
   shortcut?: string;
+  /** @deprecated Global action shortcuts belong on `globalShortcut`. */
   shortcutScope?: ShortcutScope;
   style?: 'regular' | 'destructive';
   requiresConfirmation?: boolean;
@@ -448,7 +455,7 @@ export type ExtensionActionSection = {
   isLoading?: boolean;
 };
 
-/** Grouped actions exposed through Cmd+K, local shortcuts, and host-owned action UI. */
+/** Grouped actions exposed through Cmd+K, selected-item shortcuts, and host-owned action UI. */
 export type ExtensionActionPanel = {
   title?: string;
   sections: ExtensionActionSection[];
@@ -541,8 +548,11 @@ export type ExtensionItem = {
   disabled?: boolean;
   /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
   detail?: ExtensionDetail;
+  /** Local shortcut for this item's action; shown only while this item is selected. */
   shortcut?: string;
+  /** @deprecated Use `globalShortcut` for durable global actions. */
   shortcutScope?: ShortcutScope;
+  /** Global shortcut for this durable/root action. */
   globalShortcut?: string;
   /** Set false when an item should be searchable but not user-customizable. */
   customizable?: boolean;
@@ -1321,7 +1331,7 @@ export type ExtensionContext = {
     preview(view: ExtensionView): ExtensionView;
     /** Large media preview from a file helper result. */
     preview(file: ExtensionFile, view?: Partial<ExtensionView>): ExtensionView;
-    /** Inline preview action, commonly for clipboard/file items. */
+    /** Inline preview action, commonly for clipboard/file items. Its shortcut is local to the selected item. */
     preview(input: {
       kind?: 'clipboard' | 'image' | 'video' | 'file' | 'text';
       title?: string;
@@ -1828,15 +1838,18 @@ export type ExtensionContext = {
 
 export type ExtensionCommand = {
   id: string;
-  /** Stable action id for shortcuts/aliases. Defaults to `extension:${extension.id}:${id}` for compatibility. */
+  /** Stable action id for aliases and durable global shortcuts. Defaults to `extension:${extension.id}:${id}` for compatibility. */
   actionId?: string;
   title: string;
   subtitle?: string;
   aliases?: string[];
   icon?: string;
   score?: number;
+  /** @deprecated Use `globalShortcut`; command shortcuts are global by nature. */
   shortcut?: string;
+  /** @deprecated Use `globalShortcut`. */
   shortcutScope?: ShortcutScope;
+  /** Global shortcut for this command. */
   globalShortcut?: string;
   /** Muted semantic color applied to the command result title and Lucide/fallback icon. Images keep their original colors. */
   appearance?: ExtensionItemAppearance;

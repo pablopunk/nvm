@@ -1778,6 +1778,7 @@ kbd {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 40%);
   height: 100%;
   overflow: hidden;
+  padding: 0;
 }
 
 .sidePreviewCard .extensionListPane {

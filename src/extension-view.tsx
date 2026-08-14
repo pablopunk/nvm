@@ -110,6 +110,25 @@ function fallbackEmpty(view: CommandView, fallback = EMPTY_ITEMS_TITLE) {
   );
 }
 
+function listItemShortcut(item: CommandItem) {
+  if (item.actionPanelVisibility === 'hidden') return {};
+  const actions = actionsFromPanel(item.actionPanel, item.actions || []);
+  const action = actions.find((candidate) => candidate.shortcut);
+  const persistentAction = item.persistentAction as CommandAction | undefined;
+  const globalShortcut =
+    persistentAction?.shortcutScope === 'global'
+      ? persistentAction.shortcut
+      : undefined;
+  return {
+    shortcut: globalShortcut || action?.shortcut,
+    selectedOnly: Boolean(
+      action?.shortcut &&
+        !globalShortcut &&
+        action.shortcutScope !== 'global',
+    ),
+  };
+}
+
 type ExtensionRenderBoundaryProps = {
   children: ReactNode;
   resetKey: string;
@@ -754,27 +773,25 @@ function ListExtensionView({
       empty={renderEmpty(view)}
       isLoading={view.isLoading}
       pagination={<ViewPagination view={view} runAction={runAction} />}
-      renderItem={(item) => (
-        <CommandRow
-          key={item.id}
-          value={item.id}
-          className="result extensionListItem"
-          icon={iconForItem(item)}
-          title={item.title}
-          subtitle={item.subtitle || item.text}
-          accessories={item.accessories}
-          shortcut={
-            item.actionPanelVisibility === 'hidden'
-              ? undefined
-              : actionsFromPanel(item.actionPanel, item.actions || []).find(
-                  (action) => action.shortcut,
-                )?.shortcut
-          }
-          appearance={item.appearance}
-          disabled={item.disabled}
-          onSelect={() => runDefaultAction(item)}
-        />
-      )}
+      renderItem={(item) => {
+        const shortcut = listItemShortcut(item);
+        return (
+          <CommandRow
+            key={item.id}
+            value={item.id}
+            className="result extensionListItem"
+            icon={iconForItem(item)}
+            title={item.title}
+            subtitle={item.subtitle || item.text}
+            accessories={item.accessories}
+            shortcut={shortcut.shortcut}
+            selectedOnlyShortcut={shortcut.selectedOnly}
+            appearance={item.appearance}
+            disabled={item.disabled}
+            onSelect={() => runDefaultAction(item)}
+          />
+        );
+      }}
     />
   );
   if (
