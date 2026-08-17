@@ -9865,6 +9865,10 @@ app.whenReady().then(async () => {
   ipcMain.on('dictation:reply', (event, reply) => {
     if (event.sender !== paletteWindow.win?.webContents) return;
     if (!reply || typeof reply !== 'object') return;
+    if (reply.type === 'recording') {
+      dictationService.reply(reply as DictationRendererReply);
+      return;
+    }
     if (reply.type === 'result' && typeof reply.text === 'string') {
       dictationService.reply(reply as DictationRendererReply);
       return;

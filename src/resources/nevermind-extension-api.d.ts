@@ -932,6 +932,7 @@ export type ExtensionDictation = {
   modelCacheStatus(): Promise<'cached' | 'missing'>;
   /** Download and initialize the model, retaining it according to the requested policy. */
   prepareModel(options?: { modelKeepAliveMs?: number }): Promise<void>;
+  /** Resolves after a live microphone track has delivered its first audio frame. */
   start(options?: {
     deviceId?: string;
     modelKeepAliveMs?: number;

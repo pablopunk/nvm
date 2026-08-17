@@ -1114,26 +1114,37 @@ function DictationRendererController() {
 
       if (command.type === 'start') {
         if (startPromiseRef.current || recordingRef.current) return;
-        const startPromise = recordDictation(
-          command.deviceId === 'default' ? undefined : command.deviceId,
-          undefined,
-          command.modelKeepAliveMs,
-        );
-        startPromiseRef.current = startPromise;
+        async function openMicrophone(deviceId: string | undefined) {
+          const startPromise = recordDictation(
+            deviceId,
+            undefined,
+            command.modelKeepAliveMs,
+          );
+          startPromiseRef.current = startPromise;
+          const recording = await startPromise;
+          recordingRef.current = recording;
+          return recording;
+        }
         try {
-          recordingRef.current = await startPromise;
-        } catch (error) {
-          if (command.deviceId && command.deviceId !== 'default') {
+          let recording: Awaited<ReturnType<typeof recordDictation>>;
+          try {
+            recording = await openMicrophone(
+              command.deviceId === 'default' ? undefined : command.deviceId,
+            );
+          } catch (error) {
+            if (!command.deviceId || command.deviceId === 'default')
+              throw error;
             try {
-              recordingRef.current = await recordDictation(
-                undefined,
-                undefined,
-                command.modelKeepAliveMs,
-              );
-              startPromiseRef.current = null;
-              return;
-            } catch {}
+              recording = await openMicrophone(undefined);
+            } catch {
+              throw error;
+            }
           }
+          await recording.ready;
+          window.nvm.replyDictation({ type: 'recording' });
+        } catch (error) {
+          recordingRef.current?.cancel();
+          recordingRef.current = null;
           window.nvm.replyDictation({
             type: 'error',
             message: error instanceof Error ? error.message : String(error),

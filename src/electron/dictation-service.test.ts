@@ -5,15 +5,25 @@ import {
   type DictationRendererCommand,
 } from './dictation-service';
 
-test('starts immediately and resolves transcription when the renderer replies', async () => {
+test('resolves start only after the renderer confirms audio capture', async () => {
   const commands: DictationRendererCommand[] = [];
   const service = createDictationService((command) => commands.push(command));
 
-  await service.start({ deviceId: 'default', modelKeepAliveMs: 300_000 });
+  let started = false;
+  const start = service
+    .start({ deviceId: 'default', modelKeepAliveMs: 300_000 })
+    .then(() => {
+      started = true;
+    });
   assert.equal(await service.status(), 'recording');
   assert.deepEqual(commands, [
     { type: 'start', deviceId: 'default', modelKeepAliveMs: 300_000 },
   ]);
+  await Promise.resolve();
+  assert.equal(started, false);
+  service.reply({ type: 'recording' });
+  await start;
+  assert.equal(started, true);
 
   const stopped = service.stop();
   assert.equal(await service.status(), 'transcribing');
@@ -37,6 +47,16 @@ test('returns renderer microphone devices', async () => {
   ]);
 });
 
+test('rejects start when renderer microphone startup fails', async () => {
+  const service = createDictationService(() => {});
+
+  const start = service.start();
+  service.reply({ type: 'error', message: 'Microphone did not become ready' });
+
+  await assert.rejects(start, /Microphone did not become ready/);
+  assert.equal(await service.status(), 'idle');
+});
+
 test('checks the model cache without loading the model and prepares it on demand', async () => {
   const commands: DictationRendererCommand[] = [];
   const service = createDictationService((command) => commands.push(command));
@@ -57,7 +77,9 @@ test('checks the model cache without loading the model and prepares it on demand
 
 test('cancels a pending transcription', async () => {
   const service = createDictationService(() => {});
-  await service.start();
+  const start = service.start();
+  service.reply({ type: 'recording' });
+  await start;
   const stopped = service.stop();
   await service.cancel();
   await assert.rejects(stopped, /Dictation cancelled/);

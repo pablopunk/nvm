@@ -132,6 +132,7 @@ export type DictationCommand =
   | { type: 'prepare-model'; modelKeepAliveMs?: number };
 
 export type DictationReply =
+  | { type: 'recording' }
   | { type: 'result'; text: string }
   | {
       type: 'devices';

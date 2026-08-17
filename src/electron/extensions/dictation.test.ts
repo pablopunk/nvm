@@ -202,6 +202,47 @@ test('prepares a missing model before opening the microphone', async () => {
   assert.deepEqual(result, { message: 'Listening...', tone: 'info' });
 });
 
+test('shows microphone preparation until audio capture is ready', async () => {
+  const indicatorUpdates: unknown[] = [];
+  let confirmRecording!: () => void;
+  const recordingReady = new Promise<void>((resolve) => {
+    confirmRecording = resolve;
+  });
+  const context = {
+    storage: { get: async () => ({}) },
+    dictation: {
+      status: async () => 'idle',
+      modelCacheStatus: async () => 'cached',
+      start: async () => recordingReady,
+    },
+    ui: {
+      toast: (input: unknown) => input,
+      indicator: {
+        show: () => {},
+        update: (input: unknown) => indicatorUpdates.push(input),
+        hide: () => {},
+      },
+    },
+    actions: actionBuilders(),
+  };
+  const handler = dictationHandlerFor(context);
+
+  const result = handler(context, {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(indicatorUpdates, [
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'Preparing microphone...',
+      status: 'loading',
+    },
+  ]);
+
+  confirmRecording();
+  await result;
+  assert.equal((indicatorUpdates.at(-1) as any).subtitle, 'Listening');
+});
+
 test('leaves the transcription on the clipboard when enabled', async () => {
   const pastes: unknown[] = [];
   let recording = false;

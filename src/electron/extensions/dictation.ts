@@ -143,6 +143,12 @@ async function runDictation(ctx: any) {
           modelKeepAliveMs: settings.keepAliveMs,
         });
       }
+      ctx.ui.indicator.update({
+        id: 'dictation',
+        title: 'Dictation',
+        subtitle: 'Preparing microphone...',
+        status: 'loading',
+      });
       await ctx.dictation.start({
         deviceId: settings.deviceId,
         modelKeepAliveMs: settings.keepAliveMs,

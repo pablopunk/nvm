@@ -7,6 +7,7 @@ export type DictationRendererCommand =
   | { type: 'prepare-model'; modelKeepAliveMs?: number };
 
 export type DictationRendererReply =
+  | { type: 'recording' }
   | { type: 'result'; text: string }
   | {
       type: 'devices';
@@ -36,6 +37,11 @@ export function createDictationService(
   send: (command: DictationRendererCommand) => void,
 ): DictationService {
   let currentStatus = 'idle';
+  let pendingStart: {
+    promise: Promise<void>;
+    resolve: () => void;
+    reject: (error: Error) => void;
+  } | null = null;
   let pendingStop: {
     resolve: (text: string) => void;
     reject: (error: Error) => void;
@@ -64,10 +70,18 @@ export function createDictationService(
   function start(
     options: { deviceId?: string; modelKeepAliveMs?: number } = {},
   ) {
-    if (currentStatus !== 'idle') return Promise.resolve();
+    if (currentStatus !== 'idle')
+      return pendingStart?.promise || Promise.resolve();
+    let resolveStart!: () => void;
+    let rejectStart!: (error: Error) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      resolveStart = resolve;
+      rejectStart = reject;
+    });
+    pendingStart = { promise, resolve: resolveStart, reject: rejectStart };
     currentStatus = 'recording';
     send({ type: 'start', ...options });
-    return Promise.resolve();
+    return promise;
   }
 
   function stop() {
@@ -83,6 +97,8 @@ export function createDictationService(
   function cancel() {
     if (currentStatus === 'idle') return Promise.resolve();
     currentStatus = 'idle';
+    pendingStart?.reject(new Error('Dictation cancelled'));
+    pendingStart = null;
     pendingStop?.reject(new Error('Dictation cancelled'));
     pendingStop = null;
     send({ type: 'cancel' });
@@ -135,6 +151,11 @@ export function createDictationService(
   }
 
   function reply(reply: DictationRendererReply) {
+    if (reply.type === 'recording') {
+      pendingStart?.resolve();
+      pendingStart = null;
+      return;
+    }
     if (reply.type === 'result') {
       currentStatus = 'idle';
       pendingStop?.resolve(reply.text);
@@ -158,6 +179,8 @@ export function createDictationService(
     }
     currentStatus = 'idle';
     const error = new Error(reply.message);
+    pendingStart?.reject(error);
+    pendingStart = null;
     pendingStop?.reject(error);
     pendingDevices?.reject(error);
     pendingStop = null;

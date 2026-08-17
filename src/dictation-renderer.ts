@@ -27,6 +27,7 @@ const MODEL_CACHE_FILES: Record<DictationBackend, readonly string[]> = {
   ],
 };
 const SAMPLE_RATE = 16_000;
+const MICROPHONE_READY_TIMEOUT_MS = 10_000;
 const DEFAULT_MODEL_KEEP_ALIVE_MS = 5 * 60 * 1000;
 
 let modelPromise: Promise<ParakeetModel> | null = null;
@@ -187,15 +188,18 @@ export async function recordDictation(
   const chunks: Blob[] = [];
   const recording = new Promise<Blob>((resolve, reject) => {
     recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
+      if (event.data.size === 0) return;
+      chunks.push(event.data);
     };
     recorder.onerror = () => reject(new Error('Recording failed'));
     recorder.onstop = () =>
       resolve(new Blob(chunks, { type: recorder.mimeType }));
   });
 
-  onState?.('recording');
   recorder.start();
+  const ready = waitForCapturedAudioFrame(stream).then(() => {
+    onState?.('recording');
+  });
   const modelLoadPromise = loadDictationModel().then((model) => {
     scheduleModelEviction(modelKeepAliveMs);
     return model;
@@ -203,6 +207,7 @@ export async function recordDictation(
   void modelLoadPromise.catch(() => {});
 
   return {
+    ready,
     stop: async () => {
       onState?.('transcribing');
       recorder.stop();
@@ -221,6 +226,71 @@ export async function recordDictation(
       stream.getTracks().forEach((track) => track.stop());
     },
   };
+}
+
+async function waitForCapturedAudioFrame(stream: MediaStream) {
+  const track = stream.getAudioTracks()[0];
+  if (!track) throw new Error('Microphone did not provide an audio track');
+  const context = new AudioContext();
+  const source = context.createMediaStreamSource(stream);
+  const silentOutput = context.createGain();
+  silentOutput.gain.value = 0;
+  const workletUrl = URL.createObjectURL(
+    new Blob(
+      [
+        `class DictationReadinessProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    if (inputs[0]?.[0]?.length) this.port.postMessage('frame');
+    return true;
+  }
+}
+registerProcessor('dictation-readiness', DictationReadinessProcessor);`,
+      ],
+      { type: 'text/javascript' },
+    ),
+  );
+  let worklet: AudioWorkletNode | undefined;
+  try {
+    await context.audioWorklet.addModule(workletUrl);
+    worklet = new AudioWorkletNode(context, 'dictation-readiness');
+    source.connect(worklet).connect(silentOutput).connect(context.destination);
+    if (context.state !== 'running') await context.resume();
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => finish(new Error('Microphone did not become ready')),
+        MICROPHONE_READY_TIMEOUT_MS,
+      );
+      function finish(error?: Error) {
+        window.clearTimeout(timeout);
+        track.removeEventListener('ended', handleEnded);
+        if (error) reject(error);
+        else resolve();
+      }
+      function handleEnded() {
+        finish(new Error('Microphone disconnected before it became ready'));
+      }
+      track.addEventListener('ended', handleEnded, { once: true });
+      if (track.readyState === 'ended') {
+        handleEnded();
+        return;
+      }
+      worklet.port.onmessage = () => {
+        if (
+          track.readyState === 'live' &&
+          track.enabled &&
+          !track.muted &&
+          context.state === 'running'
+        )
+          finish();
+      };
+    });
+  } finally {
+    URL.revokeObjectURL(workletUrl);
+    source.disconnect();
+    worklet?.disconnect();
+    silentOutput.disconnect();
+    await context.close();
+  }
 }
 
 async function decodeAudio(blob: Blob) {
