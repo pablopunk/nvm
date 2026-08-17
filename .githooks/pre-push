@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+remote="${1:-origin}"
+base="$remote/main"
+
+if ! git rev-parse --verify --quiet "$base" >/dev/null; then
+  base=$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" || true)
+fi
+
+if [ -z "$base" ]; then
+  echo "Pre-push check skipped: no base branch found for $remote."
+  exit 0
+fi
+
+merge_base=$(git merge-base HEAD "$base")
+mise exec -- pnpm check:changed "$merge_base"

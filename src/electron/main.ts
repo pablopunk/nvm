@@ -522,8 +522,7 @@ function spawnPendingViewLoaders(result: any, traceId?: string) {
         () => viewLoaderRegistry.spawn(viewId),
         traceId ? { traceId } : undefined,
       ),
-    )
-      .catch(() => {});
+    ).catch(() => {});
 }
 let didRunQuitCleanup = false;
 let userState: AnyRecord = {
@@ -3933,9 +3932,7 @@ async function executeHostRefreshAction(
           ),
           record.action,
         ),
-        traceId
-          ? { traceId }
-          : undefined,
+      traceId ? { traceId } : undefined,
     );
     return executeViewActionResult(result, handlerRecord.entry, launchContext);
   }
@@ -4040,7 +4037,8 @@ async function refreshViewForIpc(input: any = {}) {
                   'extension.viewRefresh.failed',
                   {
                     viewId: record.viewId,
-                    error: error instanceof Error ? error.message : String(error),
+                    error:
+                      error instanceof Error ? error.message : String(error),
                   },
                   {
                     source: 'host',
@@ -4264,8 +4262,7 @@ async function executeViewAction(action, launchContext?: any) {
               () => viewLoaderRegistry.retry(native.viewId),
               action?.traceId ? { traceId: action.traceId } : undefined,
             ),
-          )
-            .catch(() => {});
+          ).catch(() => {});
         // Return a loading skeleton so the renderer replaces the error view
         return {
           view: {
@@ -9892,14 +9889,10 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>
-    performanceTraces.run(
-      'view.loader.retry',
-      { viewId },
-      async () => {
-        if (!viewLoaderRegistry.has(viewId)) return;
-        await viewLoaderRegistry.retry(viewId);
-      },
-    ),
+    performanceTraces.run('view.loader.retry', { viewId }, async () => {
+      if (!viewLoaderRegistry.has(viewId)) return;
+      await viewLoaderRegistry.retry(viewId);
+    }),
   );
 });
 
