@@ -243,7 +243,7 @@ export class JobRegistry {
     if (!record) throw new Error(`Unknown background job: ${id}`);
     if (!record.enabled) return null;
     if (record.running) {
-      record.pendingReason = reason;
+      if (reason !== 'interval') record.pendingReason = reason;
       this.notify();
       return null;
     }
