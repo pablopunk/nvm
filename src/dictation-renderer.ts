@@ -1,4 +1,8 @@
 import { fromHub, type ParakeetModel } from 'parakeet.js';
+import {
+  createMicrophoneReadinessTracker,
+  needsBluetoothMicrophoneReadiness,
+} from './dictation-readiness';
 
 const MODEL_ID = 'parakeet-tdt-0.6b-v3';
 const MODEL_REPO_ID = 'ysdede/parakeet-tdt-0.6b-v3-onnx';
@@ -27,7 +31,8 @@ const MODEL_CACHE_FILES: Record<DictationBackend, readonly string[]> = {
   ],
 };
 const SAMPLE_RATE = 16_000;
-const MICROPHONE_READY_TIMEOUT_MS = 10_000;
+const MICROPHONE_READY_TIMEOUT_MS = 7_000;
+const MICROPHONE_SIGNAL_THRESHOLD = 0.000_01;
 const DEFAULT_MODEL_KEEP_ALIVE_MS = 5 * 60 * 1000;
 
 let modelPromise: Promise<ParakeetModel> | null = null;
@@ -231,6 +236,12 @@ export async function recordDictation(
 async function waitForCapturedAudioFrame(stream: MediaStream) {
   const track = stream.getAudioTracks()[0];
   if (!track) throw new Error('Microphone did not provide an audio track');
+  const readiness = createMicrophoneReadinessTracker(
+    needsBluetoothMicrophoneReadiness(
+      track.label,
+      track.getSettings().sampleRate,
+    ),
+  );
   const context = new AudioContext();
   const source = context.createMediaStreamSource(stream);
   const silentOutput = context.createGain();
@@ -239,8 +250,19 @@ async function waitForCapturedAudioFrame(stream: MediaStream) {
     new Blob(
       [
         `class DictationReadinessProcessor extends AudioWorkletProcessor {
+  frameCount = 0;
+  peak = 0;
+
   process(inputs) {
-    if (inputs[0]?.[0]?.length) this.port.postMessage('frame');
+    const channel = inputs[0]?.[0];
+    if (!channel?.length) return true;
+    this.frameCount += channel.length;
+    for (const sample of channel) this.peak = Math.max(this.peak, Math.abs(sample));
+    if (this.frameCount >= 256) {
+      this.port.postMessage(this.peak);
+      this.frameCount = 0;
+      this.peak = 0;
+    }
     return true;
   }
 }
@@ -274,12 +296,16 @@ registerProcessor('dictation-readiness', DictationReadinessProcessor);`,
         handleEnded();
         return;
       }
-      worklet.port.onmessage = () => {
+      worklet.port.onmessage = (event) => {
         if (
           track.readyState === 'live' &&
           track.enabled &&
           !track.muted &&
-          context.state === 'running'
+          context.state === 'running' &&
+          readiness.consume(
+            performance.now(),
+            Number(event.data) > MICROPHONE_SIGNAL_THRESHOLD,
+          )
         )
           finish();
       };

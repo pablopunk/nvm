@@ -1093,13 +1093,22 @@ function DictationRendererController() {
             .filter((device) => device.kind === 'audioinput')
             .map((device, index) => ({
               id: device.deviceId || `microphone-${index + 1}`,
-              title: device.label || `Microphone ${index + 1}`,
+              title:
+                device.label.replace(/^(Default|Communications) - /, '') ||
+                `Microphone ${index + 1}`,
               isDefault: device.deviceId === 'default',
             }));
+          const defaultMicrophone = microphones.find(
+            (device) => device.isDefault,
+          );
           window.nvm.replyDictation({
             type: 'devices',
             devices: [
-              { id: 'default', title: 'System Default', isDefault: true },
+              {
+                id: 'default',
+                title: defaultMicrophone?.title || 'System Default',
+                isDefault: true,
+              },
               ...microphones.filter((device) => device.id !== 'default'),
             ],
           });

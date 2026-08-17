@@ -149,10 +149,24 @@ async function runDictation(ctx: any) {
         subtitle: 'Preparing microphone...',
         status: 'loading',
       });
-      await ctx.dictation.start({
+      const devicesPromise = ctx.dictation.devices?.().catch(() => []) ?? [];
+      const startPromise = ctx.dictation.start({
         deviceId: settings.deviceId,
         modelKeepAliveMs: settings.keepAliveMs,
       });
+      void startPromise.catch(() => {});
+      const devices = await devicesPromise;
+      const microphone = devices.find(
+        (device: any) => device.id === settings.deviceId,
+      );
+      if (microphone?.title)
+        ctx.ui.indicator.update({
+          id: 'dictation',
+          title: 'Dictation',
+          subtitle: `Waiting for ${microphone.title}...`,
+          status: 'loading',
+        });
+      await startPromise;
       ctx.ui.indicator.update({
         id: 'dictation',
         title: 'Dictation',

@@ -213,6 +213,9 @@ test('shows microphone preparation until audio capture is ready', async () => {
     dictation: {
       status: async () => 'idle',
       modelCacheStatus: async () => 'cached',
+      devices: async () => [
+        { id: 'default', title: 'Pablo AirPods', isDefault: true },
+      ],
       start: async () => recordingReady,
     },
     ui: {
@@ -234,6 +237,12 @@ test('shows microphone preparation until audio capture is ready', async () => {
       id: 'dictation',
       title: 'Dictation',
       subtitle: 'Preparing microphone...',
+      status: 'loading',
+    },
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'Waiting for Pablo AirPods...',
       status: 'loading',
     },
   ]);
