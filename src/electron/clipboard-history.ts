@@ -119,44 +119,50 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     }
   }
 
-  async function readClipboardItem(): Promise<any | null> {
+  function videoClipboardItem(filePath: string): any {
+    return {
+      id: `video:${deps.hashValue(filePath)}`,
+      type: 'video',
+      filePath,
+      videoUrl: deps.fileUrlForPath(filePath),
+      thumbnailUrl: deps.thumbnailUrlForPath(filePath),
+      createdAt: Date.now(),
+    };
+  }
+
+  function textClipboardItem(text: string): any {
+    return {
+      id: `text:${deps.hashValue(text)}`,
+      type: 'text',
+      text,
+      createdAt: Date.now(),
+    };
+  }
+
+  function cheapClipboardItem(): any {
     const filePath = clipboardFilePath(deps.clipboard);
-    if (filePath && deps.isVideoPath(filePath)) {
-      return {
-        id: `video:${deps.hashValue(filePath)}`,
-        type: 'video',
-        filePath,
-        videoUrl: deps.fileUrlForPath(filePath),
-        thumbnailUrl: deps.thumbnailUrlForPath(filePath),
-        createdAt: Date.now(),
-      };
-    }
-
+    if (filePath && deps.isVideoPath(filePath))
+      return videoClipboardItem(filePath);
     const text = deps.clipboard.readText().trim();
-    if (text) {
-      return {
-        id: `text:${deps.hashValue(text)}`,
-        type: 'text',
-        text,
-        createdAt: Date.now(),
-      };
-    }
+    return text ? textClipboardItem(text) : null;
+  }
 
+  function readClipboardImageItem(): any {
     const image = deps.clipboard.readImage();
     if (image.isEmpty()) return null;
-
     const png = image.toPNG();
     const hash = deps.hashValue(png);
-    const imagePath = await persistClipboardImage(png, hash);
-    if (!imagePath) return null;
     return {
       id: `image:${hash}`,
       type: 'image',
-      imagePath,
-      imageDataUrl: deps.fileUrlForPath(imagePath),
-      thumbnailUrl: deps.thumbnailUrlForPath(imagePath),
+      png,
+      hash,
       createdAt: Date.now(),
     };
+  }
+
+  async function readClipboardItem(): Promise<any | null> {
+    return cheapClipboardItem() || readClipboardImageItem();
   }
 
   // ── history mutation ────────────────────────────────────
@@ -511,8 +517,18 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   // ── polling ─────────────────────────────────────────────
 
+  const CLIPBOARD_IMAGE_RECHECK_MS = 5000;
+  let lastClipboardImageCheckAt = 0;
+
+  function throttledClipboardImageItem(): any {
+    const now = Date.now();
+    if (now - lastClipboardImageCheckAt < CLIPBOARD_IMAGE_RECHECK_MS) return null;
+    lastClipboardImageCheckAt = now;
+    return readClipboardImageItem();
+  }
+
   async function pollClipboardChange() {
-    const item = await readClipboardItem();
+    const item = cheapClipboardItem() || throttledClipboardImageItem();
     if (!item || item.id === watcherLastId) return;
     const suppressed = deps.getSuppressedItemIds();
     const suppressUntil = suppressed.get(item.id) || 0;
@@ -521,6 +537,15 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       return;
     }
     if (suppressUntil) suppressed.delete(item.id);
+    if (item.type === 'image') {
+      const imagePath = await persistClipboardImage(item.png, item.hash);
+      if (!imagePath) return;
+      item.imagePath = imagePath;
+      item.imageDataUrl = deps.fileUrlForPath(imagePath);
+      item.thumbnailUrl = deps.thumbnailUrlForPath(imagePath);
+      delete item.png;
+      delete item.hash;
+    }
     watcherLastId = item.id;
     rememberClipboardItem(item);
   }

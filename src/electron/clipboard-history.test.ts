@@ -255,14 +255,50 @@ test('readClipboardItem returns null for empty clipboard', async () => {
   assert.equal(item, null);
 });
 
-test('readClipboardItem reads image from clipboard', async () => {
-  const { clipboardHistory, setClipboardImage } = createFakes();
+test('readClipboardItem reads image from clipboard without persisting', async () => {
+  const { clipboardHistory, setClipboardImage, getFiles } = createFakes();
   setClipboardImage('data:image/png;base64,abc');
 
   const item = await clipboardHistory.readClipboardItem();
 
   assert.equal(item?.type, 'image');
-  assert.ok(item?.imagePath, 'should have image path');
+  assert.ok(item?.png, 'should carry png data');
+  assert.ok(item?.id.startsWith('image:'));
+  assert.equal(getFiles().size, 0, 'reading should not write files');
+});
+
+// ═══════════════════════════════════════════════════════════
+// pollClipboardChange
+// ═══════════════════════════════════════════════════════════
+
+test('pollClipboardChange persists a new clipboard image once', async () => {
+  const { clipboardHistory, setClipboardImage, getFiles, getHistory } =
+    createFakes();
+  setClipboardImage('data:image/png;base64,abc');
+
+  await clipboardHistory.pollClipboardChange();
+
+  assert.equal(getFiles().size, 1, 'first poll should persist the image');
+  assert.equal(getHistory().length, 1);
+  await clipboardHistory.pollClipboardChange();
+  assert.equal(
+    getFiles().size,
+    1,
+    'unchanged image should not be persisted again',
+  );
+});
+
+test('pollClipboardChange detects text changes without reading images', async () => {
+  const { clipboardHistory, setClipboardText, setClipboardImage, getHistory } =
+    createFakes();
+  setClipboardImage('data:image/png;base64,abc');
+  await clipboardHistory.pollClipboardChange();
+  setClipboardText('hello world');
+
+  await clipboardHistory.pollClipboardChange();
+
+  assert.equal(getHistory()[0]?.type, 'text');
+  assert.equal(getHistory()[0]?.text, 'hello world');
 });
 
 // ═══════════════════════════════════════════════════════════
