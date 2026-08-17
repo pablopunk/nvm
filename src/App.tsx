@@ -4250,7 +4250,7 @@ export function App() {
   }
 
   function persistentActionForItem(item: ExtensionViewItem | null | undefined) {
-    return item?.persistentAction as Action | undefined;
+    return item?.persistentAction as unknown as Action | undefined;
   }
 
   function itemActionPanelIsVisible(
