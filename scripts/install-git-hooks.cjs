@@ -5,7 +5,9 @@ const { execFileSync, spawnSync } = require('node:child_process');
 try {
   execFileSync('git', ['rev-parse', '--git-dir'], { stdio: 'ignore' });
 } catch {
-  process.stdout.write('Git hooks not installed: this is not a Git checkout.\n');
+  process.stdout.write(
+    'Git hooks not installed: this is not a Git checkout.\n',
+  );
   process.exit(0);
 }
 

@@ -2,8 +2,7 @@
 
 const { execFileSync, spawnSync } = require('node:child_process');
 
-const supportedExtension =
-  /\.(cjs|cts|js|json|jsonc|jsx|mjs|mts|ts|tsx)$/i;
+const supportedExtension = /\.(cjs|cts|js|json|jsonc|jsx|mjs|mts|ts|tsx)$/i;
 const write = process.argv.includes('--write');
 const stagedFiles = execFileSync(
   'git',

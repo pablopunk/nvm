@@ -122,9 +122,7 @@ function listItemShortcut(item: CommandItem) {
   return {
     shortcut: globalShortcut || action?.shortcut,
     selectedOnly: Boolean(
-      action?.shortcut &&
-        !globalShortcut &&
-        action.shortcutScope !== 'global',
+      action?.shortcut && !globalShortcut && action.shortcutScope !== 'global',
     ),
   };
 }

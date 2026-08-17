@@ -522,7 +522,8 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   function throttledClipboardImageItem(): any {
     const now = Date.now();
-    if (now - lastClipboardImageCheckAt < CLIPBOARD_IMAGE_RECHECK_MS) return null;
+    if (now - lastClipboardImageCheckAt < CLIPBOARD_IMAGE_RECHECK_MS)
+      return null;
     lastClipboardImageCheckAt = now;
     return readClipboardImageItem();
   }

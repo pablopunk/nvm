@@ -1465,11 +1465,7 @@ export function App() {
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
-        if (
-          cancelled ||
-          result?.skipped ||
-          (!result?.view && !result?.patch)
-        )
+        if (cancelled || result?.skipped || (!result?.view && !result?.patch))
           clearInteractionTrace(trace.traceId);
         running = false;
       }

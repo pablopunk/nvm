@@ -682,7 +682,9 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       restoredFrame: Boolean(restoredFrame),
     };
     records.set(id, record);
-    structuredClone(extensionWindowViewPayload(id, normalizedView, record.options));
+    structuredClone(
+      extensionWindowViewPayload(id, normalizedView, record.options),
+    );
     applyOptions(win, record.options);
     if (restoredFrame) win.setBounds(restoredFrame);
     win.once('ready-to-show', () => {

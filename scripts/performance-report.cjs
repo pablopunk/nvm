@@ -19,14 +19,14 @@ const candidates =
             'nevermind.log',
           ),
         )
-    : names.map((name) =>
-        path.join(
-          process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
-          name,
-          'logs',
-          'nevermind.log',
-        ),
-      );
+      : names.map((name) =>
+          path.join(
+            process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
+            name,
+            'logs',
+            'nevermind.log',
+          ),
+        );
 const logPath =
   process.argv[2] || candidates.find((candidate) => fs.existsSync(candidate));
 if (!logPath || !fs.existsSync(logPath)) {

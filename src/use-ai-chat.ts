@@ -131,9 +131,15 @@ export function useAiChat(
         const traceId = activeTraceIdRef.current;
         const startedAt = activeTraceStartedAtRef.current;
         requestAnimationFrame(() => {
-          recordPerformanceTrace(traceId, 'ai.first-painted-delta', startedAt, 'ok', {
-            deltaLength: text.length,
-          });
+          recordPerformanceTrace(
+            traceId,
+            'ai.first-painted-delta',
+            startedAt,
+            'ok',
+            {
+              deltaLength: text.length,
+            },
+          );
         });
         firstPaintRecordedRef.current = true;
       }

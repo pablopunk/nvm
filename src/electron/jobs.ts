@@ -101,14 +101,11 @@ type EnabledOverrides = Record<string, boolean>;
 function timeout<T>(promise: Promise<T>, timeoutMs: number, title: string) {
   let timer: NodeJS.Timeout | undefined;
   const guard = new Promise<T>((_, reject) => {
-    timer = setTimeout(
-      () => {
-        const error = new Error(`${title} timed out after ${timeoutMs}ms`);
-        error.name = 'TimeoutError';
-        reject(error);
-      },
-      timeoutMs,
-    );
+    timer = setTimeout(() => {
+      const error = new Error(`${title} timed out after ${timeoutMs}ms`);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, timeoutMs);
     timer.unref?.();
   });
   return Promise.race([promise, guard]).finally(() => {

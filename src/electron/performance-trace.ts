@@ -203,7 +203,9 @@ export function createPerformanceTraceService({
       ? safeTraceId(context.traceId)
       : undefined;
     const ambientParent =
-      !explicitTraceId || explicitTraceId === ambient?.traceId ? ambient : undefined;
+      !explicitTraceId || explicitTraceId === ambient?.traceId
+        ? ambient
+        : undefined;
     return {
       traceId: explicitTraceId || ambient?.traceId || newId(),
       spanId: newId(),
@@ -249,7 +251,8 @@ export function createPerformanceTraceService({
       !Number.isFinite(traceEvent.durationMs)
     )
       return;
-    const { traceId, operation, durationMs, status, ...attributes } = traceEvent;
+    const { traceId, operation, durationMs, status, ...attributes } =
+      traceEvent;
     const ambient = activeTraceContext.getStore();
     const normalizedTraceId = safeTraceId(traceId);
     const normalizedStatus: PerformanceTraceStatus =

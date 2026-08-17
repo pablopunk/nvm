@@ -66,10 +66,7 @@ test('performance trace records preserve explicit durations', () => {
   });
 
   assert.equal(entries[0].durationMs, 42);
-  assert.equal(
-    (entries[0].attributes as Record<string, unknown>).queueMs,
-    3,
-  );
+  assert.equal((entries[0].attributes as Record<string, unknown>).queueMs, 3);
 });
 
 test('performance trace hashes identifier attributes', () => {
