@@ -102,6 +102,7 @@ import {
   extensionLoadingView,
 } from '../model';
 import { appResultMarker, priorityBoost } from './action-ranking';
+import { actionMatchesExecutionRecord } from './action-execution-record';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
@@ -1150,6 +1151,14 @@ function registerViewActionForRenderer(action, entry?: any) {
     return action;
   if (CHARACTER_INSERT_ACTION_TYPES.has(String(action.type || '')))
     return action;
+  if (
+    action.executionId &&
+    actionMatchesExecutionRecord(
+      action,
+      viewActionExecutionRecords.get(String(action.executionId)),
+    )
+  )
+    return action;
   pruneExecutionRecords(viewActionExecutionRecords);
   const executionId = crypto.randomUUID();
   const stored = clonePlain(withoutExecutionId(action));
@@ -1163,6 +1172,14 @@ function registerViewActionForRenderer(action, entry?: any) {
 
 function registerRootActionForRenderer(action) {
   if (!action || typeof action !== 'object') return action;
+  if (
+    action.executionId &&
+    actionMatchesExecutionRecord(
+      action,
+      rootActionExecutionRecords.get(String(action.executionId)),
+    )
+  )
+    return action;
   pruneExecutionRecords(rootActionExecutionRecords);
   const executionId = crypto.randomUUID();
   const stored = clonePlain(withoutExecutionId(action));
