@@ -72,7 +72,11 @@ if (
   );
 }
 
-if (!/ipcMain\.handle\('view:refresh',[\s\S]*refreshViewForIpc/.test(source)) {
+if (
+  !/ipcHandleMeasured\('view:refresh',[\s\S]*deps\.refreshViewForIpc/.test(
+    source,
+  )
+) {
   fail(
     'view refresh must execute through the host-owned view:refresh IPC handler',
   );
