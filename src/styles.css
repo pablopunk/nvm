@@ -2531,6 +2531,77 @@ kbd {
   display: none;
 }
 
+.extensionWindowChromeNone .indicatorStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+}
+
+.indicatorStackItem {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  flex: 0 0 48px;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface-overlay);
+  box-shadow: 0 14px 36px var(--surface-sunken);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.indicatorStackMarker {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-faint);
+  animation: indicatorPulse 1.6s ease-in-out infinite;
+}
+
+.indicatorStackItem[data-status="error"] .indicatorStackMarker {
+  background: var(--danger-text);
+  box-shadow: 0 0 0 4px var(--danger-bg);
+}
+
+.indicatorStackItem[data-status="success"] .indicatorStackMarker {
+  background: var(--success-text, var(--accent));
+}
+
+.indicatorStackText {
+  min-width: 0;
+}
+
+.indicatorStackText strong,
+.indicatorStackText small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indicatorStackText strong {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.indicatorStackText small,
+.indicatorStackProgress {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+}
+
+.indicatorStackProgress {
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes indicatorPulse {
   0%,
   100% {

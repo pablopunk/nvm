@@ -57,6 +57,36 @@ function renderExtensionView(view: CommandView) {
   );
 }
 
+test('renders indicator snapshots newest first with stable progress', () => {
+  const html = renderExtensionView({
+    type: 'indicator-stack',
+    title: 'Status',
+    entries: [
+      {
+        id: 'new',
+        sequence: 2,
+        title: 'Dictation',
+        label: 'Listening',
+        status: 'recording',
+      },
+      {
+        id: 'old',
+        sequence: 1,
+        title: 'Dictation',
+        label: 'Waiting for AirPods...',
+        status: 'loading',
+        value: 1,
+        total: 4,
+      },
+    ],
+  });
+
+  assert.ok(html.indexOf('Listening') < html.indexOf('Waiting for AirPods'));
+  assert.match(html, /data-status="recording"/);
+  assert.match(html, /25%/);
+  assert.match(html, /aria-live="polite"/);
+});
+
 test('renders unsupported-client update UI with structured updater action', () => {
   const actions: CommandAction[] = [];
   const html = renderToStaticMarkup(

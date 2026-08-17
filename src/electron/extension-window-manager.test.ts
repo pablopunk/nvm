@@ -122,6 +122,10 @@ function createManager(
     message: string;
     data?: Record<string, unknown>;
   }> = [];
+  const scheduledIndicatorDismissals = new Map<
+    object,
+    { callback: () => void; delayMs: number }
+  >();
   const persistence = persistedState
     ? {
         read: () => persistedState as never,
@@ -157,8 +161,29 @@ function createManager(
     },
     persistence,
     debug: (message, data) => diagnostics.push({ message, data }),
+    scheduleIndicatorDismiss: (callback, delayMs) => {
+      const timer = {};
+      scheduledIndicatorDismissals.set(timer, { callback, delayMs });
+      return timer;
+    },
+    cancelIndicatorDismiss: (timer) =>
+      scheduledIndicatorDismissals.delete(timer as object),
   });
-  return { manager, trustedChecks, diagnostics, persistedState };
+  return {
+    manager,
+    trustedChecks,
+    diagnostics,
+    persistedState,
+    scheduledIndicatorDismissals,
+    flushIndicatorDismissals() {
+      for (const [timer, dismissal] of [
+        ...scheduledIndicatorDismissals.entries(),
+      ]) {
+        scheduledIndicatorDismissals.delete(timer);
+        dismissal.callback();
+      }
+    },
+  };
 }
 
 test('extension window helpers clamp size and derive stable ids', () => {
@@ -230,8 +255,9 @@ test('extension window helpers clamp size and derive stable ids', () => {
   );
 });
 
-test('indicators show without focus and ignore mouse events', () => {
-  const { manager } = createManager();
+test('indicators stack stable snapshots and retire after a delay', () => {
+  const { manager, scheduledIndicatorDismissals, flushIndicatorDismissals } =
+    createManager();
   manager.showIndicator(
     {
       id: 'dictation',
@@ -243,7 +269,7 @@ test('indicators show without focus and ignore mouse events', () => {
   );
   const win = FakeBrowserWindow.instances[0];
   win.handlers.get('once:ready-to-show')?.();
-  const state = manager.getState('indicator:nevermind.dictation:dictation');
+  let state = manager.getState('indicator-stack');
 
   assert.equal(win.options.focusable, false);
   assert.equal((state?.options as any).showInactive, true);
@@ -255,8 +281,12 @@ test('indicators show without focus and ignore mouse events', () => {
   assert.equal(win.options.transparent, true);
   assert.equal(win.options.skipTaskbar, true);
   assert.equal(win.options.resizable, false);
-  assert.deepEqual(win.bounds, { x: 430, y: 44, width: 160, height: 92 });
+  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 64 });
   assert.deepEqual(win.ignoredMouseEvents, [true]);
+  assert.deepEqual(
+    (state?.view as any).entries.map((entry: any) => entry.label),
+    ['Listening'],
+  );
 
   manager.updateIndicator(
     {
@@ -267,18 +297,83 @@ test('indicators show without focus and ignore mouse events', () => {
     'nevermind.dictation',
   );
   assert.equal(FakeBrowserWindow.instances.length, 1);
-  assert.equal(
-    (win.sent.at(-1)?.payload as any).view.label,
-    'Downloading speech model...',
+  state = manager.getState('indicator-stack');
+  assert.deepEqual(
+    (state?.view as any).entries.map((entry: any) => entry.label),
+    ['Downloading speech model...', 'Listening'],
   );
-  assert.deepEqual(win.bounds, { x: 374, y: 44, width: 272, height: 92 });
+  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 120 });
   manager.updateIndicator(
     { id: 'dictation', title: 'Dictation', subtitle: 'Transcribing' },
     'nevermind.dictation',
   );
-  assert.deepEqual(win.bounds, { x: 430, y: 44, width: 160, height: 92 });
+  state = manager.getState('indicator-stack');
+  assert.deepEqual(
+    (state?.view as any).entries.map((entry: any) => entry.label),
+    ['Transcribing', 'Downloading speech model...', 'Listening'],
+  );
+  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 176 });
   manager.hideIndicator('nevermind.dictation', 'dictation');
+  assert.equal(win.visible, true);
+  assert.deepEqual(
+    [...scheduledIndicatorDismissals.values()].map(({ delayMs }) => delayMs),
+    [3_000, 3_000, 3_000],
+  );
+
+  flushIndicatorDismissals();
   assert.equal(win.visible, false);
+  assert.equal(win.destroyed, false);
+});
+
+test('indicator progress updates coalesce within one lifecycle state', () => {
+  const { manager, scheduledIndicatorDismissals } = createManager();
+  manager.showIndicator(
+    {
+      id: 'download',
+      title: 'Download',
+      subtitle: 'Downloading',
+      status: 'loading',
+      value: 1,
+      total: 10,
+    },
+    'example.extension',
+  );
+  manager.updateIndicator(
+    {
+      id: 'download',
+      title: 'Download',
+      subtitle: 'Downloading',
+      status: 'loading',
+      value: 4,
+      total: 10,
+    },
+    'example.extension',
+  );
+
+  const entries = (manager.getState('indicator-stack')?.view as any).entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].value, 4);
+  assert.equal(scheduledIndicatorDismissals.size, 0);
+});
+
+test('indicator streams from different owners share the stack independently', () => {
+  const { manager, flushIndicatorDismissals } = createManager();
+  manager.showIndicator(
+    { id: 'sync', title: 'First', subtitle: 'Syncing' },
+    'first.extension',
+  );
+  manager.showIndicator(
+    { id: 'sync', title: 'Second', subtitle: 'Uploading' },
+    'second.extension',
+  );
+
+  manager.hideIndicator('first.extension', 'sync');
+  flushIndicatorDismissals();
+
+  const state = manager.getState('indicator-stack');
+  assert.equal((state?.view as any).entries.length, 1);
+  assert.equal((state?.view as any).entries[0].title, 'Second');
+  assert.equal(FakeBrowserWindow.instances[0].visible, true);
 });
 
 test('independent-window state and close bind to the exact renderer sender', () => {

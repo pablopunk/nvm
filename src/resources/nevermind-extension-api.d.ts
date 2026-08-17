@@ -1373,7 +1373,7 @@ export type ExtensionContext = {
       message?: string;
       tone?: 'default' | 'info' | 'success' | 'error';
     }): ExtensionToastResult;
-    /** Passive always-on-top status indicator that never takes focus. */
+    /** Passive always-on-top status stack that never takes focus. Updates preserve the prior state briefly, and hide retires the active state after the same reading delay. */
     indicator: {
       show(input: ExtensionIndicatorInput): void;
       update(input: ExtensionIndicatorInput): void;
