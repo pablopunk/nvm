@@ -235,8 +235,10 @@ export function createAppsExtension() {
         actionId: 'force-quit-apps',
         title: 'Force Quit Apps',
         subtitle: 'Force quit running applications',
+        aliases: ['force quit', 'kill', 'quit apps'],
         icon: 'stop-circle',
         score: 14,
+        dismissAfterRun: 'auto' as const,
         appearance: { foreground: 'red' as const },
         run: (ctx: any) =>
           ctx.ui.list({
@@ -266,54 +268,13 @@ export function createAppsExtension() {
       },
     ],
     rootItems(ctx) {
-      const items = ctx.desktop.apps
-        .list()
-        .map((item) => appRootItem(item, ctx));
-      return [
-        {
-          id: 'force-quit-apps-command',
-          title: 'Force Quit Apps',
-          subtitle: 'Force quit running applications',
-          aliases: ['force quit', 'kill', 'quit apps'],
-          icon: 'stop-circle',
-          score: 14,
-          dismissAfterRun: 'auto',
-          appearance: { foreground: 'red' as const },
-          primaryAction: {
-            type: 'runExtensionRegisteredAction' as const,
-            title: 'Force Quit Apps',
-            extensionId: 'nevermind.apps',
-            registeredActionId: 'force-quit-apps',
-          },
-        },
-        ...items,
-      ];
+      return ctx.desktop.apps.list().map((item) => appRootItem(item, ctx));
     },
     searchItems(ctx, query) {
-      const items = ctx.desktop.apps
+      return ctx.desktop.apps
         .list()
         .map((item) => appRootItem(item, ctx))
         .filter((item: any) => extensionContext.rankAction(item, query));
-      const forceQuitItem = {
-        id: 'force-quit-apps-command',
-        title: 'Force Quit Apps',
-        subtitle: 'Force quit running applications',
-        aliases: ['force quit', 'kill', 'quit apps'],
-        icon: 'stop-circle',
-        score: 14,
-        dismissAfterRun: 'auto',
-        appearance: { foreground: 'red' as const },
-        primaryAction: {
-          type: 'runExtensionRegisteredAction' as const,
-          title: 'Force Quit Apps',
-          extensionId: 'nevermind.apps',
-          registeredActionId: 'force-quit-apps',
-        },
-      };
-      if (extensionContext.rankAction(forceQuitItem, query)) {
-        return [forceQuitItem, ...items];
-      }
-      return items;
     },
   };
 }
