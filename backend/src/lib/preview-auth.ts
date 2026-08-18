@@ -20,7 +20,28 @@ export type GatewayState =
   | { v: 2; flow: 'preview_gateway'; exactOrigin: string; deploymentId: string; jti: string; exp: number };
 
 let testStore: Map<string, unknown> | null = null;
+const localGatewayState = new Map<
+  string,
+  { value: string; expiresAt: number }
+>();
 export function setPreviewAuthStoreForTests(store: Map<string, unknown> | null) { testStore = store; }
+
+function localGatewayStateEnabled() {
+  return !env('VERCEL_ENV') && env('NODE_ENV') !== 'production';
+}
+
+function setLocalGatewayState(key: string, value: string, ttl: number) {
+  const current = localGatewayState.get(key);
+  if (current && current.expiresAt > Date.now()) return false;
+  localGatewayState.set(key, { value, expiresAt: Date.now() + ttl * 1_000 });
+  return true;
+}
+
+function getAndDeleteLocalGatewayState(key: string) {
+  const current = localGatewayState.get(key);
+  localGatewayState.delete(key);
+  return current && current.expiresAt > Date.now() ? current.value : null;
+}
 
 function keyMaterial(name: string): Uint8Array {
   const value = env(name)?.trim();
@@ -68,6 +89,9 @@ async function setNx(key: string, value: string, ttl: number, kind: 'state' | 'g
     return true;
   }
   const redis = kind === 'state' ? gatewayRedis() : grantWriterRedis();
+  if (!redis && kind === 'state' && localGatewayStateEnabled()) {
+    return setLocalGatewayState(key, value, ttl);
+  }
   if (!redis) return false;
   try { return (await redis.set(key, value, { nx: true, ex: ttl })) === 'OK'; } catch { return false; }
 }
@@ -78,6 +102,10 @@ async function deleteKey(key: string, kind: 'state' | 'grant') {
     return;
   }
   const redis = kind === 'state' ? gatewayRedis() : grantWriterRedis();
+  if (!redis && kind === 'state' && localGatewayStateEnabled()) {
+    localGatewayState.delete(key);
+    return;
+  }
   if (!redis) return;
   try { await redis.del(key); } catch { /* best-effort rollback */ }
 }
@@ -90,6 +118,9 @@ async function getDel(key: string, kind: 'state' | 'grant') {
     return typeof value === 'string' ? value : JSON.stringify(value);
   }
   const redis = kind === 'state' ? gatewayRedis() : grantWriterRedis();
+  if (!redis && kind === 'state' && localGatewayStateEnabled()) {
+    return getAndDeleteLocalGatewayState(key);
+  }
   if (!redis) return null;
   try {
     const value = await redis.getdel<unknown>(key);

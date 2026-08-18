@@ -75,3 +75,21 @@ test('rejects malformed origins and legacy query-style grants', async () => {
   assert.equal(await createPreviewSessionGrant({ origin: 'http://evil.example', returnTo: '/' }, { id: 'x', email: 'x@example.test' }), null);
   assert.equal(await consumePreviewSessionGrant('sealedSession=production', target.origin), null);
 });
+
+test('local development uses one-use in-memory OAuth state without Redis', async () => {
+  setPreviewAuthStoreForTests(null);
+  delete process.env.VERCEL_ENV;
+  delete process.env.GATEWAY_STATE_REDIS_URL;
+  delete process.env.GATEWAY_STATE_REDIS_TOKEN;
+  process.env.NODE_ENV = 'development';
+
+  const state = await createProductionState('/admin');
+
+  assert.ok(state);
+  assert.equal((await consumeGatewayState(state))?.flow, 'production');
+  assert.equal(await consumeGatewayState(state), null);
+
+  delete process.env.NODE_ENV;
+  process.env.VERCEL_ENV = 'preview';
+  setPreviewAuthStoreForTests(store);
+});
