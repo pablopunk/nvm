@@ -21,7 +21,7 @@ test('temporarily mutes macOS output and restores the prior unmuted state once',
   await lease.restore();
 
   assert.match(scripts[0], /set volume with output muted/);
-  assert.equal(scripts[1], 'set volume with output muted false');
+  assert.equal(scripts[1], 'set volume without output muted');
   assert.equal(scripts.length, 2);
 });
 
@@ -42,7 +42,7 @@ test('restores an output that was already muted to muted', async () => {
   const lease = await capability.temporarilyMute();
   await lease.restore();
 
-  assert.equal(scripts[1], 'set volume with output muted true');
+  assert.equal(scripts[1], 'set volume with output muted');
 });
 
 test('allows a failed restoration to be retried', async () => {

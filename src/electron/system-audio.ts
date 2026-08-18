@@ -53,7 +53,9 @@ export function createSystemAudioMuteCapability(
         if (restored) return;
         if (!restoration)
           restoration = executeAppleScript(
-            `set volume with output muted ${wasMuted}`,
+            wasMuted
+              ? 'set volume with output muted'
+              : 'set volume without output muted',
           )
             .then((result) => {
               if (result.exitCode !== 0)
