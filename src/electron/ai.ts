@@ -6,6 +6,7 @@ import ts from 'typescript';
 import type { CommandAction } from '../model';
 import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
 import { type ByoKeySnapshot, getByoKey } from './byo-key';
+import { finalOneShotAssistantText } from './ai-one-shot-result';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -440,7 +441,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       );
       if (askOptions.signal?.aborted) throw aiAbortError();
       askOptions.onEvent?.({ type: 'done' });
-      return text.join('');
+      return finalOneShotAssistantText(session.state.messages, text);
     } catch (error) {
       if (askOptions.signal?.aborted || isAbortError(error)) {
         askOptions.onEvent?.({ type: 'aborted' });
@@ -868,7 +869,7 @@ async function createGeneralSession(
     ),
     settingsManager: pi.SettingsManager.inMemory({
       compaction: { enabled: true },
-      retry: { enabled: true, maxRetries: 2 },
+      retry: { enabled: false },
     }),
   })) as { session: AgentSession };
   result.session.prepareModelForPrompt = async function prepareModelForPrompt(
