@@ -79,16 +79,6 @@ export interface ProgressViewProps {
   label?: string;
   status?: string;
 }
-export interface IndicatorStackViewProps {
-  entries: Array<{
-    id: string;
-    title: string;
-    label: string;
-    status: string;
-    value?: number;
-    total?: number;
-  }>;
-}
 export type FormValue = string | boolean | string[];
 export interface FormField {
   id: string;
@@ -595,37 +585,6 @@ export function ProgressView({
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-export function IndicatorStackView({ entries }: IndicatorStackViewProps) {
-  return (
-    <div className="indicatorStack" role="status" aria-live="polite">
-      {entries.map((entry) => {
-        const hasProgress =
-          typeof entry.value === 'number' &&
-          typeof entry.total === 'number' &&
-          entry.total > 0;
-        return (
-          <div
-            key={entry.id}
-            className="indicatorStackItem"
-            data-status={entry.status}
-          >
-            <span className="indicatorStackMarker" aria-hidden="true" />
-            <div className="indicatorStackText">
-              <strong>{entry.label || entry.status || entry.title}</strong>
-              <small>{entry.title}</small>
-            </div>
-            {hasProgress ? (
-              <span className="indicatorStackProgress">
-                {Math.round((entry.value! / entry.total!) * 100)}%
-              </span>
-            ) : null}
-          </div>
-        );
-      })}
     </div>
   );
 }

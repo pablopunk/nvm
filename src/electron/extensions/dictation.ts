@@ -11,6 +11,85 @@ const DEFAULT_SETTINGS: DictationSettings = {
   dictionary: '',
   copyToClipboard: false,
 };
+const INTERMEDIATE_INDICATOR_DELAY_MS = 1_000;
+
+function dictationIndicator(subtitle: string, status: string) {
+  return { id: 'dictation', title: 'Dictation', subtitle, status };
+}
+
+const LISTENING_INDICATOR = dictationIndicator('Listening', 'recording');
+const CHECKING_MODEL_INDICATOR = dictationIndicator(
+  'Checking speech model...',
+  'loading',
+);
+const DOWNLOADING_MODEL_INDICATOR = dictationIndicator(
+  'Downloading speech model...',
+  'loading',
+);
+const WAITING_FOR_MICROPHONE_INDICATOR = dictationIndicator(
+  'Waiting for microphone...',
+  'loading',
+);
+
+export function createDeferredDictationIndicator(
+  indicator: { update(input: unknown): void },
+  options: {
+    delayMs?: number;
+    schedule?: (callback: () => void, delayMs: number) => unknown;
+    cancel?: (timer: unknown) => void;
+  } = {},
+) {
+  const delayMs = options.delayMs ?? INTERMEDIATE_INDICATOR_DELAY_MS;
+  const schedule =
+    options.schedule ??
+    ((callback: () => void, delay: number) => setTimeout(callback, delay));
+  const cancel =
+    options.cancel ??
+    ((timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>));
+  let timer: unknown;
+  let pending: ReturnType<typeof dictationIndicator> | null = null;
+  let intermediateVisible = false;
+
+  function clearTimer() {
+    if (timer === undefined) return;
+    cancel(timer);
+    timer = undefined;
+  }
+
+  function begin(input: ReturnType<typeof dictationIndicator>) {
+    clearTimer();
+    if (intermediateVisible) indicator.update(LISTENING_INDICATOR);
+    intermediateVisible = false;
+    pending = input;
+    timer = schedule(() => {
+      timer = undefined;
+      if (!pending) return;
+      intermediateVisible = true;
+      indicator.update(pending);
+    }, delayMs);
+  }
+
+  function refine(input: ReturnType<typeof dictationIndicator>) {
+    if (!pending) return;
+    pending = input;
+    if (intermediateVisible) indicator.update(input);
+  }
+
+  function finish() {
+    clearTimer();
+    pending = null;
+    if (intermediateVisible) indicator.update(LISTENING_INDICATOR);
+    intermediateVisible = false;
+  }
+
+  function cancelPending() {
+    clearTimer();
+    pending = null;
+    intermediateVisible = false;
+  }
+
+  return { begin, refine, finish, cancel: cancelPending };
+}
 
 function normalizedKeepAliveMs(value: unknown) {
   const number = Number(value);
@@ -124,57 +203,40 @@ async function runDictation(ctx: any) {
   const settings = await readSettings(ctx);
   const status = await ctx.dictation.status();
   if (status === 'idle') {
-    ctx.ui.indicator.show({
-      id: 'dictation',
-      title: 'Dictation',
-      subtitle: 'Checking speech model...',
-      status: 'loading',
-    });
+    ctx.ui.indicator.show(LISTENING_INDICATOR);
+    const deferredIndicator = createDeferredDictationIndicator(
+      ctx.ui.indicator,
+    );
     try {
+      deferredIndicator.begin(CHECKING_MODEL_INDICATOR);
       const modelCacheStatus = await ctx.dictation.modelCacheStatus();
       if (modelCacheStatus === 'missing') {
-        ctx.ui.indicator.update({
-          id: 'dictation',
-          title: 'Dictation',
-          subtitle: 'Downloading speech model...',
-          status: 'loading',
-        });
+        deferredIndicator.begin(DOWNLOADING_MODEL_INDICATOR);
         await ctx.dictation.prepareModel({
           modelKeepAliveMs: settings.keepAliveMs,
         });
       }
-      ctx.ui.indicator.update({
-        id: 'dictation',
-        title: 'Dictation',
-        subtitle: 'Preparing microphone...',
-        status: 'loading',
-      });
+      deferredIndicator.begin(WAITING_FOR_MICROPHONE_INDICATOR);
       const devicesPromise = ctx.dictation.devices?.().catch(() => []) ?? [];
       const startPromise = ctx.dictation.start({
         deviceId: settings.deviceId,
         modelKeepAliveMs: settings.keepAliveMs,
       });
       void startPromise.catch(() => {});
-      const devices = await devicesPromise;
-      const microphone = devices.find(
-        (device: any) => device.id === settings.deviceId,
-      );
-      if (microphone?.title)
-        ctx.ui.indicator.update({
-          id: 'dictation',
-          title: 'Dictation',
-          subtitle: `Waiting for ${microphone.title}...`,
-          status: 'loading',
-        });
-      await startPromise;
-      ctx.ui.indicator.update({
-        id: 'dictation',
-        title: 'Dictation',
-        subtitle: 'Listening',
-        status: 'recording',
+      void Promise.resolve(devicesPromise).then((devices) => {
+        const microphone = devices.find(
+          (device: any) => device.id === settings.deviceId,
+        );
+        if (microphone?.title)
+          deferredIndicator.refine(
+            dictationIndicator(`Waiting for ${microphone.title}...`, 'loading'),
+          );
       });
+      await startPromise;
+      deferredIndicator.finish();
       return ctx.ui.toast({ message: 'Listening...', tone: 'info' });
     } catch (error) {
+      deferredIndicator.cancel();
       ctx.ui.indicator.hide('dictation');
       return ctx.ui.toast({
         message: `Dictation unavailable: ${error instanceof Error ? error.message : String(error)}`,

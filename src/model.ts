@@ -579,19 +579,9 @@ export interface CommandView {
     | 'form'
     | 'editor'
     | 'progress'
-    | 'indicator-stack'
     | 'webview'
     | 'camera';
   title: string;
-  entries?: Array<{
-    id: string;
-    sequence: number;
-    title: string;
-    label: string;
-    status: string;
-    value?: number;
-    total?: number;
-  }>;
   size?: ViewSize;
   image?: CommandImage;
   video?: string;

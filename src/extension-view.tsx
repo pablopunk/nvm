@@ -36,7 +36,6 @@ import {
   ListView,
   PreviewView,
   ProgressView,
-  IndicatorStackView,
 } from './ui';
 import type { AiLimitState } from './use-ai-chat';
 
@@ -1137,8 +1136,6 @@ function ExtensionViewSurface(props: ExtensionViewRendererProps) {
         status={props.view.status}
       />
     );
-  if (props.view.type === 'indicator-stack')
-    return <IndicatorStackView entries={props.view.entries || []} />;
   if (props.view.type === 'webview')
     return <WebExtensionView {...surfaceProps} />;
   if (props.view.type === 'camera')

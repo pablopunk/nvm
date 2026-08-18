@@ -62,32 +62,12 @@ function indicatorView(ctx: ExtensionContext) {
     innerCtx.ui.indicator.hide(INDICATOR_ID);
     return innerCtx.ui.toast({ message: 'Indicator hidden' });
   });
-  const stackedLifecycle = ctx.actions.background(
-    'Show Stacked Lifecycle',
-    (innerCtx) => {
-      innerCtx.ui.indicator.show(DOWNLOADING_INDICATOR);
-      setTimeout(() => innerCtx.ui.indicator.update(LISTENING_INDICATOR), 300);
-      setTimeout(
-        () => innerCtx.ui.indicator.update(TRANSCRIBING_INDICATOR),
-        900,
-      );
-      setTimeout(() => innerCtx.ui.indicator.hide(INDICATOR_ID), 1_500);
-      return innerCtx.ui.toast({ message: 'Indicator lifecycle started' });
-    },
-  );
 
   return ctx.ui.list({
     id: 'dev-ui-indicator',
     title: 'Dev UI · Passive Indicator',
     subtitle: 'Exercises ctx.ui.indicator through the regular Extension API',
     items: [
-      {
-        id: 'stacked-lifecycle',
-        title: 'Show Stacked Lifecycle',
-        subtitle: 'Fast transitions remain readable as stable pills',
-        icon: 'layers',
-        primaryAction: stackedLifecycle,
-      },
       {
         id: 'listening',
         title: 'Show Listening',
@@ -98,21 +78,21 @@ function indicatorView(ctx: ExtensionContext) {
       {
         id: 'downloading',
         title: 'Show Long Loading',
-        subtitle: 'Long label creates a new fixed-width snapshot',
+        subtitle: 'Content width with a transparent shadow gutter',
         icon: 'download',
         primaryAction: downloading,
       },
       {
         id: 'transcribing',
         title: 'Show Transcribing',
-        subtitle: 'Newest state stacks above prior snapshots',
+        subtitle: 'In-place update state',
         icon: 'audio-lines',
         primaryAction: transcribing,
       },
       {
         id: 'hide',
         title: 'Hide Indicator',
-        subtitle: 'Retire the active pill after its reading delay',
+        subtitle: 'Dismiss the passive window',
         icon: 'x',
         primaryAction: hide,
       },

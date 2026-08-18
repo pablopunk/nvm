@@ -10,9 +10,9 @@ first Web Audio frame do not mean that the microphone is ready.
 ## Contract
 
 Start recording before readiness checks so that all audio delivered during
-preparation is retained. Do not show `Listening` until a regular microphone has
-delivered a live frame or a Bluetooth microphone has delivered stable usable
-input.
+preparation is retained. The host start operation does not resolve until a
+regular microphone has delivered a live frame or a Bluetooth microphone has
+delivered stable usable input.
 
 Bluetooth readiness requires a non-silent frame followed by two current frames.
 Frame gaps longer than 250 ms reset readiness. A continuously delivered silent
@@ -20,8 +20,11 @@ stream becomes ready after five seconds because silence can be valid input and
 the Web platform cannot distinguish device silence from operating-system
 silence. Startup fails after seven seconds if neither condition is met.
 
-Show the resolved microphone name while waiting. This makes device routing and
-Bluetooth startup visible without adding a device-specific fixed delay.
+Show the target `Listening` state immediately to avoid flashing routine startup
+steps. Replace it with the current model or microphone preparation state only
+when that phase takes longer than one second, and restore `Listening` when the
+microphone becomes ready. Include the resolved microphone name in a delayed
+waiting state so slow device routing is useful rather than noisy.
 
 ## Evidence
 

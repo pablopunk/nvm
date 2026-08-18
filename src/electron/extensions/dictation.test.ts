@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createDictationExtension } from './dictation';
+import {
+  createDeferredDictationIndicator,
+  createDictationExtension,
+} from './dictation';
 
 function actionFactory(title: string, handler: unknown, options = {}) {
   return { ...options, type: 'runExtensionAction', title, __handler: handler };
@@ -202,7 +205,8 @@ test('prepares a missing model before opening the microphone', async () => {
   assert.deepEqual(result, { message: 'Listening...', tone: 'info' });
 });
 
-test('shows microphone preparation until audio capture is ready', async () => {
+test('keeps the target listening state during fast microphone preparation', async () => {
+  const indicatorShows: unknown[] = [];
   const indicatorUpdates: unknown[] = [];
   let confirmRecording!: () => void;
   const recordingReady = new Promise<void>((resolve) => {
@@ -221,7 +225,7 @@ test('shows microphone preparation until audio capture is ready', async () => {
     ui: {
       toast: (input: unknown) => input,
       indicator: {
-        show: () => {},
+        show: (input: unknown) => indicatorShows.push(input),
         update: (input: unknown) => indicatorUpdates.push(input),
         hide: () => {},
       },
@@ -232,24 +236,61 @@ test('shows microphone preparation until audio capture is ready', async () => {
 
   const result = handler(context, {});
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(indicatorUpdates, [
+  assert.deepEqual(indicatorShows, [
     {
       id: 'dictation',
       title: 'Dictation',
-      subtitle: 'Preparing microphone...',
-      status: 'loading',
-    },
-    {
-      id: 'dictation',
-      title: 'Dictation',
-      subtitle: 'Waiting for Pablo AirPods...',
-      status: 'loading',
+      subtitle: 'Listening',
+      status: 'recording',
     },
   ]);
+  assert.deepEqual(indicatorUpdates, []);
 
   confirmRecording();
   await result;
-  assert.equal((indicatorUpdates.at(-1) as any).subtitle, 'Listening');
+  assert.deepEqual(indicatorUpdates, []);
+});
+
+test('reveals a refined intermediate state only after its delay', () => {
+  const updates: unknown[] = [];
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  const deferred = createDeferredDictationIndicator(
+    { update: (input) => updates.push(input) },
+    {
+      schedule: (callback, delayMs) => {
+        const task = { callback, delayMs };
+        scheduled.push(task);
+        return task;
+      },
+      cancel: (timer) => {
+        const index = scheduled.indexOf(timer as (typeof scheduled)[number]);
+        if (index >= 0) scheduled.splice(index, 1);
+      },
+    },
+  );
+
+  deferred.begin({
+    id: 'dictation',
+    title: 'Dictation',
+    subtitle: 'Waiting for microphone...',
+    status: 'loading',
+  });
+  deferred.refine({
+    id: 'dictation',
+    title: 'Dictation',
+    subtitle: 'Waiting for Pablo AirPods...',
+    status: 'loading',
+  });
+  assert.deepEqual(updates, []);
+  assert.equal(scheduled[0].delayMs, 1_000);
+
+  scheduled.shift()?.callback();
+  assert.equal(
+    (updates.at(-1) as any).subtitle,
+    'Waiting for Pablo AirPods...',
+  );
+  deferred.finish();
+  assert.equal((updates.at(-1) as any).subtitle, 'Listening');
 });
 
 test('leaves the transcription on the clipboard when enabled', async () => {

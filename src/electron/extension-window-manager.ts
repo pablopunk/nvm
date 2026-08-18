@@ -138,9 +138,6 @@ type ExtensionWindowManagerDeps = {
       task: () => T | Promise<T>,
     ): T | Promise<T>;
   };
-  scheduleIndicatorDismiss?: (callback: () => void, delayMs: number) => unknown;
-  cancelIndicatorDismiss?: (timer: unknown) => void;
-  indicatorNow?: () => number;
 };
 
 export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
@@ -181,12 +178,10 @@ const WINDOW_OPTION_KEYS = new Set([
 ]);
 const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PASSIVE_WINDOW_MIN_WIDTH = 160;
-const INDICATOR_MINIMUM_VISIBLE_MS = 2_000;
-const INDICATOR_STACK_LIMIT = 4;
-const INDICATOR_STACK_WINDOW_ID = 'indicator-stack';
-const INDICATOR_STACK_WIDTH = 440;
-const INDICATOR_STACK_ROW_HEIGHT = 56;
-const INDICATOR_STACK_VERTICAL_CHROME = 56;
+const INDICATOR_WINDOW_MAX_WIDTH = 420;
+const INDICATOR_HORIZONTAL_CHROME = 56;
+const INDICATOR_APPROXIMATE_CHARACTER_WIDTH = 8;
+const INDICATOR_SHADOW_HORIZONTAL_GUTTER = 80;
 
 function invalidWindowInput(message: string): never {
   throw new Error(`Invalid extension window input: ${message}`);
@@ -347,20 +342,6 @@ function extensionWindowViewPayload(id: string, view: any, options: any) {
 
 export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   const records = new Map<string, ExtensionWindowRecord>();
-  const indicatorEntries: Array<{
-    streamId: string;
-    id: string;
-    sequence: number;
-    shownAt: number;
-    title: string;
-    label: string;
-    status: string;
-    value?: number;
-    total?: number;
-    dismissTimer?: unknown;
-  }> = [];
-  const activeIndicators = new Map<string, (typeof indicatorEntries)[number]>();
-  let indicatorSequence = 0;
   let persistedState: PersistedExtensionWindowState =
     deps.persistence?.read?.() || {};
   let persistedStateHydrated = Boolean(deps.persistence?.read);
@@ -862,46 +843,60 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     return false;
   }
 
-  function indicatorStreamId(ownerExtensionId: string, localId: unknown) {
-    return `${ownerExtensionId}\0${String(localId || 'default')}`;
+  function indicatorWindowId(ownerExtensionId: string, localId: unknown) {
+    const owner = String(ownerExtensionId || 'extension').replace(
+      /[^A-Za-z0-9._:-]/g,
+      '-',
+    );
+    const id = String(localId || 'default').replace(/[^A-Za-z0-9._:-]/g, '-');
+    return `indicator:${owner}:${id}`.slice(0, 128);
   }
 
-  function indicatorStackView() {
+  function indicatorView(input: any, id: string) {
+    const status = String(input?.status || '');
     return {
-      id: INDICATOR_STACK_WINDOW_ID,
-      type: 'indicator-stack',
-      title: 'Status',
-      entries: indicatorEntries
-        .slice()
-        .sort((left, right) => right.sequence - left.sequence)
-        .map(
-          ({
-            dismissTimer: _dismissTimer,
-            shownAt: _shownAt,
-            streamId: _streamId,
-            ...entry
-          }) => entry,
-        ),
+      id,
+      type: 'progress',
+      title: String(input?.title || 'Status'),
+      label: String(input?.subtitle || status || ''),
+      status,
+      ...(input?.value === undefined ? {} : { value: Number(input.value) }),
+      ...(input?.total === undefined ? {} : { total: Number(input.total) }),
     };
   }
 
-  function renderIndicatorStack() {
-    const existing = records.get(INDICATOR_STACK_WINDOW_ID);
-    if (indicatorEntries.length === 0) {
-      existing?.win.hide();
-      return;
-    }
+  function indicatorWindowWidth(input: any) {
+    const longestLabelLength = [
+      input?.title,
+      input?.subtitle,
+      input?.status,
+    ].reduce(
+      (longest, value) => Math.max(longest, String(value || '').length),
+      0,
+    );
+    return (
+      Math.min(
+        INDICATOR_WINDOW_MAX_WIDTH,
+        Math.max(
+          PASSIVE_WINDOW_MIN_WIDTH,
+          INDICATOR_HORIZONTAL_CHROME +
+            longestLabelLength * INDICATOR_APPROXIMATE_CHARACTER_WIDTH,
+        ),
+      ) + INDICATOR_SHADOW_HORIZONTAL_GUTTER
+    );
+  }
+
+  function showIndicator(input: any, ownerExtensionId: string) {
+    const id = indicatorWindowId(ownerExtensionId, input?.id);
     createOrUpdate(
-      indicatorStackView(),
+      indicatorView(input, id),
       {
-        id: INDICATOR_STACK_WINDOW_ID,
-        title: 'Status',
+        id,
+        title: String(input?.title || 'Status'),
         titleBar: 'hidden',
         chrome: 'none',
-        width: INDICATOR_STACK_WIDTH,
-        height:
-          INDICATOR_STACK_VERTICAL_CHROME +
-          indicatorEntries.length * INDICATOR_STACK_ROW_HEIGHT,
+        width: indicatorWindowWidth(input),
+        height: 112,
         alwaysOnTop: true,
         focusable: false,
         showInactive: true,
@@ -909,106 +904,8 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         position: 'top-center',
       },
       'show',
+      ownerExtensionId,
     );
-  }
-
-  function cancelIndicatorDismiss(entry: (typeof indicatorEntries)[number]) {
-    if (entry.dismissTimer === undefined) return;
-    if (deps.cancelIndicatorDismiss)
-      deps.cancelIndicatorDismiss(entry.dismissTimer);
-    else clearTimeout(entry.dismissTimer as ReturnType<typeof setTimeout>);
-    entry.dismissTimer = undefined;
-  }
-
-  function removeIndicatorEntry(entry: (typeof indicatorEntries)[number]) {
-    cancelIndicatorDismiss(entry);
-    const index = indicatorEntries.indexOf(entry);
-    if (index >= 0) indicatorEntries.splice(index, 1);
-    if (activeIndicators.get(entry.streamId) === entry)
-      activeIndicators.delete(entry.streamId);
-  }
-
-  function closeIndicatorEntry(entry: (typeof indicatorEntries)[number]) {
-    removeIndicatorEntry(entry);
-    renderIndicatorStack();
-  }
-
-  function retireIndicator(entry: (typeof indicatorEntries)[number]) {
-    if (entry.dismissTimer !== undefined) return;
-    const remainingVisibleMs = Math.max(
-      0,
-      INDICATOR_MINIMUM_VISIBLE_MS -
-        ((deps.indicatorNow?.() ?? Date.now()) - entry.shownAt),
-    );
-    if (remainingVisibleMs === 0) {
-      closeIndicatorEntry(entry);
-      return;
-    }
-    const dismiss = () => closeIndicatorEntry(entry);
-    if (deps.scheduleIndicatorDismiss)
-      entry.dismissTimer = deps.scheduleIndicatorDismiss(
-        dismiss,
-        remainingVisibleMs,
-      );
-    else {
-      const timer = setTimeout(dismiss, remainingVisibleMs);
-      timer.unref?.();
-      entry.dismissTimer = timer;
-    }
-  }
-
-  function trimIndicatorStack() {
-    while (indicatorEntries.length > INDICATOR_STACK_LIMIT) {
-      const oldest = indicatorEntries.reduce((candidate, entry) =>
-        entry.sequence < candidate.sequence ? entry : candidate,
-      );
-      closeIndicatorEntry(oldest);
-    }
-  }
-
-  function showIndicator(input: any, ownerExtensionId: string) {
-    const streamId = indicatorStreamId(ownerExtensionId, input?.id);
-    const active = activeIndicators.get(streamId);
-    const title = String(input?.title || 'Status');
-    const status = String(input?.status || '');
-    const label = String(input?.subtitle || status || '');
-    if (
-      active &&
-      active.title === title &&
-      active.label === label &&
-      active.status === status &&
-      (input?.value !== undefined || input?.total !== undefined)
-    ) {
-      active.value =
-        input?.value === undefined ? active.value : Number(input.value);
-      active.total =
-        input?.total === undefined ? active.total : Number(input.total);
-      renderIndicatorStack();
-      return;
-    }
-    if (active) {
-      activeIndicators.delete(streamId);
-      const visibleForMs =
-        (deps.indicatorNow?.() ?? Date.now()) - active.shownAt;
-      if (visibleForMs < INDICATOR_MINIMUM_VISIBLE_MS) retireIndicator(active);
-      else removeIndicatorEntry(active);
-    }
-    indicatorSequence += 1;
-    const entry = {
-      streamId,
-      id: `indicator-${indicatorSequence.toString(36)}`,
-      sequence: indicatorSequence,
-      shownAt: deps.indicatorNow?.() ?? Date.now(),
-      title,
-      label,
-      status,
-      ...(input?.value === undefined ? {} : { value: Number(input.value) }),
-      ...(input?.total === undefined ? {} : { total: Number(input.total) }),
-    };
-    indicatorEntries.push(entry);
-    activeIndicators.set(streamId, entry);
-    trimIndicatorStack();
-    renderIndicatorStack();
   }
 
   function updateIndicator(input: any, ownerExtensionId: string) {
@@ -1016,18 +913,11 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   }
 
   function hideIndicator(ownerExtensionId: string, localId = 'default') {
-    const streamId = indicatorStreamId(ownerExtensionId, localId);
-    const active = activeIndicators.get(streamId);
-    if (!active) return;
-    activeIndicators.delete(streamId);
-    retireIndicator(active);
+    records.get(indicatorWindowId(ownerExtensionId, localId))?.win.hide();
   }
 
   function closeAll() {
     quitting = true;
-    for (const entry of indicatorEntries) cancelIndicatorDismiss(entry);
-    indicatorEntries.length = 0;
-    activeIndicators.clear();
     for (const record of records.values()) record.win.close();
     records.clear();
   }
