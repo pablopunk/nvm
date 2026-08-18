@@ -32,6 +32,7 @@ const WAITING_FOR_MICROPHONE_INDICATOR = dictationIndicator(
   'Waiting for microphone...',
   'loading',
 );
+const CLEANING_INDICATOR = dictationIndicator('Cleaning...', 'loading');
 
 export function createDeferredDictationIndicator(
   indicator: { update(input: unknown): void },
@@ -132,7 +133,10 @@ async function cleanTranscript(
       },
     );
     return cleaned.trim() || transcript;
-  } catch {
+  } catch (error) {
+    ctx.logs?.warn?.('Dictation AI cleanup failed', {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return transcript;
   }
 }
@@ -266,26 +270,45 @@ async function runDictation(ctx: any) {
     subtitle: 'Transcribing',
     status: 'transcribing',
   });
+  const stoppedAt = performance.now();
   try {
     const transcript = await ctx.dictation.stop();
+    const transcribedAt = performance.now();
+    ctx.logs?.debug?.('Dictation transcription completed', {
+      durationMs: Math.round(transcribedAt - stoppedAt),
+      transcriptLength: transcript.length,
+    });
     if (!transcript.trim())
       return ctx.ui.toast({
         message: 'No speech detected',
         tone: 'info',
       });
+    if (settings.cleanupWithAi && ctx.ai)
+      ctx.ui.indicator.update(CLEANING_INDICATOR);
     const text = await cleanTranscript(
       ctx,
       transcript,
       settings.cleanupWithAi,
       settings.dictionary,
     );
-    return ctx.navigation.run(
+    const cleanedAt = performance.now();
+    ctx.logs?.debug?.('Dictation cleanup completed', {
+      durationMs: Math.round(cleanedAt - transcribedAt),
+      enabled: settings.cleanupWithAi && Boolean(ctx.ai),
+    });
+    const result = await ctx.navigation.run(
       ctx.actions.pasteText(text, 'Paste Dictation', {
         concealed: !settings.copyToClipboard,
         restoreClipboard: !settings.copyToClipboard,
         dismissAfterRun: 'auto',
       }),
     );
+    const pastedAt = performance.now();
+    ctx.logs?.debug?.('Dictation paste completed', {
+      durationMs: Math.round(pastedAt - cleanedAt),
+      totalMs: Math.round(pastedAt - stoppedAt),
+    });
+    return result;
   } finally {
     ctx.ui.indicator.hide('dictation');
   }
