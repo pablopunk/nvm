@@ -10,6 +10,7 @@ import { finalOneShotAssistantText } from './ai-one-shot-result';
 import {
   markDebugPerformance,
   measureDebugPerformance,
+  recordDebugPerformance,
 } from './debug-performance';
 import { inspectExtensionManifest } from './extension-manifest';
 import * as logger from './logger';
@@ -265,7 +266,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     } | null;
   } = { current: null };
 
-  async function getSession(chatId = 'default') {
+  async function getSession(chatId = 'default', initialPromptChars = 0) {
     const current = sessions.get(chatId);
     if (current) {
       markDebugPerformance('ai.session.cache-hit', { chatId });
@@ -278,14 +279,17 @@ function createNevermindAi(options: NevermindAiOptions) {
         'ai.session.create',
         { chatId, alwaysLog: true },
         () =>
-          createSession({ ...options, chatId }, (event) =>
-            options.onEvent?.({
-              ...event,
-              chatId,
-              ...(activeTraceIds.get(chatId)
-                ? { traceId: activeTraceIds.get(chatId) }
-                : {}),
-            }),
+          createSession(
+            { ...options, chatId },
+            (event) =>
+              options.onEvent?.({
+                ...event,
+                chatId,
+                ...(activeTraceIds.get(chatId)
+                  ? { traceId: activeTraceIds.get(chatId) }
+                  : {}),
+              }),
+            initialPromptChars,
           ),
       ),
     };
@@ -332,7 +336,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       { chatId, messageLength: message.length, alwaysLog: true },
       async () => {
         try {
-          const session = await getSession(chatId);
+          const session = await getSession(chatId, message.length);
           await measureDebugPerformance(
             'ai.chat.prompt',
             { chatId, messageLength: message.length, alwaysLog: true },
@@ -392,15 +396,30 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   async function ask(message: string, askOptions: AiPromptOptions = {}) {
     const text: string[] = [];
+    const startedAt = performance.now();
+    let firstDeltaAt: number | undefined;
     let session: Awaited<ReturnType<typeof generalSession>> | null = null;
     let unsubscribe = () => {};
     let removeAbortListener = () => {};
     askOptions.onEvent?.({ type: 'start' });
     try {
       if (askOptions.signal?.aborted) throw aiAbortError();
-      session = await generalSession(askOptions);
+      const prompt = aiPromptWithContext(message, askOptions.context);
+      session = await generalSession(askOptions, prompt.length);
       unsubscribe = session.subscribe((event) => {
         if (isMessageUpdateEvent(event)) {
+          if (firstDeltaAt === undefined) {
+            firstDeltaAt = performance.now();
+            recordDebugPerformance(
+              'ai.ask.time-to-first-delta',
+              firstDeltaAt - startedAt,
+              {
+                sessionId: askOptions.sessionId,
+                model: askOptions.model,
+                alwaysLog: true,
+              },
+            );
+          }
           const delta = event.assistantMessageEvent.delta;
           text.push(delta);
           askOptions.onEvent?.({ type: 'delta', text: delta });
@@ -434,7 +453,6 @@ function createNevermindAi(options: NevermindAiOptions) {
           alwaysLog: true,
         },
         async () => {
-          const prompt = aiPromptWithContext(message, askOptions.context);
           await session.prepareModelForPrompt?.(prompt);
           return session.prompt(prompt, { images: askOptions.images });
         },
@@ -476,13 +494,20 @@ function createNevermindAi(options: NevermindAiOptions) {
     };
   }
 
-  async function generalSession(sessionOptions: {
-    sessionId?: string;
-    system?: string;
-    model?: AiModelRole;
-  }) {
+  async function generalSession(
+    sessionOptions: {
+      sessionId?: string;
+      system?: string;
+      model?: AiModelRole;
+    },
+    initialPromptChars = 0,
+  ) {
     if (!sessionOptions.sessionId)
-      return createGeneralSession(options, sessionOptions);
+      return measureDebugPerformance(
+        'ai.general-session.create',
+        { model: sessionOptions.model, alwaysLog: true },
+        () => createGeneralSession(options, sessionOptions, initialPromptChars),
+      );
     const key = generalSessionCacheKey(
       sessionOptions.sessionId,
       sessionOptions.model,
@@ -492,7 +517,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       promise = measureDebugPerformance(
         'ai.general-session.create',
         { sessionId: key, alwaysLog: true },
-        () => createGeneralSession(options, sessionOptions),
+        () => createGeneralSession(options, sessionOptions, initialPromptChars),
       );
       generalSessions.set(key, promise);
       promise.catch(() => {
@@ -568,6 +593,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       onEvent,
     }: NevermindAiOptions & { chatId?: string },
     emit: (event: AiEvent) => void,
+    initialPromptChars = 0,
   ) {
     await fs.mkdir(agentDir, { recursive: true });
     await fs.mkdir(workspaceDir, { recursive: true });
@@ -588,7 +614,11 @@ function createNevermindAi(options: NevermindAiOptions) {
       source: modelSource,
       creditInfo,
       thinkingLevel,
-    } = await resolveAiModelAndAuth(modelRuntime);
+    } = await resolveAiModelAndAuth(
+      modelRuntime,
+      undefined,
+      initialPromptChars,
+    );
     if (creditInfo)
       creditInfoRef.current = {
         credits: creditInfo.credits,
@@ -654,10 +684,15 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
     })) as { session: AgentSession };
+    let initialPromptPrepared = initialPromptChars > 0;
     result.session.prepareModelForPrompt = async function prepareModelForPrompt(
       prompt,
     ) {
       if (modelSource !== 'nevermind') return;
+      if (initialPromptPrepared) {
+        initialPromptPrepared = false;
+        return;
+      }
       const chars =
         JSON.stringify(result.session.agent.state.messages).length +
         prompt.length;
@@ -821,6 +856,7 @@ function stringifyError(value: unknown) {
 async function createGeneralSession(
   options: NevermindAiOptions,
   sessionOptions: { sessionId?: string; system?: string; model?: AiModelRole },
+  initialPromptChars = 0,
 ) {
   const { agentDir, workspaceDir } = options;
   await fs.mkdir(agentDir, { recursive: true });
@@ -834,6 +870,7 @@ async function createGeneralSession(
   const { model, thinkingLevel } = await resolveAiModelAndAuth(
     modelRuntime,
     sessionOptions.model,
+    initialPromptChars,
   );
   const resourceLoader = {
     getExtensions: () => ({
@@ -872,9 +909,14 @@ async function createGeneralSession(
       retry: { enabled: false },
     }),
   })) as { session: AgentSession };
+  let initialPromptPrepared = initialPromptChars > 0;
   result.session.prepareModelForPrompt = async function prepareModelForPrompt(
     prompt,
   ) {
+    if (initialPromptPrepared) {
+      initialPromptPrepared = false;
+      return;
+    }
     const chars =
       JSON.stringify(result.session.agent.state.messages).length +
       prompt.length;

@@ -39,6 +39,29 @@ type ModelsDevModel = {
 type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
 type ModelsDevApi = Record<string, ModelsDevProvider>;
 
+const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
+  opencode: {
+    models: {
+      'gpt-5.6-luna': {
+        id: 'gpt-5.6-luna',
+        name: 'GPT-5.6 Luna',
+        reasoning: true,
+        modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+        limit: { context: 1_050_000, output: 128_000 },
+        cost: { input: 0.2, output: 1.2 },
+      },
+      'deepseek-v4-flash': {
+        id: 'deepseek-v4-flash',
+        name: 'DeepSeek V4 Flash',
+        reasoning: true,
+        modalities: { input: ['text'], output: ['text'] },
+        limit: { context: 1_000_000, output: 384_000 },
+        cost: { input: 0.14, output: 0.28 },
+      },
+    },
+  },
+};
+
 let cache: { data: ModelsDevApi; at: number } | null = null;
 let inflight: Promise<ModelsDevApi> | null = null;
 
@@ -77,10 +100,28 @@ function modelsDevKey(provider: string) {
   return PROVIDER_TO_MODELS_DEV[provider] ?? provider;
 }
 
-export async function lookupModelCost(provider: string, modelId: string): Promise<ModelCost | null> {
-  const catalog = await fetchCatalog();
+function bundledRuntimeModel(provider: string, modelId: string) {
+  return BUNDLED_RUNTIME_MODELS[modelsDevKey(provider)]?.models?.[modelId];
+}
+
+async function runtimeModel(provider: string, modelId: string) {
   const key = modelsDevKey(provider);
-  const cost = catalog[key]?.models?.[modelId]?.cost;
+  const currentCache = cache;
+  const cached = currentCache?.data[key]?.models?.[modelId];
+  if (cached) {
+    if (Date.now() - currentCache.at >= CACHE_TTL_MS) void fetchCatalog();
+    return cached;
+  }
+  const bundled = bundledRuntimeModel(provider, modelId);
+  if (bundled) {
+    void fetchCatalog();
+    return bundled;
+  }
+  return (await fetchCatalog())[key]?.models?.[modelId];
+}
+
+export async function lookupModelCost(provider: string, modelId: string): Promise<ModelCost | null> {
+  const cost = (await runtimeModel(provider, modelId))?.cost;
   if (!cost || cost.input == null || cost.output == null) return null;
   return { provider, modelId, inputUsdPerMtok: cost.input, outputUsdPerMtok: cost.output };
 }
@@ -102,8 +143,7 @@ const DEFAULT_DESCRIPTOR = {
 };
 
 export async function lookupModelDescriptor(provider: string, modelId: string): Promise<ModelDescriptor | null> {
-  const catalog = await fetchCatalog();
-  const m = catalog[modelsDevKey(provider)]?.models?.[modelId];
+  const m = await runtimeModel(provider, modelId);
   if (!m) return null;
   return {
     id: modelId,

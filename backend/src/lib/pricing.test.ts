@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
-import { lookupModelCost, resetPricingCacheForTests } from './pricing';
+import { lookupModelCost, lookupModelDescriptor, resetPricingCacheForTests } from './pricing';
 
 let originalFetch: typeof globalThis.fetch;
 
@@ -80,6 +80,22 @@ test('lookupModelCost returns null for unmapped provider', async () => {
 
   const result = await lookupModelCost('unknown-provider', 'some-model');
   assert.strictEqual(result, null);
+});
+
+test('active runtime models do not wait for the remote catalog', async () => {
+  globalThis.fetch = (() => new Promise(() => {})) as typeof globalThis.fetch;
+
+  const cost = await lookupModelCost('opencode_zen', 'gpt-5.6-luna');
+  const descriptor = await lookupModelDescriptor('opencode_zen', 'deepseek-v4-flash');
+
+  assert.deepEqual(cost, {
+    provider: 'opencode_zen',
+    modelId: 'gpt-5.6-luna',
+    inputUsdPerMtok: 0.2,
+    outputUsdPerMtok: 1.2,
+  });
+  assert.equal(descriptor?.name, 'DeepSeek V4 Flash');
+  assert.equal(descriptor?.contextWindow, 1_000_000);
 });
 
 test('resetPricingCacheForTests clears the internal cache', async () => {

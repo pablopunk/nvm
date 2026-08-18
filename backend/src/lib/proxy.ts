@@ -709,6 +709,7 @@ function teeStreamAndBill(
   const decoder = new TextDecoder('utf-8', { fatal: false });
   let terminal = false;
   let deliveredOutput = false;
+  let loggedFirstChunk = false;
   async function finish(naturalCompletion: boolean) {
     if (terminal) return;
     terminal = true;
@@ -749,6 +750,15 @@ function teeStreamAndBill(
           return;
         }
         if (value) {
+          if (value.byteLength > 0 && !loggedFirstChunk) {
+            loggedFirstChunk = true;
+            log.info('upstream_first_chunk', {
+              request_id: billCtx.requestId,
+              provider: billCtx.provider,
+              model: billCtx.activeModelId,
+              latency_ms: Date.now() - startedAt,
+            });
+          }
           sniffStreamUsage(decoder.decode(value, { stream: true }));
           if (value.byteLength > 0) deliveredOutput = true;
           controller.enqueue(value);
