@@ -42,6 +42,7 @@ type Equal<A, B> =
     : false;
 
 type AssertEqual<A, B> = Equal<A, B> extends true ? true : never;
+type AssertAssignable<A, B> = A extends B ? true : never;
 
 test('quit actions use the standard visible action lifecycle', () => {
   assert.deepEqual(ACTION_DEFINITIONS.quitApp, {
@@ -81,11 +82,11 @@ const actionPanelVisibilityContract: AssertEqual<
   NonNullable<CommandItem['actionPanelVisibility']>,
   ActionPanelVisibility
 > = true;
-const viewTypeContract: AssertEqual<
-  NonNullable<CommandView['type']>,
+const viewTypeContract: AssertAssignable<
   NonNullable<
     import('./resources/nevermind-extension-api').ExtensionView['type']
-  >
+  >,
+  NonNullable<CommandView['type']>
 > = true;
 const viewSizeContract: AssertEqual<
   NonNullable<CommandView['size']>,

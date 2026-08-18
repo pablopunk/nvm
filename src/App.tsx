@@ -1123,11 +1123,12 @@ function DictationRendererController() {
 
       if (command.type === 'start') {
         if (startPromiseRef.current || recordingRef.current) return;
+        const modelKeepAliveMs = command.modelKeepAliveMs;
         async function openMicrophone(deviceId: string | undefined) {
           const startPromise = recordDictation(
             deviceId,
             undefined,
-            command.modelKeepAliveMs,
+            modelKeepAliveMs,
           );
           startPromiseRef.current = startPromise;
           const recording = await startPromise;
