@@ -184,9 +184,9 @@ const PASSIVE_WINDOW_MIN_WIDTH = 160;
 const INDICATOR_MINIMUM_VISIBLE_MS = 2_000;
 const INDICATOR_STACK_LIMIT = 4;
 const INDICATOR_STACK_WINDOW_ID = 'indicator-stack';
-const INDICATOR_STACK_WIDTH = 360;
+const INDICATOR_STACK_WIDTH = 440;
 const INDICATOR_STACK_ROW_HEIGHT = 56;
-const INDICATOR_STACK_VERTICAL_CHROME = 8;
+const INDICATOR_STACK_VERTICAL_CHROME = 56;
 
 function invalidWindowInput(message: string): never {
   throw new Error(`Invalid extension window input: ${message}`);

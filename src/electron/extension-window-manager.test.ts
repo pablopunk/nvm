@@ -290,7 +290,7 @@ test('indicators stack stable snapshots during their reading time', () => {
   assert.equal(win.options.transparent, true);
   assert.equal(win.options.skipTaskbar, true);
   assert.equal(win.options.resizable, false);
-  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 64 });
+  assert.deepEqual(win.bounds, { x: 290, y: 44, width: 440, height: 112 });
   assert.deepEqual(win.ignoredMouseEvents, [true]);
   assert.deepEqual(
     (state?.view as any).entries.map((entry: any) => entry.label),
@@ -312,7 +312,7 @@ test('indicators stack stable snapshots during their reading time', () => {
     (state?.view as any).entries.map((entry: any) => entry.label),
     ['Downloading speech model...', 'Listening'],
   );
-  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 120 });
+  assert.deepEqual(win.bounds, { x: 290, y: 44, width: 440, height: 168 });
   advanceIndicatorTime(500);
   manager.updateIndicator(
     { id: 'dictation', title: 'Dictation', subtitle: 'Transcribing' },
@@ -323,7 +323,7 @@ test('indicators stack stable snapshots during their reading time', () => {
     (state?.view as any).entries.map((entry: any) => entry.label),
     ['Transcribing', 'Downloading speech model...', 'Listening'],
   );
-  assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 176 });
+  assert.deepEqual(win.bounds, { x: 290, y: 44, width: 440, height: 224 });
   manager.hideIndicator('nevermind.dictation', 'dictation');
   assert.equal(win.visible, true);
   assert.deepEqual(
