@@ -140,6 +140,7 @@ type ExtensionWindowManagerDeps = {
   };
   scheduleIndicatorDismiss?: (callback: () => void, delayMs: number) => unknown;
   cancelIndicatorDismiss?: (timer: unknown) => void;
+  indicatorNow?: () => number;
 };
 
 export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
@@ -180,7 +181,7 @@ const WINDOW_OPTION_KEYS = new Set([
 ]);
 const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PASSIVE_WINDOW_MIN_WIDTH = 160;
-const INDICATOR_DISMISS_DELAY_MS = 3_000;
+const INDICATOR_MINIMUM_VISIBLE_MS = 2_000;
 const INDICATOR_STACK_LIMIT = 4;
 const INDICATOR_STACK_WINDOW_ID = 'indicator-stack';
 const INDICATOR_STACK_WIDTH = 360;
@@ -350,6 +351,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     streamId: string;
     id: string;
     sequence: number;
+    shownAt: number;
     title: string;
     label: string;
     status: string;
@@ -873,8 +875,12 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         .slice()
         .sort((left, right) => right.sequence - left.sequence)
         .map(
-          ({ dismissTimer: _dismissTimer, streamId: _streamId, ...entry }) =>
-            entry,
+          ({
+            dismissTimer: _dismissTimer,
+            shownAt: _shownAt,
+            streamId: _streamId,
+            ...entry
+          }) => entry,
         ),
     };
   }
@@ -914,25 +920,38 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     entry.dismissTimer = undefined;
   }
 
-  function closeIndicatorEntry(entry: (typeof indicatorEntries)[number]) {
+  function removeIndicatorEntry(entry: (typeof indicatorEntries)[number]) {
     cancelIndicatorDismiss(entry);
     const index = indicatorEntries.indexOf(entry);
     if (index >= 0) indicatorEntries.splice(index, 1);
     if (activeIndicators.get(entry.streamId) === entry)
       activeIndicators.delete(entry.streamId);
+  }
+
+  function closeIndicatorEntry(entry: (typeof indicatorEntries)[number]) {
+    removeIndicatorEntry(entry);
     renderIndicatorStack();
   }
 
   function retireIndicator(entry: (typeof indicatorEntries)[number]) {
     if (entry.dismissTimer !== undefined) return;
+    const remainingVisibleMs = Math.max(
+      0,
+      INDICATOR_MINIMUM_VISIBLE_MS -
+        ((deps.indicatorNow?.() ?? Date.now()) - entry.shownAt),
+    );
+    if (remainingVisibleMs === 0) {
+      closeIndicatorEntry(entry);
+      return;
+    }
     const dismiss = () => closeIndicatorEntry(entry);
     if (deps.scheduleIndicatorDismiss)
       entry.dismissTimer = deps.scheduleIndicatorDismiss(
         dismiss,
-        INDICATOR_DISMISS_DELAY_MS,
+        remainingVisibleMs,
       );
     else {
-      const timer = setTimeout(dismiss, INDICATOR_DISMISS_DELAY_MS);
+      const timer = setTimeout(dismiss, remainingVisibleMs);
       timer.unref?.();
       entry.dismissTimer = timer;
     }
@@ -969,13 +988,17 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     }
     if (active) {
       activeIndicators.delete(streamId);
-      retireIndicator(active);
+      const visibleForMs =
+        (deps.indicatorNow?.() ?? Date.now()) - active.shownAt;
+      if (visibleForMs < INDICATOR_MINIMUM_VISIBLE_MS) retireIndicator(active);
+      else removeIndicatorEntry(active);
     }
     indicatorSequence += 1;
     const entry = {
       streamId,
       id: `indicator-${indicatorSequence.toString(36)}`,
       sequence: indicatorSequence,
+      shownAt: deps.indicatorNow?.() ?? Date.now(),
       title,
       label,
       status,

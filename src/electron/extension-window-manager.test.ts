@@ -126,6 +126,7 @@ function createManager(
     object,
     { callback: () => void; delayMs: number }
   >();
+  let indicatorTime = 0;
   const persistence = persistedState
     ? {
         read: () => persistedState as never,
@@ -168,6 +169,7 @@ function createManager(
     },
     cancelIndicatorDismiss: (timer) =>
       scheduledIndicatorDismissals.delete(timer as object),
+    indicatorNow: () => indicatorTime,
   });
   return {
     manager,
@@ -182,6 +184,9 @@ function createManager(
         scheduledIndicatorDismissals.delete(timer);
         dismissal.callback();
       }
+    },
+    advanceIndicatorTime(durationMs: number) {
+      indicatorTime += durationMs;
     },
   };
 }
@@ -255,9 +260,13 @@ test('extension window helpers clamp size and derive stable ids', () => {
   );
 });
 
-test('indicators stack stable snapshots and retire after a delay', () => {
-  const { manager, scheduledIndicatorDismissals, flushIndicatorDismissals } =
-    createManager();
+test('indicators stack stable snapshots during their reading time', () => {
+  const {
+    manager,
+    advanceIndicatorTime,
+    scheduledIndicatorDismissals,
+    flushIndicatorDismissals,
+  } = createManager();
   manager.showIndicator(
     {
       id: 'dictation',
@@ -288,6 +297,7 @@ test('indicators stack stable snapshots and retire after a delay', () => {
     ['Listening'],
   );
 
+  advanceIndicatorTime(500);
   manager.updateIndicator(
     {
       id: 'dictation',
@@ -303,6 +313,7 @@ test('indicators stack stable snapshots and retire after a delay', () => {
     ['Downloading speech model...', 'Listening'],
   );
   assert.deepEqual(win.bounds, { x: 330, y: 44, width: 360, height: 120 });
+  advanceIndicatorTime(500);
   manager.updateIndicator(
     { id: 'dictation', title: 'Dictation', subtitle: 'Transcribing' },
     'nevermind.dictation',
@@ -317,7 +328,7 @@ test('indicators stack stable snapshots and retire after a delay', () => {
   assert.equal(win.visible, true);
   assert.deepEqual(
     [...scheduledIndicatorDismissals.values()].map(({ delayMs }) => delayMs),
-    [3_000, 3_000, 3_000],
+    [1_500, 1_500, 2_000],
   );
 
   flushIndicatorDismissals();
@@ -353,6 +364,27 @@ test('indicator progress updates coalesce within one lifecycle state', () => {
   const entries = (manager.getState('indicator-stack')?.view as any).entries;
   assert.equal(entries.length, 1);
   assert.equal(entries[0].value, 4);
+  assert.equal(scheduledIndicatorDismissals.size, 0);
+});
+
+test('indicator updates replace states that were visible for two seconds', () => {
+  const { manager, advanceIndicatorTime, scheduledIndicatorDismissals } =
+    createManager();
+  manager.showIndicator(
+    { id: 'sync', title: 'Sync', subtitle: 'Preparing' },
+    'example.extension',
+  );
+  advanceIndicatorTime(2_000);
+  manager.updateIndicator(
+    { id: 'sync', title: 'Sync', subtitle: 'Running' },
+    'example.extension',
+  );
+
+  const entries = (manager.getState('indicator-stack')?.view as any).entries;
+  assert.deepEqual(
+    entries.map((entry: any) => entry.label),
+    ['Running'],
+  );
   assert.equal(scheduledIndicatorDismissals.size, 0);
 });
 
