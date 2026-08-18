@@ -896,7 +896,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         titleBar: 'hidden',
         chrome: 'none',
         width: indicatorWindowWidth(input),
-        height: 112,
+        height: 104,
         alwaysOnTop: true,
         focusable: false,
         showInactive: true,

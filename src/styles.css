@@ -2475,13 +2475,13 @@ kbd {
 .extensionWindowChromeNone .progressView {
   display: flex;
   align-items: center;
-  height: 48px;
+  height: 40px;
   width: max-content;
   max-width: calc(100% - 80px);
   margin: auto;
   min-height: 0;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-lg);
   background: rgba(17, 18, 23, 0.92);

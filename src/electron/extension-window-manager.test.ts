@@ -255,7 +255,7 @@ test('indicators show without focus and ignore mouse events', () => {
   assert.equal(win.options.transparent, true);
   assert.equal(win.options.skipTaskbar, true);
   assert.equal(win.options.resizable, false);
-  assert.deepEqual(win.bounds, { x: 390, y: 44, width: 240, height: 112 });
+  assert.deepEqual(win.bounds, { x: 390, y: 44, width: 240, height: 104 });
   assert.deepEqual(win.ignoredMouseEvents, [true]);
 
   manager.updateIndicator(
@@ -271,12 +271,12 @@ test('indicators show without focus and ignore mouse events', () => {
     (win.sent.at(-1)?.payload as any).view.label,
     'Downloading speech model...',
   );
-  assert.deepEqual(win.bounds, { x: 334, y: 44, width: 352, height: 112 });
+  assert.deepEqual(win.bounds, { x: 334, y: 44, width: 352, height: 104 });
   manager.updateIndicator(
     { id: 'dictation', title: 'Dictation', subtitle: 'Transcribing' },
     'nevermind.dictation',
   );
-  assert.deepEqual(win.bounds, { x: 390, y: 44, width: 240, height: 112 });
+  assert.deepEqual(win.bounds, { x: 390, y: 44, width: 240, height: 104 });
   manager.hideIndicator('nevermind.dictation', 'dictation');
   assert.equal(win.visible, false);
 });
