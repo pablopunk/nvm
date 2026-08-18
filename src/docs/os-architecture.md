@@ -65,6 +65,7 @@ All desktop integrations are owned by OS capabilities. The rest of the app descr
 - File actions such as preview, reveal, open with, trash, drag, thumbnails, and selected files use OS-owned labels and availability. Open with must honor the selected application on macOS, Windows, and Linux; platforms may return all discovered applications when reliable per-file compatibility metadata is unavailable.
 - Frontmost-app interactions such as paste are offered only when the current system can perform them reliably.
 - Camera access for host-owned extension views is capability-gated, uses OS privacy prompts where required, and must include platform packaging metadata such as macOS camera usage descriptions.
+- Dictation can temporarily mute system output while recording. Supported systems must restore the exact prior mute state before transcription, on cancellation, after microphone errors, and when the app quits; unsupported systems continue dictation without changing system audio.
 - Palette window behavior such as focus, taskbar/dock visibility, all-workspaces behavior, and desktop-window-manager quirks is not spread through generic window lifecycle code.
 - Shortcut behavior such as default accelerators, conflicts, formatting, and keyboard-settings guidance reflects the current OS.
 - Login startup behavior appears only on platforms that can own it and should keep the palette hidden until the user invokes it.

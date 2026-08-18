@@ -27,14 +27,20 @@ export type DictationService = {
   start(options?: {
     deviceId?: string;
     modelKeepAliveMs?: number;
+    muteSystemAudioWhileRecording?: boolean;
   }): Promise<void>;
   stop(): Promise<string>;
   cancel(): Promise<void>;
+  dispose(): Promise<void>;
   reply(reply: DictationRendererReply): void;
 };
 
 export function createDictationService(
   send: (command: DictationRendererCommand) => void,
+  dependencies: {
+    muteSystemAudio?: () => Promise<{ restore(): Promise<void> }>;
+    onSystemAudioError?: (error: unknown) => void;
+  } = {},
 ): DictationService {
   let currentStatus = 'idle';
   let pendingStart: {
@@ -62,13 +68,29 @@ export function createDictationService(
     resolve: () => void;
     reject: (error: Error) => void;
   } | null = null;
+  let systemAudioMute: { restore(): Promise<void> } | null = null;
+
+  async function restoreSystemAudio() {
+    const mute = systemAudioMute;
+    if (!mute) return;
+    try {
+      await mute.restore();
+      if (systemAudioMute === mute) systemAudioMute = null;
+    } catch (error) {
+      dependencies.onSystemAudioError?.(error);
+    }
+  }
 
   function status() {
     return Promise.resolve(currentStatus);
   }
 
   function start(
-    options: { deviceId?: string; modelKeepAliveMs?: number } = {},
+    options: {
+      deviceId?: string;
+      modelKeepAliveMs?: number;
+      muteSystemAudioWhileRecording?: boolean;
+    } = {},
   ) {
     if (currentStatus !== 'idle')
       return pendingStart?.promise || Promise.resolve();
@@ -80,7 +102,25 @@ export function createDictationService(
     });
     pendingStart = { promise, resolve: resolveStart, reject: rejectStart };
     currentStatus = 'recording';
-    send({ type: 'start', ...options });
+    const { muteSystemAudioWhileRecording, ...rendererOptions } = options;
+    if (muteSystemAudioWhileRecording && dependencies.muteSystemAudio) {
+      void dependencies
+        .muteSystemAudio()
+        .then((mute) => {
+          if (currentStatus !== 'recording') return mute.restore();
+          systemAudioMute = mute;
+          send({ type: 'start', ...rendererOptions });
+        })
+        .catch((error) => {
+          currentStatus = 'idle';
+          pendingStart?.reject(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+          pendingStart = null;
+        });
+    } else {
+      send({ type: 'start', ...rendererOptions });
+    }
     return promise;
   }
 
@@ -88,10 +128,11 @@ export function createDictationService(
     if (currentStatus !== 'recording')
       return Promise.reject(new Error('Dictation is not recording'));
     currentStatus = 'transcribing';
-    send({ type: 'stop' });
-    return new Promise<string>((resolve, reject) => {
+    const promise = new Promise<string>((resolve, reject) => {
       pendingStop = { resolve, reject };
     });
+    void restoreSystemAudio().finally(() => send({ type: 'stop' }));
+    return promise;
   }
 
   function cancel() {
@@ -101,8 +142,11 @@ export function createDictationService(
     pendingStart = null;
     pendingStop?.reject(new Error('Dictation cancelled'));
     pendingStop = null;
-    send({ type: 'cancel' });
-    return Promise.resolve();
+    return restoreSystemAudio().finally(() => send({ type: 'cancel' }));
+  }
+
+  function dispose() {
+    return restoreSystemAudio();
   }
 
   function devices() {
@@ -158,6 +202,7 @@ export function createDictationService(
     }
     if (reply.type === 'result') {
       currentStatus = 'idle';
+      void restoreSystemAudio();
       pendingStop?.resolve(reply.text);
       pendingStop = null;
       return;
@@ -178,6 +223,7 @@ export function createDictationService(
       return;
     }
     currentStatus = 'idle';
+    void restoreSystemAudio();
     const error = new Error(reply.message);
     pendingStart?.reject(error);
     pendingStart = null;
@@ -199,6 +245,7 @@ export function createDictationService(
     start,
     stop,
     cancel,
+    dispose,
     reply,
   };
 }

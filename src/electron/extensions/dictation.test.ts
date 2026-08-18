@@ -144,7 +144,11 @@ test('toggles recording and returns a concealed paste action', async () => {
 
   await handler(context, {});
   assert.deepEqual(starts, [
-    { deviceId: 'default', modelKeepAliveMs: 300_000 },
+    {
+      deviceId: 'default',
+      modelKeepAliveMs: 300_000,
+      muteSystemAudioWhileRecording: true,
+    },
   ]);
   const result = await handler(context, {});
   assert.deepEqual(result, { action: pastes[0] });

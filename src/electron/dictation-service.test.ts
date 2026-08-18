@@ -32,6 +32,60 @@ test('resolves start only after the renderer confirms audio capture', async () =
   assert.equal(await service.status(), 'idle');
 });
 
+test('restores system audio before transcription starts', async () => {
+  const events: string[] = [];
+  const service = createDictationService(
+    (command) => events.push(`command:${command.type}`),
+    {
+      muteSystemAudio: async () => {
+        events.push('mute');
+        return {
+          restore: async () => {
+            events.push('restore');
+          },
+        };
+      },
+    },
+  );
+
+  const start = service.start({ muteSystemAudioWhileRecording: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, ['mute', 'command:start']);
+  service.reply({ type: 'recording' });
+  await start;
+
+  const stop = service.stop();
+  assert.equal(await service.status(), 'transcribing');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, [
+    'mute',
+    'command:start',
+    'restore',
+    'command:stop',
+  ]);
+  service.reply({ type: 'result', text: 'hello' });
+  assert.equal(await stop, 'hello');
+});
+
+test('restores system audio when recording fails', async () => {
+  let restores = 0;
+  const service = createDictationService(() => {}, {
+    muteSystemAudio: async () => ({
+      restore: async () => {
+        restores += 1;
+      },
+    }),
+  });
+
+  const start = service.start({ muteSystemAudioWhileRecording: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  service.reply({ type: 'error', message: 'Microphone failed' });
+
+  await assert.rejects(start, /Microphone failed/);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(restores, 1);
+});
+
 test('returns renderer microphone devices', async () => {
   const commands: DictationRendererCommand[] = [];
   const service = createDictationService((command) => commands.push(command));

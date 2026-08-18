@@ -936,6 +936,8 @@ export type ExtensionDictation = {
   start(options?: {
     deviceId?: string;
     modelKeepAliveMs?: number;
+    /** Mute system output while recording and restore its prior state before transcription. */
+    muteSystemAudioWhileRecording?: boolean;
   }): Promise<void>;
   stop(): Promise<string>;
   cancel(): Promise<void>;

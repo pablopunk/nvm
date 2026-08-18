@@ -254,6 +254,7 @@ async function runDictation(ctx: any) {
       const startPromise = ctx.dictation.start({
         deviceId: settings.deviceId,
         modelKeepAliveMs: settings.keepAliveMs,
+        muteSystemAudioWhileRecording: true,
       });
       void startPromise.catch(() => {});
       void Promise.resolve(devicesPromise).then((devices) => {

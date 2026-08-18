@@ -123,6 +123,7 @@ import {
   createDictationService,
   type DictationRendererReply,
 } from './dictation-service';
+import { createSystemAudioMuteCapability } from './system-audio';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -285,9 +286,20 @@ const paletteWindow = createPaletteWindowController({
   rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
 });
-const dictationService = createDictationService((command) => {
-  paletteWindow.win?.webContents.send('dictation:command', command);
-});
+const systemAudioMute = createSystemAudioMuteCapability();
+const dictationService = createDictationService(
+  (command) => {
+    paletteWindow.win?.webContents.send('dictation:command', command);
+  },
+  {
+    muteSystemAudio: systemAudioMute.temporarilyMute,
+    onSystemAudioError: (error) =>
+      logWarn('dictation.system-audio.restore.failed', error, {
+        source: 'host',
+        scope: 'dictation',
+      }),
+  },
+);
 const extensionWindowManager = createExtensionWindowManager({
   BrowserWindow,
   preloadPath,
@@ -9903,6 +9915,7 @@ app.whenReady().then(async () => {
 app.on('activate', () => paletteWindow.showPalette());
 app.on('before-quit', (event) => {
   nevermindApp.isQuiting = true;
+  void dictationService.dispose();
   stateSafeQuit.handleBeforeQuit(event);
 });
 app.on('will-quit', () => {
