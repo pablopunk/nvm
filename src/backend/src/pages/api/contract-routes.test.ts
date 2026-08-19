@@ -130,7 +130,7 @@ function installModelsDevFetch() {
   };
 }
 
-function proxySelects(options: { free?: number; paid?: number; plan?: string; model?: string | null; routeProvider?: string; thinkingLevel?: string } = {}) {
+function proxySelects(options: { free?: number; paid?: number; plan?: string; model?: string | null; routeProvider?: string; thinkingLevel?: string; providerChainDepth?: number } = {}) {
   const modelRoute = options.model === null ? [] : [{ value: JSON.stringify({ provider: options.routeProvider ?? 'opencode_zen', modelId: options.model ?? 'gemini-3-flash', thinkingLevel: options.thinkingLevel ?? 'low' }) }];
   return [
     [{ user: { id: 'user_1', email: 'pablo@example.com', plan: options.plan ?? 'free', role: 'user' }, tokenId: 'token_1' }],
@@ -141,7 +141,10 @@ function proxySelects(options: { free?: number; paid?: number; plan?: string; mo
     [],
     [{ balance: (options.paid ?? 0) > 0 ? options.paid ?? 0 : options.free ?? 10 }],
     [{ reserved: 0 }],
-    ...(options.model === 'gemini-3-fast' ? [[], [], []] : [[], []]),
+    ...Array.from(
+      { length: options.providerChainDepth ?? (options.model === 'gemini-3-fast' ? 3 : 2) },
+      () => [],
+    ),
     [{ id: 'user_1' }],
     [{ requestId: 'test-reservation', userId: 'user_1', kind: (options.paid ?? 0) > 0 ? 'paid' : 'free', reservedCredits: 1, status: 'pending' }],
   ];
@@ -510,7 +513,7 @@ test('active-model preserves OpenRouter model ids and proxy format', async () =>
   assert.equal(body.api, 'openai-completions');
   assert.equal(body.baseUrl, 'https://api.nvm.fyi/api/v1');
   assert.equal(body.thinkingLevel, 'off');
-  assert.deepEqual(body.input, ['text', 'image', 'pdf']);
+  assert.deepEqual(body.input, ['text', 'image', 'audio', 'video', 'pdf']);
 });
 
 test('active-model route resolves admin-defined extension model roles', async () => {
@@ -722,6 +725,7 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
         model: 'google/gemini-2.5-flash',
         routeProvider: 'openrouter',
         thinkingLevel: 'off',
+        providerChainDepth: 3,
       }),
     }),
   );
