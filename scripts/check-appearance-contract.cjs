@@ -9,6 +9,7 @@ const ROOT = process.cwd();
 const API_DTS = path.join(
   ROOT,
   'src',
+  'app',
   'resources',
   'nevermind-extension-api.d.ts',
 );
