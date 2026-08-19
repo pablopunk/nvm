@@ -103,6 +103,10 @@ import {
 } from '../palette/model';
 import { appResultMarker, priorityBoost } from './action-ranking';
 import { actionMatchesExecutionRecord } from './action-execution-record';
+import {
+  actionFromExecutionRecord,
+  currentActionExecutionRecord,
+} from './action-execution-policy';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService } from './app-index-service';
@@ -1120,27 +1124,15 @@ const RENDERER_ONLY_VIEW_ACTION_TYPES = new Set([
   'previewClipboardItem',
 ]);
 const CHARACTER_INSERT_ACTION_TYPES = new Set(['insertCharacter']);
-const TOKEN_REQUIRED_VIEW_ACTION_TYPES = new Set([
-  'runExtensionAction',
-  'openPath',
-  'openWith',
-  'pasteText',
-  'copyImage',
-  'trash',
-  'removeClipboardHistory',
-  'shellExec',
-  'shellScript',
-  'lockScreen',
-  'sleepSystem',
-  'restartSystem',
-  'openSystemSettings',
-  'openKeyboardSettings',
-  'quitApp',
-  'forceQuitApp',
-  'checkForUpdates',
-  'downloadUpdate',
-  'installUpdate',
-  'toggleSetting',
+const TARGET_DERIVED_VIEW_ACTION_TYPES = new Set([
+  'setActionShortcut',
+  'setActionAlias',
+  'removeActionAlias',
+  'duplicateCreatedAction',
+  'removeCreatedAction',
+  'submitExtensionPr',
+  'clearActionOverride',
+  'renameExtensionPrompt',
 ]);
 
 function clonePlain(value) {
@@ -1280,25 +1272,91 @@ function mergeRendererActionInput(storedAction, rendererAction) {
 }
 
 function resolveRootActionForIpc(action) {
-  if (!action || typeof action !== 'object') return action;
-  const record = action.executionId
-    ? rootActionExecutionRecords.get(String(action.executionId))
-    : null;
+  if (!action || typeof action !== 'object')
+    throw new Error('Untrusted action');
+  const record = currentActionExecutionRecord(
+    action.executionId,
+    rootActionExecutionRecords,
+    Date.now(),
+    ACTION_EXECUTION_TTL_MS,
+  );
   if (record)
+    return actionFromExecutionRecord(action, rootActionExecutionRecords, {
+      actionName: (input) => String(input.kind || 'root'),
+      ttlMs: ACTION_EXECUTION_TTL_MS,
+    });
+  const fallback = withoutExecutionId(action);
+  const current = currentActionForStoredShortcut(fallback);
+  if (current && current !== fallback)
     return {
-      ...clonePlain(record.action),
+      ...clonePlain(withoutExecutionId(current)),
       ...(typeof action.traceId === 'string'
         ? { traceId: action.traceId }
         : {}),
     };
-  const fallback = withoutExecutionId(action);
-  if (fallback.kind === 'extension-root-item' && fallback.rootAction)
-    throw new Error('Untrusted extension root action');
-  return fallback;
+  throw new Error(`Untrusted ${fallback.kind || 'root'} action`);
+}
+
+function resolveActionReferenceForIpc(action) {
+  if (!action || typeof action !== 'object')
+    throw new Error('Untrusted action reference');
+  if (
+    currentActionExecutionRecord(
+      action.executionId,
+      rootActionExecutionRecords,
+      Date.now(),
+      ACTION_EXECUTION_TTL_MS,
+    )
+  )
+    return resolveRootActionForIpc(action);
+  return resolveViewActionForIpc(action);
+}
+
+function filePathsForAction(action, paths = new Set<string>()) {
+  if (!action || typeof action !== 'object') return paths;
+  for (const value of [action.path, action.filePath])
+    if (typeof value === 'string' && value) paths.add(value);
+  for (const nested of [
+    action.rootAction,
+    action.primaryAction,
+    action.nativeAction,
+  ])
+    filePathsForAction(nested, paths);
+  return paths;
+}
+
+function resolveRendererDerivedViewAction(action) {
+  const type = String(action.type || '');
+  if (TARGET_DERIVED_VIEW_ACTION_TYPES.has(type)) {
+    const targetAction = resolveRootActionForIpc(action.targetAction);
+    const mutable =
+      type === 'setActionShortcut'
+        ? { accelerator: action.accelerator }
+        : type === 'setActionAlias' || type === 'removeActionAlias'
+          ? { alias: action.alias }
+          : {};
+    return { type, title: action.title, targetAction, ...mutable };
+  }
+  if (type === 'setSettingShortcut' && action.settingId === 'hyperKey')
+    return {
+      type,
+      title: action.title,
+      settingId: 'hyperKey',
+      shortcut: action.shortcut,
+    };
+  if (type === 'quickLook' || type === 'revealPath') {
+    const sourceAction = resolveActionReferenceForIpc(action.sourceAction);
+    const requestedPath = String(action.path || '');
+    if (!filePathsForAction(sourceAction).has(requestedPath))
+      throw new Error(`Untrusted ${type} path`);
+    return { type, title: action.title, path: requestedPath };
+  }
+  return null;
 }
 
 function resolveViewActionForIpc(action) {
-  if (!action || typeof action !== 'object') return action;
+  if (!action || typeof action !== 'object')
+    throw new Error('Untrusted action');
   const record = action.executionId
     ? viewActionExecutionRecords.get(String(action.executionId))
     : null;
@@ -1333,14 +1391,9 @@ function resolveViewActionForIpc(action) {
           : characterWithSkinTone(record.glyph, skinTone),
     };
   }
-  if (fallback.type === 'nativeAction')
-    return {
-      ...fallback,
-      nativeAction: resolveRootActionForIpc(fallback.nativeAction),
-    };
-  if (TOKEN_REQUIRED_VIEW_ACTION_TYPES.has(String(fallback.type || '')))
-    throw new Error(`Untrusted ${fallback.type} action`);
-  return fallback;
+  const derived = resolveRendererDerivedViewAction(fallback);
+  if (derived) return derived;
+  throw new Error(`Untrusted ${fallback.type || 'view'} action`);
 }
 
 function checkRefreshBurst(extension: any) {

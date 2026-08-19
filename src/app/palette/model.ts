@@ -447,6 +447,7 @@ export interface CommandAction {
   cancelLabel?: string;
   dismissAfterRun?: 'auto';
   executionId?: string;
+  sourceAction?: unknown;
   traceId?: string;
 }
 

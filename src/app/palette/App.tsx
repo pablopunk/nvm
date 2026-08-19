@@ -188,6 +188,7 @@ type Action = {
   shortcut?: string;
   userAliases?: string[];
   appearance?: CommandItemAppearance;
+  executionId?: string;
   traceId?: string;
 };
 
@@ -2882,6 +2883,11 @@ export function App() {
       clearInteractionTrace(trace.traceId);
       return;
     }
+    if (nativeAction?.kind === 'open-keyboard-settings') {
+      await window.nvm.openSystemKeyboardSettings();
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
     if (nativeAction?.kind === 'record-shortcut' && nativeAction.action) {
       startShortcutRecorder(nativeAction.action as Action);
       recordPerformanceTrace(
@@ -3390,6 +3396,7 @@ export function App() {
       type: 'quickLook',
       title: 'Preview File',
       path: optionsFor.filePath,
+      sourceAction: optionsFor,
     });
   }
 
@@ -4637,10 +4644,15 @@ export function App() {
   }
 
   async function revealSelectedDiskItem(path: string) {
+    const sourceAction = isChildOpen
+      ? selectedExtensionItem?.primaryAction
+      : selectedAction;
+    if (!sourceAction) return;
     await runViewAction({
       type: 'revealPath',
       title: 'Reveal in File Manager',
       path,
+      sourceAction,
     });
   }
 
@@ -4762,6 +4774,7 @@ export function App() {
         type: 'quickLook',
         title: 'Preview File',
         path: selectedAction.filePath,
+        sourceAction: selectedAction,
       });
       return;
     }
