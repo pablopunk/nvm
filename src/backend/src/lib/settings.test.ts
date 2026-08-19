@@ -105,6 +105,16 @@ describe('parseModelRouteRef', () => {
     });
   });
 
+  test('preserves slash-qualified OpenRouter model ids', () => {
+    assert.deepEqual(
+      parseModelRouteRef('openrouter/google/gemini-2.5-flash'),
+      {
+        provider: 'openrouter',
+        modelId: 'google/gemini-2.5-flash',
+      },
+    );
+  });
+
   test('returns null for missing slash', () => {
     assert.strictEqual(parseModelRouteRef('gpt-4o'), null);
   });

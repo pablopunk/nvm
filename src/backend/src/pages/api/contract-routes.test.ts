@@ -112,6 +112,18 @@ function installModelsDevFetch() {
             },
           },
         },
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              name: 'Gemini 2.5 Flash',
+              reasoning: true,
+              cost: { input: 0.3, output: 2.5 },
+              limit: { context: 1_048_576, output: 65_535 },
+              modalities: { input: ['text', 'image', 'pdf'] },
+            },
+          },
+        },
       });
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -214,7 +226,10 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   delete process.env.OPENCODE_API_KEY;
   delete process.env.OPENCODE_BASE_URL;
+  delete process.env.OPENROUTER_API_KEY;
+  delete process.env.OPENROUTER_BASE_URL;
   delete process.env.NEVERMIND_KILL_SWITCHES;
+  resetPricingCacheForTests();
 });
 
 test('credit reservation reconciliation has an automatic daily schedule', () => {
@@ -468,6 +483,36 @@ test('active-model returns the configured thinking level for a route', async () 
   assert.equal(body.thinkingLevel, 'high');
 });
 
+test('active-model preserves OpenRouter model ids and proxy format', async () => {
+  installModelsDevFetch();
+  installDb(
+    createFakeDb({
+      selects: proxySelects({
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+        thinkingLevel: 'off',
+      }),
+    }),
+  );
+  const response = await getActiveModel(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/v1/active-model?model=fast', {
+        headers: { authorization: 'Bearer nvm_pat_test' },
+      }),
+    ),
+  );
+  const body = (await response.json()) as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.id, 'google/gemini-2.5-flash');
+  assert.equal(body.name, 'Gemini 2.5 Flash');
+  assert.equal(body.provider, 'nevermind');
+  assert.equal(body.api, 'openai-completions');
+  assert.equal(body.baseUrl, 'https://api.nvm.fyi/api/v1');
+  assert.equal(body.thinkingLevel, 'off');
+  assert.deepEqual(body.input, ['text', 'image', 'pdf']);
+});
+
 test('active-model route resolves admin-defined extension model roles', async () => {
   installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects({ model: 'gemini-3-fast' }) }));
@@ -665,6 +710,101 @@ test('proxy route honors extension smart/fast model selection headers', async ()
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
   assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
+});
+
+test('OpenRouter proxy enforces model, reasoning, and safe routing controls', async () => {
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000,
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+        thinkingLevel: 'off',
+      }),
+    }),
+  );
+  let forwardedBody: any;
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              cost: { input: 0.3, output: 2.5 },
+              limit: { context: 1_048_576, output: 65_535 },
+            },
+          },
+        },
+      });
+    }
+    assert.equal(
+      url,
+      'https://openrouter.example/api/v1/chat/completions',
+    );
+    assert.equal(
+      new Headers(init?.headers).get('authorization'),
+      'Bearer openrouter-key',
+    );
+    forwardedBody = JSON.parse(String(init?.body));
+    return Response.json({
+      choices: [{ message: { role: 'assistant', content: 'Hello.' } }],
+      usage: { prompt_tokens: 2, completion_tokens: 3 },
+    });
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest(
+        {
+          model: 'attacker/model',
+          models: ['attacker/fallback'],
+          route: 'fallback',
+          provider: { order: ['attacker'] },
+          plugins: [{ id: 'web' }],
+          web_search_options: { search_context_size: 'high' },
+          reasoning_effort: 'high',
+          max_completion_tokens: 128,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'hello' },
+                {
+                  type: 'image_url',
+                  image_url: { url: 'data:image/png;base64,aGVsbG8=' },
+                },
+              ],
+            },
+          ],
+        },
+        { 'x-nevermind-ai-model': 'fast' },
+      ),
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBody.model, 'google/gemini-2.5-flash');
+  assert.deepEqual(forwardedBody.reasoning, { effort: 'none' });
+  assert.equal(forwardedBody.max_tokens, 128);
+  assert.equal(forwardedBody.max_completion_tokens, undefined);
+  assert.equal(forwardedBody.models, undefined);
+  assert.equal(forwardedBody.route, undefined);
+  assert.equal(forwardedBody.provider, undefined);
+  assert.equal(forwardedBody.plugins, undefined);
+  assert.equal(forwardedBody.web_search_options, undefined);
+  assert.equal(forwardedBody.messages[0].content[1].type, 'image_url');
+  assert.equal((db.insertedValues.at(-1) as any).provider, 'openrouter');
+  assert.equal(
+    (db.insertedValues.at(-1) as any).model,
+    'google/gemini-2.5-flash',
+  );
 });
 
 test('proxy bills paid credits without granting a Free user Pro model entitlement', async () => {

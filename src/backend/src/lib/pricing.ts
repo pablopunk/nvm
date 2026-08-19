@@ -25,6 +25,9 @@ const FALLBACK: Record<string, Record<string, { input: number; output: number }>
     'gemini-3-flash': { input: 0.3, output: 2.5 },
     'gemini-3.1-pro': { input: 12.5, output: 100 },
   },
+  openrouter: {
+    'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
+  },
 };
 
 type ModelsDevModel = {
@@ -57,6 +60,22 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
         modalities: { input: ['text'], output: ['text'] },
         limit: { context: 1_000_000, output: 384_000 },
         cost: { input: 0.14, output: 0.28 },
+      },
+    },
+  },
+  openrouter: {
+    models: {
+      'google/gemini-2.5-flash': {
+        id: 'google/gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash',
+        reasoning: true,
+        attachment: true,
+        modalities: {
+          input: ['text', 'image', 'audio', 'video', 'pdf'],
+          output: ['text'],
+        },
+        limit: { context: 1_048_576, output: 65_535 },
+        cost: { input: 0.3, output: 2.5 },
       },
     },
   },

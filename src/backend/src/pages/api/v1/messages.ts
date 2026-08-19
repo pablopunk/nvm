@@ -3,10 +3,13 @@ import { completeStreamLines, parseStreamUsageJson, proxyAndBill, type StreamUsa
 
 export const config = { maxDuration: 300 };
 
-function rewriteAnthropicModel(bodyText: string, activeModelId: string): string {
+function rewriteAnthropicModel(
+  bodyText: string,
+  routing: { activeModelId: string },
+): string {
   if (!bodyText) return bodyText;
   const parsed = JSON.parse(bodyText);
-  parsed.model = activeModelId;
+  parsed.model = routing.activeModelId;
   return JSON.stringify(parsed);
 }
 

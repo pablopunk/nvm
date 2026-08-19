@@ -10,9 +10,12 @@ mock.module('electron', {
   },
 });
 
-const { isNevermindCompatibilityManifest } = await import(
-  './nevermind-compatibility'
-);
+const {
+  checkNevermindCompatibility,
+  currentNevermindCompatibilityManifest,
+  invalidateNevermindCompatibilityCache,
+  isNevermindCompatibilityManifest,
+} = await import('./nevermind-compatibility');
 
 const validManifest = {
   backend: { environment: 'preview', version: 'abcdef0' },
@@ -23,6 +26,7 @@ const validManifest = {
     updateUrl: 'https://example.com/update',
   },
   client: { compatible: true, unsupportedReason: null },
+  // biome-ignore lint/style/useNamingConvention: Backend feature names use snake_case.
   features: { proxy_streaming: true },
 };
 
@@ -35,8 +39,56 @@ test('accepts the compatibility contract and rejects malformed manifests', () =>
     { ...validManifest, api: { currentVersion: '1', supportedVersions: [1] } },
     { ...validManifest, desktop: { minimumSupportedVersion: '0.13.0' } },
     { ...validManifest, client: { compatible: 'yes' } },
-    { ...validManifest, features: { proxy_streaming: 'yes' } },
+    {
+      ...validManifest,
+      // biome-ignore lint/style/useNamingConvention: Backend feature names use snake_case.
+      features: { proxy_streaming: 'yes' },
+    },
   ]) {
     assert.equal(isNevermindCompatibilityManifest(malformed), false);
+  }
+});
+
+test('coalesces concurrent compatibility refreshes', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = () => {
+    fetches += 1;
+    return Promise.resolve(Response.json(validManifest));
+  };
+  try {
+    await Promise.all([
+      checkNevermindCompatibility('https://coalescing.example'),
+      checkNevermindCompatibility('https://coalescing.example'),
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(fetches, 1);
+});
+
+test('does not restore a manifest fetched before invalidation', async () => {
+  const originalFetch = globalThis.fetch;
+  let resolveResponse!: (response: Response) => void;
+  let markFetchStarted!: () => void;
+  const fetchStarted = new Promise<void>((resolve) => {
+    markFetchStarted = resolve;
+  });
+  globalThis.fetch = () => {
+    markFetchStarted();
+    return new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+  };
+  const baseUrl = 'https://invalidation.example';
+  try {
+    const checking = checkNevermindCompatibility(baseUrl);
+    await fetchStarted;
+    await invalidateNevermindCompatibilityCache(baseUrl);
+    resolveResponse(Response.json(validManifest));
+    assert.equal(await checking, null);
+    assert.equal(currentNevermindCompatibilityManifest(baseUrl), null);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

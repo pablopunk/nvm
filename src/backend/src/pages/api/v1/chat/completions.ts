@@ -3,10 +3,35 @@ import { completeStreamLines, parseStreamUsageJson, proxyAndBill, type StreamUsa
 
 export const config = { maxDuration: 300 };
 
-function rewriteOpenAiModel(bodyText: string, activeModelId: string): string {
+function rewriteOpenAiModel(
+  bodyText: string,
+  routing: {
+    activeModelId: string;
+    provider: string;
+    thinkingLevel: string;
+  },
+): string {
   if (!bodyText) return bodyText;
   const parsed = JSON.parse(bodyText);
-  parsed.model = activeModelId;
+  parsed.model = routing.activeModelId;
+  if (routing.provider === 'openrouter') {
+    delete parsed.models;
+    delete parsed.route;
+    delete parsed.provider;
+    delete parsed.plugins;
+    delete parsed.web_search_options;
+    delete parsed.reasoning_effort;
+    parsed.reasoning = {
+      effort: routing.thinkingLevel === 'off' ? 'none' : routing.thinkingLevel,
+    };
+    if (
+      parsed.max_tokens === undefined &&
+      parsed.max_completion_tokens !== undefined
+    ) {
+      parsed.max_tokens = parsed.max_completion_tokens;
+    }
+    delete parsed.max_completion_tokens;
+  }
   return JSON.stringify(parsed);
 }
 

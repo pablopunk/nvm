@@ -650,7 +650,8 @@ clipboardService = createClipboardHistory({
 
 const selectedText = createSelectedTextReader({
   readAccessibilityText: readAccessibilitySelectedText,
-  paletteIsFocused: () => Boolean(paletteWindow.win?.isFocused()),
+  paletteIsFocused: () =>
+    Boolean(paletteWindow.win?.isVisible() && paletteWindow.win.isFocused()),
   clipboardSnapshot,
   readClipboardText: () => clipboard.readText(),
   writeClipboardText: (text) => clipboard.writeText(text),
@@ -7277,6 +7278,15 @@ async function initNevermindAi() {
       });
     },
   });
+  void Promise.all([
+    nevermindAi.prepare({ model: 'fast' }),
+    nevermindAi.prepare({ model: 'smart' }),
+  ]).catch((error) =>
+    logWarn('ai.one-shot.startup-warm.failed', error, {
+      source: 'host',
+      scope: 'ai',
+    }),
+  );
 }
 
 async function activatedExtensionPreview(filename) {
