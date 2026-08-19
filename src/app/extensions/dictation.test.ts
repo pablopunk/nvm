@@ -69,7 +69,8 @@ test('exposes Dictate and Dictation History root items', () => {
   const searchItems = extension.searchItems(context, 'dictate');
   assert.equal(searchItems.length, 2);
   assert.equal(searchItems[0].id, item.id);
-  const searchPanelActions = searchItems[0].actionPanel.sections[0].actions;
+  const searchPanelActions = (searchItems[0] as any).actionPanel.sections[0]
+    .actions;
   assert.equal(searchPanelActions.length, 1);
   assert.equal(searchPanelActions[0].title, 'Settings');
   assert.deepEqual(
