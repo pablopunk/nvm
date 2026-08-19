@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 
@@ -33,7 +34,7 @@ export default defineConfig({
       strictPort: true,
     },
     build: {
-      outDir: '../../../dist/renderer',
+      outDir: resolve('dist/renderer'),
       emptyOutDir: true,
       target: 'esnext',
       sourcemap: false,
