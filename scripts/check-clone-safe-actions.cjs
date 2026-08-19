@@ -4,11 +4,11 @@ const path = require('node:path');
 
 const source = [
   fs.readFileSync(
-    path.join(process.cwd(), 'src', 'electron', 'main.ts'),
+    path.join(process.cwd(), 'src', 'app', 'electron', 'main.ts'),
     'utf8',
   ),
   fs.readFileSync(
-    path.join(process.cwd(), 'src', 'electron', 'app-ipc-handlers.ts'),
+    path.join(process.cwd(), 'src', 'app', 'electron', 'app-ipc-handlers.ts'),
     'utf8',
   ),
 ].join('\n');

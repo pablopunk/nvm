@@ -25,12 +25,7 @@ function main() {
   const rootDirectory = process.cwd();
   const inventory = JSON.parse(
     fs.readFileSync(
-      path.join(
-        rootDirectory,
-        'src',
-        'docs',
-        'windows-platform-inventory.json',
-      ),
+      path.join(rootDirectory, 'docs', 'windows-platform-inventory.json'),
       'utf8',
     ),
   );

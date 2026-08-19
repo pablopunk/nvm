@@ -12,7 +12,7 @@ const EMOJI_TEST_URL =
   'https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt';
 const OUTPUT_PATH = path.join(
   process.cwd(),
-  'src/electron/extensions/emoji-symbol-data.ts',
+  'src/app/extensions/emoji-symbol-data.ts',
 );
 
 const INCLUDED_SYMBOL_CATEGORIES = new Set([

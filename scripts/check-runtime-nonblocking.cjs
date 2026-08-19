@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = process.cwd();
-const runtimeRoot = path.join(root, 'src', 'electron');
+const runtimeRoot = path.join(root, 'src', 'app', 'electron');
 const forbiddenCalls = [
   'accessSync',
   'appendFileSync',

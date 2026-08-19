@@ -240,7 +240,7 @@ function detectSitesInSource(relativePath, sourceText) {
       add('direct-platform', node);
     if (isInjectedPlatformSite(node)) add('injected-platform', node);
     if (
-      relativePath === 'src/electron/os.ts' &&
+      relativePath === 'src/app/electron/os.ts' &&
       (ts.isPropertyAssignment(node) || ts.isMethodDeclaration(node)) &&
       ['darwin', 'linux', 'win32'].includes(propertyName(node.name))
     )
@@ -280,7 +280,7 @@ function walkSourceFiles(directory) {
 }
 
 function collectObservedSites(rootDirectory) {
-  const sourceRoot = path.join(rootDirectory, 'src');
+  const sourceRoot = path.join(rootDirectory, 'src', 'app');
   return walkSourceFiles(sourceRoot).flatMap((filePath) => {
     const relativePath = normalizeRepositoryPath(
       path.relative(rootDirectory, filePath),
@@ -410,7 +410,6 @@ function main() {
   const rootDirectory = process.cwd();
   const inventoryPath = path.join(
     rootDirectory,
-    'src',
     'docs',
     'windows-platform-inventory.json',
   );

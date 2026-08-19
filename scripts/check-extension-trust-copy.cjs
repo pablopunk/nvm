@@ -4,11 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const apiPath = path.join(root, 'src/resources/nevermind-extension-api.d.ts');
-const trustDocPath = path.join(root, 'src/docs/extension-trust-model.md');
+const apiPath = path.join(
+  root,
+  'src/app/resources/nevermind-extension-api.d.ts',
+);
+const trustDocPath = path.join(root, 'docs/extension-trust-model.md');
 const disclosurePath = path.join(
   root,
-  'src/electron/extension-capabilities.ts',
+  'src/app/electron/extension-capabilities.ts',
 );
 const trustDoc = fs.readFileSync(trustDocPath, 'utf8');
 const disclosure = fs.readFileSync(disclosurePath, 'utf8');
@@ -23,8 +26,8 @@ const forbiddenEnforcementCopy = [
 ];
 const extensionContractCopyFiles = [
   apiPath,
-  path.join(root, 'src/electron/ai.ts'),
-  path.join(root, 'src/fixtures/ui-fixtures.ts'),
+  path.join(root, 'src/app/electron/ai.ts'),
+  path.join(root, 'src/app/fixtures/ui-fixtures.ts'),
 ];
 for (const file of extensionContractCopyFiles) {
   const source = fs.readFileSync(file, 'utf8');
@@ -61,11 +64,11 @@ if (
 
 const builtInFiles = [
   ...fs
-    .readdirSync(path.join(root, 'src/electron/extensions'))
+    .readdirSync(path.join(root, 'src/app/extensions'))
     .filter((name) => name.endsWith('.ts') && name !== 'extensions.ts')
-    .map((name) => path.join(root, 'src/electron/extensions', name)),
-  path.join(root, 'src/electron/clipboard-history.ts'),
-  path.join(root, 'src/fixtures/ui-fixtures.ts'),
+    .map((name) => path.join(root, 'src/app/extensions', name)),
+  path.join(root, 'src/app/electron/clipboard-history.ts'),
+  path.join(root, 'src/app/fixtures/ui-fixtures.ts'),
 ];
 for (const file of builtInFiles) {
   if (/\bpermissions\s*:/.test(fs.readFileSync(file, 'utf8'))) {

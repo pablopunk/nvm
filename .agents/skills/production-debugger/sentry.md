@@ -2,14 +2,14 @@
 
 Verified skill search result: `getsentry/sentry-for-ai@sentry-workflow` (`https://skills.sh/getsentry/sentry-for-ai/sentry-workflow`). Related setup/SDK skills found: `sentry-sdk-setup`, `sentry-node-sdk`.
 
-Use this connector for Sentry alerts, issue URLs, event URLs, crash spikes, cron alert messages, and backend/desktop exceptions.
+Use this connector for Sentry alerts, issue URLs, event URLs, crash spikes, cron alert messages, and src/backend/desktop exceptions.
 
 ## Desktop versus backend
 
 Do not treat the backend and the packaged Electron app as one integration.
 
 - **Backend:** verify `SENTRY_DSN` in the linked Vercel production environment.
-- **Desktop:** inspect `src/electron/sentry.ts` and the packaged release. The
+- **Desktop:** inspect `src/app/electron/sentry.ts` and the packaged release. The
   desktop DSN is selected from `SENTRY_DSN_DESKTOP`, then
   `NEVERMIND_SENTRY_DSN`, then its built-in fallback. It does not inherit the
   backend Vercel runtime environment.
@@ -49,7 +49,7 @@ If Sentry env vars are missing locally, pull production env from the linked Verc
 
 ```bash
 umask 077
-cd backend
+cd src/backend
 vercel env pull .vercel/.env.production.local --environment=production --yes
 ```
 

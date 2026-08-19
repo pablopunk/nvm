@@ -24,13 +24,14 @@ if (prepare.status !== 0) process.exit(prepare.status || 1);
 
 const astroBin = path.join(
   root,
+  'src',
   'backend',
   'node_modules',
   '.bin',
   isWindows ? 'astro.cmd' : 'astro',
 );
 const backend = spawn(astroBin, ['dev'], {
-  cwd: path.join(root, 'backend'),
+  cwd: path.join(root, 'src', 'backend'),
   stdio: 'inherit',
   shell: isWindows,
   detached: !isWindows,

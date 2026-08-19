@@ -4,7 +4,7 @@ const path = require('node:path');
 const ts = require('typescript');
 
 // ── allowlist: host-rendered UI methods that require a fixture ──────────────
-// Keep in sync with src/docs/extension-api-ui-fixtures.md § "Current Fixture".
+// Keep in sync with docs/extension-api-ui-fixtures.md § "Current Fixture".
 const FIXTURE_REQUIRED = new Set([
   'ui.list',
   'ui.collection',
@@ -30,11 +30,12 @@ const ROOT = process.cwd();
 const API_DTS = path.join(
   ROOT,
   'src',
+  'app',
   'resources',
   'nevermind-extension-api.d.ts',
 );
-const FIXTURE_DIR = path.join(ROOT, 'src', 'fixtures');
-const DOC_FILE = path.join(ROOT, 'src', 'docs', 'extension-api-ui-fixtures.md');
+const FIXTURE_DIR = path.join(ROOT, 'src', 'app', 'fixtures');
+const DOC_FILE = path.join(ROOT, 'docs', 'extension-api-ui-fixtures.md');
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

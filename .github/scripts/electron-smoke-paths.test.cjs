@@ -10,9 +10,9 @@ const {
 
 test('runs for application source and smoke infrastructure', () => {
   for (const filePath of [
-    'src/App.tsx',
-    'src/electron/main.ts',
-    'src/resources/nevermind-extension-api.d.ts',
+    'src/app/palette/App.tsx',
+    'src/app/electron/main.ts',
+    'src/app/resources/nevermind-extension-api.d.ts',
     'tests/electron/palette.smoke.spec.ts',
     'scripts/electron-test.cjs',
     'package.json',
@@ -26,8 +26,8 @@ test('runs for application source and smoke infrastructure', () => {
 
 test('skips backend, documentation, release-only, and unrelated changes', () => {
   for (const filePath of [
-    'backend/src/pages/index.astro',
-    'src/docs/logging.md',
+    'src/backend/src/pages/index.astro',
+    'docs/logging.md',
     'README.md',
     'AGENTS.md',
     '.github/workflows/deployed-smoke.yml',
@@ -41,11 +41,14 @@ test('skips backend, documentation, release-only, and unrelated changes', () => 
 
 test('runs mixed changes only when at least one app path changed', () => {
   assert.equal(
-    hasElectronSmokeChanges(['backend/package.json', 'README.md']),
+    hasElectronSmokeChanges(['src/backend/package.json', 'README.md']),
     false,
   );
   assert.equal(
-    hasElectronSmokeChanges(['backend/package.json', 'src/ui.tsx']),
+    hasElectronSmokeChanges([
+      'src/backend/package.json',
+      'src/app/palette/ui.tsx',
+    ]),
     true,
   );
 });
