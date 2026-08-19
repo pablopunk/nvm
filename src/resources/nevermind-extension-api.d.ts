@@ -171,7 +171,7 @@ export type ExtensionActionContribution = {
   customizable?: boolean;
   /** Muted semantic color applied to the action result title and Lucide/fallback icon. Images keep their original colors. */
   appearance?: ExtensionItemAppearance;
-  /** Where this durable action should be discoverable. Defaults to `['search']`; use `['root']` for an action referenced by a root item's `primaryAction` without creating a duplicate search result. */
+  /** Durable actions are searchable and visible at the palette root by default. Use `['hidden']` only when a `rootItems()` or `searchItems()` row references the action and owns discovery. `search` and `root` are retained as discoverable legacy values. */
   placement?: ExtensionActionPlacement[];
   /** Execution lifecycle. `background`/`noView` actions are eligible for host-managed jobs and diagnostics. */
   mode?: ExtensionBackgroundMode;

@@ -52,7 +52,6 @@ export function createAiCommandsExtension() {
           background: true,
           dismissAfterRun: 'auto',
           customizable: true,
-          placement: ['root'],
           run: fixSelectedText,
         }),
       ];

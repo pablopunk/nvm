@@ -368,7 +368,7 @@ function dictationActionContribution(ctx: any) {
     background: true,
     dismissAfterRun: 'auto',
     customizable: true,
-    placement: ['root'],
+    placement: ['hidden'],
     run: runDictation,
   });
 }

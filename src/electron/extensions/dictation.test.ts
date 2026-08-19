@@ -52,7 +52,7 @@ test('exposes one Dictate root item with settings under Cmd-K', () => {
 
   assert.equal('commands' in extension, false);
   assert.equal(contribution.id, 'dictate');
-  assert.deepEqual(contribution.placement, ['root']);
+  assert.deepEqual(contribution.placement, ['hidden']);
   assert.equal(contribution.customizable, true);
   assert.equal(item.id, 'dictation');
   assert.equal(item.title, 'Dictate');

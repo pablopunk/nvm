@@ -218,6 +218,7 @@ import {
 } from './search-coordinator';
 import {
   createSearchSnapshotAssembler,
+  extensionActionContributionIsDiscoverable,
   rankSearchProviderContributions,
   searchActionIsVisibleInTestMode,
   searchProviderDescriptors,
@@ -1396,6 +1397,7 @@ const REQUIRED_INTERNAL_EXTENSIONS = [
   'nevermind.web',
   'nevermind.clipboard',
   'nevermind.dictation',
+  'nevermind.ai-commands',
   'nevermind.emoji-symbols',
   'nevermind.apps',
   'nevermind.files',
@@ -1409,6 +1411,10 @@ const REQUIRED_INTERNAL_EXTENSIONS = [
 ];
 const REQUIRED_INTERNAL_COMMANDS = [
   { extensionId: AI_BUILDER_EXTENSION_ID, commandId: 'ai-chats' },
+  {
+    extensionId: 'nevermind.ai-commands',
+    commandId: 'fix-selected-text-with-ai',
+  },
 ];
 
 function actionAliases(actionId: any) {
@@ -1557,14 +1563,9 @@ function searchableExtensions() {
 
 function searchableExtensionActionEntries() {
   const entries = visibleExtensionActionEntries();
-  const searchable = entries.filter((entry) => {
-    const placement = entry.item?.placement;
-    return (
-      !Array.isArray(placement) ||
-      placement.length === 0 ||
-      placement.includes('search')
-    );
-  });
+  const searchable = entries.filter((entry) =>
+    extensionActionContributionIsDiscoverable(entry.item),
+  );
   return isNvmTestMode
     ? searchable.filter((entry) => testModeExtensionIsSafe(entry.extension.id))
     : searchable;

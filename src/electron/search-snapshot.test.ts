@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createSearchSnapshotAssembler,
+  extensionActionContributionIsDiscoverable,
   rankSearchProviderContributions,
   SEARCH_PROVIDER_RESULT_LIMIT,
   SEARCH_RESULT_LIMIT,
@@ -87,6 +88,22 @@ function assembler(
 function identity(rows: CharacterizedAction[]) {
   return rows.map(({ id, score }) => ({ id, score }));
 }
+
+test('keeps durable actions discoverable unless they explicitly opt out', () => {
+  assert.equal(extensionActionContributionIsDiscoverable({}), true);
+  assert.equal(
+    extensionActionContributionIsDiscoverable({ placement: ['search'] }),
+    true,
+  );
+  assert.equal(
+    extensionActionContributionIsDiscoverable({ placement: ['root'] }),
+    true,
+  );
+  assert.equal(
+    extensionActionContributionIsDiscoverable({ placement: ['hidden'] }),
+    false,
+  );
+});
 
 const RANKING_CASES = [
   {

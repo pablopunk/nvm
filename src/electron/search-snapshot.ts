@@ -27,6 +27,12 @@ export interface SearchAssemblyAction extends Record<string, unknown> {
   title?: unknown;
 }
 
+export function extensionActionContributionIsDiscoverable(item: {
+  placement?: unknown;
+}) {
+  return !(Array.isArray(item.placement) && item.placement.includes('hidden'));
+}
+
 export function searchProviderDescriptors<Extension extends SearchExtension>(
   extensions: Extension[],
   query: string,

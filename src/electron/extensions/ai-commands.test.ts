@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { extensionActionContributionIsDiscoverable } from '../search-snapshot';
 import { createAiCommandsExtension } from './ai-commands';
 
 function commandHandler(context: any) {
@@ -9,7 +10,7 @@ function commandHandler(context: any) {
     action: (input: unknown) => input,
   })[0];
   assert.equal(contribution.title, 'Fix Selected Text with AI');
-  assert.deepEqual(contribution.placement, ['root']);
+  assert.equal(extensionActionContributionIsDiscoverable(contribution), true);
   return contribution.run;
 }
 

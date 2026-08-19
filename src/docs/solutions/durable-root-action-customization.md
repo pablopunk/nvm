@@ -13,7 +13,7 @@ The search host selects `rootItems()` for an empty query and `searchItems()` for
 - Using `ctx.actions.background(...)` directly as a root item's primary action created a transient handler with no durable customization record.
 - Adding the same primary action to `actionPanel` rendered it twice because the host also treats the root primary action as the default action.
 - Defining only `rootItems()` made the item disappear when the user typed a query; typed search requires `searchItems()`.
-- `ExtensionActionContribution.placement` existed in the API types but was not enforced by host search filtering, so root-only durable actions could become duplicate standalone results.
+- Treating `placement: ['root']` as a search exclusion made a valid durable action disappear when it had no matching provider item.
 
 ## Root Cause
 
@@ -21,16 +21,17 @@ The extension API had separate concepts for dynamic root items and durable actio
 
 ## Fix
 
-- Register the primary capability action through `actions(ctx)` with `placement: ['root']`.
+- Register standalone capability actions through `actions(ctx)` without placement; durable actions are searchable and visible at the palette root by default.
+- Use `placement: ['hidden']` only when `rootItems()` or `searchItems()` owns discovery and references the durable action.
 - Reference that contribution from the root item's `primaryAction` with `ctx.actions.ref(...)`.
 - Derive the referenced durable action as the root item's host-owned `persistentAction` so the host can render canonical alias and shortcut options without trusting extension-supplied executable payloads.
-- Filter durable action search results by `placement` and remove the primary action from root action panels by identity or registered-action reference.
+- Exclude only explicitly hidden durable actions from palette discovery and remove the primary action from root action panels by identity or registered-action reference.
 - Keep Settings and other secondary actions in the root item's `actionPanel`; independently searchable secondary actions belong in `actions(ctx)` and can be referenced with `ctx.actions.ref(...)`.
 
 ## Verification
 
-The Dictation extension tests cover one root item, a durable root action, root-only placement, typed-query discovery, and a Settings-only action panel. `mise exec -- pnpm test` passes all 258 tests, `mise exec -- pnpm typecheck`, source Biome checks, `git diff --check`, and `mise exec -- pnpm build` pass, and `mise exec -- pnpm palette:debug --no-build --query dictate` reports one Dictation root item with `persistentAction` aliases/shortcut/customizable metadata and only Settings in its action panel. The full `pnpm check` command still reports formatting for ignored generated `dist/main/main.js` after a build.
+The Dictation extension tests cover one provider-owned root item, one hidden durable action, typed-query discovery, and a Settings-only action panel. Search snapshot tests enforce that default, `search`, and legacy `root` actions remain discoverable while only `hidden` opts out.
 
 ## Notes for Future Searches
 
-Search for `extensionRootActionFromItem`, `persistentActionForRef`, `searchProviderDescriptors`, `placement: ['root']`, `ctx.actions.ref`, `extension-root-item`, and `extension-action` before changing root-item action behavior.
+Search for `extensionRootActionFromItem`, `persistentActionForRef`, `extensionActionContributionIsDiscoverable`, `searchProviderDescriptors`, `placement: ['hidden']`, `ctx.actions.ref`, `extension-root-item`, and `extension-action` before changing root-item action behavior.
