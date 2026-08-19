@@ -14,6 +14,7 @@
 * Keep files small and focused. Refactor slow patterns when encountered.
 * Model OS/desktop integrations as intent-named capabilities; keep platform checks in the capability layer and see `docs/os-architecture.md`.
 * Maintain native behavioral contracts (shortcuts, icons, async lifecycle) when migrating features to extensions.
+* Treat keyboard commands, displayed action shortcuts, panel guards, and focus restoration as one contract: opening or dismissing Command-K must preserve window-local shortcuts and never strand focus in hidden or unmounted controls.
 * Keep every action/search/view payload that crosses Electron IPC clone-safe and privilege-safe; strip handlers/functions after registering them, tokenize privileged actions or expose opaque host-owned handles, and add clone-safety checks for new payload shapes.
 * In extension API host-layer routing (`extension-ui-api.ts`), discriminate on properties unique to one input shape before checking optional shared fields — the `kind` field is semantically overloaded across `ExtensionFileKind` and preview-item descriptors, and routing by it first causes misroutes when both shapes overlap.
 * Keep desktop/backend API changes backward-compatible for supported released clients; see `docs/backend-api-compatibility.md`.
