@@ -27,6 +27,7 @@ import {
   prepareDictationModel,
   recordDictation,
 } from './dictation-renderer';
+import { dictationDevices } from './dictation-devices';
 import { ActionPanel } from './action-panel';
 import { isAppIconPath } from './app-icons';
 import {
@@ -1089,28 +1090,9 @@ function DictationRendererController() {
       if (command.type === 'devices') {
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          const microphones = devices
-            .filter((device) => device.kind === 'audioinput')
-            .map((device, index) => ({
-              id: device.deviceId || `microphone-${index + 1}`,
-              title:
-                device.label.replace(/^(Default|Communications) - /, '') ||
-                `Microphone ${index + 1}`,
-              isDefault: device.deviceId === 'default',
-            }));
-          const defaultMicrophone = microphones.find(
-            (device) => device.isDefault,
-          );
           window.nvm.replyDictation({
             type: 'devices',
-            devices: [
-              {
-                id: 'default',
-                title: defaultMicrophone?.title || 'System Default',
-                isDefault: true,
-              },
-              ...microphones.filter((device) => device.id !== 'default'),
-            ],
+            devices: dictationDevices(devices),
           });
         } catch (error) {
           window.nvm.replyDictation({

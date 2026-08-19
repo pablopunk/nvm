@@ -28,8 +28,9 @@ function actionBuilders(overrides: Record<string, unknown> = {}) {
 function rootItemFor(context: any) {
   const extension = createDictationExtension();
   const items = extension.rootItems(context);
-  assert.equal(items.length, 1);
-  return items[0] as any;
+  const item = items.find((candidate: any) => candidate.id === 'dictation');
+  if (!item) throw new Error('Dictation root item missing');
+  return item as any;
 }
 
 function dictationHandlerFor(context: any) {
@@ -42,9 +43,11 @@ function dictationHandlerFor(context: any) {
   return contribution.run;
 }
 
-test('exposes one Dictate root item with settings under Cmd-K', () => {
+test('exposes Dictate and Dictation History root items', () => {
   const extension = createDictationExtension();
-  const item = rootItemFor({ actions: actionBuilders() });
+  const context = { actions: actionBuilders() };
+  const roots = extension.rootItems(context);
+  const item = rootItemFor(context);
   const panelActions = item.actionPanel.sections[0].actions;
   const contribution = extension.actions({
     action: (input: unknown) => input,
@@ -59,11 +62,12 @@ test('exposes one Dictate root item with settings under Cmd-K', () => {
   assert.equal(item.primaryAction.title, 'Dictate');
   assert.equal(item.primaryAction.type, 'runExtensionRegisteredAction');
   assert.equal(item.primaryAction.registeredActionId, 'dictate');
-  const searchItems = extension.searchItems(
-    { actions: actionBuilders() },
-    'dictate',
+  assert.deepEqual(
+    roots.map((root: any) => root.title),
+    ['Dictate', 'Dictation History'],
   );
-  assert.equal(searchItems.length, 1);
+  const searchItems = extension.searchItems(context, 'dictate');
+  assert.equal(searchItems.length, 2);
   assert.equal(searchItems[0].id, item.id);
   const searchPanelActions = searchItems[0].actionPanel.sections[0].actions;
   assert.equal(searchPanelActions.length, 1);
@@ -102,6 +106,7 @@ test('toggles recording and returns a concealed paste action', async () => {
         dictionary: '',
         copyToClipboard: false,
       }),
+      set: async () => {},
     },
     dictation: {
       status: async () => (recording ? 'recording' : 'idle'),
@@ -307,6 +312,7 @@ test('leaves the transcription on the clipboard when enabled', async () => {
         dictionary: '',
         copyToClipboard: true,
       }),
+      set: async () => {},
     },
     dictation: {
       status: async () => (recording ? 'recording' : 'idle'),
@@ -375,6 +381,7 @@ test('cleans every transcript with Fast AI and preferred dictionary terms', asyn
         dictionary: 'Nevermind\nParakeet',
         copyToClipboard: false,
       }),
+      set: async () => {},
     },
     dictation: {
       status: async () => (recording ? 'recording' : 'idle'),
@@ -446,7 +453,10 @@ test('cleans without dictionary terms and falls back when AI fails', async () =>
   const pastedText: string[] = [];
   let recording = false;
   const context = {
-    storage: { get: async () => ({ cleanupWithAi: true, dictionary: '' }) },
+    storage: {
+      get: async () => ({ cleanupWithAi: true, dictionary: '' }),
+      set: async () => {},
+    },
     dictation: {
       status: async () => (recording ? 'recording' : 'idle'),
       modelCacheStatus: async () => 'cached',
@@ -558,4 +568,83 @@ test('renders and saves multiline dictionary settings', async () => {
       },
     ],
   ]);
+});
+
+test('stores cleaned transcripts and manages bounded dictation history', async () => {
+  const now = Date.now();
+  const stored: Record<string, unknown> = {
+    settings: {
+      deviceId: 'default',
+      keepAliveMs: 300_000,
+      cleanupWithAi: true,
+      dictionary: '',
+      copyToClipboard: false,
+    },
+    history: Array.from({ length: 100 }, (_, index) => ({
+      id: `existing-${index}`,
+      text: `Existing transcript ${index}`,
+      createdAt: now - index - 1,
+    })),
+  };
+  let recording = false;
+  const context: any = {
+    storage: {
+      get: async (key: string, fallback: unknown) => stored[key] ?? fallback,
+      set: async (key: string, value: unknown) => {
+        stored[key] = value;
+      },
+    },
+    dictation: {
+      status: async () => (recording ? 'recording' : 'idle'),
+      modelCacheStatus: async () => 'cached',
+      start: async () => {
+        recording = true;
+      },
+      stop: async () => {
+        recording = false;
+        return 'raw transcript';
+      },
+    },
+    ai: { ask: async () => 'Clean transcript.' },
+    ui: {
+      list: (input: unknown) => input,
+      toast: (input: unknown) => input,
+      indicator: { show: () => {}, update: () => {}, hide: () => {} },
+    },
+    actions: actionBuilders({
+      copyText: (text: string, title: string) => ({
+        type: 'copyText',
+        text,
+        title,
+      }),
+      pasteText: (text: string) => ({ type: 'pasteText', text }),
+      push: (title: string, view: unknown) => ({ type: 'push', title, view }),
+    }),
+    navigation: { run: (action: unknown) => action },
+  };
+  const handler = dictationHandlerFor(context);
+
+  await handler(context, {});
+  await handler(context, {});
+
+  const history = stored.history as any[];
+  assert.equal(history.length, 100);
+  assert.equal(history[0].text, 'Clean transcript.');
+
+  const historyRoot = createDictationExtension()
+    .rootItems(context)
+    .find((item: any) => item.id === 'dictation-history') as any;
+  const opened = await historyRoot.primaryAction.__handler(context, {});
+  const view = opened.view as any;
+  assert.equal(view.items.length, 100);
+  assert.equal(view.items[0].title, 'Clean transcript.');
+  assert.equal(view.items[0].actions[0].text, 'Clean transcript.');
+
+  await view.items[0].actions[1].__handler(context, {});
+  assert.equal((stored.history as any[]).length, 99);
+
+  const refreshed = (await historyRoot.primaryAction.__handler(context, {}))
+    .view as any;
+  await refreshed.actions[0].__handler(context, {});
+  assert.deepEqual(stored.history, []);
 });

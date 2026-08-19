@@ -6,6 +6,12 @@ type DictationSettings = {
   copyToClipboard: boolean;
 };
 
+type DictationHistoryEntry = {
+  id: string;
+  text: string;
+  createdAt: number;
+};
+
 const DEFAULT_SETTINGS: DictationSettings = {
   deviceId: 'default',
   keepAliveMs: 5 * 60 * 1000,
@@ -13,6 +19,8 @@ const DEFAULT_SETTINGS: DictationSettings = {
   dictionary: '',
   copyToClipboard: false,
 };
+const HISTORY_STORAGE_KEY = 'history';
+const MAX_HISTORY_ENTRIES = 100;
 const INTERMEDIATE_INDICATOR_DELAY_MS = 1_000;
 const AI_CLEANUP_TIMEOUT_MS = 6_000;
 const CLEANUP_SYSTEM_PROMPT =
@@ -115,6 +123,127 @@ async function readSettings(ctx: any): Promise<DictationSettings> {
   };
 }
 
+function historyEntriesFrom(value: unknown): DictationHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === 'object'),
+    )
+    .map((entry) => ({
+      id: String(entry.id || ''),
+      text: String(entry.text || ''),
+      createdAt: Number(entry.createdAt) || 0,
+    }))
+    .filter((entry) => entry.id && entry.text.trim() && entry.createdAt > 0)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, MAX_HISTORY_ENTRIES);
+}
+
+async function readHistory(ctx: any) {
+  return historyEntriesFrom(await ctx.storage.get(HISTORY_STORAGE_KEY, []));
+}
+
+async function writeHistory(ctx: any, entries: DictationHistoryEntry[]) {
+  await ctx.storage.set(
+    HISTORY_STORAGE_KEY,
+    entries.slice(0, MAX_HISTORY_ENTRIES),
+  );
+}
+
+async function addHistoryEntry(ctx: any, text: string) {
+  const createdAt = Date.now();
+  await writeHistory(ctx, [
+    {
+      id: `dictation-${createdAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      createdAt,
+    },
+    ...(await readHistory(ctx)),
+  ]);
+}
+
+function historyEntryTitle(text: string) {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+async function historyView(ctx: any) {
+  const entries = await readHistory(ctx);
+  const clearHistory = ctx.actions.run(
+    'Clear History',
+    async (innerCtx: any) => {
+      await writeHistory(innerCtx, []);
+      return {
+        view: await historyView(innerCtx),
+        navigation: 'replace',
+        toast: { message: 'Dictation history cleared', tone: 'success' },
+      };
+    },
+    {
+      icon: 'trash-2',
+      style: 'destructive',
+      requiresConfirmation: true,
+      confirmMessage: 'Clear all dictation history? This cannot be undone.',
+      confirmLabel: 'Clear history',
+    },
+  );
+
+  return ctx.ui.list({
+    id: 'dictation-history',
+    title: 'Dictation History',
+    subtitle: `${entries.length} ${entries.length === 1 ? 'dictation' : 'dictations'}`,
+    searchBarPlaceholder: 'Search dictation history',
+    emptyView: {
+      title: 'No dictation history',
+      subtitle: 'Completed dictations will appear here.',
+    },
+    items: entries.map((entry) => {
+      const open = ctx.actions.push('View Transcript', {
+        type: 'preview',
+        title: 'Dictation',
+        subtitle: new Date(entry.createdAt).toLocaleString(),
+        content: entry.text,
+        actions: [ctx.actions.copyText(entry.text, 'Copy Transcript')],
+      });
+      const copy = ctx.actions.copyText(entry.text, 'Copy Transcript');
+      const remove = ctx.actions.run(
+        'Delete Transcript',
+        async (innerCtx: any) => {
+          await writeHistory(
+            innerCtx,
+            (await readHistory(innerCtx)).filter(
+              (item) => item.id !== entry.id,
+            ),
+          );
+          return {
+            view: await historyView(innerCtx),
+            navigation: 'replace',
+            toast: { message: 'Transcript deleted', tone: 'success' },
+          };
+        },
+        {
+          icon: 'trash-2',
+          style: 'destructive',
+          requiresConfirmation: true,
+          confirmMessage: 'Delete this transcript? This cannot be undone.',
+          confirmLabel: 'Delete transcript',
+        },
+      );
+      return {
+        id: entry.id,
+        title: historyEntryTitle(entry.text),
+        subtitle: new Date(entry.createdAt).toLocaleString(),
+        icon: 'file-text',
+        primaryAction: open,
+        actions: [copy, remove],
+      };
+    }),
+    actions: entries.length ? [clearHistory] : [],
+    actionPanel: entries.length
+      ? { sections: [{ actions: [clearHistory] }] }
+      : undefined,
+  });
+}
+
 async function cleanTranscript(
   ctx: any,
   transcript: string,
@@ -157,7 +286,7 @@ async function cleanTranscript(
 
 async function settingsView(ctx: any) {
   const settings = await readSettings(ctx);
-  let devices = [{ id: 'default', title: 'System Default', isDefault: true }];
+  let devices = [{ id: 'default', title: 'Default', isDefault: true }];
   try {
     devices = await ctx.dictation.devices();
   } catch {}
@@ -310,6 +439,13 @@ async function runDictation(ctx: any) {
       settings.cleanupWithAi,
       settings.dictionary,
     );
+    try {
+      await addHistoryEntry(ctx, text);
+    } catch (error) {
+      ctx.logs?.warn?.('Dictation history save failed', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     const cleanedAt = performance.now();
     ctx.logs?.debug?.('Dictation cleanup completed', {
       durationMs: Math.round(cleanedAt - transcribedAt),
@@ -357,6 +493,24 @@ function dictationRootItem(ctx: any) {
   };
 }
 
+function dictationHistoryRootItem(ctx: any) {
+  const openHistory = ctx.actions.run(
+    'Open Dictation History',
+    async (innerCtx: any) => ({
+      view: await historyView(innerCtx),
+      navigation: 'push',
+    }),
+  );
+  return {
+    id: 'dictation-history',
+    title: 'Dictation History',
+    subtitle: 'Browse and copy previous dictations',
+    icon: 'history',
+    aliases: ['dictation history', 'transcripts', 'voice history'],
+    primaryAction: openHistory,
+  };
+}
+
 function dictationActionContribution(ctx: any) {
   return ctx.action({
     id: 'dictate',
@@ -383,10 +537,10 @@ export function createDictationExtension() {
       return [dictationActionContribution(ctx)];
     },
     rootItems(ctx: any) {
-      return [dictationRootItem(ctx)];
+      return [dictationRootItem(ctx), dictationHistoryRootItem(ctx)];
     },
     searchItems(ctx: any, _query: string) {
-      return [dictationRootItem(ctx)];
+      return [dictationRootItem(ctx), dictationHistoryRootItem(ctx)];
     },
   };
 }
