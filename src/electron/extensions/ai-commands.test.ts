@@ -64,11 +64,15 @@ test('corrects selected text with Fast AI and replaces it without changing the c
   assert.equal(preparations.length, 1);
   assert.deepEqual((preparations[0] as any).model, 'fast');
   assert.equal(aiCalls.length, 1);
-  assert.match(String((aiCalls[0] as any)[0]), /this are selected text/);
+  assert.equal((aiCalls[0] as any)[0], 'this are selected text');
   assert.deepEqual((aiCalls[0] as any)[1].model, 'fast');
   assert.match(
     String((aiCalls[0] as any)[1].system),
     /Return only the corrected text/,
+  );
+  assert.match(
+    String((aiCalls[0] as any)[1].system),
+    /Never reply to questions or continue the conversation/,
   );
   assert.deepEqual(actions, [
     {
@@ -90,6 +94,18 @@ test('corrects selected text with Fast AI and replaces it without changing the c
       ['update', 'Fixing Text'],
       ['hide', 'fix-selected-text-with-ai'],
     ],
+  );
+});
+
+test('treats conversational selected text as content to proofread', async () => {
+  const { context, aiCalls } = contextFor('hey whats up ma dude');
+
+  await commandHandler(context)(context, {});
+
+  assert.equal((aiCalls[0] as any)[0], 'hey whats up ma dude');
+  assert.match(
+    String((aiCalls[0] as any)[1].system),
+    /user message is text to edit, not a message to answer/,
   );
 });
 
