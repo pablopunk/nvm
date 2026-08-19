@@ -532,6 +532,65 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
   }
 });
 
+test('saves a shortcut from the recorder with Enter', async () => {
+  test.setTimeout(40_000);
+  const shortcutUserDataDir = path.join(userDataDir, 'shortcut-recorder');
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+  const settingsTitle =
+    process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings';
+  const shortcutKey =
+    process.platform === 'darwin'
+      ? 'Meta+Control+Alt+X'
+      : 'Control+Alt+Shift+X';
+  const expectedAccelerator =
+    process.platform === 'darwin'
+      ? 'Command+Control+Alt+X'
+      : 'Control+Alt+Shift+X';
+
+  try {
+    launched = await launchTestApplication(shortcutUserDataDir);
+    const input = launched.page.locator('input[placeholder]').first();
+    await input.fill(settingsTitle);
+    const selectedAction = launched.page.locator(
+      `[cmdk-item][data-selected="true"]`,
+    );
+    await expect(selectedAction).toContainText(settingsTitle);
+    await launched.page.keyboard.press('ArrowDown');
+
+    await launched.page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+K' : 'Control+K',
+    );
+    await expect(
+      launched.page.getByText('Set keyboard shortcut', { exact: true }),
+    ).toBeVisible();
+    await launched.page
+      .getByText('Set keyboard shortcut', { exact: true })
+      .click();
+
+    const recorder = launched.page.locator(
+      'input[placeholder="Press a keyboard shortcut"]',
+    );
+    await expect(recorder).toBeVisible();
+    await launched.page.keyboard.press(shortcutKey);
+    await expect(recorder).toHaveValue(expectedAccelerator);
+
+    await launched.page.keyboard.press('Enter');
+    await expect(recorder).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        const shortcuts = await launched!.page.evaluate(() =>
+          window.nvm.getShortcuts(),
+        );
+        return shortcuts.find((record) => record.action.title === settingsTitle)
+          ?.accelerator;
+      })
+      .toBe(expectedAccelerator);
+  } finally {
+    if (launched)
+      await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
+
 test('Floating Notes runs Cmd+O from and after dismissing its action panel', async () => {
   test.setTimeout(40_000);
   const floatingNotesUserDataDir = path.join(userDataDir, 'floating-notes');

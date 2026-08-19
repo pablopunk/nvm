@@ -4,7 +4,7 @@ const path = require('node:path');
 const ts = require('typescript');
 
 // ── allowlist: host-rendered UI methods that require a fixture ──────────────
-// Keep in sync with src/docs/extension-api-ui-fixtures.md § "Current Fixture".
+// Keep in sync with docs/extension-api-ui-fixtures.md § "Current Fixture".
 const FIXTURE_REQUIRED = new Set([
   'ui.list',
   'ui.collection',
@@ -15,6 +15,7 @@ const FIXTURE_REQUIRED = new Set([
   'input.prompt',
   'ui.editor',
   'ui.progress',
+  'ui.indicator',
   'ui.webview',
   'ui.camera',
   'ui.confirm',
@@ -29,11 +30,12 @@ const ROOT = process.cwd();
 const API_DTS = path.join(
   ROOT,
   'src',
+  'app',
   'resources',
   'nevermind-extension-api.d.ts',
 );
-const FIXTURE_FILE = path.join(ROOT, 'src', 'fixtures', 'ui-fixtures.ts');
-const DOC_FILE = path.join(ROOT, 'src', 'docs', 'extension-api-ui-fixtures.md');
+const FIXTURE_DIR = path.join(ROOT, 'src', 'app', 'fixtures');
+const DOC_FILE = path.join(ROOT, 'docs', 'extension-api-ui-fixtures.md');
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,14 @@ function fail(message) {
 
 function readFile(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function fixtureFiles() {
+  return fs
+    .readdirSync(FIXTURE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .map((entry) => path.join(FIXTURE_DIR, entry.name))
+    .sort();
 }
 
 /** Context variable names used to access extension APIs in fixture code. */
@@ -161,6 +171,18 @@ function collectFixtureCalls(fixtureSource) {
         const method = methodAccess.name.text; // 'list' | 'prompt' | ...
         calls.add(`${ns}.${method}`);
       }
+
+      if (
+        ts.isPropertyAccessExpression(nsAccess) &&
+        ts.isPropertyAccessExpression(nsAccess.expression) &&
+        ts.isIdentifier(nsAccess.expression.expression) &&
+        isContextVar(nsAccess.expression.expression.text) &&
+        ts.isIdentifier(nsAccess.expression.name) &&
+        nsAccess.expression.name.text === 'ui' &&
+        ts.isIdentifier(nsAccess.name)
+      ) {
+        calls.add(`ui.${nsAccess.name.text}`);
+      }
     }
     ts.forEachChild(node, visit);
   }
@@ -206,7 +228,7 @@ function checkNewAPIMethods(uiMethods) {
         fail(
           `New API method "${qualified}" found in ExtensionContext but not in the fixture allowlist. ` +
             `If it renders host-owned UI, add it to FIXTURE_REQUIRED in this script, ` +
-            `add a fixture command in ${path.relative(ROOT, FIXTURE_FILE)}, ` +
+            `add a fixture command under ${path.relative(ROOT, FIXTURE_DIR)}, ` +
             `and update ${path.relative(ROOT, DOC_FILE)}. ` +
             `If it is a pass‑through helper, add "${qualified}" to SKIP_METHODS.`,
         );
@@ -221,7 +243,7 @@ function checkFixtureCoverage(calls) {
   for (const qualified of FIXTURE_REQUIRED) {
     if (!calls.has(qualified)) {
       fail(
-        `"${qualified}" is required by the fixture doc but not called in ${path.relative(ROOT, FIXTURE_FILE)}. ` +
+        `"${qualified}" is required by the fixture doc but not called in fixture files under ${path.relative(ROOT, FIXTURE_DIR)}. ` +
           `Add a command that exercises ${qualified} and update ${path.relative(ROOT, DOC_FILE)}.`,
       );
     }
@@ -267,10 +289,15 @@ function verifyDocList() {
 
 function main() {
   const dtsSource = readFile(API_DTS);
-  const fixtureSource = readFile(FIXTURE_FILE);
+  const fixtureSources = fixtureFiles();
 
   const uiMethods = extractUIMethods(dtsSource);
-  const calls = collectFixtureCalls(fixtureSource);
+  const calls = new Set();
+  for (const fixtureSource of fixtureSources) {
+    for (const call of collectFixtureCalls(readFile(fixtureSource))) {
+      calls.add(call);
+    }
+  }
 
   verifyAllowlistAgainstAPI(uiMethods);
   checkNewAPIMethods(uiMethods);

@@ -3,10 +3,10 @@
 const fs = require('node:fs');
 
 const appPathPrefixes = ['src/', 'tests/electron/'];
-const appPathExclusions = ['src/docs/'];
+const appPathExclusions = ['docs/', 'src/backend/'];
 const appBuildPaths = new Set([
   'electron.vite.config.ts',
-  'index.html',
+  'src/app/palette/index.html',
   'mise.toml',
   'package.json',
   'playwright.config.ts',

@@ -2,12 +2,18 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const sourcePath = path.join(process.cwd(), 'src', 'electron', 'main.ts');
+const sourcePath = path.join(
+  process.cwd(),
+  'src',
+  'app',
+  'electron',
+  'main.ts',
+);
 const source = fs.readFileSync(sourcePath, 'utf8');
 const extensionsIndexPath = path.join(
   process.cwd(),
   'src',
-  'electron',
+  'app',
   'extensions',
   'index.ts',
 );

@@ -1,0 +1,187 @@
+export type ModelCost = {
+  provider: string;
+  modelId: string;
+  inputUsdPerMtok: number;
+  outputUsdPerMtok: number;
+};
+
+const MODELS_DEV_URL = 'https://models.dev/api.json';
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
+const PROVIDER_TO_MODELS_DEV: Record<string, string> = {
+  opencode_zen: 'opencode',
+  opencode: 'opencode',
+  openrouter: 'openrouter',
+  anthropic: 'anthropic',
+  google: 'google',
+  openai: 'openai',
+};
+
+const FALLBACK: Record<string, Record<string, { input: number; output: number }>> = {
+  opencode: {
+    'claude-haiku-4-5': { input: 1, output: 5 },
+    'claude-sonnet-4-6': { input: 3, output: 15 },
+    'gemini-3.5-flash': { input: 1.5, output: 9 },
+    'gemini-3-flash': { input: 0.3, output: 2.5 },
+    'gemini-3.1-pro': { input: 12.5, output: 100 },
+  },
+  openrouter: {
+    'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
+  },
+};
+
+type ModelsDevModel = {
+  id: string;
+  name?: string;
+  reasoning?: boolean;
+  attachment?: boolean;
+  modalities?: { input?: string[]; output?: string[] };
+  limit?: { context?: number; output?: number };
+  cost?: { input?: number; output?: number };
+};
+type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
+type ModelsDevApi = Record<string, ModelsDevProvider>;
+
+const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
+  opencode: {
+    models: {
+      'gpt-5.6-luna': {
+        id: 'gpt-5.6-luna',
+        name: 'GPT-5.6 Luna',
+        reasoning: true,
+        modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+        limit: { context: 1_050_000, output: 128_000 },
+        cost: { input: 0.2, output: 1.2 },
+      },
+      'deepseek-v4-flash': {
+        id: 'deepseek-v4-flash',
+        name: 'DeepSeek V4 Flash',
+        reasoning: true,
+        modalities: { input: ['text'], output: ['text'] },
+        limit: { context: 1_000_000, output: 384_000 },
+        cost: { input: 0.14, output: 0.28 },
+      },
+    },
+  },
+  openrouter: {
+    models: {
+      'google/gemini-2.5-flash': {
+        id: 'google/gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash',
+        reasoning: true,
+        attachment: true,
+        modalities: {
+          input: ['text', 'image', 'audio', 'video', 'pdf'],
+          output: ['text'],
+        },
+        limit: { context: 1_048_576, output: 65_535 },
+        cost: { input: 0.3, output: 2.5 },
+      },
+    },
+  },
+};
+
+let cache: { data: ModelsDevApi; at: number } | null = null;
+let inflight: Promise<ModelsDevApi> | null = null;
+
+async function fetchCatalog(): Promise<ModelsDevApi> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.data;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      const res = await fetch(MODELS_DEV_URL, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`models.dev ${res.status}`);
+      const data = (await res.json()) as ModelsDevApi;
+      cache = { data, at: Date.now() };
+      return data;
+    } catch (err) {
+      console.warn('[pricing] models.dev fetch failed, using fallback', err);
+      const data = Object.fromEntries(
+        Object.entries(FALLBACK).map(([id, models]) => [
+          id,
+          {
+            models: Object.fromEntries(
+              Object.entries(models).map(([mid, cost]) => [mid, { id: mid, cost }]),
+            ),
+          },
+        ]),
+      );
+      cache = { data, at: Date.now() };
+      return data;
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
+}
+
+function modelsDevKey(provider: string) {
+  return PROVIDER_TO_MODELS_DEV[provider] ?? provider;
+}
+
+function bundledRuntimeModel(provider: string, modelId: string) {
+  return BUNDLED_RUNTIME_MODELS[modelsDevKey(provider)]?.models?.[modelId];
+}
+
+async function runtimeModel(provider: string, modelId: string) {
+  const key = modelsDevKey(provider);
+  const currentCache = cache;
+  const cached = currentCache?.data[key]?.models?.[modelId];
+  if (cached) {
+    if (Date.now() - currentCache.at >= CACHE_TTL_MS) void fetchCatalog();
+    return cached;
+  }
+  const bundled = bundledRuntimeModel(provider, modelId);
+  if (bundled) {
+    void fetchCatalog();
+    return bundled;
+  }
+  return (await fetchCatalog())[key]?.models?.[modelId];
+}
+
+export async function lookupModelCost(provider: string, modelId: string): Promise<ModelCost | null> {
+  const cost = (await runtimeModel(provider, modelId))?.cost;
+  if (!cost || cost.input == null || cost.output == null) return null;
+  return { provider, modelId, inputUsdPerMtok: cost.input, outputUsdPerMtok: cost.output };
+}
+
+export type ModelDescriptor = {
+  id: string;
+  name: string;
+  contextWindow: number;
+  maxTokens: number;
+  reasoning: boolean;
+  input: string[];
+};
+
+const DEFAULT_DESCRIPTOR = {
+  contextWindow: 200_000,
+  maxTokens: 32_000,
+  reasoning: false,
+  input: ['text'],
+};
+
+export async function lookupModelDescriptor(provider: string, modelId: string): Promise<ModelDescriptor | null> {
+  const m = await runtimeModel(provider, modelId);
+  if (!m) return null;
+  return {
+    id: modelId,
+    name: m.name ?? modelId,
+    contextWindow: m.limit?.context ?? DEFAULT_DESCRIPTOR.contextWindow,
+    maxTokens: m.limit?.output ?? DEFAULT_DESCRIPTOR.maxTokens,
+    reasoning: m.reasoning ?? DEFAULT_DESCRIPTOR.reasoning,
+    input: m.modalities?.input ?? DEFAULT_DESCRIPTOR.input,
+  };
+}
+
+export async function listModelsForProvider(provider: string): Promise<string[]> {
+  const catalog = await fetchCatalog();
+  const key = modelsDevKey(provider);
+  const models = catalog[key]?.models ?? {};
+  return Object.keys(models).sort();
+}
+
+export function resetPricingCacheForTests() {
+  cache = null;
+  inflight = null;
+}

@@ -9,17 +9,20 @@ function assertIncludes(path, text) {
   if (!content.includes(text)) throw new Error(`${path} must include ${text}`);
 }
 
-assertIncludes('src/command-list.tsx', 'RootCommandList');
-assertIncludes('src/extension-view.tsx', "presentation === 'root'");
-assertIncludes('src/electron/main.ts', "presentation: 'root'");
-assertIncludes('src/electron/main.ts', 'function clipboardHistoryView()');
-assertIncludes('src/shortcut-manager.tsx', 'ShortcutManagerView');
-assertIncludes('src/use-ai-chat.ts', 'useAiChat');
-assertIncludes('src/use-extension-navigation.ts', 'useExtensionNavigation');
-assertIncludes('src/filtering.ts', 'filterCommandItems');
-assertIncludes('src/command-icons.tsx', 'iconForAction');
-assertIncludes('src/ui.tsx', 'selectedOnlyShortcut');
-assertIncludes('src/electron/main.ts', "case 'nativeAction'");
-assertIncludes('src/electron/main.ts', 'declaredGlobalShortcuts');
+assertIncludes('src/app/palette/command-list.tsx', 'RootCommandList');
+assertIncludes('src/app/palette/extension-view.tsx', "presentation === 'root'");
+assertIncludes('src/app/electron/main.ts', "presentation: 'root'");
+assertIncludes('src/app/electron/main.ts', 'function clipboardHistoryView()');
+assertIncludes('src/app/palette/shortcut-manager.tsx', 'ShortcutManagerView');
+assertIncludes('src/app/palette/use-ai-chat.ts', 'useAiChat');
+assertIncludes(
+  'src/app/palette/use-extension-navigation.ts',
+  'useExtensionNavigation',
+);
+assertIncludes('src/app/palette/filtering.ts', 'filterCommandItems');
+assertIncludes('src/app/palette/command-icons.tsx', 'iconForAction');
+assertIncludes('src/app/palette/ui.tsx', 'selectedOnlyShortcut');
+assertIncludes('src/app/electron/main.ts', "case 'nativeAction'");
+assertIncludes('src/app/electron/main.ts', 'declaredGlobalShortcuts');
 
 console.log('design-system checks passed');

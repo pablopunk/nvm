@@ -10,12 +10,13 @@ const relevantPrefixes = [
   'src/',
   'tests/electron/',
 ];
+const irrelevantPrefixes = ['src/backend/'];
 const relevantFiles = new Set([
   '.gitattributes',
   '.github/workflows/ci.yml',
   'electron-builder.yml',
   'electron.vite.config.ts',
-  'index.html',
+  'src/app/palette/index.html',
   'mise.toml',
   'package.json',
   'pnpm-lock.yaml',
@@ -27,6 +28,8 @@ function isWindowsPackageRelevantPath(filePath) {
   const normalizedPath = filePath
     .replaceAll('\\', '/')
     .replace(leadingCurrentDirectoryPattern, '');
+  if (irrelevantPrefixes.some((prefix) => normalizedPath.startsWith(prefix)))
+    return false;
   return (
     relevantFiles.has(normalizedPath) ||
     relevantPrefixes.some((prefix) => normalizedPath.startsWith(prefix))

@@ -13,10 +13,16 @@ function fail(message) {
 
 if (
   !fs.existsSync(
-    path.join(packageRoot, 'src', 'resources', 'nevermind-extension-api.d.ts'),
+    path.join(
+      packageRoot,
+      'src',
+      'app',
+      'resources',
+      'nevermind-extension-api.d.ts',
+    ),
   )
 ) {
-  fail('missing src/resources/nevermind-extension-api.d.ts');
+  fail('missing src/app/resources/nevermind-extension-api.d.ts');
 }
 
 if (
@@ -35,19 +41,19 @@ if (
   );
 }
 
-if (/^\s*-\s+src\/resources\/\*\*\s*$/m.test(config)) {
+if (/^\s*-\s+src\/app\/resources\/\*\*\s*$/m.test(config)) {
   fail(
-    'src/resources must be packaged with a FileSet; electron-builder default app-root ignores drop .d.ts files',
+    'src/app/resources must be packaged with a FileSet; electron-builder default app-root ignores drop .d.ts files',
   );
 }
 
 if (
-  !/from:\s*src\/resources[\s\S]*to:\s*src\/resources[\s\S]*filter:[\s\S]*['"]?\*\*\/\*['"]?/m.test(
+  !/from:\s*src\/app\/resources[\s\S]*to:\s*src\/app\/resources[\s\S]*filter:[\s\S]*['"]?\*\*\/\*['"]?/m.test(
     config,
   )
 ) {
   fail(
-    'electron-builder.yml must include src/resources as a FileSet so the extension API declaration is packaged',
+    'electron-builder.yml must include src/app/resources as a FileSet so the extension API declaration is packaged',
   );
 }
 
@@ -61,9 +67,9 @@ if (
   );
 }
 
-if (/src\/fixtures/.test(config)) {
+if (/src\/app\/fixtures/.test(config)) {
   fail(
-    'electron-builder.yml must not include src/fixtures; fixtures are dev-only and excluded from shipped product',
+    'electron-builder.yml must not include src/app/fixtures; fixtures are dev-only and excluded from shipped product',
   );
 }
 

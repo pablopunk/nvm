@@ -23,7 +23,7 @@ if [[ "$current_version" != "$VERSION" ]]; then
 fi
 
 echo "Before tagging $TAG, confirm backend contract fixtures are current for desktop-used API shapes."
-echo "See src/docs/backend-api-compatibility.md#backend-contract-prrelease-checklist."
+echo "See docs/backend-api-compatibility.md#backend-contract-prrelease-checklist."
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
   echo "Tag $TAG already exists locally; reusing it."

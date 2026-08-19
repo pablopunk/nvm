@@ -1,0 +1,117 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  acceleratorFromKeyboardEvent,
+  isShortcutRecorderSaveKey,
+} from './shortcuts';
+
+function keyboardEvent(
+  init: Partial<{
+    key: string;
+    code: string;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+  }> & { modifierState?: Record<string, boolean> } = {},
+) {
+  const { modifierState = {}, ...rest } = init;
+  return {
+    key: '',
+    code: '',
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...rest,
+    getModifierState: (name: string) => Boolean(modifierState[name]),
+  };
+}
+
+test('acceleratorFromKeyboardEvent builds accelerators from modifier flags', () => {
+  assert.equal(
+    acceleratorFromKeyboardEvent(
+      keyboardEvent({ key: ' ', code: 'Space', ctrlKey: true }),
+    ),
+    'Control+Space',
+  );
+  assert.equal(
+    acceleratorFromKeyboardEvent(
+      keyboardEvent({ key: ' ', code: 'Space', shiftKey: true }),
+    ),
+    'Shift+Space',
+  );
+  assert.equal(
+    acceleratorFromKeyboardEvent(
+      keyboardEvent({
+        key: 'k',
+        code: 'KeyK',
+        metaKey: true,
+        altKey: true,
+      }),
+    ),
+    'Command+Alt+K',
+  );
+});
+
+test('acceleratorFromKeyboardEvent recovers AltGraph modifiers cleared by Chromium on Windows', () => {
+  assert.equal(
+    acceleratorFromKeyboardEvent(
+      keyboardEvent({
+        key: ' ',
+        code: 'Space',
+        // biome-ignore lint/style/useNamingConvention: DOM modifier state name
+        modifierState: { AltGraph: true },
+      }),
+      true,
+    ),
+    'Control+Alt+Space',
+  );
+});
+
+test('acceleratorFromKeyboardEvent leaves AltGraph alone off Windows', () => {
+  assert.equal(
+    acceleratorFromKeyboardEvent(
+      keyboardEvent({
+        key: ' ',
+        code: 'Space',
+        // biome-ignore lint/style/useNamingConvention: DOM modifier state name
+        modifierState: { AltGraph: true },
+      }),
+      false,
+    ),
+    '',
+  );
+});
+
+test('acceleratorFromKeyboardEvent ignores bare keys and lone modifiers', () => {
+  assert.equal(
+    acceleratorFromKeyboardEvent(keyboardEvent({ key: 'g', code: 'KeyG' })),
+    '',
+  );
+  assert.equal(
+    acceleratorFromKeyboardEvent(
+      keyboardEvent({ key: 'Control', code: 'ControlLeft', ctrlKey: true }),
+    ),
+    '',
+  );
+});
+
+test('isShortcutRecorderSaveKey accepts Return and numpad Enter variants', () => {
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Enter', code: 'Enter' }),
+    true,
+  );
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Return', code: 'Enter' }),
+    true,
+  );
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Enter', code: 'NumpadEnter' }),
+    true,
+  );
+  assert.equal(
+    isShortcutRecorderSaveKey({ key: 'Escape', code: 'Escape' }),
+    false,
+  );
+});

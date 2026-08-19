@@ -46,13 +46,20 @@ if ('pnpm' in manifest) {
   );
 }
 const electronRepairScript = path.join(root, 'scripts', 'ensure-electron.cjs');
-if (manifest.scripts.predev !== 'node scripts/ensure-electron.cjs') {
+const backendRepairScript = path.join(root, 'scripts', 'ensure-backend.cjs');
+if (
+  manifest.scripts.predev !==
+  'node scripts/ensure-electron.cjs && node scripts/ensure-backend.cjs'
+) {
   throw new Error(
-    'package.json predev must run the conditional Electron repair script.',
+    'package.json predev must run the conditional Electron and backend repair scripts.',
   );
 }
 if (!fs.existsSync(electronRepairScript)) {
   throw new Error('The Electron repair script must exist.');
+}
+if (!fs.existsSync(backendRepairScript)) {
+  throw new Error('The backend repair script must exist.');
 }
 const electronRepair = require(electronRepairScript);
 for (const functionName of [
@@ -67,6 +74,12 @@ for (const functionName of [
       `The Electron repair script must export ${functionName}().`,
     );
   }
+}
+const backendRepair = require(backendRepairScript);
+if (typeof backendRepair.ensureBackendAvailable !== 'function') {
+  throw new Error(
+    'The backend repair script must export ensureBackendAvailable().',
+  );
 }
 
 const rootDependencies = [
@@ -86,12 +99,12 @@ const backendDependencies = ['@sentry/cli', 'esbuild', 'sharp'];
 assertDependencies(root, 'allowBuilds', rootDependencies);
 assertDependencies(root, 'onlyBuiltDependencies', rootLegacyDependencies);
 assertDependencies(
-  path.join(root, 'backend'),
+  path.join(root, 'src', 'backend'),
   'allowBuilds',
   backendDependencies,
 );
 assertDependencies(
-  path.join(root, 'backend'),
+  path.join(root, 'src', 'backend'),
   'onlyBuiltDependencies',
   backendDependencies,
 );

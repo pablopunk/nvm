@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { writePrivateFile } from '../src/electron/private-file';
+import { writePrivateFile } from '../src/app/electron/private-file';
 
 const fixtureRoot = process.argv[2];
 if (!fixtureRoot) throw new Error('Fixture root is required');

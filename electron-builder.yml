@@ -5,16 +5,25 @@ directories:
   buildResources: build
 files:
   - dist/**
-  - src/docs/**
-  - from: src/resources
-    to: src/resources
+  - docs/**
+  - from: src/app/resources
+    to: src/app/resources
     filter:
       - '**/*'
+  - from: src/app/extensions
+    to: src/app/extensions
+    filter:
+      - '*.ts'
+      - '!*.test.ts'
+      - '!_context.ts'
+      - '!emoji-symbol-data.ts'
+      - '!index.ts'
   - from: node_modules/typescript/lib
     to: node_modules/typescript/lib
     filter:
       - 'lib*.d.ts'
   - LICENSE
+  - THIRD_PARTY_NOTICES.md
   - package.json
   - '!**/*.map'
   - '!node_modules/**/{test,tests,__tests__,docs,example,examples}/**'

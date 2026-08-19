@@ -19,6 +19,9 @@ const { spawn } = require('node:child_process');
     NVM_TEST_MODE: '1',
     NVM_TEST_USER_DATA_DIR: userDataDir,
     NVM_TEST_ARTIFACT_DIR: artifactDir,
+    NVM_TEST_HEADLESS: process.env.CI
+      ? '0'
+      : process.env.NVM_TEST_HEADLESS || '1',
   };
   const child = spawn(
     process.execPath,

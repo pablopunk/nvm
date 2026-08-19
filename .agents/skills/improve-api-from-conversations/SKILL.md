@@ -42,5 +42,5 @@ Rules:
 - Do not edit app-owned state while Nevermind is running; this workflow should only read state.
 - Do not treat one-off chat details as product issues unless the user explicitly identifies them as broadly important or the API shape made the failure likely.
 - When prompt changes are needed, tighten or replace existing guidance instead of appending parallel instructions.
-- When API changes are needed, update `src/resources/nevermind-extension-api.d.ts` as the canonical contract in the implementation ticket.
+- When API changes are needed, update `src/app/resources/nevermind-extension-api.d.ts` as the canonical contract in the implementation ticket.
 - Before proposing a new issue, search current source, recent commits, and open diffs for the same root cause so already-shipped fixes are credited rather than duplicated.

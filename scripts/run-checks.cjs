@@ -12,6 +12,7 @@ const checks = [
   'check-internal-extensions.cjs',
   'check-clone-safe-actions.cjs',
   'check-packaged-resources.cjs',
+  'check-source-paths.cjs',
   'check-backend-contract-fixtures.cjs',
   'check-extension-fixture-coverage.cjs',
   'check-extension-trust-copy.cjs',

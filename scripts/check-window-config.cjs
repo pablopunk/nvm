@@ -6,10 +6,10 @@ const ts = require('typescript');
 // ── config ──────────────────────────────────────────────────────────────────
 
 const ROOT = process.cwd();
-const OS_FILE = path.join(ROOT, 'src', 'electron', 'os.ts');
+const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os.ts');
 
 /**
- * Contract points from src/docs/window-management.md.
+ * Contract points from docs/window-management.md.
  * Each entry: [functionName, requiredSubstrings[]]
  *
  * The doc requires that the main palette window on macOS combines:
@@ -23,7 +23,7 @@ const CONTRACTS = [
     name: 'paletteBrowserWindowOptions',
     required: ["type: 'panel'", 'darwin'],
     message: "must return { type: 'panel' } on darwin",
-    docRef: 'src/docs/window-management.md:7',
+    docRef: 'docs/window-management.md:7',
   },
   {
     name: 'applyPaletteWindowPolicy',
@@ -36,13 +36,13 @@ const CONTRACTS = [
     ],
     message:
       'must set always-on-top (screen-saver) and visible-on-all-workspaces on macOS',
-    docRef: 'src/docs/window-management.md:7-10',
+    docRef: 'docs/window-management.md:7-10',
   },
   {
     name: 'prepareAppWindowPolicy',
     required: ["setActivationPolicy('accessory')", 'darwin'],
     message: 'must set activationPolicy to accessory on macOS',
-    docRef: 'src/docs/window-management.md:8',
+    docRef: 'docs/window-management.md:8',
   },
 ];
 

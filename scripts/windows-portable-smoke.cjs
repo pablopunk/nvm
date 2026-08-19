@@ -163,7 +163,12 @@ async function run() {
   } finally {
     stopProcessTree(marker?.pid);
     stopProcessTree(child.pid);
-    fs.rmSync(userDataDirectory, { force: true, recursive: true });
+    fs.rmSync(userDataDirectory, {
+      force: true,
+      recursive: true,
+      maxRetries: 10,
+      retryDelay: 250,
+    });
   }
 }
 

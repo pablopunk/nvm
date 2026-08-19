@@ -1,0 +1,5222 @@
+// biome-ignore-all lint: This legacy palette component retains established renderer conventions.
+import { Command } from 'cmdk';
+import {
+  Clipboard,
+  Copy,
+  Keyboard,
+  Pencil,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Tag,
+  Trash2,
+  Wand2,
+  Zap,
+} from 'lucide-react';
+import {
+  type MouseEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { actionMenuPresentation } from './action-menu-presentation';
+import {
+  isDictationModelCached,
+  prepareDictationModel,
+  recordDictation,
+} from './dictation-renderer';
+import { ActionPanel } from './action-panel';
+import { isAppIconPath } from './app-icons';
+import {
+  applyBuilderPreviewActionResult,
+  builderPreviewAutoRunAction,
+  builderPreviewResultIsCurrent,
+  builderPreviewRootActions,
+  builderPreviewSelectedItemId,
+  hydrateBuilderPreviewViewById,
+  patchBuilderPreviewState,
+  patchBuilderPreviewViewById,
+  resetBuilderPreviewState,
+  retryBuilderPreviewHydration,
+  upsertBuilderPreview,
+} from './builder-preview';
+import {
+  type CommandIconName,
+  iconFor,
+  iconForAction,
+  iconForItem,
+} from './command-icons';
+import { RootCommandList } from './command-list';
+import {
+  markDebugPerformance,
+  measureDebugPerformance,
+  measureDebugPerformanceSync,
+  recordPerformanceTrace,
+} from './debug-performance';
+import { createRendererPerformanceTrace } from './performance-trace';
+import { ExtensionViewRenderer } from './extension-view';
+import { feedbackView } from './feedback';
+import {
+  allViewItems,
+  filterCommandItems,
+  filterCommandSections,
+  valuesMatch,
+} from './filtering';
+import {
+  actionDefinition,
+  actionDescription,
+  actionPanelFromActions,
+  actionsFromPanel,
+  type BuilderPreview,
+  type CommandAction,
+  type CommandActionPanel,
+  type CommandItem,
+  type CommandItemAppearance,
+  type CommandView,
+  type CommandViewPatch,
+  canCustomizeCommandAction,
+  extensionLoadingView,
+} from './model';
+import {
+  resetTransientPaletteState,
+  rootResultSelection,
+} from './palette-lifecycle';
+import { usePalettePrompt } from './palette-prompt';
+import type {
+  DictationCommand,
+  NevermindApi,
+  PaletteMode,
+  ShortcutRecord,
+} from './preload-api';
+import {
+  ShortcutManagerView,
+  type ShortcutRecordLike,
+  shortcutItems,
+  shortcutOptionRows,
+  shortcutRecorderRows,
+} from './shortcut-manager';
+import {
+  acceleratorFromKeyboardEvent,
+  isShortcutRecorderSaveKey,
+  keyNameForShortcut,
+  normalizedShortcut,
+} from './shortcuts';
+import {
+  type ActionPanelRow,
+  EMPTY_ACTIONS_TITLE,
+  EMPTY_ITEMS_TITLE,
+  EMPTY_ROOT_SUBTITLE,
+  EMPTY_ROOT_TITLE,
+  EmptyState,
+  type FormValue,
+  MarkdownContent,
+  SearchAccessory,
+  setShortcutLabelHyperKey,
+  shortcutLabel,
+  Toast,
+  type ToastTone,
+} from './ui';
+import { useAiChat } from './use-ai-chat';
+import { useExtensionNavigation } from './use-extension-navigation';
+import { useSearchResults } from './use-search-results';
+import { patchCommandView } from './view-patches';
+
+type ActionKind =
+  | 'open-url'
+  | 'web-search'
+  | 'app'
+  | 'clipboard'
+  | 'clipboard-history'
+  | 'keyboard-shortcuts'
+  | 'app-settings'
+  | 'check-for-updates'
+  | 'download-update'
+  | 'install-update'
+  | 'file'
+  | 'ai-placeholder'
+  | 'ai-chat'
+  | 'ai-chats'
+  | 'ai-tweak-extension'
+  | 'remove-ai-chat'
+  | 'builtin'
+  | 'calculate'
+  | 'extension-root-item'
+  | 'extension-action';
+
+type ActionIcon = string;
+
+type AppInfo = {
+  name?: string;
+  path?: string;
+};
+
+type Action = {
+  id: string;
+  kind: ActionKind;
+  title: string;
+  subtitle: string;
+  icon: ActionIcon;
+  score: number;
+  iconUrl?: string | null;
+  url?: string;
+  query?: string;
+  result?: string;
+  text?: string;
+  clipboardType?: 'text' | 'image' | 'video';
+  imageDataUrl?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  filePath?: string;
+  defaultActionId?: string;
+  isOverridden?: boolean;
+  overrideSummary?: string;
+  app?: AppInfo;
+  extensionId?: string;
+  commandId?: string;
+  aiChatId?: string;
+  extensionFile?: string;
+  removable?: boolean;
+  customizable?: boolean;
+  background?: boolean;
+  mode?: 'view' | 'noView' | 'background';
+  dismissAfterRun?: 'auto';
+  rootAction?: CommandAction;
+  actionPanel?: CommandActionPanel;
+  shortcut?: string;
+  userAliases?: string[];
+  appearance?: CommandItemAppearance;
+  traceId?: string;
+};
+
+type ExtensionViewAction = CommandAction;
+type ExtensionViewItem = CommandItem;
+type ExtensionView = CommandView;
+type BuilderPreviewAction = Action;
+
+type ClipboardHistoryActionPayload = {
+  extensionId?: string;
+  commandId?: string;
+  registeredActionId?: string;
+  actionId?: string;
+  rootAction?: unknown;
+};
+
+function isClipboardHistoryActionPayload(action: unknown): boolean {
+  if (!action || typeof action !== 'object') return false;
+  const candidate = action as ClipboardHistoryActionPayload;
+  if (
+    candidate.extensionId === 'nevermind.clipboard' &&
+    [
+      candidate.commandId,
+      candidate.registeredActionId,
+      candidate.actionId,
+    ].includes('clipboard-history')
+  )
+    return true;
+  return isClipboardHistoryActionPayload(candidate.rootAction);
+}
+
+type BuilderPreviewState = {
+  filename: string;
+  extensionId: string;
+  rootActions: BuilderPreviewAction[];
+  rootView: ExtensionView;
+  view: ExtensionView;
+  backStack: ExtensionView[];
+  selectedItemId: string;
+};
+
+declare global {
+  interface Window {
+    nvm: NevermindApi;
+  }
+}
+
+const PALETTE_HOTKEY_ACTION_ID = '__palette-hotkey__';
+const HYPER_KEY_ACTION_ID = '__hyper-key__';
+
+function spotlightConflictView(accelerator: string): ExtensionView {
+  const label = shortcutLabel(accelerator);
+  const openSettings: CommandAction = {
+    type: 'nativeAction',
+    title: 'Open Keyboard Shortcuts',
+    subtitle: 'Open system keyboard shortcut settings',
+    nativeAction: { kind: 'open-keyboard-settings' },
+  };
+  const dismiss: CommandAction = { type: 'popView', title: 'Dismiss' };
+  return {
+    type: 'preview',
+    title: `${label} conflicts with a system shortcut`,
+    content: `# ${label} is used by the system\n\nNevermind cannot use \`${label}\` until the current system shortcut binding is disabled or changed.`,
+    actions: [openSettings, dismiss],
+    actionPanel: { sections: [{ actions: [openSettings, dismiss] }] },
+  };
+}
+
+const SETTINGS_ROOT_ACTION: Action = {
+  id: 'app-settings',
+  kind: 'app-settings',
+  title: 'Settings',
+  subtitle: 'Configure Nevermind',
+  icon: 'settings',
+  score: 0,
+};
+const PALETTE_HOTKEY_PSEUDO_ACTION: Action = {
+  id: PALETTE_HOTKEY_ACTION_ID,
+  kind: 'builtin',
+  title: 'Set Nevermind shortcut',
+  subtitle: 'Global shortcut that toggles the palette',
+  icon: 'keyboard',
+  score: 0,
+};
+const HYPER_KEY_PSEUDO_ACTION: Action = {
+  id: HYPER_KEY_ACTION_ID,
+  kind: 'builtin',
+  title: 'Set Hyper key',
+  subtitle: 'Key combination displayed as Hyper in shortcut labels',
+  icon: 'keyboard',
+  score: 0,
+};
+
+const SEARCH_PLACEHOLDERS = [
+  'Watcha gonna do?',
+  'I cannot do that... Oh, nevermind.',
+  'Make it happen.',
+];
+
+const QUERY_HISTORY_STORAGE_KEY = 'nevermind.queryHistory';
+const QUERY_HISTORY_LIMIT = 100;
+
+function storedQueryHistory() {
+  try {
+    const value = JSON.parse(
+      window.localStorage.getItem(QUERY_HISTORY_STORAGE_KEY) || '[]',
+    );
+    return Array.isArray(value)
+      ? value
+          .map(String)
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(-QUERY_HISTORY_LIMIT)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveQueryHistory(history: string[]) {
+  window.localStorage.setItem(
+    QUERY_HISTORY_STORAGE_KEY,
+    JSON.stringify(history.slice(-QUERY_HISTORY_LIMIT)),
+  );
+}
+
+function seedFormValuesFromView(view: ExtensionView | null) {
+  if (view?.type !== 'form') return {};
+  return Object.fromEntries(
+    (view.fields || []).map((field) => {
+      if (field.type === 'checkbox') return [field.id, Boolean(field.value)];
+      if (field.type === 'multiselect' || field.type === 'files')
+        return [field.id, Array.isArray(field.value) ? field.value : []];
+      return [field.id, field.value || ''];
+    }),
+  );
+}
+
+function selectedItemIdForView(view: ExtensionView | null, current = '') {
+  if (!view) return '';
+  const items = allViewItems(view);
+  const declaredSelection =
+    view.selectedItemId && items.some((item) => item.id === view.selectedItemId)
+      ? view.selectedItemId
+      : '';
+  return (
+    declaredSelection ||
+    (current && items.some((item) => item.id === current)
+      ? current
+      : items[0]?.id || '')
+  );
+}
+
+function isEditableKeyTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+export function ExtensionWindowApp({ windowId }: { windowId: string }) {
+  const [view, setView] = useState<ExtensionView | null>(null);
+  const [compactView, setCompactView] = useState<ExtensionView | null>(null);
+  const [backStack, setBackStack] = useState<ExtensionView[]>([]);
+  const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>(
+    {},
+  );
+  const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
+  const [selectedValue, setSelectedValue] = useState('');
+  const [query, setQuery] = useState('');
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [actionSubmenuFor, setActionSubmenuFor] = useState<{
+    title: string;
+    panel: CommandActionPanel;
+  } | null>(null);
+  const [confirmFor, setConfirmFor] = useState<ExtensionViewAction | null>(
+    null,
+  );
+  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
+  const windowAiChatIdRef = useRef<string | undefined>(undefined);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    tone?: ToastTone;
+  } | null>(null);
+
+  useEffect(() => {
+    window.nvm
+      .getNevermindAuthStatus()
+      .then((status) => setNevermindAuthed(Boolean(status.authed)))
+      .catch(() => setNevermindAuthed(false));
+    window.nvm.getExtensionWindowState().then((state) => {
+      if (state?.view) {
+        setView(state.view);
+        setCompactView(null);
+        setBackStack([]);
+        setFormValues(seedFormValuesFromView(state.view));
+        setSelectedValue(selectedItemIdForView(state.view));
+        setWindowOptions(state.options || {});
+        if (state.view.aiChat) void aiChat.openChat(state.view);
+      }
+    });
+    return window.nvm.onExtensionWindowView((payload) => {
+      if (payload.id === windowId) {
+        setView(payload.view);
+        setCompactView(null);
+        setBackStack([]);
+        setFormValues(seedFormValuesFromView(payload.view));
+        setSelectedValue(selectedItemIdForView(payload.view));
+        setWindowOptions(payload.options || {});
+        if (payload.view.aiChat) void aiChat.openChat(payload.view);
+      }
+    });
+  }, [windowId]);
+
+  const viewKey = `${view?.id || ''}:${view?.type || ''}:${view?.title || ''}`;
+  useEffect(() => {
+    setQuery('');
+    setPanelOpen(false);
+    setActionSubmenuFor(null);
+    setConfirmFor(null);
+  }, [viewKey]);
+
+  useEffect(() => {
+    windowAiChatIdRef.current = view?.chatId;
+  }, [view?.chatId]);
+
+  useEffect(
+    () =>
+      window.nvm.onAiChatEvent((event) =>
+        aiChat.handleEvent(event, windowAiChatIdRef.current),
+      ),
+    [],
+  );
+
+  function applyPatch(patch: CommandViewPatch) {
+    setView((current) => {
+      if (!current) return current;
+      const nextView = patchCommandView(current, patch, {
+        preserveMissingItems: true,
+      });
+      setSelectedValue(selectedItemIdForView(nextView, selectedValue));
+      return nextView;
+    });
+  }
+
+  async function handleActionResult(
+    result?: {
+      view?: ExtensionView;
+      patch?: CommandViewPatch;
+      navigation?: 'root' | 'push' | 'replace' | 'pop';
+      toast?: { message: string; tone?: ToastTone };
+    } | void,
+  ) {
+    if (!result) return;
+    if (result.patch) applyPatch(result.patch);
+    if (result.navigation === 'pop') {
+      const previous = backStack.at(-1);
+      if (previous) {
+        setBackStack((current) => current.slice(0, -1));
+        setView(previous);
+        setFormValues(seedFormValuesFromView(previous));
+        setSelectedValue(selectedItemIdForView(previous));
+      } else await window.nvm.closeExtensionWindow();
+    } else if (result.view?.windowPresentation === 'compact') {
+      setPanelOpen(false);
+      setActionSubmenuFor(null);
+      setConfirmFor(null);
+      setCompactView(result.view);
+      setQuery('');
+      setSelectedValue(selectedItemIdForView(result.view));
+    } else if (result.view) {
+      if (result.navigation === 'push' && view)
+        setBackStack((current) => [...current, view]);
+      else if (result.navigation === 'root') setBackStack([]);
+      setPanelOpen(false);
+      setActionSubmenuFor(null);
+      setCompactView(null);
+      setView(result.view);
+      setFormValues(seedFormValuesFromView(result.view));
+      setSelectedValue(selectedItemIdForView(result.view, selectedValue));
+    }
+    if (result.toast) {
+      setToast(result.toast);
+      window.setTimeout(() => setToast(null), 2000);
+    }
+  }
+
+  async function executeAction(action: ExtensionViewAction) {
+    await handleActionResult(await window.nvm.runViewAction(action));
+  }
+
+  async function runAction(action: ExtensionViewAction) {
+    if (String(action.type || '').startsWith('camera.')) {
+      window.dispatchEvent(
+        new CustomEvent('nvm:camera-action', { detail: action }),
+      );
+      return;
+    }
+    const nativeKind = (action.nativeAction as { kind?: string } | undefined)
+      ?.kind;
+    if (String(nativeKind || '').startsWith('camera.')) {
+      window.dispatchEvent(
+        new CustomEvent('nvm:camera-action', { detail: action.nativeAction }),
+      );
+      return;
+    }
+    if (action.requiresConfirmation) {
+      setPanelOpen(false);
+      setActionSubmenuFor(null);
+      setConfirmFor(action);
+      return;
+    }
+    await executeAction(action);
+  }
+
+  const palettePrompt = usePalettePrompt(view, runAction);
+
+  function popWindowView() {
+    const previous = backStack.at(-1);
+    if (!previous) {
+      void window.nvm.closeExtensionWindow();
+      return;
+    }
+    setBackStack((current) => current.slice(0, -1));
+    setView(previous);
+    setCompactView(null);
+    setActionSubmenuFor(null);
+    setFormValues(seedFormValuesFromView(previous));
+    setSelectedValue(selectedItemIdForView(previous));
+  }
+
+  function selectedItem(): ExtensionViewItem | null {
+    const interactiveView = compactView || view;
+    if (
+      !(
+        interactiveView &&
+        (interactiveView.type === 'list' || interactiveView.type === 'grid')
+      )
+    )
+      return null;
+    return (
+      allViewItems(interactiveView).find((item) => item.id === selectedValue) ||
+      null
+    );
+  }
+
+  function panelContents() {
+    if (actionSubmenuFor)
+      return { panel: actionSubmenuFor.panel, fallback: [] };
+    const item = selectedItem();
+    if (item) {
+      const itemActions = actionsFromPanel(
+        item.actionPanel,
+        item.actions || [],
+      );
+      if (itemActions.length > 0)
+        return { panel: item.actionPanel, fallback: item.actions || [] };
+    }
+    return {
+      panel: (compactView || view)?.actionPanel,
+      fallback: ((compactView || view)?.actions || []) as ExtensionViewAction[],
+    };
+  }
+
+  function actionPanelRows(
+    panel?: CommandView['actionPanel'],
+    fallbackActions: ExtensionViewAction[] = [],
+  ): ActionPanelRow[] {
+    const sections = panel?.sections?.length
+      ? panel.sections
+      : [{ actions: fallbackActions }];
+    return sections.flatMap((section, sectionIndex) => {
+      const rows = (section.actions || []).map((action, index) => ({
+        value: `window-action:${sectionIndex}:${index}:${action.type}:${action.title}`,
+        icon: iconForAction(action),
+        title: action.title,
+        subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
+        shortcut: action.shortcut,
+        onSelect: () => {
+          if (action.submenu) {
+            setPanelOpen(false);
+            setActionSubmenuFor({ title: action.title, panel: action.submenu });
+            setQuery('');
+            return;
+          }
+          setPanelOpen(false);
+          setActionSubmenuFor(null);
+          void runAction(action);
+        },
+        className:
+          action.style === 'destructive' ? 'result dangerResult' : 'result',
+      }));
+      return section.title
+        ? [
+            {
+              value: `window-section:${sectionIndex}`,
+              title: section.title,
+              subtitle: '',
+              sectionHeader: true,
+              onSelect: () => {},
+              className: 'actionSectionHeader',
+            },
+            ...rows,
+          ]
+        : rows;
+    });
+  }
+
+  function confirmRows(): ActionPanelRow[] {
+    const action = confirmFor;
+    if (!action) return [];
+    return [
+      {
+        value: 'window-confirm:run',
+        icon:
+          action.style === 'destructive' ? (
+            <Trash2 size={18} />
+          ) : (
+            <Zap size={18} />
+          ),
+        title: action.confirmLabel || action.title || 'Run action',
+        subtitle: action.confirmMessage || 'Confirm this action',
+        onSelect: () => {
+          setConfirmFor(null);
+          void executeAction({ ...action, requiresConfirmation: false });
+        },
+        className:
+          action.style === 'destructive' ? 'result dangerResult' : 'result',
+      },
+      {
+        value: 'window-confirm:cancel',
+        icon: <RotateCcw size={18} />,
+        title: action.cancelLabel || 'Cancel',
+        subtitle: 'Do nothing',
+        onSelect: () => setConfirmFor(null),
+        className: 'result',
+      },
+    ];
+  }
+
+  function filteredRows(rows: ActionPanelRow[]) {
+    if (!query) return rows;
+    return rows.filter(
+      (row) => row.sectionHeader || valuesMatch(query, row.title, row.subtitle),
+    );
+  }
+
+  function closeActionPanel() {
+    setPanelOpen(false);
+    shellRef.current?.focus();
+    requestAnimationFrame(() => shellRef.current?.focus());
+  }
+
+  function moveGridSelection(key: string) {
+    if (view?.type !== 'grid' || overlayOpen) return false;
+    const filteredItems = filterCommandItems(allViewItems(view), query, {
+      minScore: 50,
+    });
+    const items = view.maxVisibleItems
+      ? filteredItems.slice(0, view.maxVisibleItems)
+      : filteredItems;
+    if (items.length === 0) return false;
+    const currentIndex = Math.max(
+      0,
+      items.findIndex((item) => item.id === selectedValue),
+    );
+    const grid = shellRef.current?.querySelector<HTMLElement>('.extensionGrid');
+    const columns = grid
+      ? Math.max(
+          1,
+          getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean)
+            .length,
+        )
+      : 4;
+    const delta =
+      key === 'ArrowRight'
+        ? 1
+        : key === 'ArrowLeft'
+          ? -1
+          : key === 'ArrowDown'
+            ? columns
+            : -columns;
+    const next =
+      items[Math.max(0, Math.min(items.length - 1, currentIndex + delta))];
+    if (!next) return false;
+    setSelectedValue(next.id);
+    requestAnimationFrame(() =>
+      shellRef.current
+        ?.querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    );
+    return true;
+  }
+
+  function onShellKeyDown(event: React.KeyboardEvent) {
+    if (
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+      moveGridSelection(event.key)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (
+      isEditableKeyTarget(event.target) &&
+      event.key !== 'Escape' &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    )
+      return;
+    if (event.key === 'Escape') {
+      if (confirmFor) setConfirmFor(null);
+      else if (actionSubmenuFor) {
+        setActionSubmenuFor(null);
+        setPanelOpen(true);
+        setQuery('');
+      } else if (panelOpen) closeActionPanel();
+      else if (compactView) {
+        setCompactView(null);
+        setQuery('');
+      } else if (palettePrompt.active) popWindowView();
+      else if (query) setQuery('');
+      else void window.nvm.closeExtensionWindow();
+      event.preventDefault();
+      return;
+    }
+    const accelerator = acceleratorFromKeyboardEvent(event.nativeEvent);
+    if (!accelerator) return;
+    const normalized = normalizedShortcut(accelerator);
+    if (palettePrompt.active) return;
+    if (normalized === 'command+k') {
+      event.preventDefault();
+      setQuery('');
+      setActionSubmenuFor(null);
+      if (actionSubmenuFor) setPanelOpen(true);
+      else if (panelOpen) closeActionPanel();
+      else setPanelOpen(true);
+      return;
+    }
+    if (confirmFor || actionSubmenuFor) return;
+    const { panel, fallback } = panelContents();
+    const item = selectedItem();
+    const candidates = panelOpen
+      ? actionsFromPanel(panel, fallback)
+      : (
+          (item
+            ? [
+                item.primaryAction,
+                ...actionsFromPanel(item.actionPanel, item.actions || []),
+              ]
+            : actionsFromPanel(
+                view?.actionPanel,
+                view?.actions || [],
+              )) as Array<ExtensionViewAction | undefined>
+        ).filter(Boolean);
+    const action = candidates.find(
+      (candidate) => normalizedShortcut(candidate.shortcut) === normalized,
+    );
+    if (!action) return;
+    event.preventDefault();
+    void runAction(action);
+  }
+
+  function renderMarkdown(content: string) {
+    return <MarkdownContent content={content} />;
+  }
+
+  function runDefaultAction(item: ExtensionViewItem) {
+    const action =
+      item.primaryAction ||
+      actionsFromPanel(item.actionPanel, item.actions || [])[0];
+    if (action) runAction(action);
+  }
+
+  function dragPathForItem(item: ExtensionViewItem) {
+    return item.path || item.filePath || null;
+  }
+
+  function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
+    const filePath = dragPathForItem(item);
+    if (!filePath) return;
+    event.preventDefault();
+    window.nvm.startFileDrag(filePath);
+  }
+
+  const actionSurfaceOpen =
+    panelOpen || Boolean(confirmFor) || Boolean(actionSubmenuFor);
+  const actionOverlayKind = confirmFor
+    ? 'confirmation'
+    : actionSubmenuFor
+      ? 'submenu'
+      : 'actions';
+  const compactActionSurface = Boolean(
+    actionSurfaceOpen &&
+      actionMenuPresentation(actionOverlayKind) === 'compact',
+  );
+  const compactViewOpen = Boolean(compactView);
+  const { panel, fallback } = panelContents();
+  const surfaceRows = confirmFor
+    ? confirmRows()
+    : palettePrompt.active
+      ? palettePrompt.rows
+      : filteredRows(actionPanelRows(panel, fallback));
+  const surfaceSelectionKey = surfaceRows
+    .filter((row) => !row.sectionHeader)
+    .map((row) => row.value)
+    .join(':');
+  const searchableView =
+    actionSurfaceOpen ||
+    compactViewOpen ||
+    palettePrompt.active ||
+    view?.type === 'list' ||
+    view?.type === 'grid';
+  useEffect(() => {
+    if (!searchableView) return;
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      if (palettePrompt.active) searchInputRef.current?.select();
+    });
+  }, [
+    searchableView,
+    viewKey,
+    panelOpen,
+    actionSubmenuFor,
+    confirmFor,
+    palettePrompt.fieldIndex,
+  ]);
+
+  useEffect(() => {
+    if (palettePrompt.active || actionSurfaceOpen)
+      setSelectedValue(
+        surfaceRows.find((row) => !row.sectionHeader)?.value || '',
+      );
+  }, [
+    palettePrompt.active,
+    palettePrompt.fieldIndex,
+    palettePrompt.selectionKey,
+    actionSurfaceOpen,
+    surfaceSelectionKey,
+  ]);
+
+  if (!view)
+    return (
+      <div className="extensionWindowShell">
+        <EmptyState icon={<Search size={24} />} title="Loading window…" />
+      </div>
+    );
+
+  const surfaceOpen =
+    palettePrompt.active || (actionSurfaceOpen && !compactActionSurface);
+  const overlayOpen = surfaceOpen || compactActionSurface || compactViewOpen;
+  const searchable = searchableView;
+  const hasActions =
+    actionsFromPanel(view.actionPanel, view.actions || []).length > 0;
+  const framelessWindow = windowOptions.chrome === 'none';
+  const shellClassName = [
+    'extensionWindowShell',
+    view.isLoading ? 'loadingBorder' : '',
+    windowOptions.titleBar === 'hidden' && !framelessWindow
+      ? 'extensionWindowTitleBarHidden'
+      : '',
+    framelessWindow ? 'extensionWindowChromeNone' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <Command
+      ref={shellRef}
+      tabIndex={-1}
+      className={shellClassName}
+      value={selectedValue}
+      onValueChange={setSelectedValue}
+      shouldFilter={false}
+      onKeyDownCapture={onShellKeyDown}
+    >
+      {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
+      {searchable && !(compactActionSurface || compactViewOpen) ? (
+        <div className="extensionWindowSearchRow">
+          <Search size={15} className="extensionWindowSearchIcon" />
+          <Command.Input
+            ref={searchInputRef}
+            autoFocus
+            className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
+            value={palettePrompt.active ? palettePrompt.query : query}
+            onValueChange={
+              palettePrompt.active ? palettePrompt.setQuery : setQuery
+            }
+            placeholder={
+              confirmFor
+                ? 'Confirm action'
+                : panelOpen
+                  ? `Filter ${view.title || 'window'} actions`
+                  : actionSubmenuFor
+                    ? `Filter ${actionSubmenuFor.title}`
+                    : palettePrompt.active
+                      ? palettePrompt.placeholder
+                      : view.searchBarPlaceholder || 'Search…'
+            }
+            spellCheck={false}
+          />
+        </div>
+      ) : null}
+      <main className="extensionWindowBody">
+        <Command.List className="extensionWindowList">
+          {surfaceOpen ? (
+            <ActionPanel
+              rows={surfaceRows}
+              emptyMessage="No matching choices"
+            />
+          ) : (
+            <>
+              <ExtensionViewRenderer
+                view={view}
+                aiChat={aiChat}
+                nevermindAuthed={nevermindAuthed}
+                onSignInToNevermind={() =>
+                  window.nvm
+                    .signInToNevermind()
+                    .then((result) => setNevermindAuthed(Boolean(result.ok)))
+                }
+                formValues={formValues}
+                setFormValues={setFormValues}
+                filterItems={(items) =>
+                  filterCommandItems(
+                    items || [],
+                    query,
+                    view.type === 'list' || view.type === 'grid'
+                      ? { minScore: 50 }
+                      : undefined,
+                  )
+                }
+                filterSections={(currentView) =>
+                  filterCommandSections(
+                    currentView,
+                    query,
+                    currentView.type === 'list' || currentView.type === 'grid'
+                      ? { minScore: 50 }
+                      : undefined,
+                  )
+                }
+                renderMarkdown={renderMarkdown}
+                renderActionPanel={() => null}
+                actionPanelRows={(actionPanel, fallbackActions) =>
+                  actionPanelRows(
+                    actionPanel,
+                    fallbackActions as ExtensionViewAction[],
+                  )
+                }
+                renderRootIcon={(item) => iconForItem(item)}
+                runDefaultAction={runDefaultAction}
+                runAction={runAction}
+                sendAiPrompt={(message) =>
+                  aiChat.sendPrompt(message, view.chatId)
+                }
+                abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+                dragPathForItem={dragPathForItem}
+                startItemDrag={startItemDrag}
+                selectedItemId={selectedValue}
+                surface="window"
+              />
+              {compactActionSurface || compactView ? (
+                <aside className="extensionWindowCompactPanel">
+                  <div className="extensionWindowSearchRow">
+                    <Search size={15} className="extensionWindowSearchIcon" />
+                    <Command.Input
+                      ref={searchInputRef}
+                      autoFocus
+                      value={query}
+                      onValueChange={setQuery}
+                      placeholder={
+                        confirmFor
+                          ? 'Confirm action'
+                          : compactView
+                            ? compactView.searchBarPlaceholder ||
+                              `Filter ${compactView.title}`
+                            : `Filter ${view.title || 'window'} actions`
+                      }
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="extensionWindowCompactResults">
+                    {actionSurfaceOpen ? (
+                      <ActionPanel
+                        rows={surfaceRows}
+                        emptyMessage="No matching choices"
+                      />
+                    ) : compactView ? (
+                      <ExtensionViewRenderer
+                        view={compactView}
+                        aiChat={aiChat}
+                        nevermindAuthed={nevermindAuthed}
+                        onSignInToNevermind={() => {}}
+                        formValues={formValues}
+                        setFormValues={setFormValues}
+                        filterItems={(items) =>
+                          filterCommandItems(items || [], query, {
+                            minScore: 50,
+                          })
+                        }
+                        filterSections={(currentView) =>
+                          filterCommandSections(currentView, query, {
+                            minScore: 50,
+                          })
+                        }
+                        renderMarkdown={renderMarkdown}
+                        renderActionPanel={() => null}
+                        actionPanelRows={(actionPanel, fallbackActions) =>
+                          actionPanelRows(
+                            actionPanel,
+                            fallbackActions as ExtensionViewAction[],
+                          )
+                        }
+                        renderRootIcon={(item) => iconForItem(item)}
+                        runDefaultAction={runDefaultAction}
+                        runAction={runAction}
+                        sendAiPrompt={(message) =>
+                          aiChat.sendPrompt(message, compactView.chatId)
+                        }
+                        abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+                        dragPathForItem={dragPathForItem}
+                        startItemDrag={startItemDrag}
+                        selectedItemId={selectedValue}
+                        surface="window"
+                      />
+                    ) : null}
+                  </div>
+                </aside>
+              ) : null}
+            </>
+          )}
+        </Command.List>
+      </main>
+      <footer className="extensionWindowFooter">
+        {palettePrompt.progress ? <span>{palettePrompt.progress}</span> : null}
+        {!overlayOpen && (view.type === 'list' || view.type === 'grid') ? (
+          <span>
+            <kbd>↵</kbd> Open
+          </span>
+        ) : null}
+        {!overlayOpen && hasActions ? (
+          <span>
+            <kbd>⌘K</kbd> Actions
+          </span>
+        ) : null}
+        {overlayOpen ? (
+          <span>
+            <kbd>esc</kbd> Back
+          </span>
+        ) : null}
+      </footer>
+    </Command>
+  );
+}
+
+function DictationRendererController() {
+  const recordingRef = useRef<Awaited<
+    ReturnType<typeof recordDictation>
+  > | null>(null);
+  const startPromiseRef = useRef<Promise<
+    Awaited<ReturnType<typeof recordDictation>>
+  > | null>(null);
+
+  useEffect(() => {
+    async function handleCommand(command: DictationCommand) {
+      if (command.type === 'model-cache-status') {
+        try {
+          window.nvm.replyDictation({
+            type: 'model-cache-status',
+            cached: await isDictationModelCached(),
+          });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      if (command.type === 'prepare-model') {
+        try {
+          await prepareDictationModel(command.modelKeepAliveMs);
+          window.nvm.replyDictation({ type: 'model-ready' });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      if (command.type === 'devices') {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const microphones = devices
+            .filter((device) => device.kind === 'audioinput')
+            .map((device, index) => ({
+              id: device.deviceId || `microphone-${index + 1}`,
+              title:
+                device.label.replace(/^(Default|Communications) - /, '') ||
+                `Microphone ${index + 1}`,
+              isDefault: device.deviceId === 'default',
+            }));
+          const defaultMicrophone = microphones.find(
+            (device) => device.isDefault,
+          );
+          window.nvm.replyDictation({
+            type: 'devices',
+            devices: [
+              {
+                id: 'default',
+                title: defaultMicrophone?.title || 'System Default',
+                isDefault: true,
+              },
+              ...microphones.filter((device) => device.id !== 'default'),
+            ],
+          });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      if (command.type === 'start') {
+        if (startPromiseRef.current || recordingRef.current) return;
+        const modelKeepAliveMs = command.modelKeepAliveMs;
+        async function openMicrophone(deviceId: string | undefined) {
+          const startPromise = recordDictation(
+            deviceId,
+            undefined,
+            modelKeepAliveMs,
+          );
+          startPromiseRef.current = startPromise;
+          const recording = await startPromise;
+          recordingRef.current = recording;
+          return recording;
+        }
+        try {
+          let recording: Awaited<ReturnType<typeof recordDictation>>;
+          try {
+            recording = await openMicrophone(
+              command.deviceId === 'default' ? undefined : command.deviceId,
+            );
+          } catch (error) {
+            if (!command.deviceId || command.deviceId === 'default')
+              throw error;
+            try {
+              recording = await openMicrophone(undefined);
+            } catch {
+              throw error;
+            }
+          }
+          await recording.ready;
+          window.nvm.replyDictation({ type: 'recording' });
+        } catch (error) {
+          recordingRef.current?.cancel();
+          recordingRef.current = null;
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          startPromiseRef.current = null;
+        }
+        return;
+      }
+
+      if (command.type === 'stop') {
+        try {
+          const recording =
+            recordingRef.current || (await startPromiseRef.current);
+          if (!recording) throw new Error('Dictation is not recording');
+          recordingRef.current = null;
+          window.nvm.replyDictation({
+            type: 'result',
+            text: await recording.stop(),
+          });
+        } catch (error) {
+          window.nvm.replyDictation({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+
+      try {
+        const recording =
+          recordingRef.current || (await startPromiseRef.current);
+        recording?.cancel();
+      } finally {
+        recordingRef.current = null;
+        startPromiseRef.current = null;
+      }
+    }
+
+    const unsubscribe = window.nvm.onDictationCommand((command) => {
+      void handleCommand(command);
+    });
+    return () => {
+      unsubscribe();
+      recordingRef.current?.cancel();
+      recordingRef.current = null;
+      startPromiseRef.current = null;
+    };
+  }, []);
+
+  return null;
+}
+
+export function App() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const compactActionInputRef = useRef<HTMLInputElement>(null);
+  const resultsListRef = useRef<HTMLDivElement>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
+  const requestedIcons = useRef(new Set<string>());
+  const runningAppsRequestIdRef = useRef(0);
+  const aiChatOpenRef = useRef(false);
+  const aiChatIdRef = useRef<string | undefined>(undefined);
+  const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined);
+  const runningViewActionsRef = useRef(new Set<string>());
+  const interactionTracesRef = useRef(
+    new Map<string, ReturnType<typeof createRendererPerformanceTrace>>(),
+  );
+  const latestInteractionTraceIdRef = useRef<string | undefined>(undefined);
+  const paletteModeRef = useRef<PaletteMode | null>(null);
+  const queryRef = useRef('');
+  const queryHistoryRef = useRef<string[]>([]);
+  const queryHistoryIndexRef = useRef<number | null>(null);
+  const queryHistoryDraftRef = useRef('');
+  const compactActionMenuOriginSelectionRef = useRef('');
+  const compactActionMenuWasOpenRef = useRef(false);
+  const previousRootQueryRef = useRef('');
+  const previousRootFirstActionIdRef = useRef('');
+  const [query, setQuery] = useState('');
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [actions, setActions] = useSearchResults<Action>(
+    window.nvm,
+    query,
+    refreshNonce,
+  );
+  const [iconUrls, setIconUrls] = useState<Record<string, string | null>>({});
+  const [runningAppPaths, setRunningAppPaths] = useState<
+    Record<string, boolean>
+  >({});
+  const [runningAppPathsRefreshNonce, setRunningAppPathsRefreshNonce] =
+    useState(0);
+  const [selectedValue, setSelectedValue] = useState('');
+  const selectedValueRef = useRef('');
+  const [optionsFor, setOptionsFor] = useState<Action | null>(null);
+  const [extensionItemOptionsFor, setExtensionItemOptionsFor] =
+    useState<ExtensionViewItem | null>(null);
+  const [actionSubmenuFor, setActionSubmenuFor] = useState<{
+    title: string;
+    panel: CommandActionPanel;
+    runAction?: (
+      action: ExtensionViewAction,
+      confirmed?: boolean,
+    ) => Promise<void>;
+  } | null>(null);
+  const [confirmRemoveFor, setConfirmRemoveFor] = useState<Action | null>(null);
+  const [confirmViewActionFor, setConfirmViewActionFor] =
+    useState<ExtensionViewAction | null>(null);
+  const [confirmBuilderPreviewAction, setConfirmBuilderPreviewAction] =
+    useState<{
+      filename: string;
+      action: ExtensionViewAction;
+    } | null>(null);
+  const [aliasFor, setAliasFor] = useState<Action | null>(null);
+  const [previewFor, setPreviewFor] = useState<Action | null>(null);
+  const extensionNavigation = useExtensionNavigation();
+  const extensionView = extensionNavigation.view;
+  const extensionViewBackStack = extensionNavigation.backStack;
+  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
+  const [builderPreviews, setBuilderPreviews] = useState<BuilderPreviewState[]>(
+    [],
+  );
+  const builderPreviewsRef = useRef<BuilderPreviewState[]>([]);
+  const builderPreviewVersionRef = useRef(0);
+  const [selectedBuilderPreviewFilename, setSelectedBuilderPreviewFilename] =
+    useState<string | null>(null);
+  const [builderPreviewFocused, setBuilderPreviewFocused] = useState(false);
+  const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
+  const [ghStatus, setGhStatus] = useState<{
+    installed: boolean;
+    authed: boolean;
+  }>({ installed: false, authed: false });
+  const [toast, setToast] = useState<{
+    message: string;
+    tone?: ToastTone;
+  } | null>(null);
+  const [placeholderIndex, setPlaceholderIndex] = useState(
+    SEARCH_PLACEHOLDERS.length - 1,
+  );
+  const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false);
+  const [isPrimaryExtensionView, setIsPrimaryExtensionView] = useState(false);
+  const [childQuery, setChildQuery] = useState('');
+  const [actionQuery, setActionQuery] = useState('');
+  const [shortcutFor, setShortcutFor] = useState<Action | null>(null);
+  const [recordedShortcut, setRecordedShortcut] = useState('');
+  const [savingShortcut, setSavingShortcut] = useState(false);
+  const savingShortcutRef = useRef(false);
+  const [shortcutManagerOpen, setShortcutManagerOpen] = useState(false);
+  const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([]);
+  const [shortcutOptionsFor, setShortcutOptionsFor] =
+    useState<ShortcutRecord | null>(null);
+  const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
+  const palettePrompt = usePalettePrompt(extensionView, runViewAction);
+  const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([]);
+  const extensionViewRef = useRef<ExtensionView | null>(null);
+  const wasChildOpenRef = useRef(false);
+  const isCompactActionMenuOpen = Boolean(
+    shortcutOptionsFor ||
+      actionSubmenuFor ||
+      confirmBuilderPreviewAction ||
+      extensionItemOptionsFor ||
+      optionsFor,
+  );
+  const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 });
+  function selectValue(value: string) {
+    selectedValueRef.current = value;
+    setSelectedValue(value);
+  }
+  function createInteractionTrace(traceId?: string) {
+    const existing = traceId
+      ? interactionTracesRef.current.get(traceId)
+      : undefined;
+    if (existing) {
+      latestInteractionTraceIdRef.current = existing.traceId;
+      return existing;
+    }
+    const trace = createRendererPerformanceTrace(traceId);
+    interactionTracesRef.current.set(trace.traceId, trace);
+    latestInteractionTraceIdRef.current = trace.traceId;
+    while (interactionTracesRef.current.size > 32) {
+      const oldest = interactionTracesRef.current.keys().next().value;
+      if (!oldest) break;
+      interactionTracesRef.current.delete(oldest);
+    }
+    return trace;
+  }
+  function clearInteractionTrace(traceId: string) {
+    interactionTracesRef.current.delete(traceId);
+    if (latestInteractionTraceIdRef.current === traceId)
+      latestInteractionTraceIdRef.current = undefined;
+  }
+  function resetTransientSurfaces() {
+    resetTransientPaletteState({
+      setOptionsFor,
+      setExtensionItemOptionsFor,
+      setConfirmRemoveFor,
+      setPreviewFor,
+      setChildQuery,
+      setShortcutFor,
+      setRecordedShortcut,
+      setShortcutManagerOpen,
+      setShortcutOptionsFor,
+      setAliasFor,
+      setConfirmViewActionFor,
+      setActionSubmenuFor,
+    });
+    setConfirmBuilderPreviewAction(null);
+    setActionQuery('');
+  }
+  useEffect(() => {
+    extensionViewRef.current = extensionView;
+  }, [extensionView]);
+  useEffect(() => {
+    builderPreviewsRef.current = builderPreviews;
+  }, [builderPreviews]);
+  useEffect(() => {
+    selectedValueRef.current = selectedValue;
+  }, [selectedValue]);
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
+  useEffect(() => {
+    queryHistoryRef.current = storedQueryHistory();
+  }, []);
+  useEffect(() => {
+    markDebugPerformance('app.commit', {
+      queryLength: query.length,
+      childQueryLength: childQuery.length,
+      actionQueryLength: actionQuery.length,
+      actionCount: actions.length,
+      selectedValue,
+      extensionViewType: extensionView?.type,
+      extensionViewId: extensionView?.id,
+      siblingViewCount: siblingViews.length,
+    });
+    const trace = latestInteractionTraceIdRef.current
+      ? interactionTracesRef.current.get(latestInteractionTraceIdRef.current)
+      : undefined;
+    if (trace) {
+      markDebugPerformance('interaction.commit', {
+        traceId: trace.traceId,
+        extensionViewType: extensionView?.type,
+      });
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.commit',
+        trace.startedAt,
+        'ok',
+        { viewType: extensionView?.type },
+      );
+      requestAnimationFrame(() => {
+        markDebugPerformance('interaction.paint', {
+          traceId: trace.traceId,
+          extensionViewType: extensionView?.type,
+        });
+        recordPerformanceTrace(
+          trace.traceId,
+          'interaction.paint',
+          trace.startedAt,
+          'ok',
+          { viewType: extensionView?.type },
+        );
+      });
+      clearInteractionTrace(trace.traceId);
+    }
+  });
+
+  useEffect(() => {
+    window.nvm
+      .getSetting('hyperKey')
+      .then(setShortcutLabelHyperKey)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!(extensionView?.refresh?.id && extensionView.refresh.intervalMs))
+      return;
+    const viewKey = viewIdentity(extensionView);
+    const refreshId = extensionView.refresh.id;
+    const intervalMs = extensionView.refresh.intervalMs;
+    let cancelled = false;
+    let running = false;
+    const refresh = async () => {
+      const current = extensionViewRef.current;
+      if (
+        cancelled ||
+        running ||
+        viewIdentity(current) !== viewKey ||
+        current?.refresh?.id !== refreshId
+      )
+        return;
+      running = true;
+      const trace = createRendererPerformanceTrace();
+      let result: any;
+      try {
+        result = await measureDebugPerformance(
+          'view.refresh',
+          { refreshId, viewId: current.id, viewKey, alwaysLog: true },
+          () =>
+            window.nvm.refreshView({
+              id: refreshId,
+              viewId: current.id,
+              traceId: trace.traceId,
+            }),
+        );
+        if (
+          !(result?.skipped || cancelled) &&
+          viewIdentity(extensionViewRef.current) === viewKey
+        )
+          await handleViewActionResult(result, 'replace');
+        if (!cancelled && !result?.skipped)
+          requestAnimationFrame(() =>
+            recordPerformanceTrace(
+              trace.traceId,
+              'view.refresh.paint',
+              trace.startedAt,
+              'ok',
+              { viewType: extensionView?.type },
+            ),
+          );
+      } catch (error) {
+        recordPerformanceTrace(
+          trace.traceId,
+          'view.refresh.error',
+          trace.startedAt,
+          'error',
+          { viewType: extensionView?.type },
+        );
+        await window.nvm.log('warn', 'Extension view refresh failed', {
+          viewKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        if (cancelled || result?.skipped || (!result?.view && !result?.patch))
+          clearInteractionTrace(trace.traceId);
+        running = false;
+      }
+    };
+    const minimumIntervalMs = extensionView.type === 'grid' ? 5000 : 1000;
+    const timer = window.setInterval(
+      refresh,
+      Math.max(minimumIntervalMs, intervalMs),
+    );
+    const immediateTimer = extensionView.refresh.immediate
+      ? window.setTimeout(refresh, 0)
+      : undefined;
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      if (immediateTimer !== undefined) window.clearTimeout(immediateTimer);
+    };
+  }, [
+    extensionView?.id,
+    extensionView?.type,
+    extensionView?.title,
+    extensionView?.refresh?.id,
+    extensionView?.refresh?.intervalMs,
+    extensionView?.refresh?.immediate,
+  ]);
+
+  useLayoutEffect(() => {
+    const card = resultsListRef.current;
+    if (!card) return;
+    const LoadingBorderMsPerPx = 0.8;
+    const updateDuration = () => {
+      const rect = card.getBoundingClientRect();
+      const perimeter = (rect.width + rect.height) * 2;
+      if (!perimeter) return;
+      card.style.setProperty(
+        '--loading-border-duration',
+        `${Math.round(perimeter * LoadingBorderMsPerPx)}ms`,
+      );
+    };
+    updateDuration();
+    const observer = new ResizeObserver(updateDuration);
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [extensionView?.id]);
+
+  useLayoutEffect(() => {
+    const palette = paletteRef.current;
+    if (!palette) return;
+    if (siblingViews.length === 0) {
+      palette.style.removeProperty('--spine-top');
+      palette.style.removeProperty('--spine-height');
+      return;
+    }
+    const updateSpine = () => {
+      const searchRow = palette.querySelector(
+        '.searchRow',
+      ) as HTMLElement | null;
+      const activePane = palette.querySelector(
+        '.results',
+      ) as HTMLElement | null;
+      if (!(searchRow && activePane)) return;
+      const paletteRect = palette.getBoundingClientRect();
+      const top = searchRow.getBoundingClientRect().bottom - paletteRect.top;
+      const bottom =
+        activePane.getBoundingClientRect().top - paletteRect.top - 11;
+      palette.style.setProperty('--spine-top', `${top}px`);
+      palette.style.setProperty(
+        '--spine-height',
+        `${Math.max(0, bottom - top)}px`,
+      );
+    };
+    updateSpine();
+    const observer = new ResizeObserver(updateSpine);
+    observer.observe(palette);
+    palette
+      .querySelectorAll('.siblingPane')
+      .forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [siblingViews, extensionView]);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.nvm.getNevermindAuthStatus().then((status) => {
+      if (!cancelled) setNevermindAuthed(status.authed);
+    });
+    window.nvm.getGhStatus().then((status) => {
+      if (!cancelled) setGhStatus(status);
+    });
+    const stop = window.nvm.onNevermindAuthChanged((status) =>
+      setNevermindAuthed(status.authed),
+    );
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    const focusInput = () => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      if (input.readOnly)
+        input.setSelectionRange(input.value.length, input.value.length);
+      else input.select();
+    };
+
+    const stopShown = window.nvm.onShown(() => {
+      markDebugPerformance('palette.shown', { queryLength: query.length });
+      resetTransientSurfaces();
+      if (!aiChatOpenRef.current) {
+        extensionNavigation.clearView();
+        aiChat.setMessages([]);
+      }
+      setIsPrimaryExtensionView(false);
+      setRefreshNonce((nonce) => nonce + 1);
+      setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length);
+      if (!aiChatOpenRef.current) {
+        extensionNavigation.setBackStack([]);
+        setSiblingViews([]);
+      }
+      requestAnimationFrame(focusInput);
+      window.setTimeout(focusInput, 50);
+    });
+    const stopShortcutShown = window.nvm.onShortcutShown(() => {
+      markDebugPerformance('palette.shortcut-shown');
+      requestAnimationFrame(focusInput);
+      window.setTimeout(focusInput, 50);
+    });
+    const stopHidden = window.nvm.onHidden(() => {
+      markDebugPerformance('palette.hidden', {
+        aiChatOpen: aiChatOpenRef.current,
+      });
+      const closedAiChatId = aiChatOpenRef.current
+        ? aiChatIdRef.current
+        : undefined;
+      setRootQuery('');
+      resetTransientSurfaces();
+      if (!aiChatOpenRef.current) {
+        extensionNavigation.clearView();
+        aiChat.setMessages([]);
+      }
+      setIsPrimaryExtensionView(false);
+      extensionNavigation.setBackStack([]);
+      setSiblingViews([]);
+      if (closedAiChatId) void window.nvm.aiChatExited(closedAiChatId);
+    });
+    const stopApps = window.nvm.onAppsIndexed(() =>
+      setRefreshNonce((nonce) => nonce + 1),
+    );
+    const stopClipboard = window.nvm.onClipboardChanged(() =>
+      setRefreshNonce((nonce) => nonce + 1),
+    );
+    const stopRootItems = window.nvm.onRootItemsChanged(() =>
+      setRefreshNonce((nonce) => nonce + 1),
+    );
+    const stopOpenActionView = window.nvm.onOpenActionView(async (payload) => {
+      markDebugPerformance('view.open-event', {
+        hasView: Boolean(payload?.view),
+        asSibling: Boolean(payload?.asSibling),
+        isPrimary: Boolean(payload?.isPrimary),
+        revealWhenReady: Boolean(payload?.revealWhenReady),
+        viewType: payload?.view?.type,
+        viewId: payload?.view?.id,
+      });
+      if (!payload?.view) return;
+      resetTransientSurfaces();
+      setIsPrimaryExtensionView(Boolean(payload.isPrimary));
+      if (payload.traceId) createInteractionTrace(payload.traceId);
+      if (payload.isPrimary) {
+        setRootQuery('');
+        setChildQuery('');
+        setActionQuery('');
+      }
+      const current = extensionViewRef.current;
+      if (
+        !payload.isPrimary &&
+        payload.asSibling &&
+        current &&
+        current.id !== payload.view.id
+      ) {
+        setSiblingViews((siblings) => [...siblings, current]);
+      } else if (payload.isPrimary || !payload.asSibling) {
+        setSiblingViews([]);
+      }
+      if (payload.view.aiChat) await openAiChat(payload.view, 'root');
+      else if (payload.isPrimary) showPrimaryExtensionView(payload.view);
+      else showExtensionView(payload.view, 'root');
+      markShortcutReady(Boolean(payload?.revealWhenReady));
+    });
+    const stopViewPatch = window.nvm.onViewPatch((payload) => {
+      markDebugPerformance('view.patch-event', {
+        viewId: payload?.viewId,
+        itemPatchCount: payload?.patch?.items?.length || 0,
+        removeCount: payload?.patch?.removeItemIds?.length || 0,
+        mode: payload?.patch?.mode,
+      });
+      if (!payload) return;
+      const previewPatch = patchBuilderPreviewViewById(
+        builderPreviewsRef.current,
+        payload.viewId || '',
+        payload.patch,
+      );
+      if (previewPatch !== builderPreviewsRef.current) {
+        builderPreviewsRef.current = previewPatch;
+        setBuilderPreviews(previewPatch);
+        return;
+      }
+      const current = extensionViewRef.current;
+      if (payload.viewId && current?.id !== payload.viewId) return;
+      if (!current) return;
+      applyViewPatch(payload.patch);
+    });
+    const stopViewHydrate = window.nvm.onViewHydrate((payload) => {
+      markDebugPerformance('view.hydrate-event', {
+        viewId: payload?.viewId,
+        hasItems: Boolean(payload?.items),
+        hasError: Boolean(payload?.error),
+      });
+      const previewHydration = hydrateBuilderPreviewViewById(
+        builderPreviewsRef.current,
+        payload,
+      );
+      if (previewHydration !== builderPreviewsRef.current) {
+        builderPreviewsRef.current = previewHydration;
+        setBuilderPreviews(previewHydration);
+        return;
+      }
+      const current = extensionViewRef.current;
+      if (payload.viewId && current?.id !== payload.viewId) return;
+      if (!current) return;
+      if (payload.error) {
+        const retryAction: CommandAction | undefined = payload.retry
+          ? {
+              type: 'nativeAction',
+              title: 'Retry',
+              nativeAction: {
+                kind: 'view-hydrate-retry',
+                viewId: payload.viewId,
+              },
+            }
+          : undefined;
+        const dismissAction: CommandAction = {
+          type: 'popView',
+          title: 'Dismiss',
+        };
+        showExtensionView(
+          feedbackView({
+            id: `view-hydrate-error:${payload.viewId || 'current'}`,
+            title: 'Could not load items',
+            message: 'Try again or go back.',
+            tone: 'error',
+            actions: [...(retryAction ? [retryAction] : []), dismissAction],
+          }),
+          'replace',
+        );
+        return;
+      }
+      if (payload.items) {
+        applyViewPatch({
+          mode: 'replace',
+          items: payload.items as any,
+          isLoading:
+            payload.isLoading === undefined ? false : payload.isLoading,
+        });
+      }
+    });
+    const stopAi = window.nvm.onAiChatEvent((event) => {
+      markDebugPerformance(`ai.event.${event.type}`, {
+        chatId: event.chatId,
+        textLength: event.text?.length || 0,
+        label: event.label,
+      });
+      if (event.type === 'debug')
+        window.nvm.log(
+          'debug',
+          `Nevermind AI: ${event.label || ''}`,
+          event.data,
+        );
+      aiChat.handleEvent(event, aiChatIdRef.current);
+      if (
+        event.type === 'extension_activated' &&
+        (!event.chatId || event.chatId === aiChatIdRef.current)
+      ) {
+        const preview = builderPreviewFrom(event.data as BuilderPreview);
+        if (!(preview && aiChatIdRef.current)) return;
+        builderPreviewVersionRef.current += 1;
+        setBuilderPreviews((previews) =>
+          upsertBuilderPreview(previews, preview),
+        );
+        setSelectedBuilderPreviewFilename(preview.filename);
+        setBuilderPreviewFocused(false);
+        const action = builderPreviewAutoRunAction(
+          event.data as BuilderPreview,
+        );
+        if (action)
+          queueMicrotask(
+            () =>
+              void runBuilderPreviewAction(
+                preview.filename,
+                action as BuilderPreviewAction,
+              ),
+          );
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+    });
+    return () => {
+      stopShown();
+      stopShortcutShown();
+      stopHidden();
+      stopApps();
+      stopClipboard();
+      stopRootItems();
+      stopOpenActionView();
+      stopViewPatch();
+      stopViewHydrate();
+      stopAi();
+    };
+  }, []);
+
+  const extensionViewSelectionKey = extensionView
+    ? `${extensionView.id || ''}:${extensionView.type}:${extensionView.title}:${extensionView.selectedItemId || ''}`
+    : '';
+
+  useLayoutEffect(() => {
+    const wasOpen = compactActionMenuWasOpenRef.current;
+    if (isCompactActionMenuOpen && !wasOpen) {
+      compactActionMenuOriginSelectionRef.current = selectedValueRef.current;
+    } else if (!isCompactActionMenuOpen && wasOpen) {
+      selectValue(compactActionMenuOriginSelectionRef.current);
+      compactActionMenuOriginSelectionRef.current = '';
+    }
+    compactActionMenuWasOpenRef.current = isCompactActionMenuOpen;
+  }, [isCompactActionMenuOpen]);
+
+  useLayoutEffect(() => {
+    function selectExtensionItem(view: ExtensionView) {
+      const items = filterExtensionItems(allViewItems(view));
+      const current = selectedValueRef.current;
+      const declaredSelection =
+        view.selectedItemId &&
+        items.some((item) => item.id === view.selectedItemId)
+          ? view.selectedItemId
+          : '';
+      selectValue(
+        declaredSelection ||
+          (current && items.some((item) => item.id === current)
+            ? current
+            : items[0]?.id || ''),
+      );
+    }
+
+    if (shortcutFor) selectValue('shortcut:save');
+    else if (shortcutOptionsFor)
+      selectValue(getShortcutOptionRows()[0]?.value ?? '');
+    else if (shortcutManagerOpen)
+      selectValue(getShortcutRows()[0]?.value ?? '');
+    else if (aliasFor) selectValue(getAliasActionRows()[0]?.value ?? '');
+    else if (confirmRemoveFor)
+      selectValue(getConfirmActionRows()[0]?.value ?? '');
+    else if (confirmViewActionFor)
+      selectValue(getConfirmViewActionRows()[0]?.value ?? '');
+    else if (confirmBuilderPreviewAction)
+      selectValue(getConfirmBuilderPreviewActionRows()[0]?.value ?? '');
+    else if (actionSubmenuFor)
+      selectValue(
+        actionPanelRows(
+          actionSubmenuFor.panel,
+          [],
+          'action-submenu',
+          true,
+          new Set<string>(),
+          actionSubmenuFor.runAction,
+        )[0]?.value ?? '',
+      );
+    else if (extensionItemOptionsFor)
+      selectValue(getExtensionItemActionRows()[0]?.value ?? '');
+    else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '');
+    else if (previewFor) selectValue('preview');
+    else if (palettePrompt.active)
+      selectValue(palettePrompt.rows[0]?.value ?? '');
+    else if (extensionView && isFilterableExtensionView)
+      selectExtensionItem(extensionView);
+    else if (extensionView?.actions?.length)
+      selectValue(
+        `extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`,
+      );
+    else if (extensionView) selectValue('preview');
+    else {
+      const current = selectedValueRef.current;
+      selectValue(
+        rootResultSelection({
+          actionIds: actions.map((action) => action.id),
+          currentSelection: current,
+          previousFirstActionId: previousRootFirstActionIdRef.current,
+          queryChanged: previousRootQueryRef.current !== query,
+        }),
+      );
+      previousRootQueryRef.current = query;
+      previousRootFirstActionIdRef.current = actions[0]?.id || '';
+    }
+  }, [
+    actions,
+    actionSubmenuFor,
+    actionQuery,
+    aliasFor,
+    childQuery,
+    confirmRemoveFor,
+    confirmViewActionFor,
+    extensionItemOptionsFor,
+    optionsFor,
+    previewFor,
+    palettePrompt.selectionKey,
+    query,
+    extensionViewSelectionKey,
+    shortcutFor,
+    shortcutManagerOpen,
+    shortcutRecords,
+    shortcutOptionsFor,
+  ]);
+
+  useEffect(() => {
+    setChildQuery('');
+  }, [extensionView?.title, extensionView?.type, shortcutManagerOpen]);
+
+  useEffect(() => {
+    setActionQuery('');
+  }, [
+    actionSubmenuFor?.title,
+    aliasFor?.id,
+    confirmRemoveFor?.id,
+    confirmViewActionFor?.title,
+    extensionItemOptionsFor?.id,
+    optionsFor?.id,
+    shortcutOptionsFor?.action.id,
+  ]);
+
+  useEffect(() => {
+    setFormValues(seedFormValuesFromView(extensionView));
+  }, [extensionView]);
+
+  useEffect(() => {
+    if (!palettePrompt.active) return;
+    requestAnimationFrame(() => inputRef.current?.select());
+  }, [palettePrompt.resetKey, palettePrompt.fieldIndex]);
+
+  useEffect(() => {
+    if (!(pendingShortcutReveal && extensionView)) return;
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.nvm.shortcutReady();
+        setPendingShortcutReveal(false);
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingShortcutReveal, extensionView]);
+
+  useEffect(() => {
+    const visibleAiChat = extensionView?.aiChat
+      ? extensionView
+      : [...siblingViews].reverse().find((view) => view.aiChat);
+    const isAiChat = Boolean(visibleAiChat);
+    const isLarge =
+      extensionView?.size === 'large' ||
+      extensionView?.presentation === 'preview';
+    aiChatOpenRef.current = isAiChat;
+    aiChatIdRef.current = visibleAiChat?.chatId;
+    const previousAiChatId = lastVisibleAiChatIdRef.current;
+    if (
+      previousAiChatId &&
+      (!visibleAiChat || previousAiChatId !== visibleAiChat.chatId)
+    )
+      void window.nvm.aiChatExited(previousAiChatId);
+    lastVisibleAiChatIdRef.current = visibleAiChat?.chatId;
+    const mode: PaletteMode = previewFor
+      ? 'preview'
+      : extensionView?.presentation === 'side-preview'
+        ? 'side-preview'
+        : isLarge || (isAiChat && builderPreviews.length > 0)
+          ? 'preview'
+          : siblingViews.length > 0
+            ? 'stacked'
+            : isAiChat
+              ? 'ai-chat'
+              : 'default';
+    if (paletteModeRef.current !== mode) {
+      paletteModeRef.current = mode;
+      window.nvm.setPaletteMode(mode);
+    }
+  }, [
+    actionSubmenuFor,
+    extensionItemOptionsFor,
+    extensionView,
+    previewFor,
+    siblingViews,
+    builderPreviews.length,
+  ]);
+
+  useEffect(() => {
+    if (!(extensionView?.aiChat || siblingViews.some((view) => view.aiChat)))
+      return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        aiChat.messagesRef.current?.scrollTo({
+          top: aiChat.messagesRef.current.scrollHeight,
+        });
+      });
+    });
+  }, [
+    aiChat.messages,
+    aiChat.busy,
+    extensionView,
+    siblingViews,
+    builderPreviews.length,
+  ]);
+
+  useEffect(() => {
+    if (!shortcutFor) return;
+    window.nvm.suspendShortcuts();
+    return () => {
+      window.nvm.resumeShortcuts();
+    };
+  }, [shortcutFor?.id]);
+
+  useLayoutEffect(() => {
+    if (!shortcutFor) return;
+    inputRef.current?.focus();
+  }, [shortcutFor?.id]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const action of actions.slice(0, 8)) {
+        const appPath = appPathForIcon(action);
+        if (!appPath || requestedIcons.current.has(appPath)) continue;
+
+        requestedIcons.current.add(appPath);
+        window.nvm.getAppIcon(appPath).then((iconUrl) => {
+          if (iconUrl)
+            setIconUrls((current) => ({
+              ...current,
+              [action.id]: iconUrl,
+              [appPath]: iconUrl,
+            }));
+          else requestedIcons.current.delete(appPath);
+        });
+      }
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [actions]);
+
+  useEffect(() => {
+    const views = [extensionView, ...siblingViews].filter(
+      Boolean,
+    ) as ExtensionView[];
+    const timer = window.setTimeout(() => {
+      for (const view of views) {
+        for (const item of allViewItems(view).slice(0, 8)) {
+          const appPath = diskPathForItem(item);
+          if (
+            !isAppIconPath(appPath) ||
+            item.image ||
+            iconUrls[appPath] ||
+            requestedIcons.current.has(appPath)
+          )
+            continue;
+          requestedIcons.current.add(appPath);
+          window.nvm.getAppIcon(appPath).then((iconUrl) => {
+            if (iconUrl)
+              setIconUrls((current) => ({ ...current, [appPath]: iconUrl }));
+            else requestedIcons.current.delete(appPath);
+          });
+        }
+      }
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [extensionView, siblingViews, iconUrls]);
+
+  useEffect(
+    () =>
+      window.nvm.onRunningAppPathsChanged(() => {
+        setRunningAppPathsRefreshNonce((nonce) => nonce + 1);
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    const appPaths = Array.from(
+      new Set(actions.map(appPathForRunningStatus).filter(Boolean) as string[]),
+    );
+    if (!appPaths.length) return;
+    const requestId = ++runningAppsRequestIdRef.current;
+    window.nvm
+      .getRunningAppPaths(appPaths)
+      .then((openPaths) => {
+        if (requestId !== runningAppsRequestIdRef.current) return;
+        const openSet = new Set(openPaths);
+        setRunningAppPaths((current) => {
+          let changed = false;
+          const next = { ...current };
+          for (const appPath of appPaths) {
+            const isOpen = openSet.has(appPath);
+            if (next[appPath] !== isOpen) {
+              next[appPath] = isOpen;
+              changed = true;
+            }
+          }
+          return changed ? next : current;
+        });
+      })
+      .catch(() => {});
+  }, [actions, runningAppPathsRefreshNonce]);
+
+  const selectedAction = useMemo(
+    () => actions.find((action) => action.id === selectedValue),
+    [actions, selectedValue],
+  );
+  const selectedBuilderPreview = useMemo(
+    () =>
+      builderPreviews.find(
+        (preview) => preview.filename === selectedBuilderPreviewFilename,
+      ) || null,
+    [builderPreviews, selectedBuilderPreviewFilename],
+  );
+  const builderPreviewRefreshKey = builderPreviews
+    .map(
+      (preview) =>
+        `${preview.filename}:${viewIdentity(preview.view)}:${preview.view.refresh?.id || ''}:${preview.view.refresh?.intervalMs || ''}:${preview.view.refresh?.immediate || ''}`,
+    )
+    .join('|');
+  useEffect(() => {
+    const timers = builderPreviews.flatMap((preview) => {
+      if (!(preview.view.refresh?.id && preview.view.refresh.intervalMs))
+        return [];
+      const filename = preview.filename;
+      const viewKey = viewIdentity(preview.view);
+      const refreshId = preview.view.refresh.id;
+      const intervalMs = preview.view.refresh.intervalMs;
+      let cancelled = false;
+      let running = false;
+      const refresh = async () => {
+        const current = builderPreviewsRef.current.find(
+          (item) => item.filename === filename,
+        );
+        if (
+          cancelled ||
+          running ||
+          !current ||
+          viewIdentity(current.view) !== viewKey ||
+          current.view.refresh?.id !== refreshId
+        )
+          return;
+        running = true;
+        try {
+          const result = await measureDebugPerformance(
+            'builder-preview.refresh',
+            { filename, refreshId, viewId: current.view.id, viewKey },
+            () =>
+              window.nvm.refreshView({
+                id: refreshId,
+                viewId: current.view.id,
+              }),
+          );
+          const latest = builderPreviewsRef.current.find(
+            (item) => item.filename === filename,
+          );
+          if (
+            !(result?.skipped || cancelled) &&
+            latest &&
+            viewIdentity(latest.view) === viewKey
+          )
+            applyBuilderPreviewResult(filename, result, undefined);
+        } catch (error) {
+          await window.nvm.log('warn', 'Builder preview refresh failed', {
+            filename,
+            viewKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          running = false;
+        }
+      };
+      const minimumIntervalMs = preview.view.type === 'grid' ? 5000 : 1000;
+      const timer = window.setInterval(
+        refresh,
+        Math.max(minimumIntervalMs, intervalMs),
+      );
+      const immediateTimer = preview.view.refresh.immediate
+        ? window.setTimeout(refresh, 0)
+        : undefined;
+      return [
+        () => {
+          cancelled = true;
+          window.clearInterval(timer);
+          if (immediateTimer !== undefined) window.clearTimeout(immediateTimer);
+        },
+      ];
+    });
+    return () => timers.forEach((stop) => stop());
+  }, [builderPreviewRefreshKey]);
+
+  const createAction = useMemo(
+    () =>
+      actions.find(
+        (action) =>
+          action.kind === 'extension-root-item' &&
+          action.extensionId === 'nevermind.ai-builder' &&
+          action.id.startsWith('extension-root:nevermind.ai-builder:ai:'),
+      ),
+    [actions],
+  );
+  const isFilterableExtensionView =
+    extensionView?.type === 'list' ||
+    extensionView?.type === 'grid' ||
+    palettePrompt.active;
+  const isRootLikeExtensionView =
+    isPrimaryExtensionView ||
+    extensionView?.id === 'clipboard-history' ||
+    extensionView?.presentation === 'side-preview';
+  const isActionWorkflowOpen = Boolean(
+    aliasFor ||
+      confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction,
+  );
+  const compactActionMenuVisible = Boolean(
+    isCompactActionMenuOpen &&
+      !shortcutFor &&
+      !aliasFor &&
+      !confirmRemoveFor &&
+      !confirmViewActionFor &&
+      !confirmBuilderPreviewAction &&
+      !palettePrompt.active,
+  );
+  const isFilterableChildOpen = Boolean(
+    confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
+      aliasFor ||
+      (shortcutManagerOpen && !shortcutOptionsFor) ||
+      isFilterableExtensionView,
+  );
+  const isLargeExtensionView = extensionView?.size === 'large';
+  const isSidePreviewView =
+    !previewFor && extensionView?.presentation === 'side-preview';
+  const isChildOpen = Boolean(
+    shortcutFor ||
+      shortcutOptionsFor ||
+      shortcutManagerOpen ||
+      actionSubmenuFor ||
+      confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
+      extensionItemOptionsFor ||
+      optionsFor ||
+      aliasFor ||
+      previewFor ||
+      extensionView,
+  );
+  const builderWorkspaceVisible = Boolean(
+    extensionView?.aiChat && selectedBuilderPreview,
+  );
+  const isVisuallyStacked =
+    (!builderWorkspaceVisible &&
+      isChildOpen &&
+      !isRootLikeExtensionView &&
+      !compactActionMenuVisible) ||
+    siblingViews.length > 0;
+  const childPlaceholder =
+    actionSubmenuFor && !compactActionMenuVisible
+      ? `Filter ${actionSubmenuFor.title}`
+      : shortcutOptionsFor && !compactActionMenuVisible
+        ? `Actions for “${shortcutOptionsFor.action.title}”`
+        : shortcutManagerOpen
+          ? 'Filter keyboard shortcuts'
+          : confirmRemoveFor || confirmViewActionFor
+            ? 'Filter confirmation actions'
+            : extensionItemOptionsFor && !compactActionMenuVisible
+              ? `Filter actions for “${extensionItemOptionsFor.title}”`
+              : optionsFor && !compactActionMenuVisible
+                ? `Filter actions for “${optionsFor.title}”`
+                : aliasFor
+                  ? `Alias for “${aliasFor.title}”`
+                  : palettePrompt.active
+                    ? palettePrompt.placeholder
+                    : extensionView
+                      ? `Filter ${extensionView.title}`
+                      : '';
+  const compactActionPlaceholder = actionSubmenuFor
+    ? `Filter ${actionSubmenuFor.title}`
+    : shortcutOptionsFor
+      ? `Filter actions for “${shortcutOptionsFor.action.title}”`
+      : extensionItemOptionsFor
+        ? `Filter actions for “${extensionItemOptionsFor.title}”`
+        : optionsFor
+          ? `Filter actions for “${optionsFor.title}”`
+          : 'Filter actions';
+  const inputValue = shortcutFor
+    ? recordedShortcut
+    : palettePrompt.active
+      ? palettePrompt.query
+      : isActionWorkflowOpen
+        ? actionQuery
+        : isFilterableChildOpen
+          ? childQuery
+          : previewFor
+            ? previewFor.title
+            : extensionView
+              ? extensionView.title
+              : optionsFor && !compactActionMenuVisible && !query
+                ? optionsFor.title
+                : query;
+  const placeholder = shortcutFor
+    ? 'Press a keyboard shortcut'
+    : palettePrompt.active
+      ? palettePrompt.placeholder
+      : isFilterableChildOpen
+        ? extensionView?.searchBarPlaceholder || childPlaceholder
+        : SEARCH_PLACEHOLDERS[placeholderIndex];
+  const activeSearchQuery = palettePrompt.active
+    ? palettePrompt.query
+    : isActionWorkflowOpen
+      ? actionQuery
+      : !shortcutFor && isFilterableChildOpen
+        ? childQuery
+        : isChildOpen
+          ? ''
+          : query;
+  const activeSearchScope = isActionWorkflowOpen
+    ? `action-workflow:${aliasFor?.id || confirmRemoveFor?.id || confirmViewActionFor?.title}`
+    : !shortcutFor && isFilterableChildOpen
+      ? `child:${actionSubmenuFor?.title || confirmRemoveFor?.id || confirmViewActionFor?.title || extensionItemOptionsFor?.id || optionsFor?.id || aliasFor?.id || extensionView?.id || extensionView?.title || shortcutManagerOpen}`
+      : isChildOpen
+        ? ''
+        : 'root';
+
+  function setRootQuery(value: string) {
+    queryHistoryIndexRef.current = null;
+    queryHistoryDraftRef.current = '';
+    setQuery(value);
+  }
+
+  function rememberRootQuery(value = queryRef.current) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const history = [
+      ...queryHistoryRef.current.filter((item) => item !== trimmed),
+      trimmed,
+    ].slice(-QUERY_HISTORY_LIMIT);
+    queryHistoryRef.current = history;
+    saveQueryHistory(history);
+    queryHistoryIndexRef.current = null;
+    queryHistoryDraftRef.current = '';
+  }
+
+  function rootSelectionIsAtTop() {
+    return !actions.length || selectedValueRef.current === actions[0]?.id;
+  }
+
+  function navigateRootQueryHistory(direction: -1 | 1) {
+    const history = queryHistoryRef.current;
+    if (!history.length) return direction < 0 && rootSelectionIsAtTop();
+    if (direction < 0 && !rootSelectionIsAtTop()) return false;
+    let index = queryHistoryIndexRef.current;
+    if (index === null) {
+      if (direction > 0) return false;
+      queryHistoryDraftRef.current = queryRef.current;
+      index = history.length - 1;
+    } else {
+      index += direction;
+    }
+    if (index < 0) index = 0;
+    if (index >= history.length) {
+      queryHistoryIndexRef.current = null;
+      setQuery(queryHistoryDraftRef.current);
+      return true;
+    }
+    queryHistoryIndexRef.current = index;
+    setQuery(history[index]);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      input?.focus();
+      input?.setSelectionRange(input.value.length, input.value.length);
+    });
+    return true;
+  }
+
+  useEffect(() => {
+    if (!(isFilterableChildOpen || shortcutFor)) return;
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [
+    confirmRemoveFor?.id,
+    confirmViewActionFor?.title,
+    extensionItemOptionsFor?.id,
+    extensionView?.title,
+    extensionView?.type,
+    isFilterableChildOpen,
+    optionsFor?.id,
+    shortcutFor?.id,
+  ]);
+
+  useEffect(() => {
+    if (!compactActionMenuVisible) return;
+    requestAnimationFrame(() => compactActionInputRef.current?.focus());
+  }, [
+    compactActionMenuVisible,
+    actionSubmenuFor?.title,
+    extensionItemOptionsFor?.id,
+    optionsFor?.id,
+    shortcutOptionsFor?.action.id,
+  ]);
+
+  useEffect(() => {
+    if (optionsFor) refreshShortcuts();
+  }, [optionsFor?.id]);
+
+  useEffect(() => {
+    if (isChildOpen) {
+      wasChildOpenRef.current = true;
+      return;
+    }
+    if (!wasChildOpenRef.current) return;
+    wasChildOpenRef.current = false;
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [isChildOpen]);
+
+  useLayoutEffect(() => {
+    if (!activeSearchQuery) return;
+    scrollResultsToTop();
+    const frame = requestAnimationFrame(scrollResultsToTop);
+    return () => cancelAnimationFrame(frame);
+  }, [activeSearchQuery, activeSearchScope]);
+
+  function markShortcutReady(shouldReveal: boolean) {
+    if (shouldReveal) setPendingShortcutReveal(true);
+  }
+
+  function showToast(message: string, tone: ToastTone = 'default') {
+    setToast({ message, tone });
+    const duration = tone === 'error' ? 4000 : 2200;
+    window.setTimeout(
+      () =>
+        setToast((current) => (current?.message === message ? null : current)),
+      duration,
+    );
+  }
+
+  async function sendAiPrompt(message: string, chatId = extensionView?.chatId) {
+    await aiChat.sendPrompt(message, chatId);
+  }
+
+  function showExtensionView(
+    view: ExtensionView,
+    navigation: 'root' | 'push' | 'replace' = 'replace',
+  ) {
+    extensionNavigation.showView(view, navigation);
+  }
+
+  function builderPreviewRootView(preview: BuilderPreview) {
+    const rootActions = builderPreviewRootActions(
+      preview,
+    ) as BuilderPreviewAction[];
+    return {
+      type: 'list' as const,
+      id: `builder-preview:${preview.filename}`,
+      title: preview.filename.replace(/\.tsx?$/, ''),
+      subtitle: preview.preview.extensionId,
+      items: rootActions.map((action) => ({
+        ...action,
+        primaryAction: {
+          type: 'nativeAction' as const,
+          title: action.title,
+          nativeAction: action,
+        },
+      })),
+    };
+  }
+
+  function builderPreviewFrom(
+    preview: BuilderPreview,
+  ): BuilderPreviewState | null {
+    if (
+      !preview.filename ||
+      !preview.preview?.extensionId ||
+      !Array.isArray(preview.preview.rootItems) ||
+      !Array.isArray(preview.preview.actions)
+    )
+      return null;
+    const rootView = builderPreviewRootView(preview);
+    return {
+      filename: preview.filename,
+      extensionId: preview.preview.extensionId,
+      rootActions: builderPreviewRootActions(preview) as BuilderPreviewAction[],
+      rootView,
+      view: rootView,
+      backStack: [],
+      selectedItemId: builderPreviewSelectedItemId(rootView),
+    };
+  }
+
+  function resetBuilderPreview(filename: string) {
+    setBuilderPreviews((previews) =>
+      resetBuilderPreviewState(previews, filename).map((preview) =>
+        preview.filename === filename
+          ? {
+              ...preview,
+              selectedItemId: builderPreviewSelectedItemId(preview.rootView),
+            }
+          : preview,
+      ),
+    );
+  }
+
+  function applyBuilderPreviewResult(
+    filename: string,
+    result: {
+      view?: ExtensionView;
+      patch?: CommandViewPatch;
+      navigation?: 'root' | 'push' | 'replace' | 'pop';
+      toast?: { message: string; tone?: ToastTone };
+    },
+    dismissAfterRun?: 'auto',
+  ) {
+    if (result.toast)
+      showToast(result.toast.message, result.toast.tone || 'default');
+    setBuilderPreviews((previews) =>
+      previews.map((preview) => {
+        if (preview.filename !== filename) return preview;
+        const patched = result.patch
+          ? patchBuilderPreviewState(preview, result.patch)
+          : preview;
+        const transitioned = applyBuilderPreviewActionResult(
+          [patched],
+          filename,
+          result,
+        )[0];
+        if (dismissAfterRun === 'auto' && !result.view)
+          return {
+            ...transitioned,
+            view: transitioned.rootView,
+            backStack: [],
+            selectedItemId: builderPreviewSelectedItemId(transitioned.rootView),
+          };
+        return {
+          ...transitioned,
+          selectedItemId: builderPreviewSelectedItemId(
+            transitioned.view,
+            transitioned.selectedItemId,
+          ),
+        };
+      }),
+    );
+  }
+
+  async function runBuilderPreviewAction(
+    filename: string,
+    action: BuilderPreviewAction,
+  ) {
+    const previewVersion = builderPreviewVersionRef.current;
+    try {
+      const result = await window.nvm.execute(action);
+      if (
+        !builderPreviewResultIsCurrent(
+          previewVersion,
+          builderPreviewVersionRef.current,
+        )
+      )
+        return;
+      applyBuilderPreviewResult(filename, result || {}, action.dismissAfterRun);
+    } catch (error) {
+      if (
+        !builderPreviewResultIsCurrent(
+          previewVersion,
+          builderPreviewVersionRef.current,
+        )
+      )
+        return;
+      showToast(
+        error instanceof Error ? error.message : 'Could not run action',
+        'error',
+      );
+    }
+  }
+
+  function popBuilderPreview(filename: string) {
+    setBuilderPreviews((previews) =>
+      previews.map((preview) => {
+        if (preview.filename !== filename) return preview;
+        const backStack = [...preview.backStack];
+        const view = backStack.pop();
+        return view
+          ? {
+              ...preview,
+              view,
+              backStack,
+              selectedItemId: builderPreviewSelectedItemId(view),
+            }
+          : preview;
+      }),
+    );
+  }
+
+  async function runBuilderPreviewViewAction(
+    filename: string,
+    action: ExtensionViewAction,
+    confirmed = false,
+  ) {
+    if (action.requiresConfirmation && !confirmed) {
+      setConfirmBuilderPreviewAction({ filename, action });
+      setActionQuery('');
+      return;
+    }
+    const nativeAction =
+      action.type === 'nativeAction'
+        ? (action.nativeAction as { kind?: string; viewId?: string })
+        : null;
+    if (nativeAction?.kind === 'view-hydrate-retry') {
+      const viewId = String(nativeAction.viewId || '');
+      const retryPreviews = retryBuilderPreviewHydration(
+        builderPreviewsRef.current,
+        viewId,
+      );
+      if (retryPreviews !== builderPreviewsRef.current) {
+        builderPreviewsRef.current = retryPreviews;
+        setBuilderPreviews(retryPreviews);
+      }
+      try {
+        await window.nvm.retryViewLoader(viewId);
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Could not retry loading',
+          'error',
+        );
+      }
+      return;
+    }
+    const rootAction =
+      action.type === 'nativeAction' ? (action.nativeAction as Action) : null;
+    if (rootAction?.kind) return runBuilderPreviewAction(filename, rootAction);
+    try {
+      const result = await window.nvm.runViewAction({
+        ...action,
+        dismissAfterRun: undefined,
+        keepPaletteOpen: true,
+      });
+      applyBuilderPreviewResult(filename, result || {}, action.dismissAfterRun);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Could not run action',
+        'error',
+      );
+    }
+  }
+
+  function showActionLoadingView(
+    title = 'Running…',
+    navigation: 'root' | 'push' | 'replace' = 'root',
+  ) {
+    showExtensionView(
+      {
+        ...extensionLoadingView(title),
+        presentation: navigation === 'root' ? 'root' : undefined,
+      },
+      navigation,
+    );
+  }
+
+  function showPrimaryExtensionView(view: ExtensionView) {
+    extensionNavigation.showView(view, 'root');
+    setIsPrimaryExtensionView(true);
+    setSiblingViews([]);
+  }
+
+  function popExtensionView() {
+    setExtensionItemOptionsFor(null);
+    if (extensionViewBackStack.length === 0 && siblingViews.length > 0) {
+      const next = siblingViews[siblingViews.length - 1];
+      setSiblingViews((siblings) => siblings.slice(0, -1));
+      extensionNavigation.showView(next, 'root');
+      return;
+    }
+    if (isPrimaryExtensionView && extensionViewBackStack.length === 0) {
+      void window.nvm.hide();
+      return;
+    }
+    extensionNavigation.popView();
+  }
+
+  function selectionAfterPatch(
+    current: ExtensionView,
+    next: ExtensionView,
+    patch: CommandViewPatch,
+  ) {
+    const nextItems = allViewItems(next);
+    if (nextItems.length === 0) return '';
+    if (patch.selectedItemId !== undefined)
+      return nextItems.some((item) => item.id === patch.selectedItemId)
+        ? patch.selectedItemId
+        : nextItems[0].id;
+    if (
+      next.selectedItemId &&
+      nextItems.some((item) => item.id === next.selectedItemId)
+    )
+      return next.selectedItemId;
+    const selected = selectedValueRef.current;
+    if (selected && nextItems.some((item) => item.id === selected))
+      return selected;
+    const currentItems = allViewItems(current);
+    const currentIndex = currentItems.findIndex((item) => item.id === selected);
+    const fallbackIndex =
+      currentIndex < 0 ? 0 : Math.min(currentIndex, nextItems.length - 1);
+    return nextItems[fallbackIndex]?.id || '';
+  }
+
+  function viewIdentity(view: ExtensionView | null) {
+    return view ? `${view.id || ''}:${view.type}:${view.title}` : '';
+  }
+
+  function restorePatchViewport(
+    viewKey: string,
+    scrollTop: number | undefined,
+    selectedItemId: string,
+  ) {
+    requestAnimationFrame(() => {
+      if (viewIdentity(extensionViewRef.current) !== viewKey) return;
+      if (selectedItemId && selectedValueRef.current !== selectedItemId) {
+        selectValue(selectedItemId);
+      }
+      if (scrollTop !== undefined && resultsListRef.current)
+        resultsListRef.current.scrollTop = scrollTop;
+    });
+  }
+
+  function applyViewPatch(patch?: CommandViewPatch) {
+    if (!patch) return;
+    measureDebugPerformanceSync(
+      'view.apply-patch',
+      {
+        itemPatchCount: patch.items?.length || 0,
+        removeCount: patch.removeItemIds?.length || 0,
+        mode: patch.mode,
+        currentViewId: extensionViewRef.current?.id,
+      },
+      () => {
+        const current = extensionViewRef.current;
+        if (!current) return;
+        const scrollTop = resultsListRef.current?.scrollTop;
+        const next = patchCommandView(current, patch);
+        const nextSelected = selectionAfterPatch(current, next, patch);
+        extensionViewRef.current = next;
+        extensionNavigation.setView(next);
+        selectValue(nextSelected);
+        restorePatchViewport(viewIdentity(current), scrollTop, nextSelected);
+      },
+    );
+  }
+
+  async function handleViewActionResult(
+    result?: {
+      view?: ExtensionView;
+      patch?: CommandViewPatch;
+      navigation?: 'root' | 'push' | 'replace' | 'pop';
+      toast?: { message: string; tone?: ToastTone };
+    } | void,
+    fallbackNavigation: 'push' | 'replace' | 'root' = 'push',
+  ) {
+    if (!result) return;
+    return measureDebugPerformance(
+      'view.handle-action-result',
+      {
+        hasView: Boolean(result.view),
+        viewType: result.view?.type,
+        hasPatch: Boolean(result.patch),
+        navigation: result.navigation,
+        fallbackNavigation,
+      },
+      async () => {
+        if (result.toast)
+          showToast(result.toast.message, result.toast.tone || 'default');
+        if (result.patch) applyViewPatch(result.patch);
+        if (result.navigation === 'pop') popExtensionView();
+        else if (result.view?.aiChat)
+          await openAiChat(
+            result.view,
+            result.navigation || fallbackNavigation,
+          );
+        else if (result.view)
+          showExtensionView(
+            result.view,
+            result.navigation || fallbackNavigation,
+          );
+      },
+    );
+  }
+
+  function actionCanDismissImmediately(action: ExtensionViewAction) {
+    return (
+      !action.keepPaletteOpen &&
+      action.dismissAfterRun === 'auto' &&
+      actionDefinition(action)?.dismiss === 'immediate'
+    );
+  }
+
+  function rootNativeActionCanDismissImmediately(
+    action: Action | { kind?: string },
+  ) {
+    return [
+      'open-url',
+      'web-search',
+      'app',
+      'clipboard',
+      'file',
+      'calculate',
+      'builtin',
+      'open-keyboard-settings',
+    ].includes(String(action.kind));
+  }
+
+  function rootActionCanDismissImmediately(
+    action:
+      | Action
+      | { kind?: string; background?: boolean; dismissAfterRun?: 'auto' },
+  ) {
+    return (
+      rootNativeActionCanDismissImmediately(action) ||
+      (['extension-action', 'extension-root-item'].includes(
+        String(action.kind),
+      ) &&
+        (action.background || action.dismissAfterRun === 'auto'))
+    );
+  }
+
+  async function runViewAction(action: ExtensionViewAction, confirmed = false) {
+    const trace = createInteractionTrace(action.traceId);
+    action = { ...action, traceId: trace.traceId };
+    if (action.requiresConfirmation && !confirmed) {
+      setConfirmViewActionFor(action);
+      setActionQuery('');
+      return;
+    }
+    const nativeAction =
+      action.type === 'nativeAction'
+        ? (action.nativeAction as
+            | Action
+            | { kind?: string; action?: Action; actionId?: string }
+            | undefined)
+        : undefined;
+    if (nativeAction?.kind === 'builder-preview-focus') {
+      setOptionsFor(null);
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>('.builderPreviewPane')?.focus(),
+      );
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.focus',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (action.type === 'setSearchQuery') {
+      const nextQuery = String(action.query ?? action.text ?? '');
+      setRootQuery(nextQuery);
+      setChildQuery('');
+      setActionQuery('');
+      setOptionsFor(null);
+      setExtensionItemOptionsFor(null);
+      setActionSubmenuFor(null);
+      setPreviewFor(null);
+      if (extensionView) extensionNavigation.clearView();
+      setIsPrimaryExtensionView(false);
+      setSiblingViews([]);
+      requestAnimationFrame(() => {
+        const input = inputRef.current;
+        input?.focus();
+        if (action.select === false)
+          input?.setSelectionRange(nextQuery.length, nextQuery.length);
+        else input?.select();
+      });
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.search-query',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (action.type === 'recordShortcut') {
+      const targetAction = action.action as Action | undefined;
+      const target =
+        targetAction?.id === PALETTE_HOTKEY_ACTION_ID
+          ? PALETTE_HOTKEY_PSEUDO_ACTION
+          : targetAction?.id === HYPER_KEY_ACTION_ID
+            ? HYPER_KEY_PSEUDO_ACTION
+            : targetAction;
+      if (target) startShortcutRecorder(target);
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.shortcut-recorder',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (nativeAction?.kind === 'record-palette-hotkey') {
+      startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION);
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.shortcut-recorder',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (nativeAction?.kind === 'record-shortcut' && nativeAction.action) {
+      startShortcutRecorder(nativeAction.action as Action);
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.shortcut-recorder',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (nativeAction?.kind === 'remove-shortcut' && nativeAction.actionId) {
+      try {
+        const result = await window.nvm.removeShortcut(
+          String(nativeAction.actionId),
+        );
+        showToast(result.message, result.ok ? 'default' : 'error');
+        if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
+          const refreshed = await window.nvm.execute({
+            id: 'keyboard-shortcuts',
+            kind: 'extension-action',
+            extensionId: 'nevermind.shortcuts',
+            registeredActionId: 'keyboard-shortcuts',
+            title: 'Keyboard Shortcuts',
+            subtitle: 'View, change, or remove global shortcuts',
+            icon: 'keyboard',
+            score: 16,
+            traceId: trace.traceId,
+          } as Action);
+          if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+        }
+      } catch (error) {
+        recordPerformanceTrace(
+          trace.traceId,
+          'interaction.error',
+          trace.startedAt,
+          'error',
+          { errorType: error instanceof Error ? error.name : typeof error },
+        );
+        clearInteractionTrace(trace.traceId);
+        showToast(
+          error instanceof Error ? error.message : 'Could not remove shortcut',
+          'error',
+        );
+      }
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (action.type === 'previewClipboardItem') {
+      setPreviewFor({
+        id: `clipboard-preview:${action.text || action.imageDataUrl || action.videoUrl || action.filePath || action.title}`,
+        kind: 'clipboard',
+        title: action.title,
+        subtitle: action.clipboardType,
+        icon: 'clipboard',
+        score: 0,
+        clipboardType: action.clipboardType,
+        text: action.text,
+        imageDataUrl: action.imageDataUrl,
+        imagePath: action.imagePath,
+        videoUrl: action.videoUrl,
+        filePath: action.filePath,
+        thumbnailUrl: action.thumbnailUrl,
+      } as Action);
+      setExtensionItemOptionsFor(null);
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (
+      nativeAction?.kind === 'clipboard' &&
+      ('imageDataUrl' in nativeAction ||
+        'videoUrl' in nativeAction ||
+        'text' in nativeAction)
+    ) {
+      setPreviewFor(nativeAction as Action);
+      setExtensionItemOptionsFor(null);
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    if (String(nativeAction?.kind || '').startsWith('camera.')) {
+      window.dispatchEvent(
+        new CustomEvent('nvm:camera-action', { detail: nativeAction }),
+      );
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.camera',
+        trace.startedAt,
+      );
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    const actionKey =
+      action.handlerId ||
+      `${action.type}:${action.title}:${action.path || action.url || action.text || ''}`;
+    if (runningViewActionsRef.current.has(actionKey)) {
+      clearInteractionTrace(trace.traceId);
+      return;
+    }
+    runningViewActionsRef.current.add(actionKey);
+    const dismissedImmediately =
+      actionCanDismissImmediately(action) ||
+      Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction));
+    const loadingNavigation = nativeAction ? 'root' : 'push';
+    const nestedAction =
+      nativeAction && 'rootAction' in nativeAction
+        ? nativeAction.rootAction
+        : action;
+    const instantClipboardHistory =
+      isClipboardHistoryActionPayload(action) ||
+      isClipboardHistoryActionPayload(nativeAction) ||
+      isClipboardHistoryActionPayload(nestedAction);
+    const definition = actionDefinition(nestedAction);
+    const showsLoading =
+      !dismissedImmediately &&
+      !instantClipboardHistory &&
+      definition?.loading === 'view';
+    try {
+      markDebugPerformance('view-action.start', {
+        actionType: action.type,
+        title: action.title,
+        dismissedImmediately,
+        showsLoading,
+      });
+      if (dismissedImmediately) {
+        markDebugPerformance('view-action.hide-before-ipc', {
+          actionType: action.type,
+          title: action.title,
+        });
+        void window.nvm.hide();
+      }
+      const resultPromise = measureDebugPerformance(
+        'view-action.ipc',
+        {
+          actionType: action.type,
+          traceId: trace.traceId,
+          title: action.title,
+          dismissedImmediately,
+          showsLoading,
+          alwaysLog: true,
+        },
+        () => window.nvm.runViewAction(action),
+      );
+      if (!dismissedImmediately && showsLoading)
+        showActionLoadingView(action.title || 'Running…', loadingNavigation);
+      const result = await resultPromise;
+      const resultAfterLoading =
+        showsLoading && result?.navigation === 'push' && result.view
+          ? { ...result, navigation: 'replace' as const }
+          : result;
+      if (
+        showsLoading &&
+        loadingNavigation === 'push' &&
+        (result?.navigation === 'replace' || result?.navigation === 'pop')
+      ) {
+        extensionNavigation.setBackStack((stack) => stack.slice(0, -1));
+      }
+      await handleViewActionResult(
+        resultAfterLoading,
+        showsLoading ? 'replace' : 'push',
+      );
+      if (
+        !(dismissedImmediately || action.keepPaletteOpen) &&
+        action.dismissAfterRun === 'auto' &&
+        !result?.view &&
+        !result?.patch &&
+        result?.navigation !== 'pop'
+      ) {
+        if (extensionNavigation.backStack.length > 0) popExtensionView();
+        else window.nvm.hide();
+      } else if (showsLoading && !result?.view && !result?.navigation) {
+        if (loadingNavigation === 'push') popExtensionView();
+        else window.nvm.hide();
+        if (result?.patch && loadingNavigation === 'push')
+          queueMicrotask(() => applyViewPatch(result.patch));
+      }
+      if (!result?.view && !result?.patch && !result?.navigation)
+        clearInteractionTrace(trace.traceId);
+    } catch (error) {
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.error',
+        trace.startedAt,
+        'error',
+        { errorType: error instanceof Error ? error.name : typeof error },
+      );
+      clearInteractionTrace(trace.traceId);
+      throw error;
+    } finally {
+      runningViewActionsRef.current.delete(actionKey);
+    }
+  }
+
+  async function openAiChat(
+    view: ExtensionView,
+    navigation: 'root' | 'push' | 'replace' = 'root',
+  ) {
+    await measureDebugPerformance(
+      'ai.open-chat',
+      {
+        chatId: view.chatId,
+        messageCount: view.messages?.length || 0,
+        navigation,
+      },
+      async () => {
+        showExtensionView(view, navigation);
+        const previews = (view.builderPreviews || [])
+          .map(builderPreviewFrom)
+          .filter(Boolean) as BuilderPreviewState[];
+        if (previews.length) {
+          builderPreviewVersionRef.current += 1;
+          setBuilderPreviews(previews);
+          setSelectedBuilderPreviewFilename(
+            previews.some(
+              (preview) =>
+                preview.filename === view.selectedBuilderPreviewFilename,
+            )
+              ? view.selectedBuilderPreviewFilename || null
+              : previews.at(-1)?.filename || null,
+          );
+          for (const preview of view.builderPreviews || []) {
+            const action = builderPreviewAutoRunAction(preview);
+            if (action)
+              queueMicrotask(
+                () =>
+                  void runBuilderPreviewAction(
+                    preview.filename,
+                    action as BuilderPreviewAction,
+                  ),
+              );
+          }
+        } else {
+          builderPreviewVersionRef.current += 1;
+          setBuilderPreviews([]);
+          setSelectedBuilderPreviewFilename(null);
+        }
+        await aiChat.openChat(view);
+        requestAnimationFrame(() => aiChat.inputRef.current?.focus());
+      },
+    );
+  }
+
+  async function startBuilderChatFromQuery(prompt: string) {
+    const result = await measureDebugPerformance(
+      'ai-builder.start-chat',
+      { promptLength: prompt.length, alwaysLog: true },
+      () =>
+        window.nvm.startBuilderChat({ prompt, title: `Automate "${prompt}"` }),
+    );
+    if (result?.view?.aiChat) await openAiChat(result.view, 'root');
+    else if (result?.view) showExtensionView(result.view, 'root');
+  }
+
+  async function run(action: Action) {
+    const trace = createInteractionTrace(action.traceId);
+    action = { ...action, traceId: trace.traceId };
+    const dismissedImmediately = rootActionCanDismissImmediately(action);
+    markDebugPerformance('root-action.start', {
+      id: action.id,
+      kind: action.kind,
+      title: action.title,
+      dismissedImmediately,
+    });
+    if (dismissedImmediately) {
+      markDebugPerformance('root-action.hide-before-ipc', {
+        id: action.id,
+        kind: action.kind,
+        title: action.title,
+      });
+      void window.nvm.hide();
+    }
+    const resultPromise = measureDebugPerformance(
+      'root-action.ipc',
+      {
+        id: action.id,
+        kind: action.kind,
+        title: action.title,
+        dismissedImmediately,
+        alwaysLog: true,
+      },
+      () => window.nvm.execute(action),
+    );
+    if (!dismissedImmediately && !isClipboardHistoryActionPayload(action))
+      showActionLoadingView(action.title || 'Running…', 'root');
+    try {
+      const result = await resultPromise;
+      if (result?.view) {
+        setOptionsFor(null);
+        setPreviewFor(null);
+        if (result.view.aiChat) await openAiChat(result.view, 'root');
+        else showExtensionView(result.view, 'root');
+      } else if (!dismissedImmediately) {
+        window.nvm.hide();
+      }
+      if (!result?.view) clearInteractionTrace(trace.traceId);
+    } catch (error) {
+      recordPerformanceTrace(
+        trace.traceId,
+        'interaction.error',
+        trace.startedAt,
+        'error',
+        { errorType: error instanceof Error ? error.name : typeof error },
+      );
+      clearInteractionTrace(trace.traceId);
+      showToast(
+        error instanceof Error ? error.message : 'Could not run action',
+        'error',
+      );
+    }
+  }
+
+  function acceleratorFromEvent(event: React.KeyboardEvent) {
+    return acceleratorFromKeyboardEvent(event.nativeEvent);
+  }
+
+  function modifierAcceleratorFromEvent(event: React.KeyboardEvent) {
+    const parts = [];
+    if (event.metaKey) parts.push('Command');
+    if (event.ctrlKey) parts.push('Control');
+    if (event.altKey) parts.push('Alt');
+    if (event.shiftKey) parts.push('Shift');
+    return parts.join('+');
+  }
+
+  async function refreshShortcuts() {
+    setShortcutRecords(
+      await measureDebugPerformance(
+        'shortcuts.refresh',
+        { alwaysLog: true },
+        () => window.nvm.getShortcuts(),
+      ),
+    );
+  }
+
+  async function openShortcutManager() {
+    await refreshShortcuts();
+    setShortcutManagerOpen(true);
+    setShortcutFor(null);
+    setOptionsFor(null);
+    setPreviewFor(null);
+  }
+
+  function startShortcutRecorder(action: Action) {
+    savingShortcutRef.current = false;
+    setSavingShortcut(false);
+    setShortcutFor(action);
+    setRecordedShortcut('');
+  }
+
+  function cancelShortcutRecorder() {
+    savingShortcutRef.current = false;
+    setSavingShortcut(false);
+    setShortcutFor(null);
+    setRecordedShortcut('');
+  }
+
+  async function saveRecordedShortcut() {
+    const targetAction = shortcutFor;
+    const accelerator = recordedShortcut;
+    if (!(targetAction && accelerator) || savingShortcutRef.current) return;
+
+    savingShortcutRef.current = true;
+    setSavingShortcut(true);
+    void window.nvm.log('debug', 'shortcut.recorder.save.started', {
+      actionId: targetAction.id,
+      accelerator,
+    });
+    try {
+      if (targetAction.id === PALETTE_HOTKEY_ACTION_ID) {
+        const result = await window.nvm.setPaletteHotkey(accelerator);
+        showToast(result.message, result.ok ? 'default' : 'error');
+        if (!(result.ok || result.spotlightConflict)) return;
+        setShortcutFor(null);
+        setRecordedShortcut('');
+        setOptionsFor(null);
+        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
+        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+        if (result.spotlightConflict)
+          showExtensionView(spotlightConflictView(accelerator), 'push');
+        return;
+      }
+      if (targetAction.id === HYPER_KEY_ACTION_ID) {
+        const result = (await window.nvm.runViewAction({
+          type: 'setSettingShortcut',
+          title: 'Save Hyper Key',
+          settingId: 'hyperKey',
+          shortcut: accelerator,
+        })) as any;
+        const message = result?.toast?.message || 'Hyper key saved';
+        showToast(message, result?.ok ? 'default' : 'error');
+        if (!result?.ok) {
+          void window.nvm.log('warn', 'shortcut.recorder.save.failed', {
+            actionId: targetAction.id,
+            accelerator,
+            message,
+          });
+          return;
+        }
+        setShortcutLabelHyperKey(accelerator);
+        setShortcutFor(null);
+        setRecordedShortcut('');
+        setOptionsFor(null);
+        setRefreshNonce((nonce) => nonce + 1);
+        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
+        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
+        return;
+      }
+      const result = (await window.nvm.runViewAction({
+        type: 'setActionShortcut',
+        title: 'Save Shortcut',
+        targetAction,
+        accelerator,
+      })) as any;
+      const message = result?.toast?.message || 'Could not save shortcut';
+      showToast(message, result?.ok ? 'default' : 'error');
+      void window.nvm.log(
+        result?.ok ? 'debug' : 'warn',
+        result?.ok
+          ? 'shortcut.recorder.save.succeeded'
+          : 'shortcut.recorder.save.failed',
+        { actionId: targetAction.id, accelerator, message },
+      );
+      if (!result?.ok) return;
+      setShortcutFor(null);
+      setRecordedShortcut('');
+      setOptionsFor(null);
+      setRefreshNonce((nonce) => nonce + 1);
+      if (shortcutManagerOpen) await refreshShortcuts();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Could not save shortcut: ${message}`, 'error');
+      void window.nvm.log('error', 'shortcut.recorder.save.failed', {
+        actionId: targetAction.id,
+        accelerator,
+        message,
+      });
+    } finally {
+      savingShortcutRef.current = false;
+      setSavingShortcut(false);
+    }
+  }
+
+  async function removeShortcut(record: ShortcutRecord) {
+    const result = await window.nvm.removeShortcut(record.actionId);
+    showToast(result.message, result.ok ? 'default' : 'error');
+    if (result.ok) {
+      setShortcutOptionsFor(null);
+      await refreshShortcuts();
+    }
+  }
+
+  async function setAlias() {
+    if (!optionsFor) return;
+    setAliasFor(optionsFor);
+    setActionQuery('');
+    setOptionsFor(null);
+  }
+
+  async function submitAlias() {
+    if (!aliasFor) return;
+    const alias = actionQuery.trim();
+    if (!alias) return;
+    const result = (await window.nvm.runViewAction({
+      type: 'setActionAlias',
+      title: 'Save Alias',
+      targetAction: aliasFor,
+      alias,
+    })) as any;
+    if (!result?.ok) return;
+    const current = aliasFor.userAliases || [];
+    const userAliases = current.includes(alias) ? current : [...current, alias];
+    setAliasFor({ ...aliasFor, userAliases });
+    setActionQuery('');
+  }
+
+  async function removeAliasEntry(alias: string) {
+    if (!aliasFor) return;
+    const result = (await window.nvm.runViewAction({
+      type: 'removeActionAlias',
+      title: 'Remove Alias',
+      targetAction: aliasFor,
+      alias,
+    })) as any;
+    if (!result?.ok) return;
+    const userAliases = (aliasFor.userAliases || []).filter(
+      (value) => value !== alias,
+    );
+    setAliasFor({ ...aliasFor, userAliases });
+  }
+
+  async function setShortcut() {
+    if (!optionsFor) return;
+    startShortcutRecorder(optionsFor);
+  }
+
+  async function removeOptionsShortcut() {
+    if (!optionsFor?.id) return;
+    const result = await window.nvm.removeShortcut(optionsFor.id);
+    showToast(result.message, result.ok ? 'default' : 'error');
+    if (!result.ok) return;
+    setOptionsFor(null);
+    setRefreshNonce((nonce) => nonce + 1);
+  }
+
+  async function quickLookOptionsAction() {
+    if (!optionsFor?.filePath) return;
+    await window.nvm.runViewAction({
+      type: 'quickLook',
+      title: 'Preview File',
+      path: optionsFor.filePath,
+    });
+  }
+
+  async function setOverride() {
+    if (!optionsFor) return;
+    const instruction = window.prompt(
+      `How should AI override “${optionsFor.title}”?`,
+      optionsFor.overrideSummary || '',
+    );
+    if (!instruction?.trim()) return;
+    const result = await window.nvm.setOverride(optionsFor, instruction);
+    showToast(result.message, result.ok ? 'default' : 'error');
+    if (result.ok) setOptionsFor(null);
+  }
+
+  async function tweakActionWithAi(action: Action | null | undefined) {
+    if (!action?.extensionFile) return;
+    const result = await window.nvm.tweakExtension({
+      extensionFile: action.extensionFile,
+      title: action.title,
+    });
+    if (result?.view) {
+      setOptionsFor(null);
+      await openAiChat(result.view, 'root');
+    }
+  }
+
+  async function tweakWithAi() {
+    await tweakActionWithAi(optionsFor);
+  }
+
+  async function renameExtensionAction() {
+    if (!optionsFor) return;
+    setOptionsFor(null);
+    await runViewAction({
+      type: 'renameExtensionPrompt',
+      title: 'Rename Extension',
+      targetAction: optionsFor,
+    });
+  }
+
+  function tabActionForRootAction(action: Action | null | undefined) {
+    if (!action) return null;
+    if (
+      action.kind === 'extension-root-item' &&
+      action.extensionId === 'nevermind.ai-builder' &&
+      action.id.startsWith('extension-root:nevermind.ai-builder:ai-chat:')
+    )
+      return () => run(action);
+    if (
+      ['extension-root-item', 'extension-action'].includes(action.kind) &&
+      action.extensionFile
+    )
+      return () => tweakActionWithAi(action);
+    return null;
+  }
+
+  async function restoreOriginal() {
+    if (!optionsFor) return;
+    const result = await window.nvm.runViewAction({
+      type: 'clearActionOverride',
+      title: 'Restore Original',
+      targetAction: optionsFor,
+    });
+    if ((result as any)?.ok) setOptionsFor(null);
+  }
+
+  async function duplicateCreatedAction() {
+    if (!optionsFor) return;
+    const result = (await window.nvm.runViewAction({
+      type: 'duplicateCreatedAction',
+      title: 'Duplicate Action',
+      targetAction: optionsFor,
+    })) as any;
+    if (!result?.action) return;
+    setOptionsFor(null);
+    setRefreshNonce((nonce) => nonce + 1);
+    await tweakActionWithAi(result.action);
+  }
+
+  function askRemoveCreatedAction() {
+    if (!optionsFor) return;
+    setConfirmRemoveFor(optionsFor);
+  }
+
+  async function confirmRemoveCreatedAction() {
+    if (!confirmRemoveFor) return;
+    const result = (await window.nvm.runViewAction({
+      type: 'removeCreatedAction',
+      title: 'Remove Action',
+      targetAction: confirmRemoveFor,
+    })) as any;
+    if (result?.ok) {
+      setConfirmRemoveFor(null);
+      setOptionsFor(null);
+      setRefreshNonce((nonce) => nonce + 1);
+    }
+  }
+
+  const canOverride = Boolean(optionsFor?.defaultActionId);
+  const canTweakWithAi = Boolean(
+    optionsFor?.extensionFile &&
+      ['extension-root-item', 'extension-action'].includes(optionsFor.kind),
+  );
+  const canRemoveCreatedAction = Boolean(
+    optionsFor?.kind === 'ai-chat' || optionsFor?.removable,
+  );
+  const canDuplicateCreatedAction = Boolean(
+    ['extension-root-item', 'extension-action'].includes(
+      optionsFor?.kind || '',
+    ) && optionsFor?.removable,
+  );
+  const canSubmitExtensionPr = Boolean(
+    canDuplicateCreatedAction && ghStatus.installed,
+  );
+  const canSubmitExtensionPrHint =
+    canDuplicateCreatedAction && ghStatus.installed && !ghStatus.authed;
+  async function submitExtensionPrAction() {
+    if (!optionsFor) return;
+    setOptionsFor(null);
+    await runViewAction({
+      type: 'submitExtensionPr',
+      title: 'Submit as PR',
+      targetAction: optionsFor,
+    } as ExtensionViewAction);
+  }
+  const canCustomizeAction = canCustomizeCommandAction(optionsFor);
+  const canRemoveOptionsShortcut = Boolean(
+    optionsFor &&
+      shortcutRecords.some((record) => record.actionId === optionsFor.id),
+  );
+  const canPreviewAction = Boolean(
+    optionsFor?.imageDataUrl ||
+      optionsFor?.videoUrl ||
+      optionsFor?.thumbnailUrl ||
+      optionsFor?.text ||
+      optionsFor?.filePath,
+  );
+  const canQuickLookAction = Boolean(optionsFor?.filePath);
+  const selectedExtensionItem = useMemo(() => {
+    if (!extensionView) return null;
+    return (
+      allViewItems(extensionView).find((item) => item.id === selectedValue) ||
+      null
+    );
+  }, [extensionView, selectedValue]);
+  const selectedShortcutRecord = useMemo(
+    () =>
+      shortcutRecords.find(
+        (record) => `shortcut:${record.actionId}` === selectedValue,
+      ) || null,
+    [selectedValue, shortcutRecords],
+  );
+  const activeAction = optionsFor || previewFor || selectedAction;
+
+  useEffect(() => {
+    if (
+      !(
+        extensionView?.onSelectionChange &&
+        selectedValue &&
+        allViewItems(extensionView).some((item) => item.id === selectedValue)
+      )
+    )
+      return;
+    runViewAction({
+      ...extensionView.onSelectionChange,
+      selectedItemId: selectedValue,
+      text: selectedValue,
+    });
+  }, [extensionView?.onSelectionChange, selectedValue]);
+
+  function childMatches(...values: Array<string | undefined>) {
+    return valuesMatch(childQuery, ...values);
+  }
+
+  function actionMatches(...values: Array<string | undefined>) {
+    return valuesMatch(actionQuery, ...values);
+  }
+
+  function filterViewSections(view: ExtensionView) {
+    const minScore = view.id === 'clipboard-history' ? 50 : undefined;
+    return measureDebugPerformanceSync(
+      'view.filter-sections',
+      {
+        childQueryLength: childQuery.length,
+        sectionCount: view.sections?.length || 0,
+      },
+      () =>
+        filterCommandSections(
+          view,
+          childQuery,
+          minScore ? { minScore } : undefined,
+        ),
+    );
+  }
+
+  function filterExtensionItems(items: ExtensionViewItem[] = []) {
+    // Filterable child views (list/grid) use a minimum score of 50 to
+    // require exact, starts-with, or contains-substring matches. This
+    // prevents long strings like file paths from causing false-positive
+    // sequential-character matches (score 20) that would show every item.
+    const minScore =
+      extensionView?.id === 'clipboard-history' ||
+      extensionView?.type === 'list' ||
+      extensionView?.type === 'grid'
+        ? 50
+        : undefined;
+    return measureDebugPerformanceSync(
+      'view.filter-items',
+      { childQueryLength: childQuery.length, itemCount: items.length },
+      () =>
+        filterCommandItems(
+          items,
+          childQuery,
+          minScore ? { minScore } : undefined,
+        ),
+    );
+  }
+
+  function getAliasActionRows() {
+    const draft = actionQuery.trim();
+    const existing = aliasFor?.userAliases || [];
+    const rows: ActionPanelRow[] = [];
+    if (draft && !existing.includes(draft)) {
+      rows.push({
+        value: 'alias:save',
+        icon: <Tag size={18} />,
+        title: `Save alias “${draft}”`,
+        subtitle: aliasFor
+          ? `Make “${aliasFor.title}” appear for this phrase`
+          : '',
+        onSelect: submitAlias,
+      });
+    }
+    for (const alias of existing) {
+      rows.push({
+        value: `alias:remove:${alias}`,
+        icon: <Trash2 size={18} />,
+        title: alias,
+        subtitle: 'Remove this alias',
+        onSelect: () => removeAliasEntry(alias),
+      });
+    }
+    rows.push({
+      value: 'alias:done',
+      icon: <RotateCcw size={18} />,
+      title: 'Done',
+      subtitle: existing.length
+        ? `${existing.length} alias${existing.length === 1 ? '' : 'es'} saved`
+        : 'Close without changes',
+      onSelect: () => {
+        setAliasFor(null);
+        setActionQuery('');
+      },
+    });
+    return rows;
+  }
+
+  function getConfirmActionRows() {
+    return [
+      {
+        value: 'confirm:remove',
+        icon: <Trash2 size={18} />,
+        title: 'Remove action',
+        subtitle: confirmRemoveFor
+          ? `Delete “${confirmRemoveFor.title}” from Nevermind`
+          : '',
+        onSelect: confirmRemoveCreatedAction,
+        className: 'result dangerResult',
+      },
+      {
+        value: 'confirm:cancel',
+        icon: <RotateCcw size={18} />,
+        title: 'Cancel',
+        subtitle: 'Keep this action',
+        onSelect: () => setConfirmRemoveFor(null),
+        className: 'result',
+      },
+    ].filter((row) => actionMatches(row.title, row.subtitle));
+  }
+
+  function getConfirmViewActionRows() {
+    const action = confirmViewActionFor;
+    return [
+      {
+        value: 'confirm:view-action',
+        icon:
+          action?.style === 'destructive' ? (
+            <Trash2 size={18} />
+          ) : (
+            <Zap size={18} />
+          ),
+        title: action?.confirmLabel || action?.title || 'Run action',
+        subtitle: action?.confirmMessage || 'Confirm this action',
+        onSelect: async () => {
+          if (!action) return;
+          setConfirmViewActionFor(null);
+          await runViewAction({ ...action, requiresConfirmation: false }, true);
+        },
+        className:
+          action?.style === 'destructive' ? 'result dangerResult' : 'result',
+      },
+      {
+        value: 'confirm:view-cancel',
+        icon: <RotateCcw size={18} />,
+        title: action?.cancelLabel || 'Cancel',
+        subtitle: 'Do nothing',
+        onSelect: () => setConfirmViewActionFor(null),
+        className: 'result',
+      },
+    ].filter((row) => actionMatches(row.title, row.subtitle));
+  }
+
+  function getConfirmBuilderPreviewActionRows() {
+    const confirmation = confirmBuilderPreviewAction;
+    const action = confirmation?.action;
+    return [
+      {
+        value: 'confirm:builder-preview-action',
+        icon:
+          action?.style === 'destructive' ? (
+            <Trash2 size={18} />
+          ) : (
+            <Zap size={18} />
+          ),
+        title: action?.confirmLabel || action?.title || 'Run action',
+        subtitle: action?.confirmMessage || 'Confirm this action',
+        onSelect: async () => {
+          if (!confirmation) return;
+          setConfirmBuilderPreviewAction(null);
+          await runBuilderPreviewViewAction(
+            confirmation.filename,
+            { ...confirmation.action, requiresConfirmation: false },
+            true,
+          );
+        },
+        className:
+          action?.style === 'destructive' ? 'result dangerResult' : 'result',
+      },
+      {
+        value: 'confirm:builder-preview-cancel',
+        icon: <RotateCcw size={18} />,
+        title: action?.cancelLabel || 'Cancel',
+        subtitle: 'Do nothing',
+        onSelect: () => setConfirmBuilderPreviewAction(null),
+        className: 'result',
+      },
+    ].filter((row) => actionMatches(row.title, row.subtitle));
+  }
+
+  function actionIdentity(action: ExtensionViewAction) {
+    const nativeId = (action.nativeAction as { id?: string } | undefined)?.id;
+    return [
+      action.type,
+      action.handlerId,
+      nativeId,
+      action.title,
+      action.path,
+      action.url,
+      action.text,
+    ]
+      .filter(Boolean)
+      .join('\u0000');
+  }
+
+  function closeActionPanels() {
+    setActionSubmenuFor(null);
+    setExtensionItemOptionsFor(null);
+    setOptionsFor(null);
+    setActionQuery('');
+  }
+
+  function actionRow(
+    action: ExtensionViewAction,
+    value: string,
+    closeAfterSelect: boolean,
+    icon = iconForAction(action),
+    runAction = runViewAction,
+  ): ActionPanelRow {
+    return {
+      value,
+      icon,
+      title: action.title,
+      subtitle: action.submenu ? 'Open submenu' : actionDescription(action),
+      shortcut: action.shortcut,
+      onSelect: async () => {
+        if (action.submenu) {
+          setActionSubmenuFor({
+            title: action.title,
+            panel: action.submenu,
+            runAction,
+          });
+          setActionQuery('');
+          return;
+        }
+        await runAction(action);
+        if (closeAfterSelect) closeActionPanels();
+      },
+      className:
+        action.style === 'destructive' ? 'result dangerResult' : 'result',
+    };
+  }
+
+  function actionPanelRows(
+    panel = extensionItemOptionsFor?.actionPanel,
+    fallbackActions = extensionItemOptionsFor?.actions || [],
+    prefix = 'extension-item',
+    closeAfterSelect = true,
+    skipActionIdentities = new Set<string>(),
+    runAction = runViewAction,
+  ): ActionPanelRow[] {
+    const sections = panel?.sections?.length
+      ? panel.sections
+      : [{ actions: fallbackActions }];
+    return sections.flatMap((section, sectionIndex) => {
+      const rows = (section.actions || [])
+        .filter((action) => !skipActionIdentities.has(actionIdentity(action)))
+        .map((action, index) =>
+          actionRow(
+            action,
+            `${prefix}:${sectionIndex}:${index}:${action.type}:${action.title}`,
+            closeAfterSelect,
+            undefined,
+            runAction,
+          ),
+        )
+        .filter((row) => actionMatches(row.title, row.subtitle));
+      if (rows.length === 0) return [];
+      return section.title
+        ? [
+            {
+              value: `${prefix}:section:${sectionIndex}`,
+              title: section.title,
+              subtitle: '',
+              sectionHeader: true,
+              onSelect: () => {},
+              className: 'actionSectionHeader',
+            },
+            ...rows,
+          ]
+        : rows;
+    });
+  }
+
+  function commandItemActionRows(
+    item: CommandItem,
+    prefix: string,
+    closeAfterSelect = true,
+  ) {
+    const primary = item.primaryAction;
+    const skip = new Set<string>();
+    const primaryRows =
+      primary && actionMatches(primary.title, actionDescription(primary))
+        ? [
+            actionRow(
+              primary,
+              `${prefix}:primary:${primary.type}:${primary.title}`,
+              closeAfterSelect,
+              iconForItem(item),
+            ),
+          ]
+        : [];
+    if (primary) skip.add(actionIdentity(primary));
+    return [
+      ...primaryRows,
+      ...actionPanelRows(
+        item.actionPanel,
+        item.actions || [],
+        prefix,
+        closeAfterSelect,
+        skip,
+      ),
+    ];
+  }
+
+  function getExtensionItemActionRows() {
+    return extensionItemOptionsFor
+      ? commandItemActionRows(extensionItemOptionsFor, 'extension-item')
+      : [];
+  }
+
+  function getShortcutRows() {
+    return shortcutItems(shortcutRecords, childMatches).map((item) => ({
+      value: item.id,
+      icon: <Keyboard size={18} />,
+      title: item.title,
+      subtitle: item.subtitle,
+      onSelect: () => {
+        const record = shortcutRecords.find(
+          (candidate) => `shortcut:${candidate.actionId}` === item.id,
+        );
+        if (record) startShortcutRecorder(record.action);
+      },
+      className: 'result',
+    }));
+  }
+
+  function renderShortcutManager() {
+    return (
+      <ShortcutManagerView
+        records={shortcutRecords}
+        matches={childMatches}
+        onSelect={(record) => setShortcutOptionsFor(record as ShortcutRecord)}
+      />
+    );
+  }
+
+  function getShortcutOptionRows() {
+    return shortcutOptionRows(
+      shortcutOptionsFor as ShortcutRecordLike | null,
+      (action) => {
+        startShortcutRecorder(action as Action);
+        setShortcutOptionsFor(null);
+      },
+      (record) => removeShortcut(record as ShortcutRecord),
+      actionMatches,
+    );
+  }
+
+  function getShortcutRecorderRows() {
+    return shortcutRecorderRows(
+      recordedShortcut,
+      shortcutFor,
+      saveRecordedShortcut,
+      cancelShortcutRecorder,
+      savingShortcut,
+    );
+  }
+
+  function getRootActionRows() {
+    return optionsFor
+      ? commandItemActionRows(commandItemFromAction(optionsFor), 'root-action')
+      : [];
+  }
+
+  function getOptionActionRows() {
+    const declaredActions = actionsFromPanel(optionsFor?.actionPanel);
+    const hasDeclaredPreviewAction = declaredActions.some(
+      (action) => action.type === 'previewClipboardItem',
+    );
+    const hasDeclaredQuickLookAction = declaredActions.some(
+      (action) => action.type === 'quickLook',
+    );
+    const optionRows = [
+      {
+        value: 'option:shortcut',
+        icon: <Keyboard size={18} />,
+        title: 'Set keyboard shortcut',
+        subtitle: 'Run this action globally without opening Nevermind',
+        onSelect: setShortcut,
+        show: canCustomizeAction,
+      },
+      {
+        value: 'option:remove-shortcut',
+        icon: <Trash2 size={18} />,
+        title: 'Remove keyboard shortcut',
+        subtitle: optionsFor?.shortcut,
+        onSelect: removeOptionsShortcut,
+        show: canCustomizeAction && canRemoveOptionsShortcut,
+        className: 'dangerResult',
+      },
+      {
+        value: 'option:preview',
+        icon: <Search size={18} />,
+        title: 'Preview',
+        subtitle: 'Press → to preview an item',
+        shortcut: 'Command+Y',
+        onSelect: () => optionsFor && setPreviewFor(optionsFor),
+        show: canPreviewAction && !hasDeclaredPreviewAction,
+      },
+      {
+        value: 'option:quick-look',
+        icon: <Search size={18} />,
+        title: 'Preview File',
+        subtitle: 'Preview this file',
+        shortcut: 'Command+Y',
+        onSelect: quickLookOptionsAction,
+        show: canQuickLookAction && !hasDeclaredQuickLookAction,
+      },
+      {
+        value: 'option:alias',
+        icon: <Tag size={18} />,
+        title: 'Set alias',
+        subtitle: 'Make this action appear for another phrase',
+        onSelect: setAlias,
+        show: canCustomizeAction,
+      },
+      {
+        value: 'option:duplicate',
+        icon: <Copy size={18} />,
+        title: 'Duplicate',
+        subtitle: 'Create a separate copy to tweak while keeping this action',
+        onSelect: duplicateCreatedAction,
+        show: canDuplicateCreatedAction,
+      },
+      {
+        value: 'option:rename',
+        icon: <Pencil size={18} />,
+        title: 'Rename',
+        subtitle: 'Change the display name of this extension',
+        onSelect: renameExtensionAction,
+        show: canTweakWithAi,
+      },
+      {
+        value: 'option:submit-pr',
+        icon: <Zap size={18} />,
+        title: 'Submit as PR',
+        subtitle: canSubmitExtensionPrHint
+          ? 'Requires GitHub CLI (gh auth login)'
+          : 'Open a pull request adding this extension to Nevermind',
+        onSelect: submitExtensionPrAction,
+        show: canSubmitExtensionPr,
+        disabled: canSubmitExtensionPrHint,
+      },
+      {
+        value: 'option:tweak',
+        icon: <Wand2 size={18} />,
+        title: 'Tweak with AI',
+        subtitle: 'Open the original creation chat for this action',
+        shortcut: 'Tab',
+        onSelect: tweakWithAi,
+        show: canTweakWithAi,
+      },
+      {
+        value: 'option:override',
+        icon: <Sparkles size={18} />,
+        title: 'Override with AI',
+        subtitle: 'Customize this action to do what you want',
+        onSelect: setOverride,
+        show: canOverride,
+      },
+      {
+        value: 'option:restore',
+        icon: <RotateCcw size={18} />,
+        title: 'Restore original',
+        subtitle: 'Remove the AI override and use the built-in behavior',
+        onSelect: restoreOriginal,
+        show: Boolean(optionsFor?.isOverridden),
+      },
+      {
+        value: 'option:remove',
+        icon: <Trash2 size={18} />,
+        title: 'Remove action',
+        subtitle: 'Delete this AI-created action from Nevermind',
+        onSelect: askRemoveCreatedAction,
+        show: canRemoveCreatedAction,
+      },
+    ].filter((row) => row.show && actionMatches(row.title, row.subtitle));
+    return [...getRootActionRows(), ...optionRows];
+  }
+
+  function getCompactActionRows() {
+    if (shortcutOptionsFor) return getShortcutOptionRows();
+    if (actionSubmenuFor)
+      return actionPanelRows(
+        actionSubmenuFor.panel,
+        [],
+        'action-submenu',
+        true,
+      );
+    if (extensionItemOptionsFor) return getExtensionItemActionRows();
+    if (optionsFor) return getOptionActionRows();
+    return [];
+  }
+
+  function renderChildEmpty(message = EMPTY_ACTIONS_TITLE, subtitle?: string) {
+    return (
+      <EmptyState
+        icon={<Search size={24} />}
+        title={message}
+        subtitle={subtitle}
+      />
+    );
+  }
+
+  function renderViewEmpty(view: ExtensionView, fallback = EMPTY_ITEMS_TITLE) {
+    return renderChildEmpty(
+      view.emptyView?.title || fallback,
+      view.emptyView?.subtitle,
+    );
+  }
+
+  function runningAppClassName(action: Action) {
+    const appPath = appPathForRunningStatus(action);
+    return appPath && runningAppPaths[appPath] ? 'runningAppResult' : undefined;
+  }
+
+  function commandItemFromAction(action: Action): CommandItem {
+    return {
+      id: action.id,
+      title: action.title,
+      subtitle: action.isOverridden
+        ? `AI override: ${action.overrideSummary}`
+        : action.subtitle,
+      icon: action.icon,
+      image:
+        action.thumbnailUrl ||
+        action.iconUrl ||
+        iconUrls[action.id] ||
+        iconUrls[appPathForIcon(action) || ''] ||
+        undefined,
+      appearance: action.appearance,
+      className: runningAppClassName(action),
+      primaryAction: {
+        type: 'nativeAction',
+        title: action.title,
+        shortcut: action.shortcut,
+        nativeAction: action,
+      },
+      actionPanel:
+        action.actionPanel ||
+        actionPanelFromActions([
+          {
+            type: 'nativeAction',
+            title: action.title,
+            shortcut: action.shortcut,
+            nativeAction: action,
+          },
+        ]),
+    };
+  }
+
+  function primaryCommandAction(item: CommandItem) {
+    return (
+      item.primaryAction ||
+      actionsFromPanel(item.actionPanel, item.actions || [])[0]
+    );
+  }
+
+  function actionFromCommandItem(item: CommandItem) {
+    return primaryCommandAction(item)?.nativeAction as Action | undefined;
+  }
+
+  async function runCommandItem(item: CommandItem) {
+    const action = primaryCommandAction(item);
+    if (!action) return;
+    if (!isChildOpen) rememberRootQuery();
+    await runViewAction(action);
+  }
+
+  function iconForCommandItem(item: CommandItem) {
+    const action = actionFromCommandItem(item);
+    return iconForItem({
+      ...item,
+      icon: (action?.icon || item.icon) as CommandIconName,
+      image: item.image,
+    });
+  }
+
+  function renderActionResults() {
+    const items = measureDebugPerformanceSync(
+      'root-actions.to-command-items',
+      { actionCount: actions.length },
+      () => actions.map(commandItemFromAction),
+    );
+    return (
+      <RootCommandList
+        items={items}
+        iconForItem={iconForCommandItem}
+        onSelect={runCommandItem}
+        extraForItem={(item) =>
+          ['extension-root-item', 'extension-action'].includes(
+            actionFromCommandItem(item)?.kind || '',
+          ) && actionFromCommandItem(item)?.extensionFile
+            ? ['Tab tweak']
+            : []
+        }
+      />
+    );
+  }
+
+  function renderActionPanel(
+    rows: ActionPanelRow[] | unknown[],
+    emptyMessage = EMPTY_ACTIONS_TITLE,
+  ) {
+    return (
+      <ActionPanel
+        rows={rows as ActionPanelRow[]}
+        emptyMessage={emptyMessage}
+      />
+    );
+  }
+
+  function renderMarkdown(content: string) {
+    markDebugPerformance('markdown.render', { contentLength: content.length });
+    return <MarkdownContent content={content} />;
+  }
+
+  function runDefaultViewAction(item: ExtensionViewItem) {
+    const action =
+      item.primaryAction ||
+      actionsFromPanel(item.actionPanel, item.actions || [])[0];
+    if (action) runViewAction(action);
+  }
+
+  function appPathForIcon(action: Action | null | undefined) {
+    const candidate = action?.app?.path || action?.rootAction?.path;
+    return isAppIconPath(candidate) ? candidate : null;
+  }
+
+  function appPathForRunningStatus(action: Action | null | undefined) {
+    const candidate =
+      action?.extensionId === 'nevermind.apps'
+        ? action.rootAction?.path
+        : action?.app?.path;
+    return typeof candidate === 'string' && candidate ? candidate : null;
+  }
+
+  function diskPathForAction(action: Action | null | undefined) {
+    return (
+      action?.filePath || action?.app?.path || action?.rootAction?.path || null
+    );
+  }
+
+  function diskPathForItem(item: ExtensionViewItem | null | undefined) {
+    if (!item) return null;
+    if (item.path || item.filePath) return item.path || item.filePath;
+    const actions = [
+      item.primaryAction,
+      ...actionsFromPanel(item.actionPanel, item.actions || []),
+    ].filter(Boolean) as ExtensionViewAction[];
+    return actions.find((action) => action.path)?.path || null;
+  }
+
+  function hydrateExtensionItemIcon(item: ExtensionViewItem) {
+    if (item.image) return item;
+    const appPath = diskPathForItem(item);
+    const iconUrl = isAppIconPath(appPath) ? iconUrls[appPath] : null;
+    return iconUrl ? { ...item, image: iconUrl } : item;
+  }
+
+  function dragPathForItem(item: ExtensionViewItem) {
+    return diskPathForItem(item);
+  }
+
+  function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
+    const filePath = dragPathForItem(item);
+    if (!filePath) return;
+    event.preventDefault();
+    window.nvm.startFileDrag(filePath);
+  }
+
+  function persistentActionForItem(item: ExtensionViewItem | null | undefined) {
+    return item?.persistentAction as unknown as Action | undefined;
+  }
+
+  function itemActionPanelIsVisible(
+    item: ExtensionViewItem | null | undefined,
+  ) {
+    return (
+      Boolean(persistentActionForItem(item)) ||
+      item?.actionPanelVisibility !== 'hidden'
+    );
+  }
+
+  function viewActionPanelIsVisible(view: ExtensionView | null | undefined) {
+    return view?.actionPanelVisibility !== 'hidden';
+  }
+
+  function viewActionPanel(view: ExtensionView) {
+    return view.actionPanel || actionPanelFromActions(view.actions || []);
+  }
+
+  function renderSearchAccessory(view: ExtensionView | null) {
+    if (!view?.searchAccessory?.items?.length) return null;
+    return (
+      <SearchAccessory
+        tooltip={view.searchAccessory.tooltip}
+        value={view.searchAccessory.value}
+        items={view.searchAccessory.items}
+        onChange={(value) => {
+          const action = view.searchAccessory?.onChange;
+          if (action) runViewAction({ ...action, value, text: value });
+        }}
+      />
+    );
+  }
+
+  function renderBuilderPreview() {
+    if (!selectedBuilderPreview) return null;
+    const preview = selectedBuilderPreview;
+    return (
+      <section
+        className="builderPreviewPane"
+        data-focused={builderPreviewFocused}
+        tabIndex={0}
+        onFocus={() => {
+          setBuilderPreviewFocused(true);
+          selectValue(preview.selectedItemId);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            setBuilderPreviewFocused(false);
+        }}
+        onClick={() => setBuilderPreviewFocused(true)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (actionSubmenuFor) setActionSubmenuFor(null);
+          else if (confirmBuilderPreviewAction)
+            setConfirmBuilderPreviewAction(null);
+          else if (preview.backStack.length > 0)
+            popBuilderPreview(preview.filename);
+          else {
+            setBuilderPreviewFocused(false);
+            aiChat.inputRef.current?.focus();
+          }
+        }}
+      >
+        <header className="builderPreviewHeader">
+          {builderPreviews.length > 1 ? (
+            <div
+              className="builderPreviewSwitcher"
+              aria-label="Preview extensions"
+            >
+              {builderPreviews.map((item) => (
+                <button
+                  key={item.filename}
+                  type="button"
+                  data-selected={item.filename === preview.filename}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    resetBuilderPreview(item.filename);
+                    setSelectedBuilderPreviewFilename(item.filename);
+                  }}
+                >
+                  {item.filename.replace(/\.tsx?$/, '')}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span>{preview.filename.replace(/\.tsx?$/, '')}</span>
+          )}
+        </header>
+        <div className="builderPreviewBody">
+          <ExtensionViewRenderer
+            view={preview.view}
+            aiChat={aiChat}
+            nevermindAuthed={nevermindAuthed}
+            onSignInToNevermind={() => {}}
+            formValues={formValues}
+            setFormValues={setFormValues}
+            filterItems={(items) => items || []}
+            filterSections={(view) => view.sections}
+            renderMarkdown={renderMarkdown}
+            renderActionPanel={renderActionPanel}
+            actionPanelRows={(
+              panel,
+              fallbackActions,
+              prefix,
+              closeAfterSelect,
+            ) =>
+              actionPanelRows(
+                panel,
+                fallbackActions,
+                `builder-preview:${preview.filename}:${prefix || 'view'}`,
+                closeAfterSelect,
+                new Set<string>(),
+                (action, confirmed) =>
+                  runBuilderPreviewViewAction(
+                    preview.filename,
+                    action,
+                    confirmed,
+                  ),
+              )
+            }
+            renderRootIcon={iconForCommandItem}
+            runDefaultAction={(item) => {
+              const action =
+                item.primaryAction ||
+                actionsFromPanel(item.actionPanel, item.actions || [])[0];
+              if (action)
+                void runBuilderPreviewViewAction(preview.filename, action);
+            }}
+            runAction={(action) =>
+              void runBuilderPreviewViewAction(preview.filename, action)
+            }
+            sendAiPrompt={() => {}}
+            abortAiChat={() => {}}
+            dragPathForItem={() => null}
+            startItemDrag={() => {}}
+            selectedItemId={preview.selectedItemId}
+            onSelectItem={(item) =>
+              selectBuilderPreviewItem(preview.filename, item.id)
+            }
+          />
+        </div>
+      </section>
+    );
+  }
+
+  function renderExtensionView(view: ExtensionView) {
+    return (
+      <ExtensionViewRenderer
+        view={view}
+        aiChat={aiChat}
+        nevermindAuthed={nevermindAuthed}
+        onSignInToNevermind={async () => {
+          const result = await window.nvm.signInToNevermind();
+          if (result.ok) setNevermindAuthed(true);
+          else
+            setToast({
+              message: `Sign-in failed: ${result.error || 'unknown'}`,
+              tone: 'error',
+            });
+        }}
+        formValues={formValues}
+        setFormValues={setFormValues}
+        filterItems={(items) =>
+          filterExtensionItems(items).map(hydrateExtensionItemIcon)
+        }
+        filterSections={filterViewSections}
+        renderMarkdown={renderMarkdown}
+        renderActionPanel={renderActionPanel}
+        actionPanelRows={actionPanelRows}
+        renderRootIcon={iconForCommandItem}
+        renderEmpty={renderViewEmpty}
+        runDefaultAction={runDefaultViewAction}
+        runAction={runViewAction}
+        sendAiPrompt={(message) => sendAiPrompt(message, view.chatId)}
+        abortAiChat={window.nvm.abortAiChat}
+        dragPathForItem={dragPathForItem}
+        startItemDrag={startItemDrag}
+        selectedItemId={selectedValue}
+      />
+    );
+  }
+
+  function runLocalShortcut(accelerator: string) {
+    if (
+      !extensionView ||
+      extensionItemOptionsFor ||
+      optionsFor ||
+      previewFor ||
+      confirmRemoveFor ||
+      shortcutManagerOpen ||
+      shortcutFor
+    )
+      return false;
+    const normalized = normalizedShortcut(accelerator);
+    const selectedItem = selectedExtensionItem;
+    const itemActions = selectedItem
+      ? actionsFromPanel(selectedItem.actionPanel, selectedItem.actions || [])
+      : [];
+    const viewActions = actionsFromPanel(
+      extensionView.actionPanel,
+      extensionView.actions || [],
+    );
+    const actions = selectedItem
+      ? ([selectedItem.primaryAction, ...itemActions].filter(
+          Boolean,
+        ) as ExtensionViewAction[])
+      : viewActions;
+    const action = actions.find(
+      (item) => normalizedShortcut(item.shortcut) === normalized,
+    );
+    if (!action) return false;
+    runViewAction(action);
+    return true;
+  }
+
+  function rootSearchQueryAction(
+    action: Action | null | undefined,
+    title: 'Continue Calculation' | 'Swap Units',
+  ) {
+    return actionsFromPanel(action?.actionPanel, []).find(
+      (candidate) =>
+        candidate.type === 'setSearchQuery' && candidate.title === title,
+    );
+  }
+
+  function selectBuilderPreviewItem(filename: string, itemId: string) {
+    setBuilderPreviews((previews) =>
+      previews.map((preview) =>
+        preview.filename === filename
+          ? { ...preview, selectedItemId: itemId }
+          : preview,
+      ),
+    );
+    selectValue(itemId);
+  }
+
+  function moveBuilderPreviewSelection(key: string) {
+    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    const view = selectedBuilderPreview.view;
+    const items = allViewItems(view).filter((item) => !item.disabled);
+    if (!items.length) return false;
+    const currentIndex = Math.max(
+      0,
+      items.findIndex(
+        (item) => item.id === selectedBuilderPreview.selectedItemId,
+      ),
+    );
+    const grid = document.querySelector<HTMLElement>(
+      '.builderPreviewPane .extensionGrid',
+    );
+    const columns = grid
+      ? Math.max(
+          1,
+          getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean)
+            .length,
+        )
+      : 4;
+    const delta =
+      key === 'ArrowRight'
+        ? 1
+        : key === 'ArrowLeft'
+          ? -1
+          : key === 'ArrowDown'
+            ? columns
+            : -columns;
+    const item =
+      items[Math.max(0, Math.min(items.length - 1, currentIndex + delta))];
+    if (!item) return false;
+    selectBuilderPreviewItem(selectedBuilderPreview.filename, item.id);
+    requestAnimationFrame(() =>
+      document
+        .querySelector(
+          `.builderPreviewPane [data-extension-item-id="${CSS.escape(item.id)}"]`,
+        )
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    );
+    return true;
+  }
+
+  function selectedBuilderPreviewItem() {
+    if (!selectedBuilderPreview) return null;
+    return (
+      allViewItems(selectedBuilderPreview.view).find(
+        (item) => item.id === selectedBuilderPreview.selectedItemId,
+      ) || null
+    );
+  }
+
+  function runSelectedBuilderPreviewAction() {
+    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    const item = selectedBuilderPreviewItem();
+    const action =
+      item?.primaryAction ||
+      actionsFromPanel(item?.actionPanel, item?.actions || [])[0] ||
+      actionsFromPanel(
+        selectedBuilderPreview.view.actionPanel,
+        selectedBuilderPreview.view.actions || [],
+      )[0];
+    if (!action) return false;
+    void runBuilderPreviewViewAction(selectedBuilderPreview.filename, action);
+    return true;
+  }
+
+  function runBuilderPreviewShortcut(accelerator: string) {
+    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    const item = selectedBuilderPreviewItem();
+    const actions = item
+      ? [
+          item.primaryAction,
+          ...actionsFromPanel(item.actionPanel, item.actions || []),
+        ].filter(Boolean)
+      : actionsFromPanel(
+          selectedBuilderPreview.view.actionPanel,
+          selectedBuilderPreview.view.actions || [],
+        );
+    const action = (actions as ExtensionViewAction[]).find(
+      (candidate) =>
+        normalizedShortcut(candidate.shortcut) ===
+        normalizedShortcut(accelerator),
+    );
+    if (!action) return false;
+    void runBuilderPreviewViewAction(selectedBuilderPreview.filename, action);
+    return true;
+  }
+
+  function moveGridSelection(key: string) {
+    if (
+      extensionView?.type !== 'grid' ||
+      confirmRemoveFor ||
+      extensionItemOptionsFor ||
+      optionsFor ||
+      previewFor
+    )
+      return false;
+    const filteredItems = filterExtensionItems(allViewItems(extensionView));
+    const items = extensionView.maxVisibleItems
+      ? filteredItems.slice(0, extensionView.maxVisibleItems)
+      : filteredItems;
+    if (items.length === 0) return false;
+    const currentIndex = Math.max(
+      0,
+      items.findIndex((item) => item.id === selectedValue),
+    );
+    const grid = document.querySelector<HTMLElement>('.extensionGrid');
+    const columns = grid
+      ? Math.max(
+          1,
+          getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean)
+            .length,
+        )
+      : 4;
+    const delta =
+      key === 'ArrowRight'
+        ? 1
+        : key === 'ArrowLeft'
+          ? -1
+          : key === 'ArrowDown'
+            ? columns
+            : -columns;
+    const nextIndex = Math.max(
+      0,
+      Math.min(items.length - 1, currentIndex + delta),
+    );
+    const next = items[nextIndex];
+    if (!next) return false;
+    selectValue(next.id);
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    );
+    return true;
+  }
+
+  function onGridKeyDownCapture(event: React.KeyboardEvent) {
+    if (
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+      ((!isEditableKeyTarget(event.target) &&
+        moveBuilderPreviewSelection(event.key)) ||
+        moveGridSelection(event.key))
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  function selectedDiskPath() {
+    if (!isChildOpen) return diskPathForAction(selectedAction);
+    if (
+      selectedExtensionItem &&
+      !confirmRemoveFor &&
+      !extensionItemOptionsFor &&
+      !optionsFor &&
+      !previewFor
+    )
+      return diskPathForItem(selectedExtensionItem);
+    return null;
+  }
+
+  async function revealSelectedDiskItem(path: string) {
+    await runViewAction({
+      type: 'revealPath',
+      title: 'Reveal in File Manager',
+      path,
+    });
+  }
+
+  function dismissFromEmptyWindowSpace(event: MouseEvent<HTMLElement>) {
+    if (event.button !== 0) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('.card, .toast, .extensionWindowCompactPanel')) return;
+    event.preventDefault();
+    void window.nvm.hide();
+  }
+
+  function onCommandKeyDown(event: React.KeyboardEvent) {
+    if (shortcutFor) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') {
+        cancelShortcutRecorder();
+        return;
+      }
+      if (isShortcutRecorderSaveKey(event.nativeEvent)) {
+        void saveRecordedShortcut();
+        return;
+      }
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        setRecordedShortcut('');
+        return;
+      }
+      const accelerator =
+        shortcutFor.id === HYPER_KEY_ACTION_ID
+          ? acceleratorFromEvent(event) || modifierAcceleratorFromEvent(event)
+          : acceleratorFromEvent(event);
+      if (accelerator) setRecordedShortcut(accelerator);
+      return;
+    }
+
+    const localAccelerator = acceleratorFromEvent(event);
+    const eventTarget = event.target;
+    const builderPreviewEventTargetsEditableControl =
+      eventTarget instanceof HTMLInputElement ||
+      eventTarget instanceof HTMLTextAreaElement ||
+      eventTarget instanceof HTMLSelectElement ||
+      (eventTarget instanceof HTMLElement && eventTarget.isContentEditable);
+    if (
+      builderPreviewFocused &&
+      !builderPreviewEventTargetsEditableControl &&
+      !localAccelerator &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
+      if (runSelectedBuilderPreviewAction()) {
+        event.preventDefault();
+        return;
+      }
+    }
+    if (normalizedShortcut(localAccelerator) === 'command+enter') {
+      const path = selectedDiskPath();
+      if (path) {
+        event.preventDefault();
+        revealSelectedDiskItem(path);
+        return;
+      }
+    }
+    if (
+      localAccelerator &&
+      (runBuilderPreviewShortcut(localAccelerator) ||
+        runLocalShortcut(localAccelerator))
+    ) {
+      event.preventDefault();
+      return;
+    }
+    if (
+      !isChildOpen &&
+      selectedAction &&
+      normalizedShortcut(localAccelerator) === 'command+enter'
+    ) {
+      const action = rootSearchQueryAction(
+        selectedAction,
+        'Continue Calculation',
+      );
+      if (action) {
+        event.preventDefault();
+        runViewAction(action);
+        return;
+      }
+    }
+    if (
+      !isChildOpen &&
+      selectedAction &&
+      normalizedShortcut(localAccelerator) === 'command+shift+enter'
+    ) {
+      const action =
+        rootSearchQueryAction(selectedAction, 'Swap Units') ||
+        rootSearchQueryAction(selectedAction, 'Continue Calculation');
+      if (action) {
+        event.preventDefault();
+        runViewAction(action);
+        return;
+      }
+    }
+    if (
+      !isChildOpen &&
+      normalizedShortcut(localAccelerator) === 'command+y' &&
+      selectedAction &&
+      (selectedAction.imageDataUrl ||
+        selectedAction.videoUrl ||
+        selectedAction.text)
+    ) {
+      event.preventDefault();
+      setPreviewFor(selectedAction);
+      setOptionsFor(null);
+      return;
+    }
+    if (
+      !isChildOpen &&
+      normalizedShortcut(localAccelerator) === 'command+y' &&
+      selectedAction?.filePath
+    ) {
+      event.preventDefault();
+      runViewAction({
+        type: 'quickLook',
+        title: 'Preview File',
+        path: selectedAction.filePath,
+      });
+      return;
+    }
+
+    if (
+      !isChildOpen &&
+      event.key === 'ArrowUp' &&
+      navigateRootQueryHistory(-1)
+    ) {
+      event.preventDefault();
+      return;
+    }
+    if (
+      !isChildOpen &&
+      event.key === 'ArrowDown' &&
+      queryHistoryIndexRef.current !== null &&
+      navigateRootQueryHistory(1)
+    ) {
+      event.preventDefault();
+      return;
+    }
+
+    if (
+      !builderPreviewEventTargetsEditableControl &&
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+      moveBuilderPreviewSelection(event.key)
+    ) {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (shortcutOptionsFor) setShortcutOptionsFor(null);
+      else if (shortcutManagerOpen) setShortcutManagerOpen(false);
+      else if (aliasFor) {
+        setAliasFor(null);
+        setActionQuery('');
+      } else if (confirmRemoveFor) setConfirmRemoveFor(null);
+      else if (confirmViewActionFor) setConfirmViewActionFor(null);
+      else if (confirmBuilderPreviewAction)
+        setConfirmBuilderPreviewAction(null);
+      else if (actionSubmenuFor) setActionSubmenuFor(null);
+      else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null);
+      else if (optionsFor) setOptionsFor(null);
+      else if (previewFor) setPreviewFor(null);
+      else if (builderPreviewFocused) {
+        setBuilderPreviewFocused(false);
+        aiChat.inputRef.current?.focus();
+      } else if (extensionView) popExtensionView();
+      else window.nvm.hide();
+      return;
+    }
+
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLowerCase() === 'k' &&
+      extensionView?.aiChat &&
+      selectedBuilderPreview &&
+      !builderPreviewFocused
+    ) {
+      event.preventDefault();
+      setOptionsFor({
+        id: `builder-preview:${selectedBuilderPreview.filename}`,
+        kind: 'builtin',
+        title: 'Builder workspace',
+        subtitle: '',
+        icon: 'sparkles',
+        score: 0,
+        actionPanel: {
+          sections: [
+            {
+              actions: [
+                {
+                  type: 'nativeAction',
+                  title: 'Focus Preview',
+                  nativeAction: {
+                    kind: 'builder-preview-focus',
+                    title: 'Focus Preview',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (builderPreviewFocused && selectedBuilderPreview) {
+        const item = allViewItems(selectedBuilderPreview.view).find(
+          (candidate) => candidate.id === selectedBuilderPreview.selectedItemId,
+        );
+        const panel =
+          item?.actionPanel || selectedBuilderPreview.view.actionPanel;
+        const actions =
+          item?.actions || selectedBuilderPreview.view.actions || [];
+        if (panel || actions.length > 0) {
+          setActionQuery('');
+          setActionSubmenuFor({
+            title: item?.title || selectedBuilderPreview.view.title,
+            panel: panel || actionPanelFromActions(actions),
+            runAction: (action, confirmed) =>
+              runBuilderPreviewViewAction(
+                selectedBuilderPreview.filename,
+                action,
+                confirmed,
+              ),
+          });
+        }
+        return;
+      }
+      if (compactActionMenuVisible) {
+        setShortcutOptionsFor(null);
+        closeActionPanels();
+        return;
+      }
+      if (
+        selectedShortcutRecord &&
+        shortcutManagerOpen &&
+        !shortcutOptionsFor
+      ) {
+        setShortcutOptionsFor(selectedShortcutRecord);
+        return;
+      }
+      if (
+        selectedExtensionItem &&
+        itemActionPanelIsVisible(selectedExtensionItem) &&
+        extensionView &&
+        !confirmRemoveFor &&
+        !confirmViewActionFor &&
+        !extensionItemOptionsFor &&
+        !optionsFor &&
+        !previewFor
+      ) {
+        setActionQuery('');
+        const persistentAction = persistentActionForItem(selectedExtensionItem);
+        if (persistentAction) setOptionsFor(persistentAction);
+        else setExtensionItemOptionsFor(selectedExtensionItem);
+        return;
+      }
+      if (
+        !selectedExtensionItem &&
+        extensionView &&
+        viewActionPanelIsVisible(extensionView) &&
+        actionsFromPanel(extensionView.actionPanel, extensionView.actions || [])
+          .length > 0 &&
+        !confirmRemoveFor &&
+        !confirmViewActionFor &&
+        !extensionItemOptionsFor &&
+        !optionsFor &&
+        !previewFor
+      ) {
+        setActionQuery('');
+        setActionSubmenuFor({
+          title: extensionView.title,
+          panel: viewActionPanel(extensionView),
+        });
+        return;
+      }
+      if (
+        activeAction &&
+        !shortcutManagerOpen &&
+        !confirmRemoveFor &&
+        !confirmViewActionFor &&
+        !extensionItemOptionsFor &&
+        !optionsFor &&
+        !extensionView
+      ) {
+        setPreviewFor(null);
+        setOptionsFor(activeAction);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && isChildOpen) {
+      const input =
+        event.target instanceof HTMLInputElement ? event.target : null;
+      if (input && input.selectionStart !== 0) return;
+      if (event.target instanceof HTMLTextAreaElement) return;
+      event.preventDefault();
+      if (shortcutOptionsFor) setShortcutOptionsFor(null);
+      else if (shortcutManagerOpen) setShortcutManagerOpen(false);
+      else if (aliasFor) {
+        setAliasFor(null);
+        setActionQuery('');
+      } else if (confirmRemoveFor) setConfirmRemoveFor(null);
+      else if (confirmViewActionFor) setConfirmViewActionFor(null);
+      else if (actionSubmenuFor) setActionSubmenuFor(null);
+      else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null);
+      else if (optionsFor) setOptionsFor(null);
+      else if (previewFor) setPreviewFor(null);
+      else if (extensionView) popExtensionView();
+      return;
+    }
+
+    if (event.key === 'ArrowRight') {
+      const input =
+        event.target instanceof HTMLInputElement ? event.target : null;
+      if (input && input.selectionStart !== input.value.length) return;
+      if (event.target instanceof HTMLTextAreaElement) return;
+      if (
+        !isChildOpen &&
+        selectedAction &&
+        (selectedAction.imageDataUrl ||
+          selectedAction.videoUrl ||
+          selectedAction.thumbnailUrl ||
+          selectedAction.text)
+      ) {
+        event.preventDefault();
+        setPreviewFor(selectedAction);
+        setOptionsFor(null);
+        return;
+      }
+      if (
+        selectedExtensionItem &&
+        itemActionPanelIsVisible(selectedExtensionItem) &&
+        extensionView &&
+        !confirmRemoveFor &&
+        !confirmViewActionFor &&
+        !extensionItemOptionsFor &&
+        !optionsFor &&
+        !previewFor
+      ) {
+        event.preventDefault();
+        setActionQuery('');
+        const persistentAction = persistentActionForItem(selectedExtensionItem);
+        if (persistentAction) setOptionsFor(persistentAction);
+        else setExtensionItemOptionsFor(selectedExtensionItem);
+        return;
+      }
+      if (
+        activeAction &&
+        !shortcutManagerOpen &&
+        !confirmRemoveFor &&
+        !confirmViewActionFor &&
+        !extensionItemOptionsFor &&
+        !optionsFor &&
+        !extensionView
+      ) {
+        event.preventDefault();
+        setPreviewFor(null);
+        setOptionsFor(activeAction);
+        return;
+      }
+    }
+
+    if (!isChildOpen && event.key === 'Tab') {
+      const tabAction = tabActionForRootAction(selectedAction);
+      if (tabAction) {
+        event.preventDefault();
+        tabAction();
+        return;
+      }
+    }
+
+    if (!isChildOpen && event.key === 'Tab' && query) {
+      event.preventDefault();
+      rememberRootQuery(query);
+      if (createAction) {
+        run(createAction);
+      } else {
+        startBuilderChatFromQuery(query);
+      }
+    }
+  }
+
+  function onShortcutRecorderKeyDown(event: React.KeyboardEvent) {
+    if (!shortcutFor) return;
+    onCommandKeyDown(event);
+  }
+
+  return (
+    <main className="shell" onMouseDown={dismissFromEmptyWindowSpace}>
+      <DictationRendererController />
+      {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
+      <Command
+        ref={paletteRef}
+        className={`palette ${isVisuallyStacked ? 'isStacked' : ''}`}
+        label="Nevermind"
+        loop={true}
+        shouldFilter={false}
+        value={selectedValue}
+        onValueChange={selectValue}
+        onKeyDownCapture={onGridKeyDownCapture}
+        onKeyDown={onCommandKeyDown}
+      >
+        <div
+          className={`searchRow card searchCard ${isVisuallyStacked ? 'stackParentCard' : ''}`}
+        >
+          <Zap className="brandIcon" size={22} />
+          <Command.Input
+            ref={inputRef}
+            onKeyDown={shortcutFor ? onShortcutRecorderKeyDown : undefined}
+            className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
+            value={inputValue}
+            onValueChange={(value) => {
+              if (shortcutFor) return;
+              if (palettePrompt.active) palettePrompt.setQuery(value);
+              else if (isActionWorkflowOpen) setActionQuery(value);
+              else if (isFilterableChildOpen) setChildQuery(value);
+              else if (!isChildOpen) setRootQuery(value);
+            }}
+            placeholder={placeholder}
+            readOnly={
+              compactActionMenuVisible ||
+              (!(shortcutFor || isFilterableChildOpen) && isChildOpen)
+            }
+            spellCheck={false}
+          />
+          {renderSearchAccessory(extensionView)}
+          {!isChildOpen && query ? (
+            <div className="tabHint">
+              <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to
+              automate
+            </div>
+          ) : null}
+        </div>
+
+        {siblingViews.map((sib, index) => (
+          <div
+            key={`sibling-${index}-${sib.id || sib.title}`}
+            className={`siblingPane card inertSibling siblingPane-${sib.type} ${sib.aiChat ? 'interactiveSibling siblingPane-aiChat' : ''}`}
+            aria-hidden={sib.aiChat ? undefined : true}
+          >
+            <div className="siblingHeader">{sib.title}</div>
+            <div className="siblingBody">{renderExtensionView(sib)}</div>
+          </div>
+        ))}
+
+        <Command.List
+          ref={resultsListRef}
+          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+        >
+          {shortcutFor ? (
+            <div className="shortcutRecorder" aria-busy={savingShortcut}>
+              <div className="shortcutKeys">
+                {(recordedShortcut
+                  ? recordedShortcut.split('+')
+                  : ['Press keys']
+                ).map((part) => (
+                  <kbd key={part}>{part}</kbd>
+                ))}
+              </div>
+              {renderActionPanel(getShortcutRecorderRows())}
+            </div>
+          ) : shortcutManagerOpen ? (
+            renderShortcutManager()
+          ) : aliasFor ? (
+            renderActionPanel(getAliasActionRows())
+          ) : confirmRemoveFor ? (
+            renderActionPanel(getConfirmActionRows())
+          ) : confirmViewActionFor ? (
+            renderActionPanel(getConfirmViewActionRows())
+          ) : confirmBuilderPreviewAction ? (
+            renderActionPanel(getConfirmBuilderPreviewActionRows())
+          ) : previewFor ? (
+            <div className="previewPane">
+              {previewFor.videoUrl ? (
+                <video
+                  className="previewImage"
+                  src={previewFor.videoUrl}
+                  controls={true}
+                  autoPlay={true}
+                  muted={true}
+                  loop={true}
+                  playsInline={true}
+                />
+              ) : previewFor.imageDataUrl ? (
+                <img
+                  className="previewImage"
+                  src={previewFor.imageDataUrl}
+                  alt="Clipboard preview"
+                />
+              ) : previewFor.thumbnailUrl ? (
+                <img
+                  className="previewImage"
+                  src={previewFor.thumbnailUrl}
+                  alt={previewFor.title}
+                />
+              ) : previewFor.text ? (
+                <pre className="previewText">{previewFor.text}</pre>
+              ) : (
+                <div className="previewDetails">
+                  <strong>{previewFor.title}</strong>
+                  <span>{previewFor.subtitle}</span>
+                </div>
+              )}
+            </div>
+          ) : palettePrompt.active ? (
+            <ActionPanel
+              rows={palettePrompt.rows}
+              emptyMessage="No matching choices"
+            />
+          ) : extensionView ? (
+            extensionView.aiChat && selectedBuilderPreview ? (
+              <div className="builderWorkspace">
+                <div
+                  className="builderChatPane"
+                  onFocusCapture={() => setBuilderPreviewFocused(false)}
+                >
+                  {renderExtensionView(extensionView)}
+                </div>
+                {renderBuilderPreview()}
+              </div>
+            ) : (
+              renderExtensionView(extensionView)
+            )
+          ) : (
+            renderActionResults()
+          )}
+        </Command.List>
+        {compactActionMenuVisible ? (
+          <aside className="extensionWindowCompactPanel paletteCompactPanel">
+            <div className="extensionWindowSearchRow">
+              <Search size={15} className="extensionWindowSearchIcon" />
+              <input
+                ref={compactActionInputRef}
+                autoFocus
+                value={actionQuery}
+                onChange={(event) => setActionQuery(event.currentTarget.value)}
+                placeholder={compactActionPlaceholder}
+                aria-label={compactActionPlaceholder}
+                spellCheck={false}
+              />
+            </div>
+            <Command.List className="extensionWindowCompactResults">
+              <ActionPanel
+                rows={getCompactActionRows()}
+                emptyMessage="No matching actions"
+              />
+            </Command.List>
+          </aside>
+        ) : null}
+      </Command>
+    </main>
+  );
+}

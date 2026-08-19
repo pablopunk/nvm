@@ -25,11 +25,11 @@ Performance is UX. In Nevermind, every millisecond affects trust because the pro
 
 ## Hot paths to inspect first
 
-- Root search: `src/use-search-results.ts`, `src/electron/main.ts` search/provider fanout, ranking, cache invalidation.
-- Input/rendering: `src/App.tsx`, `src/filtering.ts`, `src/ui.tsx`, `src/extension-view.tsx`.
-- Chat streaming: `src/use-ai-chat.ts`, markdown rendering in `src/App.tsx`, AI event forwarding in `src/electron/ai.ts` and `src/electron/main.ts`.
-- Native/Electron work: `src/electron/palette-window.ts`, app icons, thumbnails, clipboard polling, filesystem scans, logging.
-- Extension API surfaces: `src/resources/nevermind-extension-api.d.ts` when fixing missing primitives rather than bypassing extension APIs.
+- Root search: `src/app/palette/use-search-results.ts`, `src/app/electron/main.ts` search/provider fanout, ranking, cache invalidation.
+- Input/rendering: `src/app/palette/App.tsx`, `src/app/palette/filtering.ts`, `src/app/palette/ui.tsx`, `src/app/palette/extension-view.tsx`.
+- Chat streaming: `src/app/palette/use-ai-chat.ts`, markdown rendering in `src/app/palette/App.tsx`, AI event forwarding in `src/app/electron/ai.ts` and `src/app/electron/main.ts`.
+- Native/Electron work: `src/app/electron/palette-window.ts`, app icons, thumbnails, clipboard polling, filesystem scans, logging.
+- Extension API surfaces: `src/app/resources/nevermind-extension-api.d.ts` when fixing missing primitives rather than bypassing extension APIs.
 
 ## Rules
 
