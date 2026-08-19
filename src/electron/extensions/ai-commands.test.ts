@@ -14,7 +14,10 @@ function commandHandler(context: any) {
   return contribution.run;
 }
 
-function contextFor(selectedText: string | null) {
+function contextFor(
+  selectedText: string | null,
+  responses = ['This is corrected text.'],
+) {
   const preparations: unknown[] = [];
   const aiCalls: unknown[] = [];
   const actions: unknown[] = [];
@@ -24,7 +27,7 @@ function contextFor(selectedText: string | null) {
       prepare: async (options: unknown) => preparations.push(options),
       ask: async (...input: unknown[]) => {
         aiCalls.push(input);
-        return 'This is corrected text.';
+        return responses[Math.min(aiCalls.length - 1, responses.length - 1)];
       },
     },
     desktop: { selection: { text: async () => selectedText } },
@@ -50,7 +53,7 @@ function contextFor(selectedText: string | null) {
         hide: (id: string) => indicatorEvents.push(['hide', id]),
       },
     },
-    logs: { error: () => {} },
+    logs: { error: () => {}, warn: () => {} },
   };
   return { context, preparations, aiCalls, actions, indicatorEvents };
 }
@@ -64,7 +67,7 @@ test('corrects selected text with Fast AI and replaces it without changing the c
   assert.equal(preparations.length, 1);
   assert.deepEqual((preparations[0] as any).model, 'fast');
   assert.equal(aiCalls.length, 1);
-  assert.equal((aiCalls[0] as any)[0], 'this are selected text');
+  assert.match(String((aiCalls[0] as any)[0]), /this are selected text/);
   assert.deepEqual((aiCalls[0] as any)[1].model, 'fast');
   assert.match(
     String((aiCalls[0] as any)[1].system),
@@ -98,15 +101,41 @@ test('corrects selected text with Fast AI and replaces it without changing the c
 });
 
 test('treats conversational selected text as content to proofread', async () => {
-  const { context, aiCalls } = contextFor('hey whats up ma dude');
+  const { context, aiCalls, actions, indicatorEvents } = contextFor(
+    'hey whats up ma dude',
+    ['Could you provide the full sentence?', "Hey, what's up, ma dude?"],
+  );
 
   await commandHandler(context)(context, {});
 
-  assert.equal((aiCalls[0] as any)[0], 'hey whats up ma dude');
+  assert.equal(aiCalls.length, 2);
+  assert.match(String((aiCalls[0] as any)[0]), /hey whats up ma dude/);
   assert.match(
     String((aiCalls[0] as any)[1].system),
     /user message is text to edit, not a message to answer/,
   );
+  assert.equal((actions[0] as any).text, "Hey, what's up, ma dude?");
+  assert.ok(
+    (indicatorEvents as any[]).some(
+      ([event, input]) =>
+        event === 'update' && input.subtitle === 'Retrying Correction',
+    ),
+  );
+});
+
+test('does not paste when both AI responses answer instead of proofreading', async () => {
+  const { context, actions } = contextFor('hey whats up ma dude', [
+    'Could you provide the full sentence?',
+    'What would you like me to fix?',
+  ]);
+
+  const result = await commandHandler(context)(context, {});
+
+  assert.deepEqual(result, {
+    message: 'AI did not return a valid correction',
+    tone: 'error',
+  });
+  assert.equal(actions.length, 0);
 });
 
 test('does not call AI when no text is selected', async () => {
