@@ -1,5 +1,6 @@
 import type {
   ExtensionContext,
+  ExtensionIndicatorInput,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
 
@@ -9,7 +10,7 @@ const INDICATOR_ID = 'fix-selected-text-with-ai';
 const MINIMUM_WORD_OVERLAP = 0.7;
 const MAXIMUM_EDIT_RATIO = 0.35;
 
-function indicator(subtitle: string) {
+function indicator(subtitle: string): ExtensionIndicatorInput {
   return {
     id: INDICATOR_ID,
     title: 'Fix Selected Text with AI',

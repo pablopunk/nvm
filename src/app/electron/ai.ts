@@ -464,7 +464,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       );
       if (askOptions.signal?.aborted) throw aiAbortError();
       askOptions.onEvent?.({ type: 'done' });
-      return finalOneShotAssistantText(session.state.messages, text);
+      return finalOneShotAssistantText(session.agent.state.messages, text);
     } catch (error) {
       if (askOptions.signal?.aborted || isAbortError(error)) {
         askOptions.onEvent?.({ type: 'aborted' });

@@ -11,7 +11,7 @@ function commandHandler(context: any) {
   })[0];
   assert.equal(contribution.title, 'Fix Selected Text with AI');
   assert.equal(extensionActionContributionIsDiscoverable(contribution), true);
-  return contribution.run;
+  return contribution.run as (context: any, input: unknown) => unknown;
 }
 
 function contextFor(
@@ -32,7 +32,11 @@ function contextFor(
     },
     desktop: { selection: { text: async () => selectedText } },
     actions: {
-      pasteText: (text: string, title: string, options: unknown) => ({
+      pasteText: (
+        text: string,
+        title: string,
+        options: Record<string, unknown>,
+      ) => ({
         type: 'pasteText',
         text,
         title,
