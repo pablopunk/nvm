@@ -280,7 +280,7 @@ function walkSourceFiles(directory) {
 }
 
 function collectObservedSites(rootDirectory) {
-  const sourceRoot = path.join(rootDirectory, 'src');
+  const sourceRoot = path.join(rootDirectory, 'src', 'app');
   return walkSourceFiles(sourceRoot).flatMap((filePath) => {
     const relativePath = normalizeRepositoryPath(
       path.relative(rootDirectory, filePath),
@@ -410,7 +410,6 @@ function main() {
   const rootDirectory = process.cwd();
   const inventoryPath = path.join(
     rootDirectory,
-    'src',
     'docs',
     'windows-platform-inventory.json',
   );

@@ -3,6 +3,22 @@
   "supportStatus": "unverified",
   "sourceRules": [
     {
+      "key": "os-copy-selection-platform-selector-46a18e87bd80",
+      "file": "src/app/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:copySelectionIntoClipboard::platform-selector::darwin: () => new Promise((resolve) => { execFile( 'osascript', [ '-e', 'tell application \"Syste…#46a18e87bd80::self",
+      "disposition": "capability-selector",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "system-audio-direct-platform",
+      "file": "src/app/electron/system-audio.ts",
+      "category": "direct-platform",
+      "selector": "function:createSystemAudioMuteCapability/variable:platform::direct-platform::const platform = dependencies.platform ?? process.platform;::declarationList.declarations[0].initializer.right",
+      "disposition": "injected-service-default",
+      "surface": "system-actions-settings"
+    },
+    {
       "key": "ai-os-label-bad42bbd1402",
       "file": "src/app/electron/ai.ts",
       "category": "os-label",
