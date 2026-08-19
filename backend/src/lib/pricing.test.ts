@@ -87,6 +87,14 @@ test('active runtime models do not wait for the remote catalog', async () => {
 
   const cost = await lookupModelCost('opencode_zen', 'gpt-5.6-luna');
   const descriptor = await lookupModelDescriptor('opencode_zen', 'deepseek-v4-flash');
+  const openRouterCost = await lookupModelCost(
+    'openrouter',
+    'google/gemini-2.5-flash',
+  );
+  const openRouterDescriptor = await lookupModelDescriptor(
+    'openrouter',
+    'google/gemini-2.5-flash',
+  );
 
   assert.deepEqual(cost, {
     provider: 'opencode_zen',
@@ -96,6 +104,21 @@ test('active runtime models do not wait for the remote catalog', async () => {
   });
   assert.equal(descriptor?.name, 'DeepSeek V4 Flash');
   assert.equal(descriptor?.contextWindow, 1_000_000);
+  assert.deepEqual(openRouterCost, {
+    provider: 'openrouter',
+    modelId: 'google/gemini-2.5-flash',
+    inputUsdPerMtok: 0.3,
+    outputUsdPerMtok: 2.5,
+  });
+  assert.equal(openRouterDescriptor?.name, 'Gemini 2.5 Flash');
+  assert.equal(openRouterDescriptor?.contextWindow, 1_048_576);
+  assert.deepEqual(openRouterDescriptor?.input, [
+    'text',
+    'image',
+    'audio',
+    'video',
+    'pdf',
+  ]);
 });
 
 test('resetPricingCacheForTests clears the internal cache', async () => {

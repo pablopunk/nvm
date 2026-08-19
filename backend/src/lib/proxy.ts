@@ -11,6 +11,7 @@ import {
   tieredModelRouteSlot,
   type ExtensionAiModelRole,
   type ModelRouteSlot,
+  type ThinkingLevel,
 } from './settings';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
 import {
@@ -40,7 +41,10 @@ export type ProxyConfig = {
   upstreamAuthHeaderName: 'authorization' | 'x-api-key' | 'x-goog-api-key';
   formatUpstreamAuthValue: (apiKey: string) => string;
   buildUpstreamUrl: (cfg: { upstreamBaseUrl: string; activeModelId: string }) => string;
-  rewriteRequestBody?: (bodyText: string, activeModelId: string) => string;
+  rewriteRequestBody?: (
+    bodyText: string,
+    routing: Pick<ModelRouting, 'activeModelId' | 'provider' | 'thinkingLevel'>,
+  ) => string;
   parseUsageFromJson: (json: any) => UsageTokens | null;
   parseUsageFromStreamChunk: (chunk: string, acc: StreamUsageAccumulator, finalize?: boolean) => void;
   idempotencyKey?: string;
@@ -150,6 +154,7 @@ type ResolvedRouting = {
   routeSlot: ModelRouteSlot;
   provider: string;
   activeModelId: string;
+  thinkingLevel: ThinkingLevel;
   costRow: ModelCost;
   kind: 'free' | 'paid';
   balanceAvailable: number;
@@ -158,15 +163,25 @@ type ResolvedRouting = {
   upstreamApiKey: string;
 };
 
-type ModelRouting = Pick<ResolvedRouting, 'provider' | 'activeModelId' | 'costRow' | 'upstreamBaseUrl' | 'upstreamApiKey'>;
+type ModelRouting = Pick<
+  ResolvedRouting,
+  | 'provider'
+  | 'activeModelId'
+  | 'thinkingLevel'
+  | 'costRow'
+  | 'upstreamBaseUrl'
+  | 'upstreamApiKey'
+>;
 
 async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | ModelRouting> {
   let provider: string;
   let activeModelId: string;
+  let thinkingLevel: ThinkingLevel;
   try {
     const route = await getModelRoute(slot);
     provider = route.provider;
     activeModelId = route.modelId;
+    thinkingLevel = route.thinkingLevel;
   } catch (err) {
     if (err instanceof ModelNotConfiguredError) {
       return Response.json(
@@ -188,7 +203,14 @@ async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | Mod
 
   try {
     const upstream = getUpstreamConfig(provider);
-    return { provider, activeModelId, costRow, upstreamBaseUrl: upstream.baseUrl, upstreamApiKey: upstream.apiKey };
+    return {
+      provider,
+      activeModelId,
+      thinkingLevel,
+      costRow,
+      upstreamBaseUrl: upstream.baseUrl,
+      upstreamApiKey: upstream.apiKey,
+    };
   } catch (err) {
     if (err instanceof UpstreamConfigError) {
       return Response.json(
@@ -563,7 +585,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         kind: routing.kind,
       });
     }
-    forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(text, routing.activeModelId) : text;
+    forwardBody = cfg.rewriteRequestBody
+      ? cfg.rewriteRequestBody(text, routing)
+      : text;
     if (dedupEnabled) {
       const bodyHash = createHash('sha256').update(`${text}|${routing.activeModelId}`).digest('hex');
       db.update(requestDedup).set({ requestHash: bodyHash }).where(and(
