@@ -643,7 +643,8 @@ clipboardService = createClipboardHistory({
 
 const selectedText = createSelectedTextReader({
   readAccessibilityText: readAccessibilitySelectedText,
-  paletteIsFocused: () => Boolean(paletteWindow.win?.isFocused()),
+  paletteIsFocused: () =>
+    Boolean(paletteWindow.win?.isVisible() && paletteWindow.win.isFocused()),
   clipboardSnapshot,
   readClipboardText: () => clipboard.readText(),
   writeClipboardText: (text) => clipboard.writeText(text),
