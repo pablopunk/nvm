@@ -202,8 +202,8 @@ test('keeps durable global shortcuts visible in extension lists', () => {
     ],
   });
 
-  assert.doesNotMatch(html, /selectedOnlyEnter/);
-  assert.match(html, /⌘Y/);
+  assert.doesNotMatch(html, /keyHints selectedOnlyEnter/);
+  assert.match(html, /<span class="shortcutHint">⌘Y<\/span>/);
 });
 
 test('renders a native glyph as a grid tile visual', () => {

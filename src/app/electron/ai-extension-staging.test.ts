@@ -18,7 +18,7 @@ mock.module('electron', {
 const { stageAiGeneratedExtension } = await import('./ai');
 const repoRoot =
   path.basename(process.cwd()) === 'backend'
-    ? path.dirname(process.cwd())
+    ? path.resolve(process.cwd(), '..', '..')
     : process.cwd();
 
 const TYPECHECK_FAILURE = /TypeScript validation failed/;
