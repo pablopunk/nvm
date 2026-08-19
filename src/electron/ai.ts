@@ -149,6 +149,7 @@ function normalizeThinkingLevel(value: unknown): ThinkingLevel {
 
 type AiPromptOptions = {
   sessionId?: string;
+  preparationKey?: string;
   system?: string;
   model?: AiModelRole;
   context?: string;
@@ -257,6 +258,7 @@ function isAssistantErrorEndEvent(
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>();
   const generalSessions = new Map<string, Promise<AgentSession>>();
+  const preparedGeneralSessions = new Map<string, Promise<AgentSession>>();
   const activeTraceIds = new Map<string, string>();
   const firstDeltaTimes = new Map<string, number>();
   const creditInfoRef: {
@@ -405,7 +407,8 @@ function createNevermindAi(options: NevermindAiOptions) {
     try {
       if (askOptions.signal?.aborted) throw aiAbortError();
       const prompt = aiPromptWithContext(message, askOptions.context);
-      session = await generalSession(askOptions, prompt.length);
+      session = await (takePreparedGeneralSession(askOptions) ??
+        generalSession(askOptions, prompt.length));
       unsubscribe = session.subscribe((event) => {
         if (isMessageUpdateEvent(event)) {
           if (firstDeltaAt === undefined) {
@@ -494,6 +497,48 @@ function createNevermindAi(options: NevermindAiOptions) {
     };
   }
 
+  async function prepare(prepareOptions: AiPromptOptions = {}) {
+    if (prepareOptions.sessionId) {
+      await generalSession(prepareOptions, 1);
+      return;
+    }
+    const key = preparedGeneralSessionKey(prepareOptions);
+    let promise = preparedGeneralSessions.get(key);
+    if (!promise) {
+      promise = measureDebugPerformance(
+        'ai.general-session.prepare',
+        { model: prepareOptions.model, alwaysLog: true },
+        () => createGeneralSession(options, prepareOptions, 1),
+      );
+      preparedGeneralSessions.set(key, promise);
+      promise.catch(() => {
+        if (preparedGeneralSessions.get(key) === promise)
+          preparedGeneralSessions.delete(key);
+      });
+    }
+    await promise;
+  }
+
+  function preparedGeneralSessionKey(sessionOptions: {
+    preparationKey?: string;
+    system?: string;
+    model?: AiModelRole;
+  }) {
+    return JSON.stringify([
+      sessionOptions.preparationKey || '',
+      sessionOptions.model || 'default',
+      sessionOptions.system || '',
+    ]);
+  }
+
+  function takePreparedGeneralSession(sessionOptions: AiPromptOptions) {
+    if (sessionOptions.sessionId) return;
+    const key = preparedGeneralSessionKey(sessionOptions);
+    const prepared = preparedGeneralSessions.get(key);
+    if (prepared) preparedGeneralSessions.delete(key);
+    return prepared;
+  }
+
   async function generalSession(
     sessionOptions: {
       sessionId?: string;
@@ -567,9 +612,24 @@ function createNevermindAi(options: NevermindAiOptions) {
       s?.dispose?.();
       generalSessions.delete(id);
     }
+    const prepared = Array.from(preparedGeneralSessions.values());
+    preparedGeneralSessions.clear();
+    for (const promise of prepared) {
+      const s = await promise.catch(() => null);
+      s?.dispose?.();
+    }
   }
 
-  return { send, abort, reset, ask, stream, session, disposeAllSessions };
+  return {
+    send,
+    abort,
+    reset,
+    ask,
+    stream,
+    prepare,
+    session,
+    disposeAllSessions,
+  };
 
   async function createSession(
     {

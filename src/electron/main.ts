@@ -5789,6 +5789,7 @@ function createExtensionAi(extension) {
       capabilities,
     );
     return {
+      preparationKey: extensionKey,
       model: callOptions.model,
       system: callOptions.system,
       signal: callOptions.signal,
@@ -5840,6 +5841,8 @@ function createExtensionAi(extension) {
       await normalizeOptions(options),
     );
   };
+  ai.prepare = async (options: any = {}) =>
+    nevermindAi.prepare(await normalizeOptions(options));
   ai.stream = stream;
   ai.session = (id = 'default', options: any = {}) => {
     const sessionOptions = normalizeExtensionAiCallOptions(options);
