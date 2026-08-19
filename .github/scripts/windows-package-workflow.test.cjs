@@ -114,6 +114,7 @@ test('portable marker distinguishes wrapper identity from packaged child identit
   assert.match(harness, /temporary storage/);
   assert.match(harness, /stabilityMilliseconds = 5_000/);
   assert.match(harness, /taskkill/);
+  assert.match(harness, /maxRetries: 10/);
 });
 
 test('Windows package smoke remains separate from first-run development smoke and cannot publish', () => {
