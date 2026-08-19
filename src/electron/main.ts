@@ -7270,6 +7270,15 @@ async function initNevermindAi() {
       });
     },
   });
+  void Promise.all([
+    nevermindAi.prepare({ model: 'fast' }),
+    nevermindAi.prepare({ model: 'smart' }),
+  ]).catch((error) =>
+    logWarn('ai.one-shot.startup-warm.failed', error, {
+      source: 'host',
+      scope: 'ai',
+    }),
+  );
 }
 
 async function activatedExtensionPreview(filename) {

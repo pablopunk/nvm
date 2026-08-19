@@ -1087,7 +1087,7 @@ export type ExtensionAi = {
   /** One-shot AI call. Quota-limited per extension; declare the `ai` capability for review. Supports attachments and AbortController signals. */
   ask(prompt: string, model?: ExtensionAiModel): Promise<string>;
   ask(prompt: string, options?: ExtensionAiOptions): Promise<string>;
-  /** Prepare a clean one-shot session before latency-sensitive work. The next matching `ask()` or `stream()` consumes it. */
+  /** Warm the reusable one-shot AI runtime and model route before latency-sensitive work. */
   prepare(options?: ExtensionAiOptions): Promise<void>;
   /** Streaming AI call. Use `onDelta`/`onEvent` for incremental updates and await `result` for the final text. */
   stream(prompt: string, model?: ExtensionAiModel): ExtensionAiStream;

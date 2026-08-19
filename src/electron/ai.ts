@@ -5,8 +5,11 @@ import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
 import type { CommandAction } from '../model';
 import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
+import {
+  finalOneShotAssistantText,
+  streamedOneShotAssistantText,
+} from './ai-one-shot-result';
 import { type ByoKeySnapshot, getByoKey } from './byo-key';
-import { finalOneShotAssistantText } from './ai-one-shot-result';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -136,6 +139,7 @@ type ThinkingLevel =
   | 'xhigh'
   | 'max';
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
+const ACTIVE_MODEL_FETCH_TIMEOUT_MS = 5_000;
 
 function normalizeThinkingLevel(value: unknown): ThinkingLevel {
   return value === 'off' ||
@@ -211,8 +215,12 @@ type SessionEntry = {
 };
 
 type PiApi = typeof import('@earendil-works/pi-coding-agent');
+type DirectAiApi = typeof import('@earendil-works/pi-ai/compat');
 type TypeApi = any;
-
+type DirectModelDescriptor = {
+  descriptor: BackendDescriptor;
+  useDynamicBackendRouting: boolean;
+} | null;
 function isMessageUpdateEvent(
   event: AgentSessionEvent,
 ): event is MessageUpdateEvent {
@@ -260,7 +268,21 @@ function isAssistantErrorEndEvent(
 function createNevermindAi(options: NevermindAiOptions) {
   const sessions = new Map<string, SessionEntry>();
   const generalSessions = new Map<string, Promise<AgentSession>>();
-  const preparedGeneralSessions = new Map<string, Promise<AgentSession>>();
+  const preparedFallbackSessions = new Map<string, Promise<AgentSession>>();
+  const directModelDescriptors = new Map<
+    string,
+    {
+      token: string;
+      descriptor: DirectModelDescriptor;
+      refreshAfter: number;
+      refresh?: Promise<DirectModelDescriptor>;
+    }
+  >();
+  const directModelDescriptorRequests = new Map<
+    string,
+    { token: string; promise: Promise<DirectModelDescriptor> }
+  >();
+  let directAiPromise: Promise<DirectAiApi> | null = null;
   const activeTraceIds = new Map<string, string>();
   const firstDeltaTimes = new Map<string, number>();
   const creditInfoRef: {
@@ -409,7 +431,16 @@ function createNevermindAi(options: NevermindAiOptions) {
     try {
       if (askOptions.signal?.aborted) throw aiAbortError();
       const prompt = aiPromptWithContext(message, askOptions.context);
-      session = await (takePreparedGeneralSession(askOptions) ??
+      if (!askOptions.sessionId) {
+        const directResult = await askDirect(
+          prompt,
+          askOptions,
+          text,
+          startedAt,
+        );
+        if (directResult !== null) return directResult;
+      }
+      session = await (takePreparedFallbackSession(askOptions) ??
         generalSession(askOptions, prompt.length));
       unsubscribe = session.subscribe((event) => {
         if (isMessageUpdateEvent(event)) {
@@ -504,40 +535,40 @@ function createNevermindAi(options: NevermindAiOptions) {
       await generalSession(prepareOptions, 1);
       return;
     }
-    const key = preparedGeneralSessionKey(prepareOptions);
-    let promise = preparedGeneralSessions.get(key);
-    if (!promise) {
-      promise = measureDebugPerformance(
-        'ai.general-session.prepare',
+    const [, resolved] = await awaitWithAiSignal(
+      measureDebugPerformance(
+        'ai.one-shot.prepare',
         { model: prepareOptions.model, alwaysLog: true },
-        () => createGeneralSession(options, prepareOptions, 1),
-      );
-      preparedGeneralSessions.set(key, promise);
+        () =>
+          Promise.all([directAi(), resolveDirectModel(prepareOptions.model)]),
+      ),
+      prepareOptions.signal,
+    );
+    if (resolved) return;
+    const key = preparedFallbackSessionKey(prepareOptions);
+    let promise = preparedFallbackSessions.get(key);
+    if (!promise) {
+      promise = createGeneralSession(options, prepareOptions, 1);
+      preparedFallbackSessions.set(key, promise);
       promise.catch(() => {
-        if (preparedGeneralSessions.get(key) === promise)
-          preparedGeneralSessions.delete(key);
+        if (preparedFallbackSessions.get(key) === promise)
+          preparedFallbackSessions.delete(key);
       });
     }
-    await promise;
+    await awaitWithAiSignal(promise, prepareOptions.signal);
   }
 
-  function preparedGeneralSessionKey(sessionOptions: {
-    preparationKey?: string;
-    system?: string;
-    model?: AiModelRole;
-  }) {
+  function preparedFallbackSessionKey(sessionOptions: AiPromptOptions) {
     return JSON.stringify([
-      sessionOptions.preparationKey || '',
       sessionOptions.model || 'default',
       sessionOptions.system || '',
     ]);
   }
 
-  function takePreparedGeneralSession(sessionOptions: AiPromptOptions) {
-    if (sessionOptions.sessionId) return;
-    const key = preparedGeneralSessionKey(sessionOptions);
-    const prepared = preparedGeneralSessions.get(key);
-    if (prepared) preparedGeneralSessions.delete(key);
+  function takePreparedFallbackSession(sessionOptions: AiPromptOptions) {
+    const key = preparedFallbackSessionKey(sessionOptions);
+    const prepared = preparedFallbackSessions.get(key);
+    if (prepared) preparedFallbackSessions.delete(key);
     return prepared;
   }
 
@@ -614,12 +645,14 @@ function createNevermindAi(options: NevermindAiOptions) {
       s?.dispose?.();
       generalSessions.delete(id);
     }
-    const prepared = Array.from(preparedGeneralSessions.values());
-    preparedGeneralSessions.clear();
+    const prepared = Array.from(preparedFallbackSessions.values());
+    preparedFallbackSessions.clear();
     for (const promise of prepared) {
-      const s = await promise.catch(() => null);
-      s?.dispose?.();
+      const session = await promise.catch(() => null);
+      session?.dispose?.();
     }
+    directModelDescriptors.clear();
+    directModelDescriptorRequests.clear();
   }
 
   return {
@@ -632,6 +665,216 @@ function createNevermindAi(options: NevermindAiOptions) {
     session,
     disposeAllSessions,
   };
+
+  function directAi() {
+    directAiPromise ??= import('@earendil-works/pi-ai/compat');
+    return directAiPromise;
+  }
+
+  async function askDirect(
+    prompt: string,
+    askOptions: AiPromptOptions,
+    text: string[],
+    startedAt: number,
+  ) {
+    const [ai, resolved] = await awaitWithAiSignal(
+      measureDebugPerformance(
+        'ai.one-shot.setup',
+        { model: askOptions.model, alwaysLog: true },
+        () => Promise.all([directAi(), resolveDirectModel(askOptions.model)]),
+      ),
+      askOptions.signal,
+    );
+    if (!resolved) return null;
+    const content:
+      | string
+      | Array<AiImageContent | { type: 'text'; text: string }> = askOptions
+      .images?.length
+      ? [{ type: 'text', text: prompt }, ...askOptions.images]
+      : prompt;
+    const stream = ai.streamSimple(
+      resolved.model as any,
+      {
+        systemPrompt:
+          askOptions.system ||
+          'You are a helpful AI assistant inside a Nevermind extension. Answer directly and concisely.',
+        messages: [{ role: 'user', content, timestamp: Date.now() }],
+      },
+      {
+        apiKey: resolved.apiKey,
+        reasoning:
+          resolved.thinkingLevel === 'off' ? undefined : resolved.thinkingLevel,
+        signal: askOptions.signal as AbortSignal,
+        maxRetries: 0,
+      },
+    );
+    let finalText: string;
+    try {
+      finalText = await measureDebugPerformance(
+        'ai.ask.prompt',
+        {
+          messageLength: prompt.length,
+          imageCount: askOptions.images?.length || 0,
+          alwaysLog: true,
+        },
+        () =>
+          streamedOneShotAssistantText(stream, (delta) => {
+            if (text.length === 0)
+              recordDebugPerformance(
+                'ai.ask.time-to-first-delta',
+                performance.now() - startedAt,
+                { model: askOptions.model, alwaysLog: true },
+              );
+            text.push(delta);
+            askOptions.onEvent?.({ type: 'delta', text: delta });
+          }),
+      );
+    } catch (error) {
+      if (
+        resolved.source === 'nevermind' &&
+        text.length === 0 &&
+        aiLimitNoticeFromError(error)?.kind === 'insufficient_credits'
+      ) {
+        directModelDescriptors.clear();
+        return null;
+      }
+      throw error;
+    }
+    if (askOptions.signal?.aborted) throw aiAbortError();
+    resolved.replenish?.();
+    askOptions.onEvent?.({ type: 'done' });
+    return finalText;
+  }
+
+  async function resolveDirectModel(modelRole?: AiModelRole) {
+    const byo = await getByoKey();
+    if (byo)
+      return {
+        model: byoModelDescriptor(byo),
+        apiKey: byo.apiKey,
+        replenish: undefined,
+        source: 'byo' as const,
+        thinkingLevel: DEFAULT_THINKING_LEVEL,
+      };
+
+    const nevermind = await getNevermindAuth();
+    if (!nevermind) throw new NevermindAuthRequiredError();
+    const resolved = await cachedDirectModelDescriptor(
+      nevermind.baseUrl,
+      nevermind.token,
+      modelRole,
+    );
+    if (!resolved) return null;
+    return {
+      model: nevermindModelDescriptor(
+        resolved.descriptor,
+        modelRole,
+        resolved.useDynamicBackendRouting,
+        resolved.useDynamicBackendRouting,
+      ),
+      apiKey: nevermind.token,
+      replenish: () => {
+        const key = directModelDescriptorKey(nevermind.baseUrl, modelRole);
+        const cached = directModelDescriptors.get(key);
+        if (!cached) return;
+        cached.refreshAfter = 0;
+        void cachedDirectModelDescriptor(
+          nevermind.baseUrl,
+          nevermind.token,
+          modelRole,
+        );
+      },
+      source: 'nevermind' as const,
+      thinkingLevel: normalizeThinkingLevel(resolved.descriptor.thinkingLevel),
+    };
+  }
+
+  async function cachedDirectModelDescriptor(
+    baseUrl: string,
+    token: string,
+    modelRole?: AiModelRole,
+  ) {
+    const key = directModelDescriptorKey(baseUrl, modelRole);
+    const cached = directModelDescriptors.get(key);
+    if (cached?.token === token) {
+      if (cached.refreshAfter <= Date.now() && !cached.refresh) {
+        cached.refresh = fetchDirectModelDescriptor(baseUrl, token, modelRole);
+        void cached.refresh
+          .then((descriptor) => {
+            if (directModelDescriptors.get(key) !== cached) return;
+            directModelDescriptors.set(key, {
+              token,
+              descriptor,
+              refreshAfter: Date.now() + 60_000,
+            });
+          })
+          .catch((error) =>
+            logger.warn('ai.one-shot.model-refresh.failed', error as Error),
+          )
+          .finally(() => {
+            cached.refresh = undefined;
+          });
+      }
+      return cached.descriptor;
+    }
+    const pending = directModelDescriptorRequests.get(key);
+    if (pending?.token === token) return pending.promise;
+    const promise = fetchDirectModelDescriptor(baseUrl, token, modelRole)
+      .then((descriptor) => {
+        if (directModelDescriptorRequests.get(key)?.promise !== promise)
+          return descriptor;
+        directModelDescriptors.set(key, {
+          token,
+          descriptor,
+          refreshAfter: Date.now() + 60_000,
+        });
+        return descriptor;
+      })
+      .finally(() => {
+        if (directModelDescriptorRequests.get(key)?.promise === promise)
+          directModelDescriptorRequests.delete(key);
+      });
+    directModelDescriptorRequests.set(key, { token, promise });
+    return promise;
+  }
+
+  function directModelDescriptorKey(baseUrl: string, modelRole?: AiModelRole) {
+    return `${baseUrl.replace(/\/$/, '')}:${modelRole || 'default'}`;
+  }
+
+  async function fetchDirectModelDescriptor(
+    baseUrl: string,
+    token: string,
+    modelRole?: AiModelRole,
+  ): Promise<DirectModelDescriptor> {
+    const [descriptor, freeDescriptor] = await Promise.all([
+      fetchActiveModelDescriptor(baseUrl, token, modelRole),
+      fetchActiveModelDescriptor(baseUrl, token, modelRole, undefined, true),
+    ]);
+    if (descriptor.modelTier !== 'pro') {
+      return { descriptor, useDynamicBackendRouting: false };
+    }
+    const routesShareRequestFormat =
+      descriptor.api === freeDescriptor.api &&
+      descriptor.reasoning === freeDescriptor.reasoning &&
+      descriptor.input.length === freeDescriptor.input.length &&
+      descriptor.input.every((input) => freeDescriptor.input.includes(input)) &&
+      normalizeThinkingLevel(descriptor.thinkingLevel) ===
+        normalizeThinkingLevel(freeDescriptor.thinkingLevel);
+    return routesShareRequestFormat
+      ? {
+          descriptor: {
+            ...descriptor,
+            contextWindow: Math.min(
+              descriptor.contextWindow,
+              freeDescriptor.contextWindow,
+            ),
+            maxTokens: Math.min(descriptor.maxTokens, freeDescriptor.maxTokens),
+          },
+          useDynamicBackendRouting: true,
+        }
+      : null;
+  }
 
   async function createSession(
     {
@@ -832,6 +1075,29 @@ function bindAbortSignal(signal: AiPromptOptions['signal'], abort: () => void) {
   return () => signal.removeEventListener?.('abort', listener);
 }
 
+function awaitWithAiSignal<T>(
+  promise: Promise<T>,
+  signal: AiPromptOptions['signal'],
+) {
+  if (!signal?.addEventListener) return promise;
+  if (signal.aborted) return Promise.reject(aiAbortError());
+  return new Promise<T>((resolve, reject) => {
+    const removeAbortListener = bindAbortSignal(signal, () =>
+      reject(aiAbortError()),
+    );
+    promise.then(
+      (value) => {
+        removeAbortListener();
+        resolve(value);
+      },
+      (error) => {
+        removeAbortListener();
+        reject(error);
+      },
+    );
+  });
+}
+
 function aiAbortError() {
   return Object.assign(new Error('AI request aborted'), {
     name: 'AbortError',
@@ -1022,6 +1288,7 @@ async function fetchActiveModelDescriptor(
   token: string,
   modelRole?: AiModelRole,
   chars?: number,
+  forceFree = false,
 ): Promise<BackendDescriptor> {
   const trimmed = baseUrl.replace(/\/$/, '');
   const manifest = await checkNevermindCompatibility(trimmed);
@@ -1031,10 +1298,22 @@ async function fetchActiveModelDescriptor(
   const query = new URLSearchParams();
   if (modelRole) query.set('model', modelRole);
   if (chars && chars > 0) query.set('chars', String(chars));
+  if (forceFree) query.set('tier', 'free');
   const search = query.size > 0 ? `?${query}` : '';
-  const res = await fetch(`${trimmed}/api/v1/active-model${search}`, {
-    headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    ACTIVE_MODEL_FETCH_TIMEOUT_MS,
+  );
+  let res: Response;
+  try {
+    res = await fetch(`${trimmed}/api/v1/active-model${search}`, {
+      headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   if (res.status === 401) throw new NevermindAuthRequiredError();
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -1067,27 +1346,7 @@ async function resolveAiModelAndAuth(
     modelRole,
     chars,
   );
-  const model = {
-    id: descriptor.id,
-    name: descriptor.name,
-    api: descriptor.api as any,
-    provider: descriptor.provider,
-    baseUrl: descriptor.baseUrl,
-    reasoning: descriptor.reasoning,
-    input: descriptor.input as Array<'text' | 'image'>,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: descriptor.contextWindow,
-    maxTokens: descriptor.maxTokens,
-    headers: nevermindDesktopHeaders({
-      ...(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
-      ...(descriptor.modelTier
-        ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier }
-        : {}),
-      ...(descriptor.creditKind
-        ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind }
-        : {}),
-    }),
-  };
+  const model = nevermindModelDescriptor(descriptor, modelRole);
   modelRuntime.registerProvider(NEVERMIND_PROVIDER_ID, {
     name: 'Nevermind',
     api: descriptor.api as any,
@@ -1106,6 +1365,35 @@ async function resolveAiModelAndAuth(
     source: 'nevermind' as const,
     creditInfo,
     thinkingLevel: normalizeThinkingLevel(descriptor.thinkingLevel),
+  };
+}
+
+function nevermindModelDescriptor(
+  descriptor: BackendDescriptor,
+  modelRole?: AiModelRole,
+  useDynamicBackendRouting = false,
+  useDynamicBilling = false,
+) {
+  return {
+    id: descriptor.id,
+    name: descriptor.name,
+    api: descriptor.api as any,
+    provider: descriptor.provider,
+    baseUrl: descriptor.baseUrl,
+    reasoning: descriptor.reasoning,
+    input: descriptor.input as Array<'text' | 'image'>,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: descriptor.contextWindow,
+    maxTokens: descriptor.maxTokens,
+    headers: nevermindDesktopHeaders({
+      ...(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
+      ...(!useDynamicBackendRouting && descriptor.modelTier
+        ? { 'X-Nevermind-AI-Model-Tier': descriptor.modelTier }
+        : {}),
+      ...(!useDynamicBilling && descriptor.creditKind
+        ? { 'X-Nevermind-AI-Credit-Kind': descriptor.creditKind }
+        : {}),
+    }),
   };
 }
 

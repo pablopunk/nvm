@@ -41,6 +41,11 @@ type CompatibilityListener = () => void;
 const CACHE_FILENAME = 'nevermind-compatibility.json';
 const COMPATIBILITY_FETCH_TIMEOUT_MS = 5_000;
 const cachedManifests = new Map<string, CachedCompatibilityManifest>();
+const manifestFetches = new Map<
+  string,
+  Promise<NevermindCompatibilityManifest | null>
+>();
+const invalidationVersions = new Map<string, number>();
 const listeners = new Set<CompatibilityListener>();
 let cacheLoadPromise: Promise<void> | null = null;
 
@@ -122,9 +127,22 @@ export function warmNevermindCompatibilityCache(baseUrl: string) {
 export async function invalidateNevermindCompatibilityCache(baseUrl?: string) {
   await loadCompatibilityCache();
   if (baseUrl) {
-    cachedManifests.delete(normalizeBaseUrl(baseUrl));
+    const normalized = normalizeBaseUrl(baseUrl);
+    cachedManifests.delete(normalized);
+    invalidationVersions.set(
+      normalized,
+      (invalidationVersions.get(normalized) || 0) + 1,
+    );
+    manifestFetches.delete(normalized);
   } else {
     cachedManifests.clear();
+    for (const normalized of manifestFetches.keys()) {
+      invalidationVersions.set(
+        normalized,
+        (invalidationVersions.get(normalized) || 0) + 1,
+      );
+    }
+    manifestFetches.clear();
   }
   await saveCompatibilityCache();
   notifyCompatibilityChanged();
@@ -143,8 +161,26 @@ export async function checkNevermindCompatibility(baseUrl: string) {
   return effectiveManifest;
 }
 
-async function fetchCompatibilityManifest(baseUrl: string) {
+function fetchCompatibilityManifest(baseUrl: string) {
   const trimmed = normalizeBaseUrl(baseUrl);
+  const pending = manifestFetches.get(trimmed);
+  if (pending) return pending;
+  const invalidationVersion = invalidationVersions.get(trimmed) || 0;
+  const promise = fetchCompatibilityManifestUncached(
+    trimmed,
+    invalidationVersion,
+  ).finally(() => {
+    if (manifestFetches.get(trimmed) === promise)
+      manifestFetches.delete(trimmed);
+  });
+  manifestFetches.set(trimmed, promise);
+  return promise;
+}
+
+async function fetchCompatibilityManifestUncached(
+  trimmed: string,
+  invalidationVersion: number,
+) {
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -171,6 +207,8 @@ async function fetchCompatibilityManifest(baseUrl: string) {
     logger.warn('nevermind.compatibility.invalid_manifest');
     return null;
   }
+  if ((invalidationVersions.get(trimmed) || 0) !== invalidationVersion)
+    return null;
   await cacheCompatibilityManifest(trimmed, manifest);
   return manifest;
 }
