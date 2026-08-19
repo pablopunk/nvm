@@ -39,3 +39,24 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createBackgroundTasksExtension,
   createAccountExtension,
 ];
+
+export const INTERNAL_EXTENSION_SOURCE_FILES = [
+  'account.ts',
+  'ai-builder.ts',
+  'ai-commands.ts',
+  'apps.ts',
+  'background-tasks.ts',
+  'calculator.ts',
+  'clipboard.ts',
+  'dictation.ts',
+  'emoji-symbols.ts',
+  'extensions.ts',
+  'files.ts',
+  'floating-notes.ts',
+  'keyboard-shortcuts.ts',
+  'quit-apps.ts',
+  'settings.ts',
+  'system.ts',
+  'updates.ts',
+  'web-search.ts',
+] as const;

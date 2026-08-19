@@ -13,7 +13,7 @@ Workflow:
 2. Wait for the user to confirm what the command should do.
 3. Call `read_extension_api` before writing or changing extension code.
 4. If tweaking an existing generated action, call `read_current_extension` and preserve existing behavior unless the user explicitly asks to remove it.
-5. Use `list_extensions` and `read_extension` when the request needs awareness of other installed extensions.
+5. Use `list_extensions` and `read_extension` when the request needs awareness of other installed or built-in extensions.
 6. Call `list_capabilities` if the requested UI or OS operation is unclear after reading the API.
 7. Write one or more owned `.ts` extension files with `write_extension`.
 8. Use `remove_extension` when the user wants to retire an extension owned by this chat.
@@ -24,7 +24,7 @@ Rules:
 
 - Extensions are TypeScript files that export `default { id, title, actions, commands } satisfies NevermindExtension` and should return `ctx.ui.*` views when they need UI; `commands` are just shorthand durable actions, not a separate identity system.
 - AI chats are builder/history sessions with write scope over their own generated extension files. Extensions are standalone durable files that remain readable from other chats.
-- You may inspect any generated extension with `list_extensions`/`read_extension`, but only write or remove files owned by the active chat. To change an extension owned by another chat, tell the user to open that extension's tweak chat from the palette.
+- You may inspect any generated or built-in extension with `list_extensions`/`read_extension`, but built-in source is a read-only example and can use privileged host APIs that generated extensions cannot access. Only write or remove generated files owned by the active chat. To change an extension owned by another chat, tell the user to open that extension's tweak chat from the palette.
 - When tweaking an existing extension, keep the extension `id`, command `id`s, and persistent action `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Prefer declarative `ctx.ui.*`, `ctx.actions.*`, and `ctx.navigation.*` primitives over custom UI state or raw shell behavior.
 - Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them under Cmd+K.

@@ -64,6 +64,8 @@ type NevermindAiOptions = {
   agentDir: string;
   workspaceDir: string;
   extensionsDir: string;
+  internalExtensionsDir?: string;
+  internalExtensionFiles?: readonly string[];
   extensionApiPath: string;
   extensionTypesPath: string;
   skillPath: string;
@@ -636,6 +638,8 @@ function createNevermindAi(options: NevermindAiOptions) {
       agentDir,
       workspaceDir,
       extensionsDir,
+      internalExtensionsDir,
+      internalExtensionFiles,
       extensionApiPath,
       extensionTypesPath,
       skillPath,
@@ -710,6 +714,8 @@ function createNevermindAi(options: NevermindAiOptions) {
     });
     const customTools = createTools(pi, ai.Type, {
       extensionsDir,
+      internalExtensionsDir,
+      internalExtensionFiles,
       extensionApiPath,
       extensionTypesPath,
       reloadExtensions,
@@ -1212,6 +1218,8 @@ function createTools(
   Type: TypeApi,
   {
     extensionsDir,
+    internalExtensionsDir,
+    internalExtensionFiles,
     extensionApiPath,
     extensionTypesPath,
     reloadExtensions,
@@ -1229,6 +1237,8 @@ function createTools(
   }: Pick<
     NevermindAiOptions,
     | 'extensionsDir'
+    | 'internalExtensionsDir'
+    | 'internalExtensionFiles'
     | 'extensionApiPath'
     | 'extensionTypesPath'
     | 'reloadExtensions'
@@ -1437,7 +1447,7 @@ function createTools(
       name: 'list_extensions',
       label: 'List Extensions',
       description:
-        'List generated Nevermind extension files available to inspect or reference.',
+        'List generated and built-in Nevermind extension files available to inspect or reference.',
       parameters: Type.Object({}),
       execute: observedTool('list_extensions', async () => {
         const entries = await fs
@@ -1449,9 +1459,16 @@ function createTools(
           .sort();
         const listed = files.map((filename) => ({
           filename,
+          source: 'generated' as const,
           ...runtimeDetails(filename),
         }));
-        const lines = listed.map((item) => {
+        const builtins = (internalExtensionFiles || []).map((filename) => ({
+          filename: `builtin/${filename}`,
+          source: 'builtin' as const,
+        }));
+        const lines = [...listed, ...builtins].map((item) => {
+          if (item.source === 'builtin')
+            return `${item.filename} source=builtin`;
           const commands = item.commandIds.length
             ? ` commands=${item.commandIds.join(', ')}`
             : '';
@@ -1466,10 +1483,10 @@ function createTools(
               type: 'text',
               text: lines.length
                 ? lines.join('\n')
-                : 'No generated extensions installed.',
+                : 'No extensions available.',
             },
           ],
-          details: { extensionsDir, files: listed },
+          details: { extensionsDir, files: [...listed, ...builtins] },
         };
       }),
     }),
@@ -1477,15 +1494,30 @@ function createTools(
       name: 'read_extension',
       label: 'Read Extension',
       description:
-        'Read any generated Nevermind TypeScript extension source by filename.',
+        'Read generated or built-in Nevermind TypeScript extension source by its list_extensions filename. Built-in sources are read-only examples and can use privileged host APIs that generated extensions cannot access.',
       parameters: Type.Object({
         filename: Type.String({
-          description: 'Safe generated extension filename ending in .ts',
+          description:
+            'Extension filename ending in .ts, including the builtin/ prefix shown by list_extensions when applicable',
         }),
       }),
       execute: observedTool(
         'read_extension',
         async (_toolCallId: string, params: { filename: string }) => {
+          if (params.filename.startsWith('builtin/')) {
+            const filename = params.filename.slice('builtin/'.length);
+            if (
+              !internalExtensionsDir ||
+              !internalExtensionFiles?.includes(filename)
+            )
+              throw new Error('Unknown built-in extension');
+            const filePath = safeExtensionPath(internalExtensionsDir, filename);
+            const code = await fs.readFile(filePath, 'utf8');
+            return {
+              content: [{ type: 'text', text: code }],
+              details: { filename: params.filename, source: 'builtin' },
+            };
+          }
           const filePath = safeExtensionPath(extensionsDir, params.filename);
           const code = await fs.readFile(filePath, 'utf8');
           markRead(filePath);
@@ -2149,10 +2181,10 @@ The nevermind-extension-builder skill is the workflow and safety checklist; read
 Use read_extension_api before writing an extension.
 Use list_shortcuts when the extension should mention or depend on currently configured keyboard shortcuts. Never guess shortcut bindings.
 Use web_search, code_search, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
-When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated extension, but you may only write or remove extensions owned by this chat.
+When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated or built-in extension, but you may only write or remove generated extensions owned by this chat.
 Use list_capabilities when unsure which UI or OS capabilities exist.
 Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
-Use list_extensions and read_extension when you need awareness of other installed extensions.
+Use list_extensions and read_extension when you need awareness of other installed or built-in extensions. Built-in source is read-only reference material and may use privileged host APIs unavailable to generated extensions.
 Only write .ts extension files with write_extension.
 write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
 remove_extension deletes a generated .ts extension file only when this chat owns it.

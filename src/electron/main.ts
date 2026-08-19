@@ -146,7 +146,10 @@ import { createExtensionStorage as createPersistentExtensionStorage } from './ex
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowActions } from './extension-window-actions';
 import { createExtensionWindowManager } from './extension-window-manager';
-import { INTERNAL_EXTENSION_FACTORIES } from './extensions';
+import {
+  INTERNAL_EXTENSION_FACTORIES,
+  INTERNAL_EXTENSION_SOURCE_FILES,
+} from './extensions';
 import { initExtensionContext } from './extensions/_context';
 import { createAiBuilderExtension } from './extensions/ai-builder';
 import {
@@ -7093,6 +7096,13 @@ async function initNevermindAi() {
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
+    internalExtensionsDir: path.join(
+      app.getAppPath(),
+      'src',
+      'electron',
+      'extensions',
+    ),
+    internalExtensionFiles: INTERNAL_EXTENSION_SOURCE_FILES,
     extensionApiPath: extensionTypesPath,
     extensionTypesPath,
     skillPath,

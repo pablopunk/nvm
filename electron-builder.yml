@@ -10,6 +10,14 @@ files:
     to: src/resources
     filter:
       - '**/*'
+  - from: src/electron/extensions
+    to: src/electron/extensions
+    filter:
+      - '*.ts'
+      - '!*.test.ts'
+      - '!_context.ts'
+      - '!emoji-symbol-data.ts'
+      - '!index.ts'
   - from: node_modules/typescript/lib
     to: node_modules/typescript/lib
     filter:
