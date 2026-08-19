@@ -1,5 +1,6 @@
 // biome-ignore-all lint: Internal extension registry intentionally accepts heterogeneous factory shapes.
 import { createAccountExtension } from './account';
+import { createAiCommandsExtension } from './ai-commands';
 import { createAiBuilderExtension } from './ai-builder';
 import { createAppsExtension } from './apps';
 import { createBackgroundTasksExtension } from './background-tasks';
@@ -24,6 +25,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createWebSearchExtension,
   createClipboardExtension,
   createDictationExtension,
+  createAiCommandsExtension,
   createEmojiSymbolsExtension,
   createAppsExtension,
   createFilesExtension,
