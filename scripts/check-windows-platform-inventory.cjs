@@ -240,7 +240,7 @@ function detectSitesInSource(relativePath, sourceText) {
       add('direct-platform', node);
     if (isInjectedPlatformSite(node)) add('injected-platform', node);
     if (
-      relativePath === 'src/electron/os.ts' &&
+      relativePath === 'src/app/electron/os.ts' &&
       (ts.isPropertyAssignment(node) || ts.isMethodDeclaration(node)) &&
       ['darwin', 'linux', 'win32'].includes(propertyName(node.name))
     )

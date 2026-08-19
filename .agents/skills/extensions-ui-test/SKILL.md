@@ -9,17 +9,17 @@ Use this skill to dogfood Nevermind's host-rendered extension UI contract. The g
 
 ## Source of truth
 
-- API contract: `src/resources/nevermind-extension-api.d.ts`
-- Fixture rule: `src/docs/extension-api-ui-fixtures.md`
-- Fixture extensions: `src/fixtures/`
+- API contract: `src/app/resources/nevermind-extension-api.d.ts`
+- Fixture rule: `docs/extension-api-ui-fixtures.md`
+- Fixture extensions: `src/app/fixtures/`
 - Current fixture entrypoint: search for `Fixtures` in the dev palette
-- Renderer/model: `src/extension-view.tsx`, `src/ui.tsx`, `src/model.ts`, `src/styles.css`
-- Runtime fixture loader: `src/electron/main.ts`
+- Renderer/model: `src/app/palette/extension-view.tsx`, `src/app/palette/ui.tsx`, `src/app/palette/model.ts`, `src/app/palette/styles.css`
+- Runtime fixture loader: `src/app/electron/main.ts`
 - General UI review skill: `.agents/skills/ui-design/`
 
 ## Non-negotiable rule
 
-Every extension API method that renders host-owned UI must have a dev-only fixture under `src/fixtures/`. If a UI API changes, update the fixture in the same change. A UI API is not done until its fixture has been manually dogfooded.
+Every extension API method that renders host-owned UI must have a dev-only fixture under `src/app/fixtures/`. If a UI API changes, update the fixture in the same change. A UI API is not done until its fixture has been manually dogfooded.
 
 ## Start the app
 
@@ -86,8 +86,8 @@ For each command, verify:
 Do not maintain a hand-written list of every UI endpoint in this skill. Discover the current surface from the public contract and compare it with fixtures:
 
 ```bash
-rg "^    [a-zA-Z]+\(|input:" src/resources/nevermind-extension-api.d.ts
-rg "ctx\.(ui|input)\." src/fixtures
+rg "^    [a-zA-Z]+\(|input:" src/app/resources/nevermind-extension-api.d.ts
+rg "ctx\.(ui|input)\." src/app/fixtures
 ```
 
 For each public method that returns or displays host-owned UI, verify there is a reachable fixture command or nested fixture row that exercises realistic states. If a method only returns an inline helper/action, verify it is covered inside a related fixture.
@@ -100,7 +100,7 @@ Apply the `ui-design` skill checklist, especially:
 
 - Compact palette density; avoid marketing-page whitespace.
 - Grayscale hierarchy first; use color only as supporting signal.
-- Use `src/styles.css` variables, not hardcoded colors/radii.
+- Use `src/app/palette/styles.css` variables, not hardcoded colors/radii.
 - Native desktop feel: no pointer cursor on normal buttons, no webby focus rings on text inputs.
 - One clear primary action per surface.
 - Keyboard-first interactions with visible shortcut/action affordances.
@@ -125,12 +125,12 @@ Apply the `ui-design` skill checklist, especially:
 1. Reproduce through the `Fixtures` root item.
 2. Capture the smallest failing fixture command and screenshot/snapshot evidence.
 3. Identify whether the issue belongs in:
-   - public contract: `src/resources/nevermind-extension-api.d.ts`
-   - model: `src/model.ts`
-   - renderer: `src/extension-view.tsx` or `src/ui.tsx`
-   - styles: `src/styles.css`
-   - runtime normalization/loading: `src/electron/main.ts`
-   - fixture coverage: `src/fixtures/`
+   - public contract: `src/app/resources/nevermind-extension-api.d.ts`
+   - model: `src/app/palette/model.ts`
+   - renderer: `src/app/palette/extension-view.tsx` or `src/app/palette/ui.tsx`
+   - styles: `src/app/palette/styles.css`
+   - runtime normalization/loading: `src/app/electron/main.ts`
+   - fixture coverage: `src/app/fixtures/`
 4. Fix the shared primitive, not the fixture data, unless the fixture is invalid.
 5. Update the fixture to cover the regression.
 6. Run:
@@ -149,4 +149,4 @@ A UI fixture polish task is done only when:
 - Keyboard paths were verified.
 - Screenshots/snapshots show the fixed states.
 - `mise exec pnpm -- pnpm test` passes.
-- Any new UI API method is documented in `src/resources/nevermind-extension-api.d.ts` and represented in `src/fixtures/`.
+- Any new UI API method is documented in `src/app/resources/nevermind-extension-api.d.ts` and represented in `src/app/fixtures/`.

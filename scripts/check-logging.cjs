@@ -5,7 +5,7 @@ const path = require('node:path');
 // ── config ──────────────────────────────────────────────────────────────────
 
 const ROOT = process.cwd();
-const LOGGER_FILE = path.join(ROOT, 'src', 'electron', 'logger.ts');
+const LOGGER_FILE = path.join(ROOT, 'src', 'app', 'electron', 'logger.ts');
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ function main() {
   ) {
     fail(
       `${rel}: LOG_FILE_NAME must be 'nevermind.log'.\n` +
-        `  Per src/docs/logging.md, the canonical log file is nevermind.log in Electron's logs directory.`,
+        `  Per docs/logging.md, the canonical log file is nevermind.log in Electron's logs directory.`,
     );
   }
 
@@ -42,7 +42,7 @@ function main() {
   ) {
     fail(
       `${rel}: readRecentLogs must enforce MAX_RECENT_LIMIT and MAX_LOG_LINES bounds.\n` +
-        `  Per src/docs/logging.md, logs must not include unbounded reads.`,
+        `  Per docs/logging.md, logs must not include unbounded reads.`,
     );
   }
 
@@ -50,7 +50,7 @@ function main() {
   if (!source.includes('log[level](JSON.stringify(entry))')) {
     fail(
       `${rel}: log writes must go through JSON.stringify via electron-log.\n` +
-        `  Per src/docs/logging.md, production logs must be structured and bounded.`,
+        `  Per docs/logging.md, production logs must be structured and bounded.`,
     );
   }
 
@@ -58,7 +58,7 @@ function main() {
   if (!source.includes('data instanceof Error')) {
     fail(
       `${rel}: serializeData must strip Error objects to name/message/stack only.\n` +
-        `  Per src/docs/logging.md, production logs must not include arbitrary secrets.`,
+        `  Per docs/logging.md, production logs must not include arbitrary secrets.`,
     );
   }
 

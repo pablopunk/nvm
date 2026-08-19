@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!backend"]
+    "includes": ["**", "!src/backend"]
   },
   "formatter": {
     "enabled": true,

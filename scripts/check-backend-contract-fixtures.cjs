@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = path.join(process.cwd(), 'backend/src/fixtures/contracts');
+const root = path.join(process.cwd(), 'src/backend/src/fixtures/contracts');
 
 function walk(dir) {
   if (!fs.existsSync(dir)) {
@@ -20,7 +20,7 @@ const files = walk(root).filter((file) => file.endsWith('.json'));
 if (files.length === 0) {
   // biome-ignore lint/suspicious/noConsole: script CLI output
   console.error(
-    'No backend contract fixtures found under backend/src/fixtures/contracts',
+    'No backend contract fixtures found under src/backend/src/fixtures/contracts',
   );
   process.exit(1);
 }

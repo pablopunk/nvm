@@ -53,7 +53,7 @@ Avoid redirecting hosts for webhooks unless Stripe delivery has been verified en
 
 Use Stripe test mode for localhost. The Stripe Dashboard webhook URL cannot be plain localhost; use Stripe CLI forwarding instead. If the CLI is missing, install it with Homebrew (`brew install stripe/stripe-cli/stripe`) or the official Stripe install flow, then verify with `stripe --version`.
 
-1. Put test-mode values in ignored local env files (`backend/.env` in the worktree and, when useful, the canonical checkout):
+1. Put test-mode values in ignored local env files (`src/backend/.env` in the worktree and, when useful, the canonical checkout):
 
    - `STRIPE_SECRET_KEY=sk_test_...`
    - `STRIPE_SUBSCRIPTION_TIERS=[{"priceId":"price_test_subscription","tier":"pro","credits":1000}]`
@@ -63,7 +63,7 @@ Use Stripe test mode for localhost. The Stripe Dashboard webhook URL cannot be p
 
    ```sh
    set -a
-   source backend/.env
+   source src/backend/.env
    set +a
    STRIPE_API_KEY="$STRIPE_SECRET_KEY" stripe listen --forward-to localhost:4321/api/billing/webhook
    ```

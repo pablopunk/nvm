@@ -7,7 +7,7 @@ export default defineConfig({
     build: {
       outDir: 'dist/main',
       lib: {
-        entry: 'src/electron/main.ts',
+        entry: 'src/app/electron/main.ts',
         formats: ['es'],
         fileName: () => 'main.js',
       },
@@ -17,14 +17,14 @@ export default defineConfig({
     build: {
       outDir: 'dist/preload',
       lib: {
-        entry: 'src/electron/preload.ts',
+        entry: 'src/app/electron/preload.ts',
         formats: ['cjs'],
         fileName: () => 'preload.js',
       },
     },
   },
   renderer: {
-    root: '.',
+    root: 'src/app/palette',
     base: './',
     plugins: [react()],
     server: {
@@ -33,7 +33,7 @@ export default defineConfig({
       strictPort: true,
     },
     build: {
-      outDir: 'dist/renderer',
+      outDir: '../../../dist/renderer',
       emptyOutDir: true,
       target: 'esnext',
       sourcemap: false,

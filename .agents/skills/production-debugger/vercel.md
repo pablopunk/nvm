@@ -10,22 +10,22 @@ Read `axiom.md` first: Vercel production runtime logs drain to Axiom.
 
 ## Deployment/build fallback
 
-Use Vercel API events when you need deployment/build metadata or Axiom is unavailable. If `backend/.vercel/project.json` exists, read project/org ids from it but never commit it. If the installed global `vercel` CLI is rejected as outdated, run the latest CLI ephemerally with `mise exec -- pnpm dlx vercel@latest ...` instead of changing the global install.
+Use Vercel API events when you need deployment/build metadata or Axiom is unavailable. If `src/backend/.vercel/project.json` exists, read project/org ids from it but never commit it. If the installed global `vercel` CLI is rejected as outdated, run the latest CLI ephemerally with `mise exec -- pnpm dlx vercel@latest ...` instead of changing the global install.
 
 ```bash
 TOKEN=$(node -e 'const fs=require("fs"),os=require("os"),path=require("path"); const ps=[path.join(os.homedir(),"Library/Application Support/com.vercel.cli/auth.json"),path.join(os.homedir(),".local/share/com.vercel.cli/auth.json")]; for (const p of ps) if (fs.existsSync(p)) { console.log(JSON.parse(fs.readFileSync(p,"utf8")).token); process.exit(0) } process.exit(1)')
-PROJECT_ID=$(jq -r .projectId backend/.vercel/project.json)
-TEAM_ID=$(jq -r .orgId backend/.vercel/project.json)
+PROJECT_ID=$(jq -r .projectId src/backend/.vercel/project.json)
+TEAM_ID=$(jq -r .orgId src/backend/.vercel/project.json)
 curl -sS -H "Authorization: Bearer $TOKEN" \
   "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&teamId=$TEAM_ID&target=production&limit=5" | jq '.deployments[] | {uid,url,state,createdAt,meta}'
 ```
 
 ## Env/domain rules
 
-- To retrieve production env locally for debugging, use `umask 077` and `cd backend && vercel env pull .vercel/.env.production.local --environment=production --yes`; never print or commit the pulled file.
+- To retrieve production env locally for debugging, use `umask 077` and `cd src/backend && vercel env pull .vercel/.env.production.local --environment=production --yes`; never print or commit the pulled file.
 - `vercel env ls production` shows `Encrypted`; it cannot prove pasted whitespace.
 - Env edits require redeploys.
 - A Ready production deployment does not prove custom domains serve it. Inspect its aliases and verify each public host before treating a release as live; confirm before reassigning an alias.
 - Confirm before env removals, secret changes, domain changes, project changes, or redeploys.
 - Compare `*.vercel.app`, `api.nvm.fyi`, `nvm.fyi`, and `www.nvm.fyi` when alias/domain behavior is suspect.
-- Keep `PUBLIC_API_ORIGIN=https://api.nvm.fyi` and `PRODUCTION_ORIGIN=https://www.nvm.fyi` as origin-only values. Do not add an API rewrite to `backend/vercel.json`; apex-to-`www` is the only browser compatibility redirect.
+- Keep `PUBLIC_API_ORIGIN=https://api.nvm.fyi` and `PRODUCTION_ORIGIN=https://www.nvm.fyi` as origin-only values. Do not add an API rewrite to `src/backend/vercel.json`; apex-to-`www` is the only browser compatibility redirect.

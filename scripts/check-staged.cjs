@@ -14,7 +14,7 @@ const stagedFiles = execFileSync(
   .filter(
     (file) =>
       supportedExtension.test(file) &&
-      !file.startsWith('backend/') &&
+      !file.startsWith('src/backend/') &&
       !file.startsWith('.github/'),
   );
 

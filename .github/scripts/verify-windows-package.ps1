@@ -112,7 +112,7 @@ try {
     'dist/main/main.js',
     'dist/preload/preload.cjs',
     'dist/renderer/index.html',
-    'src/resources/nevermind-extension-api.d.ts',
+    'src/app/resources/nevermind-extension-api.d.ts',
     'node_modules/typescript/lib/lib.es2022.full.d.ts'
   )) {
     Assert-Condition (Test-Path -LiteralPath (Join-Path $ExtractionRoot $requiredPath)) "Packaged ASAR is missing $requiredPath."

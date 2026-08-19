@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "types": ["node", "react", "react-dom"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/electron/**/*.ts"]
+  "include": ["src/app/**/*.ts", "src/app/**/*.tsx"]
 }

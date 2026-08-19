@@ -12,10 +12,10 @@ const API_DTS = path.join(
   'resources',
   'nevermind-extension-api.d.ts',
 );
-const MAIN_TS = path.join(ROOT, 'src', 'electron', 'main.ts');
+const MAIN_TS = path.join(ROOT, 'src', 'app', 'electron', 'main.ts');
 
 /**
- * Per src/docs/solutions/extension-result-appearance-contract.md,
+ * Per docs/solutions/extension-result-appearance-contract.md,
  * `appearance` must exist on:
  *   - ExtensionItem          (the original type)
  *   - ExtensionActionContribution  (durable actions)
@@ -89,7 +89,7 @@ function main() {
     if (!typeLiteralHasMember(typeDecl.type, 'appearance')) {
       fail(
         `"appearance" field missing from ${typeName} in ${relative(API_DTS)}.\n` +
-          `  Per src/docs/solutions/extension-result-appearance-contract.md, ` +
+          `  Per docs/solutions/extension-result-appearance-contract.md, ` +
           `all result-shaped extension surfaces must support appearance.foreground.`,
       );
     }

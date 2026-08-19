@@ -4,18 +4,18 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const apiV2Dir = path.join(process.cwd(), 'backend/src/pages/api/v2');
+const apiV2Dir = path.join(process.cwd(), 'src/backend/src/pages/api/v2');
 if (!fs.existsSync(apiV2Dir)) {
   // biome-ignore lint/suspicious/noConsole: script CLI output
   console.log('Backend API major check passed (no /api/v2 routes present)');
   process.exit(0);
 }
 
-const migrationDoc = path.join(process.cwd(), 'src/docs/backend-api-v2.md');
+const migrationDoc = path.join(process.cwd(), 'docs/backend-api-v2.md');
 if (!fs.existsSync(migrationDoc)) {
   // biome-ignore lint/suspicious/noConsole: script CLI output
   console.error(
-    '/api/v2 routes require src/docs/backend-api-v2.md with breaking-change and sunset details.',
+    '/api/v2 routes require docs/backend-api-v2.md with breaking-change and sunset details.',
   );
   process.exit(1);
 }
@@ -29,7 +29,7 @@ for (const required of [
 ]) {
   if (!text.includes(required)) {
     // biome-ignore lint/suspicious/noConsole: script CLI output
-    console.error(`src/docs/backend-api-v2.md must mention: ${required}`);
+    console.error(`docs/backend-api-v2.md must mention: ${required}`);
     process.exit(1);
   }
 }

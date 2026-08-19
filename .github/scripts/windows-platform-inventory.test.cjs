@@ -14,7 +14,7 @@ const {
 } = require('../../scripts/check-os-platform-boundaries.cjs');
 
 const inventory = JSON.parse(
-  fs.readFileSync('src/docs/windows-platform-inventory.json', 'utf8'),
+  fs.readFileSync('docs/windows-platform-inventory.json', 'utf8'),
 );
 
 test('platform inventory covers every planned category and non-os platform seam', () => {
@@ -35,16 +35,16 @@ test('platform inventory covers every planned category and non-os platform seam'
     ...inventory.resolvedEntries.map((entry) => entry.file),
   ]);
   for (const expected of [
-    'src/electron/byo-key.ts',
-    'src/electron/nevermind-auth.ts',
-    'src/electron/main.ts',
-    'src/electron/nevermind-api.ts',
-    'src/electron/system-settings.ts',
-    'src/electron/app-uninstall-service.ts',
-    'src/electron/running-app-status.ts',
-    'src/electron/app-ipc-handlers.ts',
-    'src/electron/extensions/system.ts',
-    'src/extension-view.tsx',
+    'src/app/electron/byo-key.ts',
+    'src/app/electron/nevermind-auth.ts',
+    'src/app/electron/main.ts',
+    'src/app/electron/nevermind-api.ts',
+    'src/app/electron/system-settings.ts',
+    'src/app/electron/app-uninstall-service.ts',
+    'src/app/electron/running-app-status.ts',
+    'src/app/electron/app-ipc-handlers.ts',
+    'src/app/extensions/system.ts',
+    'src/app/palette/extension-view.tsx',
   ]) {
     assert.equal(files.has(expected), true, expected);
   }
@@ -61,7 +61,7 @@ test('platform inventory covers every planned category and non-os platform seam'
 });
 
 test('every detector category rejects a second site in an already inventoried file', () => {
-  const file = 'src/electron/os.ts';
+  const file = 'src/app/electron/os.ts';
   const source = fs.readFileSync(file, 'utf8');
   const additions = new Map([
     [
@@ -97,7 +97,7 @@ test('every detector category rejects a second site in an already inventoried fi
 });
 
 test('a new direct platform site needs its own selector, disposition, and readiness surface', () => {
-  const file = 'src/electron/os.ts';
+  const file = 'src/app/electron/os.ts';
   const source = fs.readFileSync(file, 'utf8');
   const addition = 'export const inventoryRegressionDirect = process.platform;';
   const observed = detectSitesInSource(file, `${source}\n${addition}\n`);
@@ -150,7 +150,7 @@ test('a new direct platform site needs its own selector, disposition, and readin
 });
 
 test('structurally ambiguous sites cannot share one inventory entry', () => {
-  const file = 'src/electron/os.ts';
+  const file = 'src/app/electron/os.ts';
   const source = fs.readFileSync(file, 'utf8');
   const duplicate =
     'export const inventoryRegressionDuplicate = process.platform;';
@@ -198,7 +198,7 @@ test('platform inventory checker accepts the frozen source and is wired into agg
 
 test('readiness document preserves the real Windows and support gates', () => {
   const readiness = fs.readFileSync(
-    'src/docs/windows-release-readiness.md',
+    'docs/windows-release-readiness.md',
     'utf8',
   );
   for (const required of [

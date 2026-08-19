@@ -27,14 +27,14 @@ test('Windows packaging filter covers every package and application input', () =
     'package.json',
     'pnpm-lock.yaml',
     'scripts/windows-portable-smoke.cjs',
-    'src/electron/main.ts',
-    'src/resources/nevermind-extension-api.d.ts',
-    'src/ui.tsx',
+    'src/app/electron/main.ts',
+    'src/app/resources/nevermind-extension-api.d.ts',
+    'src/app/palette/ui.tsx',
     'tests/electron/palette.smoke.spec.ts',
   ]) {
     assert.equal(isWindowsPackageRelevantPath(candidate), true, candidate);
   }
-  assert.equal(isWindowsPackageRelevantPath('backend/src/index.ts'), false);
+  assert.equal(isWindowsPackageRelevantPath('src/backend/src/index.ts'), false);
   assert.equal(isWindowsPackageRelevantPath('README.md'), false);
 });
 
@@ -62,8 +62,8 @@ test('tracked text stays LF on Windows so aggregate verification is host-indepen
 
 test('platform boundary selectors use host-independent repository paths', () => {
   assert.equal(
-    normalizeRepositoryPath('src\\electron\\os.ts'),
-    'src/electron/os.ts',
+    normalizeRepositoryPath('src\\app\\electron\\os.ts'),
+    'src/app/electron/os.ts',
   );
 });
 
@@ -99,7 +99,7 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
 });
 
 test('portable marker distinguishes wrapper identity from packaged child identity', () => {
-  const marker = fs.readFileSync('src/electron/test-mode.ts', 'utf8');
+  const marker = fs.readFileSync('src/app/electron/test-mode.ts', 'utf8');
   const harness = fs.readFileSync('scripts/windows-portable-smoke.cjs', 'utf8');
   for (const field of [
     'appIsPackaged',

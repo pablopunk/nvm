@@ -86,12 +86,12 @@ const backendDependencies = ['@sentry/cli', 'esbuild', 'sharp'];
 assertDependencies(root, 'allowBuilds', rootDependencies);
 assertDependencies(root, 'onlyBuiltDependencies', rootLegacyDependencies);
 assertDependencies(
-  path.join(root, 'backend'),
+  path.join(root, 'src', 'backend'),
   'allowBuilds',
   backendDependencies,
 );
 assertDependencies(
-  path.join(root, 'backend'),
+  path.join(root, 'src', 'backend'),
   'onlyBuiltDependencies',
   backendDependencies,
 );

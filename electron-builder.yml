@@ -5,13 +5,13 @@ directories:
   buildResources: build
 files:
   - dist/**
-  - src/docs/**
-  - from: src/resources
-    to: src/resources
+  - docs/**
+  - from: src/app/resources
+    to: src/app/resources
     filter:
       - '**/*'
-  - from: src/electron/extensions
-    to: src/electron/extensions
+  - from: src/app/extensions
+    to: src/app/extensions
     filter:
       - '*.ts'
       - '!*.test.ts'
