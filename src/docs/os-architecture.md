@@ -64,6 +64,7 @@ All desktop integrations are owned by OS capabilities. The rest of the app descr
 - macOS root search exposes the System Settings panes available on the current computer and opens a selected pane directly; other platforms omit these macOS-specific results.
 - File actions such as preview, reveal, open with, trash, drag, thumbnails, and selected files use OS-owned labels and availability. Open with must honor the selected application on macOS, Windows, and Linux; platforms may return all discovered applications when reliable per-file compatibility metadata is unavailable.
 - Frontmost-app interactions such as paste are offered only when the current system can perform them reliably.
+- Selected-text reads use accessibility first, then a clipboard-preserving Copy fallback only after the palette loses focus; the fallback must never copy palette input or leave temporary clipboard entries behind.
 - Camera access for host-owned extension views is capability-gated, uses OS privacy prompts where required, and must include platform packaging metadata such as macOS camera usage descriptions.
 - Dictation can temporarily mute system output while recording. Supported systems must restore the exact prior mute state before transcription, on cancellation, after microphone errors, and when the app quits; unsupported systems continue dictation without changing system audio.
 - Palette window behavior such as focus, taskbar/dock visibility, all-workspaces behavior, and desktop-window-manager quirks is not spread through generic window lifecycle code.

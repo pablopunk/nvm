@@ -917,6 +917,26 @@ export function pasteIntoFrontmostApp() {
   })();
 }
 
+export function copySelectionIntoClipboard() {
+  return osFunction<[], Promise<boolean>>(
+    {
+      darwin: () =>
+        new Promise((resolve) => {
+          execFile(
+            'osascript',
+            [
+              '-e',
+              'tell application "System Events" to keystroke "c" using command down',
+            ],
+            { timeout: 5000 },
+            (error) => resolve(!error),
+          );
+        }),
+    },
+    async () => false,
+  )();
+}
+
 function appleScriptString(value: string) {
   return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '" & return & "')}"`;
 }

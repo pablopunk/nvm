@@ -176,6 +176,7 @@ import {
   appIconSources,
   autoUpdatesUnavailableMessage,
   captureScreenImage,
+  copySelectionIntoClipboard,
   runningAppPaths as detectRunningAppPaths,
   executeSystemBuiltin,
   fileDateAddedMs,
@@ -196,12 +197,13 @@ import {
   revealPathTitle,
   scanApps,
   selectedFilePaths,
-  selectedText,
+  selectedText as readAccessibilitySelectedText,
   setLaunchAtLoginEnabled,
   settingsTitle,
   typeTextIntoFrontmostApp,
   watchApps,
 } from './os';
+import { createSelectedTextReader } from './selected-text';
 import {
   createPaletteWindowController,
   installPermissionHandlers,
@@ -629,7 +631,7 @@ clipboardService = createClipboardHistory({
   findFiles,
   selectedFilePaths,
   selectedExtensionFiles,
-  selectedText,
+  selectedText: () => selectedText(),
   selectedFiles,
   frontmostApp,
   readDesktopSelection,
@@ -637,6 +639,21 @@ clipboardService = createClipboardHistory({
   CLIPBOARD_POLL_INTERVAL_MS,
   CLIPBOARD_LAST_HOUR_MS,
   CLIPBOARD_LAST_DAY_MS,
+});
+
+const selectedText = createSelectedTextReader({
+  readAccessibilityText: readAccessibilitySelectedText,
+  paletteIsFocused: () => Boolean(paletteWindow.win?.isFocused()),
+  clipboardSnapshot,
+  readClipboardText: () => clipboard.readText(),
+  writeClipboardText: (text) => clipboard.writeText(text),
+  restoreClipboardSnapshot: (snapshot) => {
+    suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot?.text));
+    restoreClipboardSnapshot(snapshot);
+  },
+  copySelectionIntoClipboard,
+  concealClipboardText: (text) =>
+    suppressClipboardHistoryId(clipboardHistoryIdForText(text)),
 });
 
 function osCacheRoot() {

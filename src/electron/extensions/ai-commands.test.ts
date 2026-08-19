@@ -14,10 +14,11 @@ function commandHandler(context: any) {
   return contribution.run;
 }
 
-function contextFor(selectedText: string) {
+function contextFor(selectedText: string | null) {
   const preparations: unknown[] = [];
   const aiCalls: unknown[] = [];
   const actions: unknown[] = [];
+  const indicatorEvents: unknown[] = [];
   const context = {
     ai: {
       prepare: async (options: unknown) => preparations.push(options),
@@ -41,15 +42,22 @@ function contextFor(selectedText: string) {
         return action;
       },
     },
-    ui: { toast: (input: unknown) => input },
+    ui: {
+      toast: (input: unknown) => input,
+      indicator: {
+        show: (input: unknown) => indicatorEvents.push(['show', input]),
+        update: (input: unknown) => indicatorEvents.push(['update', input]),
+        hide: (id: string) => indicatorEvents.push(['hide', id]),
+      },
+    },
+    logs: { error: () => {} },
   };
-  return { context, preparations, aiCalls, actions };
+  return { context, preparations, aiCalls, actions, indicatorEvents };
 }
 
 test('corrects selected text with Fast AI and replaces it without changing the clipboard', async () => {
-  const { context, preparations, aiCalls, actions } = contextFor(
-    'this are selected text',
-  );
+  const { context, preparations, aiCalls, actions, indicatorEvents } =
+    contextFor('this are selected text');
 
   await commandHandler(context)(context, {});
 
@@ -72,10 +80,31 @@ test('corrects selected text with Fast AI and replaces it without changing the c
       dismissAfterRun: 'auto',
     },
   ]);
+  assert.deepEqual(
+    (indicatorEvents as any[]).map(([event, input]) => [
+      event,
+      typeof input === 'string' ? input : input.subtitle,
+    ]),
+    [
+      ['show', 'Reading Selection'],
+      ['update', 'Fixing Text'],
+      ['hide', 'fix-selected-text-with-ai'],
+    ],
+  );
 });
 
 test('does not call AI when no text is selected', async () => {
   const { context, aiCalls, actions } = contextFor('   ');
+
+  const result = await commandHandler(context)(context, {});
+
+  assert.deepEqual(result, { message: 'Select text to fix', tone: 'info' });
+  assert.equal(aiCalls.length, 0);
+  assert.equal(actions.length, 0);
+});
+
+test('treats a null host selection as no selected text', async () => {
+  const { context, aiCalls, actions } = contextFor(null);
 
   const result = await commandHandler(context)(context, {});
 
