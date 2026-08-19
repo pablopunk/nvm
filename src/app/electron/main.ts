@@ -106,6 +106,7 @@ import { actionMatchesExecutionRecord } from './action-execution-record';
 import {
   actionFromExecutionRecord,
   currentActionExecutionRecord,
+  nativeActionFromExecutionRecord,
 } from './action-execution-policy';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
@@ -1391,6 +1392,14 @@ function resolveViewActionForIpc(action) {
           : characterWithSkinTone(record.glyph, skinTone),
     };
   }
+  if (fallback.type === 'nativeAction')
+    return nativeActionFromExecutionRecord(
+      fallback,
+      rootActionExecutionRecords,
+      {
+        ttlMs: ACTION_EXECUTION_TTL_MS,
+      },
+    );
   const derived = resolveRendererDerivedViewAction(fallback);
   if (derived) return derived;
   throw new Error(`Untrusted ${fallback.type || 'view'} action`);

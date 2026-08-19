@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   actionFromExecutionRecord,
   currentActionExecutionRecord,
+  nativeActionFromExecutionRecord,
   type ActionExecutionRecord,
 } from './action-execution-policy';
 
@@ -120,5 +121,39 @@ test('does not execute forged nested root actions through a valid token', () => 
       },
     ),
     stored,
+  );
+});
+
+test('resolves renderer native app wrappers through the root action token', () => {
+  const stored = {
+    id: 'extension-root:nevermind.apps:app:safari',
+    kind: 'extension-root-item',
+    rootAction: {
+      type: 'openPath',
+      title: 'Open Safari',
+      path: '/Applications/Safari.app',
+    },
+  };
+
+  assert.deepEqual(
+    nativeActionFromExecutionRecord(
+      {
+        type: 'nativeAction',
+        title: 'Safari',
+        nativeAction: {
+          ...stored,
+          executionId: 'trusted-token',
+        },
+        traceId: 'trace-id',
+      },
+      records(stored),
+      { now: NOW, ttlMs: TTL_MS },
+    ),
+    {
+      type: 'nativeAction',
+      title: 'Safari',
+      nativeAction: { ...stored, traceId: 'trace-id' },
+      traceId: 'trace-id',
+    },
   );
 });

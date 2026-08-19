@@ -42,3 +42,34 @@ export function actionFromExecutionRecord(
     ...(typeof input.traceId === 'string' ? { traceId: input.traceId } : {}),
   };
 }
+
+export function nativeActionFromExecutionRecord(
+  action: unknown,
+  rootRecords: Map<string, ActionExecutionRecord>,
+  options: { now?: number; ttlMs: number },
+) {
+  if (!(action && typeof action === 'object'))
+    throw new Error('Untrusted nativeAction action');
+  const input = action as Record<string, unknown>;
+  if (input.type !== 'nativeAction')
+    throw new Error('Untrusted nativeAction action');
+  const traceId = typeof input.traceId === 'string' ? input.traceId : undefined;
+  const nativeInput = input.nativeAction;
+  if (!(nativeInput && typeof nativeInput === 'object'))
+    throw new Error('Untrusted nativeAction action');
+  const nativeAction = actionFromExecutionRecord(
+    { ...nativeInput, ...(traceId ? { traceId } : {}) },
+    rootRecords,
+    {
+      actionName: (nested) => String(nested.kind || 'root'),
+      now: options.now,
+      ttlMs: options.ttlMs,
+    },
+  );
+  return {
+    type: 'nativeAction',
+    title: input.title,
+    nativeAction,
+    ...(traceId ? { traceId } : {}),
+  };
+}
