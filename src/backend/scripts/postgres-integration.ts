@@ -245,6 +245,49 @@ async function runAssertions() {
         'same-key same-hash admission rejects concurrent execution',
       );
 
+      const activeClaimRequestId = `active-claim-${databaseName}`;
+      const activeClaimKey = `active-claim-key-${databaseName}`;
+      const activeClaimHash = await integrationRequestHash('active claim');
+      assert.equal(
+        await handleDedup(activeClaimKey, user.id, activeClaimHash, activeClaimRequestId),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({ requestId: activeClaimRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok,
+        true,
+      );
+      await db.update(requestDedup).set({
+        createdAt: new Date(Date.now() - 8 * 60_000),
+      }).where(and(
+        eq(requestDedup.userId, user.id),
+        eq(requestDedup.idempotencyKey, activeClaimKey),
+      ));
+      const activeClaimRetry = await handleDedup(
+        activeClaimKey,
+        user.id,
+        activeClaimHash,
+        `active-claim-retry-${databaseName}`,
+      );
+      assert.ok(activeClaimRetry instanceof Response);
+      assert.equal(
+        activeClaimRetry.status,
+        409,
+        'a pending reservation prevents stale claim reclaim',
+      );
+      assert.equal(
+        await finalizeReservation({
+          requestId: activeClaimRequestId,
+          outcome: 'release',
+          dedup: {
+            userId: user.id,
+            idempotencyKey: activeClaimKey,
+            requestHash: activeClaimHash,
+            status: 'failed',
+          },
+        }),
+        'released',
+      );
+
       const changedHashResult = await handleDedup(
         admissionKey,
         user.id,
@@ -383,6 +426,36 @@ async function runAssertions() {
         undefined,
         'retryable failure retains and reuses the original hash',
       );
+
+      const reconcileDedupRequestId = `reconcile-dedup-${databaseName}`;
+      const reconcileDedupKey = `reconcile-dedup-key-${databaseName}`;
+      const reconcileDedupHash = await integrationRequestHash('reconcile dedup');
+      assert.equal(
+        await handleDedup(
+          reconcileDedupKey,
+          user.id,
+          reconcileDedupHash,
+          reconcileDedupRequestId,
+        ),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({
+          requestId: reconcileDedupRequestId,
+          userId: user.id,
+          kind: 'paid',
+          credits: 5,
+          now: new Date(Date.now() - 10 * 60_000),
+        })).ok,
+        true,
+      );
+      assert.deepEqual(await reconcileStaleReservations(10), { released: 1 });
+      const [reconciledDedup] = await db.select().from(requestDedup).where(and(
+        eq(requestDedup.userId, user.id),
+        eq(requestDedup.idempotencyKey, reconcileDedupKey),
+      ));
+      assert.equal(reconciledDedup?.status, 'failed');
+      assert.equal(reconciledDedup?.requestHash, reconcileDedupHash);
 
       const dedupRaceRequestId = `dedup-race-${databaseName}`;
       const dedupRaceKey = `dedup-race-key-${databaseName}`;

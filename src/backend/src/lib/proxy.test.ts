@@ -122,7 +122,7 @@ type DedupRow = {
   id: number;
   userId: string;
   idempotencyKey: string;
-  requestHash: string;
+  requestHash: string | null;
   status: string;
   responseJson: unknown;
   responseHeaders: Record<string, unknown> | null;
@@ -368,6 +368,7 @@ test('request identity includes exact body, model role, route, and method', asyn
       }),
     }),
     makeSemanticRequest({ headers: { 'x-nevermind-ai-model': 'fast' } }),
+    makeSemanticRequest({ headers: { 'x-nevermind-ai-model-tier': 'PRO' } }),
     makeSemanticRequest({ url: 'https://api.nvm.fyi/v1/messages' }),
     makeSemanticRequest({ method: 'PUT' }),
   ];
@@ -382,6 +383,7 @@ test('same key with changed request semantics always conflicts', async function 
   const changedRequests = [
     makeSemanticRequest({ body: '{"different":true}' }),
     makeSemanticRequest({ headers: { 'x-nevermind-ai-model': 'fast' } }),
+    makeSemanticRequest({ headers: { 'x-nevermind-ai-credit-kind': 'PAID' } }),
     makeSemanticRequest({ url: 'https://api.nvm.fyi/v1/messages' }),
     makeSemanticRequest({ method: 'PUT' }),
   ];
@@ -437,7 +439,7 @@ test('handleDedup returns 409 when in-flight row exists and is not stale', async
 });
 
 test('handleDedup reclaims stale in-flight row and returns undefined', async function staleInFlightReclaims() {
-  const fiveMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+  const staleCreatedAt = new Date(Date.now() - 8 * 60 * 1000);
   const existingRow: DedupRow = {
     id: 1,
     userId: DUMMY_USER_ID,
@@ -448,7 +450,7 @@ test('handleDedup reclaims stale in-flight row and returns undefined', async fun
     responseHeaders: null,
     upstreamStatus: null,
     requestId: 'old-req',
-    createdAt: fiveMinutesAgo,
+    createdAt: staleCreatedAt,
     completedAt: null,
   };
   const { db, updates } = createFakeDedupDb([existingRow]);
@@ -461,7 +463,7 @@ test('handleDedup reclaims stale in-flight row and returns undefined', async fun
 });
 
 test('concurrent stale reclaim permits exactly one winner', async function concurrentStaleReclaimsOneWinner() {
-  const fiveMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+  const staleCreatedAt = new Date(Date.now() - 8 * 60 * 1000);
   const existingRow: DedupRow = {
     id: 1,
     userId: DUMMY_USER_ID,
@@ -472,7 +474,7 @@ test('concurrent stale reclaim permits exactly one winner', async function concu
     responseHeaders: null,
     upstreamStatus: null,
     requestId: 'old-req',
-    createdAt: fiveMinutesAgo,
+    createdAt: staleCreatedAt,
     completedAt: null,
   };
   const { db, updates } = createFakeDedupDb([existingRow]);
@@ -509,6 +511,32 @@ test('handleDedup replays completed non-streaming response', async function repl
   assert.equal(result.headers.get('x-request-id'), STABLE_REQUEST_ID);
   const body: any = await result.json();
   assert.equal(body.choices[0].message.content, 'hello');
+});
+
+test('legacy rows without a request hash never replay', async function legacyRowDoesNotReplay() {
+  const existingRow: DedupRow = {
+    id: 1,
+    userId: DUMMY_USER_ID,
+    idempotencyKey: DUMMY_KEY,
+    requestHash: null,
+    status: 'completed',
+    responseJson: { value: 'legacy response' },
+    responseHeaders: { 'content-type': 'application/json' },
+    upstreamStatus: 200,
+    requestId: 'legacy-request',
+    createdAt: new Date(),
+    completedAt: new Date(),
+  };
+  const { db } = createFakeDedupDb([existingRow]);
+  setDbForTests(db as any);
+
+  const response = await handleRequestDedup(STABLE_REQUEST_ID);
+  assert.ok(response instanceof Response);
+  assert.equal(response.status, 409);
+  assert.equal(
+    (await response.json() as any).error.type,
+    'idempotency_conflict',
+  );
 });
 
 test('handleDedup returns 409 for completed streaming response (no responseJson)', async function completedStreamingReturns409() {

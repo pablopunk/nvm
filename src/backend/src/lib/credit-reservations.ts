@@ -195,12 +195,34 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
 /** Pending rows have no verified usage after their proxy lease expires, so the
  * conservative recovery policy releases them instead of charging unknown work. */
 export async function reconcileStaleReservations(limit = 100, now = new Date()): Promise<{ released: number }> {
-  const rows = await db.select({ requestId: creditReservations.requestId }).from(creditReservations)
+  const rows = await db.select({
+    requestId: creditReservations.requestId,
+    userId: creditReservations.userId,
+  }).from(creditReservations)
     .where(and(eq(creditReservations.status, 'pending'), lte(creditReservations.expiresAt, now)))
     .limit(Math.max(1, Math.min(limit, 500)));
   let released = 0;
   for (const row of rows) {
-    if (await finalizeReservation({ requestId: row.requestId, outcome: 'release' }) === 'released') released += 1;
+    const [dedup] = await db.select({
+      idempotencyKey: requestDedup.idempotencyKey,
+      requestHash: requestDedup.requestHash,
+    }).from(requestDedup).where(and(
+      eq(requestDedup.userId, row.userId),
+      eq(requestDedup.requestId, row.requestId),
+      eq(requestDedup.status, 'in_flight'),
+    )).limit(1);
+    if (await finalizeReservation({
+      requestId: row.requestId,
+      outcome: 'release',
+      dedup: dedup?.requestHash
+        ? {
+            userId: row.userId,
+            idempotencyKey: dedup.idempotencyKey,
+            requestHash: dedup.requestHash,
+            status: 'failed',
+          }
+        : undefined,
+    }) === 'released') released += 1;
   }
   if (released > 0) log.info('credit_reservations_stale_reconciled', { released });
   return { released };

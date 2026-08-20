@@ -174,7 +174,7 @@ export const requestDedup = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     idempotencyKey: text('idempotency_key').notNull(),
-    requestHash: text('request_hash').notNull(),
+    requestHash: text('request_hash'),
     status: text('status').notNull().default('in_flight'),
     responseJson: jsonb('response_json'),
     responseHeaders: jsonb('response_headers'),

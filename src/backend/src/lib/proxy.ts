@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { requestDedup } from '../db/schema';
+import { creditReservations, requestDedup } from '../db/schema';
 import {
   getModelRoute,
   getModelProviderChain,
@@ -300,7 +300,7 @@ async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | Mod
   }
 }
 
-const DEDUP_STALE_MS = 5 * 60 * 1000;
+const DEDUP_STALE_MS = 7 * 60 * 1000;
 
 const REQUEST_IDENTITY_HEADERS = [
   'accept',
@@ -326,14 +326,8 @@ export function aiRequestHash(request: Request, body: Uint8Array) {
   const requestedModel =
     parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ??
     'smart';
-  const modelTier = semanticHeaderValue(
-    request,
-    'x-nevermind-ai-model-tier',
-  ).toLowerCase();
-  const creditKind = semanticHeaderValue(
-    request,
-    'x-nevermind-ai-credit-kind',
-  ).toLowerCase();
+  const modelTier = semanticHeaderValue(request, 'x-nevermind-ai-model-tier');
+  const creditKind = semanticHeaderValue(request, 'x-nevermind-ai-credit-kind');
   const identity = {
     method: request.method.toUpperCase(),
     route: normalizedRequestRoute(request),
@@ -413,6 +407,12 @@ export async function handleDedup(
         eq(requestDedup.requestId, existing.requestId!),
         eq(requestDedup.requestHash, requestHash),
         eq(requestDedup.status, 'in_flight'),
+        sql`not exists (
+          select 1
+          from ${creditReservations}
+          where ${creditReservations.requestId} = ${existing.requestId}
+            and ${creditReservations.status} = 'pending'
+        )`,
       )).returning();
       if (!reclaimed) {
         return withRequestId(Response.json(
