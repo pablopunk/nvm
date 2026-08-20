@@ -41,18 +41,19 @@ Versioned via drizzle-kit. SQL lives in `src/backend/drizzle/`.
 - `pnpm db:migrate` → applies pending migrations after validating the target identity
 
 `pnpm build` never connects to the database or applies migrations. GitHub's
-`Database migration` workflow is the only deployment migration owner. It uses
+`Database migration` workflow is the only migration and deployment owner. It uses
 the `database-development`, `database-preview`, or `database-production` GitHub
 environment, where each environment must provide its own `DATABASE_URL` secret.
 Configure required reviewers on `database-production`; production also requires
 the workflow's explicit approval input. Workflow concurrency and a PostgreSQL
 advisory lock prevent two migrations from changing one target at the same time.
+Development runs migrations only. Preview and production deploy the selected
+workflow commit only after its migration succeeds; automatic Vercel Git
+deployments are disabled in `vercel.json`.
 
 Use expand-and-contract migrations: apply a backward-compatible schema change,
 deploy compatible code only after migration succeeds, migrate data if needed,
-and remove old schema in a later release. Disable automatic production
-deployment in Vercel so the approved migration finishes before code that needs
-the schema receives traffic. If a deployment fails after migration, roll code
+and remove old schema in a later release. If a deployment fails after migration, roll code
 back without rolling schema back; fix forward unless a separately reviewed
 backward migration is safe for all released desktop clients.
 

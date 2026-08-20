@@ -50,3 +50,21 @@ jobs:
           NVM_DATABASE_ENV: ${{ inputs.target }}
           NVM_PRODUCTION_MIGRATION_APPROVED: ${{ inputs.approve_production }}
         run: mise exec -- pnpm -C src/backend db:migrate
+
+      - name: Deploy Preview
+        if: inputs.target == 'preview'
+        working-directory: src/backend
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: mise exec -- pnpm dlx vercel@latest deploy --yes --token "$VERCEL_TOKEN"
+
+      - name: Deploy production
+        if: inputs.target == 'production'
+        working-directory: src/backend
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: mise exec -- pnpm dlx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
