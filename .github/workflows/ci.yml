@@ -290,7 +290,7 @@ jobs:
           retention-days: 7
 
   postgres-integration:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
