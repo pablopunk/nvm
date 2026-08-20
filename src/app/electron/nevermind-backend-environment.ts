@@ -6,6 +6,7 @@ import type { NevermindCompatibilityManifest } from './nevermind-compatibility';
 import { parsePublicOrigin } from '../shared/public-origin';
 
 export const PRODUCTION_NEVERMIND_BASE_URL = 'https://api.nvm.fyi';
+export const DEVELOPMENT_NEVERMIND_BASE_URL = 'http://localhost:4321';
 
 export type NevermindBackendEnvironment = {
   environment: NevermindEnvironment;
@@ -43,16 +44,26 @@ export async function switchNevermindBackendEnvironment(
   },
   deps: NevermindBackendEnvironmentDeps,
 ) {
+  if (input.environment === 'development' && deps.isPackaged) {
+    return {
+      ok: false as const,
+      message: 'Development is available only in unpackaged builds.',
+    };
+  }
   const rawBaseUrl =
     input.environment === 'production'
       ? PRODUCTION_NEVERMIND_BASE_URL
-      : String(input.baseUrl || '').trim();
+      : input.environment === 'development'
+        ? DEVELOPMENT_NEVERMIND_BASE_URL
+        : String(input.baseUrl || '').trim();
   let parsed: URL;
   try {
     const normalized =
       input.environment === 'production'
         ? parsePublicOrigin(rawBaseUrl, 'production_api')
-        : parsePublicOrigin(rawBaseUrl, 'smoke');
+        : input.environment === 'development'
+          ? parsePublicOrigin(rawBaseUrl, 'local')
+          : parsePublicOrigin(rawBaseUrl, 'smoke');
     parsed = new URL(normalized);
   } catch {
     try {
@@ -74,7 +85,7 @@ export async function switchNevermindBackendEnvironment(
       message: 'Backend URL must be a valid origin without a path.',
     };
   }
-  if (parsed.protocol !== 'https:') {
+  if (input.environment !== 'development' && parsed.protocol !== 'https:') {
     return { ok: false as const, message: 'Backend URL must use HTTPS.' };
   }
   if (parsed.username || parsed.password) {

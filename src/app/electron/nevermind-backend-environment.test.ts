@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   type NevermindBackendEnvironment,
   type NevermindBackendEnvironmentDeps,
+  DEVELOPMENT_NEVERMIND_BASE_URL,
   PRODUCTION_NEVERMIND_BASE_URL,
   switchNevermindBackendEnvironment,
 } from './nevermind-backend-environment';
@@ -113,6 +114,37 @@ test('rejects malformed, insecure, credentialed, and packaged-loopback URLs', as
       )
     ).ok,
     false,
+  );
+  assert.deepEqual(calls, []);
+});
+
+test('switches live to the fixed local development origin in unpackaged builds', async () => {
+  const { deps, selection } = createDeps();
+  const result = await switchNevermindBackendEnvironment(
+    { environment: 'development', baseUrl: 'https://ignored.example' },
+    deps,
+  );
+  assert.deepEqual(result, {
+    ok: true,
+    message: `Connected to ${DEVELOPMENT_NEVERMIND_BASE_URL}`,
+  });
+  assert.deepEqual(selection(), {
+    environment: 'development',
+    baseUrl: DEVELOPMENT_NEVERMIND_BASE_URL,
+  });
+});
+
+test('rejects development in packaged builds before network validation', async () => {
+  const { deps, calls } = createDeps({ isPackaged: true });
+  assert.deepEqual(
+    await switchNevermindBackendEnvironment(
+      { environment: 'development' },
+      deps,
+    ),
+    {
+      ok: false,
+      message: 'Development is available only in unpackaged builds.',
+    },
   );
   assert.deepEqual(calls, []);
 });

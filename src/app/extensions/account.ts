@@ -77,7 +77,7 @@ export function createAccountExtension() {
 
   function backendEnvironmentItem() {
     async function switchBackend(input: {
-      environment: 'production' | 'pr_preview' | 'custom';
+      environment: 'development' | 'production' | 'pr_preview' | 'custom';
       baseUrl?: string;
     }) {
       const result =
@@ -89,6 +89,11 @@ export function createAccountExtension() {
         },
       };
     }
+    const developmentAction = {
+      type: 'runExtensionAction',
+      title: 'Development',
+      __handler: async () => switchBackend({ environment: 'development' }),
+    };
     const productionAction = {
       type: 'runExtensionAction',
       title: 'Production',
@@ -96,6 +101,31 @@ export function createAccountExtension() {
         switchBackend({
           environment: 'production',
         }),
+    };
+    const previewAction = {
+      type: 'promptAction',
+      title: 'Preview URL…',
+      fields: [
+        {
+          id: 'baseUrl',
+          type: 'text',
+          label: 'Preview URL',
+          placeholder: 'https://nvm-your-branch.vercel.app',
+          required: true,
+        },
+      ],
+      targetAction: {
+        type: 'runExtensionAction',
+        title: 'Use Preview',
+        __handler: async (
+          _ctx: unknown,
+          action: { formValues?: { baseUrl?: string } },
+        ) =>
+          switchBackend({
+            environment: 'pr_preview',
+            baseUrl: action.formValues?.baseUrl,
+          }),
+      },
     };
     const customAction = {
       type: 'promptAction',
@@ -127,6 +157,22 @@ export function createAccountExtension() {
       title: 'Switch Backend Environment',
       searchBarPlaceholder: 'Choose an environment',
       items: [
+        ...(!extensionContext.isPackaged
+          ? [
+              {
+                id: 'account-switch-backend-development',
+                title: 'Development',
+                subtitle: 'http://localhost:4321',
+                primaryAction: developmentAction,
+              },
+            ]
+          : []),
+        {
+          id: 'account-switch-backend-preview',
+          title: 'Preview URL…',
+          subtitle: 'Use a Vercel Preview deployment',
+          primaryAction: previewAction,
+        },
         {
           id: 'account-switch-backend-production',
           title: 'Production',
@@ -145,7 +191,7 @@ export function createAccountExtension() {
       id: 'account-switch-backend',
       actionId: 'account-switch-backend',
       title: 'Nevermind: Switch Backend Environment',
-      subtitle: 'Choose Production or a validated custom backend URL',
+      subtitle: 'Switch Development, Preview, Production, or custom backend',
       icon: 'globe',
       score: 20,
       aliases: [
@@ -161,7 +207,16 @@ export function createAccountExtension() {
         view: choicesView,
       },
       actionPanel: {
-        sections: [{ actions: [productionAction, customAction] }],
+        sections: [
+          {
+            actions: [
+              ...(!extensionContext.isPackaged ? [developmentAction] : []),
+              previewAction,
+              productionAction,
+              customAction,
+            ],
+          },
+        ],
       },
     };
   }

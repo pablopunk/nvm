@@ -47,10 +47,11 @@ export const extensionContext: {
   saveUserState: () => Promise<void>;
   invalidateExtensionRootItems: () => void;
   broadcastAuthChanged: (status: { authed: boolean; email?: string }) => void;
+  isPackaged: boolean;
   activeNevermindBaseUrl: string | null;
   setActiveNevermindBaseUrl: (value: string | null) => void;
   switchNevermindBackendEnvironment: (input: {
-    environment: 'production' | 'pr_preview' | 'custom';
+    environment: 'development' | 'production' | 'pr_preview' | 'custom';
     baseUrl?: string;
   }) => Promise<{ ok: boolean; message: string }>;
   getNevermindDebugStatus: () => {

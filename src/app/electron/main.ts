@@ -2397,7 +2397,7 @@ async function signInToSelectedNevermindEnvironment() {
 }
 
 async function switchNevermindBackendEnvironment(input: {
-  environment: 'production' | 'pr_preview' | 'custom';
+  environment: 'development' | 'production' | 'pr_preview' | 'custom';
   baseUrl?: string;
 }) {
   return switchBackendEnvironment(input, {
@@ -8099,6 +8099,7 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
         saveUserState,
         invalidateExtensionRootItems,
         broadcastAuthChanged,
+        isPackaged: app.isPackaged,
         activeNevermindBaseUrl,
         setActiveNevermindBaseUrl: (value) => {
           activeNevermindBaseUrl = value;

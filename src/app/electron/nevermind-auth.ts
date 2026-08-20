@@ -16,7 +16,11 @@ import { openExternalUrl } from './url-utils';
 const FILENAME = 'nevermind-auth.json';
 const STORE_FILENAME = 'nevermind-auth-by-origin.json';
 
-export type NevermindEnvironment = 'production' | 'pr_preview' | 'custom';
+export type NevermindEnvironment =
+  | 'development'
+  | 'production'
+  | 'pr_preview'
+  | 'custom';
 
 type StoredAuth = {
   encryptedToken?: string;
@@ -110,9 +114,10 @@ function normalizedBaseUrl(baseUrl: string) {
 export function nevermindEnvironmentForBaseUrl(
   baseUrl: string,
 ): NevermindEnvironment {
-  return normalizedBaseUrl(baseUrl) === PRODUCTION_BASE_URL
-    ? 'production'
-    : 'custom';
+  const normalized = normalizedBaseUrl(baseUrl);
+  if (normalized === PRODUCTION_BASE_URL) return 'production';
+  if (isLoopbackBaseUrl(normalized)) return 'development';
+  return 'custom';
 }
 
 function authPath() {
