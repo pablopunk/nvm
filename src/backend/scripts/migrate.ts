@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/neon-serverless';
 import { migrate } from 'drizzle-orm/neon-serverless/migrator';
 import { sql } from 'drizzle-orm';
 import ws from 'ws';
+import { validateMigrationEnvironment } from '../src/db/environment';
 
 neonConfig.webSocketConstructor = ws;
 
@@ -14,15 +15,11 @@ const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../drizzle');
 const BASELINE_TAG = '0000_remarkable_meltdown';
 const BASELINE_WHEN = 1779990985460;
 const DATABASE_URL = process.env.DATABASE_URL;
-const IS_BUILD_LIFECYCLE = process.env.npm_lifecycle_event === 'build';
 
 if (!DATABASE_URL) {
-  if (IS_BUILD_LIFECYCLE) {
-    console.warn('[migrate] skipped: DATABASE_URL is not configured for this build');
-    process.exit(0);
-  }
   throw new Error('DATABASE_URL is required to run migrations');
 }
+validateMigrationEnvironment(process.env);
 
 async function markBaselineAppliedIfPreexistingDb(db: ReturnType<typeof drizzle>) {
   await db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`);
@@ -52,10 +49,17 @@ async function markBaselineAppliedIfPreexistingDb(db: ReturnType<typeof drizzle>
   console.log(`[migrate] marked baseline ${BASELINE_TAG} as already applied`);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
 const db = drizzle(pool);
 
-await markBaselineAppliedIfPreexistingDb(db);
-await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-console.log('[migrate] done');
-await pool.end();
+try {
+  const { rows } = await db.execute<{ acquired: boolean }>(
+    sql`SELECT pg_try_advisory_lock(hashtext('nevermind_schema_migration')) AS acquired`,
+  );
+  if (!rows[0]?.acquired) throw new Error('Another migration is already running');
+  await markBaselineAppliedIfPreexistingDb(db);
+  await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  console.log('[migrate] done');
+} finally {
+  await pool.end();
+}
