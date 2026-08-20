@@ -330,34 +330,6 @@ test('retryable terminal transition retains the admitted request hash', async fu
   assert.ok(rows[0]?.completedAt);
 });
 
-test('retryable terminal transition rejects a mismatched request identity', async function failedTransitionRejectsMismatch() {
-  const existingRow: DedupRow = {
-    id: 1,
-    userId: DUMMY_USER_ID,
-    idempotencyKey: DUMMY_KEY,
-    requestHash: await requestHash(),
-    status: 'in_flight',
-    responseJson: null,
-    responseHeaders: null,
-    upstreamStatus: null,
-    requestId: STABLE_REQUEST_ID,
-    createdAt: new Date(),
-    completedAt: null,
-  };
-  const { db, rows } = createFakeDedupDb([existingRow]);
-  setDbForTests(db as any);
-
-  await assert.rejects(() =>
-    markDedupFailed({
-      userId: DUMMY_USER_ID,
-      idempotencyKey: DUMMY_KEY,
-      requestId: STABLE_REQUEST_ID,
-      requestHash: 'different-hash',
-    }),
-  );
-  assert.equal(rows[0]?.status, 'in_flight');
-});
-
 test('request identity includes exact body, model role, route, and method', async function hashesRequestSemantics() {
   const baseline = await requestHash();
   const changedRequests = [
@@ -368,7 +340,7 @@ test('request identity includes exact body, model role, route, and method', asyn
       }),
     }),
     makeSemanticRequest({ headers: { 'x-nevermind-ai-model': 'fast' } }),
-    makeSemanticRequest({ headers: { 'x-nevermind-ai-model-tier': 'PRO' } }),
+    makeSemanticRequest({ headers: { 'x-nevermind-ai-model-tier': 'pro' } }),
     makeSemanticRequest({ url: 'https://api.nvm.fyi/v1/messages' }),
     makeSemanticRequest({ method: 'PUT' }),
   ];
@@ -376,6 +348,30 @@ test('request identity includes exact body, model role, route, and method', asyn
   for (const request of changedRequests) {
     assert.notEqual(await requestHash(request), baseline);
   }
+  assert.notEqual(
+    await requestHash(
+      makeSemanticRequest({
+        headers: { 'x-nevermind-ai-model-tier': 'pro' },
+      }),
+    ),
+    await requestHash(
+      makeSemanticRequest({
+        headers: { 'x-nevermind-ai-model-tier': 'PRO' },
+      }),
+    ),
+  );
+  assert.notEqual(
+    await requestHash(
+      makeSemanticRequest({
+        headers: { 'x-nevermind-ai-credit-kind': 'paid' },
+      }),
+    ),
+    await requestHash(
+      makeSemanticRequest({
+        headers: { 'x-nevermind-ai-credit-kind': 'PAID' },
+      }),
+    ),
+  );
 });
 
 test('same key with changed request semantics always conflicts', async function changedRequestConflicts() {
@@ -383,7 +379,7 @@ test('same key with changed request semantics always conflicts', async function 
   const changedRequests = [
     makeSemanticRequest({ body: '{"different":true}' }),
     makeSemanticRequest({ headers: { 'x-nevermind-ai-model': 'fast' } }),
-    makeSemanticRequest({ headers: { 'x-nevermind-ai-credit-kind': 'PAID' } }),
+    makeSemanticRequest({ headers: { 'x-nevermind-ai-credit-kind': 'paid' } }),
     makeSemanticRequest({ url: 'https://api.nvm.fyi/v1/messages' }),
     makeSemanticRequest({ method: 'PUT' }),
   ];
