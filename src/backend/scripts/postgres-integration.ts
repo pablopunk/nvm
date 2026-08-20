@@ -326,6 +326,87 @@ async function runAssertions() {
         'released',
       );
 
+      const staleRaceRequestId = `stale-race-${databaseName}`;
+      const staleRaceRetryId = `stale-race-retry-${databaseName}`;
+      const staleRaceKey = `stale-race-key-${databaseName}`;
+      const staleRaceHash = await integrationRequestHash('stale settlement race');
+      assert.equal(
+        await handleDedup(staleRaceKey, user.id, staleRaceHash, staleRaceRequestId),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({
+          requestId: staleRaceRequestId,
+          userId: user.id,
+          kind: 'paid',
+          credits: 5,
+          now: new Date(Date.now() - 10 * 60_000),
+        })).ok,
+        true,
+      );
+      await db.update(requestDedup).set({
+        createdAt: new Date(Date.now() - 8 * 60_000),
+      }).where(and(
+        eq(requestDedup.userId, user.id),
+        eq(requestDedup.idempotencyKey, staleRaceKey),
+      ));
+      const [staleRetryResult, staleSettlementResult] = await Promise.all([
+        handleDedup(
+          staleRaceKey,
+          user.id,
+          staleRaceHash,
+          staleRaceRetryId,
+        ),
+        finalizeReservation({
+          requestId: staleRaceRequestId,
+          outcome: 'settle',
+          model: cost.modelId,
+          provider: cost.provider,
+          tokens: { inputTokens: 10, outputTokens: 10 },
+          costRow: cost,
+          status: 200,
+          latencyMs: 1,
+          dedup: {
+            userId: user.id,
+            idempotencyKey: staleRaceKey,
+            requestHash: staleRaceHash,
+            status: 'completed',
+            upstreamStatus: 200,
+          },
+        }),
+      ]);
+      const [staleRaceReservation] = await db
+        .select()
+        .from(creditReservations)
+        .where(eq(creditReservations.requestId, staleRaceRequestId));
+      const [staleRaceDedup] = await db.select().from(requestDedup).where(and(
+        eq(requestDedup.userId, user.id),
+        eq(requestDedup.idempotencyKey, staleRaceKey),
+      ));
+      const staleRaceCharges = await db.select().from(creditLedger).where(and(
+        eq(creditLedger.reason, 'ai_usage'),
+        eq(creditLedger.refId, staleRaceRequestId),
+      ));
+      const staleRaceUsage = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, staleRaceRequestId));
+      if (staleRaceReservation?.status === 'settled') {
+        assert.equal(staleSettlementResult, 'settled');
+        assert.ok(staleRetryResult instanceof Response);
+        assert.equal(staleRaceDedup?.status, 'completed');
+        assert.equal(staleRaceCharges.length, 1);
+        assert.equal(staleRaceUsage.length, 1);
+      } else {
+        assert.equal(staleRaceReservation?.status, 'released');
+        assert.equal(staleSettlementResult, 'already_terminal');
+        assert.equal(staleRetryResult, undefined);
+        assert.equal(staleRaceDedup?.status, 'in_flight');
+        assert.equal(staleRaceDedup?.requestId, staleRaceRetryId);
+        assert.equal(staleRaceCharges.length, 0);
+        assert.equal(staleRaceUsage.length, 0);
+      }
+
       const changedHashResult = await handleDedup(
         admissionKey,
         user.id,
