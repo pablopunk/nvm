@@ -373,7 +373,12 @@ export async function handleDedup(
     and(eq(requestDedup.userId, userId), eq(requestDedup.idempotencyKey, idempotencyKey)),
   ).limit(1);
 
-  if (!existing) return undefined;
+  if (!existing) {
+    return withRequestId(Response.json(
+      { error: { type: 'idempotency_conflict', message: 'Idempotency claim is unavailable' } },
+      { status: 409 },
+    ), requestId);
+  }
 
   if (existing.requestHash !== requestHash) {
     return withRequestId(Response.json(
