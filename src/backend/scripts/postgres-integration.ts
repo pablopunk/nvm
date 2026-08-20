@@ -26,6 +26,7 @@ import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
 import { createApiToken } from '../src/lib/tokens';
 import { finalizeReservation, reconcileStaleReservations, reserveCredits } from '../src/lib/credit-reservations';
+import { aiRequestHash, handleDedup } from '../src/lib/proxy';
 import { runPostgresMigrations } from './migrate-postgres';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
@@ -208,6 +209,228 @@ async function runAssertions() {
       assert.equal(reconciliationRows.find((row) => row.requestId === freshRequestId)?.status, 'pending', 'fresh reservations must be skipped');
       assert.ok(staleRequestIds.every((staleRequestId) => reconciliationRows.find((row) => row.requestId === staleRequestId)?.status === 'released'));
 
+      function integrationAiRequest(content: string) {
+        return new Request('https://api.nvm.fyi/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-nevermind-ai-model': 'smart',
+          },
+          body: JSON.stringify({ messages: [{ role: 'user', content }] }),
+        });
+      }
+
+      async function integrationRequestHash(content: string) {
+        const request = integrationAiRequest(content);
+        return aiRequestHash(
+          request,
+          new Uint8Array(await request.arrayBuffer()),
+        );
+      }
+
+      const admissionKey = `admission-${databaseName}`;
+      const admissionHash = await integrationRequestHash('same request');
+      const admissionsForSameKey = await Promise.all([
+        handleDedup(admissionKey, user.id, admissionHash, `admission-a-${databaseName}`),
+        handleDedup(admissionKey, user.id, admissionHash, `admission-b-${databaseName}`),
+      ]);
+      assert.equal(
+        admissionsForSameKey.filter((result) => result === undefined).length,
+        1,
+        'same-key same-hash admission has one winner',
+      );
+      assert.equal(
+        admissionsForSameKey.filter((result) => result instanceof Response && result.status === 409).length,
+        1,
+        'same-key same-hash admission rejects concurrent execution',
+      );
+
+      const changedHashResult = await handleDedup(
+        admissionKey,
+        user.id,
+        await integrationRequestHash('different request'),
+        `admission-changed-${databaseName}`,
+      );
+      assert.ok(changedHashResult instanceof Response);
+      assert.equal(changedHashResult.status, 409);
+      assert.equal(
+        (await changedHashResult.json() as any).error.type,
+        'idempotency_conflict',
+        'same key with another hash never replays',
+      );
+
+      const atomicRequestId = `atomic-${databaseName}`;
+      const atomicKey = `atomic-key-${databaseName}`;
+      const atomicHash = await integrationRequestHash('atomic success');
+      assert.equal(
+        await handleDedup(atomicKey, user.id, atomicHash, atomicRequestId),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({ requestId: atomicRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok,
+        true,
+      );
+      assert.equal(
+        await finalizeReservation({
+          requestId: atomicRequestId,
+          outcome: 'settle',
+          model: cost.modelId,
+          provider: cost.provider,
+          tokens: { inputTokens: 10, outputTokens: 10 },
+          costRow: cost,
+          status: 200,
+          latencyMs: 1,
+          dedup: {
+            userId: user.id,
+            idempotencyKey: atomicKey,
+            requestHash: atomicHash,
+            status: 'completed',
+            responseJson: { result: 'cached' },
+            responseHeaders: { 'content-type': 'application/json' },
+            upstreamStatus: 200,
+          },
+        }),
+        'settled',
+      );
+      const atomicReplay = await handleDedup(
+        atomicKey,
+        user.id,
+        atomicHash,
+        `atomic-retry-${databaseName}`,
+      );
+      assert.ok(atomicReplay instanceof Response);
+      assert.equal(atomicReplay.status, 200);
+      assert.deepEqual(await atomicReplay.json(), { result: 'cached' });
+      assert.equal(
+        (await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, atomicRequestId)))).length,
+        1,
+        'committed settlement retry has one charge',
+      );
+
+      const rollbackRequestId = `rollback-${databaseName}`;
+      const rollbackKey = `rollback-key-${databaseName}`;
+      const rollbackHash = await integrationRequestHash('rollback');
+      assert.equal(
+        await handleDedup(rollbackKey, user.id, rollbackHash, rollbackRequestId),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({ requestId: rollbackRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok,
+        true,
+      );
+      await assert.rejects(() =>
+        finalizeReservation({
+          requestId: rollbackRequestId,
+          outcome: 'settle',
+          model: cost.modelId,
+          provider: cost.provider,
+          tokens: { inputTokens: 10, outputTokens: 10 },
+          costRow: cost,
+          status: 200,
+          latencyMs: 1,
+          dedup: {
+            userId: user.id,
+            idempotencyKey: rollbackKey,
+            requestHash: 'mismatched-hash',
+            status: 'completed',
+          },
+        }),
+        /Missing matching idempotency claim/,
+      );
+      assert.equal(
+        (await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, rollbackRequestId)))).length,
+        0,
+        'failure before commit rolls back the charge',
+      );
+      assert.equal(
+        (await db.select().from(usage).where(eq(usage.requestId, rollbackRequestId))).length,
+        0,
+        'failure before commit rolls back usage',
+      );
+      assert.equal(
+        (await db.select().from(creditReservations).where(eq(creditReservations.requestId, rollbackRequestId)))[0]?.status,
+        'pending',
+      );
+      assert.equal(
+        (await db.select().from(requestDedup).where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, rollbackKey))))[0]?.status,
+        'in_flight',
+      );
+      assert.equal(
+        await finalizeReservation({
+          requestId: rollbackRequestId,
+          outcome: 'release',
+          dedup: {
+            userId: user.id,
+            idempotencyKey: rollbackKey,
+            requestHash: rollbackHash,
+            status: 'failed',
+          },
+        }),
+        'released',
+      );
+      const [retryableRow] = await db
+        .select()
+        .from(requestDedup)
+        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, rollbackKey)));
+      assert.equal(retryableRow?.requestHash, rollbackHash);
+      assert.equal(
+        await handleDedup(
+          rollbackKey,
+          user.id,
+          rollbackHash,
+          `rollback-retry-${databaseName}`,
+        ),
+        undefined,
+        'retryable failure retains and reuses the original hash',
+      );
+
+      const dedupRaceRequestId = `dedup-race-${databaseName}`;
+      const dedupRaceKey = `dedup-race-key-${databaseName}`;
+      const dedupRaceHash = await integrationRequestHash('terminal race');
+      assert.equal(
+        await handleDedup(dedupRaceKey, user.id, dedupRaceHash, dedupRaceRequestId),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({ requestId: dedupRaceRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok,
+        true,
+      );
+      const terminalInput = {
+        requestId: dedupRaceRequestId,
+        outcome: 'settle' as const,
+        model: cost.modelId,
+        provider: cost.provider,
+        tokens: { inputTokens: 10, outputTokens: 10 },
+        costRow: cost,
+        status: 200,
+        latencyMs: 1,
+        dedup: {
+          userId: user.id,
+          idempotencyKey: dedupRaceKey,
+          requestHash: dedupRaceHash,
+          status: 'completed' as const,
+          upstreamStatus: 200,
+        },
+      };
+      const dedupTerminalRace = await Promise.all([
+        finalizeReservation(terminalInput),
+        finalizeReservation(terminalInput),
+      ]);
+      assert.equal(dedupTerminalRace.filter((result) => result === 'settled').length, 1);
+      assert.equal(dedupTerminalRace.filter((result) => result === 'already_terminal').length, 1);
+      assert.equal(
+        (await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, dedupRaceRequestId)))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(usage).where(eq(usage.requestId, dedupRaceRequestId))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(requestDedup).where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, dedupRaceKey))))[0]?.status,
+        'completed',
+      );
+
       const tokenHash = `hash-${databaseName}`;
       await db.insert(apiTokens).values({
         userId: user.id,
@@ -295,6 +518,7 @@ async function runAssertions() {
           await tx.insert(requestDedup).values({
             userId: user.id,
             idempotencyKey: dedupKey,
+            requestHash: `rollback-hash-${databaseName}`,
             requestId: `req-${databaseName}`,
           });
           throw new Error('forced request-dedup rollback');

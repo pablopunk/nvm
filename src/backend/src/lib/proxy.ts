@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { requestDedup } from '../db/schema';
@@ -88,6 +88,14 @@ type BillContext = {
   client: DesktopClient;
   estimatedInputTokens: number;
   dedupIdempotencyKey?: string;
+  dedupRequestHash?: string;
+};
+
+export type DedupClaim = {
+  userId: string;
+  idempotencyKey: string;
+  requestId: string;
+  requestHash: string;
 };
 
 export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, status: number): UsageTokens {
@@ -106,12 +114,63 @@ export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, sta
   return tokens;
 }
 
-async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number, latencyMs: number) {
+type DedupTerminal = {
+  status: 'completed' | 'failed';
+  responseJson?: unknown;
+  responseHeaders?: Record<string, string>;
+  upstreamStatus?: number;
+};
+
+function reservationDedupFinalization(
+  ctx: BillContext,
+  terminal?: DedupTerminal,
+) {
+  if (!(terminal && ctx.dedupIdempotencyKey && ctx.dedupRequestHash)) {
+    return undefined;
+  }
+  return {
+    userId: ctx.user.id,
+    idempotencyKey: ctx.dedupIdempotencyKey,
+    requestHash: ctx.dedupRequestHash,
+    ...terminal,
+  };
+}
+
+function claimDedupFinalization(
+  claim: DedupClaim | undefined,
+  terminal: DedupTerminal,
+) {
+  if (!claim) return undefined;
+  return {
+    userId: claim.userId,
+    idempotencyKey: claim.idempotencyKey,
+    requestHash: claim.requestHash,
+    ...terminal,
+  };
+}
+
+function billContextDedupClaim(ctx: BillContext): DedupClaim | undefined {
+  if (!(ctx.dedupIdempotencyKey && ctx.dedupRequestHash)) return undefined;
+  return {
+    userId: ctx.user.id,
+    idempotencyKey: ctx.dedupIdempotencyKey,
+    requestId: ctx.requestId,
+    requestHash: ctx.dedupRequestHash,
+  };
+}
+
+async function recordUsage(
+  ctx: BillContext,
+  tokens: UsageTokens,
+  status: number,
+  latencyMs: number,
+  dedupTerminal?: DedupTerminal,
+) {
   const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
   const credits = billable ? usdToCredits(computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens)) : 0;
   await finalizeReservation(billable
-    ? { requestId: ctx.requestId, outcome: 'settle', model: ctx.activeModelId, provider: ctx.provider, tokens, costRow: ctx.costRow, status, latencyMs }
-    : { requestId: ctx.requestId, outcome: 'release' });
+    ? { requestId: ctx.requestId, outcome: 'settle', model: ctx.activeModelId, provider: ctx.provider, tokens, costRow: ctx.costRow, status, latencyMs, dedup: reservationDedupFinalization(ctx, dedupTerminal) }
+    : { requestId: ctx.requestId, outcome: 'release', dedup: reservationDedupFinalization(ctx, dedupTerminal) });
   log.info('chat_completion', {
     request_id: ctx.requestId,
     user_id: ctx.user.id,
@@ -132,21 +191,40 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
   });
 }
 
-async function releaseReservationAfterError(requestId: string, error: unknown) {
+async function releaseReservationAfterError(
+  requestId: string,
+  dedupClaim: DedupClaim | undefined,
+  error: unknown,
+) {
   try {
-    await finalizeReservation({ requestId, outcome: 'release' });
+    await finalizeReservation({
+      requestId,
+      outcome: 'release',
+      dedup: claimDedupFinalization(dedupClaim, { status: 'failed' }),
+    });
   } catch (releaseError) {
     log.error('reservation_error_release_failed', { request_id: requestId, error, release_error: releaseError });
   }
 }
 
-async function markDedupFailed(ctx: Pick<BillContext, 'user' | 'requestId' | 'dedupIdempotencyKey'>) {
-  if (!ctx.dedupIdempotencyKey) return;
-  await db.update(requestDedup).set({ status: 'failed', completedAt: new Date() }).where(and(
-    eq(requestDedup.userId, ctx.user.id),
-    eq(requestDedup.idempotencyKey, ctx.dedupIdempotencyKey),
-    eq(requestDedup.requestId, ctx.requestId),
-  ));
+export async function markDedupFailed(claim?: DedupClaim) {
+  if (!claim) return;
+  const [updated] = await db
+    .update(requestDedup)
+    .set({ status: 'failed', completedAt: new Date() })
+    .where(
+      and(
+        eq(requestDedup.userId, claim.userId),
+        eq(requestDedup.idempotencyKey, claim.idempotencyKey),
+        eq(requestDedup.requestId, claim.requestId),
+        eq(requestDedup.requestHash, claim.requestHash),
+        eq(requestDedup.status, 'in_flight'),
+      ),
+    )
+    .returning({ id: requestDedup.id });
+  if (!updated) {
+    throw new Error(`Missing matching idempotency claim ${claim.requestId}`);
+  }
 }
 
 type ResolvedRouting = {
@@ -224,15 +302,67 @@ async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | Mod
 
 const DEDUP_STALE_MS = 5 * 60 * 1000;
 
+const REQUEST_IDENTITY_HEADERS = [
+  'accept',
+  'anthropic-beta',
+  'anthropic-version',
+  'content-type',
+  'openai-beta',
+  'x-goog-api-client',
+] as const;
+
+function normalizedRequestRoute(request: Request) {
+  const url = new URL(request.url);
+  url.searchParams.sort();
+  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+  return `${pathname}${url.search}`;
+}
+
+function semanticHeaderValue(request: Request, name: string) {
+  return request.headers.get(name)?.trim() ?? '';
+}
+
+export function aiRequestHash(request: Request, body: Uint8Array) {
+  const requestedModel =
+    parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ??
+    'smart';
+  const modelTier = semanticHeaderValue(
+    request,
+    'x-nevermind-ai-model-tier',
+  ).toLowerCase();
+  const creditKind = semanticHeaderValue(
+    request,
+    'x-nevermind-ai-credit-kind',
+  ).toLowerCase();
+  const identity = {
+    method: request.method.toUpperCase(),
+    route: normalizedRequestRoute(request),
+    requestedModel,
+    modelTier: modelTier === 'free' || modelTier === 'pro' ? modelTier : '',
+    creditKind:
+      creditKind === 'free' || creditKind === 'paid' ? creditKind : '',
+    headers: REQUEST_IDENTITY_HEADERS.map((name) => [
+      name,
+      semanticHeaderValue(request, name),
+    ]),
+  };
+  return createHash('sha256')
+    .update(JSON.stringify(identity))
+    .update('\0')
+    .update(body)
+    .digest('hex');
+}
+
 export async function handleDedup(
   idempotencyKey: string,
   userId: string,
-  request: Request,
+  requestHash: string,
   requestId: string,
 ): Promise<Response | undefined> {
   const [inserted] = await db.insert(requestDedup).values({
     userId,
     idempotencyKey,
+    requestHash,
     status: 'in_flight',
     requestId,
   }).onConflictDoNothing().returning();
@@ -245,8 +375,15 @@ export async function handleDedup(
 
   if (!existing) return undefined;
 
+  if (existing.requestHash !== requestHash) {
+    return withRequestId(Response.json(
+      { error: { type: 'idempotency_conflict', message: 'Idempotency key was used for a different request' } },
+      { status: 409 },
+    ), requestId);
+  }
+
   if (existing.status === 'completed') {
-    if (existing.responseJson) {
+    if (existing.responseJson !== null) {
       return replayDedupResponse(existing, requestId);
     }
     return withRequestId(Response.json(
@@ -262,12 +399,16 @@ export async function handleDedup(
         status: 'in_flight',
         requestId,
         createdAt: new Date(),
-        requestHash: null,
         responseJson: null,
         responseHeaders: null,
         upstreamStatus: null,
         completedAt: null,
-      }).where(and(eq(requestDedup.id, existing.id), eq(requestDedup.requestId, existing.requestId!))).returning();
+      }).where(and(
+        eq(requestDedup.id, existing.id),
+        eq(requestDedup.requestId, existing.requestId!),
+        eq(requestDedup.requestHash, requestHash),
+        eq(requestDedup.status, 'in_flight'),
+      )).returning();
       if (!reclaimed) {
         return withRequestId(Response.json(
           { error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } },
@@ -282,17 +423,25 @@ export async function handleDedup(
     ), requestId);
   }
 
-  await db.update(requestDedup).set({
+  const [reclaimed] = await db.update(requestDedup).set({
     status: 'in_flight',
     requestId,
     createdAt: new Date(),
-    requestHash: null,
     responseJson: null,
     responseHeaders: null,
     upstreamStatus: null,
     completedAt: null,
-  }).where(eq(requestDedup.id, existing.id));
-  return undefined;
+  }).where(and(
+    eq(requestDedup.id, existing.id),
+    eq(requestDedup.requestId, existing.requestId!),
+    eq(requestDedup.requestHash, requestHash),
+    eq(requestDedup.status, 'failed'),
+  )).returning({ id: requestDedup.id });
+  if (reclaimed) return undefined;
+  return withRequestId(Response.json(
+    { error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } },
+    { status: 409 },
+  ), requestId);
 }
 
 function replayDedupResponse(existing: typeof requestDedup.$inferSelect, requestId: string): Response {
@@ -505,27 +654,47 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   Sentry.getCurrentScope().setUser({ id: routing.user.id });
 
+  const requestBodyBuffer = await cfg.request.clone().arrayBuffer();
+  const requestBodyBytes = new Uint8Array(requestBodyBuffer);
+  const requestBodyText = new TextDecoder().decode(requestBodyBytes);
+  const requestHash = aiRequestHash(cfg.request, requestBodyBytes);
+
   const idempotencyKey = cfg.idempotencyKey;
   const dedupEnabled = idempotencyKey && !backendKillSwitchEnabled('idempotency_dedup');
+  const dedupClaim: DedupClaim | undefined = dedupEnabled
+    ? {
+        userId: routing.user.id,
+        idempotencyKey,
+        requestId,
+        requestHash,
+      }
+    : undefined;
   if (dedupEnabled) {
-    const dedupResult = await handleDedup(idempotencyKey, routing.user.id, cfg.request, requestId);
+    const dedupResult = await handleDedup(
+      idempotencyKey,
+      routing.user.id,
+      requestHash,
+      requestId,
+    );
     if (dedupResult instanceof Response) return dedupResult;
-  }
-
-  const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
-  if (!rateDecision.ok) {
-    log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope, client_version: client.version, client_api_version: client.apiVersion });
-    return withRequestId(tooManyRequests(rateDecision), requestId);
   }
 
   let reservationCommitted = false;
   try {
+    const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
+    if (!rateDecision.ok) {
+      log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope, client_version: client.version, client_api_version: client.apiVersion });
+      await markDedupFailed(dedupClaim);
+      return withRequestId(tooManyRequests(rateDecision), requestId);
+    }
+
     let forwardBody: BodyInit | undefined;
     let estimatedInputTokens = 0;
     if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
-    const text = await cfg.request.text();
+    const text = requestBodyText;
     estimatedInputTokens = estimateInputTokensFromBody(text);
     if (estimatedInputTokens > MAX_INPUT_TOKENS) {
+      await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
         { error: { type: 'prompt_too_large', message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens` } },
         { status: 413 },
@@ -550,7 +719,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.kind === 'paid') {
       const requestedModel: ExtensionAiModelRole = parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'smart';
       const freeRouting = await resolveModelRouting(tieredModelRouteSlot('free', requestedModel));
-      if (freeRouting instanceof Response) return withRequestId(freeRouting, requestId);
+      if (freeRouting instanceof Response) {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(freeRouting, requestId);
+      }
       if (selectApiForModel(freeRouting.provider, freeRouting.activeModelId) === selectApiForModel(routing.provider, routing.activeModelId)) {
         maxOutputTokens = await maxOutputFor(freeRouting);
         const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, freeRouting.costRow);
@@ -563,6 +735,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       }
     }
     if (!reservation.ok && reservation.reason === 'request_already_reserved') {
+      await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
         { error: { type: 'idempotency_conflict', message: 'Request execution was already finalized or is still in progress' } },
         { status: 409 },
@@ -570,6 +743,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     }
     if (!reservation.ok) {
       const available = reservation.balance - reservation.reserved;
+      await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
         { error: { type: 'insufficient_credits', message: 'Request cost would exceed remaining balance', estimated_credits: estimatedCredits, balance: available, dashboard_url: DASHBOARD_URL } },
         { status: 402 },
@@ -587,23 +761,16 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     }
     forwardBody = cfg.rewriteRequestBody
       ? cfg.rewriteRequestBody(text, routing)
-      : text;
-    if (dedupEnabled) {
-      const bodyHash = createHash('sha256').update(`${text}|${routing.activeModelId}`).digest('hex');
-      db.update(requestDedup).set({ requestHash: bodyHash }).where(and(
-        eq(requestDedup.userId, routing.user.id),
-        eq(requestDedup.idempotencyKey, idempotencyKey),
-        eq(requestDedup.requestId, requestId),
-      ))
-      .catch((err) => {
-        log.warn('dedup_hash_update_failed', { request_id: requestId, error: err });
-      });
-    }
+      : requestBodyBuffer;
   }
 
   const result = await tryUpstreamProviders(cfg, routing, forwardBody, requestId);
   if (result instanceof Response) {
-    await finalizeReservation({ requestId, outcome: 'release' });
+    await finalizeReservation({
+      requestId,
+      outcome: 'release',
+      dedup: claimDedupFinalization(dedupClaim, { status: 'failed' }),
+    });
     return result;
   }
 
@@ -621,6 +788,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     client,
     estimatedInputTokens,
     dedupIdempotencyKey: dedupEnabled ? idempotencyKey : undefined,
+    dedupRequestHash: dedupEnabled ? requestHash : undefined,
   };
 
   const responseHeaders = stripHopByHop(upstreamResponse.headers);
@@ -629,7 +797,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   if (!upstreamResponse.ok) {
     const latencyMs = Date.now() - startedAt;
-    await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs);
+    await recordUsage(
+      billCtx,
+      { inputTokens: 0, outputTokens: 0 },
+      upstreamResponse.status,
+      latencyMs,
+      { status: 'failed', upstreamStatus: upstreamResponse.status },
+    );
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
@@ -639,7 +813,11 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   if (isStreamingContentType(upstreamResponse.headers.get('content-type'))) {
     if (backendKillSwitchEnabled('ai_streaming')) {
-      await finalizeReservation({ requestId, outcome: 'release' });
+      await finalizeReservation({
+        requestId,
+        outcome: 'release',
+        dedup: claimDedupFinalization(dedupClaim, { status: 'failed' }),
+      });
       return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
     }
     const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
@@ -662,34 +840,24 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     log.warn('parse_usage_failed', { request_id: requestId, error: err });
   }
   tokens = resolveBillableTokens(billCtx, tokens, upstreamResponse.status);
-  await recordUsage(billCtx, tokens, upstreamResponse.status, latencyMs);
-  if (dedupEnabled) {
-    const headersObj: Record<string, string> = {};
-    responseHeaders.forEach((value, key) => { headersObj[key] = value; });
-    db.update(requestDedup).set({
-      status: 'completed',
-      responseJson: responseJsonForDedup,
-      responseHeaders: headersObj,
-      upstreamStatus: upstreamResponse.status,
-      completedAt: new Date(),
-    }).where(and(
-      eq(requestDedup.userId, routing.user.id),
-      eq(requestDedup.idempotencyKey, idempotencyKey),
-      eq(requestDedup.requestId, requestId),
-    ))
-    .catch((err) => {
-      log.error('dedup_complete_update_failed', { request_id: requestId, error: err });
-    });
-  }
+  const headersObj: Record<string, string> = {};
+  responseHeaders.forEach((value, key) => { headersObj[key] = value; });
+  await recordUsage(billCtx, tokens, upstreamResponse.status, latencyMs, {
+    status: 'completed',
+    responseJson: responseJsonForDedup,
+    responseHeaders: headersObj,
+    upstreamStatus: upstreamResponse.status,
+  });
   return new Response(buffered, {
     status: upstreamResponse.status,
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,
   });
   } catch (error) {
-    if (reservationCommitted) await releaseReservationAfterError(requestId, error);
-    if (dedupEnabled) {
-      await markDedupFailed({ user: routing.user, requestId, dedupIdempotencyKey: idempotencyKey })
+    if (reservationCommitted) {
+      await releaseReservationAfterError(requestId, dedupClaim, error);
+    } else if (dedupEnabled) {
+      await markDedupFailed(dedupClaim)
         .catch((dedupError) => log.error('dedup_failed_update_failed', { request_id: requestId, error: dedupError }));
     }
     throw error;
@@ -745,21 +913,22 @@ function teeStreamAndBill(
       ? resolveBillableTokens(billCtx, { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens }, status)
       : { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens };
     try {
-      await recordUsage(billCtx, streamTokens, observedOutput || naturalCompletion ? status : 499, Date.now() - startedAt);
+      await recordUsage(
+        billCtx,
+        streamTokens,
+        observedOutput || naturalCompletion ? status : 499,
+        Date.now() - startedAt,
+        naturalCompletion
+          ? { status: 'completed', upstreamStatus: status }
+          : { status: 'failed', upstreamStatus: status },
+      );
     } catch (error) {
-      await releaseReservationAfterError(billCtx.requestId, error);
+      await releaseReservationAfterError(
+        billCtx.requestId,
+        billContextDedupClaim(billCtx),
+        error,
+      );
       throw error;
-    }
-    if (naturalCompletion && billCtx.dedupIdempotencyKey) {
-      db.update(requestDedup).set({ status: 'completed', upstreamStatus: status, completedAt: new Date() }).where(
-        and(
-          eq(requestDedup.userId, billCtx.user.id),
-          eq(requestDedup.idempotencyKey, billCtx.dedupIdempotencyKey),
-          eq(requestDedup.requestId, billCtx.requestId),
-        ),
-      ).catch((err) => log.error('dedup_stream_complete_update_failed', { request_id: billCtx.requestId, error: err }));
-    } else if (!naturalCompletion) {
-      await markDedupFailed(billCtx);
     }
   }
 

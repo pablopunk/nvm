@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { requestDedup } from '../db/schema';
-import { completeStreamLines, resolveBillableTokens, handleDedup, type StreamUsageAccumulator } from './proxy';
+import {
+  aiRequestHash,
+  completeStreamLines,
+  handleDedup,
+  markDedupFailed,
+  resolveBillableTokens,
+  type StreamUsageAccumulator,
+} from './proxy';
 
 const DUMMY_USER_ID = '11111111-1111-1111-1111-111111111111';
 const DUMMY_KEY = 'test-idempotency-key-123';
@@ -14,6 +21,46 @@ function makeRequest(headers: Record<string, string> = {}): Request {
     headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({ model: 'test', messages: [{ role: 'user', content: 'hi' }] }),
   });
+}
+
+function makeSemanticRequest(input: {
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}) {
+  return new Request(
+    input.url ?? 'https://api.nvm.fyi/v1/chat/completions',
+    {
+      method: input.method ?? 'POST',
+      headers: { 'content-type': 'application/json', ...input.headers },
+      body:
+        input.body ??
+        JSON.stringify({
+          model: 'test',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+    },
+  );
+}
+
+async function requestHash(request = makeRequest()) {
+  return aiRequestHash(
+    request,
+    new Uint8Array(await request.clone().arrayBuffer()),
+  );
+}
+
+async function handleRequestDedup(
+  requestId: string,
+  request = makeRequest(),
+) {
+  return handleDedup(
+    DUMMY_KEY,
+    DUMMY_USER_ID,
+    await requestHash(request),
+    requestId,
+  );
 }
 
 const ctx = {
@@ -75,7 +122,7 @@ type DedupRow = {
   id: number;
   userId: string;
   idempotencyKey: string;
-  requestHash: string | null;
+  requestHash: string;
   status: string;
   responseJson: unknown;
   responseHeaders: Record<string, unknown> | null;
@@ -148,7 +195,7 @@ function createFakeDedupDb(existingRows: DedupRow[] = []): {
             id: nextId++,
             userId: values.userId as string,
             idempotencyKey: values.idempotencyKey as string,
-            requestHash: (values.requestHash as string) ?? null,
+            requestHash: values.requestHash as string,
             status: (values.status as string) ?? 'in_flight',
             responseJson: values.responseJson ?? null,
             responseHeaders: (values.responseHeaders as Record<string, unknown>) ?? null,
@@ -246,10 +293,124 @@ afterEach(() => {
 });
 
 test('handleDedup inserts new row and returns undefined', async function newDedupRowReturnsUndefined() {
-  const { db } = createFakeDedupDb();
+  const { db, rows } = createFakeDedupDb();
   setDbForTests(db as any);
-  const result = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), STABLE_REQUEST_ID);
+  const result = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.equal(result, undefined);
+  assert.equal(rows[0]?.requestHash, await requestHash());
+});
+
+test('retryable terminal transition retains the admitted request hash', async function failedTransitionRetainsHash() {
+  const hash = await requestHash();
+  const existingRow: DedupRow = {
+    id: 1,
+    userId: DUMMY_USER_ID,
+    idempotencyKey: DUMMY_KEY,
+    requestHash: hash,
+    status: 'in_flight',
+    responseJson: null,
+    responseHeaders: null,
+    upstreamStatus: null,
+    requestId: STABLE_REQUEST_ID,
+    createdAt: new Date(),
+    completedAt: null,
+  };
+  const { db, rows } = createFakeDedupDb([existingRow]);
+  setDbForTests(db as any);
+
+  await markDedupFailed({
+    userId: DUMMY_USER_ID,
+    idempotencyKey: DUMMY_KEY,
+    requestId: STABLE_REQUEST_ID,
+    requestHash: hash,
+  });
+
+  assert.equal(rows[0]?.status, 'failed');
+  assert.equal(rows[0]?.requestHash, hash);
+  assert.ok(rows[0]?.completedAt);
+});
+
+test('retryable terminal transition rejects a mismatched request identity', async function failedTransitionRejectsMismatch() {
+  const existingRow: DedupRow = {
+    id: 1,
+    userId: DUMMY_USER_ID,
+    idempotencyKey: DUMMY_KEY,
+    requestHash: await requestHash(),
+    status: 'in_flight',
+    responseJson: null,
+    responseHeaders: null,
+    upstreamStatus: null,
+    requestId: STABLE_REQUEST_ID,
+    createdAt: new Date(),
+    completedAt: null,
+  };
+  const { db, rows } = createFakeDedupDb([existingRow]);
+  setDbForTests(db as any);
+
+  await assert.rejects(() =>
+    markDedupFailed({
+      userId: DUMMY_USER_ID,
+      idempotencyKey: DUMMY_KEY,
+      requestId: STABLE_REQUEST_ID,
+      requestHash: 'different-hash',
+    }),
+  );
+  assert.equal(rows[0]?.status, 'in_flight');
+});
+
+test('request identity includes exact body, model role, route, and method', async function hashesRequestSemantics() {
+  const baseline = await requestHash();
+  const changedRequests = [
+    makeSemanticRequest({
+      body: JSON.stringify({
+        model: 'test',
+        messages: [{ role: 'user', content: 'different' }],
+      }),
+    }),
+    makeSemanticRequest({ headers: { 'x-nevermind-ai-model': 'fast' } }),
+    makeSemanticRequest({ url: 'https://api.nvm.fyi/v1/messages' }),
+    makeSemanticRequest({ method: 'PUT' }),
+  ];
+
+  for (const request of changedRequests) {
+    assert.notEqual(await requestHash(request), baseline);
+  }
+});
+
+test('same key with changed request semantics always conflicts', async function changedRequestConflicts() {
+  const baselineHash = await requestHash();
+  const changedRequests = [
+    makeSemanticRequest({ body: '{"different":true}' }),
+    makeSemanticRequest({ headers: { 'x-nevermind-ai-model': 'fast' } }),
+    makeSemanticRequest({ url: 'https://api.nvm.fyi/v1/messages' }),
+    makeSemanticRequest({ method: 'PUT' }),
+  ];
+
+  for (const [index, request] of changedRequests.entries()) {
+    const existingRow: DedupRow = {
+      id: index + 1,
+      userId: DUMMY_USER_ID,
+      idempotencyKey: DUMMY_KEY,
+      requestHash: baselineHash,
+      status: 'completed',
+      responseJson: { value: 'must not replay' },
+      responseHeaders: { 'content-type': 'application/json' },
+      upstreamStatus: 200,
+      requestId: 'old-request',
+      createdAt: new Date(),
+      completedAt: new Date(),
+    };
+    const { db, updates } = createFakeDedupDb([existingRow]);
+    setDbForTests(db as any);
+    const response = await handleRequestDedup(`changed-${index}`, request);
+    assert.ok(response instanceof Response);
+    assert.equal(response.status, 409);
+    assert.equal(
+      (await response.json() as any).error.type,
+      'idempotency_conflict',
+    );
+    assert.equal(updates.length, 0);
+  }
 });
 
 test('handleDedup returns 409 when in-flight row exists and is not stale', async function inFlightReturns409() {
@@ -257,7 +418,7 @@ test('handleDedup returns 409 when in-flight row exists and is not stale', async
     id: 1,
     userId: DUMMY_USER_ID,
     idempotencyKey: DUMMY_KEY,
-    requestHash: null,
+    requestHash: await requestHash(),
     status: 'in_flight',
     responseJson: null,
     responseHeaders: null,
@@ -268,7 +429,7 @@ test('handleDedup returns 409 when in-flight row exists and is not stale', async
   };
   const { db } = createFakeDedupDb([existingRow]);
   setDbForTests(db as any);
-  const result = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), STABLE_REQUEST_ID);
+  const result = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.ok(result instanceof Response);
   assert.equal(result.status, 409);
   const body: any = await result.json();
@@ -281,7 +442,7 @@ test('handleDedup reclaims stale in-flight row and returns undefined', async fun
     id: 1,
     userId: DUMMY_USER_ID,
     idempotencyKey: DUMMY_KEY,
-    requestHash: null,
+    requestHash: await requestHash(),
     status: 'in_flight',
     responseJson: null,
     responseHeaders: null,
@@ -292,7 +453,7 @@ test('handleDedup reclaims stale in-flight row and returns undefined', async fun
   };
   const { db, updates } = createFakeDedupDb([existingRow]);
   setDbForTests(db as any);
-  const result = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), STABLE_REQUEST_ID);
+  const result = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.equal(result, undefined);
   assert.ok(updates.length >= 1);
   assert.equal(updates[0].setValues.status, 'in_flight');
@@ -305,7 +466,7 @@ test('concurrent stale reclaim permits exactly one winner', async function concu
     id: 1,
     userId: DUMMY_USER_ID,
     idempotencyKey: DUMMY_KEY,
-    requestHash: null,
+    requestHash: await requestHash(),
     status: 'in_flight',
     responseJson: null,
     responseHeaders: null,
@@ -317,11 +478,11 @@ test('concurrent stale reclaim permits exactly one winner', async function concu
   const { db, updates } = createFakeDedupDb([existingRow]);
   setDbForTests(db as any);
 
-  const result1 = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), 'winner-req');
+  const result1 = await handleRequestDedup('winner-req');
   assert.equal(result1, undefined, 'first caller reclaims stale row');
   assert.ok(updates.length >= 1);
 
-  const result2 = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), 'loser-req');
+  const result2 = await handleRequestDedup('loser-req');
   assert.ok(result2 instanceof Response);
   assert.equal(result2.status, 409, 'second caller gets idempotency conflict');
 });
@@ -331,7 +492,7 @@ test('handleDedup replays completed non-streaming response', async function repl
     id: 1,
     userId: DUMMY_USER_ID,
     idempotencyKey: DUMMY_KEY,
-    requestHash: null,
+    requestHash: await requestHash(),
     status: 'completed',
     responseJson: { choices: [{ message: { content: 'hello' } }] },
     responseHeaders: { 'content-type': 'application/json' },
@@ -342,7 +503,7 @@ test('handleDedup replays completed non-streaming response', async function repl
   };
   const { db } = createFakeDedupDb([existingRow]);
   setDbForTests(db as any);
-  const result = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), STABLE_REQUEST_ID);
+  const result = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.ok(result instanceof Response);
   assert.equal(result.status, 200);
   assert.equal(result.headers.get('x-request-id'), STABLE_REQUEST_ID);
@@ -355,7 +516,7 @@ test('handleDedup returns 409 for completed streaming response (no responseJson)
     id: 1,
     userId: DUMMY_USER_ID,
     idempotencyKey: DUMMY_KEY,
-    requestHash: null,
+    requestHash: await requestHash(),
     status: 'completed',
     responseJson: null,
     responseHeaders: null,
@@ -366,7 +527,7 @@ test('handleDedup returns 409 for completed streaming response (no responseJson)
   };
   const { db } = createFakeDedupDb([existingRow]);
   setDbForTests(db as any);
-  const result = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), STABLE_REQUEST_ID);
+  const result = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.ok(result instanceof Response);
   assert.equal(result.status, 409);
   const body: any = await result.json();
@@ -379,7 +540,7 @@ test('handleDedup reclaims failed row and returns undefined', async function fai
     id: 1,
     userId: DUMMY_USER_ID,
     idempotencyKey: DUMMY_KEY,
-    requestHash: null,
+    requestHash: await requestHash(),
     status: 'failed',
     responseJson: null,
     responseHeaders: null,
@@ -390,9 +551,11 @@ test('handleDedup reclaims failed row and returns undefined', async function fai
   };
   const { db, updates } = createFakeDedupDb([existingRow]);
   setDbForTests(db as any);
-  const result = await handleDedup(DUMMY_KEY, DUMMY_USER_ID, makeRequest(), STABLE_REQUEST_ID);
+  const result = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.equal(result, undefined);
   assert.ok(updates.length >= 1);
   assert.equal(updates[0].setValues.status, 'in_flight');
   assert.equal(updates[0].setValues.requestId, STABLE_REQUEST_ID, 'failed retry assigns a new execution identity');
+  assert.equal(updates[0].setValues.requestHash, undefined);
+  assert.equal(existingRow.requestHash, await requestHash());
 });

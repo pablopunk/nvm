@@ -1,6 +1,12 @@
 import { and, eq, lte, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { creditLedger, creditReservations, usage, users } from '../db/schema';
+import {
+  creditLedger,
+  creditReservations,
+  requestDedup,
+  usage,
+  users,
+} from '../db/schema';
 import { computeUsdCost, usdToCredits, usdToMicrocents, type ModelCost } from './cost';
 import { log } from './log';
 
@@ -74,7 +80,46 @@ export type ReservationFinalization = {
   costRow?: ModelCost;
   status?: number;
   latencyMs?: number;
+  dedup?: {
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    status: 'completed' | 'failed';
+    responseJson?: unknown;
+    responseHeaders?: Record<string, string>;
+    upstreamStatus?: number;
+  };
 };
+
+async function finalizeRequestDedup(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: ReservationFinalization,
+  now: Date,
+) {
+  if (!input.dedup) return;
+  const [updated] = await tx
+    .update(requestDedup)
+    .set({
+      status: input.dedup.status,
+      responseJson: input.dedup.responseJson,
+      responseHeaders: input.dedup.responseHeaders,
+      upstreamStatus: input.dedup.upstreamStatus,
+      completedAt: now,
+    })
+    .where(
+      and(
+        eq(requestDedup.userId, input.dedup.userId),
+        eq(requestDedup.idempotencyKey, input.dedup.idempotencyKey),
+        eq(requestDedup.requestId, input.requestId),
+        eq(requestDedup.requestHash, input.dedup.requestHash),
+        eq(requestDedup.status, 'in_flight'),
+      ),
+    )
+    .returning({ id: requestDedup.id });
+  if (!updated) {
+    throw new Error(`Missing matching idempotency claim ${input.requestId}`);
+  }
+}
 
 async function lockReservationAfterUser(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -102,11 +147,15 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
     // user first, reservation second. This matches admission and prevents a
     // same-request admission/finalization cycle through the FK-backed rows.
     const reservation = await lockReservationAfterUser(tx, input.requestId);
+    if (input.dedup && input.dedup.userId !== reservation.userId) {
+      throw new Error(`Idempotency claim user does not own reservation ${input.requestId}`);
+    }
     if (reservation.status !== 'pending') return 'already_terminal';
     const now = new Date();
     if (input.outcome === 'release') {
       await tx.update(creditReservations).set({ status: 'released', actualCredits: 0, releasedAt: now, updatedAt: now })
         .where(eq(creditReservations.requestId, input.requestId));
+      await finalizeRequestDedup(tx, input, now);
       log.info('credit_reservation_released', { request_id: input.requestId, user_id: reservation.userId, reserved_credits: reservation.reservedCredits });
       return 'released';
     }
@@ -137,6 +186,7 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
     });
     await tx.update(creditReservations).set({ status: 'settled', actualCredits: credits, settledAt: now, updatedAt: now })
       .where(eq(creditReservations.requestId, input.requestId));
+    await finalizeRequestDedup(tx, input, now);
     log.info('credit_reservation_settled', { request_id: input.requestId, user_id: reservation.userId, reserved_credits: reservation.reservedCredits, actual_credits: credits });
     return 'settled';
   });
