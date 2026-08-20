@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 process.env.VERCEL_ENV = 'preview';
+process.env.NVM_DATABASE_ENV = 'preview';
+process.env.NVM_ENV = 'preview';
 process.env.PRODUCTION_ORIGIN = 'https://www.nvm.fyi';
 process.env.PUBLIC_DASHBOARD_URL = 'https://www.nvm.fyi';
 process.env.PREVIEW_GATEWAY_ORIGIN = 'https://www.nvm.fyi';

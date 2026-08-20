@@ -5,6 +5,8 @@ process.env.WORKOS_API_KEY = 'sk_test_approve';
 process.env.WORKOS_CLIENT_ID = 'client_test_approve';
 process.env.WORKOS_COOKIE_PASSWORD =
   'approve-cookie-password-with-32-characters';
+process.env.NVM_DATABASE_ENV = 'production';
+process.env.NVM_ENV = 'production';
 process.env.VERCEL_ENV = 'production';
 
 const [{ POST }, { setDbForTests, resetDbForTests }, { workos }] =
