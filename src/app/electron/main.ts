@@ -105,8 +105,9 @@ import { appResultMarker, priorityBoost } from './action-ranking';
 import { actionMatchesExecutionRecord } from './action-execution-record';
 import {
   actionFromExecutionRecord,
+  createActionExecutionCapabilities,
   currentActionExecutionRecord,
-  nativeActionFromExecutionRecord,
+  mutableViewActionFields,
 } from './action-execution-policy';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
@@ -1076,6 +1077,10 @@ type ExtensionExecutionRecord = {
 };
 const viewActionExecutionRecords = new Map<string, ExtensionExecutionRecord>();
 const rootActionExecutionRecords = new Map<string, ExtensionExecutionRecord>();
+const HOST_ACTION_OWNER = 'host:main';
+const EXTENSION_ACTION_OWNER_PREFIX = 'extension:';
+const HOST_ACTION_OWNER_VERSION = crypto.randomUUID();
+const actionExecutionCapabilities = createActionExecutionCapabilities();
 const viewRefreshRecords = new Map<
   string,
   {
@@ -1179,6 +1184,31 @@ function extensionExecutionOwner(action, entry?: any) {
   };
 }
 
+function actionCapabilityOwner(action, entry?: any) {
+  const owner = extensionExecutionOwner(action, entry);
+  if (!owner.extensionId)
+    return {
+      owner: HOST_ACTION_OWNER,
+      ownerVersion: HOST_ACTION_OWNER_VERSION,
+    };
+  const extension =
+    entry?.extension || extensionModules.get(String(owner.extensionId));
+  return {
+    owner: `${EXTENSION_ACTION_OWNER_PREFIX}${owner.extensionId}`,
+    ownerVersion: String(extension?.__executionVersion || ''),
+  };
+}
+
+function actionCapabilityOwnerIsCurrent(owner: string, ownerVersion: string) {
+  if (owner === HOST_ACTION_OWNER)
+    return ownerVersion === HOST_ACTION_OWNER_VERSION;
+  if (!owner.startsWith(EXTENSION_ACTION_OWNER_PREFIX)) return false;
+  return (
+    extensionModules.get(owner.slice(EXTENSION_ACTION_OWNER_PREFIX.length))
+      ?.__executionVersion === ownerVersion
+  );
+}
+
 function registerViewActionForRenderer(action, entry?: any) {
   if (!action || typeof action !== 'object') return action;
   if (RENDERER_ONLY_VIEW_ACTION_TYPES.has(String(action.type || '')))
@@ -1194,8 +1224,12 @@ function registerViewActionForRenderer(action, entry?: any) {
   )
     return action;
   pruneExecutionRecords(viewActionExecutionRecords);
-  const executionId = crypto.randomUUID();
   const stored = clonePlain(withoutExecutionId(action));
+  const executionId = actionExecutionCapabilities.issue(stored, {
+    scope: 'view',
+    ...actionCapabilityOwner(action, entry),
+    mutableFields: mutableViewActionFields(stored),
+  });
   viewActionExecutionRecords.set(executionId, {
     action: stored,
     createdAt: Date.now(),
@@ -1215,8 +1249,11 @@ function registerRootActionForRenderer(action) {
   )
     return action;
   pruneExecutionRecords(rootActionExecutionRecords);
-  const executionId = crypto.randomUUID();
   const stored = clonePlain(withoutExecutionId(action));
+  const executionId = actionExecutionCapabilities.issue(stored, {
+    scope: 'root',
+    ...actionCapabilityOwner(action),
+  });
   rootActionExecutionRecords.set(executionId, {
     action: stored,
     createdAt: Date.now(),
@@ -1287,6 +1324,12 @@ function resolveRootActionForIpc(action) {
       actionName: (input) => String(input.kind || 'root'),
       ttlMs: ACTION_EXECUTION_TTL_MS,
     });
+  const capabilityAction = actionExecutionCapabilities.resolve(action, {
+    scope: 'root',
+    ownerIsCurrent: actionCapabilityOwnerIsCurrent,
+    maxAgeMs: ACTION_EXECUTION_TTL_MS,
+  });
+  if (capabilityAction) return capabilityAction;
   const fallback = withoutExecutionId(action);
   const current = currentActionForStoredShortcut(fallback);
   if (current && current !== fallback)
@@ -1311,6 +1354,12 @@ function resolveActionReferenceForIpc(action) {
     )
   )
     return resolveRootActionForIpc(action);
+  const rootCapabilityAction = actionExecutionCapabilities.resolve(action, {
+    scope: 'root',
+    ownerIsCurrent: actionCapabilityOwnerIsCurrent,
+    maxAgeMs: ACTION_EXECUTION_TTL_MS,
+  });
+  if (rootCapabilityAction) return rootCapabilityAction;
   return resolveViewActionForIpc(action);
 }
 
@@ -1367,6 +1416,11 @@ function resolveViewActionForIpc(action) {
       { ...clonePlain(record.action), traceId: action.traceId },
       action,
     );
+  const capabilityAction = actionExecutionCapabilities.resolve(action, {
+    scope: 'view',
+    ownerIsCurrent: actionCapabilityOwnerIsCurrent,
+  });
+  if (capabilityAction) return capabilityAction;
   const fallback = withoutExecutionId(action);
   if (CHARACTER_INSERT_ACTION_TYPES.has(String(fallback.type || ''))) {
     const record = CHARACTER_RECORDS_BY_ID.get(
@@ -1393,14 +1447,19 @@ function resolveViewActionForIpc(action) {
           : characterWithSkinTone(record.glyph, skinTone),
     };
   }
-  if (fallback.type === 'nativeAction')
-    return nativeActionFromExecutionRecord(
-      fallback,
-      rootActionExecutionRecords,
-      {
-        ttlMs: ACTION_EXECUTION_TTL_MS,
-      },
-    );
+  if (fallback.type === 'nativeAction') {
+    const traceId =
+      typeof fallback.traceId === 'string' ? fallback.traceId : undefined;
+    return {
+      type: 'nativeAction',
+      title: fallback.title,
+      nativeAction: resolveRootActionForIpc({
+        ...fallback.nativeAction,
+        ...(traceId ? { traceId } : {}),
+      }),
+      ...(traceId ? { traceId } : {}),
+    };
+  }
   const derived = resolveRendererDerivedViewAction(fallback);
   if (derived) return derived;
   throw new Error(`Untrusted ${fallback.type || 'view'} action`);
@@ -8706,6 +8765,7 @@ function registerExtension(extension) {
         },
         () => {
           if (!extension?.id) return;
+          extension.__executionVersion ||= crypto.randomUUID();
           extensionModules.set(extension.id, extension);
           for (const command of extension.commands || []) {
             if (

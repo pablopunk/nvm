@@ -40,6 +40,12 @@ Normalize host-owned view results and patches immediately before returning or se
 
 This keeps the renderer-facing contract consistent: any privileged action visible to the renderer is either renderer-only or has a main-owned execution token.
 
+Execution tokens are process-scoped HMAC capabilities as well as keys for the bounded fast-path record stores. If record pressure or age removes a record while its action is still visible, the host verifies the signed immutable action payload instead of rejecting the action. Root and view capabilities use separate domains, mutable renderer input is explicitly limited, and each extension activation has a distinct owner version so reloading or removing an extension revokes its old capabilities.
+
+Root capabilities retain the existing 30-minute lifetime. View capabilities remain valid for their extension activation or host process, matching the previous record-backed view lifetime without depending on cache residency.
+
+Do not rely on a larger record limit or FIFO/LRU policy for correctness. A bounded record cache cannot know which actions remain visible in renderer navigation history.
+
 ## Verification
 
 Run:
@@ -53,4 +59,4 @@ Dogfood the Updates view and confirm that selecting “Download Update” no lon
 
 ## Notes for future searches
 
-Keywords: Electron IPC, view-action:execute, actions:execute, view:patch, host view, internal view, Updates, downloadUpdate, installUpdate, Untrusted action, executionId, normalizeViewAction, tokenized actions.
+Keywords: Electron IPC, view-action:execute, actions:execute, view:patch, host view, internal view, Updates, downloadUpdate, installUpdate, Untrusted action, executionId, normalizeViewAction, tokenized actions, HMAC capability, record budget, action eviction.
