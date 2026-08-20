@@ -656,13 +656,14 @@ test('createClipboardExtension respects independent root visibility settings', (
 // ═══════════════════════════════════════════════════════════
 
 test('clipboardHistoryItem builds text item with paste action', () => {
-  const { clipboardHistory } = createFakes();
+  const { clipboardHistory, getHistory } = createFakes();
   const item = {
     id: 'text:abc',
     type: 'text',
     text: 'hello world',
     createdAt: Date.now(),
   };
+  getHistory().push(item);
 
   const result = clipboardHistory.clipboardHistoryItem(item);
 
@@ -671,6 +672,13 @@ test('clipboardHistoryItem builds text item with paste action', () => {
   assert.ok(result.actionPanel);
   const actions = result.actionPanel.sections[0].actions;
   assert.ok(actions.some((a: any) => a.type === 'pasteText'));
+  assert.equal(result.primaryAction.type, 'copyText');
+  assert.deepEqual(
+    result.actionPanel.sections[1].actions.map(
+      (action: any) => action.clipboardHistoryRange,
+    ),
+    ['item'],
+  );
 });
 
 test('clipboardHistoryItem builds image item without paste action', () => {
@@ -686,6 +694,38 @@ test('clipboardHistoryItem builds image item without paste action', () => {
 
   const actions = result.actionPanel.sections[0].actions;
   assert.ok(!actions.some((a: any) => a && a.type === 'pasteText'));
+});
+
+test('clipboardHistoryView keeps 300 rows within the action token budget', () => {
+  const { clipboardHistory, getHistory } = createFakes();
+  getHistory().push(
+    ...Array.from({ length: 300 }, (_, index) => ({
+      id: `text:${index}`,
+      type: 'text',
+      text: `value ${index}`,
+      createdAt: Date.now() - index,
+    })),
+  );
+
+  const view = clipboardHistory.clipboardHistoryView();
+  const rowActionCount = view.items.reduce(
+    (count: number, item: any) =>
+      count +
+      1 +
+      item.actionPanel.sections.reduce(
+        (sectionCount: number, section: any) =>
+          sectionCount + section.actions.length,
+        0,
+      ),
+    0,
+  );
+
+  assert.ok(rowActionCount < 2000);
+  assert.ok(
+    view.items.every(
+      (item: any) => item.actionPanel.sections[1].actions.length === 1,
+    ),
+  );
 });
 
 // ═══════════════════════════════════════════════════════════

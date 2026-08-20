@@ -373,17 +373,16 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   function clipboardHistoryRemovalActions(item: any = null) {
     if (deps.getHistory().length === 0) return [];
-    const actions: any[] = [];
     if (item?.id)
-      actions.push(
+      return [
         clipboardHistoryRemovalAction(
           'item',
           'Remove Item',
           `Remove “${clipboardItemTitle(item)}” from clipboard history?`,
           item.id,
         ),
-      );
-    actions.push(
+      ];
+    return [
       clipboardHistoryRemovalAction(
         'last-hour',
         'Remove Entries from Last Hour',
@@ -399,8 +398,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         'Remove All Entries',
         'Remove all clipboard history entries?',
       ),
-    );
-    return actions;
+    ];
   }
 
   function clipboardRootItem(item: any) {
