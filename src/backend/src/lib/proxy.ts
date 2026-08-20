@@ -394,6 +394,33 @@ export async function handleDedup(
   if (existing.status === 'in_flight') {
     const createdAt = new Date(existing.createdAt).getTime();
     if (Date.now() - createdAt > DEDUP_STALE_MS) {
+      const [reservation] = existing.requestId
+        ? await db.select({
+            status: creditReservations.status,
+            expiresAt: creditReservations.expiresAt,
+          }).from(creditReservations).where(
+            eq(creditReservations.requestId, existing.requestId),
+          ).limit(1)
+        : [];
+      if (reservation?.status === 'pending') {
+        if (new Date(reservation.expiresAt).getTime() > Date.now()) {
+          return withRequestId(Response.json(
+            { error: { type: 'idempotency_conflict', message: 'Request reservation is still active' } },
+            { status: 409 },
+          ), requestId);
+        }
+        await finalizeReservation({
+          requestId: existing.requestId!,
+          outcome: 'release',
+          dedup: {
+            userId,
+            idempotencyKey,
+            requestHash,
+            status: 'failed',
+          },
+        });
+        return handleDedup(idempotencyKey, userId, requestHash, requestId);
+      }
       const [reclaimed] = await db.update(requestDedup).set({
         status: 'in_flight',
         requestId,

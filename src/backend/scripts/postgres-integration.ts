@@ -288,6 +288,44 @@ async function runAssertions() {
         'released',
       );
 
+      const expiredClaimRequestId = `expired-claim-${databaseName}`;
+      const expiredClaimKey = `expired-claim-key-${databaseName}`;
+      const expiredClaimHash = await integrationRequestHash('expired claim');
+      assert.equal(
+        await handleDedup(expiredClaimKey, user.id, expiredClaimHash, expiredClaimRequestId),
+        undefined,
+      );
+      assert.equal(
+        (await reserveCredits({
+          requestId: expiredClaimRequestId,
+          userId: user.id,
+          kind: 'paid',
+          credits: 5,
+          now: new Date(Date.now() - 10 * 60_000),
+        })).ok,
+        true,
+      );
+      await db.update(requestDedup).set({
+        createdAt: new Date(Date.now() - 8 * 60_000),
+      }).where(and(
+        eq(requestDedup.userId, user.id),
+        eq(requestDedup.idempotencyKey, expiredClaimKey),
+      ));
+      assert.equal(
+        await handleDedup(
+          expiredClaimKey,
+          user.id,
+          expiredClaimHash,
+          `expired-claim-retry-${databaseName}`,
+        ),
+        undefined,
+        'an expired reservation is released before its stale claim is retried',
+      );
+      assert.equal(
+        (await db.select().from(creditReservations).where(eq(creditReservations.requestId, expiredClaimRequestId)))[0]?.status,
+        'released',
+      );
+
       const changedHashResult = await handleDedup(
         admissionKey,
         user.id,
