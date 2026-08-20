@@ -14,7 +14,8 @@ fail closed.
 ## Setup
 
 1. `cp .env.example .env` and fill in:
-   - Neon `DATABASE_URL`
+   - A development-only Neon `DATABASE_URL`
+   - `NVM_ENV=development` and `NVM_DATABASE_ENV=development`
    - Production WorkOS `API_KEY`, `CLIENT_ID`, `REDIRECT_URI`
    - `WORKOS_COOKIE_PASSWORD` — `openssl rand -base64 32`
    - Stripe `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, subscription/top-up price IDs and credit grants
@@ -37,13 +38,29 @@ Versioned via drizzle-kit. SQL lives in `src/backend/drizzle/`.
 
 - Edit `src/db/schema.ts`
 - `pnpm db:generate` → produces a new `drizzle/NNNN_*.sql`
-- `pnpm db:migrate` → applies pending migrations (also runs automatically on `pnpm build` / Vercel deploy)
+- `pnpm db:migrate` → applies pending migrations after validating the target identity
+
+`pnpm build` never connects to the database or applies migrations. GitHub's
+`Database migration` workflow is the only deployment migration owner. It uses
+the `database-development`, `database-preview`, or `database-production` GitHub
+environment, where each environment must provide its own `DATABASE_URL` secret.
+Configure required reviewers on `database-production`; production also requires
+the workflow's explicit approval input. Workflow concurrency and a PostgreSQL
+advisory lock prevent two migrations from changing one target at the same time.
+
+Use expand-and-contract migrations: apply a backward-compatible schema change,
+deploy compatible code only after migration succeeds, migrate data if needed,
+and remove old schema in a later release. Disable automatic production
+deployment in Vercel so the approved migration finishes before code that needs
+the schema receives traffic. If a deployment fails after migration, roll code
+back without rolling schema back; fix forward unless a separately reviewed
+backward migration is safe for all released desktop clients.
 
 ## Deploy
 
 Push to GitHub, import in Vercel, set env vars, and point `www.nvm.fyi` + `api.nvm.fyi` at it. `WORKOS_REDIRECT_URI` is the non-redirecting production callback (`https://www.nvm.fyi/api/auth/callback`). Release v2 uses disjoint, one-use `v:2` production and Preview-gateway states; legacy state, grants, sealed sessions, and `nvm_session` material are rejected immediately.
 
-Preview sign-in is fail-closed until the production gateway capability is configured. Trusted Preview deployments require `VERCEL_ENV=preview`, an exact `VERCEL_URL` matching `nvm-<deployment-token>-pablo-varelas-projects-4f86af8b.vercel.app`, `PREVIEW_GATEWAY_ORIGIN=https://www.nvm.fyi`, `PREVIEW_START_KEY`, `GATEWAY_STATE_KEY`, `GATEWAY_STATE_REDIS_URL/TOKEN`, production `UPSTASH_REDIS_REST_URL/TOKEN`, and `PREVIEW_SESSION_KEY`. Preview deliberately uses the production WorkOS client, `DATABASE_URL`, Redis, settings, and email; there are no separate Preview DB/Redis/WorkOS/email variables. The callback writes no local production data for Preview flows, while the exchange completes against the same production-backed runtime and mints only the host-scoped `nvm_preview_session`.
+Preview sign-in is fail-closed until the production gateway capability is configured. Trusted Preview deployments require `VERCEL_ENV=preview`, `NVM_ENV=preview`, `NVM_DATABASE_ENV=preview`, an isolated Preview `DATABASE_URL`, an exact `VERCEL_URL` matching `nvm-<deployment-token>-pablo-varelas-projects-4f86af8b.vercel.app`, `PREVIEW_GATEWAY_ORIGIN=https://www.nvm.fyi`, `PREVIEW_START_KEY`, `GATEWAY_STATE_KEY`, `GATEWAY_STATE_REDIS_URL/TOKEN`, production `UPSTASH_REDIS_REST_URL/TOKEN`, and `PREVIEW_SESSION_KEY`. Preview uses the production WorkOS gateway and Redis runtime but must not use the production database credential. The callback writes no local production data for Preview flows, while the exchange completes against the production gateway and mints only the host-scoped `nvm_preview_session`.
 
 Required Redis identities and ACL boundaries:
 

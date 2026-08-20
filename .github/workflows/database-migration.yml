@@ -1,0 +1,52 @@
+name: Database migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Database environment to migrate
+        required: true
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      approve_production:
+        description: Approve the production schema change
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-migration-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: database-${{ inputs.target }}
+    steps:
+      - name: Require production approval
+        if: inputs.target == 'production' && !inputs.approve_production
+        run: exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NVM_ENV: ${{ inputs.target }}
+          NVM_DATABASE_ENV: ${{ inputs.target }}
+          NVM_PRODUCTION_MIGRATION_APPROVED: ${{ inputs.approve_production }}
+        run: mise exec -- pnpm -C src/backend db:migrate
