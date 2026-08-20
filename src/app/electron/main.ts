@@ -138,6 +138,7 @@ import {
   summarizeDebugValue,
 } from './debug-performance';
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
+import { extensionCommandAction } from './extension-command-action';
 import {
   CHARACTER_RECORDS_BY_ID,
   characterCodePoints,
@@ -8746,7 +8747,7 @@ function registerExtension(extension) {
                 command.mode === 'noView',
               mode: command.mode,
               triggers: command.triggers,
-              primaryAction: action,
+              primaryAction: extensionCommandAction(command, action),
             };
             const normalizedItem = normalizeViewItems([item], entry)[0];
             extensionActionRegistry.set(`${extension.id}:${command.id}`, {
