@@ -7,7 +7,11 @@ import { createPostgresDb } from './postgres';
 export type Database = ReturnType<typeof createNeonDb>['db'];
 
 const testDbStorage = new AsyncLocalStorage<Database | undefined>();
-validateDatabaseEnvironment(process.env);
+validateDatabaseEnvironment({
+  NVM_ENV: env('NVM_ENV'),
+  NVM_DATABASE_ENV: env('NVM_DATABASE_ENV'),
+  VERCEL_ENV: env('VERCEL_ENV'),
+});
 const driver = process.env.NVM_DB_DRIVER || 'neon';
 const connectionString = env('DATABASE_URL');
 type DatabaseConnection = { db: Database; pool: { end: () => Promise<void> } };
