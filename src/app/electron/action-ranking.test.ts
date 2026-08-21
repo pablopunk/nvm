@@ -81,13 +81,10 @@ test('title prefixes outrank whole-word matches in longer titles', () => {
   );
 });
 
-test('exact intent aliases outrank generated search fallbacks', () => {
+test('leading query words in a command outrank generated search fallbacks', () => {
   const query = 'fix with ai';
   const commandScore = actionTextSearchScore(
-    {
-      title: 'Fix Selected Text with AI',
-      aliases: ['fix with ai', 'fix grammar'],
-    },
+    { title: 'Fix Selected Text with AI' },
     query,
   );
   const automationScore = actionTextSearchScore(
@@ -99,7 +96,7 @@ test('exact intent aliases outrank generated search fallbacks', () => {
     query,
   );
 
-  assert.equal(commandScore, 1000);
+  assert.equal(commandScore, 925);
   assert.ok(commandScore > automationScore);
   assert.ok(commandScore > webSearchScore);
 });

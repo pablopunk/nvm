@@ -30,7 +30,10 @@ export function prioritizedTitleSearchScore(value: unknown, q: string): number {
   const score = scoreNormalized(normalizedTitle, q);
   if (score === 100) return 1000;
   if (normalizedTitle.startsWith(q)) return 950;
+  if (score === 95) return 925;
   if (score === 90) return 900;
+  if (score === 70) return 875;
+  if (score === 60) return 860;
   if (score === 50) return 850;
   if (score === 20) return 820;
   if (score === 10) return 810;

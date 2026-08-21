@@ -40,9 +40,26 @@ test('scoreNormalizedNonEmpty fuzzy match', () => {
   assert.equal(scoreNormalizedNonEmpty('settings', 'stng'), 20);
 });
 
-test('scoreNormalizedNonEmpty matches unordered word prefixes', () => {
-  assert.equal(scoreNormalizedNonEmpty('rightwards arrow', 'right arrow'), 50);
-  assert.equal(scoreNormalizedNonEmpty('rightwards arrow', 'arrow right'), 50);
+test('scoreNormalizedNonEmpty ranks word-prefix matches by order and position', () => {
+  assert.equal(scoreNormalizedNonEmpty('rightwards arrow', 'right arrow'), 95);
+  assert.equal(
+    scoreNormalizedNonEmpty('move rightwards arrow', 'right arrow'),
+    70,
+  );
+  assert.equal(scoreNormalizedNonEmpty('rightwards arrow', 'arrow right'), 60);
+  assert.equal(
+    scoreNormalizedNonEmpty('fix selected text with ai', 'fix with ai'),
+    95,
+  );
+  assert.equal(
+    scoreNormalizedNonEmpty('press tab to automate fix with ai', 'fix with ai'),
+    90,
+  );
+});
+
+test('scoreNormalizedNonEmpty consumes repeated word-prefix matches', () => {
+  assert.equal(scoreNormalizedNonEmpty('go home', 'go go'), 0);
+  assert.equal(scoreNormalizedNonEmpty('go go home', 'go go'), 95);
 });
 
 test('strict view filtering finds rightwards arrow from natural word order', () => {

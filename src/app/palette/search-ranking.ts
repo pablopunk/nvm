@@ -7,13 +7,37 @@
  */
 const WORD_CHARACTER = /[\p{L}\p{N}]/u;
 
-function allQueryWordsMatchTextWordPrefixes(text: string, query: string) {
-  const queryWords = query.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  if (queryWords.length < 2) return false;
-  const textWords = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  return queryWords.every((queryWord) =>
-    textWords.some((textWord) => textWord.startsWith(queryWord)),
-  );
+function words(value: string) {
+  return value.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+function queryWordPrefixScore(text: string, query: string) {
+  const queryWords = words(query);
+  if (queryWords.length < 2) return 0;
+  const textWords = words(text);
+  const orderedMatchIndexes: number[] = [];
+  let nextTextWordIndex = 0;
+  for (const queryWord of queryWords) {
+    const relativeIndex = textWords
+      .slice(nextTextWordIndex)
+      .findIndex((textWord) => textWord.startsWith(queryWord));
+    if (relativeIndex < 0) break;
+    nextTextWordIndex += relativeIndex;
+    orderedMatchIndexes.push(nextTextWordIndex);
+    nextTextWordIndex += 1;
+  }
+  if (orderedMatchIndexes.length === queryWords.length)
+    return orderedMatchIndexes[0] === 0 ? 95 : 70;
+
+  const availableTextWords = [...textWords];
+  for (const queryWord of queryWords) {
+    const matchIndex = availableTextWords.findIndex((textWord) =>
+      textWord.startsWith(queryWord),
+    );
+    if (matchIndex < 0) return 0;
+    availableTextWords.splice(matchIndex, 1);
+  }
+  return 60;
 }
 
 export function scoreNormalizedNonEmpty(text: string, query: string): number {
@@ -24,25 +48,25 @@ export function scoreNormalizedNonEmpty(text: string, query: string): number {
   // stronger word-match score as a word later in the title.
   const isWordBoundary = (value: string | undefined) =>
     value === undefined || !WORD_CHARACTER.test(value);
+  let phraseScore = 0;
   let start = text.indexOf(query);
   while (start >= 0) {
     if (
       isWordBoundary(text[start - 1]) &&
       isWordBoundary(text[start + query.length])
     ) {
-      return 90;
+      phraseScore = 90;
+      break;
     }
     start = text.indexOf(query, start + 1);
   }
-  if (text.startsWith(query)) {
-    return 80;
-  }
-  if (text.includes(query)) {
-    return 50;
-  }
-  if (allQueryWordsMatchTextWordPrefixes(text, query)) {
-    return 50;
-  }
+  phraseScore = Math.max(
+    phraseScore,
+    text.startsWith(query) ? 80 : 0,
+    text.includes(query) ? 50 : 0,
+    queryWordPrefixScore(text, query),
+  );
+  if (phraseScore > 0) return phraseScore;
   let pos = 0;
   for (const ch of query) {
     pos = text.indexOf(ch, pos);
@@ -66,13 +90,16 @@ export function scoreNormalizedNonEmpty(text: string, query: string): number {
  * `query` must be non‑empty; wrappers guard that contract.
  *
  * Score bands:
- *   100 — exact match
- *    90 — whole-word match
- *    80 — starts with
- *    50 — contains (substring)
- *    20 — sequential character match (original fuzzy)
- *    10 — character-set match (all query chars exist, any order)
- *     0 — no match
+ *   100 - exact match
+ *    95 - ordered word-prefix match starting at the first title word
+ *    90 - whole-word phrase match
+ *    80 - starts with
+ *    70 - ordered word-prefix match
+ *    60 - unordered word-prefix match
+ *    50 - contains (substring)
+ *    20 - sequential character match (original fuzzy)
+ *    10 - character-set match (all query chars exist, any order)
+ *     0 - no match
  */
 export function scoreFuzzy(text: string, query: string): number {
   const sequential = scoreNormalizedNonEmpty(text, query);
