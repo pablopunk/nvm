@@ -219,7 +219,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     });
     win.webContents.once('did-finish-load', () => {
       debugLog('renderer.didFinishLoad', { url: win?.webContents.getURL() });
-      if (options.isDev || pendingShowOnReady) {
+      if (pendingShowOnReady) {
         pendingShowOnReady = false;
         showPalette();
       }
