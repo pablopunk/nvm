@@ -562,6 +562,7 @@ export type ExtensionItem = {
   background?: boolean;
   /** Ranking hint. The host caps provider scores and combines them with usage signals. */
   score?: number;
+  /** Milliseconds since epoch. The host treats this as an intrinsic recency signal alongside recorded use. */
   lastUsed?: number;
   dismissAfterRun?: 'auto';
   [key: string]: unknown;
@@ -830,6 +831,8 @@ export type ExtensionApp = {
   id: string;
   name: string;
   path: string;
+  /** Finder/Spotlight Date Added on macOS, with filesystem creation time as a fallback. */
+  dateAddedMs?: number;
   [key: string]: unknown;
 };
 /** An app that can open a specific file. Returned by `ctx.desktop.files.openWithApps(filePath)`. */

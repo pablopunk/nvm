@@ -1,12 +1,29 @@
-export type IndexedApp = {
+async function enrichIndexedApps(
+  deps: AppIndexServiceDeps,
+  apps: IndexedApp[],
+) {
+  if (!deps.enrichApps) {
+    return apps;
+  }
+  try {
+    return await deps.enrichApps(apps);
+  } catch (error) {
+    deps.error?.('applications.enrichment.failed', error);
+    return apps;
+  }
+}
+
+export interface IndexedApp {
   id?: string;
   name: string;
   path?: string;
+  dateAddedMs?: number;
   [key: string]: unknown;
-};
+}
 
-export type AppIndexServiceDeps = {
+export interface AppIndexServiceDeps {
   scanApps: () => Promise<IndexedApp[]>;
+  enrichApps?: (apps: IndexedApp[]) => Promise<IndexedApp[]>;
   watchApps: (onChanged: () => void) => Array<{ close: () => unknown }>;
   normalize: (value: string) => string;
   emitChanged: () => void;
@@ -20,14 +37,16 @@ export type AppIndexServiceDeps = {
   ) => Promise<T>;
   mark?: (name: string, data?: Record<string, unknown>) => void;
   error?: (message: string, error: unknown) => void;
-};
+}
 
 export function dedupeAndSortApps(
   apps: IndexedApp[],
   normalize: (value: string) => string,
 ) {
   const deduped = new Map<string, IndexedApp>();
-  for (const item of apps) deduped.set(normalize(item.name), item);
+  for (const item of apps) {
+    deduped.set(normalize(item.name), item);
+  }
   return Array.from(deduped.values()).sort((a, b) =>
     a.name.localeCompare(b.name),
   );
@@ -35,6 +54,7 @@ export function dedupeAndSortApps(
 
 export function createAppIndexService(deps: AppIndexServiceDeps) {
   let index: IndexedApp[] = [];
+  let indexGeneration = 0;
   let watchers: Array<{ close: () => unknown }> = [];
 
   function measure<T>(
@@ -53,15 +73,21 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
     deps.emitChanged();
   }
 
-  async function startWatcher() {
-    for (const watcher of watchers) watcher.close();
+  function startWatcher() {
+    for (const watcher of watchers) {
+      watcher.close();
+    }
     watchers = deps.watchApps(scheduleIndex);
   }
 
   async function indexApplications() {
+    const generation = ++indexGeneration;
     await measure('apps.index', { alwaysLog: true }, async () => {
       try {
         const apps = await deps.scanApps();
+        if (generation !== indexGeneration) {
+          return;
+        }
         index = dedupeAndSortApps(apps, deps.normalize);
         deps.invalidateRunningStatus();
         deps.mark?.('apps.index.result', {
@@ -70,6 +96,13 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
         });
         deps.notifyIndexed(index.length);
         deps.scheduleRunningStatusRefresh('apps-indexed');
+        const enrichedApps = await enrichIndexedApps(deps, index);
+        if (generation !== indexGeneration || enrichedApps === index) {
+          return;
+        }
+        index = dedupeAndSortApps(enrichedApps, deps.normalize);
+        deps.mark?.('apps.index.enriched', { indexedCount: index.length });
+        deps.notifyIndexed(index.length);
       } catch (error) {
         deps.error?.('applications.index.failed', error);
       }
@@ -77,7 +110,9 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
   }
 
   function closeWatchers() {
-    for (const watcher of watchers) watcher.close();
+    for (const watcher of watchers) {
+      watcher.close();
+    }
     watchers = [];
   }
 

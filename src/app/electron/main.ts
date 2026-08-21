@@ -115,7 +115,9 @@ import {
 import {
   actionTextSearchScore,
   appResultMarker,
+  effectiveLastUsed,
   priorityBoost,
+  recencyBoost,
 } from './action-ranking';
 import { actionMatchesExecutionRecord } from './action-execution-record';
 import {
@@ -199,6 +201,7 @@ import {
   autoUpdatesUnavailableMessage,
   captureScreenImage,
   copySelectionIntoClipboard,
+  enrichAppDateAdded,
   runningAppPaths as detectRunningAppPaths,
   executeSystemBuiltin,
   fileDateAddedMs,
@@ -913,6 +916,7 @@ function recordLearningReview(chatId: string) {
 }
 
 const appIndexService = createAppIndexService({
+  enrichApps: enrichAppDateAdded,
   scanApps,
   watchApps,
   normalize,
@@ -920,8 +924,10 @@ const appIndexService = createAppIndexService({
   invalidateRunningStatus: () => runningAppStatus.invalidate(),
   scheduleRunningStatusRefresh: (reason) =>
     runningAppStatus.scheduleRefresh(reason),
-  notifyIndexed: (count) =>
-    paletteWindow.win?.webContents.send('apps:indexed', count),
+  notifyIndexed: (count) => {
+    extensionRootItemsCache.delete('nevermind.apps');
+    paletteWindow.win?.webContents.send('apps:indexed', count);
+  },
   measure: measureDebugPerformance,
   mark: markDebugPerformance,
   error: (message, error) =>
@@ -1640,9 +1646,7 @@ function usageBoost(actionId: any) {
 
 function recentBoost(actionId: any) {
   const recent = userState.recents[actionId];
-  if (!recent) return 0;
-  const ageHours = Math.max(0, (Date.now() - recent.lastUsed) / 36e5);
-  return Math.max(0, 20 - ageHours);
+  return recencyBoost(recent?.lastUsed);
 }
 
 function defaultActionIdFor(action: any) {
@@ -1696,6 +1700,10 @@ function withDefaultOverride(action: any) {
 function rankAction(action: any, query: any) {
   const base = actionSearchScore(action, query);
   if (query.trim() && base <= 0) return null;
+  const lastUsed = effectiveLastUsed(
+    action.lastUsed,
+    userState.recents[action.id]?.lastUsed,
+  );
   return {
     ...action,
     aliases: [...(action.aliases || []), ...actionAliases(action.id)],
@@ -1704,8 +1712,8 @@ function rankAction(action: any, query: any) {
       base +
       priorityBoost(action) +
       usageBoost(action.id) +
-      recentBoost(action.id),
-    lastUsed: userState.recents[action.id]?.lastUsed || 0,
+      recencyBoost(lastUsed),
+    lastUsed,
   };
 }
 
@@ -7134,6 +7142,7 @@ function createExtensionContext(
                 id: entry.id,
                 name: entry.name,
                 path: entry.path,
+                dateAddedMs: entry.dateAddedMs,
               })),
             search: (query) => {
               const needle = String(query || '').toLowerCase();
@@ -7150,6 +7159,7 @@ function createExtensionContext(
                   id: entry.id,
                   name: entry.name,
                   path: entry.path,
+                  dateAddedMs: entry.dateAddedMs,
                 }));
             },
             icon: (appPath) => appIconCache.get(appPath),

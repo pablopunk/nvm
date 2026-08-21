@@ -51,6 +51,7 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
     id: 'example',
     name: 'Example',
     path: '/Applications/Example.app',
+    dateAddedMs: 1234,
   };
   initExtensionContext({
     appIndexService: { get: () => [app] },
@@ -90,6 +91,7 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
   const appItem = root.find((item: any) => item.id === 'app:example') as any;
   assert.equal(discoveries, 0);
   assert.equal(appItem.primaryAction.title, 'Open Example');
+  assert.equal(appItem.lastUsed, app.dateAddedMs);
   assert.equal(appItem.actions[0].title, 'Uninstall Example…');
   await appItem.actions[0].__handler();
   assert.equal(discoveries, 1);

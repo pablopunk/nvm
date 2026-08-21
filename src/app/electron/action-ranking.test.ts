@@ -5,11 +5,23 @@ import {
   actionTextSearchScore,
   appResultMarker,
   compareRankedActions,
+  effectiveLastUsed,
   priorityBoost,
+  recencyBoost,
 } from './action-ranking';
 import { prioritizedTitleSearchScore, scoreNormalized } from './search-utils';
 
 const EXACT_MATCH_SCORE = 100;
+
+test('installation and launch timestamps contribute equally to recency', () => {
+  const now = Date.UTC(2026, 7, 21, 12);
+  const oneHourAgo = now - 36e5;
+
+  assert.equal(recencyBoost(oneHourAgo, now), 19);
+  assert.equal(effectiveLastUsed(oneHourAgo, 0), oneHourAgo);
+  assert.equal(effectiveLastUsed(0, oneHourAgo), oneHourAgo);
+  assert.equal(effectiveLastUsed(oneHourAgo, now), now);
+});
 
 test('generated actions sort ahead of their AI builder chat on ranking ties', () => {
   const generatedAction = {

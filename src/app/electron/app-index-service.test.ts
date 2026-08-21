@@ -7,6 +7,12 @@ import {
 } from './app-index-service';
 
 const normalize = (value: string) => value.trim().toLowerCase();
+const INITIAL_DATE_ADDED = 100;
+const ENRICHED_DATE_ADDED = 200;
+
+function noop() {
+  return;
+}
 
 test('dedupeAndSortApps keeps one app per normalized name and sorts by display name', () => {
   const apps = dedupeAndSortApps(
@@ -56,6 +62,47 @@ test('app index service indexes apps and notifies dependent running-app status',
   ]);
 });
 
+test('app index service publishes cheap apps before date-added enrichment', async () => {
+  let finishEnrichment: ((apps: IndexedApp[]) => void) | undefined;
+  let primaryIndexReady: (() => void) | undefined;
+  const primaryIndexed = new Promise<void>((resolve) => {
+    primaryIndexReady = resolve;
+  });
+  const service = createAppIndexService({
+    scanApps: async () => [
+      {
+        name: 'New App',
+        path: '/Applications/New App.app',
+        dateAddedMs: INITIAL_DATE_ADDED,
+      },
+    ],
+    enrichApps: () =>
+      new Promise((resolve) => {
+        finishEnrichment = resolve;
+      }),
+    watchApps: () => [],
+    normalize,
+    emitChanged: noop,
+    invalidateRunningStatus: noop,
+    scheduleRunningStatusRefresh: noop,
+    notifyIndexed: () => primaryIndexReady?.(),
+  });
+
+  const indexing = service.indexApplications();
+  await primaryIndexed;
+  assert.equal(service.get()[0]?.dateAddedMs, INITIAL_DATE_ADDED);
+
+  finishEnrichment?.([
+    {
+      name: 'New App',
+      path: '/Applications/New App.app',
+      dateAddedMs: ENRICHED_DATE_ADDED,
+    },
+  ]);
+  await indexing;
+  assert.equal(service.get()[0]?.dateAddedMs, ENRICHED_DATE_ADDED);
+});
+
 test('app index service replaces watchers and emits debounced host change events', async () => {
   const closed: string[] = [];
   const emitted: string[] = [];
@@ -69,9 +116,9 @@ test('app index service replaces watchers and emits debounced host change events
     },
     normalize,
     emitChanged: () => emitted.push('changed'),
-    invalidateRunningStatus: () => {},
-    scheduleRunningStatusRefresh: () => {},
-    notifyIndexed: () => {},
+    invalidateRunningStatus: noop,
+    scheduleRunningStatusRefresh: noop,
+    notifyIndexed: noop,
   });
 
   await service.startWatcher();
@@ -87,16 +134,14 @@ test('app index service keeps previous index when scanning fails', async () => {
   const errors: Array<{ message: string; error: unknown }> = [];
   let apps: IndexedApp[] | Error = [{ name: 'Notes' }];
   const service = createAppIndexService({
-    scanApps: async () => {
-      if (apps instanceof Error) throw apps;
-      return apps;
-    },
+    scanApps: () =>
+      apps instanceof Error ? Promise.reject(apps) : Promise.resolve(apps),
     watchApps: () => [],
     normalize,
-    emitChanged: () => {},
-    invalidateRunningStatus: () => {},
-    scheduleRunningStatusRefresh: () => {},
-    notifyIndexed: () => {},
+    emitChanged: noop,
+    invalidateRunningStatus: noop,
+    scheduleRunningStatusRefresh: noop,
+    notifyIndexed: noop,
     error: (message, error) => errors.push({ message, error }),
   });
 

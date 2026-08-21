@@ -9,12 +9,13 @@ function uninstallResult(ctx: any, result: any) {
       tone: 'success',
     });
   }
-  const details = result.untouched.length
-    ? result.untouched.map((item: any) => ({
-        title: item.path,
-        subtitle: item.message,
-      }))
-    : result.notes.map((note: any) => ({ title: note.message }));
+  const details =
+    result.untouched.length > 0
+      ? result.untouched.map((item: any) => ({
+          title: item.path,
+          subtitle: item.message,
+        }))
+      : result.notes.map((note: any) => ({ title: note.message }));
   return feedbackView({
     id: 'uninstall-result',
     title:
@@ -189,6 +190,7 @@ function appRootItem(item, ctx: any) {
     icon: 'app',
     image: undefined as string | undefined,
     score: 30,
+    lastUsed: Number(item.dateAddedMs || 0),
     dismissAfterRun: 'auto',
     customizable: true,
     primaryAction: {
@@ -223,7 +225,6 @@ function createForceQuitAppItem(app: any) {
   };
 }
 
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: the extension definition is deliberately kept as one declarative object.
 export function createAppsExtension() {
   return {
     id: 'nevermind.apps',
