@@ -101,7 +101,11 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from '../palette/model';
-import { appResultMarker, priorityBoost } from './action-ranking';
+import {
+  actionTextSearchScore,
+  appResultMarker,
+  priorityBoost,
+} from './action-ranking';
 import { actionMatchesExecutionRecord } from './action-execution-record';
 import {
   actionFromExecutionRecord,
@@ -241,9 +245,7 @@ import {
   hashValue,
   normalize,
   parseRateExpression,
-  prioritizedTitleSearchScore,
   score,
-  scoreNormalized,
 } from './search-utils';
 import {
   SETTING_DEFINITIONS,
@@ -1573,24 +1575,7 @@ function actionAliases(actionId: any) {
 function actionSearchScore(action: any, query: any) {
   const q = normalize(query);
   if (!q) return action.score || 0;
-  let best = prioritizedTitleSearchScore(action.title, q);
-  const subtitleScore = scoreNormalized(action.subtitle, q);
-  if (subtitleScore > best) best = subtitleScore;
-  if (best >= 1000) return best;
-  const aliases = action.aliases;
-  if (aliases) {
-    for (const alias of aliases) {
-      const s = scoreNormalized(alias, q);
-      if (s > best) best = s;
-      if (best === 100) return best;
-    }
-  }
-  for (const alias of actionAliases(action.id)) {
-    const s = scoreNormalized(alias, q);
-    if (s > best) best = s;
-    if (best === 100) return best;
-  }
-  return best;
+  return actionTextSearchScore(action, q, actionAliases(action.id));
 }
 
 function usageBoost(actionId: any) {

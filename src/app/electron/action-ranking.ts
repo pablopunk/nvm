@@ -1,3 +1,5 @@
+import { prioritizedTitleSearchScore, scoreNormalized } from './search-utils';
+
 interface RankedAction {
   id?: unknown;
   kind?: unknown;
@@ -12,6 +14,23 @@ const APP_RESULT_PRIORITY_BOOST = 25;
 
 const AI_BUILDER_CHAT_TIE_PRIORITY = -1;
 const DEFAULT_TIE_PRIORITY = 0;
+
+export function actionTextSearchScore(
+  action: { aliases?: unknown; subtitle?: unknown; title?: unknown },
+  query: string,
+  additionalAliases: unknown[] = [],
+) {
+  let best = prioritizedTitleSearchScore(action.title, query);
+  best = Math.max(best, scoreNormalized(action.subtitle, query));
+  for (const alias of [
+    ...(Array.isArray(action.aliases) ? action.aliases : []),
+    ...additionalAliases,
+  ]) {
+    best = Math.max(best, prioritizedTitleSearchScore(alias, query));
+    if (best >= 1000) break;
+  }
+  return best;
+}
 
 export function appResultMarker(
   item: { isAppResult?: unknown } & Record<string, unknown>,

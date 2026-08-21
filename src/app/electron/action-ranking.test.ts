@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  actionTextSearchScore,
   appResultMarker,
   compareRankedActions,
   priorityBoost,
@@ -78,6 +79,29 @@ test('title prefixes outrank whole-word matches in longer titles', () => {
     prioritizedTitleSearchScore('Dictate', 'dictate') >
       prioritizedTitleSearchScore('Dictation Settings', 'dictate'),
   );
+});
+
+test('exact intent aliases outrank generated search fallbacks', () => {
+  const query = 'fix with ai';
+  const commandScore = actionTextSearchScore(
+    {
+      title: 'Fix Selected Text with AI',
+      aliases: ['fix with ai', 'fix grammar'],
+    },
+    query,
+  );
+  const automationScore = actionTextSearchScore(
+    { title: `Press Tab to automate "${query}"` },
+    query,
+  );
+  const webSearchScore = actionTextSearchScore(
+    { title: `Search the web for "${query}"` },
+    query,
+  );
+
+  assert.equal(commandScore, 1000);
+  assert.ok(commandScore > automationScore);
+  assert.ok(commandScore > webSearchScore);
 });
 
 test('only marked application launch results receive the app boost', () => {

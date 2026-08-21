@@ -10,6 +10,7 @@ function commandHandler(context: any) {
     action: (input: unknown) => input,
   })[0];
   assert.equal(contribution.title, 'Fix Selected Text with AI');
+  assert.ok(contribution.aliases.includes('fix with ai'));
   assert.equal(extensionActionContributionIsDiscoverable(contribution), true);
   return contribution.run as (context: any, input: unknown) => unknown;
 }

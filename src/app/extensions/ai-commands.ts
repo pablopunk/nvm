@@ -146,7 +146,12 @@ export function createAiCommandsExtension() {
           title: 'Fix Selected Text with AI',
           subtitle: 'Correct grammar, spelling, and punctuation',
           icon: 'wand-sparkles',
-          aliases: ['fix grammar', 'correct selected text', 'proofread'],
+          aliases: [
+            'fix with ai',
+            'fix grammar',
+            'correct selected text',
+            'proofread',
+          ],
           background: true,
           dismissAfterRun: 'auto',
           customizable: true,
