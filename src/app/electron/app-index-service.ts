@@ -1,29 +1,14 @@
-async function enrichIndexedApps(
-  deps: AppIndexServiceDeps,
-  apps: IndexedApp[],
-) {
-  if (!deps.enrichApps) {
-    return apps;
-  }
-  try {
-    return await deps.enrichApps(apps);
-  } catch (error) {
-    deps.error?.('applications.enrichment.failed', error);
-    return apps;
-  }
-}
-
 export interface IndexedApp {
   id?: string;
   name: string;
   path?: string;
-  dateAddedMs?: number;
+  firstSeenAt?: number;
   [key: string]: unknown;
 }
 
 export interface AppIndexServiceDeps {
   scanApps: () => Promise<IndexedApp[]>;
-  enrichApps?: (apps: IndexedApp[]) => Promise<IndexedApp[]>;
+  trackFirstSeen?: (apps: IndexedApp[]) => IndexedApp[];
   watchApps: (onChanged: () => void) => Array<{ close: () => unknown }>;
   normalize: (value: string) => string;
   emitChanged: () => void;
@@ -37,6 +22,35 @@ export interface AppIndexServiceDeps {
   ) => Promise<T>;
   mark?: (name: string, data?: Record<string, unknown>) => void;
   error?: (message: string, error: unknown) => void;
+}
+
+export function trackFirstSeenApps(
+  apps: IndexedApp[],
+  options: {
+    firstSeenAtById: Record<string, number>;
+    initialized: boolean;
+    now: number;
+    normalize: (value: string) => string;
+  },
+) {
+  const { firstSeenAtById, initialized, now, normalize } = options;
+  const nextFirstSeenAtById = { ...firstSeenAtById };
+  let changed = false;
+  const trackedApps = apps.map((app) => {
+    const id = normalize(String(app.path || app.id || app.name));
+    if (!Object.hasOwn(nextFirstSeenAtById, id)) {
+      nextFirstSeenAtById[id] = initialized ? now : 0;
+      changed = true;
+    }
+    return { ...app, firstSeenAt: nextFirstSeenAtById[id] };
+  });
+  const nextInitialized = initialized || apps.length > 0;
+  return {
+    apps: trackedApps,
+    firstSeenAtById: nextFirstSeenAtById,
+    initialized: nextInitialized,
+    changed: changed || nextInitialized !== initialized,
+  };
 }
 
 export function dedupeAndSortApps(
@@ -84,10 +98,11 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
     const generation = ++indexGeneration;
     await measure('apps.index', { alwaysLog: true }, async () => {
       try {
-        const apps = await deps.scanApps();
+        const scannedApps = await deps.scanApps();
         if (generation !== indexGeneration) {
           return;
         }
+        const apps = deps.trackFirstSeen?.(scannedApps) || scannedApps;
         index = dedupeAndSortApps(apps, deps.normalize);
         deps.invalidateRunningStatus();
         deps.mark?.('apps.index.result', {
@@ -96,13 +111,6 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
         });
         deps.notifyIndexed(index.length);
         deps.scheduleRunningStatusRefresh('apps-indexed');
-        const enrichedApps = await enrichIndexedApps(deps, index);
-        if (generation !== indexGeneration || enrichedApps === index) {
-          return;
-        }
-        index = dedupeAndSortApps(enrichedApps, deps.normalize);
-        deps.mark?.('apps.index.enriched', { indexedCount: index.length });
-        deps.notifyIndexed(index.length);
       } catch (error) {
         deps.error?.('applications.index.failed', error);
       }

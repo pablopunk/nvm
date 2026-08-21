@@ -586,7 +586,6 @@ async function scanMacApps() {
           id: appPath,
           name: path.basename(appPath).replace(/\.app$/i, ''),
           path: appPath,
-          dateAddedMs: stat.birthtimeMs,
         });
       } catch {}
     }),
@@ -608,7 +607,6 @@ async function scanMacApps() {
                 id: fullPath,
                 name: entry.name.replace(/\.app$/i, ''),
                 path: fullPath,
-                dateAddedMs: st.birthtimeMs,
               });
           } catch {
             /* broken symlink or inaccessible, skip */
@@ -903,21 +901,6 @@ export async function fileDateAddedMs(paths: string[]) {
     Array.from({ length: Math.min(4, chunks.length) }, readNextChunk),
   );
   return dates;
-}
-
-export async function enrichAppDateAdded<
-  App extends { path?: string; dateAddedMs?: number },
->(apps: App[]): Promise<App[]> {
-  if (!hasCapability('file-date-added')) {
-    return apps;
-  }
-  const paths = apps.flatMap((item) => (item.path ? [item.path] : []));
-  const dates = await fileDateAddedMs(paths);
-  return apps.map((item) => ({
-    ...item,
-    dateAddedMs:
-      (item.path ? dates.get(item.path) : 0) || item.dateAddedMs || 0,
-  }));
 }
 
 export function pasteIntoFrontmostApp() {

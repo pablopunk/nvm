@@ -831,8 +831,8 @@ export type ExtensionApp = {
   id: string;
   name: string;
   path: string;
-  /** Finder/Spotlight Date Added on macOS, with filesystem creation time as a fallback. */
-  dateAddedMs?: number;
+  /** When Nevermind first observed this app after its initial app-index baseline. Replacements at the same app identity keep their original timestamp. */
+  firstSeenAt?: number;
   [key: string]: unknown;
 };
 /** An app that can open a specific file. Returned by `ctx.desktop.files.openWithApps(filePath)`. */

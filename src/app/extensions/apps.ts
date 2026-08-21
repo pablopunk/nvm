@@ -190,7 +190,7 @@ function appRootItem(item, ctx: any) {
     icon: 'app',
     image: undefined as string | undefined,
     score: 30,
-    lastUsed: Number(item.dateAddedMs || 0),
+    lastUsed: Number(item.firstSeenAt || 0),
     dismissAfterRun: 'auto',
     customizable: true,
     primaryAction: {

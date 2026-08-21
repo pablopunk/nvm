@@ -4,11 +4,13 @@ import {
   createAppIndexService,
   dedupeAndSortApps,
   type IndexedApp,
+  trackFirstSeenApps,
 } from './app-index-service';
 
 const normalize = (value: string) => value.trim().toLowerCase();
-const INITIAL_DATE_ADDED = 100;
-const ENRICHED_DATE_ADDED = 200;
+const FIRST_SCAN_TIME = 100;
+const NEW_APP_TIME = 200;
+const UPDATE_TIME = 300;
 
 function noop() {
   return;
@@ -62,45 +64,47 @@ test('app index service indexes apps and notifies dependent running-app status',
   ]);
 });
 
-test('app index service publishes cheap apps before date-added enrichment', async () => {
-  let finishEnrichment: ((apps: IndexedApp[]) => void) | undefined;
-  let primaryIndexReady: (() => void) | undefined;
-  const primaryIndexed = new Promise<void>((resolve) => {
-    primaryIndexReady = resolve;
-  });
-  const service = createAppIndexService({
-    scanApps: async () => [
-      {
-        name: 'New App',
-        path: '/Applications/New App.app',
-        dateAddedMs: INITIAL_DATE_ADDED,
-      },
-    ],
-    enrichApps: () =>
-      new Promise((resolve) => {
-        finishEnrichment = resolve;
-      }),
-    watchApps: () => [],
-    normalize,
-    emitChanged: noop,
-    invalidateRunningStatus: noop,
-    scheduleRunningStatusRefresh: noop,
-    notifyIndexed: () => primaryIndexReady?.(),
-  });
-
-  const indexing = service.indexApplications();
-  await primaryIndexed;
-  assert.equal(service.get()[0]?.dateAddedMs, INITIAL_DATE_ADDED);
-
-  finishEnrichment?.([
+test('first-seen tracking keeps a neutral baseline and dates only new app paths', () => {
+  const baseline = trackFirstSeenApps(
+    [{ name: 'Existing', path: '/Applications/Existing.app' }],
     {
-      name: 'New App',
-      path: '/Applications/New App.app',
-      dateAddedMs: ENRICHED_DATE_ADDED,
+      firstSeenAtById: {},
+      initialized: false,
+      now: FIRST_SCAN_TIME,
+      normalize,
     },
-  ]);
-  await indexing;
-  assert.equal(service.get()[0]?.dateAddedMs, ENRICHED_DATE_ADDED);
+  );
+  assert.equal(baseline.apps[0]?.firstSeenAt, 0);
+  assert.equal(baseline.initialized, true);
+
+  const nextScan = trackFirstSeenApps(
+    [
+      { name: 'Existing', path: '/Applications/Existing.app' },
+      { name: 'New', path: '/Applications/New.app' },
+    ],
+    {
+      firstSeenAtById: baseline.firstSeenAtById,
+      initialized: baseline.initialized,
+      now: NEW_APP_TIME,
+      normalize,
+    },
+  );
+  assert.deepEqual(
+    nextScan.apps.map((app) => app.firstSeenAt),
+    [0, NEW_APP_TIME],
+  );
+
+  const afterUpdate = trackFirstSeenApps(
+    [{ name: 'New', path: '/Applications/New.app' }],
+    {
+      firstSeenAtById: nextScan.firstSeenAtById,
+      initialized: nextScan.initialized,
+      now: UPDATE_TIME,
+      normalize,
+    },
+  );
+  assert.equal(afterUpdate.apps[0]?.firstSeenAt, NEW_APP_TIME);
+  assert.equal(afterUpdate.changed, false);
 });
 
 test('app index service replaces watchers and emits debounced host change events', async () => {

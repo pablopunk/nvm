@@ -128,7 +128,7 @@ import {
 } from './action-execution-policy';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
-import { createAppIndexService } from './app-index-service';
+import { createAppIndexService, trackFirstSeenApps } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
 import {
   createProductionAppUninstallService,
@@ -201,7 +201,6 @@ import {
   autoUpdatesUnavailableMessage,
   captureScreenImage,
   copySelectionIntoClipboard,
-  enrichAppDateAdded,
   runningAppPaths as detectRunningAppPaths,
   executeSystemBuiltin,
   fileDateAddedMs,
@@ -607,6 +606,8 @@ let userState: AnyRecord = {
   settings: {},
   jobSettings: {},
   rateCache: {},
+  appFirstSeenAtById: {},
+  appFirstSeenInitialized: false,
   extensionManager: { schemaVersion: 1, files: {}, proposals: {} },
   nevermindEnvironment: {
     environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
@@ -916,8 +917,21 @@ function recordLearningReview(chatId: string) {
 }
 
 const appIndexService = createAppIndexService({
-  enrichApps: enrichAppDateAdded,
   scanApps,
+  trackFirstSeen: (apps) => {
+    const tracked = trackFirstSeenApps(apps, {
+      firstSeenAtById: userState.appFirstSeenAtById || {},
+      initialized: userState.appFirstSeenInitialized === true,
+      now: Date.now(),
+      normalize,
+    });
+    if (tracked.changed) {
+      userState.appFirstSeenAtById = tracked.firstSeenAtById;
+      userState.appFirstSeenInitialized = tracked.initialized;
+      scheduleSaveState();
+    }
+    return tracked.apps;
+  },
   watchApps,
   normalize,
   emitChanged: () => jobRegistry.emit('apps.changed'),
@@ -7142,7 +7156,7 @@ function createExtensionContext(
                 id: entry.id,
                 name: entry.name,
                 path: entry.path,
-                dateAddedMs: entry.dateAddedMs,
+                firstSeenAt: entry.firstSeenAt,
               })),
             search: (query) => {
               const needle = String(query || '').toLowerCase();
@@ -7159,7 +7173,7 @@ function createExtensionContext(
                   id: entry.id,
                   name: entry.name,
                   path: entry.path,
-                  dateAddedMs: entry.dateAddedMs,
+                  firstSeenAt: entry.firstSeenAt,
                 }));
             },
             icon: (appPath) => appIconCache.get(appPath),
@@ -9769,6 +9783,8 @@ async function loadUserState() {
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},
+      appFirstSeenAtById: loaded.appFirstSeenAtById || {},
+      appFirstSeenInitialized: loaded.appFirstSeenInitialized === true,
       extensionManager: loaded.extensionManager || {
         schemaVersion: 0,
         files: {},
