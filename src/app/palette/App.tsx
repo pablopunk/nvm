@@ -343,6 +343,16 @@ function selectedItemIdForView(view: ExtensionView | null, current = '') {
   );
 }
 
+function extensionWindowViewIdentity(view: ExtensionView | null) {
+  if (!view) return '';
+  const submitActionIdentity =
+    view.submitAction?.handlerId ||
+    view.submitAction?.registeredActionId ||
+    view.submitAction?.actionId ||
+    '';
+  return `${view.type}:${view.id || submitActionIdentity}`;
+}
+
 function isEditableKeyTarget(target: EventTarget | null) {
   return (
     target instanceof HTMLInputElement ||
@@ -354,12 +364,14 @@ function isEditableKeyTarget(target: EventTarget | null) {
 
 export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [view, setView] = useState<ExtensionView | null>(null);
+  const viewRef = useRef<ExtensionView | null>(null);
   const [compactView, setCompactView] = useState<ExtensionView | null>(null);
   const [backStack, setBackStack] = useState<ExtensionView[]>([]);
   const [windowOptions, setWindowOptions] = useState<Record<string, unknown>>(
     {},
   );
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
+  const [formFocusKey, setFormFocusKey] = useState(0);
   const [selectedValue, setSelectedValue] = useState('');
   const [query, setQuery] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -387,6 +399,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       .catch(() => setNevermindAuthed(false));
     window.nvm.getExtensionWindowState().then((state) => {
       if (state?.view) {
+        setFormFocusKey((current) => current + 1);
+        viewRef.current = state.view;
         setView(state.view);
         setCompactView(null);
         setBackStack([]);
@@ -398,6 +412,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     });
     const stopView = window.nvm.onExtensionWindowView((payload) => {
       if (payload.id === windowId) {
+        if (
+          extensionWindowViewIdentity(viewRef.current) !==
+          extensionWindowViewIdentity(payload.view)
+        )
+          setFormFocusKey((current) => current + 1);
+        viewRef.current = payload.view;
         setView(payload.view);
         setCompactView(null);
         setBackStack([]);
@@ -417,6 +437,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       stopAuth();
     };
   }, [windowId]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   const viewKey = `${view?.id || ''}:${view?.type || ''}:${view?.title || ''}`;
   useEffect(() => {
@@ -462,6 +486,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (result.navigation === 'pop') {
       const previous = backStack.at(-1);
       if (previous) {
+        setFormFocusKey((current) => current + 1);
         setBackStack((current) => current.slice(0, -1));
         setView(previous);
         setFormValues(seedFormValuesFromView(previous));
@@ -475,6 +500,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setQuery('');
       setSelectedValue(selectedItemIdForView(result.view));
     } else if (result.view) {
+      setFormFocusKey((current) => current + 1);
       if (result.navigation === 'push' && view)
         setBackStack((current) => [...current, view]);
       else if (result.navigation === 'root') setBackStack([]);
@@ -528,6 +554,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       return;
     }
     setBackStack((current) => current.slice(0, -1));
+    setFormFocusKey((current) => current + 1);
     setView(previous);
     setCompactView(null);
     setActionSubmenuFor(null);
@@ -718,8 +745,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (
       event.target instanceof Element &&
       event.target.closest('.formView') &&
-      event.key !== 'Escape' &&
-      !((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k')
+      (event.metaKey || event.ctrlKey) &&
+      event.key === 'Enter'
     )
       return;
     if (event.key === 'Escape') {
@@ -971,6 +998,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                 dragPathForItem={dragPathForItem}
                 startItemDrag={startItemDrag}
                 selectedItemId={selectedValue}
+                autoFocusForm={!overlayOpen}
+                formFocusKey={formFocusKey}
                 surface="window"
               />
               {compactActionSurface || compactView ? (
@@ -1035,6 +1064,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                         dragPathForItem={dragPathForItem}
                         startItemDrag={startItemDrag}
                         selectedItemId={selectedValue}
+                        autoFocusForm={false}
+                        formFocusKey={formFocusKey}
                         surface="window"
                       />
                     ) : null}
@@ -4381,7 +4412,7 @@ export function App() {
     );
   }
 
-  function renderExtensionView(view: ExtensionView) {
+  function renderExtensionView(view: ExtensionView, autoFocusForm = true) {
     return (
       <ExtensionViewRenderer
         view={view}
@@ -4414,6 +4445,8 @@ export function App() {
         dragPathForItem={dragPathForItem}
         startItemDrag={startItemDrag}
         selectedItemId={selectedValue}
+        autoFocusForm={autoFocusForm}
+        formFocusKey={extensionNavigation.navigationKey}
       />
     );
   }
@@ -5091,7 +5124,7 @@ export function App() {
             aria-hidden={sib.aiChat ? undefined : true}
           >
             <div className="siblingHeader">{sib.title}</div>
-            <div className="siblingBody">{renderExtensionView(sib)}</div>
+            <div className="siblingBody">{renderExtensionView(sib, false)}</div>
           </div>
         ))}
 

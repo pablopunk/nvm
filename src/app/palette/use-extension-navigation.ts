@@ -37,6 +37,7 @@ export function useExtensionNavigation() {
     view: null,
     backStack: [],
   });
+  const [navigationKey, setNavigationKey] = useState(0);
   const { view, backStack } = state;
 
   function setView(nextView: SetStateAction<CommandView | null>) {
@@ -60,11 +61,13 @@ export function useExtensionNavigation() {
     nextView: CommandView,
     navigation: Exclude<NavigationMode, 'pop'> = 'replace',
   ) {
+    setNavigationKey((current) => current + 1);
     setState((current) => nextNavigationState(current, nextView, navigation));
   }
 
   function popView() {
     let didPop = false;
+    setNavigationKey((current) => current + 1);
     setState((current) => {
       const next = previousNavigationState(current);
       didPop = next.didPop;
@@ -74,11 +77,13 @@ export function useExtensionNavigation() {
   }
 
   function clearView() {
+    setNavigationKey((current) => current + 1);
     setState({ view: null, backStack: [] });
   }
 
   return {
     view,
+    navigationKey,
     setView,
     backStack,
     setBackStack,

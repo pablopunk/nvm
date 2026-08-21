@@ -1675,6 +1675,8 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
@@ -1694,6 +1696,12 @@ kbd {
   background: var(--accent-soft);
 }
 
+.formSubmitButton > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .formSubmitButton kbd,
 .formKeyboardHint kbd {
   color: var(--text-tertiary);
@@ -1703,6 +1711,7 @@ kbd {
 
 .formFooter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;

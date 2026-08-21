@@ -89,6 +89,7 @@ export type ExtensionViewRendererProps = {
   selectedItemId?: string;
   onSelectItem?: (item: CommandItem) => void;
   autoFocusForm?: boolean;
+  formFocusKey?: string | number;
   /** Rendering host; windows get compact headers and no palette chrome. */
   surface?: 'palette' | 'window';
 };
@@ -1030,10 +1031,10 @@ function FormExtensionView({
   setFormValues,
   runAction,
   autoFocusForm,
+  formFocusKey,
 }: ExtensionViewSurfaceProps) {
   return (
     <FormView
-      key={`${view.id || ''}:${view.title}`}
       fields={view.fields || []}
       values={formValues}
       onChange={(id, value) =>
@@ -1046,6 +1047,7 @@ function FormExtensionView({
       }
       submitTitle={view.submitAction?.title}
       autoFocus={autoFocusForm}
+      autoFocusKey={formFocusKey}
     />
   );
 }

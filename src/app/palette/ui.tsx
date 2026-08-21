@@ -1,9 +1,10 @@
 // biome-ignore-all lint: This legacy shared UI module retains established renderer conventions.
 import { Command } from 'cmdk';
 import { Folder } from 'lucide-react';
-import React, { type ReactNode, useLayoutEffect, useRef } from 'react';
+import React, { type ReactNode, useId, useLayoutEffect, useRef } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { formKeyboardActionForEvent } from './form-keyboard';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
 
@@ -105,6 +106,7 @@ export interface FormViewProps {
   onSubmit?: () => void;
   submitTitle?: string;
   autoFocus?: boolean;
+  autoFocusKey?: string | number;
 }
 export interface EditorViewProps {
   value: string;
@@ -601,22 +603,22 @@ function normalizedFormValue(value: FormValue | undefined) {
   return value === undefined ? '' : value;
 }
 
-function formFieldErrorId(field: FormField) {
-  return `form-field-error-${field.id}`;
+function formFieldErrorId(formId: string, field: FormField) {
+  return `${formId}-form-field-error-${field.id}`;
 }
 
-function formFieldDescriptionId(field: FormField) {
-  return `form-field-description-${field.id}`;
+function formFieldDescriptionId(formId: string, field: FormField) {
+  return `${formId}-form-field-description-${field.id}`;
 }
 
-function formFieldControlId(field: FormField) {
-  return `form-field-control-${field.id}`;
+function formFieldControlId(formId: string, field: FormField) {
+  return `${formId}-form-field-control-${field.id}`;
 }
 
-function formFieldDescribedBy(field: FormField) {
+function formFieldDescribedBy(formId: string, field: FormField) {
   return [
-    field.description ? formFieldDescriptionId(field) : '',
-    field.error ? formFieldErrorId(field) : '',
+    field.description ? formFieldDescriptionId(formId, field) : '',
+    field.error ? formFieldErrorId(formId, field) : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -625,11 +627,12 @@ function formFieldDescribedBy(field: FormField) {
 function formFieldControl(
   field: FormField,
   value: FormValue,
+  formId: string,
   onChange?: FormViewProps['onChange'],
 ) {
   const type = field.type || 'text';
-  const controlId = formFieldControlId(field);
-  const describedBy = formFieldDescribedBy(field) || undefined;
+  const controlId = formFieldControlId(formId, field);
+  const describedBy = formFieldDescribedBy(formId, field) || undefined;
   if (type === 'file' || type === 'files' || type === 'folder') {
     const values = Array.isArray(value)
       ? value
@@ -799,11 +802,20 @@ export function FormView({
   onSubmit,
   submitTitle = 'Submit',
   autoFocus = true,
+  autoFocusKey = 0,
 }: FormViewProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const hasAutoFocusedRef = useRef(false);
+  const previousAutoFocusKeyRef = useRef(autoFocusKey);
+  const formId = useId();
   useLayoutEffect(() => {
-    if (!autoFocus) return;
+    if (previousAutoFocusKeyRef.current !== autoFocusKey) {
+      previousAutoFocusKeyRef.current = autoFocusKey;
+      hasAutoFocusedRef.current = false;
+    }
+    if (!autoFocus || hasAutoFocusedRef.current) return;
     const frame = requestAnimationFrame(() => {
+      hasAutoFocusedRef.current = true;
       formRef.current
         ?.querySelector<HTMLElement>(
           'input:not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled)',
@@ -811,7 +823,7 @@ export function FormView({
         ?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [autoFocus]);
+  }, [autoFocus, autoFocusKey]);
 
   return (
     <form
@@ -819,23 +831,29 @@ export function FormView({
       className="extensionView formView"
       aria-keyshortcuts="Meta+Enter Control+Enter"
       onKeyDown={(event) => {
-        const commandKey = event.metaKey || event.ctrlKey;
-        if (
-          event.key === 'Escape' ||
-          (commandKey && event.key.toLowerCase() === 'k')
-        )
-          return;
-        if (commandKey && event.key === 'Enter') {
+        const control = event.target;
+        const action = formKeyboardActionForEvent({
+          key: event.key,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          targetTag:
+            control instanceof HTMLElement ? control.tagName : undefined,
+          inputType:
+            control instanceof HTMLInputElement ? control.type : undefined,
+        });
+        if (action === 'host') return;
+        if (action === 'submit') {
           event.preventDefault();
           event.stopPropagation();
           event.currentTarget.requestSubmit();
           return;
         }
         event.stopPropagation();
-        if (event.key !== 'Enter' || event.altKey || event.shiftKey) return;
-        const control = event.target;
-        if (!(control instanceof HTMLInputElement)) return;
-        if (control.type === 'checkbox') {
+        if (action === 'field' || !(control instanceof HTMLInputElement))
+          return;
+        if (action === 'toggle') {
           event.preventDefault();
           control.click();
           return;
@@ -863,7 +881,7 @@ export function FormView({
                 key={field.id}
                 className={`formStaticField formStaticField-${type}`}
               >
-                {formFieldControl(field, value, onChange)}
+                {formFieldControl(field, value, formId, onChange)}
               </div>
             );
           return (
@@ -875,7 +893,7 @@ export function FormView({
               type !== 'folder' ? (
                 <label
                   className="formFieldLabel"
-                  htmlFor={formFieldControlId(field)}
+                  htmlFor={formFieldControlId(formId, field)}
                 >
                   {field.label || field.id}
                 </label>
@@ -884,14 +902,17 @@ export function FormView({
                   {field.label || field.id}
                 </span>
               ) : null}
-              {formFieldControl(field, value, onChange)}
+              {formFieldControl(field, value, formId, onChange)}
               {field.description ? (
-                <small id={formFieldDescriptionId(field)}>
+                <small id={formFieldDescriptionId(formId, field)}>
                   {field.description}
                 </small>
               ) : null}
               {field.error ? (
-                <small id={formFieldErrorId(field)} className="formFieldError">
+                <small
+                  id={formFieldErrorId(formId, field)}
+                  className="formFieldError"
+                >
                   {field.error}
                 </small>
               ) : null}

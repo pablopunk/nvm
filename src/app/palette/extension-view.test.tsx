@@ -126,8 +126,8 @@ test('renders forms as a grouped keyboard-first surface', () => {
   assert.match(html, /class="extensionView formView"/);
   assert.match(html, /aria-keyshortcuts="Meta\+Enter Control\+Enter"/);
   assert.match(html, /class="formFields"/);
-  assert.match(html, /for="form-field-control-name"/);
-  assert.match(html, /id="form-field-description-name"/);
+  assert.match(html, /for="[^"]+-form-field-control-name"/);
+  assert.match(html, /id="[^"]+-form-field-description-name"/);
   assert.match(html, /class="formMultiselect"/);
   assert.match(html, /<kbd>Tab<\/kbd> Move between fields/);
   assert.match(html, /<span>Save Account<\/span><kbd>⌘↵<\/kbd>/);
