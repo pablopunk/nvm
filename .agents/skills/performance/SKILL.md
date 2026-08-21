@@ -21,7 +21,7 @@ Performance is UX. In Nevermind, every millisecond affects trust because the pro
 4. **Separate perceived and actual latency.** Prefer showing cached/snapshot data immediately, hydrating expensive details later, and refreshing in place.
 5. **Find the blocking edge.** Look for synchronous CPU, awaited fanout, repeated IPC, re-render storms, layout reads/writes, heavy serialization, filesystem/native calls, and broad cache invalidation.
 6. **Fix the disease, then re-measure.** Prefer no-op guards, in-flight dedupe, request coalescing, stale-result drops, memoization, and lazy hydration before architectural rewrites. Confirm the same `performance.measure` names improve instead of adding unrelated patches.
-7. **Verify with the closest real flow.** Use `mise exec -- pnpm typecheck`, `mise exec -- pnpm test` for safety, and `mise exec -- pnpm palette:debug` for provider/search behavior; manually dogfood UI changes when render/input feel matters.
+7. **Verify with the closest real flow.** Use `mise exec -- pnpm typecheck` and `mise exec -- pnpm test` for safety; manually dogfood UI changes when render/input feel matters.
 
 ## Hot paths to inspect first
 

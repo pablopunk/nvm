@@ -10473,28 +10473,6 @@ async function removeCreatedAction(action) {
   return { ok: false, message: 'This action cannot be removed' };
 }
 
-async function runPaletteDebugCli() {
-  await appIndexService.indexApplications();
-  await indexFiles();
-  const query = String(process.env.NVM_PALETTE_QUERY || '');
-  const actions = await searchActions(query);
-  const selected = process.env.NVM_PALETTE_EXECUTE
-    ? actions.find(
-        (action) =>
-          action.id === process.env.NVM_PALETTE_EXECUTE ||
-          action.title === process.env.NVM_PALETTE_EXECUTE,
-      )
-    : null;
-  const result = selected ? await executeActionForIpc(selected) : undefined;
-  console.log(
-    JSON.stringify(
-      { query, count: actions.length, actions, selected, result },
-      null,
-      2,
-    ),
-  );
-}
-
 async function pickFormFieldPaths(event, input: any = {}) {
   const senderWindow =
     BrowserWindow.fromWebContents(event.sender) ||
@@ -10585,11 +10563,6 @@ app.whenReady().then(async () => {
   registerHostJobs();
   jobRegistry.onChange(syncFrontmostAppPolling);
   await loadExtensions();
-  if (process.env.NVM_PALETTE_DEBUG) {
-    await runPaletteDebugCli();
-    app.quit();
-    return;
-  }
   await initNevermindAi();
   initExtensionContext({ nevermindAi });
   void restorePersistentExtensionWindows();

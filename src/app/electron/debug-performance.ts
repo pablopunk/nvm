@@ -24,9 +24,7 @@ export function debugPerformanceEnabled() {
   )
     return false;
   return Boolean(
-    process.env.NVM_DEBUG_PERFORMANCE ||
-      process.env.NVM_PALETTE_DEBUG ||
-      process.env.ELECTRON_RENDERER_URL,
+    process.env.NVM_DEBUG_PERFORMANCE || process.env.ELECTRON_RENDERER_URL,
   );
 }
 

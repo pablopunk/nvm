@@ -26,7 +26,6 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "format:staged": "node scripts/check-staged.cjs --write",
-    "palette:debug": "node .agents/skills/palette-debug/palette-debug.cjs",
     "learnings:export": "node scripts/learnings-export.cjs",
     "logs:tail": "node scripts/tail-log.cjs",
     "logs:performance": "node scripts/performance-report.cjs",

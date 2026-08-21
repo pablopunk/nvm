@@ -18,7 +18,7 @@ This surfaced after adding background-job fixtures. A persistent fixture action 
 
 ## What did not work
 
-- Relying on `palette:debug` alone was insufficient because JSON output drops functions silently.
+- Relying on JSON-serialized debug output alone was insufficient because JSON output drops functions silently.
 - Inspecting printed search results did not reveal the uncloneable field for the same reason.
 
 ## Root cause
@@ -40,7 +40,6 @@ Run:
 
 ```bash
 mise exec -- pnpm test
-mise exec -- pnpm palette:debug
 ```
 
 Then dogfood live search with the dev app and CDP:
