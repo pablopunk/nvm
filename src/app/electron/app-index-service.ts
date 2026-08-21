@@ -1,3 +1,43 @@
+function measureAppIndex<T>(
+  deps: AppIndexServiceDeps,
+  name: string,
+  data: Record<string, unknown>,
+  fn: () => Promise<T>,
+) {
+  return deps.measure ? deps.measure(name, data, fn) : fn();
+}
+
+function indexedAppsFromScan(
+  deps: AppIndexServiceDeps,
+  scan: AppScanResult,
+  initializeBaseline: boolean,
+) {
+  const apps =
+    deps.trackFirstSeen?.(scan.apps, initializeBaseline) || scan.apps;
+  return dedupeAndSortApps(apps, deps.normalize);
+}
+
+async function confirmedBaselineIndex(options: {
+  deps: AppIndexServiceDeps;
+  isCurrent: () => boolean;
+}) {
+  const { deps, isCurrent } = options;
+  if (!deps.needsFirstSeenBaseline?.()) {
+    return null;
+  }
+  const scan = await deps.scanApps();
+  if (!isCurrent()) {
+    return null;
+  }
+  if (!scan.complete) {
+    deps.mark?.('apps.index.baseline-incomplete', {
+      scannedCount: scan.apps.length,
+    });
+    return null;
+  }
+  return indexedAppsFromScan(deps, scan, true);
+}
+
 export interface IndexedApp {
   id?: string;
   name: string;
@@ -6,9 +46,18 @@ export interface IndexedApp {
   [key: string]: unknown;
 }
 
+export interface AppScanResult {
+  apps: IndexedApp[];
+  complete: boolean;
+}
+
 export interface AppIndexServiceDeps {
-  scanApps: () => Promise<IndexedApp[]>;
-  trackFirstSeen?: (apps: IndexedApp[]) => IndexedApp[];
+  scanApps: () => Promise<AppScanResult>;
+  trackFirstSeen?: (
+    apps: IndexedApp[],
+    initializeBaseline: boolean,
+  ) => IndexedApp[];
+  needsFirstSeenBaseline?: () => boolean;
   watchApps: (onChanged: () => void) => Array<{ close: () => unknown }>;
   normalize: (value: string) => string;
   emitChanged: () => void;
@@ -29,22 +78,24 @@ export function trackFirstSeenApps(
   options: {
     firstSeenAtById: Record<string, number>;
     initialized: boolean;
+    initializeBaseline?: boolean;
     now: number;
-    normalize: (value: string) => string;
+    identityKey: (value: string) => string;
   },
 ) {
-  const { firstSeenAtById, initialized, now, normalize } = options;
+  const { firstSeenAtById, initialized, initializeBaseline, now, identityKey } =
+    options;
   const nextFirstSeenAtById = { ...firstSeenAtById };
   let changed = false;
   const trackedApps = apps.map((app) => {
-    const id = normalize(String(app.path || app.id || app.name));
+    const id = identityKey(String(app.path || app.id || app.name));
     if (!Object.hasOwn(nextFirstSeenAtById, id)) {
       nextFirstSeenAtById[id] = initialized ? now : 0;
       changed = true;
     }
     return { ...app, firstSeenAt: nextFirstSeenAtById[id] };
   });
-  const nextInitialized = initialized || apps.length > 0;
+  const nextInitialized = initialized || initializeBaseline === true;
   return {
     apps: trackedApps,
     firstSeenAtById: nextFirstSeenAtById,
@@ -71,14 +122,6 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
   let indexGeneration = 0;
   let watchers: Array<{ close: () => unknown }> = [];
 
-  function measure<T>(
-    name: string,
-    data: Record<string, unknown>,
-    fn: () => Promise<T>,
-  ) {
-    return deps.measure ? deps.measure(name, data, fn) : fn();
-  }
-
   function get() {
     return index;
   }
@@ -96,21 +139,30 @@ export function createAppIndexService(deps: AppIndexServiceDeps) {
 
   async function indexApplications() {
     const generation = ++indexGeneration;
-    await measure('apps.index', { alwaysLog: true }, async () => {
+    await measureAppIndex(deps, 'apps.index', { alwaysLog: true }, async () => {
       try {
-        const scannedApps = await deps.scanApps();
+        const scan = await deps.scanApps();
         if (generation !== indexGeneration) {
           return;
         }
-        const apps = deps.trackFirstSeen?.(scannedApps) || scannedApps;
-        index = dedupeAndSortApps(apps, deps.normalize);
+        index = indexedAppsFromScan(deps, scan, false);
         deps.invalidateRunningStatus();
         deps.mark?.('apps.index.result', {
-          scannedCount: apps.length,
+          scannedCount: scan.apps.length,
+          complete: scan.complete,
           indexedCount: index.length,
         });
         deps.notifyIndexed(index.length);
         deps.scheduleRunningStatusRefresh('apps-indexed');
+        const baselineIndex = await confirmedBaselineIndex({
+          deps,
+          isCurrent: () => generation === indexGeneration,
+        });
+        if (baselineIndex) {
+          index = baselineIndex;
+          deps.mark?.('apps.index.baseline', { indexedCount: index.length });
+          deps.notifyIndexed(index.length);
+        }
       } catch (error) {
         deps.error?.('applications.index.failed', error);
       }

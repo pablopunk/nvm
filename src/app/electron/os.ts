@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This platform adapter retains established cross-OS imperative conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import { watch } from 'node:fs';
+import { type Dirent, watch } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,6 +32,10 @@ type OsWatcher = {
   on: (event: string, listener: () => void) => unknown;
 };
 type OsExecFile = typeof execFile;
+
+function isMissingPathError(error: unknown) {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
+}
 
 export type OsAdapterDependencies = {
   app?: typeof app;
@@ -171,12 +175,17 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   }
 
   async function scanWindowsAppsForPlatform() {
-    if (processPlatform !== 'win32') return [];
+    if (processPlatform !== 'win32') return { apps: [], complete: true };
     const found: Array<{ id: string; name: string; path: string }> = [];
+    let complete = true;
     async function walk(root: string): Promise<void> {
-      const entries = await fileSystem
-        .readdir(root, { withFileTypes: true })
-        .catch(() => []);
+      let entries: Dirent[];
+      try {
+        entries = await fileSystem.readdir(root, { withFileTypes: true });
+      } catch (error) {
+        if (!isMissingPathError(error)) complete = false;
+        return;
+      }
       await Promise.all(
         entries.map(async (entry) => {
           const fullPath = pathFacade.join(root, entry.name);
@@ -191,7 +200,7 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
       );
     }
     await Promise.all(appScanRootsForPlatform().map(walk));
-    return found;
+    return { apps: found, complete };
   }
 
   function watchAppsForPlatform(onChange: () => void) {
@@ -289,6 +298,8 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   }
 
   return {
+    appIdentityKey: (value: string) =>
+      dependent({ win32: value.toLowerCase() }, value),
     appScanRoots: appScanRootsForPlatform,
     forceQuitWindowsApp: forceQuitWindowsAppForPlatform,
     hasCapability: hasCapabilityForPlatform,
@@ -577,6 +588,7 @@ const macSystemApps = ['/System/Library/CoreServices/Finder.app'];
 
 async function scanMacApps() {
   const found: any[] = [];
+  let complete = true;
   await Promise.all(
     macSystemApps.map(async (appPath) => {
       try {
@@ -587,14 +599,20 @@ async function scanMacApps() {
           name: path.basename(appPath).replace(/\.app$/i, ''),
           path: appPath,
         });
-      } catch {}
+      } catch (error) {
+        if (!isMissingPathError(error)) complete = false;
+      }
     }),
   );
 
   async function walk(dir: string, depth: number) {
-    const entries = await fs
-      .readdir(dir, { withFileTypes: true })
-      .catch(() => []);
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      if (!isMissingPathError(error)) complete = false;
+      return;
+    }
     await Promise.all(
       entries.map(async (entry) => {
         if (entry.name.startsWith('.')) return;
@@ -608,7 +626,8 @@ async function scanMacApps() {
                 name: entry.name.replace(/\.app$/i, ''),
                 path: fullPath,
               });
-          } catch {
+          } catch (error) {
+            if (!isMissingPathError(error)) complete = false;
             /* broken symlink or inaccessible, skip */
           }
           return;
@@ -616,14 +635,15 @@ async function scanMacApps() {
         try {
           const st = await fs.stat(fullPath);
           if (st.isDirectory() && depth > 0) await walk(fullPath, depth - 1);
-        } catch {
+        } catch (error) {
+          if (!isMissingPathError(error)) complete = false;
           /* skip inaccessible entries */
         }
       }),
     );
   }
   await Promise.all(appScanRoots().map((root) => walk(root, 2)));
-  return found;
+  return { apps: found, complete };
 }
 
 async function scanWindowsApps() {
@@ -632,16 +652,27 @@ async function scanWindowsApps() {
 
 async function scanLinuxApps() {
   const found: any[] = [];
+  let complete = true;
   await Promise.all(
     appScanRoots().map(async (root) => {
-      const entries = await fs
-        .readdir(root, { withFileTypes: true })
-        .catch(() => []);
+      let entries: Dirent[];
+      try {
+        entries = await fs.readdir(root, { withFileTypes: true });
+      } catch (error) {
+        if (!isMissingPathError(error)) complete = false;
+        return;
+      }
       await Promise.all(
         entries.map(async (entry) => {
           if (!(entry.isFile() && entry.name.endsWith('.desktop'))) return;
           const fullPath = path.join(root, entry.name);
-          const body = await fs.readFile(fullPath, 'utf8').catch(() => '');
+          let body: string;
+          try {
+            body = await fs.readFile(fullPath, 'utf8');
+          } catch (error) {
+            if (!isMissingPathError(error)) complete = false;
+            return;
+          }
           const desktopEntry = parseLinuxDesktopEntry(body);
           if (!desktopEntry) return;
           found.push({
@@ -655,7 +686,7 @@ async function scanLinuxApps() {
       );
     }),
   );
-  return found;
+  return { apps: found, complete };
 }
 
 export async function scanApps() {
@@ -663,6 +694,10 @@ export async function scanApps() {
     { darwin: scanMacApps, win32: scanWindowsApps },
     scanLinuxApps,
   )();
+}
+
+export function appIdentityKey(value: string) {
+  return defaultOsAdapter.appIdentityKey(value);
 }
 
 type RunningAppCandidate = {

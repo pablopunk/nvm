@@ -12,6 +12,14 @@ mock.module('electron', {
 const os = await import('./os');
 const linuxOnly = { skip: process.platform !== 'linux' };
 
+test('preserves case in Linux app identity paths', () => {
+  const adapter = os.createOsAdapter({ processPlatform: 'linux' });
+  assert.equal(
+    adapter.appIdentityKey('/opt/Apps/Example.desktop'),
+    '/opt/Apps/Example.desktop',
+  );
+});
+
 test('keeps the Linux platform contract non-destructive', linuxOnly, () => {
   assert.equal(os.osLabel(), 'Linux');
   assert.equal(os.settingsTitle(), 'Open Settings');

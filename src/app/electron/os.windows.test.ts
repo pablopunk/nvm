@@ -52,6 +52,10 @@ test('simulates Windows labels, capabilities, and exact platform paths off-host'
   assert.equal(adapter.hasCapability('open-with-app-filtering'), false);
   assert.equal(adapter.hasCapability('launch-at-login'), true);
   assert.equal(adapter.hasCapability('auto-updates'), true);
+  assert.equal(
+    adapter.appIdentityKey(String.raw`C:\Apps\Example.EXE`),
+    String.raw`c:\apps\example.exe`,
+  );
   assert.deepEqual(adapter.appScanRoots(), [
     String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs`,
     String.raw`C:\Users\Zoë\AppData\Roaming\Microsoft\Windows\Start Menu\Programs`,
@@ -97,10 +101,10 @@ test('recursively discovers Windows shortcuts and ignores inaccessible roots', a
     },
   });
 
+  const scan = await adapter.scanWindowsApps();
+  assert.equal(scan.complete, false);
   assert.deepEqual(
-    (await adapter.scanWindowsApps()).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    ),
+    scan.apps.sort((a, b) => a.name.localeCompare(b.name)),
     [
       {
         id: String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Nevermind.lnk`,

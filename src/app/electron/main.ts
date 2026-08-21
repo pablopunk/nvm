@@ -198,6 +198,7 @@ import {
 import { compatibleOpenWithApps } from './open-with-apps';
 import {
   appIconSources,
+  appIdentityKey,
   autoUpdatesUnavailableMessage,
   captureScreenImage,
   copySelectionIntoClipboard,
@@ -918,12 +919,13 @@ function recordLearningReview(chatId: string) {
 
 const appIndexService = createAppIndexService({
   scanApps,
-  trackFirstSeen: (apps) => {
+  trackFirstSeen: (apps, initializeBaseline) => {
     const tracked = trackFirstSeenApps(apps, {
       firstSeenAtById: userState.appFirstSeenAtById || {},
       initialized: userState.appFirstSeenInitialized === true,
+      initializeBaseline,
       now: Date.now(),
-      normalize,
+      identityKey: appIdentityKey,
     });
     if (tracked.changed) {
       userState.appFirstSeenAtById = tracked.firstSeenAtById;
@@ -932,6 +934,7 @@ const appIndexService = createAppIndexService({
     }
     return tracked.apps;
   },
+  needsFirstSeenBaseline: () => userState.appFirstSeenInitialized !== true,
   watchApps,
   normalize,
   emitChanged: () => jobRegistry.emit('apps.changed'),
@@ -10571,6 +10574,7 @@ app.whenReady().then(async () => {
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
 
   await loadUserState();
+  await appIndexService.startWatcher();
   await Promise.all([hydrateExtensionDrafts(), hydrateExtensionWindowsState()]);
   extensionPrSubmitter = createExtensionPrSubmitter({
     execFileText,
@@ -10597,7 +10601,6 @@ app.whenReady().then(async () => {
   flushBufferedDeepLinks();
   registerActionShortcuts();
   await startClipboardWatcher();
-  await appIndexService.startWatcher();
   powerMonitor.on('resume', () => jobRegistry.emit('wake'));
   jobRegistry.emit('login');
 

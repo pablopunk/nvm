@@ -11,6 +11,7 @@ const normalize = (value: string) => value.trim().toLowerCase();
 const FIRST_SCAN_TIME = 100;
 const NEW_APP_TIME = 200;
 const UPDATE_TIME = 300;
+const CONFIRMED_SCAN_COUNT = 4;
 
 function noop() {
   return;
@@ -35,11 +36,14 @@ test('dedupeAndSortApps keeps one app per normalized name and sorts by display n
 test('app index service indexes apps and notifies dependent running-app status', async () => {
   const notifications: string[] = [];
   const service = createAppIndexService({
-    scanApps: async () => [
-      { name: 'B' },
-      { name: 'A' },
-      { name: 'a', path: '/latest/A.app' },
-    ],
+    scanApps: async () => ({
+      apps: [
+        { name: 'B' },
+        { name: 'A' },
+        { name: 'a', path: '/latest/A.app' },
+      ],
+      complete: true,
+    }),
     watchApps: () => [],
     normalize,
     emitChanged: () => notifications.push('changed'),
@@ -64,34 +68,69 @@ test('app index service indexes apps and notifies dependent running-app status',
   ]);
 });
 
-test('first-seen tracking keeps a neutral baseline and dates only new app paths', () => {
+test('first-seen tracking confirms a neutral baseline', () => {
   const baseline = trackFirstSeenApps(
     [{ name: 'Existing', path: '/Applications/Existing.app' }],
     {
       firstSeenAtById: {},
       initialized: false,
+      initializeBaseline: false,
       now: FIRST_SCAN_TIME,
-      normalize,
+      identityKey: (value) => value,
     },
   );
   assert.equal(baseline.apps[0]?.firstSeenAt, 0);
-  assert.equal(baseline.initialized, true);
+  assert.equal(baseline.initialized, false);
 
-  const nextScan = trackFirstSeenApps(
+  const confirmedBaseline = trackFirstSeenApps(
     [
-      { name: 'Existing', path: '/Applications/Existing.app' },
-      { name: 'New', path: '/Applications/New.app' },
+      ...baseline.apps,
+      { name: 'Recovered', path: '/Applications/Recovered.app' },
     ],
     {
       firstSeenAtById: baseline.firstSeenAtById,
       initialized: baseline.initialized,
+      initializeBaseline: true,
+      now: FIRST_SCAN_TIME,
+      identityKey: (value) => value,
+    },
+  );
+  assert.deepEqual(
+    confirmedBaseline.apps.map((app) => app.firstSeenAt),
+    [0, 0],
+  );
+  assert.equal(confirmedBaseline.initialized, true);
+
+  const emptyBaseline = trackFirstSeenApps([], {
+    firstSeenAtById: {},
+    initialized: false,
+    initializeBaseline: true,
+    now: FIRST_SCAN_TIME,
+    identityKey: (value) => value,
+  });
+  assert.equal(emptyBaseline.initialized, true);
+});
+
+test('first-seen tracking dates new paths but retains updates', () => {
+  const nextScan = trackFirstSeenApps(
+    [
+      { name: 'Existing', path: '/Applications/Existing.app' },
+      { name: 'Recovered', path: '/Applications/Recovered.app' },
+      { name: 'New', path: '/Applications/New.app' },
+    ],
+    {
+      firstSeenAtById: {
+        '/Applications/Existing.app': 0,
+        '/Applications/Recovered.app': 0,
+      },
+      initialized: true,
       now: NEW_APP_TIME,
-      normalize,
+      identityKey: (value) => value,
     },
   );
   assert.deepEqual(
     nextScan.apps.map((app) => app.firstSeenAt),
-    [0, NEW_APP_TIME],
+    [0, 0, NEW_APP_TIME],
   );
 
   const afterUpdate = trackFirstSeenApps(
@@ -100,11 +139,65 @@ test('first-seen tracking keeps a neutral baseline and dates only new app paths'
       firstSeenAtById: nextScan.firstSeenAtById,
       initialized: nextScan.initialized,
       now: UPDATE_TIME,
-      normalize,
+      identityKey: (value) => value,
     },
   );
   assert.equal(afterUpdate.apps[0]?.firstSeenAt, NEW_APP_TIME);
   assert.equal(afterUpdate.changed, false);
+});
+
+test('app index service waits for a complete baseline scan', async () => {
+  let scanCount = 0;
+  let initialized = false;
+  let firstSeenAtById: Record<string, number> = {};
+  const service = createAppIndexService({
+    scanApps: () => {
+      scanCount += 1;
+      return Promise.resolve({
+        apps:
+          scanCount <= 2
+            ? [{ name: 'Existing', path: '/Applications/Existing.app' }]
+            : [
+                { name: 'Existing', path: '/Applications/Existing.app' },
+                { name: 'Recovered', path: '/Applications/Recovered.app' },
+              ],
+        complete: scanCount > 2,
+      });
+    },
+    trackFirstSeen: (apps, initializeBaseline) => {
+      const tracked = trackFirstSeenApps(apps, {
+        firstSeenAtById,
+        initialized,
+        initializeBaseline,
+        now: FIRST_SCAN_TIME,
+        identityKey: (value) => value,
+      });
+      firstSeenAtById = tracked.firstSeenAtById;
+      initialized = tracked.initialized;
+      return tracked.apps;
+    },
+    needsFirstSeenBaseline: () => !initialized,
+    watchApps: () => [],
+    normalize,
+    emitChanged: noop,
+    invalidateRunningStatus: noop,
+    scheduleRunningStatusRefresh: noop,
+    notifyIndexed: noop,
+  });
+
+  await service.indexApplications();
+
+  assert.equal(scanCount, 2);
+  assert.equal(initialized, false);
+
+  await service.indexApplications();
+
+  assert.equal(scanCount, CONFIRMED_SCAN_COUNT);
+  assert.equal(initialized, true);
+  assert.deepEqual(
+    service.get().map((app) => app.firstSeenAt),
+    [0, 0],
+  );
 });
 
 test('app index service replaces watchers and emits debounced host change events', async () => {
@@ -112,7 +205,7 @@ test('app index service replaces watchers and emits debounced host change events
   const emitted: string[] = [];
   const callbacks: Array<() => void> = [];
   const service = createAppIndexService({
-    scanApps: async () => [],
+    scanApps: async () => ({ apps: [], complete: true }),
     watchApps: () => {
       const id = `watcher-${callbacks.length}`;
       callbacks.push(() => emitted.push('changed'));
@@ -139,7 +232,9 @@ test('app index service keeps previous index when scanning fails', async () => {
   let apps: IndexedApp[] | Error = [{ name: 'Notes' }];
   const service = createAppIndexService({
     scanApps: () =>
-      apps instanceof Error ? Promise.reject(apps) : Promise.resolve(apps),
+      apps instanceof Error
+        ? Promise.reject(apps)
+        : Promise.resolve({ apps, complete: true }),
     watchApps: () => [],
     normalize,
     emitChanged: noop,
