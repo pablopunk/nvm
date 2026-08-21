@@ -1197,9 +1197,7 @@ kbd {
 
 .chatBubble,
 .progressStep,
-.progressOverview,
-.formField,
-.formStaticField {
+.progressOverview {
   display: grid;
   gap: 4px;
   border-radius: var(--radius-md);
@@ -1281,9 +1279,7 @@ kbd {
 }
 
 .progressStep,
-.progressOverview,
-.formField,
-.formStaticField {
+.progressOverview {
   padding: 8px 10px;
   background: var(--surface-1);
 }
@@ -1506,15 +1502,63 @@ kbd {
   padding-left: 4px;
 }
 
+.formView {
+  min-height: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.formFields {
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  overscroll-behavior: contain;
+}
+
+.formField,
+.formStaticField {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-1);
+}
+
+.formFields > :last-child {
+  border-bottom: 0;
+}
+
+.formField:focus-within {
+  background: var(--surface-2);
+}
+
+.formFieldLabel,
+.formCheckbox {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
 .formView input:not([type="checkbox"]),
 .formView textarea,
-.formView select {
+.formView select,
+.formMultiselect {
+  width: 100%;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text-primary);
   background: var(--surface-sunken);
   font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+
+.formView input:not([type="checkbox"]):focus,
+.formView textarea:focus,
+.formView select:focus {
+  border-color: var(--border-3);
 }
 
 .previewText {
@@ -1541,18 +1585,50 @@ kbd {
 
 .formCheckbox input {
   flex: none;
-  width: auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
   accent-color: var(--accent-strong);
 }
 
-.formView select[multiple] {
-  min-height: 88px;
+.formMultiselect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
   padding: 6px;
 }
 
-.formView select[multiple] option {
+.formMultiselect legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.formMultiselect label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   border-radius: var(--radius-xs);
-  padding: 4px 6px;
+  padding: 5px 8px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  font-size: var(--fs-xs);
+}
+
+.formMultiselect label:has(input:checked) {
+  color: var(--text-primary);
+  background: var(--accent-faint);
+}
+
+.formMultiselect input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent-strong);
 }
 
 .formPickerControl {
@@ -1604,11 +1680,14 @@ kbd {
 }
 
 .formSubmitButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text-strong);
-  background: var(--surface-3);
+  background: var(--accent-faint);
   font: inherit;
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -1620,7 +1699,26 @@ kbd {
 }
 
 .formSubmitButton:hover {
-  background: var(--surface-4);
+  background: var(--accent-soft);
+}
+
+.formSubmitButton kbd,
+.formKeyboardHint kbd {
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--fs-2xs);
+}
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.formKeyboardHint {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
 }
 
 .formDescription,
@@ -1642,7 +1740,7 @@ kbd {
 }
 
 .formStaticField-separator {
-  padding-block: 4px;
+  padding: 4px 12px;
 }
 
 .resultText {

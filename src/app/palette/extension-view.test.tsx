@@ -100,6 +100,39 @@ test('renders sent and pending AI chat image attachments', () => {
   assert.match(html, /Remove Pending image/);
 });
 
+test('renders forms as a grouped keyboard-first surface', () => {
+  const html = renderExtensionView({
+    type: 'form',
+    title: 'Account',
+    fields: [
+      { id: 'name', label: 'Name', type: 'text', description: 'Your name' },
+      {
+        id: 'roles',
+        label: 'Roles',
+        type: 'multiselect',
+        options: [
+          { title: 'Author', value: 'author' },
+          { title: 'Reviewer', value: 'reviewer' },
+        ],
+      },
+    ],
+    submitAction: {
+      type: 'runExtensionAction',
+      title: 'Save Account',
+      handlerId: 'save-account',
+    },
+  });
+
+  assert.match(html, /class="extensionView formView"/);
+  assert.match(html, /aria-keyshortcuts="Meta\+Enter Control\+Enter"/);
+  assert.match(html, /class="formFields"/);
+  assert.match(html, /for="form-field-control-name"/);
+  assert.match(html, /id="form-field-description-name"/);
+  assert.match(html, /class="formMultiselect"/);
+  assert.match(html, /<kbd>Tab<\/kbd> Move between fields/);
+  assert.match(html, /<span>Save Account<\/span><kbd>⌘↵<\/kbd>/);
+});
+
 test('renders unsupported-client update UI with structured updater action', () => {
   const actions: CommandAction[] = [];
   const html = renderToStaticMarkup(

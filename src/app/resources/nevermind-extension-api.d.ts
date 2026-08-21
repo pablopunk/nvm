@@ -1354,7 +1354,7 @@ export type ExtensionContext = {
       shortcut?: string;
     }): ExtensionAction;
     chat(view: ExtensionView): ExtensionView;
-    /** Legacy structured form surface retained for compatibility. Prefer `ctx.input.prompt`, editors, choices, and native pickers for new workflows. */
+    /** Legacy structured form surface retained for compatibility. The host focuses the first field, uses Tab to move, Enter to advance from single-line fields, and Command+Enter to submit. Prefer `ctx.input.prompt`, editors, choices, and native pickers for new workflows. */
     form(view: ExtensionView): ExtensionView;
     /** Editable host-owned text/Markdown surface. Markdown is rendered as single-pane rich text with Markdown shortcuts while remaining the persisted value. The host injects `editorContent` into `submitAction`; use `titleFromContent` for note-like documents instead of a separate rename flow. */
     editor(view: ExtensionView): ExtensionView;

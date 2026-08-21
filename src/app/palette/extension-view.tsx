@@ -88,6 +88,7 @@ export type ExtensionViewRendererProps = {
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void;
   selectedItemId?: string;
   onSelectItem?: (item: CommandItem) => void;
+  autoFocusForm?: boolean;
   /** Rendering host; windows get compact headers and no palette chrome. */
   surface?: 'palette' | 'window';
 };
@@ -1028,9 +1029,11 @@ function FormExtensionView({
   formValues,
   setFormValues,
   runAction,
+  autoFocusForm,
 }: ExtensionViewSurfaceProps) {
   return (
     <FormView
+      key={`${view.id || ''}:${view.title}`}
       fields={view.fields || []}
       values={formValues}
       onChange={(id, value) =>
@@ -1042,6 +1045,7 @@ function FormExtensionView({
           : undefined
       }
       submitTitle={view.submitAction?.title}
+      autoFocus={autoFocusForm}
     />
   );
 }
