@@ -38,6 +38,23 @@ export function createAiBuilderExtension() {
     id: AI_BUILDER_EXTENSION_ID,
     title: 'AI Builder',
     capabilities: ['ai', 'extensions.ownership'] as const,
+    actions(ctx) {
+      return [
+        ctx.action({
+          id: 'cleanup-expired-conversations',
+          title: 'Clean Up Expired AI Conversations',
+          placement: ['hidden'],
+          mode: 'background',
+          triggers: [
+            { type: 'startup', delayMs: 1000 },
+            { type: 'interval', every: 60 * 60 * 1000 },
+          ],
+          async run(innerCtx) {
+            await innerCtx.aiBuilder?.cleanupExpiredConversations();
+          },
+        }),
+      ];
+    },
     commands: [
       {
         id: 'ai-chats',

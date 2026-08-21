@@ -1204,6 +1204,8 @@ export type ExtensionText = {
 
 export type ExtensionAiBuilder = {
   /** Host-only surface: available to the built-in `nevermind.ai-builder` extension. */
+  /** Removes expired conversations while preserving builder chats. */
+  cleanupExpiredConversations(): Promise<number>;
   startChat(input: {
     prompt: string;
     title?: string;

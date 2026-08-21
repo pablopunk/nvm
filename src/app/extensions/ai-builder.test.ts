@@ -5,9 +5,11 @@ import { createAiBuilderExtension } from './ai-builder';
 
 function context() {
   return {
+    action: (input: unknown) => input,
     aiBuilder: {
       openChat: (chatId: string) => ({ type: 'openChat', chatId }),
       startChat: (input: unknown) => ({ type: 'startChat', input }),
+      cleanupExpiredConversations: () => Promise.resolve(0),
     },
   };
 }
@@ -70,4 +72,21 @@ test('labels conversational history separately from builder chats', () => {
       ['Continue AI chat: Weather command', 'AI builder chat', 'sparkles'],
     ],
   );
+});
+
+test('cleans expired conversations through declarative background triggers', async () => {
+  let cleanupRuns = 0;
+  const ctx = context();
+  ctx.aiBuilder.cleanupExpiredConversations = async () => ++cleanupRuns;
+  const [cleanup] = createAiBuilderExtension().actions(ctx as any) as any[];
+
+  assert.equal(cleanup.placement[0], 'hidden');
+  assert.equal(cleanup.mode, 'background');
+  assert.deepEqual(cleanup.triggers, [
+    { type: 'startup', delayMs: 1000 },
+    { type: 'interval', every: 60 * 60 * 1000 },
+  ]);
+
+  await cleanup.run(ctx);
+  assert.equal(cleanupRuns, 1);
 });

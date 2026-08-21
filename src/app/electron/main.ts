@@ -7414,6 +7414,7 @@ function createAiBuilderApi(extension) {
         async () => ({ view: aiChatsView() }),
         input.options,
       ),
+    cleanupExpiredConversations: cleanupExpiredAiConversations,
     listChats: () =>
       Object.values(userState.aiChats || {}).map((chat: any) => ({
         id: chat.id,
@@ -9635,18 +9636,6 @@ function registerHostJobs() {
     run: saveUserState,
   });
   jobRegistry.register({
-    id: 'ai-chats.cleanup',
-    title: 'AI Chat Cleanup',
-    owner: 'host',
-    scope: 'ai',
-    triggers: [
-      { type: 'startup', delayMs: 1000 },
-      { type: 'interval', everyMs: 60 * 60 * 1000 },
-    ],
-    timeoutMs: 30_000,
-    run: cleanupExpiredAiChats,
-  });
-  jobRegistry.register({
     id: 'apps.index',
     title: 'Application Index',
     owner: 'host',
@@ -10367,8 +10356,8 @@ async function removeAiChat(chatId) {
   };
 }
 
-async function cleanupExpiredAiChats() {
-  if (paletteWindow.win?.isVisible()) return;
+async function cleanupExpiredAiConversations() {
+  if (paletteWindow.win?.isVisible()) return 0;
   const expiredChatIds = expiredConversationAiChatIds(userState.aiChats || {});
   const removableChatIds = expiredChatIds.filter(
     (chatId) =>
@@ -10376,7 +10365,7 @@ async function cleanupExpiredAiChats() {
       !pendingAiChatSends.has(chatId) &&
       !activeConversationRequests.has(chatId),
   );
-  if (!removableChatIds.length) return;
+  if (!removableChatIds.length) return 0;
 
   const removedChatIds: string[] = [];
   for (const chatId of removableChatIds) {
@@ -10412,9 +10401,10 @@ async function cleanupExpiredAiChats() {
     patchAiChatsRemove(chatId);
     removedChatIds.push(chatId);
   }
-  if (!removedChatIds.length) return;
+  if (!removedChatIds.length) return 0;
   scheduleSaveState();
   invalidateExtensionRootItems();
+  return removedChatIds.length;
 }
 
 async function removeAiChatReferencesToExtensionFile(extensionFile) {
