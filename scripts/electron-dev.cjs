@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { startStripeDevelopmentListener } = require('./stripe-dev-listener.cjs');
 
 const root = path.resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
@@ -30,12 +31,20 @@ const astroBin = path.join(
   '.bin',
   isWindows ? 'astro.cmd' : 'astro',
 );
+
+const stripeDevelopment = startStripeDevelopmentListener(root, isWindows);
+const stripeListener = stripeDevelopment?.listener;
 const backend = spawn(astroBin, ['dev'], {
   cwd: path.join(root, 'src', 'backend'),
   stdio: 'inherit',
   shell: isWindows,
   detached: !isWindows,
-  env: process.env,
+  env: stripeDevelopment
+    ? {
+        ...process.env,
+        STRIPE_WEBHOOK_SECRET: stripeDevelopment.webhookSecret,
+      }
+    : process.env,
 });
 
 const remoteDebuggingPort = process.env.NVM_DEV_REMOTE_DEBUGGING_PORT || '9222';
@@ -104,6 +113,7 @@ function killProcess(proc, signal) {
 }
 
 function killChild(signal = 'SIGINT') {
+  killProcess(stripeListener, signal);
   killProcess(backend, signal);
   killProcess(child, signal);
 }
@@ -125,6 +135,7 @@ process.on('exit', () => {
 
 child.on('exit', (code, signal) => {
   if (fallbackTimer) clearTimeout(fallbackTimer);
+  killProcess(stripeListener, 'SIGTERM');
   killProcess(backend, 'SIGTERM');
   process.exit(code ?? (signal ? 1 : 0));
 });
@@ -132,6 +143,7 @@ child.on('exit', (code, signal) => {
 backend.on('exit', (code, signal) => {
   if (shuttingDown) return;
   console.error(`backend exited (code=${code}, signal=${signal})`);
+  killProcess(stripeListener, 'SIGTERM');
   killProcess(child, 'SIGTERM');
   process.exit(code ?? (signal ? 1 : 0));
 });
@@ -144,4 +156,15 @@ child.on('error', (error) => {
 
 backend.on('error', (error) => {
   console.error('backend:', error);
+});
+
+stripeListener?.on('exit', (code, signal) => {
+  if (!shuttingDown)
+    console.warn(
+      `Stripe webhook forwarding stopped (code=${code}, signal=${signal}).`,
+    );
+});
+
+stripeListener?.on('error', (error) => {
+  console.error('Stripe webhook forwarding:', error);
 });

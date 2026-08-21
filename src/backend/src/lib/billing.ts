@@ -301,6 +301,11 @@ function subscriptionPriceId(subscription: Stripe.Subscription): string | null {
   return item?.price?.id ?? item?.pricing?.price_details?.price ?? null;
 }
 
+function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): Date {
+  const item = (subscription as any).items?.data?.[0] as any;
+  return unixSecondsToDate(item?.current_period_end ?? (subscription as any).current_period_end);
+}
+
 type BillingDb = typeof db;
 
 async function userByStripeCustomer(database: BillingDb, customerId: string | null): Promise<typeof users.$inferSelect | null> {
@@ -379,7 +384,7 @@ async function handleCheckoutCompleted(database: BillingDb, session: Stripe.Chec
     stripeSubId: subscription.id,
     tier: item.tier,
     status: subscription.status,
-    currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
+    currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
   });
   if (session.payment_status === 'paid') {
     await grantPaidCredits(database, user.id, item.credits, 'stripe_checkout_subscription', session.id);
@@ -399,7 +404,7 @@ async function handleInvoicePaid(database: BillingDb, invoice: Stripe.Invoice, s
       stripeSubId: subscription.id,
       tier: item.tier,
       status: subscription.status,
-      currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
+      currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
     });
   }
   await grantPaidCredits(database, user.id, item.credits, 'stripe_subscription_renewal', invoice.id);
@@ -461,7 +466,7 @@ async function handleSubscriptionStatus(database: BillingDb, event: Stripe.Event
     stripeSubId: subscription.id,
     tier,
     status: subscription.status,
-    currentPeriodEnd: unixSecondsToDate((subscription as any).current_period_end),
+    currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
     lastEventCreatedAt: incomingCreatedAt,
     lastEventId: event.id,
   });

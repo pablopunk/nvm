@@ -173,7 +173,8 @@ function installStripe(subscription: Record<string, unknown> = {}) {
       retrieve: async (id: string) => ({
         id,
         status: subscription.status ?? 'active',
-        current_period_end: subscription.current_period_end ?? 1_800_000_000,
+        current_period_end: 1_800_000_000,
+        ...subscription,
       }),
     },
     webhooks: {
@@ -289,6 +290,25 @@ test('checkout completion upserts subscription and grants initial paid credits o
   assert.equal(creditInserts[0].values.refId, 'cs_123');
   assert.equal(db.inserts.some((call) => call.table === subscriptions && call.values.status === 'active' && call.values.tier === 'pro'), true);
   assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), true);
+});
+
+test('checkout completion stores item-level billing periods from current Stripe API versions', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  installStripe({ current_period_end: undefined, items: { data: [{ current_period_end: 1_900_000_000 }] } });
+  const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
+
+  await processStripeEvent(stripeEvent('checkout.session.completed', {
+    id: 'cs_item_period',
+    mode: 'subscription',
+    customer: 'cus_123',
+    subscription: 'sub_123',
+    payment_status: 'paid',
+    client_reference_id: user.id,
+    metadata: { price_id: 'price_pro', user_id: user.id },
+  }, 'evt_item_period'));
+
+  const inserted = db.inserts.find((call) => call.table === subscriptions);
+  assert.equal(inserted?.values.currentPeriodEnd.toISOString(), new Date(1_900_000_000 * 1000).toISOString());
 });
 
 test('invoice.paid grants renewal credits only for subscription cycle invoices', async () => {
