@@ -15,7 +15,7 @@ type DictationHistoryEntry = {
 const DEFAULT_SETTINGS: DictationSettings = {
   deviceId: 'default',
   keepAliveMs: 5 * 60 * 1000,
-  cleanupWithAi: true,
+  cleanupWithAi: false,
   dictionary: '',
   copyToClipboard: false,
 };
@@ -118,7 +118,7 @@ async function readSettings(ctx: any): Promise<DictationSettings> {
     ...DEFAULT_SETTINGS,
     ...(stored && typeof stored === 'object' ? stored : {}),
     keepAliveMs: normalizedKeepAliveMs(stored?.keepAliveMs),
-    cleanupWithAi: stored?.cleanupWithAi !== false,
+    cleanupWithAi: stored?.cleanupWithAi === true,
     copyToClipboard: stored?.copyToClipboard === true,
   };
 }
@@ -334,7 +334,7 @@ async function settingsView(ctx: any) {
       },
       {
         id: 'cleanupWithAi',
-        label: 'Clean up transcription with AI',
+        label: 'Clean with AI',
         type: 'checkbox',
         value: settings.cleanupWithAi,
         description:

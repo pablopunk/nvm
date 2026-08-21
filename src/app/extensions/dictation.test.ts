@@ -96,14 +96,15 @@ test('does not declare a default dictation shortcut', () => {
 
 test('toggles recording and returns a concealed paste action', async () => {
   let recording = false;
+  let aiCalls = 0;
   const starts: unknown[] = [];
+  const indicatorUpdates: unknown[] = [];
   const pastes: unknown[] = [];
   const context = {
     storage: {
       get: async () => ({
         deviceId: 'default',
         keepAliveMs: 300_000,
-        cleanupWithAi: false,
         dictionary: '',
         copyToClipboard: false,
       }),
@@ -122,11 +123,17 @@ test('toggles recording and returns a concealed paste action', async () => {
         return 'hello world';
       },
     },
+    ai: {
+      ask: async () => {
+        aiCalls += 1;
+        return 'cleaned text';
+      },
+    },
     ui: {
       toast: (input: unknown) => input,
       indicator: {
         show: () => {},
-        update: () => {},
+        update: (input: unknown) => indicatorUpdates.push(input),
         hide: () => {},
       },
     },
@@ -157,6 +164,11 @@ test('toggles recording and returns a concealed paste action', async () => {
     },
   ]);
   const result = await handler(context, {});
+  assert.equal(aiCalls, 0);
+  assert.deepEqual(
+    indicatorUpdates.map((update: any) => update.subtitle),
+    ['Transcribing'],
+  );
   assert.deepEqual(result, { action: pastes[0] });
   assert.deepEqual(pastes, [
     {
@@ -536,7 +548,11 @@ test('renders and saves multiline dictionary settings', async () => {
   const view = result.view as any;
   assert.equal(
     view.fields.find((field: any) => field.id === 'cleanupWithAi').value,
-    true,
+    false,
+  );
+  assert.equal(
+    view.fields.find((field: any) => field.id === 'cleanupWithAi').label,
+    'Clean with AI',
   );
   assert.equal(
     view.fields.find((field: any) => field.id === 'dictionary').value,
