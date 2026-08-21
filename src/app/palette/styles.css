@@ -1505,32 +1505,20 @@ kbd {
 .formView {
   min-height: 0;
   gap: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .formFields {
-  min-height: 0;
-  overflow-y: auto;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-md);
-  background: var(--surface-1);
-  overscroll-behavior: contain;
+  display: grid;
+  gap: 12px;
+  padding: 4px;
 }
 
 .formField,
 .formStaticField {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-1);
-}
-
-.formFields > :last-child {
-  border-bottom: 0;
-}
-
-.formField:focus-within {
-  background: var(--surface-2);
 }
 
 .formFieldLabel,
@@ -1545,11 +1533,11 @@ kbd {
 .formView select,
 .formMultiselect {
   width: 100%;
-  border: 1px solid var(--border-2);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text-primary);
-  background: var(--surface-sunken);
+  background: var(--surface-2);
   font: inherit;
   font-size: var(--fs-sm);
   line-height: 1.4;
@@ -1558,7 +1546,8 @@ kbd {
 .formView input:not([type="checkbox"]):focus,
 .formView textarea:focus,
 .formView select:focus {
-  border-color: var(--border-3);
+  border-color: var(--border-2);
+  background: var(--surface-sunken);
 }
 
 .previewText {
@@ -1596,7 +1585,10 @@ kbd {
   flex-wrap: wrap;
   gap: 6px;
   margin: 0;
-  padding: 6px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .formMultiselect legend {
@@ -1740,7 +1732,7 @@ kbd {
 }
 
 .formStaticField-separator {
-  padding: 4px 12px;
+  padding-block: 4px;
 }
 
 .resultText {
