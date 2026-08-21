@@ -57,8 +57,8 @@ that did not reuse the full replacement surface.
   UI.
 - The extension-window Command root handles local shortcuts in the capture
   phase so Cmd+K remains host-owned even when the rich editor has focus.
-- Compact action menus and nested submenus keep the editor visible while
-  confirmations and prompts expand into the full window.
+- Compact action menus, nested submenus, and confirmations keep the editor
+  visible while prompts expand into the full window.
 
 ## Verification
 

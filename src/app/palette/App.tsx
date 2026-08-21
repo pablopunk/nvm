@@ -21,7 +21,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { actionMenuPresentation } from './action-menu-presentation';
+import {
+  actionMenuPresentation,
+  confirmationReturnSurface,
+  type ConfirmationReturnSurface,
+} from './action-menu-presentation';
 import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
 import {
   isDictationModelCached,
@@ -373,7 +377,9 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
   const [formFocusKey, setFormFocusKey] = useState(0);
   const [selectedValue, setSelectedValue] = useState('');
+  const [compactSelectedValue, setCompactSelectedValue] = useState('');
   const [query, setQuery] = useState('');
+  const [compactQuery, setCompactQuery] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{
     title: string;
@@ -385,8 +391,21 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
   const windowAiChatIdRef = useRef<string | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const compactSearchInputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+  const baseFocusOriginRef = useRef<HTMLElement | null>(null);
   const actionPanelFocusOriginRef = useRef<HTMLElement | null>(null);
+  const actionPanelSelectionOriginRef = useRef<string | null>(null);
+  const actionPanelQueryOriginRef = useRef<string | null>(null);
+  const compactViewFocusOriginRef = useRef<HTMLElement | null>(null);
+  const compactViewSelectionOriginRef = useRef<string | null>(null);
+  const confirmationReturnSelectionRef = useRef<string | null>(null);
+  const confirmationReturnQueryRef = useRef<string | null>(null);
+  const pendingCompactSelectionRef = useRef<string | null>(null);
+  const submenuReturnSelectionRef = useRef<string | null>(null);
+  const submenuReturnQueryRef = useRef<string | null>(null);
+  const confirmationReturnSurfaceRef =
+    useRef<ConfirmationReturnSurface>('view');
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -446,6 +465,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const viewKey = `${view?.id || ''}:${view?.type || ''}:${view?.title || ''}`;
   useEffect(() => {
     setQuery('');
+    setCompactQuery('');
     setPanelOpen(false);
     setActionSubmenuFor(null);
     setConfirmFor(null);
@@ -494,12 +514,14 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setSelectedValue(selectedItemIdForView(previous));
       } else await window.nvm.closeExtensionWindow();
     } else if (result.view?.windowPresentation === 'compact') {
+      compactViewFocusOriginRef.current = baseFocusOriginRef.current;
+      compactViewSelectionOriginRef.current = selectedValue;
       setPanelOpen(false);
       setActionSubmenuFor(null);
       setConfirmFor(null);
       setCompactView(result.view);
-      setQuery('');
-      setSelectedValue(selectedItemIdForView(result.view));
+      setCompactQuery('');
+      setCompactSelectedValue(selectedItemIdForView(result.view));
     } else if (result.view) {
       setFormFocusKey((current) => current + 1);
       if (result.navigation === 'push' && view)
@@ -538,8 +560,28 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       return;
     }
     if (action.requiresConfirmation) {
+      confirmationReturnSurfaceRef.current = confirmationReturnSurface(
+        Boolean(actionSubmenuFor),
+        panelOpen,
+      );
+      confirmationReturnSelectionRef.current = compactSelectedValue;
+      confirmationReturnQueryRef.current = compactQuery;
+      if (!actionPanelFocusOriginRef.current) {
+        const activeElement = document.activeElement;
+        actionPanelFocusOriginRef.current =
+          activeElement instanceof HTMLElement &&
+          shellRef.current?.contains(activeElement)
+            ? activeElement
+            : null;
+      }
+      if (actionPanelSelectionOriginRef.current === null)
+        actionPanelSelectionOriginRef.current = compactView
+          ? compactSelectedValue
+          : selectedValue;
+      if (actionPanelQueryOriginRef.current === null)
+        actionPanelQueryOriginRef.current = compactView ? compactQuery : '';
       setPanelOpen(false);
-      setActionSubmenuFor(null);
+      setCompactQuery('');
       setConfirmFor(action);
       return;
     }
@@ -565,6 +607,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
 
   function selectedItem(): ExtensionViewItem | null {
     const interactiveView = compactView || view;
+    const interactiveSelection = compactView
+      ? (panelOpen || confirmFor || actionSubmenuFor) &&
+        actionPanelSelectionOriginRef.current !== null
+        ? actionPanelSelectionOriginRef.current
+        : compactSelectedValue
+      : selectedValue;
     if (
       !(
         interactiveView &&
@@ -573,8 +621,9 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     )
       return null;
     return (
-      allViewItems(interactiveView).find((item) => item.id === selectedValue) ||
-      null
+      allViewItems(interactiveView).find(
+        (item) => item.id === interactiveSelection,
+      ) || null
     );
   }
 
@@ -612,13 +661,20 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         shortcut: action.shortcut,
         onSelect: () => {
           if (action.submenu) {
+            submenuReturnSelectionRef.current = compactSelectedValue;
+            submenuReturnQueryRef.current = compactQuery;
             setPanelOpen(false);
             setActionSubmenuFor({ title: action.title, panel: action.submenu });
-            setQuery('');
+            setCompactQuery('');
+            return;
+          }
+          if (action.requiresConfirmation) {
+            void runAction(action);
             return;
           }
           setPanelOpen(false);
           setActionSubmenuFor(null);
+          restoreActionPanelFocus();
           void runAction(action);
         },
         className:
@@ -656,6 +712,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         subtitle: action.confirmMessage || 'Confirm this action',
         onSelect: () => {
           setConfirmFor(null);
+          setPanelOpen(false);
+          setActionSubmenuFor(null);
+          confirmationReturnSurfaceRef.current = 'view';
+          confirmationReturnSelectionRef.current = null;
+          confirmationReturnQueryRef.current = null;
+          restoreActionPanelFocus();
           void executeAction({ ...action, requiresConfirmation: false });
         },
         className:
@@ -666,16 +728,17 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         icon: <RotateCcw size={18} />,
         title: action.cancelLabel || 'Cancel',
         subtitle: 'Do nothing',
-        onSelect: () => setConfirmFor(null),
+        onSelect: returnFromConfirmation,
         className: 'result',
       },
     ];
   }
 
-  function filteredRows(rows: ActionPanelRow[]) {
-    if (!query) return rows;
+  function filteredRows(rows: ActionPanelRow[], filter: string) {
+    if (!filter) return rows;
     return rows.filter(
-      (row) => row.sectionHeader || valuesMatch(query, row.title, row.subtitle),
+      (row) =>
+        row.sectionHeader || valuesMatch(filter, row.title, row.subtitle),
     );
   }
 
@@ -684,13 +747,26 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       origin instanceof HTMLElement && shellRef.current?.contains(origin)
         ? origin
         : null;
+    actionPanelSelectionOriginRef.current = compactView
+      ? compactSelectedValue
+      : selectedValue;
+    actionPanelQueryOriginRef.current = compactView ? compactQuery : '';
+    setCompactQuery('');
     setPanelOpen(true);
   }
 
-  function closeActionPanel() {
+  function restoreActionPanelFocus() {
     const focusOrigin = actionPanelFocusOriginRef.current;
+    const selectionOrigin = actionPanelSelectionOriginRef.current;
+    const queryOrigin = actionPanelQueryOriginRef.current;
     actionPanelFocusOriginRef.current = null;
-    setPanelOpen(false);
+    actionPanelSelectionOriginRef.current = null;
+    actionPanelQueryOriginRef.current = null;
+    if (selectionOrigin !== null) {
+      if (compactView) pendingCompactSelectionRef.current = selectionOrigin;
+      else setSelectedValue(selectionOrigin);
+    }
+    if (compactView && queryOrigin !== null) setCompactQuery(queryOrigin);
     requestAnimationFrame(() => {
       const focusTarget =
         focusOrigin?.isConnected && shellRef.current?.contains(focusOrigin)
@@ -700,20 +776,96 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     });
   }
 
-  function moveGridSelection(key: string) {
-    if (view?.type !== 'grid' || overlayOpen) return false;
-    const filteredItems = filterCommandItems(allViewItems(view), query, {
-      minScore: 50,
+  function closeActionPanel() {
+    setPanelOpen(false);
+    restoreActionPanelFocus();
+  }
+
+  function returnFromConfirmation() {
+    const returnSurface = confirmationReturnSurfaceRef.current;
+    const returnSelection = confirmationReturnSelectionRef.current;
+    const returnQuery = confirmationReturnQueryRef.current;
+    confirmationReturnSurfaceRef.current = 'view';
+    confirmationReturnSelectionRef.current = null;
+    confirmationReturnQueryRef.current = null;
+    setConfirmFor(null);
+    setCompactQuery(returnQuery || '');
+    if (returnSurface !== 'view')
+      pendingCompactSelectionRef.current = returnSelection;
+    if (returnSurface === 'submenu') return;
+    setActionSubmenuFor(null);
+    if (returnSurface === 'panel') {
+      setPanelOpen(true);
+      return;
+    }
+    setPanelOpen(false);
+    restoreActionPanelFocus();
+  }
+
+  function returnFromSubmenu() {
+    pendingCompactSelectionRef.current = submenuReturnSelectionRef.current;
+    submenuReturnSelectionRef.current = null;
+    const returnQuery = submenuReturnQueryRef.current;
+    submenuReturnQueryRef.current = null;
+    setActionSubmenuFor(null);
+    setPanelOpen(true);
+    setCompactQuery(returnQuery || '');
+  }
+
+  function closeCompactView() {
+    const focusOrigin = compactViewFocusOriginRef.current;
+    const selectionOrigin = compactViewSelectionOriginRef.current;
+    compactViewFocusOriginRef.current = null;
+    compactViewSelectionOriginRef.current = null;
+    setCompactView(null);
+    setCompactQuery('');
+    if (selectionOrigin !== null) setSelectedValue(selectionOrigin);
+    requestAnimationFrame(() => {
+      const focusTarget =
+        focusOrigin?.isConnected && shellRef.current?.contains(focusOrigin)
+          ? focusOrigin
+          : shellRef.current;
+      focusTarget?.focus({ preventScroll: true });
     });
-    const items = view.maxVisibleItems
-      ? filteredItems.slice(0, view.maxVisibleItems)
+  }
+
+  function rememberBaseFocus(event: React.FocusEvent) {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      !target.closest('.extensionWindowCompactPanel')
+    )
+      baseFocusOriginRef.current = target;
+  }
+
+  function moveGridSelection(key: string) {
+    const compactGrid = compactView?.type === 'grid' && !actionSurfaceOpen;
+    const gridView = compactGrid ? compactView : view;
+    if (gridView?.type !== 'grid' || (!compactGrid && overlayOpen))
+      return false;
+    const filteredItems = filterCommandItems(
+      allViewItems(gridView),
+      compactGrid ? compactQuery : query,
+      {
+        minScore: 50,
+      },
+    );
+    const items = gridView.maxVisibleItems
+      ? filteredItems.slice(0, gridView.maxVisibleItems)
       : filteredItems;
-    if (items.length === 0) return false;
+    if (!items.length) return false;
+    const selected = compactGrid ? compactSelectedValue : selectedValue;
     const currentIndex = Math.max(
       0,
-      items.findIndex((item) => item.id === selectedValue),
+      items.findIndex((item) => item.id === selected),
     );
-    const grid = shellRef.current?.querySelector<HTMLElement>('.extensionGrid');
+    const grid = Array.from(
+      shellRef.current?.querySelectorAll<HTMLElement>('.extensionGrid') || [],
+    ).find(
+      (candidate) =>
+        Boolean(candidate.closest('.extensionWindowCompactPanel')) ===
+        compactGrid,
+    );
     const columns = grid
       ? Math.max(
           1,
@@ -732,12 +884,16 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     const next =
       items[Math.max(0, Math.min(items.length - 1, currentIndex + delta))];
     if (!next) return false;
-    setSelectedValue(next.id);
-    requestAnimationFrame(() =>
-      shellRef.current
+    if (compactGrid) setCompactSelectedValue(next.id);
+    else setSelectedValue(next.id);
+    requestAnimationFrame(() => {
+      const selectionRoot = compactGrid
+        ? shellRef.current?.querySelector('.extensionWindowCompactPanel')
+        : shellRef.current;
+      selectionRoot
         ?.querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
-    );
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
     return true;
   }
 
@@ -766,16 +922,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     )
       return;
     if (event.key === 'Escape') {
-      if (confirmFor) setConfirmFor(null);
-      else if (actionSubmenuFor) {
-        setActionSubmenuFor(null);
-        setPanelOpen(true);
-        setQuery('');
-      } else if (panelOpen) closeActionPanel();
-      else if (compactView) {
-        setCompactView(null);
-        setQuery('');
-      } else if (palettePrompt.active) popWindowView();
+      if (confirmFor) returnFromConfirmation();
+      else if (actionSubmenuFor) returnFromSubmenu();
+      else if (panelOpen) closeActionPanel();
+      else if (compactView) closeCompactView();
+      else if (palettePrompt.active) popWindowView();
       else if (query) setQuery('');
       else void window.nvm.closeExtensionWindow();
       event.preventDefault();
@@ -787,9 +938,17 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (palettePrompt.active) return;
     if (normalized === 'command+k') {
       event.preventDefault();
-      setQuery('');
-      setActionSubmenuFor(null);
-      if (actionSubmenuFor) setPanelOpen(true);
+      setCompactQuery('');
+      if (confirmFor) {
+        setConfirmFor(null);
+        setActionSubmenuFor(null);
+        confirmationReturnSurfaceRef.current = 'view';
+        confirmationReturnSelectionRef.current = null;
+        confirmationReturnQueryRef.current = null;
+        closeActionPanel();
+        return;
+      }
+      if (actionSubmenuFor) returnFromSubmenu();
       else if (panelOpen) closeActionPanel();
       else openActionPanel(event.target);
       return;
@@ -857,7 +1016,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     ? confirmRows()
     : palettePrompt.active
       ? palettePrompt.rows
-      : filteredRows(actionPanelRows(panel, fallback));
+      : filteredRows(actionPanelRows(panel, fallback), compactQuery);
   const surfaceSelectionKey = surfaceRows
     .filter((row) => !row.sectionHeader)
     .map((row) => row.value)
@@ -871,11 +1030,17 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   useEffect(() => {
     if (!searchableView) return;
     requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-      if (palettePrompt.active) searchInputRef.current?.select();
+      const input =
+        compactActionSurface || compactViewOpen
+          ? compactSearchInputRef.current
+          : searchInputRef.current;
+      input?.focus();
+      if (palettePrompt.active) input?.select();
     });
   }, [
     searchableView,
+    compactActionSurface,
+    compactViewOpen,
     viewKey,
     panelOpen,
     actionSubmenuFor,
@@ -884,17 +1049,42 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   ]);
 
   useEffect(() => {
-    if (palettePrompt.active || actionSurfaceOpen)
-      setSelectedValue(
-        surfaceRows.find((row) => !row.sectionHeader)?.value || '',
+    if (
+      compactView &&
+      !actionSurfaceOpen &&
+      pendingCompactSelectionRef.current !== null
+    ) {
+      setCompactSelectedValue(pendingCompactSelectionRef.current);
+      pendingCompactSelectionRef.current = null;
+      return;
+    }
+    if (!(palettePrompt.active || actionSurfaceOpen)) return;
+    const firstValue =
+      surfaceRows.find((row) => !row.sectionHeader)?.value || '';
+    if (compactActionSurface) {
+      const pendingSelection = pendingCompactSelectionRef.current;
+      pendingCompactSelectionRef.current = null;
+      setCompactSelectedValue(
+        pendingSelection &&
+          surfaceRows.some((row) => row.value === pendingSelection)
+          ? pendingSelection
+          : firstValue,
       );
+    } else setSelectedValue(firstValue);
   }, [
     palettePrompt.active,
     palettePrompt.fieldIndex,
     palettePrompt.selectionKey,
     actionSurfaceOpen,
+    compactActionSurface,
+    compactQuery,
+    compactView,
     surfaceSelectionKey,
   ]);
+
+  function stopCompactSurfaceKeyDown(event: React.KeyboardEvent) {
+    event.stopPropagation();
+  }
 
   if (!view)
     return (
@@ -929,11 +1119,19 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       value={selectedValue}
       onValueChange={setSelectedValue}
       shouldFilter={false}
+      onFocusCapture={rememberBaseFocus}
       onKeyDownCapture={onShellKeyDown}
     >
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
-      {searchable && !(compactActionSurface || compactViewOpen) ? (
-        <div className="extensionWindowSearchRow">
+      {searchable &&
+      !compactViewOpen &&
+      (!compactActionSurface ||
+        view.type === 'list' ||
+        view.type === 'grid') ? (
+        <div
+          className="extensionWindowSearchRow"
+          inert={compactActionSurface || undefined}
+        >
           <Search size={15} className="extensionWindowSearchIcon" />
           <Command.Input
             ref={searchInputRef}
@@ -959,7 +1157,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         </div>
       ) : null}
       <main className="extensionWindowBody">
-        <Command.List className="extensionWindowList">
+        <Command.List
+          className="extensionWindowList"
+          inert={compactActionSurface || compactViewOpen || undefined}
+        >
           {surfaceOpen ? (
             <ActionPanel
               rows={surfaceRows}
@@ -1018,79 +1219,86 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                 formFocusKey={formFocusKey}
                 surface="window"
               />
-              {compactActionSurface || compactView ? (
-                <aside className="extensionWindowCompactPanel">
-                  <div className="extensionWindowSearchRow">
-                    <Search size={15} className="extensionWindowSearchIcon" />
-                    <Command.Input
-                      ref={searchInputRef}
-                      autoFocus
-                      value={query}
-                      onValueChange={setQuery}
-                      placeholder={
-                        confirmFor
-                          ? 'Confirm action'
-                          : compactView
-                            ? compactView.searchBarPlaceholder ||
-                              `Filter ${compactView.title}`
-                            : `Filter ${view.title || 'window'} actions`
-                      }
-                      spellCheck={false}
-                    />
-                  </div>
-                  <div className="extensionWindowCompactResults">
-                    {actionSurfaceOpen ? (
-                      <ActionPanel
-                        rows={surfaceRows}
-                        emptyMessage="No matching choices"
-                      />
-                    ) : compactView ? (
-                      <ExtensionViewRenderer
-                        view={compactView}
-                        aiChat={aiChat}
-                        nevermindAuthed={nevermindAuthed}
-                        onSignInToNevermind={() => {}}
-                        formValues={formValues}
-                        setFormValues={setFormValues}
-                        filterItems={(items) =>
-                          filterCommandItems(items || [], query, {
-                            minScore: 50,
-                          })
-                        }
-                        filterSections={(currentView) =>
-                          filterCommandSections(currentView, query, {
-                            minScore: 50,
-                          })
-                        }
-                        renderMarkdown={renderMarkdown}
-                        renderActionPanel={() => null}
-                        actionPanelRows={(actionPanel, fallbackActions) =>
-                          actionPanelRows(
-                            actionPanel,
-                            fallbackActions as ExtensionViewAction[],
-                          )
-                        }
-                        renderRootIcon={(item) => iconForItem(item)}
-                        runDefaultAction={runDefaultAction}
-                        runAction={runAction}
-                        sendAiPrompt={(message) =>
-                          aiChat.sendPrompt(message, compactView.chatId)
-                        }
-                        abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
-                        dragPathForItem={dragPathForItem}
-                        startItemDrag={startItemDrag}
-                        selectedItemId={selectedValue}
-                        autoFocusForm={false}
-                        formFocusKey={formFocusKey}
-                        surface="window"
-                      />
-                    ) : null}
-                  </div>
-                </aside>
-              ) : null}
             </>
           )}
         </Command.List>
+        {compactActionSurface || compactView ? (
+          <aside className="extensionWindowCompactPanel">
+            <Command
+              value={compactSelectedValue}
+              onValueChange={setCompactSelectedValue}
+              shouldFilter={false}
+              onKeyDown={stopCompactSurfaceKeyDown}
+            >
+              <div className="extensionWindowSearchRow">
+                <Search size={15} className="extensionWindowSearchIcon" />
+                <Command.Input
+                  ref={compactSearchInputRef}
+                  autoFocus
+                  value={compactQuery}
+                  onValueChange={setCompactQuery}
+                  placeholder={
+                    confirmFor
+                      ? 'Confirm action'
+                      : compactView
+                        ? compactView.searchBarPlaceholder ||
+                          `Filter ${compactView.title}`
+                        : `Filter ${view.title || 'window'} actions`
+                  }
+                  spellCheck={false}
+                />
+              </div>
+              <Command.List className="extensionWindowCompactResults">
+                {actionSurfaceOpen ? (
+                  <ActionPanel
+                    rows={surfaceRows}
+                    emptyMessage="No matching choices"
+                  />
+                ) : compactView ? (
+                  <ExtensionViewRenderer
+                    view={compactView}
+                    aiChat={aiChat}
+                    nevermindAuthed={nevermindAuthed}
+                    onSignInToNevermind={() => {}}
+                    formValues={formValues}
+                    setFormValues={setFormValues}
+                    filterItems={(items) =>
+                      filterCommandItems(items || [], compactQuery, {
+                        minScore: 50,
+                      })
+                    }
+                    filterSections={(currentView) =>
+                      filterCommandSections(currentView, compactQuery, {
+                        minScore: 50,
+                      })
+                    }
+                    renderMarkdown={renderMarkdown}
+                    renderActionPanel={() => null}
+                    actionPanelRows={(actionPanel, fallbackActions) =>
+                      actionPanelRows(
+                        actionPanel,
+                        fallbackActions as ExtensionViewAction[],
+                      )
+                    }
+                    renderRootIcon={(item) => iconForItem(item)}
+                    runDefaultAction={runDefaultAction}
+                    runAction={runAction}
+                    sendAiPrompt={(message) =>
+                      aiChat.sendPrompt(message, compactView.chatId)
+                    }
+                    abortAiChat={(chatId) => window.nvm.abortAiChat(chatId)}
+                    dragPathForItem={dragPathForItem}
+                    startItemDrag={startItemDrag}
+                    selectedItemId={compactSelectedValue}
+                    autoFocusForm={false}
+                    formFocusKey={formFocusKey}
+                    surface="window"
+                  />
+                ) : null}
+              </Command.List>
+            </Command>
+          </aside>
+        ) : null}
       </main>
       <footer className="extensionWindowFooter">
         {palettePrompt.progress ? <span>{palettePrompt.progress}</span> : null}

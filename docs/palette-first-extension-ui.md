@@ -20,8 +20,9 @@ actions should preserve the palette's single focus target and keyboard model.
 - Cmd+K action menus and nested submenus appear in a compact bottom-right
   overlay on every palette and independent window, preserving the current
   results, query, and selection. `actionPanelPresentation` is retained only for
-  source compatibility and is ignored. Confirmations and prompts expand to the
-  full keyboard-first surface after their action is chosen.
+  source compatibility and is ignored. In independent windows, confirmations
+  remain in that compact overlay; prompts expand to the full keyboard-first
+  surface when they need input.
 - List or choice results launched inside those windows may use
   `windowPresentation: 'compact'` to reuse the overlay without replacing the
   base editor; normal palette launches still render the list at full size.

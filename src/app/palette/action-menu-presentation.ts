@@ -4,9 +4,16 @@ export type ActionMenuSurfaceKind =
   | 'submenu'
   | 'prompt';
 
+export type ConfirmationReturnSurface = 'panel' | 'submenu' | 'view';
+
 export function actionMenuPresentation(kind: ActionMenuSurfaceKind) {
-  if (kind === 'confirmation' || kind === 'prompt') {
-    return 'default';
-  }
-  return 'compact';
+  return kind === 'prompt' ? 'default' : 'compact';
+}
+
+export function confirmationReturnSurface(
+  hasSubmenu: boolean,
+  panelOpen: boolean,
+): ConfirmationReturnSurface {
+  if (hasSubmenu) return 'submenu';
+  return panelOpen ? 'panel' : 'view';
 }

@@ -167,7 +167,7 @@ function floatingNoteEditorView(ctx: ExtensionContext) {
   });
   const confirm = ctx.ui.confirm({
     title: 'Confirm Floating Action',
-    message: 'Confirmations expand from the compact action panel.',
+    message: 'Confirmations stay in the compact action panel.',
     confirmLabel: 'Confirm',
     onConfirm: ctx.actions.run('Confirm', (_ctx) =>
       _ctx.ui.toast({ message: 'Floating action confirmed' }),

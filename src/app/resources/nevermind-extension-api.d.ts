@@ -693,7 +693,7 @@ export type ExtensionView = {
   actions?: ExtensionAction[];
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
-  /** @deprecated Action menus and nested submenus are compact on every surface; this property is ignored. Confirmations and prompts use the full palette. */
+  /** @deprecated Action menus and nested submenus are compact on every surface; this property is ignored. Independent-window confirmations stay in the compact menu, while prompts use the full palette. */
   actionPanelPresentation?: 'default' | 'compact';
   /** Independent windows only: render this result as a compact overlay while preserving the current base view. Other surfaces render it normally. */
   windowPresentation?: 'default' | 'compact';
