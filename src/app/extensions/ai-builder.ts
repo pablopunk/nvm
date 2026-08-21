@@ -10,18 +10,23 @@ const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder';
 export function createAiBuilderExtension() {
   function chatsSubtitle() {
     const count = Object.keys(extensionContext.userState.aiChats || {}).length;
-    return `${count} builder ${count === 1 ? 'chat' : 'chats'}`;
+    return `${count} AI ${count === 1 ? 'chat' : 'chats'}`;
   }
   function chatItems(ctx, query = '') {
     return Object.values(extensionContext.userState.aiChats || {})
       .map((item: any) => ({
         id: `ai-chat:${item.id}`,
-        title: `Continue AI chat: ${item.title || item.query}`,
+        title:
+          item.kind === 'conversation'
+            ? `Continue conversation: ${item.title || item.query}`
+            : `Continue AI chat: ${item.title || item.query}`,
         subtitle:
-          item.status === 'ready'
-            ? 'AI builder chat'
-            : 'Continue AI builder chat',
-        icon: 'sparkles',
+          item.kind === 'conversation'
+            ? 'AI conversation'
+            : item.status === 'ready'
+              ? 'AI builder chat'
+              : 'Continue AI builder chat',
+        icon: item.kind === 'conversation' ? 'message-circle' : 'sparkles',
         score: 13,
         lastUsed: Math.max(item.updatedAt || 0, item.createdAt || 0),
         primaryAction: ctx.aiBuilder.openChat(item.id),
@@ -60,11 +65,12 @@ export function createAiBuilderExtension() {
       )
         items.push({
           id: `ai:${q}`,
-          title: `Press Tab to automate "${q}"`,
-          subtitle: 'Automate with AI',
+          title: `Automate "${q}"`,
+          subtitle: 'Build a reusable command with AI',
           query: q,
           icon: 'bolt',
           score: 40,
+          appearance: { foreground: 'yellow', background: 'accent' },
           primaryAction: ctx.aiBuilder.startChat({
             prompt: q,
             title: `Automate "${q}"`,

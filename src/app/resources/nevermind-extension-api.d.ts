@@ -169,7 +169,7 @@ export type ExtensionActionContribution = {
   dismissAfterRun?: 'auto';
   background?: boolean;
   customizable?: boolean;
-  /** Muted semantic color applied to the action result title and Lucide/fallback icon. Images keep their original colors. */
+  /** Semantic visual treatment for the action result. */
   appearance?: ExtensionItemAppearance;
   /** Durable actions are searchable and visible at the palette root by default. Use `['hidden']` only when a `rootItems()` or `searchItems()` row references the action and owns discovery. `search` and `root` are retained as discoverable legacy values. */
   placement?: ExtensionActionPlacement[];
@@ -512,6 +512,8 @@ export type ExtensionDetail = {
 export type ExtensionItemAppearance = {
   /** Muted semantic color applied to the item title and Lucide/fallback icon. Images keep their original colors. */
   foreground?: ForegroundColor;
+  /** Subtle accent-tinted row background for a result that should stand out without replacing selection state. */
+  background?: 'accent';
 };
 
 /** Item displayed in root/search providers, list views, and grid views. */
@@ -1856,7 +1858,7 @@ export type ExtensionCommand = {
   shortcutScope?: ShortcutScope;
   /** Global shortcut for this command. */
   globalShortcut?: string;
-  /** Muted semantic color applied to the command result title and Lucide/fallback icon. Images keep their original colors. */
+  /** Semantic visual treatment for the command result. */
   appearance?: ExtensionItemAppearance;
   /** Dismiss immediately for fire-and-forget commands. Prefer `mode: 'background'` for durable scheduled work. */
   background?: boolean;

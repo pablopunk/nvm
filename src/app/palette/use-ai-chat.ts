@@ -1,5 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  AI_CHAT_IMAGE_LIMIT,
+  AI_CHAT_IMAGE_MAX_BYTES,
+  AI_CHAT_IMAGE_MIME_TYPES,
+  AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
+  type AiChatImageInput,
+  type AiChatMessageImage,
+  canSendAiChatMessage,
+} from '../shared/ai-chat-images';
+import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
@@ -13,7 +22,6 @@ export type AiLimitState = {
   title: string;
   message: string;
   actionTitle?: string;
-  dashboardUrl?: string;
   action?: CommandAction;
 };
 export type AiChatEvent = {
@@ -27,10 +35,59 @@ export type AiChatEvent = {
   traceId?: string;
 };
 
+export type AiChatAttachment = AiChatImageInput & {
+  id: string;
+  previewUrl: string;
+  byteLength: number;
+};
+
+function readImageFile(file: File) {
+  const mimeType = file.type.toLowerCase();
+  if (!AI_CHAT_IMAGE_MIME_TYPES.includes(mimeType as never))
+    return Promise.reject(new Error('Paste a PNG, JPEG, WebP, or GIF image'));
+  if (!file.size || file.size > AI_CHAT_IMAGE_MAX_BYTES)
+    return Promise.reject(new Error('Each image must be 8 MB or smaller'));
+  return new Promise<AiChatAttachment>((resolve, reject) => {
+    const reader = new FileReader();
+    const previewUrl = URL.createObjectURL(file);
+    function rejectRead() {
+      URL.revokeObjectURL(previewUrl);
+      reject(new Error('Could not read the pasted image'));
+    }
+    reader.onerror = rejectRead;
+    reader.onabort = rejectRead;
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      const separator = dataUrl.indexOf(',');
+      if (separator < 0) {
+        URL.revokeObjectURL(previewUrl);
+        return reject(new Error('Could not read the pasted image'));
+      }
+      resolve({
+        id: crypto.randomUUID(),
+        previewUrl,
+        data: dataUrl.slice(separator + 1),
+        mimeType,
+        byteLength: file.size,
+        ...(file.name ? { name: file.name } : {}),
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function isSafeLimitAction(action: unknown): action is CommandAction {
   if (!action || typeof action !== 'object') return false;
-  const candidate = action as { type?: unknown; title?: unknown };
-  if (typeof candidate.type !== 'string' || typeof candidate.title !== 'string')
+  const candidate = action as {
+    type?: unknown;
+    title?: unknown;
+    executionId?: unknown;
+  };
+  if (
+    typeof candidate.type !== 'string' ||
+    typeof candidate.title !== 'string' ||
+    typeof candidate.executionId !== 'string'
+  )
     return false;
   return Object.values(action).every((value) => typeof value !== 'function');
 }
@@ -56,11 +113,44 @@ function limitStateFromEvent(event: AiChatEvent): AiLimitState | null {
   return data;
 }
 
+export function userMessageFromEvent(event: AiChatEvent) {
+  const message = (event.data as { message?: unknown } | undefined)?.message;
+  if (!message || typeof message !== 'object') return null;
+  const candidate = message as {
+    role?: unknown;
+    content?: unknown;
+    images?: unknown;
+  };
+  if (candidate.role !== 'user' || typeof candidate.content !== 'string')
+    return null;
+  const images = Array.isArray(candidate.images)
+    ? candidate.images.flatMap((image) => {
+        if (!image || typeof image !== 'object') return [];
+        const typedImage = image as { url?: unknown; alt?: unknown };
+        if (typeof typedImage.url !== 'string') return [];
+        return [
+          {
+            url: typedImage.url,
+            ...(typeof typedImage.alt === 'string'
+              ? { alt: typedImage.alt }
+              : {}),
+          },
+        ];
+      })
+    : [];
+  return {
+    role: 'user' as const,
+    content: candidate.content,
+    ...(images.length ? { images } : {}),
+  };
+}
+
 export function useAiChat(
   sendMessage: (
     message: string,
     chatId?: string,
     traceId?: string,
+    images?: AiChatImageInput[],
   ) => Promise<void>,
   resetChat: (chatId?: string) => Promise<void>,
 ) {
@@ -70,14 +160,40 @@ export function useAiChat(
     NonNullable<CommandView['messages']>
   >([]);
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<AiChatAttachment[]>([]);
+  const attachmentsRef = useRef<AiChatAttachment[]>([]);
+  const pendingAttachmentCountRef = useRef(0);
+  const attachmentGenerationRef = useRef(0);
+  const attachmentPreviewUrlsRef = useRef(new Set<string>());
+  const [attaching, setAttaching] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const busyByChatIdRef = useRef(new Map<string, boolean>());
   const [limit, setLimit] = useState<AiLimitState | null>(null);
   const [creditNotice, setCreditNotice] = useState<string | null>(null);
   const pendingDeltaRef = useRef('');
   const deltaFrameRef = useRef<number | null>(null);
   const activeTraceIdRef = useRef<string | undefined>(undefined);
+  const optimisticTraceIdRef = useRef<string | undefined>(undefined);
   const activeTraceStartedAtRef = useRef<number | undefined>(undefined);
   const firstPaintRecordedRef = useRef(false);
+  const openChatIdRef = useRef<string | undefined>(undefined);
+
+  function updateBusy(nextBusy: boolean) {
+    busyRef.current = nextBusy;
+    setBusy(nextBusy);
+  }
+
+  function chatStateKey(chatId?: string) {
+    return chatId || 'default';
+  }
+
+  function updateChatBusy(chatId: string | undefined, nextBusy: boolean) {
+    const key = chatStateKey(chatId);
+    busyByChatIdRef.current.set(key, nextBusy);
+    if (key === chatStateKey(openChatIdRef.current)) updateBusy(nextBusy);
+  }
 
   function finishActiveAiTrace(
     operation: string,
@@ -109,7 +225,42 @@ export function useAiChat(
         ...current.slice(0, -1),
         { ...last, content: `${last.content}${text}` },
       ];
-    return [...current, { role: 'assistant' as const, content: text }];
+    return boundedMessages([
+      ...current,
+      { role: 'assistant' as const, content: text },
+    ]);
+  }
+
+  function releaseMessagePreviews(
+    released: NonNullable<CommandView['messages']>,
+  ) {
+    for (const message of released)
+      for (const image of message.images || [])
+        if (attachmentPreviewUrlsRef.current.delete(image.url))
+          URL.revokeObjectURL(image.url);
+  }
+
+  function boundedMessages(next: NonNullable<CommandView['messages']>) {
+    const released = next.slice(0, -100);
+    if (released.length) releaseMessagePreviews(released);
+    return next.slice(-100);
+  }
+
+  function replaceMessages(next: NonNullable<CommandView['messages']>) {
+    if (!next.length) {
+      attachmentGenerationRef.current += 1;
+      pendingAttachmentCountRef.current = 0;
+      setAttaching(false);
+      updateAttachments([]);
+      for (const url of attachmentPreviewUrlsRef.current)
+        URL.revokeObjectURL(url);
+      attachmentPreviewUrlsRef.current.clear();
+      setAttachmentError(null);
+    }
+    setMessages((current) => {
+      releaseMessagePreviews(current);
+      return boundedMessages(next);
+    });
   }
 
   function cancelDeltaFlush() {
@@ -164,15 +315,132 @@ export function useAiChat(
   function appendMessage(
     role: 'user' | 'assistant' | 'system',
     content: string,
+    images?: AiChatMessageImage[],
   ) {
     markDebugPerformance('ai.message.append', {
       role,
       contentLength: content.length,
     });
-    setMessages((current) => [
-      ...appendPendingDelta(current),
-      { role, content },
-    ]);
+    setMessages((current) =>
+      boundedMessages([
+        ...appendPendingDelta(current),
+        { role, content, ...(images?.length ? { images } : {}) },
+      ]),
+    );
+  }
+
+  function applyUserMessageEvent(event: AiChatEvent) {
+    const message = userMessageFromEvent(event);
+    if (!message) return;
+    const replacesOptimisticMessage =
+      Boolean(event.traceId) && event.traceId === optimisticTraceIdRef.current;
+    if (replacesOptimisticMessage) optimisticTraceIdRef.current = undefined;
+    setMessages((current) => {
+      if (!replacesOptimisticMessage)
+        return boundedMessages([...appendPendingDelta(current), message]);
+      const index = current.findLastIndex((item) => item.role === 'user');
+      if (index < 0) return boundedMessages([...current, message]);
+      releaseMessagePreviews([current[index]]);
+      return [...current.slice(0, index), message, ...current.slice(index + 1)];
+    });
+  }
+
+  function releaseLatestOptimisticMessage() {
+    setMessages((current) => {
+      const index = current.findLastIndex((item) => item.role === 'user');
+      if (index < 0) return current;
+      const optimistic = current[index];
+      releaseMessagePreviews([optimistic]);
+      return [
+        ...current.slice(0, index),
+        {
+          role: optimistic.role,
+          content: optimistic.content || '[Image attachment failed]',
+        },
+        ...current.slice(index + 1),
+      ];
+    });
+  }
+
+  function updateAttachments(next: AiChatAttachment[]) {
+    attachmentsRef.current = next;
+    setAttachments(next);
+  }
+
+  async function attachImageFiles(files: File[]) {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    if (!imageFiles.length) return false;
+    const available = Math.max(
+      0,
+      AI_CHAT_IMAGE_LIMIT -
+        attachmentsRef.current.length -
+        pendingAttachmentCountRef.current,
+    );
+    const acceptedFiles = imageFiles.slice(0, available);
+    setAttachmentError(
+      imageFiles.length > available
+        ? `Attach no more than ${AI_CHAT_IMAGE_LIMIT} images`
+        : null,
+    );
+    if (!acceptedFiles.length) return true;
+    const generation = attachmentGenerationRef.current;
+    pendingAttachmentCountRef.current += acceptedFiles.length;
+    setAttaching(true);
+    const results = await Promise.allSettled(acceptedFiles.map(readImageFile));
+    if (generation !== attachmentGenerationRef.current) {
+      for (const result of results)
+        if (result.status === 'fulfilled')
+          URL.revokeObjectURL(result.value.previewUrl);
+      return true;
+    }
+    const readable = results.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    const next: AiChatAttachment[] = [];
+    let totalBytes = attachmentsRef.current.reduce(
+      (total, attachment) => total + attachment.byteLength,
+      0,
+    );
+    for (const attachment of readable) {
+      if (totalBytes + attachment.byteLength > AI_CHAT_IMAGE_TOTAL_MAX_BYTES) {
+        URL.revokeObjectURL(attachment.previewUrl);
+        setAttachmentError('AI chat images must total 24 MB or less');
+        continue;
+      }
+      totalBytes += attachment.byteLength;
+      next.push(attachment);
+    }
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (failure)
+      setAttachmentError(
+        failure.reason instanceof Error
+          ? failure.reason.message
+          : String(failure.reason),
+      );
+    if (next.length) {
+      for (const attachment of next)
+        attachmentPreviewUrlsRef.current.add(attachment.previewUrl);
+      updateAttachments([...attachmentsRef.current, ...next]);
+    }
+    pendingAttachmentCountRef.current -= acceptedFiles.length;
+    setAttaching(pendingAttachmentCountRef.current > 0);
+    return true;
+  }
+
+  function removeAttachment(id: string) {
+    const removed = attachmentsRef.current.find(
+      (attachment) => attachment.id === id,
+    );
+    if (removed) {
+      URL.revokeObjectURL(removed.previewUrl);
+      attachmentPreviewUrlsRef.current.delete(removed.previewUrl);
+    }
+    updateAttachments(
+      attachmentsRef.current.filter((attachment) => attachment.id !== id),
+    );
+    setAttachmentError(null);
   }
 
   function appendDelta(text: string) {
@@ -208,13 +476,32 @@ export function useAiChat(
 
   async function sendPrompt(message: string, chatId?: string) {
     const trimmed = message.trim();
-    if (!trimmed || busy) return;
+    const outgoingAttachments = attachmentsRef.current;
+    const targetChatId = chatId || openChatIdRef.current;
+    if (
+      !canSendAiChatMessage(trimmed, outgoingAttachments.length) ||
+      pendingAttachmentCountRef.current > 0 ||
+      busyByChatIdRef.current.get(chatStateKey(targetChatId)) ||
+      (!targetChatId && busyRef.current)
+    )
+      return;
+    updateChatBusy(targetChatId, true);
     setLimit(null);
     setCreditNotice(null);
-    appendMessage('user', trimmed);
+    appendMessage(
+      'user',
+      trimmed,
+      outgoingAttachments.map((attachment) => ({
+        url: attachment.previewUrl,
+        alt: attachment.name || 'Pasted image',
+      })),
+    );
     setInput('');
+    updateAttachments([]);
+    setAttachmentError(null);
     const trace = createRendererPerformanceTrace();
     activeTraceIdRef.current = trace.traceId;
+    optimisticTraceIdRef.current = trace.traceId;
     activeTraceStartedAtRef.current = trace.startedAt;
     firstPaintRecordedRef.current = false;
     try {
@@ -223,18 +510,34 @@ export function useAiChat(
         {
           chatId,
           messageLength: trimmed.length,
+          imageCount: outgoingAttachments.length,
           traceId: trace.traceId,
           alwaysLog: true,
         },
-        () => sendMessage(trimmed, chatId, trace.traceId),
+        () =>
+          sendMessage(
+            trimmed,
+            chatId,
+            trace.traceId,
+            outgoingAttachments.map(({ data, mimeType, name }) => ({
+              data,
+              mimeType,
+              ...(name ? { name } : {}),
+            })),
+          ),
       );
     } catch (error) {
-      finishActiveAiTrace('ai.send.error', 'error');
-      appendMessage(
-        'system',
-        error instanceof Error ? error.message : String(error),
-      );
-      setBusy(false);
+      if (optimisticTraceIdRef.current === trace.traceId) {
+        releaseLatestOptimisticMessage();
+        optimisticTraceIdRef.current = undefined;
+      }
+      finishActiveAiTrace('ai.send.error', 'error', trace.traceId);
+      if (chatStateKey(targetChatId) === chatStateKey(openChatIdRef.current))
+        appendMessage(
+          'system',
+          error instanceof Error ? error.message : String(error),
+        );
+      updateChatBusy(targetChatId, false);
     }
   }
 
@@ -247,12 +550,25 @@ export function useAiChat(
         hasInitialPrompt: Boolean(view.initialPrompt),
       },
       async () => {
+        openChatIdRef.current = view.chatId;
+        updateBusy(
+          busyByChatIdRef.current.get(chatStateKey(view.chatId)) || false,
+        );
         pendingDeltaRef.current = '';
         cancelDeltaFlush();
         setMessages(view.messages || []);
         setLimit(null);
         setCreditNotice(null);
         setInput('');
+        optimisticTraceIdRef.current = undefined;
+        attachmentGenerationRef.current += 1;
+        pendingAttachmentCountRef.current = 0;
+        setAttaching(false);
+        for (const url of attachmentPreviewUrlsRef.current)
+          URL.revokeObjectURL(url);
+        attachmentPreviewUrlsRef.current.clear();
+        updateAttachments([]);
+        setAttachmentError(null);
         focusInput();
         if (view.initialPrompt)
           await sendPrompt(view.initialPrompt, view.chatId);
@@ -262,7 +578,19 @@ export function useAiChat(
   }
 
   function handleEvent(event: AiChatEvent, activeChatId?: string) {
+    const eventChatId = event.chatId || activeChatId;
+    if (event.type === 'start') updateChatBusy(eventChatId, true);
+    if (
+      event.type === 'done' ||
+      event.type === 'error' ||
+      event.type === 'aborted'
+    )
+      updateChatBusy(eventChatId, false);
     if (!aiChatEventMatchesActiveChat(event, activeChatId)) return;
+    if (event.type === 'user_message') {
+      applyUserMessageEvent(event);
+      return;
+    }
     if (
       event.traceId &&
       activeTraceIdRef.current &&
@@ -272,14 +600,7 @@ export function useAiChat(
     if (event.type === 'start') {
       setLimit(null);
       setCreditNotice(null);
-      setBusy(true);
     }
-    if (
-      event.type === 'done' ||
-      event.type === 'error' ||
-      event.type === 'aborted'
-    )
-      setBusy(false);
     if (event.type === 'done')
       finishActiveAiTrace('ai.done', 'ok', event.traceId);
     if (event.type === 'error')
@@ -304,24 +625,36 @@ export function useAiChat(
 
   useEffect(
     () => () => {
+      attachmentGenerationRef.current += 1;
+      for (const url of attachmentPreviewUrlsRef.current)
+        URL.revokeObjectURL(url);
+      attachmentPreviewUrlsRef.current.clear();
       cancelDeltaFlush();
       activeTraceIdRef.current = undefined;
+      optimisticTraceIdRef.current = undefined;
       activeTraceStartedAtRef.current = undefined;
       firstPaintRecordedRef.current = false;
+      busyByChatIdRef.current.clear();
     },
     [],
   );
 
   return {
     messages,
-    setMessages,
+    setMessages: replaceMessages,
     input,
     setInput,
+    attachments,
+    attaching,
+    attachmentError,
+    attachImageFiles,
+    removeAttachment,
     busy,
-    setBusy,
+    setBusy: updateBusy,
     limit,
     setLimit,
     creditNotice,
+    setCreditNotice,
     messagesRef,
     inputRef,
     appendMessage,

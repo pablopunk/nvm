@@ -922,6 +922,14 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     records.clear();
   }
 
+  function broadcast(channel: string, payload: unknown) {
+    structuredClone(payload);
+    for (const record of records.values()) {
+      if (!record.win.isDestroyed())
+        record.win.webContents.send(channel, payload);
+    }
+  }
+
   return {
     records,
     createOrUpdate,
@@ -932,6 +940,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     showIndicator,
     updateIndicator,
     hideIndicator,
+    broadcast,
     closeAll,
     persistentWindowRecords,
     forgetPersistentWindow,

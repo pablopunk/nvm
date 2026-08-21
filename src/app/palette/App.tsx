@@ -22,6 +22,7 @@ import {
   useState,
 } from 'react';
 import { actionMenuPresentation } from './action-menu-presentation';
+import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
 import {
   isDictationModelCached,
   prepareDictationModel,
@@ -395,7 +396,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         if (state.view.aiChat) void aiChat.openChat(state.view);
       }
     });
-    return window.nvm.onExtensionWindowView((payload) => {
+    const stopView = window.nvm.onExtensionWindowView((payload) => {
       if (payload.id === windowId) {
         setView(payload.view);
         setCompactView(null);
@@ -406,6 +407,15 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         if (payload.view.aiChat) void aiChat.openChat(payload.view);
       }
     });
+    const stopAuth = window.nvm.onNevermindAuthChanged((status) => {
+      setNevermindAuthed(status.authed);
+      aiChat.setLimit(null);
+      aiChat.setCreditNotice(null);
+    });
+    return () => {
+      stopView();
+      stopAuth();
+    };
   }, [windowId]);
 
   const viewKey = `${view?.id || ''}:${view?.type || ''}:${view?.title || ''}`;
@@ -1558,9 +1568,11 @@ export function App() {
     window.nvm.getGhStatus().then((status) => {
       if (!cancelled) setGhStatus(status);
     });
-    const stop = window.nvm.onNevermindAuthChanged((status) =>
-      setNevermindAuthed(status.authed),
-    );
+    const stop = window.nvm.onNevermindAuthChanged((status) => {
+      setNevermindAuthed(status.authed);
+      aiChat.setLimit(null);
+      aiChat.setCreditNotice(null);
+    });
     return () => {
       cancelled = true;
       stop();
@@ -1575,6 +1587,13 @@ export function App() {
       if (input.readOnly)
         input.setSelectionRange(input.value.length, input.value.length);
       else input.select();
+    };
+    const focusActiveInput = () => {
+      if (aiChatOpenRef.current) {
+        aiChat.inputRef.current?.focus();
+        return;
+      }
+      focusInput();
     };
 
     const stopShown = window.nvm.onShown(() => {
@@ -1591,13 +1610,13 @@ export function App() {
         extensionNavigation.setBackStack([]);
         setSiblingViews([]);
       }
-      requestAnimationFrame(focusInput);
-      window.setTimeout(focusInput, 50);
+      requestAnimationFrame(focusActiveInput);
+      window.setTimeout(focusActiveInput, 50);
     });
     const stopShortcutShown = window.nvm.onShortcutShown(() => {
       markDebugPerformance('palette.shortcut-shown');
-      requestAnimationFrame(focusInput);
-      window.setTimeout(focusInput, 50);
+      requestAnimationFrame(focusActiveInput);
+      window.setTimeout(focusActiveInput, 50);
     });
     const stopHidden = window.nvm.onHidden(() => {
       markDebugPerformance('palette.hidden', {
@@ -2170,16 +2189,6 @@ export function App() {
     return () => timers.forEach((stop) => stop());
   }, [builderPreviewRefreshKey]);
 
-  const createAction = useMemo(
-    () =>
-      actions.find(
-        (action) =>
-          action.kind === 'extension-root-item' &&
-          action.extensionId === 'nevermind.ai-builder' &&
-          action.id.startsWith('extension-root:nevermind.ai-builder:ai:'),
-      ),
-    [actions],
-  );
   const isFilterableExtensionView =
     extensionView?.type === 'list' ||
     extensionView?.type === 'grid' ||
@@ -3128,12 +3137,11 @@ export function App() {
     );
   }
 
-  async function startBuilderChatFromQuery(prompt: string) {
+  async function startConversationChatFromQuery(prompt: string) {
     const result = await measureDebugPerformance(
-      'ai-builder.start-chat',
+      'ai-conversation.start-chat',
       { promptLength: prompt.length, alwaysLog: true },
-      () =>
-        window.nvm.startBuilderChat({ prompt, title: `Automate "${prompt}"` }),
+      () => window.nvm.startConversationChat({ prompt }),
     );
     if (result?.view?.aiChat) await openAiChat(result.view, 'root');
     else if (result?.view) showExtensionView(result.view, 'root');
@@ -3436,22 +3444,6 @@ export function App() {
       title: 'Rename Extension',
       targetAction: optionsFor,
     });
-  }
-
-  function tabActionForRootAction(action: Action | null | undefined) {
-    if (!action) return null;
-    if (
-      action.kind === 'extension-root-item' &&
-      action.extensionId === 'nevermind.ai-builder' &&
-      action.id.startsWith('extension-root:nevermind.ai-builder:ai-chat:')
-    )
-      return () => run(action);
-    if (
-      ['extension-root-item', 'extension-action'].includes(action.kind) &&
-      action.extensionFile
-    )
-      return () => tweakActionWithAi(action);
-    return null;
   }
 
   async function restoreOriginal() {
@@ -4016,7 +4008,6 @@ export function App() {
         icon: <Wand2 size={18} />,
         title: 'Tweak with AI',
         subtitle: 'Open the original creation chat for this action',
-        shortcut: 'Tab',
         onSelect: tweakWithAi,
         show: canTweakWithAi,
       },
@@ -4157,13 +4148,6 @@ export function App() {
         items={items}
         iconForItem={iconForCommandItem}
         onSelect={runCommandItem}
-        extraForItem={(item) =>
-          ['extension-root-item', 'extension-action'].includes(
-            actionFromCommandItem(item)?.kind || '',
-          ) && actionFromCommandItem(item)?.extensionFile
-            ? ['Tab tweak']
-            : []
-        }
       />
     );
   }
@@ -5024,23 +5008,20 @@ export function App() {
       }
     }
 
-    if (!isChildOpen && event.key === 'Tab') {
-      const tabAction = tabActionForRootAction(selectedAction);
-      if (tabAction) {
-        event.preventDefault();
-        tabAction();
-        return;
-      }
-    }
-
-    if (!isChildOpen && event.key === 'Tab' && query) {
+    if (
+      shouldStartConversationFromTab({
+        key: event.key,
+        query,
+        isChildOpen,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+      })
+    ) {
       event.preventDefault();
       rememberRootQuery(query);
-      if (createAction) {
-        run(createAction);
-      } else {
-        startBuilderChatFromQuery(query);
-      }
+      startConversationChatFromQuery(query);
     }
   }
 
@@ -5090,8 +5071,7 @@ export function App() {
           {renderSearchAccessory(extensionView)}
           {!isChildOpen && query ? (
             <div className="tabHint">
-              <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to
-              automate
+              <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to ask AI
             </div>
           ) : null}
         </div>

@@ -1,14 +1,20 @@
 // biome-ignore-all lint: This legacy AI integration retains established provider and session conventions.
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
 import type { CommandAction } from '../palette/model';
-import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
 import {
   finalOneShotAssistantText,
   streamedOneShotAssistantText,
 } from './ai-one-shot-result';
+import {
+  aiPromptUsesDirectModel,
+  type AiToolMode,
+  CONVERSATION_AI_TOOLS,
+  missingConversationAiTools,
+} from './ai-tool-policy';
 import { type ByoKeySnapshot, getByoKey } from './byo-key';
 import {
   markDebugPerformance,
@@ -19,7 +25,11 @@ import { inspectExtensionManifest } from './extension-manifest';
 import * as logger from './logger';
 import { type LogLevel, type LogSource, readRecentLogs } from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
-import { getNevermindAuth, NevermindAuthRequiredError } from './nevermind-auth';
+import {
+  getNevermindAuth,
+  getNevermindDashboardUrl,
+  NevermindAuthRequiredError,
+} from './nevermind-auth';
 import {
   checkNevermindCompatibility,
   requireNevermindCompatibilityFeature,
@@ -46,13 +56,9 @@ type AiLimitNotice = {
   title: string;
   message: string;
   actionTitle?: string;
-  dashboardUrl?: string;
   action?: CommandAction;
   retryAfterSec?: number;
 };
-
-const NEVERMIND_DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
-const NEVERMIND_UPDATE_URL = 'https://github.com/pablopunk/nvm/releases/latest';
 
 type ActiveChat = {
   id?: string;
@@ -158,6 +164,7 @@ type AiPromptOptions = {
   preparationKey?: string;
   system?: string;
   model?: AiModelRole;
+  toolMode?: AiToolMode;
   context?: string;
   images?: AiImageContent[];
   signal?: {
@@ -326,16 +333,26 @@ function createNevermindAi(options: NevermindAiOptions) {
     return entry.promise;
   }
 
-  async function send(message: string, chatId = 'default', traceId?: string) {
+  async function send(
+    message: string,
+    chatId = 'default',
+    traceId?: string,
+    images?: AiImageContent[],
+  ) {
     const credit = creditInfoRef.current;
     if (credit?.notice === 'blocked') {
+      creditInfoRef.current = null;
       const limit: AiLimitNotice = {
         kind: 'insufficient_credits',
         title: 'Credits needed',
         message:
           "You've reached your Nevermind AI credit limit. Open your dashboard to review your account.",
         actionTitle: 'Open Dashboard',
-        dashboardUrl: NEVERMIND_DASHBOARD_URL,
+        action: {
+          type: 'openUrl',
+          title: 'Open Dashboard',
+          url: getNevermindDashboardUrl(),
+        },
       };
       options.onEvent?.({
         type: 'error',
@@ -350,7 +367,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       options.onEvent?.({
         type: 'credit_warning',
         chatId,
-        message: `Low credit balance: ${credit.credits.total} credits remaining. Consider adding credits at www.nvm.fyi/dashboard.`,
+        message: `Low credit balance: ${credit.credits.total} credits remaining. Consider opening your dashboard.`,
       });
     }
     options.onEvent?.({ type: 'start', chatId, traceId });
@@ -359,16 +376,26 @@ function createNevermindAi(options: NevermindAiOptions) {
     const startedAt = performance.now();
     await measureDebugPerformance(
       'ai.chat.send',
-      { chatId, messageLength: message.length, alwaysLog: true },
+      {
+        chatId,
+        messageLength: message.length,
+        imageCount: images?.length || 0,
+        alwaysLog: true,
+      },
       async () => {
         try {
           const session = await getSession(chatId, message.length);
           await measureDebugPerformance(
             'ai.chat.prompt',
-            { chatId, messageLength: message.length, alwaysLog: true },
+            {
+              chatId,
+              messageLength: message.length,
+              imageCount: images?.length || 0,
+              alwaysLog: true,
+            },
             async () => {
               await session.prepareModelForPrompt?.(message);
-              return session.prompt(message);
+              return session.prompt(message, { images });
             },
           );
           options.onEvent?.({
@@ -431,7 +458,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     try {
       if (askOptions.signal?.aborted) throw aiAbortError();
       const prompt = aiPromptWithContext(message, askOptions.context);
-      if (!askOptions.sessionId) {
+      if (aiPromptUsesDirectModel(askOptions)) {
         const directResult = await askDirect(
           prompt,
           askOptions,
@@ -562,6 +589,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     return JSON.stringify([
       sessionOptions.model || 'default',
       sessionOptions.system || '',
+      sessionOptions.toolMode || 'none',
     ]);
   }
 
@@ -577,6 +605,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionId?: string;
       system?: string;
       model?: AiModelRole;
+      toolMode?: AiToolMode;
     },
     initialPromptChars = 0,
   ) {
@@ -589,6 +618,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     const key = generalSessionCacheKey(
       sessionOptions.sessionId,
       sessionOptions.model,
+      sessionOptions.toolMode,
     );
     let promise = generalSessions.get(key);
     if (!promise) {
@@ -607,7 +637,11 @@ function createNevermindAi(options: NevermindAiOptions) {
 
   function session(
     sessionId: string,
-    sessionOptions: { system?: string; model?: AiModelRole } = {},
+    sessionOptions: {
+      system?: string;
+      model?: AiModelRole;
+      toolMode?: AiToolMode;
+    } = {},
   ) {
     return {
       ask: (message: string, options: AiPromptOptions = {}) =>
@@ -624,8 +658,12 @@ function createNevermindAi(options: NevermindAiOptions) {
     };
   }
 
-  function generalSessionCacheKey(sessionId: string, model?: AiModelRole) {
-    return `${model || 'default'}:${sessionId}`;
+  function generalSessionCacheKey(
+    sessionId: string,
+    model?: AiModelRole,
+    toolMode?: AiToolMode,
+  ) {
+    return `${model || 'default'}:${toolMode || 'none'}:${sessionId}`;
   }
 
   function generalSessionCacheKeys(sessionId: string) {
@@ -633,6 +671,9 @@ function createNevermindAi(options: NevermindAiOptions) {
       generalSessionCacheKey(sessionId),
       generalSessionCacheKey(sessionId, 'smart'),
       generalSessionCacheKey(sessionId, 'fast'),
+      generalSessionCacheKey(sessionId, undefined, 'conversation'),
+      generalSessionCacheKey(sessionId, 'smart', 'conversation'),
+      generalSessionCacheKey(sessionId, 'fast', 'conversation'),
     ];
   }
 
@@ -653,6 +694,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     }
     directModelDescriptors.clear();
     directModelDescriptorRequests.clear();
+    creditInfoRef.current = null;
   }
 
   return {
@@ -1123,7 +1165,11 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       message:
         'You’ve reached your Nevermind AI credit limit. Open your dashboard to review your account.',
       actionTitle: 'Open Dashboard',
-      dashboardUrl: NEVERMIND_DASHBOARD_URL,
+      action: {
+        type: 'openUrl',
+        title: 'Open Dashboard',
+        url: getNevermindDashboardUrl(),
+      },
     };
   }
   if (/rate[_ -]?limited|rate limit exceeded|429\b/i.test(text)) {
@@ -1134,7 +1180,11 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
         ? `You’re sending messages too quickly. Try again in about ${retryAfterSec} seconds, or open your dashboard for account details.`
         : 'You’ve reached a Nevermind AI usage limit. Open your dashboard for account details.',
       actionTitle: 'Open Dashboard',
-      dashboardUrl: NEVERMIND_DASHBOARD_URL,
+      action: {
+        type: 'openUrl',
+        title: 'Open Dashboard',
+        url: getNevermindDashboardUrl(),
+      },
       retryAfterSec,
     };
   }
@@ -1143,9 +1193,7 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       kind: 'prompt_too_large',
       title: 'Prompt too large',
       message:
-        'This request is too large for the current AI limit. Try a shorter message or open your dashboard for account details.',
-      actionTitle: 'Open Dashboard',
-      dashboardUrl: NEVERMIND_DASHBOARD_URL,
+        'This chat contains too much content. Shorten the message, remove attachments, or start a new chat.',
     };
   }
   if (
@@ -1159,7 +1207,6 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       message:
         'This version of Nevermind is no longer supported by the backend. Install the latest version to keep using AI features.',
       actionTitle: 'Check for Update',
-      dashboardUrl: NEVERMIND_UPDATE_URL,
       action: { type: 'checkForUpdates', title: 'Check for Update' },
     };
   }
@@ -1187,7 +1234,12 @@ function stringifyError(value: unknown) {
 
 async function createGeneralSession(
   options: NevermindAiOptions,
-  sessionOptions: { sessionId?: string; system?: string; model?: AiModelRole },
+  sessionOptions: {
+    sessionId?: string;
+    system?: string;
+    model?: AiModelRole;
+    toolMode?: AiToolMode;
+  },
   initialPromptChars = 0,
 ) {
   const { agentDir, workspaceDir } = options;
@@ -1204,12 +1256,18 @@ async function createGeneralSession(
     sessionOptions.model,
     initialPromptChars,
   );
+  const toolMode = sessionOptions.toolMode || 'none';
+  const webAccessLoader =
+    toolMode === 'conversation'
+      ? await createPiWebAccessLoader(pi, { agentDir, workspaceDir })
+      : null;
   const resourceLoader = {
-    getExtensions: () => ({
-      extensions: [],
-      errors: [],
-      runtime: pi.createExtensionRuntime(),
-    }),
+    getExtensions: () =>
+      webAccessLoader?.getExtensions() || {
+        extensions: [],
+        errors: [],
+        runtime: pi.createExtensionRuntime(),
+      },
     getSkills: () => ({ skills: [], diagnostics: [] }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
@@ -1219,7 +1277,9 @@ async function createGeneralSession(
       'You are a helpful AI assistant inside a Nevermind extension. Answer directly and concisely.',
     getAppendSystemPrompt: () => [],
     extendResources: () => {},
-    reload: async () => {},
+    reload: async () => {
+      await webAccessLoader?.reload();
+    },
   };
   const result = (await pi.createAgentSession({
     cwd: workspaceDir,
@@ -1228,7 +1288,9 @@ async function createGeneralSession(
     thinkingLevel,
     modelRuntime,
     resourceLoader,
-    noTools: 'builtin',
+    ...(toolMode === 'conversation'
+      ? { tools: [...CONVERSATION_AI_TOOLS] }
+      : { noTools: 'builtin' as const }),
     sessionManager: pi.SessionManager.inMemory(
       path.join(
         workspaceDir,
@@ -1241,6 +1303,18 @@ async function createGeneralSession(
       retry: { enabled: false },
     }),
   })) as { session: AgentSession };
+  if (toolMode === 'conversation') {
+    const activeTools = result.session.agent.state.tools.map(
+      (tool) => tool.name,
+    );
+    const missingTools = missingConversationAiTools(activeTools);
+    if (missingTools.length > 0) {
+      result.session.dispose?.();
+      throw new Error(
+        `Conversation AI tools failed to load: ${missingTools.join(', ')}`,
+      );
+    }
+  }
   let initialPromptPrepared = initialPromptChars > 0;
   result.session.prepareModelForPrompt = async function prepareModelForPrompt(
     prompt,
@@ -1426,16 +1500,10 @@ async function createResourceLoader(
     'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'
   >,
 ) {
-  const webAccessPath = await findPiWebAccessPath();
-  const webAccessLoader =
-    webAccessPath && pi.DefaultResourceLoader
-      ? new pi.DefaultResourceLoader({
-          agentDir,
-          cwd: workspaceDir,
-          additionalExtensionPaths: [webAccessPath],
-        })
-      : null;
-  if (webAccessLoader) await webAccessLoader.reload();
+  const webAccessLoader = await createPiWebAccessLoader(pi, {
+    agentDir,
+    workspaceDir,
+  });
 
   const extensionBuilderSkill = {
     name: 'nevermind-extension-builder',
@@ -1479,9 +1547,41 @@ async function createResourceLoader(
   };
 }
 
+async function createPiWebAccessLoader(
+  pi: PiApi,
+  {
+    agentDir,
+    workspaceDir,
+  }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir'>,
+) {
+  const webAccessPath = await findPiWebAccessPath();
+  if (!(webAccessPath && pi.DefaultResourceLoader))
+    throw new Error('Bundled Pi web access is unavailable');
+  const loader = new pi.DefaultResourceLoader({
+    agentDir,
+    cwd: workspaceDir,
+    additionalExtensionPaths: [webAccessPath],
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+  });
+  await loader.reload();
+  return loader;
+}
+
 async function findPiWebAccessPath() {
+  const require = createRequire(import.meta.url);
+  let installedPackagePath: string | undefined;
+  try {
+    installedPackagePath = path.dirname(
+      require.resolve('pi-web-access/package.json'),
+    );
+  } catch {}
   const candidates = [
     process.env.NEVERMIND_PI_WEB_ACCESS_PATH,
+    installedPackagePath,
     '/opt/homebrew/lib/node_modules/pi-web-access',
     '/usr/local/lib/node_modules/pi-web-access',
     path.join(

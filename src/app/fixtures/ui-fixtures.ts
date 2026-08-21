@@ -378,6 +378,18 @@ function renderingPolishView(ctx: ExtensionContext) {
         actions: [openAction],
       }),
       ctx.ui.item({
+        id: 'accent-background',
+        title: 'Accent Background',
+        subtitle: 'Highlights a primary result without replacing selection',
+        icon: 'sparkles',
+        appearance: { foreground: 'yellow', background: 'accent' },
+        detail: {
+          title: 'Accent Background',
+          markdown:
+            '`appearance.background: "accent"` adds a subtle semantic highlight while the selected state remains visible.',
+        },
+      }),
+      ctx.ui.item({
         id: 'warning',
         title: 'Warning Accessory',
         subtitle: 'Foreground colors title and icon together',

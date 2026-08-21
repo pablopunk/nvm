@@ -73,7 +73,7 @@ test('AI builder chat continuation title no longer exact-matches the prompt', ()
 test('title prefixes outrank whole-word matches in longer titles', () => {
   assert.ok(
     prioritizedTitleSearchScore('Dictate', 'dictat') >
-      prioritizedTitleSearchScore('Press Tab to automate "dictat"', 'dictat'),
+      prioritizedTitleSearchScore('Automate "dictat"', 'dictat'),
   );
   assert.ok(
     prioritizedTitleSearchScore('Dictate', 'dictate') >
@@ -88,7 +88,7 @@ test('leading query words in a command outrank generated search fallbacks', () =
     query,
   );
   const automationScore = actionTextSearchScore(
-    { title: `Press Tab to automate "${query}"` },
+    { title: `Automate "${query}"` },
     query,
   );
   const webSearchScore = actionTextSearchScore(

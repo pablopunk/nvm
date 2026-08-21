@@ -230,6 +230,21 @@ test('extension window helpers clamp size and derive stable ids', () => {
   );
 });
 
+test('broadcast sends clone-safe host events to each live extension window', () => {
+  const { manager } = createManager();
+  manager.createOrUpdate({ id: 'one', type: 'list', title: 'One', items: [] });
+  manager.createOrUpdate({ id: 'two', type: 'list', title: 'Two', items: [] });
+  const windows = [...FakeBrowserWindow.instances];
+  for (const win of windows) win.sent = [];
+
+  manager.broadcast('nevermind:auth-changed', { authed: true });
+
+  for (const win of windows)
+    assert.deepEqual(win.sent, [
+      { channel: 'nevermind:auth-changed', payload: { authed: true } },
+    ]);
+});
+
 test('indicators show without focus and ignore mouse events', () => {
   const { manager } = createManager();
   manager.showIndicator(

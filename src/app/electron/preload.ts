@@ -117,8 +117,8 @@ const api: NevermindApi = {
   pickFormFieldPaths: (input) =>
     invokeMeasured('dialog:pick-form-field-paths', input),
   startFileDrag: (filePath) => ipcRenderer.send('drag:file', filePath),
-  sendAiMessage: (message, chatId, traceId) =>
-    invokeMeasured('ai:chat:send', message, chatId, traceId),
+  sendAiMessage: (message, chatId, traceId, images) =>
+    invokeMeasured('ai:chat:send', message, chatId, traceId, images),
   aiChatExited: (chatId) => invokeMeasured('ai:chat:exited', chatId),
   abortAiChat: (chatId) => invokeMeasured('ai:chat:abort', chatId),
   resetAiChat: (chatId) => invokeMeasured('ai:chat:reset', chatId),
@@ -148,6 +148,8 @@ const api: NevermindApi = {
   tweakExtension: (input) =>
     invokeMeasured('ai-builder:tweak-extension', input),
   startBuilderChat: (input) => invokeMeasured('ai-builder:start-chat', input),
+  startConversationChat: (input) =>
+    invokeMeasured('ai-conversation:start-chat', input),
   getAppIcon: (appPath) => invokeMeasured('apps:icon', appPath),
   getRunningAppPaths: (appPaths) =>
     invokeMeasured('apps:running-paths', appPaths),

@@ -261,6 +261,58 @@ test('device auth initiate returns the desktop-v1 initiation contract', async ()
   assert.equal((db.insertedValues[0] as any).deviceLabel, 'Pablo Mac');
 });
 
+test('Local device auth uses the backend origin for verification', async () => {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = 'development';
+  try {
+    installDb(createFakeDb());
+    const request = new Request('http://localhost:4321/api/auth/device/initiate', {
+      method: 'POST',
+      body: '{}',
+    });
+
+    const response = await initiateDeviceAuth(routeContext(request));
+    const body = await response.json() as any;
+
+    assert.equal(response.status, 200);
+    assert.equal(
+      body.verifyUrl,
+      `http://localhost:4321/auth/device?code=${body.code}`,
+    );
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+  }
+});
+
+test('Production device auth rejects a loopback verification origin', async () => {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  const previousNodeEnvironment = process.env.NODE_ENV;
+  delete process.env.VERCEL_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    installDb(createFakeDb());
+    const request = new Request('http://localhost:4321/api/auth/device/initiate', {
+      method: 'POST',
+      body: '{}',
+    });
+
+    const response = await initiateDeviceAuth(routeContext(request));
+    const body = await response.json() as any;
+
+    assert.equal(response.status, 200);
+    assert.equal(
+      body.verifyUrl,
+      `https://www.nvm.fyi/auth/device?code=${body.code}`,
+    );
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+    if (previousNodeEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnvironment;
+  }
+});
+
 test('Preview device auth rejects a mismatched request origin before creating a code', async () => {
   const previousEnvironment = process.env.VERCEL_ENV;
   const previousUrl = process.env.VERCEL_URL;
@@ -472,6 +524,29 @@ test('active-model route returns descriptor contract with compatibility headers'
   assert.equal(body.thinkingLevel, 'low');
   assert.equal(body.modelTier, 'free');
   assert.equal(body.creditKind, 'free');
+});
+
+test('Local active-model routes completions through the local backend', async () => {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = 'development';
+  try {
+    installModelsDevFetch();
+    installDb(createFakeDb({ selects: proxySelects() }));
+    const response = await getActiveModel(
+      routeContext(
+        new Request('http://localhost:4321/api/v1/active-model', {
+          headers: { authorization: 'Bearer nvm_pat_test' },
+        }),
+      ),
+    );
+    const body = await response.json() as any;
+
+    assert.equal(response.status, 200);
+    assert.equal(body.baseUrl, 'http://localhost:4321/api/v1');
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+  }
 });
 
 test('active-model returns the configured thinking level for a route', async () => {
@@ -688,6 +763,39 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   assert.deepEqual(await promptTooLarge.json(), {
     error: { type: 'prompt_too_large', message: 'Prompt exceeds 100000 input tokens' },
   });
+});
+
+test('proxy route does not reject inline images as oversized text prompts', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }));
+  installOpenAiFetch(() =>
+    Response.json({ usage: { prompt_tokens: 1_600, completion_tokens: 3 } }),
+  );
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        model: 'placeholder',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'What is in this image?' },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/png;base64,${'a'.repeat(600_000)}`,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 200);
 });
 
 test('proxy route honors extension smart/fast model selection headers', async () => {

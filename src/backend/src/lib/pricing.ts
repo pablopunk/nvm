@@ -65,6 +65,22 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
   },
   openrouter: {
     models: {
+      'deepseek/deepseek-v4-flash-0731': {
+        id: 'deepseek/deepseek-v4-flash-0731',
+        name: 'DeepSeek V4 Flash 0731',
+        reasoning: true,
+        modalities: { input: ['text'], output: ['text'] },
+        limit: { context: 1_310_720, output: 393_216 },
+        cost: { input: 0.14, output: 0.28 },
+      },
+      'deepseek/deepseek-v4-pro-0813': {
+        id: 'deepseek/deepseek-v4-pro-0813',
+        name: 'DeepSeek V4 Pro 0813',
+        reasoning: true,
+        modalities: { input: ['text'], output: ['text'] },
+        limit: { context: 1_048_576, output: 384_000 },
+        cost: { input: 1.188, output: 3.564 },
+      },
       'google/gemini-2.5-flash': {
         id: 'google/gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',

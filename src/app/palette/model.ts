@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { AiChatMessage } from '../shared/ai-chat-images';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
@@ -489,6 +490,7 @@ export interface CommandDetail {
 export type CommandItemForeground = ForegroundColor;
 export interface CommandItemAppearance {
   foreground?: CommandItemForeground;
+  background?: 'accent';
 }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & {
@@ -642,7 +644,7 @@ export interface CommandView {
     mode?: CommandViewPatch['mode'];
     immediate?: boolean;
   };
-  messages?: { role: 'user' | 'assistant' | 'system'; content: string }[];
+  messages?: AiChatMessage[];
   fields?: CommandFormField[];
   submitAction?: CommandAction;
   steps?: { title: string; status?: string }[];

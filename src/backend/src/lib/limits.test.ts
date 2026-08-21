@@ -79,6 +79,121 @@ describe('estimateInputTokensFromBody', () => {
       Math.ceil(totalChars / CHARS_PER_TOKEN),
     );
   });
+
+  test('estimates image payloads without counting base64 as text', () => {
+    const base64 = 'a'.repeat(600_000);
+    const textTokens = Math.ceil('user'.length / CHARS_PER_TOKEN);
+    const expected = textTokens + 1_600;
+    const payloads = [
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${base64}` },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/png',
+                  data: base64,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ inlineData: { mimeType: 'image/png', data: base64 } }],
+          },
+        ],
+      },
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_image',
+                detail: 'auto',
+                image_url: `data:image/png;base64,${base64}`,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: `data:image/png;base64,${base64}`,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    for (const payload of payloads)
+      assert.equal(estimateInputTokensFromBody(JSON.stringify(payload)), expected);
+  });
+
+  test('continues counting unrelated data fields as text', () => {
+    const data = 'a'.repeat(600_000);
+    assert.equal(
+      estimateInputTokensFromBody(JSON.stringify({ data })),
+      Math.ceil(data.length / CHARS_PER_TOKEN),
+    );
+  });
+
+  test('does not exempt malformed image-like wrappers', () => {
+    const data = 'a'.repeat(600_000);
+    const malformed = [
+      {
+        type: 'image_url',
+        image_url: { url: `data:image/png;base64,${data}` },
+        hiddenText: data,
+      },
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'text/plain', data },
+      },
+      {
+        inlineData: { mimeType: 'image/png', data: `${data}!` },
+      },
+      {
+        type: 'input_image',
+        detail: data,
+        image_url: `data:image/png;base64,${data}`,
+      },
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data },
+        cache_control: { type: 'ephemeral', ttl: data },
+      },
+    ];
+
+    for (const payload of malformed)
+      assert.ok(estimateInputTokensFromBody(JSON.stringify(payload)) > 100_000);
+  });
 });
 
 describe('estimatePromptCredits', () => {

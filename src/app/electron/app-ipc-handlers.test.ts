@@ -26,7 +26,12 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     refreshViewForIpc: (input) => ({ refreshed: input }),
     pickFormFieldPaths: (_event, input) => ({ picked: input }),
     startFileDrag: () => calls.push('drag'),
-    sendAiChatMessage: (message, chatId) => ({ message, chatId }),
+    sendAiChatMessage: (message, chatId, traceId, images) => ({
+      message,
+      chatId,
+      traceId,
+      images,
+    }),
     noteAiChatExited: (chatId) => ({ chatId }),
     abortAiChat: (chatId) => ({ chatId }),
     resetAiChat: (chatId) => ({ chatId }),
@@ -50,6 +55,11 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     aiChatView: (item, options) => ({ type: 'chat', item, options }),
     normalizeHostViewResult: (result) => ({ normalized: result }),
     createDraftAiChat: (prompt) => ({ prompt, messages: [] }),
+    createDraftConversationChat: (prompt) => ({
+      kind: 'conversation',
+      prompt,
+      messages: [],
+    }),
     getNevermindAuth: async () => null,
     getNevermindDebugStatus: () => ({
       client: { environment: 'production', baseUrl: 'https://api.nvm.fyi' },
@@ -103,6 +113,28 @@ test('registerAppIpcHandlers registers core invoke handlers and drag listener', 
   assert.equal(handles.has('logs:write'), true);
   assert.equal(listeners.has('drag:file'), true);
   assert.equal(listeners.has('actions:search:cancel'), true);
+});
+
+test('AI chat IPC forwards clone-safe image inputs', async () => {
+  const image = {
+    data: Buffer.from('image').toString('base64'),
+    mimeType: 'image/png',
+  };
+  assert.deepEqual(
+    await createDeps().handles.get('ai:chat:send')?.(
+      {},
+      'Question',
+      'chat-a',
+      'trace-a',
+      [image],
+    ),
+    {
+      message: 'Question',
+      chatId: 'chat-a',
+      traceId: 'trace-a',
+      images: [image],
+    },
+  );
 });
 
 test('search IPC stays scoped to the originating sender', async () => {
@@ -189,6 +221,51 @@ test('registerAppIpcHandlers awaits restored AI chat views', async () => {
         item: { prompt: 'Restore', messages: [] },
         options: { start: true },
       },
+    },
+  });
+});
+
+test('registerAppIpcHandlers starts a conversation with its first prompt', async () => {
+  const { handles } = createDeps();
+
+  const result = await handles.get('ai-conversation:start-chat')?.(
+    {},
+    { prompt: 'What is the weather?' },
+  );
+
+  assert.deepEqual(result, {
+    normalized: {
+      view: {
+        type: 'chat',
+        item: {
+          kind: 'conversation',
+          prompt: 'What is the weather?',
+          messages: [],
+        },
+        options: { initialPrompt: 'What is the weather?' },
+      },
+    },
+  });
+});
+
+test('registerAppIpcHandlers rejects an empty conversation prompt', async () => {
+  let created = false;
+  const { handles } = createDeps({
+    createDraftConversationChat: () => {
+      created = true;
+      return {};
+    },
+  });
+
+  const result = await handles.get('ai-conversation:start-chat')?.(
+    {},
+    { prompt: '   ' },
+  );
+
+  assert.equal(created, false);
+  assert.deepEqual(result, {
+    normalized: {
+      toast: { message: 'Enter a question first', tone: 'error' },
     },
   });
 });

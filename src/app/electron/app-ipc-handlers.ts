@@ -35,6 +35,7 @@ export interface AppIpcHandlersDeps {
     message: unknown,
     chatId: unknown,
     traceId?: unknown,
+    images?: unknown,
   ) => unknown;
   noteAiChatExited: (chatId: unknown) => unknown;
   abortAiChat: (chatId: unknown) => unknown;
@@ -59,6 +60,7 @@ export interface AppIpcHandlersDeps {
   aiChatView: (item: unknown, options?: Record<string, unknown>) => unknown;
   normalizeHostViewResult: (result: unknown) => unknown;
   createDraftAiChat: (prompt: string) => unknown;
+  createDraftConversationChat: (prompt: string) => unknown;
   getNevermindAuth: () => Promise<{ baseUrl?: string; email?: string } | null>;
   getNevermindDebugStatus: () => {
     client: { environment: string; baseUrl: string };
@@ -130,8 +132,10 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   );
   ipcHandleMeasured('dialog:pick-form-field-paths', deps.pickFormFieldPaths);
   deps.ipcMain.on('drag:file', deps.startFileDrag);
-  ipcHandleMeasured('ai:chat:send', (_event, message, chatId, traceId) =>
-    deps.sendAiChatMessage(message, chatId, traceId),
+  ipcHandleMeasured(
+    'ai:chat:send',
+    (_event, message, chatId, traceId, images) =>
+      deps.sendAiChatMessage(message, chatId, traceId, images),
   );
   ipcHandleMeasured('ai:chat:exited', (_event, chatId) =>
     deps.noteAiChatExited(chatId),
@@ -215,6 +219,24 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
         view: await deps.aiChatView(item, {
           start: messages.length <= 1,
         }),
+      });
+    },
+  );
+  ipcHandleMeasured(
+    'ai-conversation:start-chat',
+    async (_event, input: unknown = {}) => {
+      // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
+      const typedInput = input as any;
+      const prompt = String(
+        typedInput?.prompt || typedInput?.query || '',
+      ).trim();
+      if (!prompt)
+        return deps.normalizeHostViewResult({
+          toast: { message: 'Enter a question first', tone: 'error' },
+        });
+      const item = deps.createDraftConversationChat(prompt);
+      return deps.normalizeHostViewResult({
+        view: await deps.aiChatView(item, { initialPrompt: prompt }),
       });
     },
   );

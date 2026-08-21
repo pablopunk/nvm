@@ -5,6 +5,7 @@ import {
   LogIn,
   Search,
   Square,
+  X,
 } from 'lucide-react';
 import React, {
   type CSSProperties,
@@ -38,11 +39,18 @@ import {
   ProgressView,
 } from './ui';
 import type { AiLimitState } from './use-ai-chat';
+import type { AiChatAttachment } from './use-ai-chat';
+import { canSendAiChatMessage } from '../shared/ai-chat-images';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
   input: string;
   setInput: (value: string) => void;
+  attachments: AiChatAttachment[];
+  attaching: boolean;
+  attachmentError: string | null;
+  attachImageFiles: (files: File[]) => Promise<boolean>;
+  removeAttachment: (id: string) => void;
   busy: boolean;
   limit: AiLimitState | null;
   creditNotice: string | null;
@@ -345,19 +353,7 @@ export function NevermindLimitGate({
         title: limit.actionTitle || limit.action.title,
         onSelect: () => runAction(limit.action!),
       }
-    : limit.dashboardUrl
-      ? {
-          value: 'open-dashboard',
-          icon: <CreditCard size={16} />,
-          title: limit.actionTitle || 'Open Dashboard',
-          onSelect: () =>
-            runAction({
-              type: 'openUrl',
-              title: limit.actionTitle || 'Open Dashboard',
-              url: limit.dashboardUrl,
-            }),
-        }
-      : undefined;
+    : undefined;
   return (
     <EmptyState
       icon={<CreditCard size={24} />}
@@ -823,6 +819,11 @@ function ChatInputForm({
   placeholder,
   onAbort,
   chatId,
+  attachments = [],
+  attaching = false,
+  attachmentError,
+  onAttachImages,
+  onRemoveAttachment,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -833,6 +834,11 @@ function ChatInputForm({
   placeholder?: string;
   onAbort?: (chatId?: string) => void;
   chatId?: string;
+  attachments?: AiChatAttachment[];
+  attaching?: boolean;
+  attachmentError?: string | null;
+  onAttachImages?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
 }) {
   return (
     <form
@@ -842,23 +848,68 @@ function ChatInputForm({
         onSubmit();
       }}
     >
-      <textarea
-        ref={inputRef}
-        autoFocus
-        rows={1}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onInput={(event) => onResize(event.currentTarget)}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter') return;
-          event.stopPropagation();
-          if (!event.shiftKey) {
+      <div className="chatInputShell">
+        {attachments.length ? (
+          <div className="chatAttachments" aria-label="Attached images">
+            {attachments.map((attachment) => (
+              <div className="chatAttachment" key={attachment.id}>
+                <img
+                  src={attachment.previewUrl}
+                  alt={attachment.name || 'Pasted image'}
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove ${attachment.name || 'image'}`}
+                  title="Remove image"
+                  onClick={() => onRemoveAttachment?.(attachment.id)}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {attachmentError ? (
+          <div className="chatAttachmentError" role="status">
+            {attachmentError}
+          </div>
+        ) : null}
+        <textarea
+          ref={inputRef}
+          autoFocus
+          rows={1}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onInput={(event) => onResize(event.currentTarget)}
+          onPaste={(event) => {
+            if (!onAttachImages) return;
+            const files = Array.from(event.clipboardData.items).flatMap(
+              (item) => {
+                const file = item.kind === 'file' ? item.getAsFile() : null;
+                return file ? [file] : [];
+              },
+            );
+            if (!files.some((file) => file.type.startsWith('image/'))) return;
             event.preventDefault();
-            onSubmit();
+            onAttachImages(files);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.stopPropagation();
+            if (!event.shiftKey) {
+              event.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={
+            attaching
+              ? 'Attaching image…'
+              : busy
+                ? 'Thinking…'
+                : placeholder || 'Message AI'
           }
-        }}
-        placeholder={busy ? 'Thinking…' : placeholder || 'Message AI'}
-      />
+        />
+      </div>
       {busy ? (
         <button
           className="chatIconButton chatStopButton"
@@ -875,7 +926,9 @@ function ChatInputForm({
           type="submit"
           aria-label="Enter"
           title="Enter"
-          disabled={!value.trim()}
+          disabled={
+            attaching || !canSendAiChatMessage(value, attachments.length)
+          }
         >
           <CornerDownLeft size={16} />
         </button>
@@ -942,6 +995,11 @@ function ChatExtensionView({
       placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'}
       onAbort={abortAiChat}
       chatId={view.chatId}
+      attachments={aiChat.attachments}
+      attaching={aiChat.attaching}
+      attachmentError={aiChat.attachmentError}
+      onAttachImages={(files) => void aiChat.attachImageFiles(files)}
+      onRemoveAttachment={aiChat.removeAttachment}
     />
   ) : view.submitAction ? (
     <ChatInputForm

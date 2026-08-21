@@ -52,7 +52,7 @@ test('scoreNormalizedNonEmpty ranks word-prefix matches by order and position', 
     95,
   );
   assert.equal(
-    scoreNormalizedNonEmpty('press tab to automate fix with ai', 'fix with ai'),
+    scoreNormalizedNonEmpty('automate fix with ai', 'fix with ai'),
     90,
   );
 });

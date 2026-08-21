@@ -19,19 +19,28 @@ import {
   previousNavigationState,
 } from './use-extension-navigation';
 
-function renderExtensionView(view: CommandView) {
+function renderExtensionView(
+  view: CommandView,
+  aiChatOverrides: Partial<ExtensionViewRendererProps['aiChat']> = {},
+) {
   const props: ExtensionViewRendererProps = {
     view,
     aiChat: {
       messages: [],
       input: '',
       setInput: () => {},
+      attachments: [],
+      attaching: false,
+      attachmentError: null,
+      attachImageFiles: async () => false,
+      removeAttachment: () => {},
       busy: false,
       limit: null,
       creditNotice: null,
       inputRef: React.createRef<HTMLTextAreaElement>(),
       messagesRef: React.createRef<HTMLDivElement>(),
       resizeInput: () => {},
+      ...aiChatOverrides,
     },
     nevermindAuthed: null,
     onSignInToNevermind: () => {},
@@ -57,6 +66,40 @@ function renderExtensionView(view: CommandView) {
   );
 }
 
+test('renders sent and pending AI chat image attachments', () => {
+  const html = renderExtensionView(
+    {
+      type: 'chat',
+      title: 'Images',
+      aiChat: true,
+      messages: [],
+    },
+    {
+      messages: [
+        {
+          role: 'user',
+          content: 'What is this?',
+          images: [{ url: 'nvm-file://local/sent.png', alt: 'Sent image' }],
+        },
+      ],
+      attachments: [
+        {
+          id: 'pending',
+          data: 'aW1hZ2U=',
+          mimeType: 'image/png',
+          byteLength: 5,
+          name: 'Pending image',
+          previewUrl: 'data:image/png;base64,aW1hZ2U=',
+        },
+      ],
+    },
+  );
+
+  assert.match(html, /Sent image/);
+  assert.match(html, /Pending image/);
+  assert.match(html, /Remove Pending image/);
+});
+
 test('renders unsupported-client update UI with structured updater action', () => {
   const actions: CommandAction[] = [];
   const html = renderToStaticMarkup(
@@ -67,7 +110,11 @@ test('renders unsupported-client update UI with structured updater action', () =
           title: 'Update Nevermind',
           message: 'This version is no longer supported by the backend.',
           actionTitle: 'Check for Update',
-          action: { type: 'checkForUpdates', title: 'Check for Update' },
+          action: {
+            type: 'checkForUpdates',
+            title: 'Check for Update',
+            executionId: 'trusted-update-action',
+          },
         }}
         runAction={(action) => actions.push(action)}
       />
@@ -303,17 +350,21 @@ test('root navigation intentionally clears nested history', () => {
   assert.deepEqual(rooted.backStack, []);
 });
 
-test('renders deprecation-warning UI with dashboard fallback action', () => {
+test('renders an AI limit with a structured dashboard action', () => {
   const html = renderToStaticMarkup(
     <Command>
       <NevermindLimitGate
         limit={{
-          kind: 'deprecation_warning',
-          title: 'Backend API deprecation',
-          message:
-            'This API contract will sunset soon. Review the migration path.',
-          actionTitle: 'Review migration',
-          dashboardUrl: 'https://www.nvm.fyi/dashboard',
+          kind: 'insufficient_credits',
+          title: 'Credits needed',
+          message: 'Open your dashboard to review your account.',
+          actionTitle: 'Open Dashboard',
+          action: {
+            type: 'openUrl',
+            title: 'Open Dashboard',
+            url: 'https://www.nvm.fyi/dashboard',
+            executionId: 'trusted-dashboard-action',
+          },
         }}
         runAction={() => {}}
       />
@@ -321,12 +372,9 @@ test('renders deprecation-warning UI with dashboard fallback action', () => {
   );
 
   assert.match(html, /role="status"/);
-  assert.match(html, /Backend API deprecation/);
-  assert.match(
-    html,
-    /This API contract will sunset soon\. Review the migration path\./,
-  );
-  assert.match(html, /Review migration/);
+  assert.match(html, /Credits needed/);
+  assert.match(html, /Open your dashboard to review your account\./);
+  assert.match(html, /Open Dashboard/);
 });
 
 test('extension webview iframe keeps scripts isolated from app origin and privileged permissions', () => {

@@ -9,6 +9,7 @@ import { safeJsonBody } from '../../../../lib/validation';
 import { env } from '../../../../lib/env';
 import { parsePublicOrigin } from '../../../../../../app/shared/public-origin';
 import { previewOriginMatchesRequest } from '../../../../lib/preview-auth';
+import { localDevelopmentOrigin } from '../../../../lib/local-development-origin';
 
 const TTL_MS = 5 * 60 * 1000;
 
@@ -25,10 +26,13 @@ export const POST: APIRoute = async ({ request, url }) => {
   const deviceLabel = ((parsed.data.label ?? '').trim() || 'Desktop').slice(0, 120);
 
   let verifyOrigin: string;
+  const localOrigin = localDevelopmentOrigin(url.origin);
   try {
     if (env('VERCEL_ENV') === 'preview') {
       if (!previewOriginMatchesRequest(url.origin)) throw new Error('Preview request origin does not match deployment');
       verifyOrigin = url.origin;
+    } else if (localOrigin) {
+      verifyOrigin = localOrigin;
     } else {
       verifyOrigin = parsePublicOrigin(env('PRODUCTION_ORIGIN') ?? 'https://www.nvm.fyi', 'production_web');
     }

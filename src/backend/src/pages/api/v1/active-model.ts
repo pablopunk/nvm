@@ -9,19 +9,21 @@ import { estimateRequestCredits } from '../../../lib/limits';
 import { env } from '../../../lib/env';
 import { joinPublicApiUrl, parsePublicOrigin } from '../../../../../app/shared/public-origin';
 import { previewTargetFromEnvironment } from '../../../lib/preview-auth';
+import { localDevelopmentOrigin } from '../../../lib/local-development-origin';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
 
 export const GET: APIRoute = async ({ request }) => {
   const requestOrigin = new URL(request.url).origin;
   const previewTarget = env('VERCEL_ENV') === 'preview' ? previewTargetFromEnvironment() : null;
+  const localOrigin = localDevelopmentOrigin(requestOrigin);
   if (env('VERCEL_ENV') === 'preview' && (!previewTarget || previewTarget.origin !== requestOrigin)) {
     return Response.json({ error: { type: 'configuration_error', message: 'Preview API origin is unavailable.' } }, { status: 503 });
   }
 
   let configuredApiOrigin: string;
   try {
-    configuredApiOrigin = previewTarget?.origin ?? parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
+    configuredApiOrigin = previewTarget?.origin ?? localOrigin ?? parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
   } catch {
     return Response.json({ error: { type: 'configuration_error', message: 'Public API origin is unavailable.' } }, { status: 503 });
   }
@@ -89,9 +91,10 @@ export const GET: APIRoute = async ({ request }) => {
   }
 
   const api = selectApiForModel(provider, modelId);
+  const requestScopedOrigin = previewTarget || localOrigin;
   const baseUrl = api === 'anthropic-messages'
-    ? previewTarget ? `${configuredApiOrigin}/api` : joinPublicApiUrl(configuredApiOrigin, '/api')
-    : previewTarget ? `${configuredApiOrigin}/api/v1` : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
+    ? requestScopedOrigin ? `${configuredApiOrigin}/api` : joinPublicApiUrl(configuredApiOrigin, '/api')
+    : requestScopedOrigin ? `${configuredApiOrigin}/api/v1` : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
 
   let notice: 'ok' | 'low' | 'blocked';
   const selectedBalance = creditKind === 'paid' ? balances.paid : balances.free;

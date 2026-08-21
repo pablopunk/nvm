@@ -37,7 +37,17 @@ import {
   systemPreferences,
 } from 'electron';
 import electronUpdater from 'electron-updater';
+import {
+  AI_CHAT_IMAGE_LIMIT,
+  AI_CHAT_IMAGE_MIME_TYPES,
+  AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
+} from '../shared/ai-chat-images';
 import { createNevermindAi } from './ai';
+import {
+  type NormalizedAiChatImage,
+  normalizeAiChatImages,
+} from './ai-chat-images';
+import { trustedAiLimitAction } from './ai-limit-action-policy';
 import { aiChatPreviewFiles, prepareAiChatPreview } from './ai-chat-previews';
 import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
@@ -67,6 +77,7 @@ import {
 import {
   consumeDeviceCode,
   getDefaultNevermindBaseUrl,
+  getNevermindDashboardUrl,
   getNevermindAuth,
   isSigningIn,
   nevermindEnvironmentForBaseUrl,
@@ -237,6 +248,7 @@ import {
   searchProviderDescriptors,
 } from './search-snapshot';
 import { createProgressiveSearchTestExtension } from './search-test-extension';
+import { expiredConversationAiChatIds } from './ai-chat-retention';
 import {
   calculate,
   calculateDetailed,
@@ -476,6 +488,9 @@ let clipboardService: ReturnType<typeof createClipboardHistory> | null = null;
 let statePath = '';
 let iconCacheDir = '';
 let clipboardImagesDir = '';
+let aiChatImagesDir = '';
+let aiChatImageStoredBytes: number | null = null;
+let aiChatImageStorageMutation: Promise<void> = Promise.resolve();
 let extensionsDir = '';
 let extensionPrSubmitter: ReturnType<typeof createExtensionPrSubmitter> | null =
   null;
@@ -529,7 +544,25 @@ let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 const learningReviewJobs = new Map<string, Promise<void>>();
 let activeAiChatId: string | undefined;
+let aiChatSendSuspensionCount = 0;
 const draftAiChats = new Map<string, AnyRecord>();
+const activeConversationRequests = new Map<
+  string,
+  { abort: () => void; result: Promise<unknown> }
+>();
+const activeConversationSessionIds = new Set<string>();
+const pendingAiChatSends = new Map<
+  string,
+  {
+    aborted: boolean;
+    started: boolean;
+    traceId?: string;
+    settled: Promise<void>;
+    resolveSettled: () => void;
+  }
+>();
+const CONVERSATION_SYSTEM_PROMPT =
+  'You are Nevermind AI, a helpful conversational assistant. Answer the user directly and concisely. You cannot create, modify, validate, install, or remove Nevermind extensions.';
 const viewLoaderRegistry = createViewLoaderRegistry({
   sendHydrate: (viewId, payload) =>
     paletteWindow.win?.webContents.send('view:hydrate', { viewId, ...payload }),
@@ -736,6 +769,14 @@ function aiLearningMetadata(chatId: string) {
     contextExtensionFile: chat?.contextExtensionFile,
     extensionFiles: chatTouchedExtensionFiles(chat),
   };
+}
+
+function isConversationAiChat(chat: AnyRecord | null | undefined) {
+  return chat?.kind === 'conversation';
+}
+
+function isBuilderAiChat(chat: AnyRecord | null | undefined) {
+  return Boolean(chat) && !isConversationAiChat(chat);
 }
 
 function relevantLearningContext(message: string, chatId: string) {
@@ -1240,6 +1281,20 @@ function registerViewActionForRenderer(action, entry?: any) {
   return { ...action, executionId };
 }
 
+function registerAiEventActionForRenderer(event) {
+  const data = event?.data;
+  if (!(data && typeof data === 'object' && data.action)) return event;
+  const action = trustedAiLimitAction(event, getNevermindDashboardUrl());
+  if (!action) return { ...event, data: { ...data, action: undefined } };
+  return {
+    ...event,
+    data: {
+      ...data,
+      action: registerViewActionForRenderer(action),
+    },
+  };
+}
+
 function registerRootActionForRenderer(action) {
   if (!action || typeof action !== 'object') return action;
   if (
@@ -1727,6 +1782,7 @@ function getOrCreateAiChat(query, options: any = {}) {
 function aiChatItem(id, query) {
   return {
     id,
+    kind: 'builder',
     query,
     title: query,
     status: 'running',
@@ -1741,10 +1797,31 @@ function aiChatItem(id, query) {
   };
 }
 
+function conversationChatItem(id, query) {
+  return {
+    id,
+    kind: 'conversation',
+    query,
+    title: query,
+    status: 'running',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [],
+  };
+}
+
 function createDraftAiChat(query) {
   const trimmed = query.trim();
   const id = `draft:${hashValue(`${trimmed}:${Date.now()}:${crypto.randomUUID()}`)}`;
   const item = aiChatItem(id, trimmed);
+  draftAiChats.set(id, item);
+  return item;
+}
+
+function createDraftConversationChat(query) {
+  const trimmed = query.trim();
+  const id = `draft:conversation:${crypto.randomUUID()}`;
+  const item = conversationChatItem(id, trimmed);
   draftAiChats.set(id, item);
   return item;
 }
@@ -1757,25 +1834,193 @@ function promoteDraftAiChat(chatId) {
   draft.createdAt = Date.now();
   draft.updatedAt = Date.now();
   userState.aiChats[chatId] = draft;
-  learningStore?.upsertTraceMetadata(chatId, aiLearningMetadata(chatId));
+  if (isBuilderAiChat(draft))
+    learningStore?.upsertTraceMetadata(chatId, aiLearningMetadata(chatId));
   scheduleSaveState();
   invalidateExtensionRootItems();
   return draft;
 }
 
-function appendAiChatMessage(chatId, role, content) {
+function appendAiChatMessage(chatId, role, content, images: any[] = []) {
   const chat = userState.aiChats[chatId];
-  if (!(chat && content)) return;
-  chat.messages = [...(chat.messages || []), { role, content }].slice(-100);
+  if (!(chat && (content || images.length))) return null;
+  const message = { role, content, ...(images.length ? { images } : {}) };
+  const messages = [...(chat.messages || []), message];
+  removeStoredAiChatMessageImages(messages.slice(0, -100));
+  chat.messages = messages.slice(-100);
   chat.updatedAt = Date.now();
-  learningStore?.appendMessage(
-    chatId,
-    role,
-    content,
-    aiLearningMetadata(chatId),
-  );
+  if (isBuilderAiChat(chat) && content)
+    learningStore?.appendMessage(
+      chatId,
+      role,
+      content,
+      aiLearningMetadata(chatId),
+    );
   scheduleSaveState();
   patchAiChatsItem(chatId);
+  return message;
+}
+
+function aiChatImageDirectory(chatId) {
+  return path.join(aiChatImagesDir, hashValue(String(chatId)));
+}
+
+const AI_CHAT_IMAGE_STORAGE_MAX_BYTES = 512 * 1024 * 1024;
+
+function mutateAiChatImageStorage<T>(operation: () => Promise<T>) {
+  const result = aiChatImageStorageMutation.catch(() => {}).then(operation);
+  aiChatImageStorageMutation = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function directoryFileBytes(directory: string): Promise<number> {
+  const entries = await fs
+    .readdir(directory, { withFileTypes: true })
+    .catch(() => []);
+  let total = 0;
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) total += await directoryFileBytes(entryPath);
+    else if (entry.isFile())
+      total += await fs
+        .stat(entryPath)
+        .then((stat) => stat.size)
+        .catch(() => 0);
+  }
+  return total;
+}
+
+async function currentAiChatImageStoredBytes() {
+  aiChatImageStoredBytes ??= await directoryFileBytes(aiChatImagesDir);
+  return aiChatImageStoredBytes;
+}
+
+async function persistAiChatImages(
+  chatId: string,
+  images: NormalizedAiChatImage[],
+) {
+  if (!images.length) return [];
+  return mutateAiChatImageStorage(async () => {
+    const addedBytes = images.reduce(
+      (total, image) => total + image.bytes.length,
+      0,
+    );
+    const storedBytes = await currentAiChatImageStoredBytes();
+    if (storedBytes + addedBytes > AI_CHAT_IMAGE_STORAGE_MAX_BYTES)
+      throw new Error(
+        'AI chat image storage is full. Remove chats with images and try again.',
+      );
+    const directory = aiChatImageDirectory(chatId);
+    await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+    const writtenPaths: string[] = [];
+    try {
+      const stored = [] as Array<{
+        path: string;
+        mimeType: string;
+        name?: string;
+      }>;
+      for (const image of images) {
+        const imagePath = path.join(
+          directory,
+          `${crypto.randomUUID()}.${image.extension}`,
+        );
+        await fs.writeFile(imagePath, image.bytes, { mode: 0o600 });
+        writtenPaths.push(imagePath);
+        stored.push({
+          path: imagePath,
+          mimeType: image.mimeType,
+          ...(image.name ? { name: image.name } : {}),
+        });
+      }
+      aiChatImageStoredBytes = storedBytes + addedBytes;
+      return stored;
+    } catch (error) {
+      await Promise.allSettled(
+        writtenPaths.map((imagePath) => fs.rm(imagePath)),
+      );
+      aiChatImageStoredBytes = null;
+      throw error;
+    }
+  });
+}
+
+async function removeAiChatImagePaths(imagePaths: string[]) {
+  if (!imagePaths.length) return;
+  await mutateAiChatImageStorage(async () => {
+    const storedBytes = await currentAiChatImageStoredBytes();
+    let removedBytes = 0;
+    for (const imagePath of imagePaths) {
+      const size = await fs
+        .stat(imagePath)
+        .then((stat) => stat.size)
+        .catch(() => 0);
+      try {
+        await fs.rm(imagePath, { force: true });
+        removedBytes += size;
+      } catch {}
+    }
+    aiChatImageStoredBytes = Math.max(0, storedBytes - removedBytes);
+  });
+}
+
+async function removeAiChatImageDirectory(chatId: string) {
+  const directory = aiChatImageDirectory(chatId);
+  await mutateAiChatImageStorage(async () => {
+    const storedBytes = await currentAiChatImageStoredBytes();
+    const removedBytes = await directoryFileBytes(directory);
+    await fs.rm(directory, { recursive: true, force: true });
+    aiChatImageStoredBytes = Math.max(0, storedBytes - removedBytes);
+  });
+}
+
+function aiChatMessagesForRenderer(messages: any[] = []) {
+  return messages.map(aiChatMessageForRenderer);
+}
+
+function aiChatMessageForRenderer(message) {
+  return {
+    role: message.role,
+    content: String(message.content || ''),
+    ...(Array.isArray(message.images)
+      ? {
+          images: message.images.flatMap((image) => {
+            const imagePath = storedAiChatImagePath(image);
+            if (!imagePath) return [];
+            return [
+              {
+                url: fileUrlForPath(imagePath),
+                ...(typeof image.name === 'string' ? { alt: image.name } : {}),
+              },
+            ];
+          }),
+        }
+      : {}),
+  };
+}
+
+function storedAiChatImagePath(image) {
+  if (!(image && typeof image.path === 'string')) return null;
+  const imagePath = path.resolve(image.path);
+  const relative = path.relative(path.resolve(aiChatImagesDir), imagePath);
+  return relative.startsWith('..') || path.isAbsolute(relative)
+    ? null
+    : imagePath;
+}
+
+function removeStoredAiChatMessageImages(messages) {
+  const imagePaths = messages.flatMap((message) =>
+    Array.isArray(message.images)
+      ? message.images.flatMap((image) => {
+          const imagePath = storedAiChatImagePath(image);
+          return imagePath ? [imagePath] : [];
+        })
+      : [],
+  );
+  if (!imagePaths.length) return;
+  void removeAiChatImagePaths(imagePaths);
 }
 
 function appendAiChatDelta(chatId, text) {
@@ -1785,13 +2030,28 @@ function appendAiChatDelta(chatId, text) {
   const last = messages[messages.length - 1];
   if (last?.role === 'assistant') last.content = `${last.content}${text}`;
   else messages.push({ role: 'assistant', content: text });
+  removeStoredAiChatMessageImages(messages.slice(0, -100));
   chat.messages = messages.slice(-100);
   chat.updatedAt = Date.now();
-  learningStore?.appendAssistantDelta(chatId, text, aiLearningMetadata(chatId));
+  if (isBuilderAiChat(chat))
+    learningStore?.appendAssistantDelta(
+      chatId,
+      text,
+      aiLearningMetadata(chatId),
+    );
   scheduleSaveState();
 }
 
 async function aiChatView(item, options: any = {}) {
+  if (isConversationAiChat(item))
+    return {
+      type: 'chat',
+      title: item.title || item.query || 'Ask AI',
+      aiChat: true,
+      chatId: item.id,
+      initialPrompt: options.initialPrompt,
+      messages: aiChatMessagesForRenderer(item.messages),
+    };
   const { files: previewFiles, selectedBuilderPreviewFilename } =
     aiChatPreviewFiles(
       item,
@@ -1825,7 +2085,7 @@ async function aiChatView(item, options: any = {}) {
     aiChat: true,
     chatId: item.id,
     initialPrompt: options.initialPrompt,
-    messages: item.messages || [],
+    messages: aiChatMessagesForRenderer(item.messages),
     builderPreviews,
     selectedBuilderPreviewFilename,
   };
@@ -1846,7 +2106,9 @@ function aiChatRemoveAction(chat) {
       style: 'destructive',
     }),
     {
-      message: `Remove "${chat.title || chat.query || 'AI chat'}" and its history? Generated extension files stay.`,
+      message: isConversationAiChat(chat)
+        ? `Remove "${chat.title || chat.query || 'AI chat'}" and its history?`
+        : `Remove "${chat.title || chat.query || 'AI chat'}" and its history? Generated extension files stay.`,
       confirmLabel: 'Remove Chat',
       destructive: true,
     },
@@ -1854,15 +2116,17 @@ function aiChatRemoveAction(chat) {
 }
 
 function aiChatListItem(chat: any) {
+  const conversation = isConversationAiChat(chat);
   return {
     id: `ai-chat:${chat.id}`,
     title: chat.title || chat.query || 'AI Chat',
-    subtitle:
-      chat.contextExtensionFile ||
-      (chat.touchedExtensionFiles || [])[0] ||
-      chat.status ||
-      'Builder chat',
-    icon: 'sparkles',
+    subtitle: conversation
+      ? 'AI conversation'
+      : chat.contextExtensionFile ||
+        (chat.touchedExtensionFiles || [])[0] ||
+        chat.status ||
+        'Builder chat',
+    icon: conversation ? 'message-circle' : 'sparkles',
     primaryAction: aiChatOpenAction(chat.id),
     actions: [aiChatRemoveAction(chat)],
   };
@@ -1936,6 +2200,7 @@ function patchAiChatsRemove(chatId: string) {
 }
 
 function chatTouchedExtensionFiles(chat) {
+  if (!isBuilderAiChat(chat)) return [];
   return Array.from(
     new Set(
       [
@@ -1966,7 +2231,7 @@ function extensionFileOwner(filename) {
 }
 
 function claimExtensionFileForChat(chat, filename) {
-  if (!(chat && filename)) return false;
+  if (!(isBuilderAiChat(chat) && filename)) return false;
   const safeName = path.basename(filename);
   const owner = extensionFileOwner(safeName);
   if (owner && owner.id !== chat.id) return false;
@@ -1975,7 +2240,7 @@ function claimExtensionFileForChat(chat, filename) {
 }
 
 function touchExtensionFileForChat(chat, filename) {
-  if (!(chat && filename)) return;
+  if (!(isBuilderAiChat(chat) && filename)) return;
   const safeName = path.basename(filename);
   chat.touchedExtensionFiles = Array.from(
     new Set([...chatTouchedExtensionFiles(chat), safeName]),
@@ -1993,8 +2258,9 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   const existing = (Object.values(userState.aiChats || {}) as any[])
     .filter(
       (chat) =>
-        chat.contextExtensionFile === filename ||
-        chatTouchedExtensionFiles(chat).includes(filename),
+        isBuilderAiChat(chat) &&
+        (chat.contextExtensionFile === filename ||
+          chatTouchedExtensionFiles(chat).includes(filename)),
     )
     .sort(
       (a, b) =>
@@ -2014,6 +2280,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   const id = hashValue(`extension-chat:${filename}:${Date.now()}`);
   const item = {
     id,
+    kind: 'builder',
     query: `Tweak ${title || filename}`,
     title: `Tweak ${title || filename}`,
     status: 'ready',
@@ -2444,27 +2711,44 @@ async function switchNevermindBackendEnvironment(input: {
   environment: 'development' | 'production' | 'pr_preview' | 'custom';
   baseUrl?: string;
 }) {
-  return switchBackendEnvironment(input, {
-    isPackaged: app.isPackaged,
-    selectedEnvironment: selectedNevermindEnvironment,
-    resolvesToUnsafeAddress: resolvesToUnsafeNevermindAddress,
-    invalidateCompatibilityCache: invalidateNevermindCompatibilityCache,
-    checkCompatibility: checkNevermindCompatibility,
-    setSelectedEnvironment: (selection) => {
-      userState.nevermindEnvironment = selection;
-    },
-    scheduleSaveState,
-    setActiveAuthBaseUrl: setActiveNevermindAuthBaseUrl,
-    getAuth: getNevermindAuth,
-    signIn: signInToSelectedNevermindEnvironment,
-    setActiveBaseUrl: (baseUrl) => {
-      activeNevermindBaseUrl = baseUrl;
-    },
-    warmCompatibilityCache: warmNevermindCompatibilityCache,
-    disposeAiSessions: () => nevermindAi?.disposeAllSessions?.(),
-    invalidateExtensionRootItems,
-    broadcastAuthChanged,
-  });
+  aiChatSendSuspensionCount += 1;
+  try {
+    return await switchBackendEnvironment(input, {
+      isPackaged: app.isPackaged,
+      selectedEnvironment: selectedNevermindEnvironment,
+      resolvesToUnsafeAddress: resolvesToUnsafeNevermindAddress,
+      invalidateCompatibilityCache: invalidateNevermindCompatibilityCache,
+      checkCompatibility: checkNevermindCompatibility,
+      setSelectedEnvironment: (selection) => {
+        userState.nevermindEnvironment = selection;
+      },
+      scheduleSaveState,
+      setActiveAuthBaseUrl: setActiveNevermindAuthBaseUrl,
+      getAuth: getNevermindAuth,
+      signIn: signInToSelectedNevermindEnvironment,
+      setActiveBaseUrl: (baseUrl) => {
+        activeNevermindBaseUrl = baseUrl;
+      },
+      warmCompatibilityCache: warmNevermindCompatibilityCache,
+      disposeAiSessions,
+      invalidateExtensionRootItems,
+      broadcastAuthChanged,
+    });
+  } finally {
+    aiChatSendSuspensionCount -= 1;
+  }
+}
+
+async function disposeAiSessions() {
+  const pending = Array.from(pendingAiChatSends.entries());
+  const conversations = Array.from(activeConversationRequests.values());
+  await Promise.allSettled(pending.map(([chatId]) => abortAiChat(chatId)));
+  for (const request of conversations) request.abort();
+  await Promise.allSettled(pending.map(([, request]) => request.settled));
+  await Promise.allSettled(conversations.map((request) => request.result));
+  activeConversationRequests.clear();
+  activeConversationSessionIds.clear();
+  await nevermindAi?.disposeAllSessions?.();
 }
 
 function safeExternalUpdateUrl(raw?: string) {
@@ -2900,6 +3184,7 @@ function invalidateExtensionRootItems() {
 
 function broadcastAuthChanged(status: { authed: boolean; email?: string }) {
   paletteWindow.win?.webContents.send('nevermind:auth-changed', status);
+  extensionWindowManager.broadcast('nevermind:auth-changed', status);
 }
 
 function prepareActionPanelForRenderer(panel, entry?: any) {
@@ -3311,8 +3596,12 @@ function refreshExtensionRootActions(extension, cacheKey, traceId?: string) {
 
 function normalizeItemAppearance(appearance) {
   const foreground = appearance?.foreground;
-  if (!ITEM_FOREGROUND_COLORS.has(foreground)) return;
-  return { foreground };
+  const background = appearance?.background;
+  const normalized = {
+    ...(ITEM_FOREGROUND_COLORS.has(foreground) ? { foreground } : {}),
+    ...(background === 'accent' ? { background } : {}),
+  };
+  return Object.keys(normalized).length ? normalized : undefined;
 }
 
 function actionsAreSame(left, right) {
@@ -7248,14 +7537,16 @@ async function initNevermindAi() {
     }),
     getExtensionRuntimeState: (filename) =>
       extensionRuntimeStateForFile(filename),
-    getActiveChat: () =>
-      activeAiChatId
-        ? userState.aiChats[activeAiChatId] ||
-          draftAiChats.get(activeAiChatId) ||
-          null
-        : null,
-    getChat: (chatId) =>
-      userState.aiChats[chatId] || draftAiChats.get(chatId) || null,
+    getActiveChat: () => {
+      const chat = activeAiChatId
+        ? userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId)
+        : null;
+      return isBuilderAiChat(chat) ? chat : null;
+    },
+    getChat: (chatId) => {
+      const chat = userState.aiChats[chatId] || draftAiChats.get(chatId);
+      return isBuilderAiChat(chat) ? chat : null;
+    },
     markGeneratedExtension: (filePath, chatId) =>
       markGeneratedExtensionForActiveChat(filePath, chatId),
     activateGeneratedExtension: async (filename, source, chatId) => {
@@ -7288,6 +7579,10 @@ async function initNevermindAi() {
     addAliasForChat: (chatId) => addAliasForGeneratedAction(chatId),
     onEvent: (event) => {
       const chatId = event.chatId || activeAiChatId;
+      const chat = chatId
+        ? userState.aiChats[chatId] || draftAiChats.get(chatId)
+        : null;
+      if (!isBuilderAiChat(chat)) return;
       const metadata = chatId ? aiLearningMetadata(chatId) : undefined;
       if (chatId && event.type === 'start')
         learningStore?.recordStatus(chatId, 'start', metadata);
@@ -7378,11 +7673,20 @@ async function initNevermindAi() {
       }
       if (chatId && event.type === 'aborted') {
         learningStore?.recordStatus(chatId, 'aborted', metadata);
+        const current = userState.aiChats[chatId];
+        if (current) {
+          current.status = 'aborted';
+          current.updatedAt = Date.now();
+          patchAiChatsItem(chatId);
+          scheduleSaveState();
+        }
       }
-      paletteWindow.win?.webContents.send('ai:chat:event', {
-        ...event,
-        chatId,
-      });
+      broadcastAiChatEvent(
+        registerAiEventActionForRenderer({
+          ...event,
+          chatId,
+        }),
+      );
     },
   });
   void Promise.all([
@@ -7456,6 +7760,11 @@ function extensionRuntimeStateForFile(filename) {
   };
 }
 
+function broadcastAiChatEvent(event) {
+  paletteWindow.win?.webContents.send('ai:chat:event', event);
+  extensionWindowManager.broadcast('ai:chat:event', event);
+}
+
 function aiChatPromptWithContext(message, chatId) {
   const chat = userState.aiChats[chatId];
   const focused = chat?.contextExtensionFile
@@ -7472,11 +7781,86 @@ function aiChatPromptWithContext(message, chatId) {
   const transcript = messages
     .map(
       (item) =>
-        `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`,
+        `${item.role === 'user' ? 'User' : 'Assistant'}: ${aiChatTranscriptContent(item)}`,
     )
     .join('\n\n');
 
   return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}${learnings}\n\n${transcript}\n\nNew user message:\n${message}`;
+}
+
+function conversationPromptWithContext(message, chatId) {
+  const chat = userState.aiChats[chatId];
+  const transcript = (chat?.messages || [])
+    .filter((item) => item.role === 'user' || item.role === 'assistant')
+    .slice(-20)
+    .map(
+      (item) =>
+        `${item.role === 'user' ? 'User' : 'Assistant'}: ${aiChatTranscriptContent(item)}`,
+    )
+    .join('\n\n');
+  return transcript ? `${transcript}\n\nUser: ${message}` : message;
+}
+
+function aiChatTranscriptContent(message) {
+  const imageCount = Array.isArray(message.images) ? message.images.length : 0;
+  const imageNotice =
+    imageCount === 1 ? '[Attached image]' : `[Attached ${imageCount} images]`;
+  return [message.content, imageCount ? imageNotice : '']
+    .filter(Boolean)
+    .join('\n');
+}
+
+function aiChatPromptMessage(message, imageCount) {
+  const trimmed = String(message || '').trim();
+  if (trimmed) return trimmed;
+  return imageCount === 1
+    ? 'Analyze the attached image.'
+    : 'Analyze the attached images.';
+}
+
+function piImages(images: NormalizedAiChatImage[]) {
+  return images.map(({ data, mimeType }) => ({
+    type: 'image' as const,
+    data,
+    mimeType,
+  }));
+}
+
+async function restoredConversationImages(
+  chat,
+  currentImages: NormalizedAiChatImage[],
+) {
+  let remainingCount = AI_CHAT_IMAGE_LIMIT - currentImages.length;
+  let remainingBytes =
+    AI_CHAT_IMAGE_TOTAL_MAX_BYTES -
+    currentImages.reduce((total, image) => total + image.bytes.length, 0);
+  if (remainingCount <= 0 || remainingBytes <= 0) return [];
+  const candidates = (chat.messages || [])
+    .slice(-20)
+    .flatMap((message) => (Array.isArray(message.images) ? message.images : []))
+    .reverse();
+  const restored: Array<{
+    type: 'image';
+    data: string;
+    mimeType: string;
+  }> = [];
+  for (const image of candidates) {
+    if (remainingCount <= 0 || remainingBytes <= 0) break;
+    const imagePath = storedAiChatImagePath(image);
+    const mimeType = String(image?.mimeType || '').toLowerCase();
+    if (!imagePath || !AI_CHAT_IMAGE_MIME_TYPES.includes(mimeType as never))
+      continue;
+    const bytes = await fs.readFile(imagePath).catch(() => null);
+    if (!(bytes && bytes.length <= remainingBytes)) continue;
+    restored.push({
+      type: 'image',
+      data: bytes.toString('base64'),
+      mimeType,
+    });
+    remainingCount -= 1;
+    remainingBytes -= bytes.length;
+  }
+  return restored.reverse();
 }
 
 function markGeneratedExtensionForActiveChat(
@@ -7484,7 +7868,7 @@ function markGeneratedExtensionForActiveChat(
   chatId = activeAiChatId,
 ) {
   const chat = chatId ? userState.aiChats[chatId] : null;
-  if (!chat) return;
+  if (!isBuilderAiChat(chat)) return;
   touchExtensionFileForChat(chat, path.basename(filePath));
   scheduleSaveState();
 }
@@ -7495,7 +7879,7 @@ function chatCanWriteExtension(filename, chatId = activeAiChatId) {
   const chat = chatId
     ? userState.aiChats[chatId] || draftAiChats.get(chatId)
     : null;
-  if (!chat) return false;
+  if (!isBuilderAiChat(chat)) return false;
   const owner = extensionFileOwner(base);
   if (owner) return owner.id === chat.id;
   return !Array.from(extensionModules.values()).some(
@@ -7575,7 +7959,7 @@ async function removeGeneratedExtensionForChat(
       throw error;
     }
     try {
-      await removeAiChatReferencesToExtensionFile(base, chatId);
+      await removeAiChatReferencesToExtensionFile(base);
     } catch (error) {
       await atomicWriteFile(filePath, source);
       if (fileState) manager.files[base] = fileState;
@@ -7620,36 +8004,230 @@ function addAliasForGeneratedAction(chatId) {
   scheduleSaveState();
 }
 
-async function sendAiChatMessage(message, chatId, traceId) {
+async function sendAiChatMessage(message, chatId, traceId, images) {
+  const normalizedImages = normalizeAiChatImages(images);
+  const userMessage = typeof message === 'string' ? message.trim() : '';
+  const requestTraceId = typeof traceId === 'string' ? traceId : undefined;
+  if (!(userMessage || normalizedImages.length))
+    throw new Error('Enter a message or attach an image');
+  const promptMessage = aiChatPromptMessage(
+    userMessage,
+    normalizedImages.length,
+  );
   return performanceTraces.run(
     'ai.chat',
-    { messageLength: String(message || '').length },
-    async () => {
-      if (!nevermindAi) await initNevermindAi();
-      activeAiChatId = chatId || activeAiChatId;
-      if (activeAiChatId?.startsWith('draft:'))
-        promoteDraftAiChat(activeAiChatId);
-      const prompt = activeAiChatId
-        ? aiChatPromptWithContext(message, activeAiChatId)
-        : message;
-      if (activeAiChatId) appendAiChatMessage(activeAiChatId, 'user', message);
-      return nevermindAi.send(prompt, activeAiChatId, traceId);
+    {
+      messageLength: userMessage.length,
+      imageCount: normalizedImages.length,
     },
-    typeof traceId === 'string' ? { traceId } : undefined,
+    async () => {
+      if (aiChatSendSuspensionCount > 0)
+        throw new Error('AI is unavailable while the backend is switching');
+      const requestedChatId = typeof chatId === 'string' ? chatId : '';
+      if (!requestedChatId) throw new Error('AI chat not found');
+      if (requestedChatId.startsWith('draft:'))
+        promoteDraftAiChat(requestedChatId);
+      const targetChatId = requestedChatId;
+      const chat = userState.aiChats[targetChatId];
+      if (!(isBuilderAiChat(chat) || isConversationAiChat(chat)))
+        throw new Error('AI chat not found');
+      activeAiChatId = targetChatId;
+      if (
+        pendingAiChatSends.has(targetChatId) ||
+        (isConversationAiChat(chat) &&
+          activeConversationRequests.has(targetChatId))
+      )
+        throw new Error('This AI chat is already responding');
+      let resolveSettled = () => {};
+      const settled = new Promise<void>((resolve) => {
+        resolveSettled = resolve;
+      });
+      const pending = {
+        aborted: false,
+        started: false,
+        ...(requestTraceId ? { traceId: requestTraceId } : {}),
+        settled,
+        resolveSettled,
+      };
+      pendingAiChatSends.set(targetChatId, pending);
+      const conversation = isConversationAiChat(chat);
+      let prompt = conversation
+        ? activeConversationSessionIds.has(targetChatId)
+          ? promptMessage
+          : conversationPromptWithContext(promptMessage, targetChatId)
+        : aiChatPromptWithContext(promptMessage, targetChatId);
+      try {
+        if (!nevermindAi) await initNevermindAi();
+        let modelImages = piImages(normalizedImages);
+        if (conversation && !activeConversationSessionIds.has(targetChatId)) {
+          const restoredImages = await restoredConversationImages(
+            chat,
+            normalizedImages,
+          );
+          if (restoredImages.length) {
+            prompt = `Recent earlier attached images are included first, in transcript order. Images for the new message are last.\n\n${prompt}`;
+            modelImages = [...restoredImages, ...modelImages];
+          }
+        }
+        const storedImages = await persistAiChatImages(
+          targetChatId,
+          normalizedImages,
+        );
+        const storedMessage = appendAiChatMessage(
+          targetChatId,
+          'user',
+          userMessage,
+          storedImages,
+        );
+        if (!storedMessage) throw new Error('AI chat not found');
+        broadcastAiChatEvent({
+          type: 'user_message',
+          chatId: targetChatId,
+          traceId: requestTraceId,
+          data: { message: aiChatMessageForRenderer(storedMessage) },
+        });
+        if (pending.aborted) return;
+        pending.started = true;
+        if (conversation)
+          return sendConversationMessage(
+            prompt,
+            targetChatId,
+            requestTraceId,
+            modelImages,
+          );
+        return nevermindAi.send(
+          prompt,
+          targetChatId,
+          requestTraceId,
+          modelImages,
+        );
+      } finally {
+        if (pendingAiChatSends.get(targetChatId) === pending)
+          pendingAiChatSends.delete(targetChatId);
+        pending.resolveSettled();
+      }
+    },
+    requestTraceId ? { traceId: requestTraceId } : undefined,
   );
 }
 
+async function sendConversationMessage(
+  prompt,
+  chatId,
+  traceId,
+  images: Array<{ type: 'image'; data: string; mimeType: string }> = [],
+) {
+  const chat = userState.aiChats[chatId];
+  if (!isConversationAiChat(chat)) throw new Error('AI chat not found');
+  if (activeConversationRequests.has(chatId))
+    throw new Error('This AI conversation is already responding');
+  let terminalEvent: string | undefined;
+  let responseActivity = false;
+  const session = nevermindAi.session(chatId, {
+    system: CONVERSATION_SYSTEM_PROMPT,
+    toolMode: 'conversation',
+  });
+  const request = session.stream(prompt, {
+    images,
+    onEvent(event: any) {
+      const terminal = ['done', 'error', 'aborted'].includes(event.type);
+      if (terminal && terminalEvent) return;
+      if (terminal) terminalEvent = event.type;
+      if (event.type === 'delta' || event.type === 'tool_start')
+        responseActivity = true;
+      if (event.type === 'delta' && event.text)
+        appendAiChatDelta(chatId, event.text);
+      if (event.type === 'error' && event.message)
+        appendAiChatMessage(chatId, 'system', event.message);
+      const current = userState.aiChats[chatId];
+      if (current && event.type === 'start') current.status = 'running';
+      if (current && terminal) {
+        current.status = event.type === 'done' ? 'done' : event.type;
+        current.updatedAt = Date.now();
+        patchAiChatsItem(chatId);
+        scheduleSaveState();
+      }
+      broadcastAiChatEvent(
+        registerAiEventActionForRenderer({
+          ...event,
+          chatId,
+          traceId,
+        }),
+      );
+    },
+  });
+  activeConversationSessionIds.add(chatId);
+  activeConversationRequests.set(chatId, request);
+  try {
+    await request.result;
+  } catch {
+    // The stream reports errors and cancellation through onEvent.
+  } finally {
+    if (activeConversationRequests.get(chatId) === request)
+      activeConversationRequests.delete(chatId);
+    if (
+      !responseActivity &&
+      (terminalEvent === 'error' || terminalEvent === 'aborted')
+    ) {
+      activeConversationSessionIds.delete(chatId);
+      await session.reset().catch(() => {});
+    }
+  }
+}
+
 async function abortAiChat(chatId) {
-  return nevermindAi?.abort(chatId || activeAiChatId);
+  const targetChatId = chatId || activeAiChatId;
+  if (!targetChatId) return;
+  const chat =
+    userState.aiChats[targetChatId] || draftAiChats.get(targetChatId);
+  const pending = pendingAiChatSends.get(targetChatId);
+  if (pending && !pending.started) {
+    pending.aborted = true;
+    const current = userState.aiChats[targetChatId];
+    if (current) {
+      current.status = 'aborted';
+      current.updatedAt = Date.now();
+      patchAiChatsItem(targetChatId);
+      scheduleSaveState();
+    }
+    broadcastAiChatEvent({
+      type: 'aborted',
+      chatId: targetChatId,
+      traceId: pending.traceId,
+    });
+    return;
+  }
+  if (pending) pending.aborted = true;
+  if (isConversationAiChat(chat))
+    return activeConversationRequests.get(targetChatId)?.abort();
+  return nevermindAi?.abort(targetChatId);
 }
 
 async function resetAiChat(chatId) {
   activeAiChatId = chatId || activeAiChatId;
+  if (!activeAiChatId) return;
+  const chat =
+    userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId);
+  const pending = pendingAiChatSends.get(activeAiChatId);
+  const conversationRequest = activeConversationRequests.get(activeAiChatId);
+  await abortAiChat(activeAiChatId);
+  await pending?.settled;
+  if (isConversationAiChat(chat)) {
+    await conversationRequest?.result.catch(() => {});
+    activeConversationSessionIds.delete(activeAiChatId);
+    return nevermindAi
+      ?.session(activeAiChatId, { toolMode: 'conversation' })
+      .reset();
+  }
   return nevermindAi?.reset(activeAiChatId);
 }
 
 async function noteAiChatExited(chatId) {
   if (!chatId) return;
+  if (isConversationAiChat(userState.aiChats[chatId])) {
+    if (activeAiChatId === chatId) activeAiChatId = undefined;
+    return;
+  }
   recordLearningReview(chatId);
 }
 
@@ -9057,6 +9635,18 @@ function registerHostJobs() {
     run: saveUserState,
   });
   jobRegistry.register({
+    id: 'ai-chats.cleanup',
+    title: 'AI Chat Cleanup',
+    owner: 'host',
+    scope: 'ai',
+    triggers: [
+      { type: 'startup', delayMs: 1000 },
+      { type: 'interval', everyMs: 60 * 60 * 1000 },
+    ],
+    timeoutMs: 30_000,
+    run: cleanupExpiredAiChats,
+  });
+  jobRegistry.register({
     id: 'apps.index',
     title: 'Application Index',
     owner: 'host',
@@ -9132,6 +9722,7 @@ async function loadUserState() {
   );
   iconCacheDir = path.join(cacheRoot, 'icons');
   clipboardImagesDir = path.join(app.getPath('userData'), 'clipboard-images');
+  aiChatImagesDir = path.join(app.getPath('userData'), 'ai-chat-images');
   extensionsDir = path.join(app.getPath('userData'), 'extensions');
   extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage');
   extensionCacheDir = path.join(cacheRoot, 'extension-storage');
@@ -9221,6 +9812,7 @@ async function migrateAiChats() {
       .catch(() => []),
   );
   for (const chat of Object.values(userState.aiChats || {}) as any[]) {
+    if (isConversationAiChat(chat)) continue;
     if (chat.generatedExtensionFile && !chat.touchedExtensionFiles)
       chat.touchedExtensionFiles = [chat.generatedExtensionFile];
     if (chat.generatedExtensionFile && !chat.contextExtensionFile)
@@ -9699,6 +10291,7 @@ async function duplicateCreatedAction(action) {
   await activateManagedExtension(duplicateFile);
   userState.aiChats[duplicateId] = {
     id: duplicateId,
+    kind: 'builder',
     query: `Tweak ${duplicateTitle}`,
     title: `Tweak ${duplicateTitle}`,
     status: 'ready',
@@ -9746,13 +10339,23 @@ async function duplicateCreatedAction(action) {
 async function removeAiChat(chatId) {
   if (!(chatId && userState.aiChats[chatId]))
     return { toast: { message: 'AI chat not found', tone: 'error' } };
-  await nevermindAi?.reset?.(chatId);
+  await resetAiChat(chatId);
   const chat = userState.aiChats[chatId];
   // INVARIANT: removing a chat deletes only conversation history and AI session state.
   // It must NEVER unlink generated extension files. Generated extensions are durable
   // artifacts owned by chats via touchedExtensionFiles; chat removal preserves them so
   // the user can keep the extension after discarding the conversation that built it.
   delete userState.aiChats[chatId];
+  await removeAiChatImageDirectory(chatId).catch((error) =>
+    logWarn(
+      'aiChat.images.remove.failed',
+      {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { source: 'host', scope: 'ai' },
+    ),
+  );
   for (const actionId of Object.keys(userState.recents || {})) {
     if (actionId === `ai-chat:${chatId}`) delete userState.recents[actionId];
   }
@@ -9764,10 +10367,57 @@ async function removeAiChat(chatId) {
   };
 }
 
-async function removeAiChatReferencesToExtensionFile(
-  extensionFile,
-  preserveChatId?: string,
-) {
+async function cleanupExpiredAiChats() {
+  if (paletteWindow.win?.isVisible()) return;
+  const expiredChatIds = expiredConversationAiChatIds(userState.aiChats || {});
+  const removableChatIds = expiredChatIds.filter(
+    (chatId) =>
+      chatId !== activeAiChatId &&
+      !pendingAiChatSends.has(chatId) &&
+      !activeConversationRequests.has(chatId),
+  );
+  if (!removableChatIds.length) return;
+
+  const removedChatIds: string[] = [];
+  for (const chatId of removableChatIds) {
+    try {
+      await nevermindAi?.session(chatId, { toolMode: 'conversation' }).reset();
+    } catch (error) {
+      logWarn(
+        'aiChat.session.reset.failed',
+        {
+          chatId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { source: 'host', scope: 'ai' },
+      );
+      continue;
+    }
+    try {
+      await removeAiChatImageDirectory(chatId);
+    } catch (error) {
+      logWarn(
+        'aiChat.images.remove.failed',
+        {
+          chatId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { source: 'host', scope: 'ai' },
+      );
+      continue;
+    }
+    delete userState.aiChats[chatId];
+    activeConversationSessionIds.delete(chatId);
+    delete userState.recents?.[`ai-chat:${chatId}`];
+    patchAiChatsRemove(chatId);
+    removedChatIds.push(chatId);
+  }
+  if (!removedChatIds.length) return;
+  scheduleSaveState();
+  invalidateExtensionRootItems();
+}
+
+async function removeAiChatReferencesToExtensionFile(extensionFile) {
   const removedFile = path.basename(extensionFile || '');
   if (!removedFile) return;
   for (const chat of Object.values(userState.aiChats || {}) as any[]) {
@@ -9782,10 +10432,6 @@ async function removeAiChatReferencesToExtensionFile(
         .then(() => true)
         .catch(() => false);
       if (exists) remainingFiles.push(filename);
-    }
-    if (remainingFiles.length === 0 && chat.id !== preserveChatId) {
-      await removeAiChat(chat.id);
-      continue;
     }
     chat.touchedExtensionFiles = remainingFiles;
     chat.builderPreviewFiles = (chat.builderPreviewFiles || []).filter(
@@ -10002,6 +10648,7 @@ app.whenReady().then(async () => {
     aiChatView,
     normalizeHostViewResult,
     createDraftAiChat,
+    createDraftConversationChat,
     getNevermindAuth,
     getNevermindDebugStatus,
     setActiveNevermindBaseUrl: (baseUrl) => {

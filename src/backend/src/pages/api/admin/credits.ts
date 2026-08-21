@@ -11,7 +11,7 @@ const creditsSchema = z.object({
   userId: z.string().uuid(),
   delta: z.number().int(),
   kind: z.enum(['free', 'paid']),
-  reason: z.string().min(1),
+  reason: z.string().trim().min(1).optional(),
 });
 
 export const POST: APIRoute = async ({ request }) => {
@@ -23,19 +23,20 @@ export const POST: APIRoute = async ({ request }) => {
 
   const parsed = await safeJsonBody(request, creditsSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  const reason = parsed.data.reason ?? 'admin_adjustment';
 
   await db.insert(creditLedger).values({
     userId: parsed.data.userId,
     delta: parsed.data.delta,
     kind: parsed.data.kind,
-    reason: parsed.data.reason,
+    reason,
   });
   await recordAudit({
     actorUserId: actor.id,
     action: 'credits.granted',
     targetType: 'user',
     targetId: parsed.data.userId,
-    meta: { delta: parsed.data.delta, kind: parsed.data.kind, reason: parsed.data.reason },
+    meta: { delta: parsed.data.delta, kind: parsed.data.kind, reason },
   });
   return Response.json({ ok: true });
 };

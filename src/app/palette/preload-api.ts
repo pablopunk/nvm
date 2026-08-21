@@ -5,6 +5,7 @@ import type {
   CommandView,
   CommandViewPatch,
 } from './model';
+import type { AiChatImageInput } from '../shared/ai-chat-images';
 
 export type RootAction = {
   id: string;
@@ -180,6 +181,7 @@ export type NevermindApi = {
     message: string,
     chatId?: string,
     traceId?: string,
+    images?: AiChatImageInput[],
   ) => Promise<void>;
   aiChatExited: (chatId?: string) => Promise<void>;
   abortAiChat: (chatId?: string) => Promise<void>;
@@ -210,6 +212,9 @@ export type NevermindApi = {
   startBuilderChat: (input: {
     prompt: string;
     title?: string;
+  }) => Promise<ViewActionResult>;
+  startConversationChat: (input: {
+    prompt: string;
   }) => Promise<ViewActionResult>;
   getAppIcon: (appPath: string) => Promise<string | null>;
   getRunningAppPaths: (appPaths: string[]) => Promise<string[]>;

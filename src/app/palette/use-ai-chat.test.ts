@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { aiChatEventMatchesActiveChat } from './use-ai-chat';
+import {
+  aiChatEventMatchesActiveChat,
+  userMessageFromEvent,
+} from './use-ai-chat';
 
 test('ai chat events without a chat id remain global for the active surface', () => {
   assert.equal(aiChatEventMatchesActiveChat({ type: 'start' }, 'chat-a'), true);
@@ -28,5 +31,32 @@ test('ai chat events are isolated to the active extension-window chat id', () =>
       undefined,
     ),
     false,
+  );
+});
+
+test('AI chat user-message events accept clone-safe persisted images', () => {
+  assert.deepEqual(
+    userMessageFromEvent({
+      type: 'user_message',
+      data: {
+        message: {
+          role: 'user',
+          content: 'What is this?',
+          images: [{ url: 'nvm-file://local/image.png', alt: 'Pasted image' }],
+        },
+      },
+    }),
+    {
+      role: 'user',
+      content: 'What is this?',
+      images: [{ url: 'nvm-file://local/image.png', alt: 'Pasted image' }],
+    },
+  );
+  assert.equal(
+    userMessageFromEvent({
+      type: 'user_message',
+      data: { message: { role: 'assistant', content: 'No' } },
+    }),
+    null,
   );
 });

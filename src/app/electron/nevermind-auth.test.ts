@@ -22,6 +22,7 @@ const {
   clearNevermindAuth,
   clearNevermindAuthCacheForTests,
   getCachedNevermindAuth,
+  getNevermindDashboardUrl,
   getNevermindAuth,
   resolveDefaultNevermindBaseUrl,
   setActiveNevermindAuthBaseUrl,
@@ -166,6 +167,19 @@ test('uses production by default for packaged builds and localhost for developme
       expected,
     );
   }
+});
+
+test('dashboard URL follows the active backend origin', () => {
+  setActiveNevermindAuthBaseUrl('http://localhost:4321');
+  assert.equal(getNevermindDashboardUrl(), 'http://localhost:4321/dashboard');
+  setActiveNevermindAuthBaseUrl('https://preview.example.com');
+  assert.equal(
+    getNevermindDashboardUrl(),
+    'https://preview.example.com/dashboard',
+  );
+  setActiveNevermindAuthBaseUrl(production);
+  assert.equal(getNevermindDashboardUrl(), 'https://www.nvm.fyi/dashboard');
+  clearNevermindAuthCacheForTests();
 });
 
 test('invalid stored bases fall back to the canonical origin and never become store keys', async () => {

@@ -6,6 +6,7 @@ import { app, safeStorage } from 'electron';
 import {
   migrateLegacyDesktopOrigin,
   parsePublicOrigin,
+  PRODUCTION_WEB_ORIGIN,
 } from '../shared/public-origin';
 import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
@@ -356,6 +357,14 @@ export class NevermindAuthRequiredError extends Error {
 
 export function getDefaultNevermindBaseUrl() {
   return DEFAULT_BASE_URL;
+}
+
+export function getNevermindDashboardUrl() {
+  const origin =
+    activeBaseUrl === PRODUCTION_BASE_URL
+      ? PRODUCTION_WEB_ORIGIN
+      : activeBaseUrl;
+  return `${origin}/dashboard`;
 }
 
 function defaultDeviceLabel() {

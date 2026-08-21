@@ -22,6 +22,7 @@ export interface KeyHintsProps {
 }
 export interface ItemAppearance {
   foreground?: string;
+  background?: 'accent';
 }
 export interface CommandRowProps {
   value: string;
@@ -146,7 +147,11 @@ export interface GridViewProps<T> {
   pagination?: ReactNode;
 }
 export interface ChatViewProps {
-  messages: { role: string; content: ReactNode }[];
+  messages: {
+    role: string;
+    content: ReactNode;
+    images?: { url: string; alt?: string }[];
+  }[];
   isBusy?: boolean;
   input?: ReactNode;
   messagesRef?: React.RefObject<HTMLDivElement | null>;
@@ -292,6 +297,7 @@ export function CommandRow({
       value={value}
       className={itemClassName}
       data-foreground={appearance?.foreground}
+      data-background={appearance?.background}
       disabled={disabled}
       data-disabled={disabled ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
@@ -380,6 +386,7 @@ export function CommandTile({
       className="extensionTile"
       data-extension-item-id={value}
       data-foreground={appearance?.foreground}
+      data-background={appearance?.background}
       draggable={draggable}
       onDragStart={onDragStart}
       onSelect={onSelect}
@@ -1013,7 +1020,18 @@ export function ChatView({
       <div className="chatMessages" ref={messagesRef}>
         {messages.map((message, index) => (
           <div key={index} className={`chatBubble ${message.role}`}>
-            {message.content}
+            {message.images?.length ? (
+              <div className="chatMessageImages">
+                {message.images.map((image, imageIndex) => (
+                  <img
+                    key={`${image.url}:${imageIndex}`}
+                    src={image.url}
+                    alt={image.alt || 'Attached image'}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {message.content || null}
           </div>
         ))}
         {isBusy ? <div className="chatBubble system">Thinking…</div> : null}
