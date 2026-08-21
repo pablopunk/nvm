@@ -386,6 +386,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const windowAiChatIdRef = useRef<string | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+  const actionPanelFocusOriginRef = useRef<HTMLElement | null>(null);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -678,10 +679,25 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     );
   }
 
+  function openActionPanel(origin: EventTarget | null) {
+    actionPanelFocusOriginRef.current =
+      origin instanceof HTMLElement && shellRef.current?.contains(origin)
+        ? origin
+        : null;
+    setPanelOpen(true);
+  }
+
   function closeActionPanel() {
+    const focusOrigin = actionPanelFocusOriginRef.current;
+    actionPanelFocusOriginRef.current = null;
     setPanelOpen(false);
-    shellRef.current?.focus();
-    requestAnimationFrame(() => shellRef.current?.focus());
+    requestAnimationFrame(() => {
+      const focusTarget =
+        focusOrigin?.isConnected && shellRef.current?.contains(focusOrigin)
+          ? focusOrigin
+          : shellRef.current;
+      focusTarget?.focus({ preventScroll: true });
+    });
   }
 
   function moveGridSelection(key: string) {
@@ -775,7 +791,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setActionSubmenuFor(null);
       if (actionSubmenuFor) setPanelOpen(true);
       else if (panelOpen) closeActionPanel();
-      else setPanelOpen(true);
+      else openActionPanel(event.target);
       return;
     }
     if (confirmFor || actionSubmenuFor) return;

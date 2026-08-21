@@ -32,8 +32,8 @@ function createContext() {
       toast: (toast: any) => ({ toast }),
     },
     windows: {
-      create: (view: unknown, options: unknown) => ({
-        type: 'createWindow',
+      toggle: (view: unknown, options: unknown) => ({
+        type: 'toggleWindow',
         title: 'Floating Notes',
         view,
         windowOptions: options,
@@ -43,12 +43,13 @@ function createContext() {
   return { ctx, values, commits, discards };
 }
 
-test('Floating Notes command opens a persistent floating window with an autosaving editor', async () => {
+test('Floating Notes command toggles a persistent floating window with an autosaving editor', async () => {
   const { ctx, values } = createContext();
   const extension = createFloatingNotesExtension();
 
   const action = await extension.commands[0].run(ctx as any);
-  assert.equal(action.type, 'createWindow');
+  assert.equal(action.type, 'toggleWindow');
+  assert.equal(extension.commands[0].mode, 'noView');
   assert.equal(action.windowOptions.id, 'floating-notes');
   assert.equal(action.windowOptions.restoreKey, 'floating-notes');
   assert.equal(action.windowOptions.persistent, true);

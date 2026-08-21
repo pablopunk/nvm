@@ -784,6 +784,13 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       };
     }
     if (action.type === 'toggleWindow') {
+      if (record.win.isVisible()) {
+        record.win.hide();
+        return {
+          toast: { message: 'Toggled window' },
+          ...record.compatibility,
+        };
+      }
       if (action.view || action.windowOptions)
         createOrUpdate(
           action.view || record.view,
@@ -795,8 +802,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
           'preserve',
           action.ownerExtensionId,
         );
-      if (record.win.isVisible()) record.win.hide();
-      else revealWindow(record.win, record.options);
+      revealWindow(record.win, record.options);
       return {
         toast: { message: 'Toggled window' },
         ...record.compatibility,

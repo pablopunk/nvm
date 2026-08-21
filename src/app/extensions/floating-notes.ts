@@ -362,9 +362,9 @@ function floatingWindowOptions() {
   };
 }
 
-async function openFloatingWindow(ctx: any) {
+async function toggleFloatingWindow(ctx: any) {
   const note = (await mostRecentNote(ctx)) || (await createNote(ctx));
-  return ctx.windows.create(noteEditor(ctx, note), floatingWindowOptions());
+  return ctx.windows.toggle(noteEditor(ctx, note), floatingWindowOptions());
 }
 
 export function createFloatingNotesExtension() {
@@ -383,12 +383,13 @@ export function createFloatingNotesExtension() {
       {
         id: 'floating-notes',
         actionId: 'floating-notes',
-        title: 'Floating Notes',
-        subtitle: 'Open your floating Markdown notes',
+        title: 'Toggle Floating Notes',
+        subtitle: 'Show or hide your floating Markdown notes',
         aliases: ['notes', 'note'],
         icon: 'notebook-pen',
         score: 18,
-        run: (ctx: any) => openFloatingWindow(ctx),
+        mode: 'noView',
+        run: (ctx: any) => toggleFloatingWindow(ctx),
       },
       {
         id: 'search-floating-notes',

@@ -474,7 +474,7 @@ test('returns the frozen missing-window error for every id-only control action',
   }
 });
 
-test('toggles an existing window exactly once while updating its view and options', () => {
+test('hides a visible window without replacing its live view, then refreshes it before showing', () => {
   const { manager } = createManager();
   const record = manager.createOrUpdate(
     { id: 'panel', title: 'Old' },
@@ -496,6 +496,8 @@ test('toggles an existing window exactly once while updating its view and option
   assert.equal(win.visible, false);
   assert.equal(win.showCount, showsBeforeHideToggle);
   assert.equal(win.hideCount, 1);
+  assert.equal(win.title, 'Old');
+  assert.deepEqual(win.bounds, { x: 310, y: 210, width: 400, height: 300 });
 
   const hidesBeforeShowToggle = win.hideCount;
   manager.executeWindowAction({
@@ -508,7 +510,7 @@ test('toggles an existing window exactly once while updating its view and option
   assert.equal(win.showCount, showsBeforeHideToggle + 1);
   assert.equal(win.focusCount, 1);
   assert.equal(win.title, 'Newest');
-  assert.deepEqual(win.bounds, { x: 310, y: 210, width: 640, height: 480 });
+  assert.deepEqual(win.bounds, { x: 310, y: 210, width: 400, height: 480 });
 });
 
 test('keeps persistent windows without restore keys live and reports session-only persistence', () => {
