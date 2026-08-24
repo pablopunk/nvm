@@ -94,7 +94,7 @@ test('does not declare a default dictation shortcut', () => {
   assert.equal(contribution.dismissAfterRun, 'auto');
 });
 
-test('toggles recording and returns a concealed paste action', async () => {
+test('skips enabled AI cleaning when signed out', async () => {
   let recording = false;
   let aiCalls = 0;
   const starts: unknown[] = [];
@@ -105,6 +105,7 @@ test('toggles recording and returns a concealed paste action', async () => {
       get: async () => ({
         deviceId: 'default',
         keepAliveMs: 300_000,
+        cleanupWithAi: true,
         dictionary: '',
         copyToClipboard: false,
       }),
@@ -124,6 +125,7 @@ test('toggles recording and returns a concealed paste action', async () => {
       },
     },
     ai: {
+      isAvailable: async () => false,
       ask: async () => {
         aiCalls += 1;
         return 'cleaned text';
@@ -408,6 +410,7 @@ test('cleans every transcript with Fast AI and preferred dictionary terms', asyn
       },
     },
     ai: {
+      isAvailable: async () => true,
       prepare: async (input: unknown) => {
         aiPreparations.push(input);
       },
@@ -482,6 +485,7 @@ test('cleans without dictionary terms and falls back when AI fails', async () =>
       },
     },
     ai: {
+      isAvailable: async () => true,
       ask: async () => {
         throw new Error('AI unavailable');
       },
@@ -510,6 +514,7 @@ test('cleans without dictionary terms and falls back when AI fails', async () =>
 
 test('renders and saves multiline dictionary settings', async () => {
   const saved: unknown[] = [];
+  let signedIn = true;
   let saveHandler:
     | ((context: any, action: any) => Promise<unknown>)
     | undefined;
@@ -528,6 +533,7 @@ test('renders and saves multiline dictionary settings', async () => {
     dictation: {
       devices: async () => [{ id: 'default', title: 'System Default' }],
     },
+    ai: { isAvailable: async () => signedIn },
     actions: actionBuilders({
       run: (title: string, handler: typeof saveHandler) => {
         saveHandler = handler;
@@ -555,6 +561,10 @@ test('renders and saves multiline dictionary settings', async () => {
     'Clean with AI',
   );
   assert.equal(
+    view.fields.find((field: any) => field.id === 'cleanupWithAi').disabled,
+    false,
+  );
+  assert.equal(
     view.fields.find((field: any) => field.id === 'dictionary').value,
     'Nevermind\nParakeet',
   );
@@ -568,7 +578,7 @@ test('renders and saves multiline dictionary settings', async () => {
     formValues: {
       deviceId: 'default',
       keepAliveMs: '1800000',
-      cleanupWithAi: false,
+      cleanupWithAi: true,
       dictionary: 'Nevermind\nParakeet\nWASM',
       copyToClipboard: false,
     },
@@ -579,12 +589,36 @@ test('renders and saves multiline dictionary settings', async () => {
       {
         deviceId: 'default',
         keepAliveMs: 1_800_000,
-        cleanupWithAi: false,
+        cleanupWithAi: true,
         dictionary: 'Nevermind\nParakeet\nWASM',
         copyToClipboard: false,
       },
     ],
   ]);
+
+  signedIn = false;
+  const signedOutView = (await settingsAction.__handler(context, {}))
+    .view as any;
+  const signedOutField = signedOutView.fields.find(
+    (field: any) => field.id === 'cleanupWithAi',
+  );
+  assert.equal(signedOutField.value, false);
+  assert.equal(signedOutField.disabled, true);
+  assert.equal(
+    signedOutField.description,
+    'Sign in to Nevermind to use AI cleaning.',
+  );
+  if (!saveHandler) throw new Error('Settings save handler was not registered');
+  await saveHandler(context, {
+    formValues: {
+      deviceId: 'default',
+      keepAliveMs: '1800000',
+      cleanupWithAi: true,
+      dictionary: 'Nevermind',
+      copyToClipboard: false,
+    },
+  });
+  assert.equal((saved.at(-1) as any)[1].cleanupWithAi, false);
 });
 
 test('stores cleaned transcripts and manages bounded dictation history', async () => {
@@ -622,7 +656,10 @@ test('stores cleaned transcripts and manages bounded dictation history', async (
         return 'raw transcript';
       },
     },
-    ai: { ask: async () => 'Clean transcript.' },
+    ai: {
+      isAvailable: async () => true,
+      ask: async () => 'Clean transcript.',
+    },
     ui: {
       list: (input: unknown) => input,
       toast: (input: unknown) => input,

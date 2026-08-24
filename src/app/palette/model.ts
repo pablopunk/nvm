@@ -506,6 +506,7 @@ export interface CommandFormField {
   value?: CommandFormValue;
   placeholder?: string;
   required?: boolean;
+  disabled?: boolean;
   options?: CommandFormOption[];
   description?: string;
   error?: string;

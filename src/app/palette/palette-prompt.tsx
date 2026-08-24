@@ -12,7 +12,10 @@ type PromptSubmit = (action: CommandAction) => void | Promise<void>;
 
 function interactiveFields(view: CommandView | null) {
   return (view?.fields || []).filter(
-    (field) => field.type !== 'description' && field.type !== 'separator',
+    (field) =>
+      !field.disabled &&
+      field.type !== 'description' &&
+      field.type !== 'separator',
   );
 }
 

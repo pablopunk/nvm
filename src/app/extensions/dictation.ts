@@ -123,6 +123,14 @@ async function readSettings(ctx: any): Promise<DictationSettings> {
   };
 }
 
+async function aiIsAvailable(ctx: any) {
+  try {
+    return Boolean(ctx.ai && (await ctx.ai.isAvailable?.()));
+  } catch {
+    return false;
+  }
+}
+
 function historyEntriesFrom(value: unknown): DictationHistoryEntry[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -286,6 +294,7 @@ async function cleanTranscript(
 
 async function settingsView(ctx: any) {
   const settings = await readSettings(ctx);
+  const aiAvailable = await aiIsAvailable(ctx);
   let devices = [{ id: 'default', title: 'Default', isDefault: true }];
   try {
     devices = await ctx.dictation.devices();
@@ -295,10 +304,12 @@ async function settingsView(ctx: any) {
     'Save Dictation Settings',
     async (innerCtx: any, action: any) => {
       const values = action?.formValues || {};
+      const cleanWithAi =
+        Boolean(values.cleanupWithAi) && (await aiIsAvailable(innerCtx));
       await innerCtx.storage.set('settings', {
         deviceId: String(values.deviceId || 'default'),
         keepAliveMs: normalizedKeepAliveMs(values.keepAliveMs),
-        cleanupWithAi: Boolean(values.cleanupWithAi),
+        cleanupWithAi: cleanWithAi,
         dictionary: String(values.dictionary || ''),
         copyToClipboard: Boolean(values.copyToClipboard),
       });
@@ -336,9 +347,11 @@ async function settingsView(ctx: any) {
         id: 'cleanupWithAi',
         label: 'Clean with AI',
         type: 'checkbox',
-        value: settings.cleanupWithAi,
-        description:
-          'Send the transcript to Fast AI to correct punctuation, grammar, and transcription errors before pasting.',
+        value: aiAvailable && settings.cleanupWithAi,
+        disabled: !aiAvailable,
+        description: aiAvailable
+          ? 'Send the transcript to Fast AI to correct punctuation, grammar, and transcription errors before pasting.'
+          : 'Sign in to Nevermind to use AI cleaning.',
       },
       {
         id: 'dictionary',
@@ -364,10 +377,11 @@ async function settingsView(ctx: any) {
 async function runDictation(ctx: any) {
   if (!ctx.dictation) throw new Error('Dictation is unavailable');
   const settings = await readSettings(ctx);
+  const cleanWithAi = settings.cleanupWithAi && (await aiIsAvailable(ctx));
   const status = await ctx.dictation.status();
   if (status === 'idle') {
     ctx.ui.indicator.show(LISTENING_INDICATOR);
-    if (settings.cleanupWithAi && ctx.ai)
+    if (cleanWithAi)
       void ctx.ai
         .prepare?.({ model: 'fast', system: CLEANUP_SYSTEM_PROMPT })
         .catch(() => undefined);
@@ -431,12 +445,11 @@ async function runDictation(ctx: any) {
         message: 'No speech detected',
         tone: 'info',
       });
-    if (settings.cleanupWithAi && ctx.ai)
-      ctx.ui.indicator.update(CLEANING_INDICATOR);
+    if (cleanWithAi) ctx.ui.indicator.update(CLEANING_INDICATOR);
     const text = await cleanTranscript(
       ctx,
       transcript,
-      settings.cleanupWithAi,
+      cleanWithAi,
       settings.dictionary,
     );
     try {
@@ -449,7 +462,7 @@ async function runDictation(ctx: any) {
     const cleanedAt = performance.now();
     ctx.logs?.debug?.('Dictation cleanup completed', {
       durationMs: Math.round(cleanedAt - transcribedAt),
-      enabled: settings.cleanupWithAi && Boolean(ctx.ai),
+      enabled: cleanWithAi,
     });
     const result = await ctx.navigation.run(
       ctx.actions.pasteText(text, 'Paste Dictation', {

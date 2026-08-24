@@ -89,6 +89,7 @@ export interface FormField {
   value?: FormValue;
   placeholder?: string;
   required?: boolean;
+  disabled?: boolean;
   options?: { title: string; value: string }[];
   description?: string;
   error?: string;
@@ -672,6 +673,7 @@ function formFieldControl(
         <pre title={label || placeholder}>{label || placeholder}</pre>
         <button
           type="button"
+          disabled={field.disabled}
           aria-label={`${field.buttonLabel || 'Choose'} ${field.label || field.id}`}
           onClick={choosePath}
         >
@@ -680,6 +682,7 @@ function formFieldControl(
         {values.length ? (
           <button
             type="button"
+            disabled={field.disabled}
             className="formPickerClear"
             aria-label={`Clear ${field.label || field.id}`}
             onClick={clearPath}
@@ -702,6 +705,7 @@ function formFieldControl(
         value={String(value)}
         placeholder={field.placeholder}
         required={field.required}
+        disabled={field.disabled}
         aria-invalid={field.error ? true : undefined}
         aria-describedby={describedBy}
         rows={field.rows || 4}
@@ -715,6 +719,7 @@ function formFieldControl(
           id={controlId}
           checked={Boolean(value)}
           required={field.required}
+          disabled={field.disabled}
           type="checkbox"
           aria-invalid={field.error ? true : undefined}
           aria-describedby={describedBy}
@@ -731,6 +736,7 @@ function formFieldControl(
         id={controlId}
         value={String(value)}
         required={field.required}
+        disabled={field.disabled}
         aria-invalid={field.error ? true : undefined}
         aria-describedby={describedBy}
         onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
@@ -756,6 +762,7 @@ function formFieldControl(
       <fieldset
         id={controlId}
         className="formMultiselect"
+        disabled={field.disabled}
         aria-invalid={field.error ? true : undefined}
         aria-describedby={describedBy}
       >
@@ -787,6 +794,7 @@ function formFieldControl(
       value={String(value)}
       placeholder={field.placeholder}
       required={field.required}
+      disabled={field.disabled}
       type={type}
       aria-invalid={field.error ? true : undefined}
       aria-describedby={describedBy}

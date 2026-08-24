@@ -723,6 +723,8 @@ export type ExtensionFormField = {
   value?: ExtensionFormValue;
   placeholder?: string;
   required?: boolean;
+  /** Prevent interaction while keeping the field and its explanation visible. */
+  disabled?: boolean;
   options?: ExtensionFormOption[];
   description?: string;
   error?: string;
@@ -1086,6 +1088,8 @@ export type ExtensionData = {
 };
 
 export type ExtensionAi = {
+  /** Whether the user is signed in and can use Nevermind AI features. */
+  isAvailable(): Promise<boolean>;
   /** Easy one-shot AI call. Quota-limited per extension; declare the `ai` capability for review. Smart/fast routes are configured by the backend admin. */
   (prompt: string, model?: ExtensionAiModel): Promise<string>;
   (prompt: string, options?: ExtensionAiOptions): Promise<string>;

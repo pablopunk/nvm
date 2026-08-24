@@ -6284,6 +6284,7 @@ function createExtensionAi(extension) {
     };
   };
   const ai: any = async (prompt, options: any = {}) => ai.ask(prompt, options);
+  ai.isAvailable = async () => Boolean(await getNevermindAuth());
   ai.ask = async (prompt, options: any = {}) => {
     enforceAiQuota();
     return nevermindAi.ask(

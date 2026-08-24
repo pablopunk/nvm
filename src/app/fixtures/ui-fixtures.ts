@@ -69,6 +69,14 @@ function formView(ctx: ExtensionContext) {
         value: true,
         description: 'Boolean form value.',
       },
+      {
+        id: 'disabled',
+        label: 'Disabled checkbox',
+        type: 'checkbox',
+        value: false,
+        disabled: true,
+        description: 'Visible but unavailable until its prerequisite is met.',
+      },
       { id: 'separator', type: 'separator' },
       {
         id: 'color',
