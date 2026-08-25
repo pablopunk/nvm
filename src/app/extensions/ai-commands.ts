@@ -75,12 +75,21 @@ function proofreadingPrompt(selectedText: string, retry = false) {
   return `${retry ? 'Your previous response was not a valid correction. ' : ''}Proofread the ORIGINAL TEXT below. Do not answer its meaning. Output only the corrected ORIGINAL TEXT.\n\nORIGINAL TEXT\n${selectedText}\nEND ORIGINAL TEXT`;
 }
 
+function appIdentity(app: unknown) {
+  if (!app || typeof app !== 'object') return String(app || '');
+  const record = app as Record<string, unknown>;
+  return String(
+    record.path || record.bundleId || record.id || record.name || '',
+  );
+}
+
 async function fixSelectedText(ctx: ExtensionContext) {
   ctx.ui.indicator.show(indicator('Reading Selection'));
   let keepFinalIndicatorVisible = false;
   try {
     if (!ctx.ai) throw new Error('AI is unavailable');
     const ai = ctx.ai;
+    const sourceApp = await ctx.desktop.apps?.frontmost?.();
     void ai
       .prepare({ model: 'fast', system: FIX_SELECTED_TEXT_SYSTEM_PROMPT })
       .catch(() => undefined);
@@ -121,11 +130,25 @@ async function fixSelectedText(ctx: ExtensionContext) {
       });
       return;
     }
+    const targetApp = await ctx.desktop.apps?.frontmost?.();
+    if (
+      appIdentity(sourceApp) &&
+      appIdentity(sourceApp) !== appIdentity(targetApp)
+    ) {
+      keepFinalIndicatorVisible = true;
+      ctx.ui.indicator.update({
+        ...indicator('Frontmost app changed. Select the text and try again'),
+        status: 'error',
+        durationMs: 4000,
+      });
+      return;
+    }
 
     return ctx.navigation.run(
       ctx.actions.pasteText(correctedText, 'Replace Selected Text', {
         concealed: true,
         restoreClipboard: true,
+        expectedFrontmostAppId: appIdentity(sourceApp),
         dismissAfterRun: 'auto',
       }),
     );

@@ -197,6 +197,8 @@ export type ExtensionPasteTextOptions = {
   concealed?: boolean;
   /** Delay before restoring clipboard contents, in milliseconds. Defaults to 250. */
   restoreDelayMs?: number;
+  /** Only paste while this app id, bundle id, path, or name is still frontmost. */
+  expectedFrontmostAppId?: string;
 };
 
 export type ExtensionTypeTextOptions = {
@@ -1572,26 +1574,26 @@ export type ExtensionContext = {
     ): ExtensionAction;
   };
 
-  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return actions; execution results expose persistence and capability degradation. */
+  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return declarative actions. */
   windows: {
     /** Open or update, show, and focus an independent window rendering the given host-owned view. The action title is `options.title`, then `view.title`, then `Open Window`. */
     create(
       view: ExtensionView,
       options?: ExtensionWindowOptions,
     ): ExtensionAction;
-    /** Show and focus an existing owner-local window. Missing windows return an error result. */
+    /** Show and focus an existing owner-local window. Missing windows show an error indicator. */
     show(
       id: string,
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** Hide an existing owner-local window without destroying it. Missing windows return an error result. */
+    /** Hide an existing owner-local window without destroying it. Missing windows show an error indicator. */
     hide(
       id: string,
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** Toggle an existing owner-local window exactly once. Missing id-only targets return an error. */
+    /** Toggle an existing owner-local window exactly once. Missing id-only targets show an error indicator. */
     toggle(id: string): ExtensionAction;
     toggle(id: string, title: string): ExtensionAction;
     toggle(id: string, options: ExtensionWindowOptions): ExtensionAction;
@@ -1612,7 +1614,7 @@ export type ExtensionContext = {
       title: string,
       options: ExtensionWindowOptions,
     ): ExtensionAction;
-    /** Destroy an existing owner-local window. Missing windows return an error result. */
+    /** Destroy an existing owner-local window. Missing windows show an error indicator. */
     close(
       id: string,
       title?: string,

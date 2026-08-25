@@ -345,6 +345,7 @@ function extensionWindowViewPayload(id: string, view: any, options: any) {
 export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   const records = new Map<string, ExtensionWindowRecord>();
   const indicatorHideTimers = new Map<string, unknown>();
+  const suppressedReadyReveals = new Set<string>();
   let persistedState: PersistedExtensionWindowState =
     deps.persistence?.read?.() || {};
   let persistedStateHydrated = Boolean(deps.persistence?.read);
@@ -699,7 +700,8 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       );
       if (!record.restoredFrame)
         positionWindow(win, String(record.options.position || 'center'));
-      revealWindow(win, record.options, false);
+      if (!suppressedReadyReveals.has(id))
+        revealWindow(win, record.options, false);
     });
     if ((safeOptions as any).hideOnBlur) win.on('blur', () => win.hide());
     if (safeOptions.remembersFrame) {
@@ -888,6 +890,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     if (!(Number.isFinite(duration) && duration > 0)) return;
     const hide = () => {
       indicatorHideTimers.delete(id);
+      suppressedReadyReveals.add(id);
       records.get(id)?.win.hide();
     };
     if (deps.scheduleIndicatorHide)
@@ -925,6 +928,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
 
   function showIndicator(input: any, ownerExtensionId: string) {
     const id = indicatorWindowId(ownerExtensionId, input?.id);
+    suppressedReadyReveals.delete(id);
     cancelIndicatorHide(id);
     createOrUpdate(
       indicatorView(input, id),
@@ -953,6 +957,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
 
   function hideIndicator(ownerExtensionId: string, localId = 'default') {
     const id = indicatorWindowId(ownerExtensionId, localId);
+    suppressedReadyReveals.add(id);
     cancelIndicatorHide(id);
     records.get(id)?.win.hide();
   }
@@ -960,6 +965,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   function closeAll() {
     quitting = true;
     for (const id of indicatorHideTimers.keys()) cancelIndicatorHide(id);
+    suppressedReadyReveals.clear();
     for (const record of records.values()) record.win.close();
     records.clear();
   }

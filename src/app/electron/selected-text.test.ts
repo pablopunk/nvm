@@ -6,13 +6,17 @@ function reader(options: {
   accessibilityText?: string | null;
   copiedText?: string;
   paletteFocused?: boolean;
+  focusAfterAccessibility?: boolean;
 }) {
   let clipboard = 'original clipboard';
   const concealed: string[] = [];
   let copyCalls = 0;
   let restoreCalls = 0;
   const selectedText = createSelectedTextReader({
-    readAccessibilityText: async () => options.accessibilityText,
+    readAccessibilityText: async () => {
+      if (options.focusAfterAccessibility) options.paletteFocused = true;
+      return options.accessibilityText;
+    },
     paletteIsFocused: () => Boolean(options.paletteFocused),
     clipboardSnapshot: () => clipboard,
     readClipboardText: () => clipboard,
@@ -65,6 +69,17 @@ test('does not copy palette input when the palette still has focus', async () =>
   const fixture = reader({
     accessibilityText: 'selected palette query',
     paletteFocused: true,
+  });
+
+  assert.equal(await fixture.selectedText(), null);
+  assert.equal(fixture.copyCalls(), 0);
+});
+
+test('does not copy when the palette regains focus during accessibility capture', async () => {
+  const fixture = reader({
+    accessibilityText: null,
+    copiedText: 'selected palette query',
+    focusAfterAccessibility: true,
   });
 
   assert.equal(await fixture.selectedText(), null);

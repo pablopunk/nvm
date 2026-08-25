@@ -31,6 +31,7 @@ export function createSelectedTextReader<Snapshot>(
       (await dependencies.readAccessibilityText()) ?? '',
     );
     if (accessibilityText) return accessibilityText;
+    if (dependencies.paletteIsFocused()) return null;
 
     const snapshot = dependencies.clipboardSnapshot();
     const sentinel =

@@ -332,6 +332,28 @@ test('timed indicators dismiss and updates replace the pending dismissal', () =>
   assert.equal(win.visible, false);
 });
 
+test('timed indicators do not reveal after expiring before first paint', () => {
+  const scheduled: Array<() => void> = [];
+  const { manager } = createManager([], undefined, {
+    schedule(callback) {
+      scheduled.push(callback);
+      return callback;
+    },
+    cancel: () => {},
+  });
+  manager.showIndicator(
+    { id: 'feedback', title: 'Nevermind', durationMs: 1 },
+    'nevermind.host',
+  );
+  const win = FakeBrowserWindow.instances[0];
+
+  scheduled[0]();
+  win.handlers.get('once:ready-to-show')?.();
+
+  assert.equal(win.showInactiveCount, 0);
+  assert.equal(win.visible, false);
+});
+
 test('independent-window state and close bind to the exact renderer sender', () => {
   const { manager } = createManager();
   const record = manager.createOrUpdate(

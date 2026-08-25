@@ -4383,6 +4383,39 @@ function presentActionErrorFeedback(error: unknown, action: any) {
   );
 }
 
+function showRendererIndicator(sender: unknown, input: any) {
+  const paletteSender = paletteWindow.win?.webContents === sender;
+  const extensionWindowState = paletteSender
+    ? null
+    : extensionWindowManager.getStateForSender(sender);
+  if (!(paletteSender || extensionWindowState))
+    throw new Error('Indicator sender is not an application window');
+  const status = [
+    'recording',
+    'transcribing',
+    'loading',
+    'success',
+    'error',
+  ].includes(String(input?.status || ''))
+    ? String(input.status)
+    : undefined;
+  extensionWindowManager.showIndicator(
+    {
+      id: 'feedback',
+      title: String(input?.title || 'Nevermind').slice(0, 120),
+      subtitle: String(input?.subtitle || '').slice(0, 500),
+      ...(status ? { status } : {}),
+      durationMs: Math.min(
+        10_000,
+        Math.max(1000, Number(input?.durationMs) || 2200),
+      ),
+    },
+    paletteSender
+      ? 'nevermind.host'
+      : `nevermind.window.${String((extensionWindowState as any).id || 'unknown')}`,
+  );
+}
+
 async function executeViewActionResult(result, entry, launchContext?: any) {
   if (!result) return result;
   if (result?.type === 'draftResolution') {
@@ -4689,6 +4722,12 @@ function pasteTextAction(action: any) {
   clipboardService!.pasteTextAction(action);
 }
 
+function desktopAppIdentity(appInfo: any) {
+  return String(
+    appInfo?.path || appInfo?.bundleId || appInfo?.id || appInfo?.name || '',
+  );
+}
+
 function executeWindowAction(action: any) {
   return performanceTraces.run(
     'extension.window.action',
@@ -4782,8 +4821,8 @@ function registerTestModeIpcHandlers() {
   handle('settings:get', (_event, id) => getSetting(id));
   handle('palette:set-mode', () => undefined);
   handle('palette:hide', () => paletteWindow.hidePalette());
-  handle('indicator:show', (_event, input) =>
-    extensionWindowManager.showIndicator(input, 'nevermind.host'),
+  handle('indicator:show', (event, input) =>
+    showRendererIndicator(event.sender, input),
   );
   handle('palette:shortcut-ready', () => paletteWindow.revealPalette());
   handle('actions:suspend-shortcuts', () => undefined);
@@ -4862,6 +4901,17 @@ async function executeViewAction(action, launchContext?: any) {
       clipboard.writeText(action.text || '');
       break;
     case 'pasteText':
+      if (
+        action.expectedFrontmostAppId &&
+        String(action.expectedFrontmostAppId) !==
+          desktopAppIdentity(await frontmostApp())
+      )
+        return {
+          toast: {
+            message: 'Frontmost app changed. Select the text and try again',
+            tone: 'error',
+          },
+        };
       if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
       pasteTextAction(action);
       return { toast: { message: 'Pasted' } };
@@ -10756,6 +10806,7 @@ app.whenReady().then(async () => {
     processPlatform: process.platform,
     getCameraMediaAccessStatus: () =>
       systemPreferences.getMediaAccessStatus('camera'),
+    showRendererIndicator,
     extensionWindowManager,
     saveExtensionDraft: saveExtensionDraftForIpc,
     logError,

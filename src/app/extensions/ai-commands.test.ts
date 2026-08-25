@@ -17,11 +17,15 @@ function commandHandler(context: any) {
 function contextFor(
   selectedText: string | null,
   responses = ['This is corrected text.'],
+  frontmostApps: unknown[] = [
+    { name: 'TextEdit', bundleId: 'com.apple.TextEdit' },
+  ],
 ) {
   const preparations: unknown[] = [];
   const aiCalls: unknown[] = [];
   const actions: unknown[] = [];
   const indicatorEvents: unknown[] = [];
+  let frontmostCall = 0;
   const context = {
     ai: {
       prepare: async (options: unknown) => preparations.push(options),
@@ -30,7 +34,13 @@ function contextFor(
         return responses[Math.min(aiCalls.length - 1, responses.length - 1)];
       },
     },
-    desktop: { selection: { text: async () => selectedText } },
+    desktop: {
+      selection: { text: async () => selectedText },
+      apps: {
+        frontmost: async () =>
+          frontmostApps[Math.min(frontmostCall++, frontmostApps.length - 1)],
+      },
+    },
     actions: {
       pasteText: (
         text: string,
@@ -87,6 +97,7 @@ test('corrects selected text with Fast AI and replaces it without changing the c
       title: 'Replace Selected Text',
       concealed: true,
       restoreClipboard: true,
+      expectedFrontmostAppId: 'com.apple.TextEdit',
       dismissAfterRun: 'auto',
     },
   ]);
@@ -169,4 +180,24 @@ test('treats a null host selection as no selected text', async () => {
   );
   assert.equal(aiCalls.length, 0);
   assert.equal(actions.length, 0);
+});
+
+test('does not paste into a different frontmost application', async () => {
+  const { context, actions, indicatorEvents } = contextFor(
+    'this are selected text',
+    ['This is selected text.'],
+    [
+      { name: 'TextEdit', bundleId: 'com.apple.TextEdit' },
+      { name: 'Mail', bundleId: 'com.apple.mail' },
+    ],
+  );
+
+  const result = await commandHandler(context)(context, {});
+
+  assert.equal(result, undefined);
+  assert.equal(actions.length, 0);
+  assert.equal(
+    (indicatorEvents.at(-1) as any)[1].subtitle,
+    'Frontmost app changed. Select the text and try again',
+  );
 });

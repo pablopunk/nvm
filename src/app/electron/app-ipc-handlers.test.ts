@@ -84,10 +84,10 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     hasCapability: () => true,
     processPlatform: 'darwin',
     getCameraMediaAccessStatus: () => 'granted',
+    showRendererIndicator: (sender, input) =>
+      calls.push(`indicator:${String(sender)}:${JSON.stringify(input)}`),
     extensionWindowManager: {
       getStateForSender: (sender) => ({ sender }),
-      showIndicator: (input, owner) =>
-        calls.push(`indicator:${owner}:${JSON.stringify(input)}`),
       closeForSender: (sender) => {
         calls.push(`close-window:${String(sender)}`);
         return true;
@@ -158,6 +158,19 @@ test('search IPC stays scoped to the originating sender', async () => {
   listeners.get('actions:search:cancel')?.({ sender }, { generation: 3 });
   assert.deepEqual(starts, [{ sender, input }]);
   assert.deepEqual(cancels, [{ sender, input: { generation: 3 } }]);
+});
+
+test('indicator IPC stays scoped to the originating sender', async () => {
+  const calls: unknown[] = [];
+  const { handles } = createDeps({
+    showRendererIndicator: (sender, input) => calls.push({ sender, input }),
+  });
+  const sender = { id: 42 };
+  const input = { title: 'Nevermind', subtitle: 'Saved' };
+
+  await handles.get('indicator:show')?.({ sender }, input);
+
+  assert.deepEqual(calls, [{ sender, input }]);
 });
 
 test('registerAppIpcHandlers preserves palette, camera, and window behavior', async () => {

@@ -91,10 +91,10 @@ export interface AppIpcHandlersDeps {
   hasCapability: (capability: string) => boolean;
   processPlatform: NodeJS.Platform | string;
   getCameraMediaAccessStatus: () => string;
+  showRendererIndicator(sender: unknown, input: unknown): void;
   extensionWindowManager: {
     getStateForSender(sender: unknown): unknown;
     closeForSender(sender: unknown): boolean;
-    showIndicator(input: unknown, ownerExtensionId: string): void;
   };
   saveExtensionDraft: (input: unknown) => unknown;
   logError: (message: string, data?: unknown, context?: unknown) => unknown;
@@ -278,8 +278,8 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     deps.paletteWindow.setPaletteSizeForMode(mode);
   });
   ipcHandleMeasured('palette:hide', () => deps.paletteWindow.hidePalette());
-  ipcHandleMeasured('indicator:show', (_event, input) =>
-    deps.extensionWindowManager.showIndicator(input, 'nevermind.host'),
+  ipcHandleMeasured('indicator:show', (event, input) =>
+    deps.showRendererIndicator(event.sender, input),
   );
   ipcHandleMeasured('palette:shortcut-ready', () =>
     deps.paletteWindow.revealPalette(),

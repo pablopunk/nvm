@@ -120,6 +120,16 @@ export function createExtensionUiApi({
     editor: (view: any) => ({ ...view, type: 'editor' }),
     progress: (input: any = {}) => progressView(input),
     confirm: (input: any = {}) => buildConfirmAction(input),
+    toast: (input: any = {}) => {
+      const tone = String(input?.tone || 'default');
+      showIndicator({
+        id: 'feedback',
+        title: 'Nevermind',
+        subtitle: String(input?.message || ''),
+        ...(tone === 'error' || tone === 'success' ? { status: tone } : {}),
+        durationMs: tone === 'error' ? 4000 : 2200,
+      });
+    },
     indicator: {
       show: showIndicator,
       update: updateIndicator,

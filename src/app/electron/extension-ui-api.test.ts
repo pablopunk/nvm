@@ -97,10 +97,27 @@ test('indicator helpers delegate passive status lifecycle to the host', () => {
   ui.indicator.show({ id: 'dictation', title: 'Listening' });
   ui.indicator.update({ id: 'dictation', title: 'Transcribing' });
   ui.indicator.hide('dictation');
+  assert.equal(
+    (ui as unknown as { toast(input: unknown): unknown }).toast({
+      message: 'Legacy feedback',
+      tone: 'error',
+    }),
+    undefined,
+  );
   assert.deepEqual(calls, [
     ['show', { id: 'dictation', title: 'Listening' }],
     ['update', { id: 'dictation', title: 'Transcribing' }],
     ['hide', 'dictation'],
+    [
+      'show',
+      {
+        id: 'feedback',
+        title: 'Nevermind',
+        subtitle: 'Legacy feedback',
+        status: 'error',
+        durationMs: 4000,
+      },
+    ],
   ]);
 });
 
