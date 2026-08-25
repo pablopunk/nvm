@@ -75,7 +75,6 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
     actionAliases: () => [],
     rankAction: () => true,
   });
-  const indicators: any[] = [];
   const ctx = {
     desktop: { apps: { list: () => [app] } },
     actions: {
@@ -111,6 +110,7 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
 
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: this scenario exercises the complete destructive-action journey.
 test('Uninstall candidate list defaults to the app, patches selection, and confirms host snapshot paths', async () => {
+  const indicators: any[] = [];
   const app = {
     id: 'example',
     name: 'Example',

@@ -145,6 +145,14 @@ export function userMessageFromEvent(event: AiChatEvent) {
   };
 }
 
+function latestUserMessageIndex(
+  messages: NonNullable<CommandView['messages']>,
+) {
+  for (let index = messages.length - 1; index >= 0; index -= 1)
+    if (messages[index].role === 'user') return index;
+  return -1;
+}
+
 export function useAiChat(
   sendMessage: (
     message: string,
@@ -338,7 +346,7 @@ export function useAiChat(
     setMessages((current) => {
       if (!replacesOptimisticMessage)
         return boundedMessages([...appendPendingDelta(current), message]);
-      const index = current.findLastIndex((item) => item.role === 'user');
+      const index = latestUserMessageIndex(current);
       if (index < 0) return boundedMessages([...current, message]);
       releaseMessagePreviews([current[index]]);
       return [...current.slice(0, index), message, ...current.slice(index + 1)];
@@ -347,7 +355,7 @@ export function useAiChat(
 
   function releaseLatestOptimisticMessage() {
     setMessages((current) => {
-      const index = current.findLastIndex((item) => item.role === 'user');
+      const index = latestUserMessageIndex(current);
       if (index < 0) return current;
       const optimistic = current[index];
       releaseMessagePreviews([optimistic]);
