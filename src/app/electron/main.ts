@@ -4757,6 +4757,9 @@ function registerTestModeIpcHandlers() {
   handle('settings:get', (_event, id) => getSetting(id));
   handle('palette:set-mode', () => undefined);
   handle('palette:hide', () => paletteWindow.hidePalette());
+  handle('indicator:show', (_event, input) =>
+    extensionWindowManager.showIndicator(input, 'nevermind.host'),
+  );
   handle('palette:shortcut-ready', () => paletteWindow.revealPalette());
   handle('actions:suspend-shortcuts', () => undefined);
   handle('actions:resume-shortcuts', () => undefined);
