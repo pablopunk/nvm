@@ -132,7 +132,6 @@ test('skips enabled AI cleaning when signed out', async () => {
       },
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: {
         show: () => {},
         update: (input: unknown) => indicatorUpdates.push(input),
@@ -212,7 +211,6 @@ test('prepares a missing model before opening the microphone', async () => {
       },
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: {
         show: () => {},
         update: () => {},
@@ -227,7 +225,7 @@ test('prepares a missing model before opening the microphone', async () => {
   const result = await handler(context, {});
   assert.deepEqual(events, ['cache-status', 'prepare-model', 'start']);
   assert.deepEqual(prepared, [{ modelKeepAliveMs: 300_000 }]);
-  assert.deepEqual(result, { message: 'Listening...', tone: 'info' });
+  assert.equal(result, undefined);
 });
 
 test('keeps the target listening state during fast microphone preparation', async () => {
@@ -248,7 +246,6 @@ test('keeps the target listening state during fast microphone preparation', asyn
       start: async () => recordingReady,
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: {
         show: (input: unknown) => indicatorShows.push(input),
         update: (input: unknown) => indicatorUpdates.push(input),
@@ -342,7 +339,6 @@ test('leaves the transcription on the clipboard when enabled', async () => {
       },
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: {
         show: () => {},
         update: () => {},
@@ -420,7 +416,6 @@ test('cleans every transcript with Fast AI and preferred dictionary terms', asyn
       },
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: {
         show: () => {},
         update: (input: unknown) => indicatorUpdates.push(input),
@@ -491,7 +486,6 @@ test('cleans without dictionary terms and falls back when AI fails', async () =>
       },
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: { show: () => {}, update: () => {}, hide: () => {} },
     },
     actions: actionBuilders({
@@ -662,7 +656,6 @@ test('stores cleaned transcripts and manages bounded dictation history', async (
     },
     ui: {
       list: (input: unknown) => input,
-      toast: (input: unknown) => input,
       indicator: { show: () => {}, update: () => {}, hide: () => {} },
     },
     actions: actionBuilders({

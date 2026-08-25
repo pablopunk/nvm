@@ -26,11 +26,11 @@ export function createSelectedTextReader<Snapshot>(
       new Promise<void>((resolve) => setTimeout(resolve, durationMs)));
 
   async function read() {
+    if (dependencies.paletteIsFocused()) return null;
     const accessibilityText = String(
       (await dependencies.readAccessibilityText()) ?? '',
     );
     if (accessibilityText) return accessibilityText;
-    if (dependencies.paletteIsFocused()) return null;
 
     const snapshot = dependencies.clipboardSnapshot();
     const sentinel =

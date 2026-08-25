@@ -319,7 +319,6 @@ export type ExtensionDraftConflict = {
 export type ExtensionDraftResolutionFollowUp = {
   view?: ExtensionView;
   navigation?: 'root' | 'push' | 'replace' | 'pop';
-  toast?: { message: string; tone?: 'default' | 'success' | 'error' };
 };
 
 /** Resolve an editor draft conflict. Migration must supply replacement content. */
@@ -343,25 +342,6 @@ export type ExtensionWindowRestoreDescriptor = {
   options?: ExtensionWindowOptions;
 };
 
-/** Observable compatibility and platform details returned after a window action executes. */
-export type ExtensionWindowActionResult = {
-  toast: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
-  persistence?: 'relaunch' | 'session-only';
-  degradedCapabilities?: ExtensionWindowCapability[];
-  diagnostics?: Array<
-    | { reason: 'missing-restore-key' }
-    | {
-        reason: 'unsupported-capability';
-        capability: ExtensionWindowCapability;
-      }
-  >;
-};
-
-/** Host-rendered toast result. Return this from action handlers for lightweight feedback. */
-export type ExtensionToastResult = {
-  toast: { message: string; tone?: 'default' | 'info' | 'success' | 'error' };
-};
-
 export type ExtensionIndicatorStatus =
   | 'recording'
   | 'transcribing'
@@ -376,6 +356,8 @@ export type ExtensionIndicatorInput = {
   status?: ExtensionIndicatorStatus;
   value?: number;
   total?: number;
+  /** Hide this indicator after the given duration. Omit it for status that remains until `hide`. */
+  durationMs?: number;
 };
 
 /** In-place list/grid update returned from an action handler. */
@@ -398,14 +380,12 @@ export type ExtensionNavigationMode = 'root' | 'push' | 'replace' | 'pop';
 export type ExtensionActionResult =
   | ExtensionView
   | ExtensionAction
-  | ExtensionToastResult
   | ExtensionDraftResolution
   | {
       view?: ExtensionView | null;
       action?: ExtensionAction;
       patch?: ExtensionViewPatch;
       navigation?: ExtensionNavigationMode;
-      toast?: ExtensionToastResult['toast'];
     }
   | void;
 
@@ -1386,10 +1366,6 @@ export type ExtensionContext = {
       onConfirm?: ExtensionAction;
       action?: ExtensionAction;
     }): ExtensionAction;
-    toast(input?: {
-      message?: string;
-      tone?: 'default' | 'info' | 'success' | 'error';
-    }): ExtensionToastResult;
     /** Passive always-on-top status indicator that never takes focus. */
     indicator: {
       show(input: ExtensionIndicatorInput): void;

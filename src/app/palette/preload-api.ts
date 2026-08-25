@@ -105,6 +105,16 @@ export type ViewActionResult = {
   traceId?: string;
 };
 
+export type IndicatorInput = {
+  id?: string;
+  title: string;
+  subtitle?: string;
+  status?: 'recording' | 'transcribing' | 'loading' | 'success' | 'error';
+  value?: number;
+  total?: number;
+  durationMs?: number;
+};
+
 export type OpenActionViewPayload = {
   view?: CommandView;
   revealWhenReady?: boolean;
@@ -220,6 +230,7 @@ export type NevermindApi = {
   getRunningAppPaths: (appPaths: string[]) => Promise<string[]>;
   setPaletteMode: (mode: PaletteMode) => Promise<void>;
   hide: () => Promise<void>;
+  showIndicator: (input: IndicatorInput) => Promise<void>;
   testInvoke: () => Promise<unknown>;
   testStageExtensionProposal: (
     filename: string,

@@ -1,13 +1,17 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: the extension host currently exposes these callbacks without public types.
 import { feedbackView } from '../palette/feedback';
 import { extensionContext } from './_context';
+import { showExtensionFeedback } from './feedback';
 
 function uninstallResult(ctx: any, result: any) {
   if (result.status === 'complete') {
-    return ctx.ui.toast({
-      message: `${result.moved.length} item${result.moved.length === 1 ? '' : 's'} moved to Trash`,
-      tone: 'success',
-    });
+    showExtensionFeedback(
+      ctx,
+      'Uninstall',
+      `${result.moved.length} item${result.moved.length === 1 ? '' : 's'} moved to Trash`,
+      'success',
+    );
+    return;
   }
   const details =
     result.untouched.length > 0
@@ -94,10 +98,13 @@ function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
       values,
     );
     if (selection.length === 0) {
-      return ctx.ui.toast({
-        message: 'Select at least one item to move to Trash',
-        tone: 'error',
-      });
+      showExtensionFeedback(
+        ctx,
+        'Uninstall',
+        'Select at least one item to move to Trash',
+        'error',
+      );
+      return;
     }
     const selectedPaths = selection.map((candidate: any) => candidate.path);
     return ctx.ui.confirm({

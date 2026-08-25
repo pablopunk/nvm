@@ -2,6 +2,7 @@ import type {
   ExtensionContext,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
+import { showExtensionFeedback } from '../extensions/feedback';
 
 const FILE_CANDIDATES = [
   {
@@ -53,10 +54,13 @@ function fileSelectionListView(ctx: ExtensionContext) {
   const review = ctx.actions.run('Review selected files', () => {
     const selected = FILE_CANDIDATES.filter((file) => selectedIds.has(file.id));
     if (selected.length === 0) {
-      return ctx.ui.toast({
-        message: 'Select at least one file',
-        tone: 'error',
-      });
+      showExtensionFeedback(
+        ctx,
+        'File Selection Fixture',
+        'Select at least one file',
+        'error',
+      );
+      return;
     }
     return ctx.ui.preview({
       title: 'Selected Files',

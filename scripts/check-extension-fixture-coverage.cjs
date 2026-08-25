@@ -19,7 +19,6 @@ const FIXTURE_REQUIRED = new Set([
   'ui.webview',
   'ui.camera',
   'ui.confirm',
-  'ui.toast',
 ]);
 
 // Helpers (ui.item, ui.actions, ui.empty, ui.loading, ui.error) are

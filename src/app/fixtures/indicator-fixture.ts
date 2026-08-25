@@ -3,6 +3,7 @@ import type {
   ExtensionIndicatorInput,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
+import { showExtensionFeedback } from '../extensions/feedback';
 
 const INDICATOR_ID = 'dev-ui-indicator';
 
@@ -36,9 +37,6 @@ function indicatorAction(
     ctx.actions.background(title, (innerCtx) => {
       if (update) innerCtx.ui.indicator.update(input);
       else innerCtx.ui.indicator.show(input);
-      return innerCtx.ui.toast({
-        message: `${input.subtitle} indicator shown`,
-      });
     });
 }
 
@@ -60,7 +58,7 @@ function indicatorView(ctx: ExtensionContext) {
   )(ctx);
   const hide = ctx.actions.background('Hide Indicator', (innerCtx) => {
     innerCtx.ui.indicator.hide(INDICATOR_ID);
-    return innerCtx.ui.toast({ message: 'Indicator hidden' });
+    showExtensionFeedback(innerCtx, 'Indicator Fixture', 'Indicator hidden');
   });
 
   return ctx.ui.list({

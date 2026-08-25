@@ -155,6 +155,7 @@ const api: NevermindApi = {
     invokeMeasured('apps:running-paths', appPaths),
   setPaletteMode: (mode) => invokeMeasured('palette:set-mode', mode),
   hide: () => invokeMeasured('palette:hide'),
+  showIndicator: (input) => invokeMeasured('indicator:show', input),
   testInvoke: () => invokeMeasured('test:invoke'),
   testStageExtensionProposal: (filename, source) =>
     invokeMeasured('test:stage-extension-proposal', filename, source),

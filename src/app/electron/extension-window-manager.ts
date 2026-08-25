@@ -138,6 +138,8 @@ type ExtensionWindowManagerDeps = {
       task: () => T | Promise<T>,
     ): T | Promise<T>;
   };
+  scheduleIndicatorHide?: (callback: () => void, delayMs: number) => unknown;
+  cancelIndicatorHide?: (timer: unknown) => void;
 };
 
 export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
@@ -342,6 +344,7 @@ function extensionWindowViewPayload(id: string, view: any, options: any) {
 
 export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   const records = new Map<string, ExtensionWindowRecord>();
+  const indicatorHideTimers = new Map<string, unknown>();
   let persistedState: PersistedExtensionWindowState =
     deps.persistence?.read?.() || {};
   let persistedStateHydrated = Boolean(deps.persistence?.read);
@@ -871,6 +874,34 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     };
   }
 
+  function cancelIndicatorHide(id: string) {
+    const timer = indicatorHideTimers.get(id);
+    if (timer === undefined) return;
+    if (deps.cancelIndicatorHide) deps.cancelIndicatorHide(timer);
+    else clearTimeout(timer as ReturnType<typeof setTimeout>);
+    indicatorHideTimers.delete(id);
+  }
+
+  function scheduleIndicatorHide(id: string, durationMs: unknown) {
+    cancelIndicatorHide(id);
+    const duration = Number(durationMs);
+    if (!(Number.isFinite(duration) && duration > 0)) return;
+    const hide = () => {
+      indicatorHideTimers.delete(id);
+      records.get(id)?.win.hide();
+    };
+    if (deps.scheduleIndicatorHide)
+      indicatorHideTimers.set(
+        id,
+        deps.scheduleIndicatorHide(hide, Math.min(duration, 60_000)),
+      );
+    else {
+      const timer = setTimeout(hide, Math.min(duration, 60_000));
+      timer.unref?.();
+      indicatorHideTimers.set(id, timer);
+    }
+  }
+
   function indicatorWindowWidth(input: any) {
     const longestLabelLength = [
       input?.title,
@@ -894,6 +925,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
 
   function showIndicator(input: any, ownerExtensionId: string) {
     const id = indicatorWindowId(ownerExtensionId, input?.id);
+    cancelIndicatorHide(id);
     createOrUpdate(
       indicatorView(input, id),
       {
@@ -912,6 +944,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       'show',
       ownerExtensionId,
     );
+    scheduleIndicatorHide(id, input?.durationMs);
   }
 
   function updateIndicator(input: any, ownerExtensionId: string) {
@@ -919,11 +952,14 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
   }
 
   function hideIndicator(ownerExtensionId: string, localId = 'default') {
-    records.get(indicatorWindowId(ownerExtensionId, localId))?.win.hide();
+    const id = indicatorWindowId(ownerExtensionId, localId);
+    cancelIndicatorHide(id);
+    records.get(id)?.win.hide();
   }
 
   function closeAll() {
     quitting = true;
+    for (const id of indicatorHideTimers.keys()) cancelIndicatorHide(id);
     for (const record of records.values()) record.win.close();
     records.clear();
   }

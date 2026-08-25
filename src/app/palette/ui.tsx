@@ -62,11 +62,6 @@ export interface EmptyStateProps {
   subtitle?: string;
   action?: ActionPanelRow;
 }
-export type ToastTone = 'default' | 'info' | 'success' | 'error';
-export interface ToastProps {
-  message: string;
-  tone?: ToastTone;
-}
 export interface PreviewViewProps {
   content?: ReactNode;
   image?: CommandImage;
@@ -426,18 +421,6 @@ export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
   );
 }
 
-export function Toast({ message, tone }: ToastProps) {
-  const resolvedTone = tone || 'default';
-  return (
-    <div
-      className={`toast toast-${resolvedTone}`}
-      role={resolvedTone === 'error' ? 'alert' : 'status'}
-    >
-      {message}
-    </div>
-  );
-}
-
 export function SearchAccessory({
   tooltip,
   value,
@@ -554,6 +537,7 @@ export function ProgressView({
   label,
   status,
 }: ProgressViewProps) {
+  const normalizedStatus = normalizedProgressStatus(status);
   const hasProgress =
     typeof value === 'number' && typeof total === 'number' && total > 0;
   const ratio = hasProgress ? Math.max(0, Math.min(1, value / total)) : 0;
@@ -562,7 +546,11 @@ export function ProgressView({
   return (
     <div className="extensionView progressView">
       {showSummary ? (
-        <div className="progressOverview">
+        <div
+          className="progressOverview"
+          data-status={normalizedStatus}
+          role={normalizedStatus === 'error' ? 'alert' : 'status'}
+        >
           <div>
             <strong>{label || status || 'Working…'}</strong>
             {hasProgress ? (

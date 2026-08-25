@@ -75,6 +75,7 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
     actionAliases: () => [],
     rankAction: () => true,
   });
+  const indicators: any[] = [];
   const ctx = {
     desktop: { apps: { list: () => [app] } },
     actions: {
@@ -161,7 +162,7 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
       item: (input) => input,
       list: (input) => input,
       confirm: (input) => input,
-      toast: (input) => ({ toast: input }),
+      indicator: { show: (input) => indicators.push(input) },
       preview: (input) => input,
       error: (title, message) => ({ type: 'preview', title, message }),
     },
@@ -188,13 +189,15 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
   assert.equal(deselected.patch.items[0].accessories[0].text, 'Optional');
   const review = list.sections[0].items[0].primaryAction;
   const empty = review.__handler();
-  assert.equal(empty.toast.tone, 'error');
+  assert.equal(empty, undefined);
+  assert.equal(indicators.at(-1).status, 'error');
   const selected = deselected.patch.items[0].primaryAction.__handler();
   assert.equal(selected.patch.items[0].accessories[0].text, 'Selected');
   const confirmation = review.__handler();
   assert.equal(confirmation.message, app.path);
   assert.equal(confirmation.onConfirm.requiresConfirmation, undefined);
   const complete = await confirmation.onConfirm.__handler();
-  assert.equal(complete.toast.message, '1 item moved to Trash');
-  assert.equal(complete.toast.tone, 'success');
+  assert.equal(complete, undefined);
+  assert.equal(indicators.at(-1).subtitle, '1 item moved to Trash');
+  assert.equal(indicators.at(-1).status, 'success');
 });

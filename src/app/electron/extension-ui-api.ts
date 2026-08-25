@@ -120,12 +120,6 @@ export function createExtensionUiApi({
     editor: (view: any) => ({ ...view, type: 'editor' }),
     progress: (input: any = {}) => progressView(input),
     confirm: (input: any = {}) => buildConfirmAction(input),
-    toast: (input: any = {}) => ({
-      toast: {
-        message: String(input?.message || ''),
-        tone: input?.tone || 'default',
-      },
-    }),
     indicator: {
       show: showIndicator,
       update: updateIndicator,

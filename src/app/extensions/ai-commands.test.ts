@@ -50,7 +50,6 @@ function contextFor(
       },
     },
     ui: {
-      toast: (input: unknown) => input,
       indicator: {
         show: (input: unknown) => indicatorEvents.push(['show', input]),
         update: (input: unknown) => indicatorEvents.push(['update', input]),
@@ -128,36 +127,46 @@ test('treats conversational selected text as content to proofread', async () => 
 });
 
 test('does not paste when both AI responses answer instead of proofreading', async () => {
-  const { context, actions } = contextFor('hey whats up ma dude', [
-    'Could you provide the full sentence?',
-    'What would you like me to fix?',
-  ]);
+  const { context, actions, indicatorEvents } = contextFor(
+    'hey whats up ma dude',
+    ['Could you provide the full sentence?', 'What would you like me to fix?'],
+  );
 
   const result = await commandHandler(context)(context, {});
 
-  assert.deepEqual(result, {
-    message: 'AI did not return a valid correction',
-    tone: 'error',
-  });
+  assert.equal(result, undefined);
+  assert.equal(
+    (indicatorEvents.at(-1) as any)[1].subtitle,
+    'AI did not return a valid correction',
+  );
   assert.equal(actions.length, 0);
 });
 
 test('does not call AI when no text is selected', async () => {
-  const { context, aiCalls, actions } = contextFor('   ');
+  const { context, aiCalls, actions, indicatorEvents } = contextFor('   ');
 
   const result = await commandHandler(context)(context, {});
 
-  assert.deepEqual(result, { message: 'Select text to fix', tone: 'info' });
+  assert.equal(result, undefined);
+  assert.equal(
+    (indicatorEvents.at(-1) as any)[1].subtitle,
+    'Select text to fix',
+  );
+  assert.equal((indicatorEvents.at(-1) as any)[1].status, 'error');
   assert.equal(aiCalls.length, 0);
   assert.equal(actions.length, 0);
 });
 
 test('treats a null host selection as no selected text', async () => {
-  const { context, aiCalls, actions } = contextFor(null);
+  const { context, aiCalls, actions, indicatorEvents } = contextFor(null);
 
   const result = await commandHandler(context)(context, {});
 
-  assert.deepEqual(result, { message: 'Select text to fix', tone: 'info' });
+  assert.equal(result, undefined);
+  assert.equal(
+    (indicatorEvents.at(-1) as any)[1].subtitle,
+    'Select text to fix',
+  );
   assert.equal(aiCalls.length, 0);
   assert.equal(actions.length, 0);
 });

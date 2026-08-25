@@ -76,9 +76,6 @@ test('extension ui api keeps utility helpers stable', () => {
     isLoading: true,
     items: [],
   });
-  assert.deepEqual(ui.toast({ message: 123, tone: 'error' }), {
-    toast: { message: '123', tone: 'error' },
-  });
   const error = ui.error('Uninstall unavailable', 'Try another app.');
   assert.equal(error.type, 'list');
   assert.equal(error.items[0].disabled, true);

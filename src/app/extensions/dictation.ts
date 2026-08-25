@@ -1,3 +1,5 @@
+import { showExtensionFeedback } from './feedback';
+
 type DictationSettings = {
   deviceId: string;
   keepAliveMs: number;
@@ -180,10 +182,15 @@ async function historyView(ctx: any) {
     'Clear History',
     async (innerCtx: any) => {
       await writeHistory(innerCtx, []);
+      showExtensionFeedback(
+        innerCtx,
+        'Dictation',
+        'Dictation history cleared',
+        'success',
+      );
       return {
         view: await historyView(innerCtx),
         navigation: 'replace',
-        toast: { message: 'Dictation history cleared', tone: 'success' },
       };
     },
     {
@@ -222,10 +229,15 @@ async function historyView(ctx: any) {
               (item) => item.id !== entry.id,
             ),
           );
+          showExtensionFeedback(
+            innerCtx,
+            'Dictation',
+            'Transcript deleted',
+            'success',
+          );
           return {
             view: await historyView(innerCtx),
             navigation: 'replace',
-            toast: { message: 'Transcript deleted', tone: 'success' },
           };
         },
         {
@@ -416,14 +428,17 @@ async function runDictation(ctx: any) {
       });
       await startPromise;
       deferredIndicator.finish();
-      return ctx.ui.toast({ message: 'Listening...', tone: 'info' });
+      return;
     } catch (error) {
       deferredIndicator.cancel();
       ctx.ui.indicator.hide('dictation');
-      return ctx.ui.toast({
-        message: `Dictation unavailable: ${error instanceof Error ? error.message : String(error)}`,
-        tone: 'error',
-      });
+      showExtensionFeedback(
+        ctx,
+        'Dictation',
+        `Dictation unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      );
+      return;
     }
   }
   ctx.ui.indicator.update({
@@ -440,11 +455,10 @@ async function runDictation(ctx: any) {
       durationMs: Math.round(transcribedAt - stoppedAt),
       transcriptLength: transcript.length,
     });
-    if (!transcript.trim())
-      return ctx.ui.toast({
-        message: 'No speech detected',
-        tone: 'info',
-      });
+    if (!transcript.trim()) {
+      showExtensionFeedback(ctx, 'Dictation', 'No speech detected');
+      return;
+    }
     if (cleanWithAi) ctx.ui.indicator.update(CLEANING_INDICATOR);
     const text = await cleanTranscript(
       ctx,

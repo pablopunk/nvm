@@ -1,4 +1,5 @@
 import type { NevermindExtension } from '../resources/nevermind-extension-api';
+import { showExtensionFeedback } from './feedback';
 
 export function createQuitAppsExtension() {
   return {
@@ -43,15 +44,21 @@ export function createQuitAppsExtension() {
                 try {
                   ctx.logs.info('Attempting to quit applications', { script });
                   await ctx.desktop.shell?.appleScript(script);
-                  return ctx.ui.toast({ message: 'Quitting applications...' });
+                  showExtensionFeedback(
+                    ctx,
+                    'Quit All Apps',
+                    'Quitting applications...',
+                  );
                 } catch (err: any) {
                   ctx.logs.error('Failed to execute Quit Apps script', {
                     error: err.message,
                   });
-                  return ctx.ui.toast({
-                    message: `Error: ${err.message}`,
-                    tone: 'error',
-                  });
+                  showExtensionFeedback(
+                    ctx,
+                    'Quit All Apps',
+                    `Error: ${err.message}`,
+                    'error',
+                  );
                 }
               }),
             });

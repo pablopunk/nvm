@@ -121,8 +121,6 @@ import {
   SearchAccessory,
   setShortcutLabelHyperKey,
   shortcutLabel,
-  Toast,
-  type ToastTone,
 } from './ui';
 import { useAiChat } from './use-ai-chat';
 import { useExtensionNavigation } from './use-extension-navigation';
@@ -157,6 +155,21 @@ type AppInfo = {
   name?: string;
   path?: string;
 };
+
+type FeedbackTone = 'default' | 'info' | 'success' | 'error';
+
+function showFeedbackIndicator(
+  message: string,
+  tone: FeedbackTone = 'default',
+) {
+  void window.nvm.showIndicator({
+    id: 'feedback',
+    title: 'Nevermind',
+    subtitle: message,
+    ...(tone === 'error' || tone === 'success' ? { status: tone } : {}),
+    durationMs: tone === 'error' ? 4000 : 2200,
+  });
+}
 
 type Action = {
   id: string;
@@ -407,10 +420,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const confirmationReturnSurfaceRef =
     useRef<ConfirmationReturnSurface>('view');
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
-  const [toast, setToast] = useState<{
-    message: string;
-    tone?: ToastTone;
-  } | null>(null);
 
   useEffect(() => {
     window.nvm
@@ -499,7 +508,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       view?: ExtensionView;
       patch?: CommandViewPatch;
       navigation?: 'root' | 'push' | 'replace' | 'pop';
-      toast?: { message: string; tone?: ToastTone };
+      toast?: { message: string; tone?: FeedbackTone };
     } | void,
   ) {
     if (!result) return;
@@ -535,8 +544,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setSelectedValue(selectedItemIdForView(result.view, selectedValue));
     }
     if (result.toast) {
-      setToast(result.toast);
-      window.setTimeout(() => setToast(null), 2000);
+      showFeedbackIndicator(result.toast.message, result.toast.tone);
     }
   }
 
@@ -1122,7 +1130,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       onFocusCapture={rememberBaseFocus}
       onKeyDownCapture={onShellKeyDown}
     >
-      {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
       {searchable &&
       !compactViewOpen &&
       (!compactActionSurface ||
@@ -1540,10 +1547,6 @@ export function App() {
     installed: boolean;
     authed: boolean;
   }>({ installed: false, authed: false });
-  const [toast, setToast] = useState<{
-    message: string;
-    tone?: ToastTone;
-  } | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(
     SEARCH_PLACEHOLDERS.length - 1,
   );
@@ -2677,16 +2680,6 @@ export function App() {
     if (shouldReveal) setPendingShortcutReveal(true);
   }
 
-  function showToast(message: string, tone: ToastTone = 'default') {
-    setToast({ message, tone });
-    const duration = tone === 'error' ? 4000 : 2200;
-    window.setTimeout(
-      () =>
-        setToast((current) => (current?.message === message ? null : current)),
-      duration,
-    );
-  }
-
   async function sendAiPrompt(message: string, chatId = extensionView?.chatId) {
     await aiChat.sendPrompt(message, chatId);
   }
@@ -2759,12 +2752,12 @@ export function App() {
       view?: ExtensionView;
       patch?: CommandViewPatch;
       navigation?: 'root' | 'push' | 'replace' | 'pop';
-      toast?: { message: string; tone?: ToastTone };
+      toast?: { message: string; tone?: FeedbackTone };
     },
     dismissAfterRun?: 'auto',
   ) {
     if (result.toast)
-      showToast(result.toast.message, result.toast.tone || 'default');
+      showFeedbackIndicator(result.toast.message, result.toast.tone);
     setBuilderPreviews((previews) =>
       previews.map((preview) => {
         if (preview.filename !== filename) return preview;
@@ -2817,7 +2810,7 @@ export function App() {
         )
       )
         return;
-      showToast(
+      showFeedbackIndicator(
         error instanceof Error ? error.message : 'Could not run action',
         'error',
       );
@@ -2869,7 +2862,7 @@ export function App() {
       try {
         await window.nvm.retryViewLoader(viewId);
       } catch (error) {
-        showToast(
+        showFeedbackIndicator(
           error instanceof Error ? error.message : 'Could not retry loading',
           'error',
         );
@@ -2887,7 +2880,7 @@ export function App() {
       });
       applyBuilderPreviewResult(filename, result || {}, action.dismissAfterRun);
     } catch (error) {
-      showToast(
+      showFeedbackIndicator(
         error instanceof Error ? error.message : 'Could not run action',
         'error',
       );
@@ -3002,7 +2995,7 @@ export function App() {
       view?: ExtensionView;
       patch?: CommandViewPatch;
       navigation?: 'root' | 'push' | 'replace' | 'pop';
-      toast?: { message: string; tone?: ToastTone };
+      toast?: { message: string; tone?: FeedbackTone };
     } | void,
     fallbackNavigation: 'push' | 'replace' | 'root' = 'push',
   ) {
@@ -3018,7 +3011,7 @@ export function App() {
       },
       async () => {
         if (result.toast)
-          showToast(result.toast.message, result.toast.tone || 'default');
+          showFeedbackIndicator(result.toast.message, result.toast.tone);
         if (result.patch) applyViewPatch(result.patch);
         if (result.navigation === 'pop') popExtensionView();
         else if (result.view?.aiChat)
@@ -3174,7 +3167,7 @@ export function App() {
         const result = await window.nvm.removeShortcut(
           String(nativeAction.actionId),
         );
-        showToast(result.message, result.ok ? 'default' : 'error');
+        showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
         if (result.ok && extensionView?.id === 'keyboard-shortcuts') {
           const refreshed = await window.nvm.execute({
             id: 'keyboard-shortcuts',
@@ -3198,7 +3191,7 @@ export function App() {
           { errorType: error instanceof Error ? error.name : typeof error },
         );
         clearInteractionTrace(trace.traceId);
-        showToast(
+        showFeedbackIndicator(
           error instanceof Error ? error.message : 'Could not remove shortcut',
           'error',
         );
@@ -3286,7 +3279,7 @@ export function App() {
           actionType: action.type,
           title: action.title,
         });
-        void window.nvm.hide();
+        await window.nvm.hide();
       }
       const resultPromise = measureDebugPerformance(
         'view-action.ipc',
@@ -3425,7 +3418,7 @@ export function App() {
         kind: action.kind,
         title: action.title,
       });
-      void window.nvm.hide();
+      await window.nvm.hide();
     }
     const resultPromise = measureDebugPerformance(
       'root-action.ipc',
@@ -3460,7 +3453,7 @@ export function App() {
         { errorType: error instanceof Error ? error.name : typeof error },
       );
       clearInteractionTrace(trace.traceId);
-      showToast(
+      showFeedbackIndicator(
         error instanceof Error ? error.message : 'Could not run action',
         'error',
       );
@@ -3526,7 +3519,7 @@ export function App() {
     try {
       if (targetAction.id === PALETTE_HOTKEY_ACTION_ID) {
         const result = await window.nvm.setPaletteHotkey(accelerator);
-        showToast(result.message, result.ok ? 'default' : 'error');
+        showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
         if (!(result.ok || result.spotlightConflict)) return;
         setShortcutFor(null);
         setRecordedShortcut('');
@@ -3545,7 +3538,7 @@ export function App() {
           shortcut: accelerator,
         })) as any;
         const message = result?.toast?.message || 'Hyper key saved';
-        showToast(message, result?.ok ? 'default' : 'error');
+        showFeedbackIndicator(message, result?.ok ? 'default' : 'error');
         if (!result?.ok) {
           void window.nvm.log('warn', 'shortcut.recorder.save.failed', {
             actionId: targetAction.id,
@@ -3570,7 +3563,7 @@ export function App() {
         accelerator,
       })) as any;
       const message = result?.toast?.message || 'Could not save shortcut';
-      showToast(message, result?.ok ? 'default' : 'error');
+      showFeedbackIndicator(message, result?.ok ? 'default' : 'error');
       void window.nvm.log(
         result?.ok ? 'debug' : 'warn',
         result?.ok
@@ -3586,7 +3579,7 @@ export function App() {
       if (shortcutManagerOpen) await refreshShortcuts();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`Could not save shortcut: ${message}`, 'error');
+      showFeedbackIndicator(`Could not save shortcut: ${message}`, 'error');
       void window.nvm.log('error', 'shortcut.recorder.save.failed', {
         actionId: targetAction.id,
         accelerator,
@@ -3600,7 +3593,7 @@ export function App() {
 
   async function removeShortcut(record: ShortcutRecord) {
     const result = await window.nvm.removeShortcut(record.actionId);
-    showToast(result.message, result.ok ? 'default' : 'error');
+    showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
     if (result.ok) {
       setShortcutOptionsFor(null);
       await refreshShortcuts();
@@ -3654,7 +3647,7 @@ export function App() {
   async function removeOptionsShortcut() {
     if (!optionsFor?.id) return;
     const result = await window.nvm.removeShortcut(optionsFor.id);
-    showToast(result.message, result.ok ? 'default' : 'error');
+    showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
     if (!result.ok) return;
     setOptionsFor(null);
     setRefreshNonce((nonce) => nonce + 1);
@@ -3678,7 +3671,7 @@ export function App() {
     );
     if (!instruction?.trim()) return;
     const result = await window.nvm.setOverride(optionsFor, instruction);
-    showToast(result.message, result.ok ? 'default' : 'error');
+    showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
     if (result.ok) setOptionsFor(null);
   }
 
@@ -4646,10 +4639,10 @@ export function App() {
           const result = await window.nvm.signInToNevermind();
           if (result.ok) setNevermindAuthed(true);
           else
-            setToast({
-              message: `Sign-in failed: ${result.error || 'unknown'}`,
-              tone: 'error',
-            });
+            showFeedbackIndicator(
+              `Sign-in failed: ${result.error || 'unknown'}`,
+              'error',
+            );
         }}
         formValues={formValues}
         setFormValues={setFormValues}
@@ -4908,7 +4901,7 @@ export function App() {
   function dismissFromEmptyWindowSpace(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('.card, .toast, .extensionWindowCompactPanel')) return;
+    if (target?.closest('.card, .extensionWindowCompactPanel')) return;
     event.preventDefault();
     void window.nvm.hide();
   }
@@ -5298,7 +5291,6 @@ export function App() {
   return (
     <main className="shell" onMouseDown={dismissFromEmptyWindowSpace}>
       <DictationRendererController />
-      {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
       <Command
         ref={paletteRef}
         className={`palette ${isVisuallyStacked ? 'isStacked' : ''}`}

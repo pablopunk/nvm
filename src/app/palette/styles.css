@@ -154,42 +154,6 @@ input,
   -webkit-app-region: no-drag;
 }
 
-.toast {
-  position: fixed;
-  z-index: 20;
-  top: calc(var(--window-blur-margin) + 64px);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(520px, calc(100% - var(--window-blur-margin) * 2 - 48px));
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius-pill);
-  padding: 8px 12px;
-  color: var(--text-primary);
-  background: rgba(24, 25, 34, 0.92);
-  box-shadow: 0 12px 36px rgba(10, 11, 16, 0.28);
-  backdrop-filter: blur(24px) saturate(1.3);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  pointer-events: none;
-}
-
-.toast-info {
-  border-color: rgba(127, 182, 255, 0.3);
-  color: var(--accent);
-}
-
-.toast-success {
-  border-color: rgba(112, 220, 158, 0.3);
-  color: var(--success-text, #8fe5af);
-  background: rgba(19, 53, 37, 0.92);
-}
-
-.toast-error {
-  border-color: rgba(255, 120, 120, 0.26);
-  color: var(--danger-text);
-  background: rgba(55, 23, 30, 0.92);
-}
-
 .palette {
   position: relative;
   display: flex;
@@ -2710,6 +2674,18 @@ kbd {
   box-shadow: 0 0 0 4px var(--accent-faint);
   content: "";
   animation: indicatorPulse 1.6s ease-in-out infinite;
+}
+
+.extensionWindowChromeNone .progressOverview[data-status="done"]::before {
+  background: var(--success-text);
+  box-shadow: none;
+  animation: none;
+}
+
+.extensionWindowChromeNone .progressOverview[data-status="error"]::before {
+  background: var(--danger-text);
+  box-shadow: none;
+  animation: none;
 }
 
 .extensionWindowChromeNone .progressOverview > div:first-child {

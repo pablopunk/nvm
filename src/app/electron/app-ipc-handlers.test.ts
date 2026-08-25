@@ -86,6 +86,8 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     getCameraMediaAccessStatus: () => 'granted',
     extensionWindowManager: {
       getStateForSender: (sender) => ({ sender }),
+      showIndicator: (input, owner) =>
+        calls.push(`indicator:${owner}:${JSON.stringify(input)}`),
       closeForSender: (sender) => {
         calls.push(`close-window:${String(sender)}`);
         return true;
@@ -110,6 +112,7 @@ test('registerAppIpcHandlers registers core invoke handlers and drag listener', 
   assert.equal(handles.has('nevermind:auth-status'), true);
   assert.equal(handles.has('nevermind:debug-status'), true);
   assert.equal(handles.has('camera:request-access'), true);
+  assert.equal(handles.has('indicator:show'), true);
   assert.equal(handles.has('logs:write'), true);
   assert.equal(listeners.has('drag:file'), true);
   assert.equal(listeners.has('actions:search:cancel'), true);

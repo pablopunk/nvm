@@ -10,6 +10,7 @@ import type {
   ExtensionOcrResult,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
+import { showExtensionFeedback } from '../extensions/feedback';
 
 const WATCH_FIXTURE_ROOT = path.join(
   os.tmpdir(),
@@ -168,9 +169,11 @@ function floatingNoteEditorView(ctx: ExtensionContext) {
     ],
     submitTitle: 'Apply Label',
     action: ctx.actions.run('Apply Label', (_ctx, action) =>
-      _ctx.ui.toast({
-        message: `Label: ${String(action.formValues?.label || '')}`,
-      }),
+      showExtensionFeedback(
+        _ctx,
+        'Floating Note',
+        `Label: ${String(action.formValues?.label || '')}`,
+      ),
     ),
   });
   const confirm = ctx.ui.confirm({
@@ -178,7 +181,7 @@ function floatingNoteEditorView(ctx: ExtensionContext) {
     message: 'Confirmations stay in the compact action panel.',
     confirmLabel: 'Confirm',
     onConfirm: ctx.actions.run('Confirm', (_ctx) =>
-      _ctx.ui.toast({ message: 'Floating action confirmed' }),
+      showExtensionFeedback(_ctx, 'Floating Note', 'Floating action confirmed'),
     ),
   });
   const submenu: ExtensionAction = {
@@ -235,9 +238,11 @@ function backgroundJobFixtureAction(ctx: ExtensionContext) {
       const count =
         (await innerCtx.storage.get<number>('backgroundJobRuns', 0)) || 0;
       await innerCtx.storage.set('backgroundJobRuns', count + 1);
-      return innerCtx.ui.toast({
-        message: `Background fixture run #${count + 1}`,
-      });
+      showExtensionFeedback(
+        innerCtx,
+        'Background Fixture',
+        `Background fixture run #${count + 1}`,
+      );
     },
   });
 }
@@ -264,9 +269,11 @@ function folderWatchFixtureAction(ctx: ExtensionContext) {
         (await innerCtx.storage.get<number>('folderWatchRuns', 0)) || 0;
       await innerCtx.storage.set('folderWatchRuns', count + 1);
       await innerCtx.storage.set('folderWatchLaunch', innerCtx.launch || null);
-      return innerCtx.ui.toast({
-        message: `Folder watch fixture run #${count + 1}`,
-      });
+      showExtensionFeedback(
+        innerCtx,
+        'Folder Watch Fixture',
+        `Folder watch fixture run #${count + 1}`,
+      );
     },
   });
 }
@@ -287,9 +294,11 @@ async function folderWatchView(ctx: ExtensionContext) {
         filePath,
         `Nevermind folder watch fixture ${new Date().toISOString()}\n`,
       );
-      return innerCtx.ui.toast({
-        message: `Touched ${path.basename(filePath)}`,
-      });
+      showExtensionFeedback(
+        innerCtx,
+        'Folder Watch Fixture',
+        `Touched ${path.basename(filePath)}`,
+      );
     },
   );
   return ctx.ui.preview({
@@ -488,9 +497,11 @@ function clipboardView(ctx: ExtensionContext) {
         },
         { concealed: true },
       );
-      return innerCtx.ui.toast({
-        message: 'Wrote concealed HTML clipboard content',
-      });
+      showExtensionFeedback(
+        innerCtx,
+        'Clipboard Fixture',
+        'Wrote concealed HTML clipboard content',
+      );
     },
   );
   const writeFiles = ctx.actions.run(
@@ -500,9 +511,11 @@ function clipboardView(ctx: ExtensionContext) {
       const filePath = path.join(WATCH_FIXTURE_ROOT, 'clipboard-file.txt');
       fs.writeFileSync(filePath, 'Nevermind clipboard file fixture\n');
       innerCtx.desktop.clipboard?.writeFiles([filePath], { concealed: true });
-      return innerCtx.ui.toast({
-        message: `Wrote ${path.basename(filePath)} as clipboard file`,
-      });
+      showExtensionFeedback(
+        innerCtx,
+        'Clipboard Fixture',
+        `Wrote ${path.basename(filePath)} as clipboard file`,
+      );
     },
   );
   const read = ctx.actions.run('Read Clipboard', async (innerCtx) => {
@@ -812,9 +825,13 @@ function listView(ctx: ExtensionContext) {
   const confirm = ctx.ui.confirm({
     title: 'Confirm Dev Action',
     message: 'This confirms host-owned action UI still renders correctly.',
-    confirmLabel: 'Show Toast',
-    onConfirm: ctx.actions.run('Show Toast', () =>
-      ctx.ui.toast({ message: 'Confirmed from dev UI fixture' }),
+    confirmLabel: 'Show Indicator',
+    onConfirm: ctx.actions.run('Show Indicator', (innerCtx) =>
+      showExtensionFeedback(
+        innerCtx,
+        'List Fixture',
+        'Confirmed from dev UI fixture',
+      ),
     ),
   });
   return ctx.ui.list({
@@ -1381,15 +1398,22 @@ function crudCollectionView(ctx: ExtensionContext) {
         value: 'Release notes draft',
       },
     ],
-    action: ctx.actions.run('Save draft', (_innerCtx, action) =>
-      ctx.ui.toast({
-        message: `Saved ${String(action.formValues?.title || 'draft')}`,
-        tone: 'success',
-      }),
+    action: ctx.actions.run('Save draft', (innerCtx, action) =>
+      showExtensionFeedback(
+        innerCtx,
+        'CRUD Collection',
+        `Saved ${String(action.formValues?.title || 'draft')}`,
+        'success',
+      ),
     ),
   });
-  const remove = ctx.actions.run('Remove draft', () =>
-    ctx.ui.toast({ message: 'Draft removed', tone: 'success' }),
+  const remove = ctx.actions.run('Remove draft', (innerCtx) =>
+    showExtensionFeedback(
+      innerCtx,
+      'CRUD Collection',
+      'Draft removed',
+      'success',
+    ),
   );
   return ctx.ui.collection({
     id: 'dev-ui-crud-collection',
@@ -1401,8 +1425,13 @@ function crudCollectionView(ctx: ExtensionContext) {
       title: 'No records',
       subtitle: 'Use Add record to exercise the empty state.',
     },
-    add: ctx.actions.run('Add record', () =>
-      ctx.ui.toast({ message: 'Add action invoked', tone: 'success' }),
+    add: ctx.actions.run('Add record', (innerCtx) =>
+      showExtensionFeedback(
+        innerCtx,
+        'CRUD Collection',
+        'Add action invoked',
+        'success',
+      ),
     ),
     items: [
       {

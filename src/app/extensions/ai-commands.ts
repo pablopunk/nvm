@@ -76,19 +76,24 @@ function proofreadingPrompt(selectedText: string, retry = false) {
 }
 
 async function fixSelectedText(ctx: ExtensionContext) {
-  if (!ctx.ai) throw new Error('AI is unavailable');
-  const ai = ctx.ai;
   ctx.ui.indicator.show(indicator('Reading Selection'));
+  let keepFinalIndicatorVisible = false;
   try {
+    if (!ctx.ai) throw new Error('AI is unavailable');
+    const ai = ctx.ai;
     void ai
       .prepare({ model: 'fast', system: FIX_SELECTED_TEXT_SYSTEM_PROMPT })
       .catch(() => undefined);
     const selectedText = String((await ctx.desktop.selection.text()) ?? '');
-    if (!selectedText.trim())
-      return ctx.ui.toast({
-        message: 'Select text to fix',
-        tone: 'info',
+    if (!selectedText.trim()) {
+      keepFinalIndicatorVisible = true;
+      ctx.ui.indicator.update({
+        ...indicator('Select text to fix'),
+        status: 'error',
+        durationMs: 4000,
       });
+      return;
+    }
 
     ctx.ui.indicator.update(indicator('Fixing Text'));
     let correctedText = await ai.ask(proofreadingPrompt(selectedText), {
@@ -108,10 +113,13 @@ async function fixSelectedText(ctx: ExtensionContext) {
         inputLength: selectedText.length,
         outputLength: correctedText.length,
       });
-      return ctx.ui.toast({
-        message: 'AI did not return a valid correction',
-        tone: 'error',
+      keepFinalIndicatorVisible = true;
+      ctx.ui.indicator.update({
+        ...indicator('AI did not return a valid correction'),
+        status: 'error',
+        durationMs: 4000,
       });
+      return;
     }
 
     return ctx.navigation.run(
@@ -123,12 +131,16 @@ async function fixSelectedText(ctx: ExtensionContext) {
     );
   } catch (error) {
     ctx.logs.error('Fix selected text failed', error);
-    return ctx.ui.toast({
-      message: error instanceof Error ? error.message : 'Could not fix text',
-      tone: 'error',
+    keepFinalIndicatorVisible = true;
+    ctx.ui.indicator.update({
+      ...indicator(
+        error instanceof Error ? error.message : 'Could not fix text',
+      ),
+      status: 'error',
+      durationMs: 4000,
     });
   } finally {
-    ctx.ui.indicator.hide(INDICATOR_ID);
+    if (!keepFinalIndicatorVisible) ctx.ui.indicator.hide(INDICATOR_ID);
   }
 }
 

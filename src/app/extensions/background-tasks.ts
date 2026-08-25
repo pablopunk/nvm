@@ -86,8 +86,14 @@ function jobItem(ctx, job: JobSnapshot) {
   const runNow = ctx.actions.run('Run Now', async () => {
     try {
       await extensionContext.jobRegistry.run(job.id, 'manual');
+      ctx.ui.indicator.show({
+        id: 'feedback',
+        title: 'Background Tasks',
+        subtitle: `Ran ${job.title}`,
+        status: 'success',
+        durationMs: 2200,
+      });
       return {
-        toast: { message: `Ran ${job.title}` },
         view: backgroundTasksView(ctx),
         navigation: 'replace',
       };
@@ -106,10 +112,14 @@ function jobItem(ctx, job: JobSnapshot) {
     async () => {
       extensionContext.jobRegistry.setEnabled(job.id, !job.enabled);
       await extensionContext.saveUserState();
+      ctx.ui.indicator.show({
+        id: 'feedback',
+        title: 'Background Tasks',
+        subtitle: `${job.enabled ? 'Disabled' : 'Enabled'} ${job.title}`,
+        status: 'success',
+        durationMs: 2200,
+      });
       return {
-        toast: {
-          message: `${job.enabled ? 'Disabled' : 'Enabled'} ${job.title}`,
-        },
         view: backgroundTasksView(ctx),
         navigation: 'replace',
       };
@@ -117,8 +127,14 @@ function jobItem(ctx, job: JobSnapshot) {
   );
   const clearError = ctx.actions.run('Clear Error', () => {
     extensionContext.jobRegistry.clearError(job.id);
+    ctx.ui.indicator.show({
+      id: 'feedback',
+      title: 'Background Tasks',
+      subtitle: `Cleared ${job.title}`,
+      status: 'success',
+      durationMs: 2200,
+    });
     return {
-      toast: { message: `Cleared ${job.title}` },
       view: backgroundTasksView(ctx),
       navigation: 'replace',
     };

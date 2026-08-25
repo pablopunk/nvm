@@ -3266,7 +3266,7 @@ function runInBackground(task, traceId?: string) {
   });
 }
 
-async function executeAction(action, options: any = {}) {
+async function executeActionWithoutFeedback(action, options: any = {}) {
   if (!action) return;
   recordRecent(action);
   let result;
@@ -3288,7 +3288,8 @@ async function executeAction(action, options: any = {}) {
     }
     case 'extension-command': {
       const upgraded = currentActionForStoredShortcut(action);
-      if (upgraded !== action) return executeAction(upgraded, options);
+      if (upgraded !== action)
+        return executeActionWithoutFeedback(upgraded, options);
       break;
     }
   }
@@ -3299,6 +3300,13 @@ async function executeAction(action, options: any = {}) {
     else paletteWindow.hidePalette();
   }
   return result;
+}
+
+async function executeAction(action, options: any = {}) {
+  return presentActionResultFeedback(
+    await executeActionWithoutFeedback(action, options),
+    action,
+  );
 }
 
 function extensionActionEntryForAction(action) {
@@ -3467,6 +3475,16 @@ async function executeExtensionRootItem(action) {
               scope: 'extension',
               extensionId: record.entry.extension?.id,
             });
+            if (action.background || action.dismissAfterRun === 'auto')
+              return {
+                toast: {
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'The action could not be completed',
+                  tone: 'error',
+                },
+              };
             return { view: extensionErrorView(record.entry, error) };
           }
         },
@@ -3807,12 +3825,18 @@ async function executeActionForIpc(action) {
           let trustedAction: any = null;
           try {
             trustedAction = resolveRootActionForIpc(action);
-            const result = normalizeHostViewResult(
-              await measureDebugPerformance(
-                'action.execute',
-                { action: summarizeDebugValue(trustedAction), alwaysLog: true },
-                () => executeAction(trustedAction),
+            const result = presentActionResultFeedback(
+              normalizeHostViewResult(
+                await measureDebugPerformance(
+                  'action.execute',
+                  {
+                    action: summarizeDebugValue(trustedAction),
+                    alwaysLog: true,
+                  },
+                  () => executeAction(trustedAction),
+                ),
               ),
+              trustedAction,
             );
             structuredClone(result);
             spawnPendingViewLoaders(result, trustedAction?.traceId);
@@ -4309,6 +4333,36 @@ function normalizeHostViewResult(result) {
   };
 }
 
+function actionFeedbackOwner(action: any) {
+  if (action?.extensionId) return String(action.extensionId);
+  if (action?.ownerExtensionId) return String(action.ownerExtensionId);
+  if (action?.type === 'runExtensionAction')
+    return (
+      extensionActionHandlers.get(action.handlerId)?.entry?.extension?.id ||
+      'nevermind.host'
+    );
+  return 'nevermind.host';
+}
+
+function presentActionResultFeedback(result: any, action: any) {
+  if (!result?.toast) return result;
+  const message = String(result.toast.message || '');
+  const tone = String(result.toast.tone || 'default');
+  if (message)
+    extensionWindowManager.showIndicator(
+      {
+        id: 'feedback',
+        title: String(action?.title || 'Nevermind'),
+        subtitle: message,
+        ...(tone === 'error' || tone === 'success' ? { status: tone } : {}),
+        durationMs: tone === 'error' ? 4000 : 2200,
+      },
+      actionFeedbackOwner(action),
+    );
+  const { toast: _toast, ...remaining } = result;
+  return Object.keys(remaining).length ? remaining : undefined;
+}
+
 async function executeViewActionResult(result, entry, launchContext?: any) {
   if (!result) return result;
   if (result?.type === 'draftResolution') {
@@ -4539,12 +4593,18 @@ async function executeViewActionForIpc(action) {
           let trustedAction: any = null;
           try {
             trustedAction = resolveViewActionForIpc(action);
-            const result = normalizeHostViewResult(
-              await measureDebugPerformance(
-                'view-action.execute',
-                { action: summarizeDebugValue(trustedAction), alwaysLog: true },
-                () => executeViewAction(trustedAction),
+            const result = presentActionResultFeedback(
+              normalizeHostViewResult(
+                await measureDebugPerformance(
+                  'view-action.execute',
+                  {
+                    action: summarizeDebugValue(trustedAction),
+                    alwaysLog: true,
+                  },
+                  () => executeViewAction(trustedAction),
+                ),
               ),
+              trustedAction,
             );
             structuredClone(result);
             spawnPendingViewLoaders(

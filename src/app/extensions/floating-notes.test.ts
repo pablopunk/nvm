@@ -7,6 +7,7 @@ function createContext() {
   const values = new Map<string, unknown>();
   const commits: Array<{ key: string; version: unknown }> = [];
   const discards: string[] = [];
+  const indicators: any[] = [];
   const ctx = {
     storage: {
       get: async (key: string, fallback: unknown) =>
@@ -29,7 +30,7 @@ function createContext() {
       list: (view: any) => ({ ...view, type: 'list' }),
       collection: (view: any) => ({ ...view, type: 'list' }),
       editor: (view: any) => ({ ...view, type: 'editor' }),
-      toast: (toast: any) => ({ toast }),
+      indicator: { show: (input: any) => indicators.push(input) },
     },
     windows: {
       toggle: (view: unknown, options: unknown) => ({
@@ -40,7 +41,7 @@ function createContext() {
       }),
     },
   };
-  return { ctx, values, commits, discards };
+  return { ctx, values, commits, discards, indicators };
 }
 
 test('Floating Notes command toggles a persistent floating window with an autosaving editor', async () => {
@@ -150,7 +151,7 @@ test('All notes action exposes Command+O and replaces the editor with the collec
 });
 
 test('collection lists notes with CRUD operations and deletes discard drafts', async () => {
-  const { ctx, values, discards } = createContext();
+  const { ctx, values, discards, indicators } = createContext();
   const extension = createFloatingNotesExtension();
   const collection = await extension.commands[1].run(ctx as any);
   assert.equal(collection.title, 'Floating Notes');
@@ -169,13 +170,14 @@ test('collection lists notes with CRUD operations and deletes discard drafts', a
 
   const noteId = item.id.replace('floating-note:', '');
   const deleted = await item.remove.__handler(ctx);
-  assert.equal(deleted.toast.message, 'Note deleted');
+  assert.equal(deleted.view.type, 'list');
+  assert.equal(indicators.at(-1).subtitle, 'Note deleted');
   assert.deepEqual(discards, [noteId]);
   assert.equal((values.get('notes') as unknown[]).length, 1);
 });
 
 test('deleting the open note moves to the next note or a fresh one', async () => {
-  const { ctx, values } = createContext();
+  const { ctx, values, indicators } = createContext();
   const extension = createFloatingNotesExtension();
   const action = await extension.commands[0].run(ctx as any);
   const remove = action.view.actions.find(
@@ -183,7 +185,7 @@ test('deleting the open note moves to the next note or a fresh one', async () =>
   );
   const result = await remove.__handler(ctx);
   assert.equal(result.view.type, 'editor');
-  assert.equal(result.toast.message, 'Note deleted');
+  assert.equal(indicators.at(-1).subtitle, 'Note deleted');
   const notes = values.get('notes') as Array<{ id: string }>;
   assert.equal(notes.length, 1);
   assert.notEqual(notes[0].id, action.view.draft.key);

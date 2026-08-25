@@ -42,9 +42,9 @@ function reader(options: {
 }
 
 test('returns accessibility text without touching the clipboard', async () => {
-  const fixture = reader({ accessibilityText: 'selected text' });
+  const fixture = reader({ accessibilityText: '  selected text\n' });
 
-  assert.equal(await fixture.selectedText(), 'selected text');
+  assert.equal(await fixture.selectedText(), '  selected text\n');
   assert.equal(fixture.copyCalls(), 0);
   assert.equal(fixture.restoreCalls(), 0);
 });
@@ -62,7 +62,10 @@ test('copies selected text and restores the clipboard when accessibility returns
 });
 
 test('does not copy palette input when the palette still has focus', async () => {
-  const fixture = reader({ accessibilityText: null, paletteFocused: true });
+  const fixture = reader({
+    accessibilityText: 'selected palette query',
+    paletteFocused: true,
+  });
 
   assert.equal(await fixture.selectedText(), null);
   assert.equal(fixture.copyCalls(), 0);

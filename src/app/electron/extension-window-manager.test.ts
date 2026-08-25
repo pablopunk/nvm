@@ -115,6 +115,10 @@ class FakeBrowserWindow {
 function createManager(
   unsupportedCapabilities: string[] = [],
   persistedState?: Record<string, unknown>,
+  indicatorTimers?: {
+    schedule(callback: () => void, delayMs: number): unknown;
+    cancel(timer: unknown): void;
+  },
 ) {
   FakeBrowserWindow.instances = [];
   const trustedChecks: Array<{ id: string; url: string }> = [];
@@ -157,6 +161,8 @@ function createManager(
     },
     persistence,
     debug: (message, data) => diagnostics.push({ message, data }),
+    scheduleIndicatorHide: indicatorTimers?.schedule,
+    cancelIndicatorHide: indicatorTimers?.cancel,
   });
   return { manager, trustedChecks, diagnostics, persistedState };
 }
@@ -293,6 +299,36 @@ test('indicators show without focus and ignore mouse events', () => {
   );
   assert.deepEqual(win.bounds, { x: 390, y: 44, width: 240, height: 104 });
   manager.hideIndicator('nevermind.dictation', 'dictation');
+  assert.equal(win.visible, false);
+});
+
+test('timed indicators dismiss and updates replace the pending dismissal', () => {
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  const cancelled: unknown[] = [];
+  const { manager } = createManager([], undefined, {
+    schedule(callback, delayMs) {
+      const timer = { callback, delayMs };
+      scheduled.push(timer);
+      return timer;
+    },
+    cancel: (timer) => cancelled.push(timer),
+  });
+  manager.showIndicator(
+    { id: 'feedback', title: 'Nevermind', durationMs: 2200 },
+    'nevermind.host',
+  );
+  const win = FakeBrowserWindow.instances[0];
+  win.handlers.get('once:ready-to-show')?.();
+  manager.updateIndicator(
+    { id: 'feedback', title: 'Try again', durationMs: 4000 },
+    'nevermind.host',
+  );
+
+  assert.equal(scheduled.length, 2);
+  assert.equal(scheduled[0].delayMs, 2200);
+  assert.equal(scheduled[1].delayMs, 4000);
+  assert.deepEqual(cancelled, [scheduled[0]]);
+  scheduled[1].callback();
   assert.equal(win.visible, false);
 });
 

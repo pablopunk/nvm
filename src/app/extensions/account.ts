@@ -5,6 +5,7 @@ import {
   signOutFromNevermind,
 } from '../electron/nevermind-auth';
 import { extensionContext } from './_context';
+import { showExtensionFeedback } from './feedback';
 
 export function createAccountExtension() {
   const extensionId = 'nevermind.account';
@@ -23,7 +24,7 @@ export function createAccountExtension() {
         primaryAction: {
           type: 'runExtensionAction',
           title: 'Log out',
-          __handler: async () => {
+          __handler: async (ctx: any) => {
             const { revoked } = await signOutFromNevermind();
             extensionContext.setActiveNevermindBaseUrl(null);
             await extensionContext.nevermindAi?.disposeAllSessions?.();
@@ -32,12 +33,12 @@ export function createAccountExtension() {
             const suffix = revoked
               ? ''
               : ' (token revoke failed - check connection)';
-            return {
-              toast: {
-                message: `Logged out of ${existing.email}${suffix}`,
-                tone: revoked ? ('default' as const) : ('error' as const),
-              },
-            };
+            showExtensionFeedback(
+              ctx,
+              'Nevermind Account',
+              `Logged out of ${existing.email}${suffix}`,
+              revoked ? 'success' : 'error',
+            );
           },
         },
       };
@@ -53,7 +54,7 @@ export function createAccountExtension() {
       primaryAction: {
         type: 'runExtensionAction',
         title: 'Log in',
-        __handler: async () => {
+        __handler: async (ctx: any) => {
           const result = await extensionContext.signInToNevermind();
           extensionContext.invalidateExtensionRootItems();
           if (result.ok)
@@ -64,41 +65,45 @@ export function createAccountExtension() {
           const message = result.ok
             ? `Logged in as ${result.auth.email}`
             : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`;
-          return {
-            toast: {
-              message,
-              tone: result.ok ? ('default' as const) : ('error' as const),
-            },
-          };
+          showExtensionFeedback(
+            ctx,
+            'Nevermind Account',
+            message,
+            result.ok ? 'success' : 'error',
+          );
         },
       },
     };
   }
 
   function backendEnvironmentItem() {
-    async function switchBackend(input: {
-      environment: 'development' | 'production' | 'pr_preview' | 'custom';
-      baseUrl?: string;
-    }) {
+    async function switchBackend(
+      ctx: any,
+      input: {
+        environment: 'development' | 'production' | 'pr_preview' | 'custom';
+        baseUrl?: string;
+      },
+    ) {
       const result =
         await extensionContext.switchNevermindBackendEnvironment(input);
-      return {
-        toast: {
-          message: result.message,
-          tone: result.ok ? ('default' as const) : ('error' as const),
-        },
-      };
+      showExtensionFeedback(
+        ctx,
+        'Nevermind Backend',
+        result.message,
+        result.ok ? 'success' : 'error',
+      );
     }
     const developmentAction = {
       type: 'runExtensionAction',
       title: 'Development',
-      __handler: async () => switchBackend({ environment: 'development' }),
+      __handler: async (ctx: any) =>
+        switchBackend(ctx, { environment: 'development' }),
     };
     const productionAction = {
       type: 'runExtensionAction',
       title: 'Production',
-      __handler: async () =>
-        switchBackend({
+      __handler: async (ctx: any) =>
+        switchBackend(ctx, {
           environment: 'production',
         }),
     };
@@ -118,10 +123,10 @@ export function createAccountExtension() {
         type: 'runExtensionAction',
         title: 'Use Preview',
         __handler: async (
-          _ctx: unknown,
+          ctx: any,
           action: { formValues?: { baseUrl?: string } },
         ) =>
-          switchBackend({
+          switchBackend(ctx, {
             environment: 'pr_preview',
             baseUrl: action.formValues?.baseUrl,
           }),
@@ -143,10 +148,10 @@ export function createAccountExtension() {
         type: 'runExtensionAction',
         title: 'Use Custom URL',
         __handler: async (
-          _ctx: unknown,
+          ctx: any,
           action: { formValues?: { baseUrl?: string } },
         ) =>
-          switchBackend({
+          switchBackend(ctx, {
             environment: 'custom',
             baseUrl: action.formValues?.baseUrl,
           }),
@@ -258,15 +263,15 @@ export function createAccountExtension() {
       primaryAction: {
         type: 'runExtensionAction',
         title: 'Clear BYO Key',
-        __handler: async () => {
+        __handler: async (ctx: any) => {
           await clearByoKey();
           extensionContext.invalidateExtensionRootItems();
-          return {
-            toast: {
-              message: 'BYO provider key cleared. Using Nevermind backend.',
-              tone: 'default' as const,
-            },
-          };
+          showExtensionFeedback(
+            ctx,
+            'Nevermind Account',
+            'BYO provider key cleared. Using Nevermind backend.',
+            'success',
+          );
         },
       },
     };

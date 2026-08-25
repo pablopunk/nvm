@@ -1,5 +1,6 @@
 // biome-ignore-all lint: First-party extension mirrors dynamic extension context payloads and bounded note limits.
 import { titleFromFirstContentLine } from '../palette/editor-title';
+import { showExtensionFeedback } from './feedback';
 
 type FloatingNote = {
   id: string;
@@ -149,6 +150,12 @@ function draftConflictAction(noteId: string) {
           const note = (await readNotes(innerCtx)).find(
             (item) => item.id === noteId,
           );
+          showExtensionFeedback(
+            innerCtx,
+            'Floating Notes',
+            'Unsaved changes restored',
+            'success',
+          );
           return {
             type: 'draftResolution',
             key: conflict.key,
@@ -157,7 +164,6 @@ function draftConflictAction(noteId: string) {
               ? noteEditor(innerCtx, note)
               : await notesCollection(innerCtx),
             navigation: 'replace',
-            toast: { message: 'Unsaved changes restored', tone: 'success' },
           };
         },
       };
@@ -222,10 +228,8 @@ function deleteFromEditorAction(note: FloatingNote) {
       );
       await ctx.drafts.discard(note.id);
       const result = await nextEditorResult(ctx);
-      return {
-        ...result,
-        toast: { message: 'Note deleted', tone: 'success' },
-      };
+      showExtensionFeedback(ctx, 'Floating Notes', 'Note deleted', 'success');
+      return result;
     },
   };
 }
@@ -241,10 +245,10 @@ function deleteFromCollectionAction(note: FloatingNote) {
         notes.filter((item) => item.id !== note.id),
       );
       await ctx.drafts.discard(note.id);
+      showExtensionFeedback(ctx, 'Floating Notes', 'Note deleted', 'success');
       return {
         view: await notesCollection(ctx),
         navigation: 'replace',
-        toast: { message: 'Note deleted', tone: 'success' },
       };
     },
   };
@@ -335,12 +339,17 @@ async function notesCollection(ctx: any) {
           const current = (await readNotes(innerCtx)).find(
             (item) => item.id === note.id,
           );
-          return current
-            ? { view: noteEditor(innerCtx, current), navigation: 'replace' }
-            : innerCtx.ui.toast({
-                message: 'Note no longer exists',
-                tone: 'error',
-              });
+          if (current)
+            return {
+              view: noteEditor(innerCtx, current),
+              navigation: 'replace',
+            };
+          showExtensionFeedback(
+            innerCtx,
+            'Floating Notes',
+            'Note no longer exists',
+            'error',
+          );
         },
       },
       remove: deleteFromCollectionAction(note),
