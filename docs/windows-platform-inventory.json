@@ -195,10 +195,10 @@
       "surface": "window-behavior"
     },
     {
-      "key": "os-injected-platform-06dc37aa7f17",
+      "key": "os-injected-platform-10735a07ca95",
       "file": "src/app/electron/os.ts",
       "category": "injected-platform",
-      "selector": "function:createOsAdapter/function:scanWindowsAppsForPlatform/if:processPlatform !== 'win32'::injected-platform::if (processPlatform !== 'win32') return [];::expression.left",
+      "selector": "function:createOsAdapter/function:scanWindowsAppsForPlatform/if:processPlatform !== 'win32'::injected-platform::if (processPlatform !== 'win32') return { apps: [], complete: true };::expression.left",
       "disposition": "capability-layer",
       "surface": "app-discovery-launch-quit"
     },
@@ -571,6 +571,14 @@
       "surface": "system-actions-settings"
     },
     {
+      "key": "os-platform-selector-bcdc474c1246",
+      "file": "src/app/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:createOsAdapter/property:appIdentityKey::platform-selector::win32: value.toLowerCase()::self",
+      "disposition": "capability-selector",
+      "surface": "app-discovery-launch-quit"
+    },
+    {
       "key": "os-platform-selector-febac03271da",
       "file": "src/app/electron/os.ts",
       "category": "platform-selector",
@@ -923,10 +931,10 @@
       "surface": "clipboard-text-image-paste"
     },
     {
-      "key": "os-platform-selector-5ac9e4856610",
+      "key": "os-platform-selector-eb5ca0228d36",
       "file": "src/app/electron/os.ts",
       "category": "platform-selector",
-      "selector": "function:selectedText::platform-selector::darwin: async () => { const script = 'tell application \"System Events\"\\nset frontProcess to firs…#b9ca87924315::self",
+      "selector": "function:selectedText::platform-selector::darwin: async () => { const script = 'tell application \"System Events\"\\nset frontProcess to firs…#81f627ac2f4a::self",
       "disposition": "capability-selector",
       "surface": "clipboard-text-image-paste"
     },
