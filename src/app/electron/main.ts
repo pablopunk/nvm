@@ -3842,6 +3842,11 @@ async function executeActionForIpc(action) {
             spawnPendingViewLoaders(result, trustedAction?.traceId);
             return result;
           } catch (error) {
+            if (
+              trustedAction?.background ||
+              trustedAction?.dismissAfterRun === 'auto'
+            )
+              return presentActionErrorFeedback(error, trustedAction);
             if (trustedAction?.kind === 'extension-command') {
               const entry = extensionEntryForAction(trustedAction);
               if (entry) return { view: extensionErrorView(entry, error) };
@@ -4363,6 +4368,21 @@ function presentActionResultFeedback(result: any, action: any) {
   return Object.keys(remaining).length ? remaining : undefined;
 }
 
+function presentActionErrorFeedback(error: unknown, action: any) {
+  return presentActionResultFeedback(
+    {
+      toast: {
+        message:
+          error instanceof Error
+            ? error.message
+            : 'The action could not be completed',
+        tone: 'error',
+      },
+    },
+    action,
+  );
+}
+
 async function executeViewActionResult(result, entry, launchContext?: any) {
   if (!result) return result;
   if (result?.type === 'draftResolution') {
@@ -4626,6 +4646,11 @@ async function executeViewActionForIpc(action) {
                 actionTitle: trustedAction?.title || action?.title,
               },
             });
+            if (
+              trustedAction?.dismissAfterRun === 'auto' &&
+              !trustedAction?.keepPaletteOpen
+            )
+              return presentActionErrorFeedback(error, trustedAction);
             if (record)
               return {
                 view: extensionErrorView(record.entry, error),
@@ -10000,7 +10025,13 @@ async function executeShortcutAction(action) {
     : null;
   if (instantView) recordRecent(currentAction);
   if (shortcutActionRunsWithoutView(currentAction)) {
-    runInBackground(() => executeAction({ ...currentAction, traceId }));
+    runInBackground(async () => {
+      try {
+        await executeAction({ ...currentAction, traceId });
+      } catch (error) {
+        presentActionErrorFeedback(error, currentAction);
+      }
+    }, traceId);
     return;
   }
   const wasVisible = Boolean(paletteWindow.win?.isVisible());
