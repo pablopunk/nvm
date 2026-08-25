@@ -5293,7 +5293,7 @@ export function App() {
       <DictationRendererController />
       <Command
         ref={paletteRef}
-        className={`palette ${isVisuallyStacked ? 'isStacked' : ''}`}
+        className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
         label="Nevermind"
         loop={true}
         shouldFilter={false}

@@ -164,6 +164,10 @@ input,
   padding: 0;
 }
 
+.palette.fitContent {
+  height: auto;
+}
+
 .palette::before {
   content: "";
   position: absolute;
@@ -339,11 +343,6 @@ kbd {
   min-height: 0;
 }
 
-.results.fitContentCard,
-.results.fitContentCard > [cmdk-list-sizer] {
-  flex: 0 1 auto;
-}
-
 .results.sidePreviewCard {
   flex: 1 1 0;
 }
@@ -365,6 +364,11 @@ kbd {
 
 .optionsCard.loadingBorder {
   flex: 1 1 auto;
+}
+
+.results.fitContentCard,
+.results.fitContentCard > [cmdk-list-sizer] {
+  flex: 0 1 auto;
 }
 
 .optionsCard > [cmdk-list-sizer] {
