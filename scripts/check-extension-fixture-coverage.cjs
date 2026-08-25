@@ -208,7 +208,7 @@ function verifyAllowlistAgainstAPI(uiMethods) {
 // ── 4.  Check for new API methods that might need fixtures ──────────────────
 
 function checkNewAPIMethods(uiMethods) {
-  // Methods returning ExtensionView, ExtensionAction, or ExtensionToastResult
+  // Methods returning ExtensionView or ExtensionAction
   // are "render-ish" and should trigger a review.  We can't easily inspect
   // return types with a shallow walk, so we flag any method on `ui` / `input`
   // that is NOT in the allowlist and NOT in a known-skip set.
