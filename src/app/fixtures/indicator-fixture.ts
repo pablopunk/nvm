@@ -3,7 +3,7 @@ import type {
   ExtensionIndicatorInput,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { showExtensionFeedback } from '../extensions/feedback';
+import { showExtensionFeedback } from '../extensions/feedback.ts';
 
 const INDICATOR_ID = 'dev-ui-indicator';
 

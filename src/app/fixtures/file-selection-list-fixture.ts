@@ -2,7 +2,7 @@ import type {
   ExtensionContext,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { showExtensionFeedback } from '../extensions/feedback';
+import { showExtensionFeedback } from '../extensions/feedback.ts';
 
 const FILE_CANDIDATES = [
   {

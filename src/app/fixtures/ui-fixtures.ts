@@ -10,7 +10,7 @@ import type {
   ExtensionOcrResult,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { showExtensionFeedback } from '../extensions/feedback';
+import { showExtensionFeedback } from '../extensions/feedback.ts';
 
 const WATCH_FIXTURE_ROOT = path.join(
   os.tmpdir(),
