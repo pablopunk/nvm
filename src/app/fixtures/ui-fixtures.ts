@@ -238,11 +238,6 @@ function backgroundJobFixtureAction(ctx: ExtensionContext) {
       const count =
         (await innerCtx.storage.get<number>('backgroundJobRuns', 0)) || 0;
       await innerCtx.storage.set('backgroundJobRuns', count + 1);
-      showExtensionFeedback(
-        innerCtx,
-        'Background Fixture',
-        `Background fixture run #${count + 1}`,
-      );
     },
   });
 }
