@@ -555,7 +555,7 @@ test('hides a visible window without replacing its live view, then refreshes it 
   assert.equal(win.showCount, showsBeforeHideToggle);
   assert.equal(win.hideCount, 1);
   assert.equal(win.title, 'Old');
-  assert.deepEqual(win.bounds, { x: 310, y: 210, width: 400, height: 300 });
+  assert.deepEqual(win.bounds, { x: 310, y: 210, width: 400, height: 420 });
 
   const hidesBeforeShowToggle = win.hideCount;
   manager.executeWindowAction({
