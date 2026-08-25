@@ -13,11 +13,14 @@ The old ad-hoc `debug.log` file is not the source of truth.
 
 ## Development
 
-File logging is always enabled. In development, logs are also mirrored to the terminal for immediate feedback. Prefer tailing the file when debugging cross-process issues so main, renderer, host, and extension events appear in one stream.
+File logging is always enabled. In development, logs are also mirrored to the terminal for immediate feedback. The dev launcher writes its complete backend and Electron output to `.tmp/dev.log`, replacing the file on each start. Use this file for local incidents that cross the Astro and Electron processes.
 
 ```sh
+tail -n 200 -F .tmp/dev.log
 mise exec -- pnpm logs:tail
 ```
+
+`logs:tail` reads the structured Electron log. Use it when only main, renderer, host, or extension events are relevant.
 
 ## Production
 

@@ -1,10 +1,28 @@
 #!/usr/bin/env node
+const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { startStripeDevelopmentListener } = require('./stripe-dev-listener.cjs');
 
 const root = path.resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
+const devLogPath = path.join(root, '.tmp', 'dev.log');
+fs.mkdirSync(path.dirname(devLogPath), { recursive: true });
+const devLog = fs.createWriteStream(devLogPath, { flags: 'w' });
+
+function mirrorOutput(stream, terminal) {
+  stream?.on('data', (chunk) => {
+    terminal.write(chunk);
+    devLog.write(chunk);
+  });
+}
+
+function mirrorChildOutput(childProcess) {
+  mirrorOutput(childProcess.stdout, process.stdout);
+  mirrorOutput(childProcess.stderr, process.stderr);
+}
+
+console.log(`Development logs: ${devLogPath}`);
 const bin = path.join(
   root,
   'node_modules',
@@ -17,9 +35,18 @@ const prepare = spawnSync(
   [path.join(__dirname, 'prepare-dev.cjs')],
   {
     cwd: root,
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
   },
 );
+
+if (prepare.stdout) {
+  process.stdout.write(prepare.stdout);
+  devLog.write(prepare.stdout);
+}
+if (prepare.stderr) {
+  process.stderr.write(prepare.stderr);
+  devLog.write(prepare.stderr);
+}
 
 if (prepare.status !== 0) process.exit(prepare.status || 1);
 
@@ -36,7 +63,7 @@ const stripeDevelopment = startStripeDevelopmentListener(root, isWindows);
 const stripeListener = stripeDevelopment?.listener;
 const backend = spawn(astroBin, ['dev'], {
   cwd: path.join(root, 'src', 'backend'),
-  stdio: 'inherit',
+  stdio: ['inherit', 'pipe', 'pipe'],
   shell: isWindows,
   detached: !isWindows,
   env: stripeDevelopment
@@ -53,12 +80,15 @@ const child = spawn(
   ['dev', '--watch', '--remoteDebuggingPort', remoteDebuggingPort],
   {
     cwd: root,
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
     shell: isWindows,
     detached: !isWindows,
     env: process.env,
   },
 );
+
+mirrorChildOutput(backend);
+mirrorChildOutput(child);
 
 let shuttingDown = false;
 let fallbackTimer;
@@ -130,6 +160,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGHUP', () => shutdown('SIGHUP'));
 process.on('exit', () => {
+  devLog.end();
   if (!shuttingDown) killChild('SIGTERM');
 });
 

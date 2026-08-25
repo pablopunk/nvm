@@ -5,6 +5,7 @@
 * Run pnpm through mise as `mise exec -- pnpm <command>`. Do not use npm, yarn, bun, or bare pnpm directly.
 * Leverage existing primitives, formatters, and OS capabilities instead of creating one-off helpers.
 * Respect manual file changes and stop the app before editing `userState` to prevent overwrites.
+* For local app incidents, inspect `.tmp/dev.log` before terminal scrollback; development logs must remain file-backed and terminal-visible.
 * Commit frequently and use history to guide changes.
 * Do not fix symptoms, fix diseases. After two successive symptom patches in the same code path, stop patching and audit the architecture.
 
