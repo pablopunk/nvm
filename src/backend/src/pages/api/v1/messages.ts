@@ -6,10 +6,12 @@ export const config = { maxDuration: 300 };
 function rewriteAnthropicModel(
   bodyText: string,
   routing: { activeModelId: string },
+  maxOutputTokens: number,
 ): string {
   if (!bodyText) return bodyText;
   const parsed = JSON.parse(bodyText);
   parsed.model = routing.activeModelId;
+  if (parsed.max_tokens !== undefined) parsed.max_tokens = maxOutputTokens;
   return JSON.stringify(parsed);
 }
 

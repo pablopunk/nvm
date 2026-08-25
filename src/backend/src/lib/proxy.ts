@@ -44,6 +44,7 @@ export type ProxyConfig = {
   rewriteRequestBody?: (
     bodyText: string,
     routing: Pick<ModelRouting, 'activeModelId' | 'provider' | 'thinkingLevel'>,
+    maxOutputTokens: number,
   ) => string;
   parseUsageFromJson: (json: any) => UsageTokens | null;
   parseUsageFromStreamChunk: (chunk: string, acc: StreamUsageAccumulator, finalize?: boolean) => void;
@@ -57,6 +58,8 @@ export type StreamUsageAccumulator = {
   pendingText?: string;
   reportMalformedFrame?: (error: unknown) => void;
 };
+
+const OUTPUT_CONTEXT_SAFETY_TOKENS = 4_096;
 
 export function completeStreamLines(chunkText: string, acc: StreamUsageAccumulator, finalize = false): string[] {
   const text = `${acc.pendingText ?? ''}${chunkText}`;
@@ -738,9 +741,23 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     const maxOutputFor = async (candidate: ModelRouting) => {
       const descriptor = await lookupModelDescriptor(candidate.provider, candidate.activeModelId);
       const serverMaximum = descriptor?.maxTokens ?? 32_000;
-      return Math.min(requestedOutput ?? serverMaximum, serverMaximum);
+      const contextMaximum = descriptor
+        ? descriptor.contextWindow - estimatedInputTokens - OUTPUT_CONTEXT_SAFETY_TOKENS
+        : serverMaximum;
+      return Math.min(
+        requestedOutput ?? serverMaximum,
+        serverMaximum,
+        Math.max(0, contextMaximum),
+      );
     };
     let maxOutputTokens = await maxOutputFor(routing);
+    if (maxOutputTokens < 1) {
+      await markDedupFailed(dedupClaim);
+      return withRequestId(Response.json(
+        { error: { type: 'prompt_too_large', message: 'Prompt leaves no room for model output' } },
+        { status: 413 },
+      ), requestId);
+    }
     let estimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, routing.costRow);
     let reservation = await reserveCredits({
       requestId,
@@ -756,13 +773,16 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         return withRequestId(freeRouting, requestId);
       }
       if (selectApiForModel(freeRouting.provider, freeRouting.activeModelId) === selectApiForModel(routing.provider, routing.activeModelId)) {
-        maxOutputTokens = await maxOutputFor(freeRouting);
-        const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, freeRouting.costRow);
-        const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
-        if (freeReservation.ok) {
-          routing = { user: routing.user, routeSlot: tieredModelRouteSlot('free', requestedModel), ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
-          estimatedCredits = freeEstimatedCredits;
-          reservation = freeReservation;
+        const freeMaxOutputTokens = await maxOutputFor(freeRouting);
+        if (freeMaxOutputTokens > 0) {
+          const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, freeMaxOutputTokens, freeRouting.costRow);
+          const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
+          if (freeReservation.ok) {
+            maxOutputTokens = freeMaxOutputTokens;
+            routing = { user: routing.user, routeSlot: tieredModelRouteSlot('free', requestedModel), ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
+            estimatedCredits = freeEstimatedCredits;
+            reservation = freeReservation;
+          }
         }
       }
     }
@@ -792,7 +812,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       });
     }
     forwardBody = cfg.rewriteRequestBody
-      ? cfg.rewriteRequestBody(text, routing)
+      ? cfg.rewriteRequestBody(text, routing, maxOutputTokens)
       : requestBodyBuffer;
   }
 

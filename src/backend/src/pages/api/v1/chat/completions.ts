@@ -10,10 +10,14 @@ function rewriteOpenAiModel(
     provider: string;
     thinkingLevel: string;
   },
+  maxOutputTokens: number,
 ): string {
   if (!bodyText) return bodyText;
   const parsed = JSON.parse(bodyText);
   parsed.model = routing.activeModelId;
+  if (parsed.max_tokens !== undefined) parsed.max_tokens = maxOutputTokens;
+  if (parsed.max_completion_tokens !== undefined)
+    parsed.max_completion_tokens = maxOutputTokens;
   if (routing.provider === 'openrouter') {
     delete parsed.models;
     delete parsed.route;

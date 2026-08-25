@@ -5,6 +5,7 @@ import type { APIContext } from 'astro';
 import { setDbForTests, resetDbForTests } from '../../db/client';
 import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
 import { resetPricingCacheForTests } from '../../lib/pricing';
+import { estimateInputTokensFromBody } from '../../lib/limits';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
@@ -917,6 +918,65 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
     (db.insertedValues.at(-1) as any).model,
     'google/gemini-2.5-flash',
   );
+});
+
+test('OpenRouter proxy reserves prompt context from the requested output limit', async () => {
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 10_000,
+        model: 'provider/context-bound-model',
+        routeProvider: 'openrouter',
+      }),
+    }),
+  );
+  const body = {
+    model: 'placeholder',
+    max_completion_tokens: 1_048_576,
+    messages: [{ role: 'user', content: 'Fix this sentence.' }],
+  };
+  let forwardedBody: any;
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        openrouter: {
+          models: {
+            'provider/context-bound-model': {
+              id: 'provider/context-bound-model',
+              cost: { input: 0.1, output: 0.1 },
+              limit: { context: 1_048_576, output: 1_048_576 },
+            },
+          },
+        },
+      });
+    }
+    assert.equal(
+      url,
+      'https://openrouter.example/api/v1/chat/completions',
+    );
+    forwardedBody = JSON.parse(String(init?.body));
+    return Response.json({
+      choices: [{ message: { role: 'assistant', content: 'Fixed.' } }],
+      usage: { prompt_tokens: 12, completion_tokens: 2 },
+    });
+  };
+
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest(body)),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    forwardedBody.max_tokens,
+    1_048_576 - estimateInputTokensFromBody(JSON.stringify(body)) - 4_096,
+  );
+  assert.equal(forwardedBody.max_completion_tokens, undefined);
 });
 
 test('proxy bills paid credits without granting a Free user Pro model entitlement', async () => {
