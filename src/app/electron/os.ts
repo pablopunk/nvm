@@ -1043,7 +1043,8 @@ export async function selectedText() {
         const script =
           'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\ntry\nset selectedText to value of attribute "AXSelectedText" of focused UI element of frontProcess\nif selectedText is missing value then return ""\nreturn selectedText as text\non error\nreturn ""\nend try\nend tell';
         const result = await runAppleScript(script, 5000);
-        return result.stdout || null;
+        const text = result.stdout.replace(/\r?\n$/, '');
+        return text || null;
       },
     },
     async () => null,
