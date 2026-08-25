@@ -2470,6 +2470,7 @@ function updateStatusView(_options: any = {}) {
     type: 'list',
     id: 'app-updates',
     title: 'Updates',
+    contentSizing: 'fit',
     presentation: 'root',
     searchBarPlaceholder: 'Search Updates',
     isLoading:

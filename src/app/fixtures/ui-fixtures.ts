@@ -950,6 +950,7 @@ function loadingView(ctx: ExtensionContext) {
   return ctx.ui.list({
     id: 'dev-ui-loading',
     title: 'Dev UI · Loading',
+    contentSizing: 'fit',
     subtitle: 'The view paints immediately while its items load in the host.',
     emptyView: {
       title: 'Loading fixture items…',

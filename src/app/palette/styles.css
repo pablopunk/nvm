@@ -375,6 +375,11 @@ kbd {
   min-height: 0;
 }
 
+.results.fitContentCard,
+.results.fitContentCard > [cmdk-list-sizer] {
+  flex: 0 1 auto;
+}
+
 .results.sidePreviewCard {
   flex: 1 1 0;
 }

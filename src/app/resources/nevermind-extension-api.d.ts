@@ -641,6 +641,8 @@ export type ExtensionView = {
     | 'camera';
   title: string;
   size?: ViewSize;
+  /** List views only: `fit` wraps a short status-style list instead of filling the palette. Defaults to `fill`. */
+  contentSizing?: 'fill' | 'fit';
   presentation?: ViewPresentation;
   subtitle?: string;
   content?: string;

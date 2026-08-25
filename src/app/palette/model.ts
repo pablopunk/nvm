@@ -623,6 +623,7 @@ export interface CommandView {
   emptyView?: { title?: string; subtitle?: string };
   detail?: { placement?: 'side' | 'bottom'; visible?: boolean };
   searchBarPlaceholder?: string;
+  contentSizing?: NonNullable<ExtensionView['contentSizing']>;
   presentation?: ViewPresentation;
   selectedItemId?: string;
   maxVisibleItems?: number;
