@@ -9,34 +9,17 @@ const MODEL_REPO_ID = 'ysdede/parakeet-tdt-0.6b-v3-onnx';
 const MODEL_REVISION = 'main';
 const MODEL_CACHE_DB_NAME = 'parakeet-cache-db';
 const MODEL_CACHE_STORE_NAME = 'file-store';
-type DictationBackend = 'webgpu' | 'wasm';
-
-type DictationGpu = {
-  requestAdapter(options?: {
-    powerPreference?: 'low-power' | 'high-performance';
-  }): Promise<unknown>;
-};
-
-const MODEL_CACHE_FILES: Record<DictationBackend, readonly string[]> = {
-  wasm: [
-    'encoder-model.int8.onnx',
-    'decoder_joint-model.int8.onnx',
-    'vocab.txt',
-  ],
-  webgpu: [
-    'encoder-model.onnx',
-    'encoder-model.onnx.data',
-    'decoder_joint-model.int8.onnx',
-    'vocab.txt',
-  ],
-};
+const MODEL_CACHE_FILES = [
+  'encoder-model.int8.onnx',
+  'decoder_joint-model.int8.onnx',
+  'vocab.txt',
+];
 const SAMPLE_RATE = 16_000;
 const MICROPHONE_READY_TIMEOUT_MS = 7_000;
 const MICROPHONE_SIGNAL_THRESHOLD = 0.000_01;
 const DEFAULT_MODEL_KEEP_ALIVE_MS = 5 * 60 * 1000;
 
 let modelPromise: Promise<ParakeetModel> | null = null;
-let backendPromise: Promise<DictationBackend> | null = null;
 let loadedModel:
   | (ParakeetModel & {
       dispose?: () => Promise<void> | void;
@@ -46,25 +29,6 @@ let modelEvictionTimer: number | undefined;
 
 function modelCacheKey(filename: string) {
   return `hf-${MODEL_REPO_ID}-${MODEL_REVISION}--${filename}`;
-}
-
-function getDictationBackend() {
-  if (!backendPromise) {
-    backendPromise = (async () => {
-      const gpu = (navigator as Navigator & { gpu?: DictationGpu }).gpu;
-      if (!gpu) return 'wasm';
-      try {
-        return (await gpu.requestAdapter({
-          powerPreference: 'high-performance',
-        }))
-          ? 'webgpu'
-          : 'wasm';
-      } catch {
-        return 'wasm';
-      }
-    })();
-  }
-  return backendPromise;
 }
 
 function openModelCacheDatabase() {
@@ -82,10 +46,8 @@ function openModelCacheDatabase() {
 }
 
 export async function isDictationModelCached() {
-  const backend = await getDictationBackend();
   const database = await openModelCacheDatabase();
   if (!database) return false;
-  const cacheFiles = MODEL_CACHE_FILES[backend];
 
   return new Promise<boolean>((resolve) => {
     let settled = false;
@@ -106,10 +68,10 @@ export async function isDictationModelCached() {
         'readonly',
       );
       const store = transaction.objectStore(MODEL_CACHE_STORE_NAME);
-      let remaining = cacheFiles.length;
+      let remaining = MODEL_CACHE_FILES.length;
       let cached = true;
       transaction.onerror = () => finish(false);
-      for (const filename of cacheFiles) {
+      for (const filename of MODEL_CACHE_FILES) {
         const request = store.get(modelCacheKey(filename));
         request.onsuccess = () => {
           if (!request.result) cached = false;
@@ -130,16 +92,7 @@ export function loadDictationModel() {
     modelEvictionTimer = undefined;
   }
   if (!modelPromise) {
-    modelPromise = getDictationBackend()
-      .then(async (backend) => {
-        try {
-          return await loadModelForBackend(backend);
-        } catch (error) {
-          if (backend !== 'webgpu') throw error;
-          backendPromise = Promise.resolve('wasm');
-          return loadModelForBackend('wasm');
-        }
-      })
+    modelPromise = loadModel()
       .then((model) => {
         loadedModel = model;
         return model;
@@ -153,10 +106,10 @@ export function loadDictationModel() {
   return modelPromise;
 }
 
-function loadModelForBackend(backend: DictationBackend) {
+function loadModel() {
   return fromHub(MODEL_ID, {
-    backend,
-    encoderQuant: backend === 'webgpu' ? 'fp32' : 'int8',
+    backend: 'wasm',
+    encoderQuant: 'int8',
     decoderQuant: 'int8',
     preprocessorBackend: 'js',
   });
