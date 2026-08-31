@@ -1079,13 +1079,13 @@ export async function selectedText(target: AppFocusTarget) {
       darwin: async () => {
         if (!systemPreferences.isTrustedAccessibilityClient(true)) {
           throw new Error(
-            'Accessibility access is required. Enable the current Nevermind development app in System Settings, then restart it.',
+            'Accessibility access is required. Enable Nevermind in System Settings, then restart it.',
           );
         }
         const result = await runMacosSelectedTextHelper('read', target);
         if (result.exitCode === 2) {
           throw new Error(
-            'Accessibility access is required. Enable the current Nevermind development app in System Settings, then restart it.',
+            'Accessibility access is required. Enable Nevermind in System Settings, then restart it.',
           );
         }
         if (result.exitCode !== 0 && result.exitCode !== 3)

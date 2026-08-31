@@ -728,11 +728,6 @@ const selectedText = createSelectedTextReader({
   copySelectionIntoClipboard,
   concealClipboardText: (text) =>
     suppressClipboardHistoryId(clipboardHistoryIdForText(text)),
-  selectionRead: (result) =>
-    loggerDebug('selected-text.read.result', result, {
-      source: 'host',
-      scope: 'selected-text',
-    }),
 });
 
 function osCacheRoot() {
@@ -3333,7 +3328,7 @@ async function executeActionWithoutFeedback(action, options: any = {}) {
   if (!options.keepPaletteOpen) {
     if (isNvmTestMode && action.kind === 'test-action')
       setTimeout(() => paletteWindow.hidePalette(), 0).unref?.();
-    else paletteWindow.hidePalette();
+    else await paletteWindow.hidePalette();
   }
   return result;
 }
@@ -4948,7 +4943,7 @@ async function executeViewAction(action, launchContext?: any) {
             tone: 'error',
           },
         };
-      if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
+      if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
       pasteTextAction(action);
       return { toast: { message: 'Pasted' } };
     case 'insertCharacter':
@@ -4956,7 +4951,7 @@ async function executeViewAction(action, launchContext?: any) {
         clipboard.writeText(action.text || '');
         break;
       }
-      if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
+      if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
       pasteTextAction({
         ...action,
         type: 'pasteText',
@@ -4965,7 +4960,7 @@ async function executeViewAction(action, launchContext?: any) {
       });
       return { toast: { message: 'Pasted' } };
     case 'pasteClipboard':
-      if (paletteWindow.win?.isVisible()) paletteWindow.hidePalette();
+      if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
       pasteClipboardAction(action);
       return { toast: { message: 'Pasted' } };
     case 'typeText': {
@@ -10221,7 +10216,7 @@ async function executeShortcutAction(action) {
       isPrimary: true,
     });
   } else {
-    paletteWindow.hidePalette();
+    await paletteWindow.hidePalette();
   }
 }
 

@@ -298,8 +298,10 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       { options: showOptions },
       () => {
         if (!win) return;
-        restoredFocusReturnTarget = null;
-        focusReturnTarget = showOptions.focusReturnTarget ?? null;
+        if (!win.isVisible()) {
+          restoredFocusReturnTarget = null;
+          focusReturnTarget = showOptions.focusReturnTarget ?? null;
+        }
         markDebugPerformance('palette-window.show.start', {
           visible: win.isVisible(),
           bounds: win.getBounds(),

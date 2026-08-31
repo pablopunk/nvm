@@ -12,7 +12,7 @@ Palette dismissal and action IPC ran concurrently. This made selected-text fallb
 
 - Await palette dismissal before an immediate action crosses IPC.
 - Capture the source application before the palette takes focus, then explicitly restore that application before selected-text work; hiding a palette window does not identify or reliably reactivate its source application on macOS.
-- Treat Accessibility retries as transition tolerance, not as a substitute for restoring source-app focus.
+- Keep focus-transition tolerance inside one bounded native Accessibility read; do not stack retries across layers.
 - Reject selected-text accessibility reads while the palette owns focus.
 - Use passive indicator windows for transient feedback because they do not activate the app and remain visible after palette dismissal.
 - Let the indicator host own timed dismissal; renderer timers cannot reliably outlive a hidden or replaced surface.

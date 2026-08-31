@@ -10,6 +10,7 @@ files:
     to: src/app/resources
     filter:
       - '**/*'
+      - '!macos-selected-text.swift'
   - from: src/app/extensions
     to: src/app/extensions
     filter:
