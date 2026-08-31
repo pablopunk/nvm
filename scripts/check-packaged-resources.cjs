@@ -5,6 +5,9 @@ const path = require('node:path');
 const configPath = path.join(process.cwd(), 'electron-builder.yml');
 const config = fs.readFileSync(configPath, 'utf8');
 const packageRoot = path.resolve(process.argv[2] || process.cwd());
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
+);
 
 function fail(message) {
   console.error(`Packaged resource check failed: ${message}`);
@@ -38,6 +41,22 @@ if (
 ) {
   fail(
     'missing node_modules/typescript/lib/lib.es2022.full.d.ts; run mise exec pnpm -- pnpm install',
+  );
+}
+
+if (!packageJson.dependencies?.['dom-serializer']) {
+  fail(
+    'dom-serializer must be a direct dependency so Electron packages pi-web-access runtime imports',
+  );
+}
+
+if (
+  !fs.existsSync(
+    path.join(packageRoot, 'node_modules', 'dom-serializer', 'package.json'),
+  )
+) {
+  fail(
+    'missing node_modules/dom-serializer/package.json; run mise exec -- pnpm install',
   );
 }
 

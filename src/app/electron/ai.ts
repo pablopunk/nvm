@@ -1568,6 +1568,17 @@ async function createPiWebAccessLoader(
     noContextFiles: true,
   });
   await loader.reload();
+  const loadErrors = loader.getExtensions().errors;
+  if (loadErrors.length > 0) {
+    logger.error(
+      'ai.web-access.load.failed',
+      { errors: loadErrors },
+      { source: 'host', scope: 'ai' },
+    );
+    throw new Error(
+      `Bundled Pi web access failed to load: ${loadErrors[0].error}`,
+    );
+  }
   return loader;
 }
 

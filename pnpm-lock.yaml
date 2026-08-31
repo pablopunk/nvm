@@ -48,6 +48,9 @@ importers:
       debug:
         specifier: ^4.4.3
         version: 4.4.3(supports-color@8.1.1)
+      dom-serializer:
+        specifier: 2.0.0
+        version: 2.0.0
       electron-log:
         specifier: ^5.4.4
         version: 5.4.4
