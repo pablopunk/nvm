@@ -15,6 +15,7 @@ type SelectedTextReaderDependencies<Snapshot> = {
 
 const CLIPBOARD_POLL_INTERVAL_MS = 25;
 const CLIPBOARD_POLL_ATTEMPTS = 20;
+const ACCESSIBILITY_POLL_ATTEMPTS = 8;
 
 export function createSelectedTextReader<Snapshot>(
   dependencies: SelectedTextReaderDependencies<Snapshot>,
@@ -25,10 +26,17 @@ export function createSelectedTextReader<Snapshot>(
     ((durationMs: number) =>
       new Promise<void>((resolve) => setTimeout(resolve, durationMs)));
 
-  async function read() {
+  async function readAccessibilitySelection(attemptsLeft: number) {
     if (dependencies.paletteIsFocused()) return null;
-    const accessibilityText = String(
-      (await dependencies.readAccessibilityText()) ?? '',
+    const text = String((await dependencies.readAccessibilityText()) ?? '');
+    if (text || attemptsLeft <= 1) return text || null;
+    await delay(CLIPBOARD_POLL_INTERVAL_MS);
+    return readAccessibilitySelection(attemptsLeft - 1);
+  }
+
+  async function read() {
+    const accessibilityText = await readAccessibilitySelection(
+      ACCESSIBILITY_POLL_ATTEMPTS,
     );
     if (accessibilityText) return accessibilityText;
     if (dependencies.paletteIsFocused()) return null;

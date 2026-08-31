@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSelectedTextReader } from './selected-text';
 
+const RESTORED_ACCESSIBILITY_CALLS = 3;
+
 function reader(options: {
   accessibilityText?: string | null;
+  accessibilityTexts?: Array<string | null>;
   copiedText?: string;
   paletteFocused?: boolean;
   focusAfterAccessibility?: boolean;
@@ -12,10 +15,19 @@ function reader(options: {
   const concealed: string[] = [];
   let copyCalls = 0;
   let restoreCalls = 0;
+  let accessibilityCalls = 0;
   const selectedText = createSelectedTextReader({
-    readAccessibilityText: async () => {
-      if (options.focusAfterAccessibility) options.paletteFocused = true;
-      return options.accessibilityText;
+    readAccessibilityText: () => {
+      if (options.focusAfterAccessibility) {
+        options.paletteFocused = true;
+      }
+      const text = options.accessibilityTexts
+        ? options.accessibilityTexts[
+            Math.min(accessibilityCalls, options.accessibilityTexts.length - 1)
+          ]
+        : options.accessibilityText;
+      accessibilityCalls += 1;
+      return Promise.resolve(text);
     },
     paletteIsFocused: () => Boolean(options.paletteFocused),
     clipboardSnapshot: () => clipboard,
@@ -27,13 +39,15 @@ function reader(options: {
       restoreCalls += 1;
       clipboard = snapshot;
     },
-    copySelectionIntoClipboard: async () => {
+    copySelectionIntoClipboard: () => {
       copyCalls += 1;
-      if (options.copiedText !== undefined) clipboard = options.copiedText;
-      return true;
+      if (options.copiedText !== undefined) {
+        clipboard = options.copiedText;
+      }
+      return Promise.resolve(true);
     },
     concealClipboardText: (text) => concealed.push(text),
-    delay: async () => {},
+    delay: () => Promise.resolve(),
     sentinel: () => 'selection sentinel',
   });
   return {
@@ -42,6 +56,7 @@ function reader(options: {
     clipboard: () => clipboard,
     copyCalls: () => copyCalls,
     restoreCalls: () => restoreCalls,
+    accessibilityCalls: () => accessibilityCalls,
   };
 }
 
@@ -63,6 +78,17 @@ test('copies selected text and restores the clipboard when accessibility returns
   assert.equal(fixture.clipboard(), 'original clipboard');
   assert.equal(fixture.restoreCalls(), 1);
   assert.deepEqual(fixture.concealed, ['selection sentinel', 'fallback text']);
+});
+
+test('waits for the source app selection to return after palette dismissal', async () => {
+  const fixture = reader({
+    accessibilityTexts: [null, null, 'restored selection'],
+  });
+
+  assert.equal(await fixture.selectedText(), 'restored selection');
+  assert.equal(fixture.accessibilityCalls(), RESTORED_ACCESSIBILITY_CALLS);
+  assert.equal(fixture.copyCalls(), 0);
+  assert.equal(fixture.restoreCalls(), 0);
 });
 
 test('does not copy palette input when the palette still has focus', async () => {

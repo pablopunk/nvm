@@ -89,7 +89,6 @@ async function fixSelectedText(ctx: ExtensionContext) {
   try {
     if (!ctx.ai) throw new Error('AI is unavailable');
     const ai = ctx.ai;
-    const sourceApp = await ctx.desktop.apps?.frontmost?.();
     void ai
       .prepare({ model: 'fast', system: FIX_SELECTED_TEXT_SYSTEM_PROMPT })
       .catch(() => undefined);
@@ -103,6 +102,7 @@ async function fixSelectedText(ctx: ExtensionContext) {
       });
       return;
     }
+    const sourceApp = await ctx.desktop.apps?.frontmost?.();
 
     ctx.ui.indicator.update(indicator('Fixing Text'));
     let correctedText = await ai.ask(proofreadingPrompt(selectedText), {
