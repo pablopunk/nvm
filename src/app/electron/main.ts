@@ -2084,17 +2084,19 @@ function appendAiChatDelta(chatId, text) {
 }
 
 async function aiChatView(item, options: any = {}) {
-  if (isConversationAiChat(item))
+  if (isConversationAiChat(item)) {
+    const byo = await getByoKey();
     return {
       type: 'chat',
       title: item.title || item.query || 'Ask AI',
       aiChat: true,
       chatId: item.id,
       aiModel: aiChatModelForChat(item),
-      aiModelSelectable: true,
+      aiModelSelectable: !byo,
       initialPrompt: options.initialPrompt,
       messages: aiChatMessagesForRenderer(item.messages),
     };
+  }
   const { files: previewFiles, selectedBuilderPreviewFilename } =
     aiChatPreviewFiles(
       item,
@@ -8200,6 +8202,8 @@ async function setAiChatModel(chatId, model: unknown) {
     userState.aiChats[targetChatId] || draftAiChats.get(targetChatId);
   if (!isConversationAiChat(chat))
     throw new Error('Only Tab conversations can change models');
+  if (await getByoKey())
+    throw new Error('Fast and Smart are unavailable with a BYO model');
   if (
     pendingAiChatSends.has(targetChatId) ||
     activeConversationRequests.has(targetChatId)
@@ -8225,6 +8229,7 @@ async function setAiChatModel(chatId, model: unknown) {
       .reset();
     activeConversationSessionIds.delete(targetChatId);
     chat.model = model;
+    chat.updatedAt = Date.now();
     userState.aiChatDefaultModel = model;
     scheduleSaveState();
     if (userState.aiChats[targetChatId]) patchAiChatsItem(targetChatId);
@@ -8442,22 +8447,22 @@ async function abortAiChat(chatId) {
 }
 
 async function resetAiChat(chatId) {
-  activeAiChatId = chatId || activeAiChatId;
-  if (!activeAiChatId) return;
+  const targetChatId = chatId || activeAiChatId;
+  if (!targetChatId) return;
   const chat =
-    userState.aiChats[activeAiChatId] || draftAiChats.get(activeAiChatId);
-  const pending = pendingAiChatSends.get(activeAiChatId);
-  const conversationRequest = activeConversationRequests.get(activeAiChatId);
-  await abortAiChat(activeAiChatId);
+    userState.aiChats[targetChatId] || draftAiChats.get(targetChatId);
+  const pending = pendingAiChatSends.get(targetChatId);
+  const conversationRequest = activeConversationRequests.get(targetChatId);
+  await abortAiChat(targetChatId);
   await pending?.settled;
   if (isConversationAiChat(chat)) {
     await conversationRequest?.result.catch(() => {});
-    activeConversationSessionIds.delete(activeAiChatId);
+    activeConversationSessionIds.delete(targetChatId);
     return nevermindAi
-      ?.session(activeAiChatId, { toolMode: 'conversation' })
+      ?.session(targetChatId, { toolMode: 'conversation' })
       .reset();
   }
-  return nevermindAi?.reset(activeAiChatId);
+  return nevermindAi?.reset(targetChatId);
 }
 
 async function noteAiChatExited(chatId) {

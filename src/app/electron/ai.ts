@@ -1407,7 +1407,10 @@ async function resolveAiModelAndAuth(
   if (byo) {
     await modelRuntime.setRuntimeApiKey(byo.providerId, byo.apiKey);
     return {
-      model: byoModelDescriptor(byo),
+      model: byoModelDescriptor(
+        byo,
+        modelRuntime.getModel(byo.providerId, byo.modelId)?.input,
+      ),
       source: 'byo' as const,
       creditInfo: null,
       thinkingLevel: DEFAULT_THINKING_LEVEL,
@@ -1473,7 +1476,10 @@ function nevermindModelDescriptor(
   };
 }
 
-function byoModelDescriptor(byo: ByoKeySnapshot) {
+function byoModelDescriptor(
+  byo: ByoKeySnapshot,
+  input: Array<'text' | 'image'> = ['text', 'image'],
+) {
   const model = {
     id: byo.modelId,
     name: byo.modelName,
@@ -1481,7 +1487,7 @@ function byoModelDescriptor(byo: ByoKeySnapshot) {
     provider: byo.provider,
     baseUrl: byo.baseUrl,
     reasoning: false,
-    input: ['text'] as Array<'text' | 'image'>,
+    input,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
     maxTokens: 16_384,

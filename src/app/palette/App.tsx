@@ -27,6 +27,7 @@ import {
   confirmationReturnSurface,
   type ConfirmationReturnSurface,
 } from './action-menu-presentation';
+import { restoredAiChatView } from './ai-chat-navigation';
 import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
 import {
   isDictationModelCached,
@@ -526,6 +527,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         setView(previous);
         setFormValues(seedFormValuesFromView(previous));
         setSelectedValue(selectedItemIdForView(previous));
+        if (previous.aiChat) await aiChat.openChat(previous);
       } else await window.nvm.closeExtensionWindow();
     } else if (result.view?.windowPresentation === 'compact') {
       compactViewFocusOriginRef.current = baseFocusOriginRef.current;
@@ -547,6 +549,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setView(result.view);
       setFormValues(seedFormValuesFromView(result.view));
       setSelectedValue(selectedItemIdForView(result.view, selectedValue));
+      if (result.view.aiChat) await aiChat.openChat(result.view);
     }
     if (result.toast) {
       showFeedbackIndicator(result.toast.message, result.toast.tone);
@@ -616,6 +619,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     setActionSubmenuFor(null);
     setFormValues(seedFormValuesFromView(previous));
     setSelectedValue(selectedItemIdForView(previous));
+    if (previous.aiChat) void aiChat.openChat(previous);
   }
 
   function selectedItem(): ExtensionViewItem | null {
@@ -2927,10 +2931,15 @@ export function App() {
 
   function popExtensionView() {
     setExtensionItemOptionsFor(null);
+    const restoredAiChat = restoredAiChatView(
+      extensionViewBackStack,
+      siblingViews,
+    );
     if (extensionViewBackStack.length === 0 && siblingViews.length > 0) {
       const next = siblingViews[siblingViews.length - 1];
       setSiblingViews((siblings) => siblings.slice(0, -1));
       extensionNavigation.showView(next, 'root');
+      if (restoredAiChat) void activateAiChatView(restoredAiChat);
       return;
     }
     if (isPrimaryExtensionView && extensionViewBackStack.length === 0) {
@@ -2938,6 +2947,7 @@ export function App() {
       return;
     }
     extensionNavigation.popView();
+    if (restoredAiChat) void activateAiChatView(restoredAiChat);
   }
 
   function selectionAfterPatch(
@@ -3362,6 +3372,38 @@ export function App() {
     }
   }
 
+  async function activateAiChatView(
+    view: ExtensionView,
+    runBuilderAutoActions = false,
+  ) {
+    const previews = (view.builderPreviews || [])
+      .map(builderPreviewFrom)
+      .filter(Boolean) as BuilderPreviewState[];
+    builderPreviewVersionRef.current += 1;
+    setBuilderPreviews(previews);
+    setSelectedBuilderPreviewFilename(
+      previews.some(
+        (preview) => preview.filename === view.selectedBuilderPreviewFilename,
+      )
+        ? view.selectedBuilderPreviewFilename || null
+        : previews.at(-1)?.filename || null,
+    );
+    if (runBuilderAutoActions)
+      for (const preview of view.builderPreviews || []) {
+        const action = builderPreviewAutoRunAction(preview);
+        if (action)
+          queueMicrotask(
+            () =>
+              void runBuilderPreviewAction(
+                preview.filename,
+                action as BuilderPreviewAction,
+              ),
+          );
+      }
+    await aiChat.openChat(view);
+    requestAnimationFrame(() => aiChat.inputRef.current?.focus());
+  }
+
   async function openAiChat(
     view: ExtensionView,
     navigation: 'root' | 'push' | 'replace' = 'root',
@@ -3375,38 +3417,7 @@ export function App() {
       },
       async () => {
         showExtensionView(view, navigation);
-        const previews = (view.builderPreviews || [])
-          .map(builderPreviewFrom)
-          .filter(Boolean) as BuilderPreviewState[];
-        if (previews.length) {
-          builderPreviewVersionRef.current += 1;
-          setBuilderPreviews(previews);
-          setSelectedBuilderPreviewFilename(
-            previews.some(
-              (preview) =>
-                preview.filename === view.selectedBuilderPreviewFilename,
-            )
-              ? view.selectedBuilderPreviewFilename || null
-              : previews.at(-1)?.filename || null,
-          );
-          for (const preview of view.builderPreviews || []) {
-            const action = builderPreviewAutoRunAction(preview);
-            if (action)
-              queueMicrotask(
-                () =>
-                  void runBuilderPreviewAction(
-                    preview.filename,
-                    action as BuilderPreviewAction,
-                  ),
-              );
-          }
-        } else {
-          builderPreviewVersionRef.current += 1;
-          setBuilderPreviews([]);
-          setSelectedBuilderPreviewFilename(null);
-        }
-        await aiChat.openChat(view);
-        requestAnimationFrame(() => aiChat.inputRef.current?.focus());
+        await activateAiChatView(view, true);
       },
     );
   }
