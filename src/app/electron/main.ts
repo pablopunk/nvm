@@ -214,6 +214,7 @@ import {
   fileDateAddedMs,
   forceQuitApp as forceQuitOsApp,
   frontmostApp,
+  frontmostAppFocusTarget,
   getLaunchAtLoginEnabled,
   hasCapability,
   keyboardSettingsSubtitle,
@@ -230,6 +231,7 @@ import {
   scanApps,
   selectedFilePaths,
   selectedText as readAccessibilitySelectedText,
+  restoreAppFocus,
   setLaunchAtLoginEnabled,
   settingsTitle,
   typeTextIntoFrontmostApp,
@@ -322,6 +324,9 @@ const paletteWindow = createPaletteWindowController({
   rendererUrl,
   rendererIndexPath,
   getPaletteHotkey: () => String(getPaletteHotkey()),
+  captureFocusReturnTarget: frontmostAppFocusTarget,
+  restoreFocusReturnTarget: (target) =>
+    restoreAppFocus(target as { bundleId?: string | null }),
 });
 const systemAudioMute = createSystemAudioMuteCapability();
 const dictationService = createDictationService(

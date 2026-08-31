@@ -41,6 +41,8 @@ type PaletteWindowOptions = {
   rendererUrl?: string;
   rendererIndexPath: string;
   getPaletteHotkey: () => string;
+  captureFocusReturnTarget?: () => Promise<unknown>;
+  restoreFocusReturnTarget?: (target: unknown) => Promise<unknown>;
 };
 
 const WINDOW_BLUR_MARGIN = 96;
@@ -124,6 +126,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let ignorePaletteBlurUntil = 0;
   let pendingShowOnReady = false;
   let currentPaletteMode: PaletteMode = 'default';
+  let focusReturnTarget: unknown = null;
 
   function debugLog(message: string, data?: unknown) {
     logger.debug(message, data, { source: 'host', scope: 'palette-window' });
@@ -283,13 +286,18 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   function showPalette(
-    showOptions: { deferReveal?: boolean; skipShownEvent?: boolean } = {},
+    showOptions: {
+      deferReveal?: boolean;
+      skipShownEvent?: boolean;
+      focusReturnTarget?: unknown;
+    } = {},
   ) {
     measureDebugPerformanceSync(
       'palette-window.show',
       { options: showOptions },
       () => {
         if (!win) return;
+        focusReturnTarget = showOptions.focusReturnTarget ?? null;
         markDebugPerformance('palette-window.show.start', {
           visible: win.isVisible(),
           bounds: win.getBounds(),
@@ -348,7 +356,9 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     win?.setOpacity(1);
   }
 
-  function hidePalette() {
+  async function hidePalette() {
+    const target = focusReturnTarget;
+    focusReturnTarget = null;
     measureDebugPerformanceSync('palette-window.hide', undefined, () => {
       if (!win) return;
       debugLog('hidePalette', {
@@ -360,12 +370,23 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       if (isNvmTestMode) recordTestWindowEvent('hidden');
       win.webContents.send('palette:hidden');
       win.hide();
-      if (process.platform === 'darwin') {
-        app.hide();
-        app.show();
-      }
       if (isNvmTestMode) setTimeout(() => showPalette(), 100).unref?.();
     });
+    if (target) {
+      await options
+        .restoreFocusReturnTarget?.(target)
+        .then((restored) =>
+          debugLog('hidePalette.restoreFocus', {
+            restored: Boolean(restored),
+          }),
+        )
+        .catch((error) =>
+          logger.warn('Could not restore palette source app focus', error, {
+            source: 'host',
+            scope: 'palette-window',
+          }),
+        );
+    }
   }
 
   function showPaletteWhenReady() {
@@ -377,14 +398,28 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     else showPalette();
   }
 
-  function togglePalette() {
-    if (win?.isVisible()) hidePalette();
-    else showPalette();
+  async function togglePalette() {
+    if (win?.isVisible()) {
+      await hidePalette();
+      return;
+    }
+    const target = await options.captureFocusReturnTarget?.();
+    debugLog('showPalette.captureFocus', { captured: Boolean(target) });
+    showPalette({ focusReturnTarget: target });
+  }
+
+  function handlePaletteHotkey() {
+    togglePalette().catch((error) =>
+      logger.warn('Could not toggle palette', error, {
+        source: 'host',
+        scope: 'palette-window',
+      }),
+    );
   }
 
   function registerHotkey() {
     const hotkey = options.getPaletteHotkey();
-    const ok = globalShortcut.register(hotkey, togglePalette);
+    const ok = globalShortcut.register(hotkey, handlePaletteHotkey);
     debugLog('registerHotkey', {
       accelerator: hotkey,
       ok,

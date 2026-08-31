@@ -1069,6 +1069,55 @@ export async function frontmostApp() {
   )();
 }
 
+export async function frontmostAppFocusTarget() {
+  return osFunction(
+    {
+      darwin: () =>
+        new Promise<{ bundleId: string } | null>((resolve) => {
+          execFile('/usr/bin/lsappinfo', ['front'], (frontError, stdout) => {
+            const asn = String(stdout || '').trim();
+            if (frontError || !asn) return resolve(null);
+            execFile(
+              '/usr/bin/lsappinfo',
+              ['info', '-only', 'bundleID', asn],
+              (infoError, infoStdout) => {
+                if (infoError) return resolve(null);
+                const bundleId =
+                  String(infoStdout || '').match(
+                    /"CFBundleIdentifier"="([^"]+)"/,
+                  )?.[1] || '';
+                resolve(bundleId ? { bundleId } : null);
+              },
+            );
+          });
+        }),
+    },
+    async () => null,
+  )();
+}
+
+export async function restoreAppFocus(appIdentity: {
+  bundleId?: string | null;
+}) {
+  const bundleId = String(appIdentity?.bundleId || '');
+  if (!bundleId) return false;
+  return osFunction(
+    {
+      darwin: async () => {
+        const script = `tell application "System Events"
+set matchingProcesses to application processes whose bundle identifier is ${appleScriptString(bundleId)}
+if (count of matchingProcesses) is 0 then return false
+set frontmost of item 1 of matchingProcesses to true
+return true
+end tell`;
+        const result = await runAppleScript(script, 5000);
+        return result.exitCode === 0 && result.stdout.trim() === 'true';
+      },
+    },
+    async () => false,
+  )();
+}
+
 function detached(command: string, args: string[] = []) {
   spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
 }
