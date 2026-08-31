@@ -37,6 +37,7 @@ export interface AppIpcHandlersDeps {
     traceId?: unknown,
     images?: unknown,
   ) => unknown;
+  setAiChatModel: (chatId: unknown, model: unknown) => unknown;
   noteAiChatExited: (chatId: unknown) => unknown;
   abortAiChat: (chatId: unknown) => unknown;
   resetAiChat: (chatId: unknown) => unknown;
@@ -137,6 +138,9 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     'ai:chat:send',
     (_event, message, chatId, traceId, images) =>
       deps.sendAiChatMessage(message, chatId, traceId, images),
+  );
+  ipcHandleMeasured('ai:chat:set-model', (_event, chatId, model) =>
+    deps.setAiChatModel(chatId, model),
   );
   ipcHandleMeasured('ai:chat:exited', (_event, chatId) =>
     deps.noteAiChatExited(chatId),

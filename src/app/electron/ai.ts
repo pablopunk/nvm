@@ -5,6 +5,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
 import type { CommandAction } from '../palette/model';
+import { AUTOMATE_AI_CHAT_MODEL } from '../shared/ai-chat-model';
 import {
   finalOneShotAssistantText,
   streamedOneShotAssistantText,
@@ -958,6 +959,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       modelsPath: null,
       allowModelNetwork: false,
     });
+    const modelRole: AiModelRole = AUTOMATE_AI_CHAT_MODEL;
     const {
       model,
       source: modelSource,
@@ -965,7 +967,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       thinkingLevel,
     } = await resolveAiModelAndAuth(
       modelRuntime,
-      undefined,
+      modelRole,
       initialPromptChars,
     );
     if (creditInfo)
@@ -1047,7 +1049,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       const chars =
         JSON.stringify(result.session.agent.state.messages).length +
         prompt.length;
-      const next = await resolveAiModelAndAuth(modelRuntime, undefined, chars);
+      const next = await resolveAiModelAndAuth(modelRuntime, modelRole, chars);
       await result.session.setModel(next.model);
       result.session.setThinkingLevel(next.thinkingLevel);
     };

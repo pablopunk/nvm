@@ -100,6 +100,35 @@ test('renders sent and pending AI chat image attachments', () => {
   assert.match(html, /Remove Pending image/);
 });
 
+test('renders the model picker only for selectable AI conversations', () => {
+  const conversation = renderExtensionView(
+    {
+      type: 'chat',
+      title: 'Question',
+      aiChat: true,
+      aiModel: 'fast',
+      aiModelSelectable: true,
+      messages: [],
+    },
+    { model: 'fast', setModel: async () => {} },
+  );
+  assert.match(conversation, /aria-label="AI model"/);
+  assert.match(
+    conversation,
+    /<option value="fast"(?: selected="")?>Fast<\/option>/,
+  );
+  assert.match(conversation, /<option value="smart">Smart<\/option>/);
+
+  const automation = renderExtensionView({
+    type: 'chat',
+    title: 'Automate a command',
+    aiChat: true,
+    aiModel: 'smart',
+    messages: [],
+  });
+  assert.doesNotMatch(automation, /aria-label="AI model"/);
+});
+
 test('renders forms as a grouped keyboard-first surface', () => {
   const html = renderExtensionView({
     type: 'form',

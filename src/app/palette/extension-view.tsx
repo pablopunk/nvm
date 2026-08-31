@@ -1,5 +1,6 @@
 // biome-ignore-all lint: This established renderer retains existing declarative view conventions.
 import {
+  ChevronDown,
   CornerDownLeft,
   CreditCard,
   LogIn,
@@ -41,6 +42,7 @@ import {
 import type { AiLimitState } from './use-ai-chat';
 import type { AiChatAttachment } from './use-ai-chat';
 import { canSendAiChatMessage } from '../shared/ai-chat-images';
+import type { AiChatModel } from '../shared/ai-chat-model';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
@@ -52,6 +54,9 @@ type AiChatState = {
   attachImageFiles: (files: File[]) => Promise<boolean>;
   removeAttachment: (id: string) => void;
   busy: boolean;
+  model?: AiChatModel;
+  modelChanging?: boolean;
+  setModel?: (model: AiChatModel) => Promise<void>;
   limit: AiLimitState | null;
   creditNotice: string | null;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -826,6 +831,9 @@ function ChatInputForm({
   attachmentError,
   onAttachImages,
   onRemoveAttachment,
+  model,
+  modelChanging = false,
+  onModelChange,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -841,6 +849,9 @@ function ChatInputForm({
   attachmentError?: string | null;
   onAttachImages?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
+  model?: AiChatModel;
+  modelChanging?: boolean;
+  onModelChange?: (model: AiChatModel) => void;
 }) {
   return (
     <form
@@ -911,30 +922,66 @@ function ChatInputForm({
                 : placeholder || 'Message AI'
           }
         />
+        <div className="chatComposerFooter">
+          {model && onModelChange ? (
+            <label className="chatModelPicker" title="AI model">
+              <select
+                className="chatModelSelect"
+                aria-label="AI model"
+                value={model}
+                disabled={busy || modelChanging}
+                onKeyDown={(event) => {
+                  if (
+                    [
+                      'ArrowDown',
+                      'ArrowLeft',
+                      'ArrowRight',
+                      'ArrowUp',
+                      'Enter',
+                      ' ',
+                    ].includes(event.key)
+                  )
+                    event.stopPropagation();
+                }}
+                onChange={(event) =>
+                  onModelChange(event.target.value as AiChatModel)
+                }
+              >
+                <option value="fast">Fast</option>
+                <option value="smart">Smart</option>
+              </select>
+              <ChevronDown size={12} aria-hidden="true" />
+            </label>
+          ) : (
+            <span />
+          )}
+          {busy ? (
+            <button
+              className="chatIconButton chatStopButton"
+              type="button"
+              aria-label="Stop"
+              title="Stop"
+              onClick={() => onAbort?.(chatId)}
+            >
+              <Square size={12} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              className="chatIconButton chatEnterButton"
+              type="submit"
+              aria-label="Send message"
+              title="Send message"
+              disabled={
+                attaching ||
+                modelChanging ||
+                !canSendAiChatMessage(value, attachments.length)
+              }
+            >
+              <CornerDownLeft size={15} />
+            </button>
+          )}
+        </div>
       </div>
-      {busy ? (
-        <button
-          className="chatIconButton chatStopButton"
-          type="button"
-          aria-label="Stop"
-          title="Stop"
-          onClick={() => onAbort?.(chatId)}
-        >
-          <Square size={14} fill="currentColor" />
-        </button>
-      ) : (
-        <button
-          className="chatIconButton chatEnterButton"
-          type="submit"
-          aria-label="Enter"
-          title="Enter"
-          disabled={
-            attaching || !canSendAiChatMessage(value, attachments.length)
-          }
-        >
-          <CornerDownLeft size={16} />
-        </button>
-      )}
     </form>
   );
 }
@@ -960,6 +1007,14 @@ function ChatExtensionView({
         <span>{aiChat.creditNotice}</span>
       </div>
     ) : null;
+  const selectableModel =
+    view.aiChat && view.aiModelSelectable ? aiChat.model : undefined;
+  const onModelChange =
+    view.aiChat && view.aiModelSelectable && aiChat.setModel
+      ? (model: AiChatModel) => {
+          void aiChat.setModel?.(model);
+        }
+      : undefined;
   const messages = (view.aiChat ? aiChat.messages : view.messages || []).map(
     (message) => ({ ...message, content: renderMarkdown(message.content) }),
   );
@@ -997,6 +1052,9 @@ function ChatExtensionView({
       placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'}
       onAbort={abortAiChat}
       chatId={view.chatId}
+      model={selectableModel}
+      modelChanging={aiChat.modelChanging}
+      onModelChange={onModelChange}
       attachments={aiChat.attachments}
       attaching={aiChat.attaching}
       attachmentError={aiChat.attachmentError}

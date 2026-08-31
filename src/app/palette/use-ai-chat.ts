@@ -9,6 +9,11 @@ import {
   canSendAiChatMessage,
 } from '../shared/ai-chat-images';
 import {
+  DEFAULT_AI_CHAT_MODEL,
+  isAiChatModel,
+  type AiChatModel,
+} from '../shared/ai-chat-model';
+import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
@@ -160,6 +165,7 @@ export function useAiChat(
     traceId?: string,
     images?: AiChatImageInput[],
   ) => Promise<void>,
+  setChatModel: (chatId: string, model: AiChatModel) => Promise<void>,
   resetChat: (chatId?: string) => Promise<void>,
 ) {
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -178,6 +184,10 @@ export function useAiChat(
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const busyByChatIdRef = useRef(new Map<string, boolean>());
+  const [model, setModelState] = useState<AiChatModel>(DEFAULT_AI_CHAT_MODEL);
+  const modelRef = useRef<AiChatModel>(DEFAULT_AI_CHAT_MODEL);
+  const [modelChanging, setModelChangingState] = useState(false);
+  const modelChangingRef = useRef(false);
   const [limit, setLimit] = useState<AiLimitState | null>(null);
   const [creditNotice, setCreditNotice] = useState<string | null>(null);
   const pendingDeltaRef = useRef('');
@@ -482,6 +492,39 @@ export function useAiChat(
     });
   }
 
+  async function changeModel(nextModel: AiChatModel) {
+    const chatId = openChatIdRef.current;
+    if (
+      !chatId ||
+      modelChangingRef.current ||
+      busyByChatIdRef.current.get(chatStateKey(chatId))
+    )
+      return;
+    const previousModel = modelRef.current;
+    if (nextModel === previousModel) return;
+    modelRef.current = nextModel;
+    setModelState(nextModel);
+    modelChangingRef.current = true;
+    setModelChangingState(true);
+    try {
+      await setChatModel(chatId, nextModel);
+    } catch (error) {
+      if (openChatIdRef.current === chatId) {
+        modelRef.current = previousModel;
+        setModelState(previousModel);
+        appendMessage(
+          'system',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    } finally {
+      if (openChatIdRef.current === chatId) {
+        modelChangingRef.current = false;
+        setModelChangingState(false);
+      }
+    }
+  }
+
   async function sendPrompt(message: string, chatId?: string) {
     const trimmed = message.trim();
     const outgoingAttachments = attachmentsRef.current;
@@ -489,6 +532,7 @@ export function useAiChat(
     if (
       !canSendAiChatMessage(trimmed, outgoingAttachments.length) ||
       pendingAttachmentCountRef.current > 0 ||
+      modelChangingRef.current ||
       busyByChatIdRef.current.get(chatStateKey(targetChatId)) ||
       (!targetChatId && busyRef.current)
     )
@@ -565,6 +609,13 @@ export function useAiChat(
         pendingDeltaRef.current = '';
         cancelDeltaFlush();
         setMessages(view.messages || []);
+        const nextModel = isAiChatModel(view.aiModel)
+          ? view.aiModel
+          : DEFAULT_AI_CHAT_MODEL;
+        modelRef.current = nextModel;
+        setModelState(nextModel);
+        modelChangingRef.current = false;
+        setModelChangingState(false);
         setLimit(null);
         setCreditNotice(null);
         setInput('');
@@ -597,6 +648,14 @@ export function useAiChat(
     if (!aiChatEventMatchesActiveChat(event, activeChatId)) return;
     if (event.type === 'user_message') {
       applyUserMessageEvent(event);
+      return;
+    }
+    if (event.type === 'model_changed') {
+      const nextModel = (event.data as { model?: unknown } | undefined)?.model;
+      if (isAiChatModel(nextModel)) {
+        modelRef.current = nextModel;
+        setModelState(nextModel);
+      }
       return;
     }
     if (
@@ -659,6 +718,9 @@ export function useAiChat(
     removeAttachment,
     busy,
     setBusy: updateBusy,
+    model,
+    modelChanging,
+    setModel: changeModel,
     limit,
     setLimit,
     creditNotice,

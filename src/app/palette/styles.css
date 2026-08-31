@@ -53,6 +53,7 @@
   --item-foreground-pink: rgb(232, 197, 218);
 
   --accent: #ffd84d;
+  --accent-contrast: rgb(22, 22, 18);
   --accent-strong: rgba(255, 216, 77, 0.72);
   --accent-mid: rgba(255, 216, 77, 0.45);
   --accent-soft: rgba(255, 216, 77, 0.28);
@@ -986,39 +987,81 @@ kbd {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 8px 12px 12px;
-  gap: 8px;
+  padding: 12px 16px 16px;
+  gap: 12px;
 }
 
 .chatMessages {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 0;
-  scroll-padding-bottom: 8px;
+  padding: 4px 4px 8px;
+  scroll-padding-bottom: 12px;
 }
 
 .chatInputRow {
   position: relative;
   display: block;
   min-height: 0;
-  margin-top: 4px;
 }
 
 .chatInputShell {
   overflow: hidden;
-  border: 1px solid var(--surface-4);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  background: var(--surface-sunken);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
+}
+
+.chatComposerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 8px 8px;
+}
+
+.chatModelPicker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.chatModelPicker svg {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+}
+
+.chatModelSelect {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: 4px 24px 4px 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-xs);
+  outline: none;
+}
+
+.chatModelSelect:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.chatModelSelect:disabled {
+  opacity: 0.55;
 }
 
 .chatInputRow:focus-within .chatInputShell {
   border-color: var(--border-3);
+  background: var(--surface-2);
 }
 
 .chatAttachments {
@@ -1117,12 +1160,12 @@ kbd {
 .chatInputRow textarea {
   display: block;
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   max-height: 144px;
   box-sizing: border-box;
   border: 0;
   border-radius: 0;
-  padding: 8px 44px 8px 12px;
+  padding: 10px 12px 2px;
   color: var(--text-primary);
   background: transparent;
   box-shadow: none;
@@ -1136,13 +1179,10 @@ kbd {
 }
 
 .chatIconButton {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   transform: none;
   border: 0;
   border-radius: var(--radius-pill);
@@ -1152,7 +1192,12 @@ kbd {
 
 .chatEnterButton {
   color: var(--text-secondary);
-  background: var(--surface-3);
+  background: var(--surface-2);
+}
+
+.chatEnterButton:not(:disabled) {
+  color: var(--accent-contrast);
+  background: var(--accent-strong);
 }
 
 .chatEnterButton:disabled {
@@ -1177,31 +1222,29 @@ kbd {
 }
 
 .chatBubble {
-  max-width: min(760px, 88%);
+  max-width: min(760px, 92%);
   padding: 0;
   color: var(--text-primary);
   background: transparent;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   line-height: 1.5;
 }
 
 .chatBubble.assistant {
   align-self: flex-start;
-  max-width: 78%;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
+  max-width: 90%;
+  padding: 4px 0;
   color: var(--text-primary);
-  background: var(--surface-2);
+  background: transparent;
 }
 
 .chatBubble.user {
   align-self: flex-end;
-  max-width: 72%;
+  max-width: 78%;
   border-radius: var(--radius-md);
   padding: 8px 12px;
   color: var(--text-primary);
-  background: var(--surface-4);
+  background: var(--surface-3);
 }
 
 .chatMessageImages {
@@ -1228,12 +1271,21 @@ kbd {
 
 .chatBubble.system {
   align-self: flex-start;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-pill);
-  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
   color: var(--text-tertiary);
-  background: var(--surface-1);
+  background: transparent;
   font-size: var(--fs-xs);
+}
+
+.chatBubble.system::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mid);
+  content: "";
 }
 
 .chatBanner {

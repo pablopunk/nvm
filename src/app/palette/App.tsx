@@ -401,7 +401,11 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const [confirmFor, setConfirmFor] = useState<ExtensionViewAction | null>(
     null,
   );
-  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
+  const aiChat = useAiChat(
+    window.nvm.sendAiMessage,
+    window.nvm.setAiChatModel,
+    window.nvm.resetAiChat,
+  );
   const windowAiChatIdRef = useRef<string | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const compactSearchInputRef = useRef<HTMLInputElement>(null);
@@ -1533,7 +1537,11 @@ export function App() {
   const extensionNavigation = useExtensionNavigation();
   const extensionView = extensionNavigation.view;
   const extensionViewBackStack = extensionNavigation.backStack;
-  const aiChat = useAiChat(window.nvm.sendAiMessage, window.nvm.resetAiChat);
+  const aiChat = useAiChat(
+    window.nvm.sendAiMessage,
+    window.nvm.setAiChatModel,
+    window.nvm.resetAiChat,
+  );
   const [builderPreviews, setBuilderPreviews] = useState<BuilderPreviewState[]>(
     [],
   );

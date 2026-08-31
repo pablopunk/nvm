@@ -32,6 +32,7 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
       traceId,
       images,
     }),
+    setAiChatModel: (chatId, model) => ({ chatId, model }),
     noteAiChatExited: (chatId) => ({ chatId }),
     abortAiChat: (chatId) => ({ chatId }),
     resetAiChat: (chatId) => ({ chatId }),
@@ -137,6 +138,17 @@ test('AI chat IPC forwards clone-safe image inputs', async () => {
       traceId: 'trace-a',
       images: [image],
     },
+  );
+});
+
+test('AI chat IPC forwards model changes', async () => {
+  assert.deepEqual(
+    await createDeps().handles.get('ai:chat:set-model')?.(
+      {},
+      'chat-a',
+      'smart',
+    ),
+    { chatId: 'chat-a', model: 'smart' },
   );
 });
 

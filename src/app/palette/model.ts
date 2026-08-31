@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { AiChatMessage } from '../shared/ai-chat-images';
+import type { AiChatModel } from '../shared/ai-chat-model';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
@@ -596,6 +597,8 @@ export interface CommandView {
   controls?: boolean;
   aiChat?: boolean;
   chatId?: string;
+  aiModel?: AiChatModel;
+  aiModelSelectable?: boolean;
   builderPreviews?: BuilderPreview[];
   selectedBuilderPreviewFilename?: string;
   initialPrompt?: string;

@@ -119,6 +119,8 @@ const api: NevermindApi = {
   startFileDrag: (filePath) => ipcRenderer.send('drag:file', filePath),
   sendAiMessage: (message, chatId, traceId, images) =>
     invokeMeasured('ai:chat:send', message, chatId, traceId, images),
+  setAiChatModel: (chatId, model) =>
+    invokeMeasured('ai:chat:set-model', chatId, model),
   aiChatExited: (chatId) => invokeMeasured('ai:chat:exited', chatId),
   abortAiChat: (chatId) => invokeMeasured('ai:chat:abort', chatId),
   resetAiChat: (chatId) => invokeMeasured('ai:chat:reset', chatId),

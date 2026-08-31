@@ -42,6 +42,13 @@ import {
   AI_CHAT_IMAGE_MIME_TYPES,
   AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
 } from '../shared/ai-chat-images';
+import {
+  aiChatModelForChat,
+  AUTOMATE_AI_CHAT_MODEL,
+  DEFAULT_AI_CHAT_MODEL,
+  isAiChatModel,
+  normalizeAiChatModel,
+} from '../shared/ai-chat-model';
 import { createNevermindAi } from './ai';
 import {
   type NormalizedAiChatImage,
@@ -554,6 +561,8 @@ const activeConversationRequests = new Map<
   { abort: () => void; result: Promise<unknown> }
 >();
 const activeConversationSessionIds = new Set<string>();
+const pendingAiChatModelChanges = new Set<string>();
+let aiChatModelChangeQueue = Promise.resolve();
 const pendingAiChatSends = new Map<
   string,
   {
@@ -604,6 +613,7 @@ let userState: AnyRecord = {
   overrides: {},
   clipboardHistory: [],
   aiChats: {},
+  aiChatDefaultModel: DEFAULT_AI_CHAT_MODEL,
   settings: {},
   jobSettings: {},
   rateCache: {},
@@ -782,6 +792,10 @@ function isConversationAiChat(chat: AnyRecord | null | undefined) {
 
 function isBuilderAiChat(chat: AnyRecord | null | undefined) {
   return Boolean(chat) && !isConversationAiChat(chat);
+}
+
+function defaultAiChatModel() {
+  return normalizeAiChatModel(userState.aiChatDefaultModel);
 }
 
 function relevantLearningContext(message: string, chatId: string) {
@@ -1808,6 +1822,7 @@ function aiChatItem(id, query) {
   return {
     id,
     kind: 'builder',
+    model: AUTOMATE_AI_CHAT_MODEL,
     query,
     title: query,
     status: 'running',
@@ -1826,6 +1841,7 @@ function conversationChatItem(id, query) {
   return {
     id,
     kind: 'conversation',
+    model: defaultAiChatModel(),
     query,
     title: query,
     status: 'running',
@@ -2074,6 +2090,8 @@ async function aiChatView(item, options: any = {}) {
       title: item.title || item.query || 'Ask AI',
       aiChat: true,
       chatId: item.id,
+      aiModel: aiChatModelForChat(item),
+      aiModelSelectable: true,
       initialPrompt: options.initialPrompt,
       messages: aiChatMessagesForRenderer(item.messages),
     };
@@ -2109,6 +2127,7 @@ async function aiChatView(item, options: any = {}) {
     title: `Automate "${item.query}"`,
     aiChat: true,
     chatId: item.id,
+    aiModel: aiChatModelForChat(item),
     initialPrompt: options.initialPrompt,
     messages: aiChatMessagesForRenderer(item.messages),
     builderPreviews,
@@ -2306,6 +2325,7 @@ function getOrCreateExtensionChat(extensionFile, title = extensionFile) {
   const item = {
     id,
     kind: 'builder',
+    model: AUTOMATE_AI_CHAT_MODEL,
     query: `Tweak ${title || filename}`,
     title: `Tweak ${title || filename}`,
     status: 'ready',
@@ -8172,6 +8192,53 @@ function addAliasForGeneratedAction(chatId) {
   scheduleSaveState();
 }
 
+async function setAiChatModel(chatId, model: unknown) {
+  const targetChatId = typeof chatId === 'string' ? chatId : '';
+  if (!targetChatId) throw new Error('AI chat not found');
+  if (!isAiChatModel(model)) throw new Error('Unsupported AI chat model');
+  const chat =
+    userState.aiChats[targetChatId] || draftAiChats.get(targetChatId);
+  if (!isConversationAiChat(chat))
+    throw new Error('Only Tab conversations can change models');
+  if (
+    pendingAiChatSends.has(targetChatId) ||
+    activeConversationRequests.has(targetChatId)
+  )
+    throw new Error('Finish the current response before changing models');
+
+  if (pendingAiChatModelChanges.has(targetChatId))
+    throw new Error('The AI chat model is already changing');
+  const previousModel = aiChatModelForChat(chat);
+  if (previousModel === model) return;
+  pendingAiChatModelChanges.add(targetChatId);
+  const previousChange = aiChatModelChangeQueue;
+  let releaseChange = () => {};
+  aiChatModelChangeQueue = new Promise<void>((resolve) => {
+    releaseChange = () => resolve();
+  });
+  try {
+    await previousChange;
+    await nevermindAi
+      ?.session(targetChatId, {
+        toolMode: 'conversation',
+      })
+      .reset();
+    activeConversationSessionIds.delete(targetChatId);
+    chat.model = model;
+    userState.aiChatDefaultModel = model;
+    scheduleSaveState();
+    if (userState.aiChats[targetChatId]) patchAiChatsItem(targetChatId);
+    broadcastAiChatEvent({
+      type: 'model_changed',
+      chatId: targetChatId,
+      data: { model },
+    });
+  } finally {
+    releaseChange();
+    pendingAiChatModelChanges.delete(targetChatId);
+  }
+}
+
 async function sendAiChatMessage(message, chatId, traceId, images) {
   const normalizedImages = normalizeAiChatImages(images);
   const userMessage = typeof message === 'string' ? message.trim() : '';
@@ -8199,6 +8266,8 @@ async function sendAiChatMessage(message, chatId, traceId, images) {
       const chat = userState.aiChats[targetChatId];
       if (!(isBuilderAiChat(chat) || isConversationAiChat(chat)))
         throw new Error('AI chat not found');
+      if (pendingAiChatModelChanges.has(targetChatId))
+        throw new Error('The AI chat model is changing');
       activeAiChatId = targetChatId;
       if (
         pendingAiChatSends.has(targetChatId) ||
@@ -8293,6 +8362,7 @@ async function sendConversationMessage(
   let responseActivity = false;
   const session = nevermindAi.session(chatId, {
     system: CONVERSATION_SYSTEM_PROMPT,
+    model: aiChatModelForChat(chat),
     toolMode: 'conversation',
   });
   const request = session.stream(prompt, {
@@ -9923,6 +9993,7 @@ async function loadUserState() {
       overrides: loaded.overrides || {},
       clipboardHistory: loaded.clipboardHistory || [],
       aiChats: loaded.aiChats || {},
+      aiChatDefaultModel: normalizeAiChatModel(loaded.aiChatDefaultModel),
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},
@@ -9942,7 +10013,7 @@ async function loadUserState() {
     };
   }
 
-  await migrateAiChats();
+  const aiChatsChanged = await migrateAiChats();
   clipboardHistory = await normalizeClipboardHistory(
     userState.clipboardHistory,
     CLIPBOARD_LIMIT,
@@ -9958,6 +10029,12 @@ async function loadUserState() {
     },
   );
   jobRegistry.hydrateEnabled(userState.jobSettings?.enabled || {});
+  if (
+    loaded &&
+    (aiChatsChanged ||
+      loaded.aiChatDefaultModel !== userState.aiChatDefaultModel)
+  )
+    scheduleSaveState();
 }
 
 async function migrateAiChats() {
@@ -9969,7 +10046,15 @@ async function migrateAiChats() {
       )
       .catch(() => []),
   );
+  let modelsChanged = false;
   for (const chat of Object.values(userState.aiChats || {}) as any[]) {
+    const expectedModel = isConversationAiChat(chat)
+      ? normalizeAiChatModel(chat.model)
+      : AUTOMATE_AI_CHAT_MODEL;
+    if (chat.model !== expectedModel) {
+      chat.model = expectedModel;
+      modelsChanged = true;
+    }
     if (isConversationAiChat(chat)) continue;
     if (chat.generatedExtensionFile && !chat.touchedExtensionFiles)
       chat.touchedExtensionFiles = [chat.generatedExtensionFile];
@@ -9991,6 +10076,7 @@ async function migrateAiChats() {
       delete chat.selectedBuilderPreviewFilename;
     }
   }
+  return modelsChanged;
 }
 
 async function persistClipboardImage(png, hash) {
@@ -10456,6 +10542,7 @@ async function duplicateCreatedAction(action) {
   userState.aiChats[duplicateId] = {
     id: duplicateId,
     kind: 'builder',
+    model: AUTOMATE_AI_CHAT_MODEL,
     query: `Tweak ${duplicateTitle}`,
     title: `Tweak ${duplicateTitle}`,
     status: 'ready',
@@ -10763,6 +10850,7 @@ app.whenReady().then(async () => {
     pickFormFieldPaths,
     startFileDrag,
     sendAiChatMessage,
+    setAiChatModel,
     noteAiChatExited,
     abortAiChat,
     resetAiChat,
