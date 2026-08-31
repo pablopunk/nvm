@@ -11,7 +11,8 @@ Palette dismissal and action IPC ran concurrently. This made selected-text fallb
 ## Durable rule
 
 - Await palette dismissal before an immediate action crosses IPC.
-- Do not treat window hide completion as proof that macOS restored source-app focus; retry Accessibility selection briefly before using clipboard fallback.
+- Hiding a palette window does not deactivate its macOS application. Relinquish app activation before selected-text work, then show the app without focusing it so passive indicators remain available.
+- Treat Accessibility retries as transition tolerance, not as a substitute for restoring source-app focus.
 - Reject selected-text accessibility reads while the palette owns focus.
 - Use passive indicator windows for transient feedback because they do not activate the app and remain visible after palette dismissal.
 - Let the indicator host own timed dismissal; renderer timers cannot reliably outlive a hidden or replaced surface.

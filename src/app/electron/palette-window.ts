@@ -360,6 +360,10 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       if (isNvmTestMode) recordTestWindowEvent('hidden');
       win.webContents.send('palette:hidden');
       win.hide();
+      if (process.platform === 'darwin') {
+        app.hide();
+        app.show();
+      }
       if (isNvmTestMode) setTimeout(() => showPalette(), 100).unref?.();
     });
   }
