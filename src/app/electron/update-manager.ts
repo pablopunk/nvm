@@ -3,12 +3,14 @@ import * as logger from './logger';
 import { supportsAutoUpdates } from './os';
 
 type UpdateInfo = { version?: string };
+type UpdateCheckResult = {
+  isUpdateAvailable: boolean;
+  updateInfo?: UpdateInfo;
+};
 type AutoUpdaterLike = {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
-  checkForUpdates: () => Promise<
-    { updateInfo?: UpdateInfo } | null | undefined
-  >;
+  checkForUpdates: () => Promise<UpdateCheckResult | null | undefined>;
   downloadUpdate: () => Promise<unknown>;
   quitAndInstall: () => void;
   on: (event: string, listener: (...args: any[]) => void) => void;
@@ -89,7 +91,12 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
         { source: 'host', scope: 'updater' },
       );
       const result = await autoUpdater.checkForUpdates();
-      if (options.download && result?.updateInfo && !state.downloadedInfo)
+      if (
+        options.download &&
+        result?.isUpdateAvailable &&
+        result.updateInfo &&
+        !state.downloadedInfo
+      )
         await downloadAvailableUpdate(result.updateInfo);
       return result?.updateInfo || null;
     } catch (error) {
@@ -110,14 +117,16 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   }
 
   async function downloadAvailableUpdate(info = state.availableInfo) {
+    const availableInfo = info || state.availableInfo;
     if (
       !canUseAutoUpdates() ||
       state.downloadInFlight ||
       state.installInFlight ||
-      state.downloadedInfo
+      state.downloadedInfo ||
+      !availableInfo
     )
       return;
-    state.availableInfo = info || state.availableInfo;
+    state.availableInfo = availableInfo;
     state.downloadInFlight = true;
     state.status = 'downloading';
     state.errorMessage = '';

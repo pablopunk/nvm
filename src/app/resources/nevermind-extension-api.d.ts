@@ -1381,7 +1381,7 @@ export type ExtensionContext = {
     item<T extends ExtensionItem>(item: T): T;
     actions<T extends ExtensionAction[]>(actions: T): T;
     empty(title?: string, subtitle?: string): ExtensionView;
-    /** Loading-only list surface; the host renders the perimeter sweep instead of an inline spinner or progress screen. */
+    /** Compact loading-only list surface; the host renders the perimeter sweep instead of an inline spinner or progress screen. */
     loading(title?: string): ExtensionView;
     error(title?: string, message?: string): ExtensionView;
   };

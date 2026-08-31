@@ -73,6 +73,7 @@ test('extension ui api keeps utility helpers stable', () => {
     id: 'extension-loading:Loading files',
     title: 'Loading files',
     searchBarPlaceholder: 'Loading files',
+    contentSizing: 'fit',
     isLoading: true,
     items: [],
   });

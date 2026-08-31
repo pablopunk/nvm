@@ -670,6 +670,7 @@ export function extensionLoadingView(title = 'Loading…'): CommandView {
     id: `extension-loading:${title}`,
     title,
     searchBarPlaceholder: title,
+    contentSizing: 'fit',
     isLoading: true,
     items: [],
   };
