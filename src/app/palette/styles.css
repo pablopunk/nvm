@@ -639,6 +639,11 @@ kbd {
   padding: 16px;
 }
 
+.aiChatResultsCard {
+  flex: 1 1 0;
+}
+
+.aiChatResultsCard > [cmdk-list-sizer],
 .builderResultsCard > [cmdk-list-sizer] {
   display: grid;
   height: 100%;

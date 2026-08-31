@@ -5376,7 +5376,7 @@ export function App() {
 
         <Command.List
           ref={resultsListRef}
-          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
         >
           {shortcutFor ? (
             <div className="shortcutRecorder" aria-busy={savingShortcut}>
