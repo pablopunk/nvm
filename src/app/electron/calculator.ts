@@ -45,6 +45,13 @@ type ExpressionNode =
   | { type: 'function'; name: string; args: ExpressionNode[] };
 
 const MAX_EXPRESSION_LENGTH = 500;
+const NUMERIC_OPERAND_PATTERN =
+  '[+-]?(?:(?:\\d+(?:,\\d{3})*(?:\\.\\d+)?)|(?:\\.\\d+))(?:\\s*[kmb])?';
+const NUMERIC_SUBTRACTION_PATTERN = new RegExp(
+  `(?:^|[^\\w.])${NUMERIC_OPERAND_PATTERN}\\s*-\\s*${NUMERIC_OPERAND_PATTERN}(?:$|[^\\w.])`,
+  'i',
+);
+const DATE_LIKE_SUBTRACTION_PATTERN = /^\d{4}-\d{1,2}(?:-\d{1,2})?$/;
 const SUFFIX_MULTIPLIERS: Record<string, number> = {
   k: 1_000,
   m: 1_000_000,
@@ -394,8 +401,9 @@ function normalizeCalculationQuery(query: string) {
 
 function isLikelyCalculation(expression: string, explicit: boolean) {
   if (explicit) return expression.length > 0;
-  if (/[+*/%^()]/.test(expression)) return true;
-  if (/\d\s-\s\d/.test(expression)) return true;
+  const normalizedExpression = normalizeNaturalMath(expression);
+  if (/[+*/%^()]/.test(normalizedExpression)) return true;
+  if (looksLikeNumericSubtraction(normalizedExpression)) return true;
   if (
     /\b(sqrt|square root|power|squared|cubed|sin|cos|tan|log|ln|abs|round|floor|ceil|min|max|percent)\b/i.test(
       expression,
@@ -407,10 +415,24 @@ function isLikelyCalculation(expression: string, explicit: boolean) {
   return /\d(?:\.\d+)?\s*[kmb]\b.*[+\-*/^]/i.test(expression);
 }
 
+function looksLikeNumericSubtraction(expression: string) {
+  const trimmed = expression.trim();
+  return (
+    !DATE_LIKE_SUBTRACTION_PATTERN.test(trimmed) &&
+    NUMERIC_SUBTRACTION_PATTERN.test(trimmed)
+  );
+}
+
 function normalizeNaturalMath(expression: string) {
   let next = expression.trim();
-  next = next.replace(/[×]/g, '*').replace(/[÷]/g, '/');
+  next = next.replace(/[×]/g, '*').replace(/[÷]/g, '/').replace(/[−]/g, '-');
   next = next.replace(/^(?:what(?:'s| is)|calculate|calc)\s+/i, '');
+  next = next.replace(/\bplus\b/gi, '+');
+  next = next.replace(/\bminus\b/gi, '-');
+  next = next.replace(/\btimes\b/gi, '*');
+  next = next.replace(/\bmultiplied\s+by\b/gi, '*');
+  next = next.replace(/\bdivided\s+by\b/gi, '/');
+  next = next.replace(/\bover\b/gi, '/');
   next = next.replace(/\bpercent\b/gi, '%');
   next = next.replace(/^square\s+root\s+of\s+(.+)$/i, 'sqrt($1)');
   next = next.replace(/\bpower\b/gi, '^');

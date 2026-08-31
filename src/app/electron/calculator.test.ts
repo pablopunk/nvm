@@ -26,6 +26,15 @@ test('evaluates arithmetic without executing JavaScript', () => {
   assert.equal(raw('Math.max(1,2)'), null);
 });
 
+test('recognizes compact and natural arithmetic input', () => {
+  assert.equal(raw('33-18'), '15');
+  assert.equal(raw('33−18'), '15');
+  assert.equal(raw('33 minus 18'), '15');
+  assert.equal(raw('33×18'), '594');
+  assert.equal(raw('33 divided by 3'), '11');
+  assert.equal(raw('10--5'), '15');
+});
+
 test('supports constants and math functions', () => {
   assert.equal(raw('sqrt(625)'), '25');
   assert.equal(raw('square root of 625'), '25');
@@ -202,4 +211,5 @@ test('does not trigger for plain non-calculator queries', () => {
   assert.equal(raw('calendar'), null);
   assert.equal(raw('hello world'), null);
   assert.equal(raw('123'), null);
+  assert.equal(raw('2026-08-31'), null);
 });
