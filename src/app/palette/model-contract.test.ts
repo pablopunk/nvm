@@ -53,6 +53,17 @@ test('quit actions use the standard visible action lifecycle', () => {
   });
 });
 
+test('update actions use their host-owned status view for progress', () => {
+  assert.deepEqual(
+    [
+      ACTION_DEFINITIONS.checkForUpdates,
+      ACTION_DEFINITIONS.downloadUpdate,
+      ACTION_DEFINITIONS.installUpdate,
+    ].map((definition) => definition.loading),
+    ['none', 'none', 'none'],
+  );
+});
+
 const permissionContract: AssertEqual<
   HostExtensionPermission,
   PublicExtensionPermission

@@ -58,6 +58,24 @@ test('does not download when the update check reports no update', async () => {
   assert.equal(manager.state.errorMessage, '');
 });
 
+test('keeps genuine update check failures as errors', async () => {
+  const calls: string[] = [];
+  const manager = createUpdateManager({
+    ...createAutoUpdater(calls),
+    checkForUpdates: async () => {
+      calls.push('check');
+      throw new Error('network unavailable');
+    },
+  });
+
+  await manager.checkForUpdates();
+
+  assert.deepEqual(calls, ['check']);
+  assert.equal(manager.state.status, 'error');
+  assert.equal(manager.state.errorMessage, 'network unavailable');
+  assert.equal(manager.state.checkInFlight, false);
+});
+
 test('exposes installing state before the deferred updater restart', () => {
   const calls: string[] = [];
   const manager = createUpdateManager(createAutoUpdater(calls));

@@ -168,19 +168,19 @@ export const ACTION_DEFINITIONS = {
   checkForUpdates: {
     description: 'Check for updates',
     dismiss: 'manual',
-    loading: 'view',
+    loading: 'none',
     execute: 'main',
   },
   downloadUpdate: {
     description: 'Download update',
     dismiss: 'manual',
-    loading: 'view',
+    loading: 'none',
     execute: 'main',
   },
   installUpdate: {
     description: 'Install update',
     dismiss: 'manual',
-    loading: 'view',
+    loading: 'none',
     execute: 'main',
   },
   lockScreen: {

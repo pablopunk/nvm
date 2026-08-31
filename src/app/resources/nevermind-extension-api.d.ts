@@ -1539,7 +1539,7 @@ export type ExtensionContext = {
       | 'quit',
       (title?: string, options?: Record<string, unknown>) => ExtensionAction
     >;
-    /** App update actions. Declare the `updates` capability for review. */
+    /** App update actions; progress is rendered by the host's Updates status view. Declare the `updates` capability for review. */
     updates: Record<
       'check' | 'download' | 'install',
       (title?: string, options?: Record<string, unknown>) => ExtensionAction
