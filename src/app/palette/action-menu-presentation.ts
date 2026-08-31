@@ -1,3 +1,10 @@
+interface ActionMenuHostLayout {
+  builderWorkspaceVisible: boolean;
+  hasNavigatedChild: boolean;
+  hasSiblingViews: boolean;
+  isRootLikeView: boolean;
+}
+
 export type ActionMenuSurfaceKind =
   | 'actions'
   | 'confirmation'
@@ -14,6 +21,20 @@ export function confirmationReturnSurface(
   hasSubmenu: boolean,
   panelOpen: boolean,
 ): ConfirmationReturnSurface {
-  if (hasSubmenu) return 'submenu';
+  if (hasSubmenu) {
+    return 'submenu';
+  }
   return panelOpen ? 'panel' : 'view';
+}
+
+export function actionMenuHostIsStacked({
+  builderWorkspaceVisible,
+  hasNavigatedChild,
+  hasSiblingViews,
+  isRootLikeView,
+}: ActionMenuHostLayout) {
+  return (
+    (!builderWorkspaceVisible && hasNavigatedChild && !isRootLikeView) ||
+    hasSiblingViews
+  );
 }

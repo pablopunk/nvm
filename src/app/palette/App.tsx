@@ -22,6 +22,7 @@ import {
   useState,
 } from 'react';
 import {
+  actionMenuHostIsStacked,
   actionMenuPresentation,
   confirmationReturnSurface,
   type ConfirmationReturnSurface,
@@ -2510,15 +2511,25 @@ export function App() {
       previewFor ||
       extensionView,
   );
+  const isNavigatedChildOpen = Boolean(
+    shortcutFor ||
+      shortcutManagerOpen ||
+      confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
+      aliasFor ||
+      previewFor ||
+      extensionView,
+  );
   const builderWorkspaceVisible = Boolean(
     extensionView?.aiChat && selectedBuilderPreview,
   );
-  const isVisuallyStacked =
-    (!builderWorkspaceVisible &&
-      isChildOpen &&
-      !isRootLikeExtensionView &&
-      !compactActionMenuVisible) ||
-    siblingViews.length > 0;
+  const isVisuallyStacked = actionMenuHostIsStacked({
+    builderWorkspaceVisible,
+    hasNavigatedChild: isNavigatedChildOpen,
+    hasSiblingViews: siblingViews.length > 0,
+    isRootLikeView: isRootLikeExtensionView,
+  });
   const childPlaceholder =
     actionSubmenuFor && !compactActionMenuVisible
       ? `Filter ${actionSubmenuFor.title}`
