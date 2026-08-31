@@ -10,6 +10,7 @@ import {
   type BrowserWindow,
   type BrowserWindowConstructorOptions,
   shell,
+  systemPreferences,
 } from 'electron';
 import {
   EXTENSION_WINDOW_CAPABILITIES,
@@ -20,6 +21,7 @@ import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
+import { warn as logWarn } from './logger';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
@@ -952,21 +954,56 @@ export function pasteIntoFrontmostApp() {
   })();
 }
 
-export function copySelectionIntoClipboard() {
+export type AppFocusTarget = {
+  bundleId: string;
+  pid: number;
+};
+
+function macosSelectedTextHelperPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'macos-selected-text')
+    : path.join(app.getAppPath(), 'build', 'native', 'macos-selected-text');
+}
+
+function runMacosSelectedTextHelper(
+  operation: 'copy' | 'read',
+  target: AppFocusTarget,
+) {
+  return new Promise<{ exitCode: number; stderr: string; stdout: string }>(
+    (resolve) => {
+      execFile(
+        macosSelectedTextHelperPath(),
+        [operation, String(target.pid)],
+        { timeout: 5000 },
+        (error, stdout, stderr) =>
+          resolve({
+            exitCode:
+              typeof (error as NodeJS.ErrnoException | null)?.code === 'number'
+                ? Number((error as NodeJS.ErrnoException).code)
+                : error
+                  ? 1
+                  : 0,
+            stderr: String(stderr || error?.message || ''),
+            stdout: String(stdout || ''),
+          }),
+      );
+    },
+  );
+}
+
+export function copySelectionIntoClipboard(target: AppFocusTarget) {
   return osFunction<[], Promise<boolean>>(
     {
-      darwin: () =>
-        new Promise((resolve) => {
-          execFile(
-            'osascript',
-            [
-              '-e',
-              'tell application "System Events" to keystroke "c" using command down',
-            ],
-            { timeout: 5000 },
-            (error) => resolve(!error),
+      darwin: async () => {
+        const result = await runMacosSelectedTextHelper('copy', target);
+        if (result.exitCode !== 0)
+          logWarn(
+            'selected-text.copy.failed',
+            { exitCode: result.exitCode, error: result.stderr.trim() },
+            { source: 'host', scope: 'selected-text' },
           );
-        }),
+        return result.exitCode === 0;
+      },
     },
     async () => false,
   )();
@@ -1036,15 +1073,28 @@ export async function selectedFilePaths() {
   )();
 }
 
-export async function selectedText() {
+export async function selectedText(target: AppFocusTarget) {
   return osFunction(
     {
       darwin: async () => {
-        const script =
-          'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\ntry\nset selectedText to value of attribute "AXSelectedText" of focused UI element of frontProcess\nif selectedText is missing value then return ""\nreturn selectedText as text\non error\nreturn ""\nend try\nend tell';
-        const result = await runAppleScript(script, 5000);
-        const text = result.stdout.replace(/\r?\n$/, '');
-        return text || null;
+        if (!systemPreferences.isTrustedAccessibilityClient(true)) {
+          throw new Error(
+            'Accessibility access is required. Enable the current Nevermind development app in System Settings, then restart it.',
+          );
+        }
+        const result = await runMacosSelectedTextHelper('read', target);
+        if (result.exitCode === 2) {
+          throw new Error(
+            'Accessibility access is required. Enable the current Nevermind development app in System Settings, then restart it.',
+          );
+        }
+        if (result.exitCode !== 0 && result.exitCode !== 3)
+          logWarn(
+            'selected-text.read.failed',
+            { exitCode: result.exitCode, error: result.stderr.trim() },
+            { source: 'host', scope: 'selected-text' },
+          );
+        return result.exitCode === 0 ? result.stdout || null : null;
       },
     },
     async () => null,
@@ -1073,20 +1123,23 @@ export async function frontmostAppFocusTarget() {
   return osFunction(
     {
       darwin: () =>
-        new Promise<{ bundleId: string } | null>((resolve) => {
+        new Promise<AppFocusTarget | null>((resolve) => {
           execFile('/usr/bin/lsappinfo', ['front'], (frontError, stdout) => {
             const asn = String(stdout || '').trim();
             if (frontError || !asn) return resolve(null);
             execFile(
               '/usr/bin/lsappinfo',
-              ['info', '-only', 'bundleID', asn],
+              ['info', '-only', 'bundleID', '-only', 'pid', asn],
               (infoError, infoStdout) => {
                 if (infoError) return resolve(null);
                 const bundleId =
                   String(infoStdout || '').match(
                     /"CFBundleIdentifier"="([^"]+)"/,
                   )?.[1] || '';
-                resolve(bundleId ? { bundleId } : null);
+                const pid = Number(
+                  String(infoStdout || '').match(/"pid"=(\d+)/)?.[1] || 0,
+                );
+                resolve(bundleId && pid ? { bundleId, pid } : null);
               },
             );
           });

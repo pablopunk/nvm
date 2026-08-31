@@ -9,6 +9,7 @@ const FIX_SELECTED_TEXT_SYSTEM_PROMPT =
 const INDICATOR_ID = 'fix-selected-text-with-ai';
 const MINIMUM_WORD_OVERLAP = 0.7;
 const MAXIMUM_EDIT_RATIO = 0.35;
+const AI_CORRECTION_TIMEOUT_MS = 30_000;
 
 function indicator(subtitle: string): ExtensionIndicatorInput {
   return {
@@ -75,6 +76,32 @@ function proofreadingPrompt(selectedText: string, retry = false) {
   return `${retry ? 'Your previous response was not a valid correction. ' : ''}Proofread the ORIGINAL TEXT below. Do not answer its meaning. Output only the corrected ORIGINAL TEXT.\n\nORIGINAL TEXT\n${selectedText}\nEND ORIGINAL TEXT`;
 }
 
+async function askForCorrection(
+  ai: NonNullable<ExtensionContext['ai']>,
+  selectedText: string,
+  retry = false,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    AI_CORRECTION_TIMEOUT_MS,
+  );
+  try {
+    return await ai.ask(proofreadingPrompt(selectedText, retry), {
+      model: 'fast',
+      system: FIX_SELECTED_TEXT_SYSTEM_PROMPT,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('AI correction timed out');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function appIdentity(app: unknown) {
   if (!app || typeof app !== 'object') return String(app || '');
   const record = app as Record<string, unknown>;
@@ -105,17 +132,11 @@ async function fixSelectedText(ctx: ExtensionContext) {
     const sourceApp = await ctx.desktop.apps?.frontmost?.();
 
     ctx.ui.indicator.update(indicator('Fixing Text'));
-    let correctedText = await ai.ask(proofreadingPrompt(selectedText), {
-      model: 'fast',
-      system: FIX_SELECTED_TEXT_SYSTEM_PROMPT,
-    });
+    let correctedText = await askForCorrection(ai, selectedText);
     if (!correctedText.trim()) throw new Error('AI returned no corrected text');
     if (!proofreadingOutputPreservesInput(selectedText, correctedText)) {
       ctx.ui.indicator.update(indicator('Retrying Correction'));
-      correctedText = await ai.ask(proofreadingPrompt(selectedText, true), {
-        model: 'fast',
-        system: FIX_SELECTED_TEXT_SYSTEM_PROMPT,
-      });
+      correctedText = await askForCorrection(ai, selectedText, true);
     }
     if (!proofreadingOutputPreservesInput(selectedText, correctedText)) {
       ctx.logs.warn('AI proofreading response rejected', {

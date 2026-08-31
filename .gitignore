@@ -11,3 +11,4 @@ release
 .codex
 .multica
 /backend/
+/build/native/

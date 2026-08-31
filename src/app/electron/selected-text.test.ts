@@ -17,6 +17,7 @@ function reader(options: {
   let restoreCalls = 0;
   let accessibilityCalls = 0;
   const selectedText = createSelectedTextReader({
+    selectionTarget: () => 'source-app',
     readAccessibilityText: () => {
       if (options.focusAfterAccessibility) {
         options.paletteFocused = true;

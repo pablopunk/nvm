@@ -127,6 +127,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let pendingShowOnReady = false;
   let currentPaletteMode: PaletteMode = 'default';
   let focusReturnTarget: unknown = null;
+  let restoredFocusReturnTarget: unknown = null;
 
   function debugLog(message: string, data?: unknown) {
     logger.debug(message, data, { source: 'host', scope: 'palette-window' });
@@ -297,6 +298,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       { options: showOptions },
       () => {
         if (!win) return;
+        restoredFocusReturnTarget = null;
         focusReturnTarget = showOptions.focusReturnTarget ?? null;
         markDebugPerformance('palette-window.show.start', {
           visible: win.isVisible(),
@@ -373,6 +375,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       if (isNvmTestMode) setTimeout(() => showPalette(), 100).unref?.();
     });
     if (target) {
+      restoredFocusReturnTarget = target;
       await options
         .restoreFocusReturnTarget?.(target)
         .then((restored) =>
@@ -415,6 +418,12 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         scope: 'palette-window',
       }),
     );
+  }
+
+  function takeRestoredFocusReturnTarget() {
+    const target = restoredFocusReturnTarget;
+    restoredFocusReturnTarget = null;
+    return target;
   }
 
   function registerHotkey() {
@@ -466,6 +475,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     hidePalette,
     showPaletteWhenReady,
     togglePalette,
+    takeRestoredFocusReturnTarget,
     registerHotkey,
   };
 }

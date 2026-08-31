@@ -205,6 +205,7 @@ import {
 import { compatibleOpenWithApps } from './open-with-apps';
 import {
   appIconSources,
+  type AppFocusTarget,
   appIdentityKey,
   autoUpdatesUnavailableMessage,
   captureScreenImage,
@@ -711,6 +712,9 @@ clipboardService = createClipboardHistory({
 });
 
 const selectedText = createSelectedTextReader({
+  selectionTarget: async () =>
+    (paletteWindow.takeRestoredFocusReturnTarget() as AppFocusTarget | null) ??
+    frontmostAppFocusTarget(),
   readAccessibilityText: readAccessibilitySelectedText,
   paletteIsFocused: () =>
     Boolean(paletteWindow.win?.isVisible() && paletteWindow.win.isFocused()),
@@ -724,6 +728,11 @@ const selectedText = createSelectedTextReader({
   copySelectionIntoClipboard,
   concealClipboardText: (text) =>
     suppressClipboardHistoryId(clipboardHistoryIdForText(text)),
+  selectionRead: (result) =>
+    loggerDebug('selected-text.read.result', result, {
+      source: 'host',
+      scope: 'selected-text',
+    }),
 });
 
 function osCacheRoot() {

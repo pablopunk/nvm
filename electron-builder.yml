@@ -33,6 +33,9 @@ publish:
     owner: pablopunk
     repo: nvm
 mac:
+  extraResources:
+    - from: build/native/macos-selected-text
+      to: macos-selected-text
   icon: build/Icon.icon
   category: public.app-category.productivity
   target:
