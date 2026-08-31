@@ -3,6 +3,7 @@
   --window-blur-margin: 96px;
   --search-row-height: 58px;
   --palette-stack-gap: 8px;
+  --stack-card-right-inset: 58px;
 
   --radius-pill: 999px;
   --radius-xl: 24px;
@@ -358,7 +359,7 @@ kbd {
   flex: 0 1 auto;
   height: auto !important;
   min-height: 0;
-  width: calc(100% - 58px);
+  width: calc(100% - var(--stack-card-right-inset));
   margin-left: 34px;
   overflow: visible;
 }
@@ -2378,6 +2379,11 @@ kbd {
 
 .paletteCompactPanel {
   bottom: 12px;
+}
+
+.palette.isStacked .paletteCompactPanel {
+  right: calc(12px + var(--stack-card-right-inset));
+  width: min(320px, calc(100% - 24px - var(--stack-card-right-inset)));
 }
 
 .extensionWindowCompactPanel .extensionWindowSearchRow {
