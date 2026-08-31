@@ -42,6 +42,7 @@ const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   let startupTimer: NodeJS.Timeout | null = null;
   let pollTimer: NodeJS.Timeout | null = null;
+  let installStarted = false;
   const stateListeners = new Set<() => void>();
   function notifyStateChanged() {
     for (const listener of stateListeners) {
@@ -248,7 +249,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     pollTimer.unref?.();
   }
 
-  function quitAndInstall() {
+  function prepareInstall() {
     if (!state.downloadedInfo || state.installInFlight) return false;
     state.installInFlight = true;
     state.status = 'installing';
@@ -258,10 +259,18 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
       scope: 'updater',
     });
     notifyStateChanged();
+    return true;
+  }
+
+  function quitAndInstall() {
+    if (!state.downloadedInfo || installStarted) return false;
+    if (!state.installInFlight && !prepareInstall()) return false;
+    installStarted = true;
     try {
       autoUpdater.quitAndInstall();
       return true;
     } catch (error) {
+      installStarted = false;
       state.installInFlight = false;
       state.status = 'error';
       state.errorMessage =
@@ -282,6 +291,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     downloadAvailableUpdate,
     clearTimers,
     configure,
+    prepareInstall,
     quitAndInstall,
     onStateChange,
   };

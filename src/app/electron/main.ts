@@ -2527,12 +2527,12 @@ function downloadUpdateView() {
 }
 
 function installDownloadedUpdate() {
-  if (!updateManager.state.downloadedInfo)
+  if (!updateManager.prepareInstall())
     return { view: updateStatusView(), navigation: 'replace' };
   nevermindApp.isQuiting = true;
   void stateSafeQuit.requestQuit('updater', () => {
     const didStart = updateManager.quitAndInstall();
-    if (!(didStart || updateManager.state.installInFlight)) app.quit();
+    if (!didStart) app.quit();
   });
   return { view: updateStatusView(), navigation: 'replace' };
 }

@@ -57,3 +57,16 @@ test('does not download when the update check reports no update', async () => {
   assert.equal(manager.state.status, 'idle');
   assert.equal(manager.state.errorMessage, '');
 });
+
+test('exposes installing state before the deferred updater restart', () => {
+  const calls: string[] = [];
+  const manager = createUpdateManager(createAutoUpdater(calls));
+  manager.state.downloadedInfo = { version: '0.16.6' };
+
+  assert.equal(manager.prepareInstall(), true);
+  assert.equal(manager.state.status, 'installing');
+  assert.equal(manager.state.installInFlight, true);
+
+  assert.equal(manager.quitAndInstall(), true);
+  assert.deepEqual(calls, ['install']);
+});
