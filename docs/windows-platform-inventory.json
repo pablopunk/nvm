@@ -3,10 +3,10 @@
   "supportStatus": "unverified",
   "sourceRules": [
     {
-      "key": "os-copy-selection-platform-selector-46a18e87bd80",
+      "key": "os-copy-selection-platform-selector-8b485c4761fe",
       "file": "src/app/electron/os.ts",
       "category": "platform-selector",
-      "selector": "function:copySelectionIntoClipboard::platform-selector::darwin: () => new Promise((resolve) => { execFile( 'osascript', [ '-e', 'tell application \"Syste…#46a18e87bd80::self",
+      "selector": "function:copySelectionIntoClipboard::platform-selector::darwin: async () => { const result = await runMacosSelectedTextHelper('copy', target); if (resul…#8b485c4761fe::self",
       "disposition": "capability-selector",
       "surface": "clipboard-text-image-paste"
     },
@@ -273,6 +273,22 @@
       "selector": "module::known-folder::export function knownUserFolderPath( name: 'Desktop' | 'Documents' | 'Downloads', ) { return def…#c99ad2911974::self",
       "disposition": "capability-layer",
       "surface": "files-search-open"
+    },
+    {
+      "key": "os-accessibility-label-32a47f291ec0",
+      "file": "src/app/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:selectedText/property:darwin/if:!systemPreferences.isTrustedAccessibilityClient(true)::os-label::throw new Error( 'Accessibility access is required. Enable Nevermind in System Settings, then restart it.', );::expression.arguments[0]",
+      "disposition": "capability-owned-label",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "os-accessibility-helper-label-32a47f291ec0",
+      "file": "src/app/electron/os.ts",
+      "category": "os-label",
+      "selector": "function:selectedText/property:darwin/if:result.exitCode === 2::os-label::throw new Error( 'Accessibility access is required. Enable Nevermind in System Settings, then restart it.', );::expression.arguments[0]",
+      "disposition": "capability-owned-label",
+      "surface": "clipboard-text-image-paste"
     },
     {
       "key": "os-os-label-3c9b3391dcb8",
@@ -931,12 +947,28 @@
       "surface": "clipboard-text-image-paste"
     },
     {
-      "key": "os-platform-selector-eb5ca0228d36",
+      "key": "os-platform-selector-14628c765308",
       "file": "src/app/electron/os.ts",
       "category": "platform-selector",
-      "selector": "function:selectedText::platform-selector::darwin: async () => { const script = 'tell application \"System Events\"\\nset frontProcess to firs…#81f627ac2f4a::self",
+      "selector": "function:selectedText::platform-selector::darwin: async () => { if (!systemPreferences.isTrustedAccessibilityClient(true)) { throw new Err…#14628c765308::self",
       "disposition": "capability-selector",
       "surface": "clipboard-text-image-paste"
+    },
+    {
+      "key": "os-frontmost-focus-target-platform-selector-d1555a2bdfb3",
+      "file": "src/app/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:frontmostAppFocusTarget::platform-selector::darwin: () => new Promise<AppFocusTarget | null>((resolve) => { execFile('/usr/bin/lsappinfo', […#d1555a2bdfb3::self",
+      "disposition": "capability-selector",
+      "surface": "window-behavior"
+    },
+    {
+      "key": "os-restore-focus-platform-selector-a1826a63e1a7",
+      "file": "src/app/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:restoreAppFocus::platform-selector::darwin: async () => { const script = `tell application \"System Events\" set matchingProcesses to …#a1826a63e1a7::self",
+      "disposition": "capability-selector",
+      "surface": "window-behavior"
     },
     {
       "key": "os-platform-selector-a2e2034dd90b",
