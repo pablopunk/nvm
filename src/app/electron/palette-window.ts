@@ -45,10 +45,7 @@ type PaletteWindowOptions = {
 
 const WINDOW_BLUR_MARGIN = 96;
 const DEFAULT_PALETTE_SIZE = { width: 720, height: 480 };
-const AI_CHAT_PALETTE_SIZE = {
-  width: 760,
-  height: DEFAULT_PALETTE_SIZE.height,
-};
+const AI_CHAT_PALETTE_SIZE = DEFAULT_PALETTE_SIZE;
 const STACKED_PALETTE_SIZE = { width: 760, height: 720 };
 const PREVIEW_PALETTE_SIZE = { width: 1080, height: 760 };
 const SIDE_PREVIEW_PALETTE_SIZE = { width: 960, height: 640 };
