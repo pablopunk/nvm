@@ -4,7 +4,7 @@ import { db } from '../db/client';
 import { creditReservations, requestDedup } from '../db/schema';
 import {
   getModelRoute,
-  getModelProviderChain,
+  getModelProviderRoutes,
   modelRouteSlotForAccount,
   ModelNotConfiguredError,
   parseExtensionAiModelRole,
@@ -25,7 +25,7 @@ import { getUpstreamConfig, selectApiForModel, providerSupportsFormat, UpstreamC
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { estimateInputTokensFromBody, estimateRequestCredits, MAX_INPUT_TOKENS, requestedMaxOutputTokens } from './limits';
-import { finalizeReservation, reserveCredits } from './credit-reservations';
+import { finalizeReservation, reserveCredits, resizeReservation } from './credit-reservations';
 import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
 import * as Sentry from '@sentry/astro';
@@ -33,7 +33,14 @@ import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
-export type UsageTokens = { inputTokens: number; outputTokens: number };
+export type UsageTokens = {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteInputTokens?: number;
+  reasoningTokens?: number;
+  providerCostUsd?: number;
+};
 
 export type ProxyConfig = {
   request: Request;
@@ -54,6 +61,11 @@ export type ProxyConfig = {
 export type StreamUsageAccumulator = {
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteInputTokens?: number;
+  reasoningTokens?: number;
+  providerCostUsd?: number;
+  observedOutputCharacters?: number;
   finalized: boolean;
   pendingText?: string;
   reportMalformedFrame?: (error: unknown) => void;
@@ -90,6 +102,7 @@ type BillContext = {
   requestId: string;
   client: DesktopClient;
   estimatedInputTokens: number;
+  reservationCredits?: number;
   dedupIdempotencyKey?: string;
   dedupRequestHash?: string;
 };
@@ -102,7 +115,7 @@ export type DedupClaim = {
 };
 
 export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, status: number): UsageTokens {
-  if (status >= 200 && status < 300 && tokens.outputTokens === 0 && ctx.estimatedInputTokens > 0) {
+  if (status >= 200 && status < 300 && ctx.estimatedInputTokens > 0 && (tokens.inputTokens === 0 || tokens.outputTokens === 0)) {
     log.error('usage_missing_on_success', {
       request_id: ctx.requestId,
       provider: ctx.provider,
@@ -110,8 +123,9 @@ export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, sta
       estimated_input_tokens: ctx.estimatedInputTokens,
     });
     return {
+      ...tokens,
       inputTokens: tokens.inputTokens > 0 ? tokens.inputTokens : ctx.estimatedInputTokens,
-      outputTokens: 1,
+      outputTokens: tokens.outputTokens > 0 ? tokens.outputTokens : 1,
     };
   }
   return tokens;
@@ -170,10 +184,42 @@ async function recordUsage(
   dedupTerminal?: DedupTerminal,
 ) {
   const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
-  const credits = billable ? usdToCredits(computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens)) : 0;
+  const providerCostUsd = ctx.provider === 'openrouter'
+    && tokens.providerCostUsd != null
+    && Number.isFinite(tokens.providerCostUsd)
+    && tokens.providerCostUsd >= 0
+    ? tokens.providerCostUsd
+    : undefined;
+  const costUsd = providerCostUsd ?? computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens, tokens);
+  const calculatedCredits = billable ? usdToCredits(costUsd) : 0;
+  const credits = ctx.reservationCredits == null
+    ? calculatedCredits
+    : Math.min(calculatedCredits, ctx.reservationCredits);
   await finalizeReservation(billable
-    ? { requestId: ctx.requestId, outcome: 'settle', model: ctx.activeModelId, provider: ctx.provider, tokens, costRow: ctx.costRow, status, latencyMs, dedup: reservationDedupFinalization(ctx, dedupTerminal) }
-    : { requestId: ctx.requestId, outcome: 'release', dedup: reservationDedupFinalization(ctx, dedupTerminal) });
+    ? {
+        requestId: ctx.requestId,
+        outcome: 'settle',
+        model: ctx.activeModelId,
+        provider: ctx.provider,
+        tokens,
+        costRow: ctx.costRow,
+        providerCostUsd,
+        costSource: providerCostUsd == null ? 'catalog_estimate' : 'provider_reported',
+        status,
+        latencyMs,
+        dedup: reservationDedupFinalization(ctx, dedupTerminal),
+      }
+    : {
+        requestId: ctx.requestId,
+        outcome: 'release',
+        model: ctx.activeModelId,
+        provider: ctx.provider,
+        tokens,
+        costRow: ctx.costRow,
+        status,
+        latencyMs,
+        dedup: reservationDedupFinalization(ctx, dedupTerminal),
+      });
   log.info('chat_completion', {
     request_id: ctx.requestId,
     user_id: ctx.user.id,
@@ -593,27 +639,45 @@ function chainExhaustedResponse(requestId: string): Response {
 async function tryUpstreamProviders(
   cfg: ProxyConfig,
   routing: ResolvedRouting,
-  forwardBody: BodyInit | undefined,
+  requestBody: BodyInit | undefined,
+  requestBodyText: string,
+  estimatedInputTokens: number,
+  reservedCredits: number | undefined,
+  maxOutputTokens: number | undefined,
+  requestedOutputTokens: number | undefined,
   requestId: string,
-): Promise<{ response: Response; provider: string; costRow: ModelCost } | Response> {
+): Promise<
+  | { response: Response; provider: string; modelId: string; costRow: ModelCost; reservedCredits: number | undefined }
+  | { failure: Response; provider: string; modelId: string; costRow: ModelCost; status: number }
+> {
   const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
   const failoverEnabled = !backendKillSwitchEnabled('ai_failover');
 
-  let chainProviders: string[] = [];
+  let chainProviders: Array<{ providerId: string; modelId: string }> = [];
   if (failoverEnabled) {
     try {
-      chainProviders = await getModelProviderChain(routing.routeSlot, routing.activeModelId);
+      chainProviders = await getModelProviderRoutes(routing.routeSlot, routing.activeModelId);
     } catch (err) {
       log.warn('provider_chain_fetch_failed', { request_id: requestId, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
-  const providerChain = [routing.provider, ...chainProviders.filter((p) => p !== routing.provider)];
-  let lastErrorStatus = 503;
+  const providerChain = [
+    { providerId: routing.provider, modelId: routing.activeModelId },
+    ...chainProviders.filter((route) => route.providerId !== routing.provider || route.modelId !== routing.activeModelId),
+  ];
+  let lastFailure: { provider: string; modelId: string; costRow: ModelCost } = {
+    provider: routing.provider,
+    modelId: routing.activeModelId,
+    costRow: routing.costRow,
+  };
+  let creditFailure: { response: Response; provider: string; modelId: string; costRow: ModelCost } | null = null;
+  let currentReservedCredits = reservedCredits;
 
-  for (const providerId of providerChain) {
-    if (!providerSupportsFormat(providerId, apiFormat)) {
-      log.info('upstream_format_skip', { request_id: requestId, provider: providerId, format: apiFormat });
+  for (const [attemptIndex, candidate] of providerChain.entries()) {
+    const { providerId, modelId } = candidate;
+    if (!providerSupportsFormat(providerId, apiFormat) || selectApiForModel(providerId, modelId) !== apiFormat) {
+      log.info('upstream_format_skip', { request_id: requestId, provider: providerId, model: modelId, format: apiFormat });
       continue;
     }
 
@@ -625,17 +689,75 @@ async function tryUpstreamProviders(
       continue;
     }
 
-    const costRow = providerId === routing.provider
+    const costRow = providerId === routing.provider && modelId === routing.activeModelId
       ? routing.costRow
-      : await lookupModelCost(providerId, routing.activeModelId);
+      : await lookupModelCost(providerId, modelId);
     if (!costRow) {
-      log.warn('upstream_cost_skip', { request_id: requestId, provider: providerId, model: routing.activeModelId });
+      log.warn('upstream_cost_skip', { request_id: requestId, provider: providerId, model: modelId });
       continue;
     }
+    lastFailure = { provider: providerId, modelId, costRow };
+
+    const descriptor = providerId === routing.provider && modelId === routing.activeModelId
+      ? null
+      : await lookupModelDescriptor(providerId, modelId);
+    const candidateMaxOutputTokens = descriptor
+      ? Math.min(
+          requestedOutputTokens ?? descriptor.maxTokens,
+          descriptor.maxTokens,
+          Math.max(0, descriptor.contextWindow - estimatedInputTokens - OUTPUT_CONTEXT_SAFETY_TOKENS),
+        )
+      : maxOutputTokens;
+    if (candidateMaxOutputTokens != null && candidateMaxOutputTokens < 1) {
+      log.warn('upstream_context_skip', { request_id: requestId, provider: providerId, model: modelId });
+      continue;
+    }
+    const candidateCredits = candidateMaxOutputTokens == null
+      ? undefined
+      : estimateRequestCredits(estimatedInputTokens, candidateMaxOutputTokens, costRow);
+    if (candidateCredits != null && reservedCredits != null && candidateCredits > reservedCredits) {
+      const resized = await resizeReservation(
+        requestId,
+        candidateCredits,
+      );
+      if (!resized.ok && resized.reason === 'insufficient_credits') {
+        log.warn('upstream_credit_skip', { request_id: requestId, provider: providerId, model: modelId });
+        creditFailure = {
+          response: withRequestId(Response.json(
+            { error: { type: 'insufficient_credits', message: 'Failover cost would exceed remaining balance', balance: resized.balance - resized.reserved, dashboard_url: DASHBOARD_URL } },
+            { status: 402 },
+          ), requestId),
+          ...lastFailure,
+        };
+        if (attemptIndex === providerChain.length - 1) {
+          return {
+            failure: creditFailure.response,
+            provider: creditFailure.provider,
+            modelId: creditFailure.modelId,
+            costRow: creditFailure.costRow,
+            status: 402,
+          };
+        }
+        continue;
+      }
+      if (resized.ok) currentReservedCredits = resized.reservation.reservedCredits;
+    }
+
+    const candidateRouting: ModelRouting = {
+      provider: providerId,
+      activeModelId: modelId,
+      thinkingLevel: routing.thinkingLevel,
+      costRow,
+      upstreamBaseUrl: upstreamCfg.baseUrl,
+      upstreamApiKey: upstreamCfg.apiKey,
+    };
+    const forwardBody = cfg.rewriteRequestBody && candidateMaxOutputTokens != null
+      ? cfg.rewriteRequestBody(requestBodyText, candidateRouting, candidateMaxOutputTokens)
+      : requestBody;
 
     const upstreamUrl = cfg.buildUpstreamUrl({
       upstreamBaseUrl: upstreamCfg.baseUrl,
-      activeModelId: routing.activeModelId,
+      activeModelId: modelId,
     });
 
     const headers = buildForwardHeaders(
@@ -646,6 +768,7 @@ async function tryUpstreamProviders(
     );
 
     let resp;
+    creditFailure = null;
     try {
       resp = await fetch(upstreamUrl, {
         method: cfg.request.method,
@@ -661,19 +784,27 @@ async function tryUpstreamProviders(
       continue;
     }
 
-    const isLast = providerId === providerChain[providerChain.length - 1];
+    const isLast = attemptIndex === providerChain.length - 1;
 
     if (resp.status >= 500) {
-      lastErrorStatus = resp.status;
       log.warn('upstream_5xx', { request_id: requestId, provider: providerId, status: resp.status });
       if (!isLast) continue;
     }
 
     log.info('upstream_selected', { request_id: requestId, provider: providerId, status: resp.status });
-    return { response: resp, provider: providerId, costRow };
+    return { response: resp, provider: providerId, modelId, costRow, reservedCredits: currentReservedCredits };
   }
 
-  return chainExhaustedResponse(requestId);
+  if (creditFailure) {
+    return {
+      failure: creditFailure.response,
+      provider: creditFailure.provider,
+      modelId: creditFailure.modelId,
+      costRow: creditFailure.costRow,
+      status: 402,
+    };
+  }
+  return { failure: chainExhaustedResponse(requestId), ...lastFailure, status: 503 };
 }
 
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
@@ -724,7 +855,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     }
 
     let forwardBody: BodyInit | undefined;
+    let maxOutputTokens: number | undefined;
+    let requestedOutput: number | undefined;
     let estimatedInputTokens = 0;
+    let estimatedCredits: number | undefined;
     if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
     const text = requestBodyText;
     estimatedInputTokens = estimateInputTokensFromBody(text);
@@ -737,7 +871,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     }
     let parsedBody: unknown = null;
     try { parsedBody = JSON.parse(text); } catch { /* upstream retains its existing invalid-JSON behavior */ }
-    const requestedOutput = requestedMaxOutputTokens(parsedBody);
+    requestedOutput = requestedMaxOutputTokens(parsedBody);
     const maxOutputFor = async (candidate: ModelRouting) => {
       const descriptor = await lookupModelDescriptor(candidate.provider, candidate.activeModelId);
       const serverMaximum = descriptor?.maxTokens ?? 32_000;
@@ -750,7 +884,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         Math.max(0, contextMaximum),
       );
     };
-    let maxOutputTokens = await maxOutputFor(routing);
+    maxOutputTokens = await maxOutputFor(routing);
     if (maxOutputTokens < 1) {
       await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
@@ -758,7 +892,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         { status: 413 },
       ), requestId);
     }
-    let estimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, routing.costRow);
+    estimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, routing.costRow);
     let reservation = await reserveCredits({
       requestId,
       userId: routing.user.id,
@@ -816,29 +950,48 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       : requestBodyBuffer;
   }
 
-  const result = await tryUpstreamProviders(cfg, routing, forwardBody, requestId);
-  if (result instanceof Response) {
-    await finalizeReservation({
+  const result = await tryUpstreamProviders(
+    cfg,
+    routing,
+    forwardBody,
+    requestBodyText,
+    estimatedInputTokens,
+    estimatedCredits,
+    maxOutputTokens,
+    requestedOutput,
+    requestId,
+  );
+  if ('failure' in result) {
+    await recordUsage({
+      user: routing.user,
+      provider: result.provider,
+      activeModelId: result.modelId,
+      costRow: result.costRow,
+      kind: routing.kind,
       requestId,
-      outcome: 'release',
-      dedup: claimDedupFinalization(dedupClaim, { status: 'failed' }),
-    });
-    return result;
+      client,
+      estimatedInputTokens,
+      dedupIdempotencyKey: dedupEnabled ? idempotencyKey : undefined,
+      dedupRequestHash: dedupEnabled ? requestHash : undefined,
+    }, { inputTokens: 0, outputTokens: 0 }, result.status, Date.now() - startedAt, { status: 'failed', upstreamStatus: result.status });
+    return result.failure;
   }
 
   const upstreamResponse = result.response;
   const winningProvider = result.provider;
+  const winningModelId = result.modelId;
   const winningCostRow = result.costRow;
 
   const billCtx: BillContext = {
     user: routing.user,
     provider: winningProvider,
-    activeModelId: routing.activeModelId,
+    activeModelId: winningModelId,
     costRow: winningCostRow,
     kind: routing.kind,
     requestId,
     client,
     estimatedInputTokens,
+    reservationCredits: result.reservedCredits,
     dedupIdempotencyKey: dedupEnabled ? idempotencyKey : undefined,
     dedupRequestHash: dedupEnabled ? requestHash : undefined,
   };
@@ -947,12 +1100,15 @@ function teeStreamAndBill(
   const acc: StreamUsageAccumulator = {
     inputTokens: 0,
     outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
+    reasoningTokens: 0,
+    observedOutputCharacters: 0,
     finalized: false,
     reportMalformedFrame: reportMalformedStreamUsageFrame,
   };
   const decoder = new TextDecoder('utf-8', { fatal: false });
   let terminal = false;
-  let deliveredOutput = false;
   let loggedFirstChunk = false;
   async function finish(naturalCompletion: boolean) {
     if (terminal) return;
@@ -960,10 +1116,27 @@ function teeStreamAndBill(
     if (naturalCompletion) {
       sniffStreamUsage(decoder.decode(), true);
     }
-    const observedOutput = acc.outputTokens > 0 || deliveredOutput;
-    const streamTokens = naturalCompletion || deliveredOutput
-      ? resolveBillableTokens(billCtx, { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens }, status)
-      : { inputTokens: acc.inputTokens, outputTokens: acc.outputTokens };
+    const observedOutput = acc.outputTokens > 0 || (acc.observedOutputCharacters ?? 0) > 0;
+    const observedOutputTokens = acc.outputTokens > 0
+      ? acc.outputTokens
+      : Math.max(0, Math.ceil((acc.observedOutputCharacters ?? 0) / 4));
+    const streamTokens = naturalCompletion || observedOutput
+      ? resolveBillableTokens(billCtx, {
+          inputTokens: acc.inputTokens,
+          outputTokens: observedOutputTokens,
+          cachedInputTokens: acc.cachedInputTokens,
+          cacheWriteInputTokens: acc.cacheWriteInputTokens,
+          reasoningTokens: acc.reasoningTokens,
+          providerCostUsd: acc.providerCostUsd,
+        }, status)
+      : {
+          inputTokens: acc.inputTokens,
+          outputTokens: observedOutputTokens,
+          cachedInputTokens: acc.cachedInputTokens,
+          cacheWriteInputTokens: acc.cacheWriteInputTokens,
+          reasoningTokens: acc.reasoningTokens,
+          providerCostUsd: acc.providerCostUsd,
+        };
     try {
       await recordUsage(
         billCtx,
@@ -1005,7 +1178,6 @@ function teeStreamAndBill(
             });
           }
           sniffStreamUsage(decoder.decode(value, { stream: true }));
-          if (value.byteLength > 0) deliveredOutput = true;
           controller.enqueue(value);
         }
       } catch (error) {

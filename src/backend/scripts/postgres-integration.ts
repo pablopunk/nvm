@@ -25,7 +25,7 @@ import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
 import { createApiToken } from '../src/lib/tokens';
-import { finalizeReservation, reconcileStaleReservations, reserveCredits } from '../src/lib/credit-reservations';
+import { finalizeReservation, reconcileStaleReservations, reserveCredits, resizeReservation } from '../src/lib/credit-reservations';
 import { aiRequestHash, handleDedup } from '../src/lib/proxy';
 import { runPostgresMigrations } from './migrate-postgres';
 
@@ -143,6 +143,21 @@ async function runAssertions() {
         await reserveCredits({ requestId: releasedRequestId, userId: user.id, kind: 'paid', credits: 20 }),
         { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 20 },
         'a released execution identity must never authorize more upstream work',
+      );
+
+      const resizeRequestId = `resize-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: resizeRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      const resized = await resizeReservation(resizeRequestId, 100);
+      assert.ok(resized.ok);
+      assert.equal(resized.reservation.reservedCredits, 100);
+      assert.deepEqual(
+        await resizeReservation(resizeRequestId, 110),
+        { ok: false, reason: 'insufficient_credits', balance: 9, reserved: 0 },
+      );
+      assert.equal(await finalizeReservation({ requestId: resizeRequestId, outcome: 'release' }), 'released');
+      assert.deepEqual(
+        await resizeReservation(resizeRequestId, 20),
+        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 100 },
       );
 
       const terminalRaceRequestId = `terminal-race-${databaseName}`;

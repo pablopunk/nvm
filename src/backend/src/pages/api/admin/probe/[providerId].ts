@@ -20,21 +20,33 @@ export const GET: APIRoute = async ({ request, params }) => {
     throw err;
   }
 
-  const probeUrl = `${baseUrl}/models`;
+  const probeUrl = providerId === 'anthropic'
+    ? `${baseUrl}/v1/models?limit=1`
+    : providerId === 'google'
+      ? `${baseUrl}/models?pageSize=1`
+      : `${baseUrl}/models`;
+  const headers = new Headers();
+  if (providerId === 'anthropic') {
+    headers.set('x-api-key', apiKey);
+    headers.set('anthropic-version', '2023-06-01');
+  } else if (providerId === 'google') {
+    headers.set('x-goog-api-key', apiKey);
+  } else {
+    headers.set('authorization', `Bearer ${apiKey}`);
+  }
   const startedAt = Date.now();
   try {
     const resp = await fetch(probeUrl, {
       method: 'GET',
-      headers: { authorization: `Bearer ${apiKey}` },
+      headers,
       signal: AbortSignal.timeout(8000),
     });
     const latencyMs = Date.now() - startedAt;
-    const body = await resp.text().catch(() => '');
     return Response.json({
-      ok: resp.ok || resp.status < 500,
+      ok: resp.ok,
       status: resp.status,
       latencyMs,
-      body: body.slice(0, 500),
+      ...(resp.ok ? {} : { error: `Provider returned HTTP ${resp.status}` }),
     });
   } catch (err) {
     const latencyMs = Date.now() - startedAt;

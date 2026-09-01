@@ -36,13 +36,23 @@ function rewriteOpenAiModel(
     }
     delete parsed.max_completion_tokens;
   }
+  if (parsed.stream === true) {
+    parsed.stream_options = { ...(parsed.stream_options ?? {}), include_usage: true };
+  }
   return JSON.stringify(parsed);
 }
 
 function parseUsageFromOpenAiJson(json: any): UsageTokens | null {
   const u = json?.usage;
   if (!u) return null;
-  return { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 };
+  return {
+    inputTokens: u.prompt_tokens ?? 0,
+    outputTokens: u.completion_tokens ?? 0,
+    cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? 0,
+    cacheWriteInputTokens: u.prompt_tokens_details?.cache_write_tokens ?? 0,
+    reasoningTokens: u.completion_tokens_details?.reasoning_tokens ?? 0,
+    providerCostUsd: typeof u.cost === 'number' ? u.cost : undefined,
+  };
 }
 
 function parseUsageFromOpenAiStreamChunk(chunkText: string, acc: StreamUsageAccumulator, finalize = false): void {
@@ -52,9 +62,21 @@ function parseUsageFromOpenAiStreamChunk(chunkText: string, acc: StreamUsageAccu
     const payload = trimmed.slice(5).trim();
     if (!payload || payload === '[DONE]') continue;
     const obj = parseStreamUsageJson(payload, acc);
+    const content = obj?.choices?.[0]?.delta?.content;
+    if (typeof content === 'string') acc.observedOutputCharacters = (acc.observedOutputCharacters ?? 0) + content.length;
+    const reasoning = obj?.choices?.[0]?.delta?.reasoning;
+    if (typeof reasoning === 'string') acc.observedOutputCharacters = (acc.observedOutputCharacters ?? 0) + reasoning.length;
+    for (const toolCall of obj?.choices?.[0]?.delta?.tool_calls ?? []) {
+      const argumentsText = toolCall?.function?.arguments;
+      if (typeof argumentsText === 'string') acc.observedOutputCharacters = (acc.observedOutputCharacters ?? 0) + argumentsText.length;
+    }
     if (obj?.usage) {
       acc.inputTokens = obj.usage.prompt_tokens ?? acc.inputTokens;
       acc.outputTokens = obj.usage.completion_tokens ?? acc.outputTokens;
+      acc.cachedInputTokens = obj.usage.prompt_tokens_details?.cached_tokens ?? acc.cachedInputTokens;
+      acc.cacheWriteInputTokens = obj.usage.prompt_tokens_details?.cache_write_tokens ?? acc.cacheWriteInputTokens;
+      acc.reasoningTokens = obj.usage.completion_tokens_details?.reasoning_tokens ?? acc.reasoningTokens;
+      if (typeof obj.usage.cost === 'number') acc.providerCostUsd = obj.usage.cost;
       acc.finalized = true;
     }
   }

@@ -79,11 +79,22 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
 .model-route-row .field { min-width: 0; }
 .model-route-row .ts-wrapper { width: 100%; min-width: 0; }
 .model-route-row .thinking-select { width: 100%; }
+.route-details { grid-column: 1 / -1; padding: 8px 0 12px 132px; font-size: 12px; }
+.chain-editor { margin: 8px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.chain-editor legend { padding: 0 4px; color: var(--muted); }
+.chain-row { display: grid; grid-template-columns: 150px minmax(220px, 1fr); gap: 8px 12px; align-items: end; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.chain-row:last-child { border-bottom: 0; }
+.chain-price { grid-column: 1 / -1; }
+.chain-actions { display: flex; gap: 4px; align-items: center; }
+.chain-actions .button, .chain-footer .button, .route-details > .button { padding: 4px 8px; font-size: 12px; }
+.chain-footer { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 
 @media (max-width: 700px) {
   .model-route-row { grid-template-columns: 1fr 1fr; }
   .model-route-row__name { grid-column: 1 / -1; padding-bottom: 0; }
   .model-route-row .model-route-row__name + .field { grid-column: 1 / -1; }
+  .route-details { padding-left: 0; }
+  .chain-row { grid-template-columns: 1fr; }
 }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }

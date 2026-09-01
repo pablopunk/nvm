@@ -3,10 +3,20 @@ export type ModelCost = {
   modelId: string;
   inputUsdPerMtok: number;
   outputUsdPerMtok: number;
+  cacheReadUsdPerMtok?: number;
+  cacheWriteUsdPerMtok?: number;
+  tiers?: Array<{
+    thresholdTokens: number;
+    inputUsdPerMtok?: number;
+    outputUsdPerMtok?: number;
+    cacheReadUsdPerMtok?: number;
+    cacheWriteUsdPerMtok?: number;
+  }>;
 };
 
 const MODELS_DEV_URL = 'https://models.dev/api.json';
 const CACHE_TTL_MS = 60 * 60 * 1000;
+const FALLBACK_CACHE_TTL_MS = 60 * 1000;
 
 const PROVIDER_TO_MODELS_DEV: Record<string, string> = {
   opencode_zen: 'opencode',
@@ -37,7 +47,13 @@ type ModelsDevModel = {
   attachment?: boolean;
   modalities?: { input?: string[]; output?: string[] };
   limit?: { context?: number; output?: number };
-  cost?: { input?: number; output?: number };
+  cost?: {
+    input?: number;
+    output?: number;
+    cache_read?: number;
+    cache_write?: number;
+    tiers?: Array<{ input?: number; output?: number; cache_read?: number; cache_write?: number; tier?: { type?: string; size?: number } }>;
+  };
 };
 type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
 type ModelsDevApi = Record<string, ModelsDevProvider>;
@@ -97,20 +113,28 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
   },
 };
 
-let cache: { data: ModelsDevApi; at: number } | null = null;
+type PricingSource = 'models.dev' | 'bundled' | 'fallback';
+
+let cache: { data: ModelsDevApi; at: number; source: Exclude<PricingSource, 'bundled'> } | null = null;
 let inflight: Promise<ModelsDevApi> | null = null;
 
 async function fetchCatalog(): Promise<ModelsDevApi> {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.data;
+  const cacheTtl = cache?.source === 'fallback' ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS;
+  if (cache && Date.now() - cache.at < cacheTtl) return cache.data;
   if (inflight) return inflight;
   inflight = (async () => {
     try {
       const res = await fetch(MODELS_DEV_URL, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`models.dev ${res.status}`);
       const data = (await res.json()) as ModelsDevApi;
-      cache = { data, at: Date.now() };
+      cache = { data, at: Date.now(), source: 'models.dev' };
       return data;
     } catch (err) {
+      if (cache && cache.source === 'models.dev') {
+        console.warn('[pricing] models.dev refresh failed, using stale catalog', err);
+        cache = { ...cache, at: Date.now() };
+        return cache.data;
+      }
       console.warn('[pricing] models.dev fetch failed, using fallback', err);
       const data = Object.fromEntries(
         Object.entries(FALLBACK).map(([id, models]) => [
@@ -122,7 +146,7 @@ async function fetchCatalog(): Promise<ModelsDevApi> {
           },
         ]),
       );
-      cache = { data, at: Date.now() };
+      cache = { data, at: Date.now(), source: 'fallback' };
       return data;
     } finally {
       inflight = null;
@@ -139,26 +163,77 @@ function bundledRuntimeModel(provider: string, modelId: string) {
   return BUNDLED_RUNTIME_MODELS[modelsDevKey(provider)]?.models?.[modelId];
 }
 
-async function runtimeModel(provider: string, modelId: string) {
+async function runtimeModel(provider: string, modelId: string): Promise<{ model: ModelsDevModel; source: PricingSource } | null> {
   const key = modelsDevKey(provider);
   const currentCache = cache;
   const cached = currentCache?.data[key]?.models?.[modelId];
   if (cached) {
     if (Date.now() - currentCache.at >= CACHE_TTL_MS) void fetchCatalog();
-    return cached;
+    return { model: cached, source: currentCache.source };
   }
   const bundled = bundledRuntimeModel(provider, modelId);
   if (bundled) {
     void fetchCatalog();
-    return bundled;
+    return { model: bundled, source: 'bundled' };
   }
-  return (await fetchCatalog())[key]?.models?.[modelId];
+  const model = (await fetchCatalog())[key]?.models?.[modelId];
+  return model && cache ? { model, source: cache.source } : null;
 }
 
 export async function lookupModelCost(provider: string, modelId: string): Promise<ModelCost | null> {
-  const cost = (await runtimeModel(provider, modelId))?.cost;
+  const cost = (await runtimeModel(provider, modelId))?.model.cost;
   if (!cost || cost.input == null || cost.output == null) return null;
-  return { provider, modelId, inputUsdPerMtok: cost.input, outputUsdPerMtok: cost.output };
+  const tiers = (cost.tiers ?? []).flatMap((tier) => tier.tier?.size == null ? [] : [{
+    thresholdTokens: tier.tier.size,
+    ...(tier.input == null ? {} : { inputUsdPerMtok: tier.input }),
+    ...(tier.output == null ? {} : { outputUsdPerMtok: tier.output }),
+    ...(tier.cache_read == null ? {} : { cacheReadUsdPerMtok: tier.cache_read }),
+    ...(tier.cache_write == null ? {} : { cacheWriteUsdPerMtok: tier.cache_write }),
+  }]);
+  return {
+    provider,
+    modelId,
+    inputUsdPerMtok: cost.input,
+    outputUsdPerMtok: cost.output,
+    ...(cost.cache_read == null ? {} : { cacheReadUsdPerMtok: cost.cache_read }),
+    ...(cost.cache_write == null ? {} : { cacheWriteUsdPerMtok: cost.cache_write }),
+    ...(tiers.length ? { tiers } : {}),
+  };
+}
+
+export type ModelPricing = Omit<ModelCost, 'cacheReadUsdPerMtok' | 'cacheWriteUsdPerMtok' | 'tiers'> & {
+  cacheReadUsdPerMtok: number | null;
+  cacheWriteUsdPerMtok: number | null;
+  tiers: Array<{
+    thresholdTokens: number;
+    inputUsdPerMtok: number | null;
+    outputUsdPerMtok: number | null;
+    cacheReadUsdPerMtok: number | null;
+    cacheWriteUsdPerMtok: number | null;
+  }>;
+  source: PricingSource;
+};
+
+export async function lookupModelPricing(provider: string, modelId: string): Promise<ModelPricing | null> {
+  const resolved = await runtimeModel(provider, modelId);
+  const cost = resolved?.model.cost;
+  if (!resolved || !cost || cost.input == null || cost.output == null) return null;
+  return {
+    provider,
+    modelId,
+    inputUsdPerMtok: cost.input,
+    outputUsdPerMtok: cost.output,
+    cacheReadUsdPerMtok: cost.cache_read ?? null,
+    cacheWriteUsdPerMtok: cost.cache_write ?? null,
+    tiers: (cost.tiers ?? []).flatMap((tier) => tier.tier?.size == null ? [] : [{
+      thresholdTokens: tier.tier.size,
+      inputUsdPerMtok: tier.input ?? null,
+      outputUsdPerMtok: tier.output ?? null,
+      cacheReadUsdPerMtok: tier.cache_read ?? null,
+      cacheWriteUsdPerMtok: tier.cache_write ?? null,
+    }]),
+    source: resolved.source,
+  };
 }
 
 export type ModelDescriptor = {
@@ -178,8 +253,9 @@ const DEFAULT_DESCRIPTOR = {
 };
 
 export async function lookupModelDescriptor(provider: string, modelId: string): Promise<ModelDescriptor | null> {
-  const m = await runtimeModel(provider, modelId);
-  if (!m) return null;
+  const resolved = await runtimeModel(provider, modelId);
+  if (!resolved) return null;
+  const m = resolved.model;
   return {
     id: modelId,
     name: m.name ?? modelId,
@@ -194,7 +270,8 @@ export async function listModelsForProvider(provider: string): Promise<string[]>
   const catalog = await fetchCatalog();
   const key = modelsDevKey(provider);
   const models = catalog[key]?.models ?? {};
-  return Object.keys(models).sort();
+  const bundled = BUNDLED_RUNTIME_MODELS[key]?.models ?? {};
+  return [...new Set([...Object.keys(models), ...Object.keys(bundled)])].sort();
 }
 
 export function resetPricingCacheForTests() {

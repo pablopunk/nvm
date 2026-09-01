@@ -34,6 +34,27 @@ describe('computeUsdCost', () => {
     const result = computeUsdCost(makeCost(1, 5), 100, 200);
     assert.strictEqual(result, 0.0011);
   });
+
+  test('uses source cache read and write rates', () => {
+    const cost = {
+      ...makeCost(2, 10),
+      cacheReadUsdPerMtok: 0.2,
+      cacheWriteUsdPerMtok: 2.5,
+    };
+    const result = computeUsdCost(cost, 1_000_000, 100_000, {
+      cachedInputTokens: 400_000,
+      cacheWriteInputTokens: 100_000,
+    });
+    assert.strictEqual(result, 2.33);
+  });
+
+  test('uses the highest matching long-context tier', () => {
+    const cost = {
+      ...makeCost(2, 10),
+      tiers: [{ thresholdTokens: 272_000, inputUsdPerMtok: 4, outputUsdPerMtok: 15 }],
+    };
+    assert.strictEqual(computeUsdCost(cost, 300_000, 100_000), 2.7);
+  });
 });
 
 describe('usdToCredits', () => {

@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
 import { requireSameOrigin } from '../../../lib/csrf';
-import { listAllProviders, updateProvider } from '../../../lib/settings';
+import { getModelRoute, listAllProviders, updateProvider, type ModelRouteSlot } from '../../../lib/settings';
 import { recordAudit } from '../../../lib/audit';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -30,6 +30,12 @@ export const PUT: APIRoute = async ({ request }) => {
   const body = parsed.data;
 
   if (!body.id) return new Response('Missing id', { status: 400 });
+  if (body.enabled === false) {
+    const slots: ModelRouteSlot[] = ['pro-smart', 'pro-fast', 'free-smart', 'free-fast'];
+    const routes = await Promise.all(slots.map(async (slot) => ({ slot, route: await getModelRoute(slot) })));
+    const active = routes.find(({ route }) => route.provider === body.id);
+    if (active) return new Response(`Provider is active for ${active.slot}`, { status: 409 });
+  }
 
   await updateProvider(body.id, {
     enabled: body.enabled,

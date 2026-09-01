@@ -12,8 +12,28 @@ function readPositiveNumberEnv(key: string, fallback: number): number {
 export const CREDIT_USD = readPositiveNumberEnv('CREDIT_USD', 0.01);
 export const MARKUP = readPositiveNumberEnv('CREDIT_MARKUP', 5);
 
-export function computeUsdCost(cost: ModelCost, inputTokens: number, outputTokens: number): number {
-  return (inputTokens * cost.inputUsdPerMtok + outputTokens * cost.outputUsdPerMtok) / 1_000_000;
+export function computeUsdCost(
+  cost: ModelCost,
+  inputTokens: number,
+  outputTokens: number,
+  details: { cachedInputTokens?: number; cacheWriteInputTokens?: number } = {},
+): number {
+  const tier = [...(cost.tiers ?? [])]
+    .filter((candidate) => inputTokens >= candidate.thresholdTokens)
+    .sort((a, b) => b.thresholdTokens - a.thresholdTokens)[0];
+  const inputRate = tier?.inputUsdPerMtok ?? cost.inputUsdPerMtok;
+  const outputRate = tier?.outputUsdPerMtok ?? cost.outputUsdPerMtok;
+  const cacheReadRate = tier?.cacheReadUsdPerMtok ?? cost.cacheReadUsdPerMtok ?? inputRate;
+  const cacheWriteRate = tier?.cacheWriteUsdPerMtok ?? cost.cacheWriteUsdPerMtok ?? inputRate;
+  const cachedInputTokens = Math.max(0, Math.min(inputTokens, details.cachedInputTokens ?? 0));
+  const cacheWriteInputTokens = Math.max(0, Math.min(inputTokens - cachedInputTokens, details.cacheWriteInputTokens ?? 0));
+  const regularInputTokens = Math.max(0, inputTokens - cachedInputTokens - cacheWriteInputTokens);
+  return (
+    regularInputTokens * inputRate
+    + cachedInputTokens * cacheReadRate
+    + cacheWriteInputTokens * cacheWriteRate
+    + outputTokens * outputRate
+  ) / 1_000_000;
 }
 
 export function usdToCredits(costUsd: number): number {

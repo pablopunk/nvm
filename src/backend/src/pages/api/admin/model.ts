@@ -5,6 +5,7 @@ import { requireSameOrigin } from '../../../lib/csrf';
 import {
   getModelRoute,
   listKnownProviders,
+  isProviderEnabled,
   modelRouteToRef,
   parseModelRouteSlot,
   parseModelRouteRef,
@@ -85,6 +86,7 @@ export const PUT: APIRoute = async ({ request }) => {
 
   const cost = await lookupModelCost(route.provider, route.modelId);
   if (!cost) return new Response(`No pricing for ${route.provider}/${route.modelId}`, { status: 400 });
+  if (!(await isProviderEnabled(route.provider))) return new Response(`Provider ${route.provider} is disabled`, { status: 400 });
 
   const thinkingLevel = (body.thinkingLevel as ThinkingLevel | undefined)
     ?? (await safeRoute(slot))?.thinkingLevel

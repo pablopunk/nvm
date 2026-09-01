@@ -483,7 +483,26 @@ describe('setModelProviderChain', () => {
     chainValues.forEach((v: any) => {
       assert.strictEqual(v.routeSlot, 'paid');
       assert.strictEqual(v.modelId, 'test-model');
+      assert.strictEqual(v.providerModelId, 'test-model');
     });
+  });
+
+  test('stores provider-specific model ids for failover', async () => {
+    let inserted: any[] = [];
+    const db: any = {
+      insert: () => promiseChain([], (values) => { inserted = values as any[]; }),
+      delete: () => ({ where: () => promiseChain([]) }),
+      transaction: async (cb: (tx: any) => Promise<void>) => cb(db),
+    };
+    setDbForTests(db);
+
+    await setModelProviderChain('pro-smart', 'openai/gpt-5.6-sol', [
+      { providerId: 'opencode_zen', modelId: 'gpt-5.6-sol' },
+    ]);
+
+    assert.equal(inserted[0].modelId, 'openai/gpt-5.6-sol');
+    assert.equal(inserted[0].providerId, 'opencode_zen');
+    assert.equal(inserted[0].providerModelId, 'gpt-5.6-sol');
   });
 
   test('empty provider list deletes without inserting', async () => {

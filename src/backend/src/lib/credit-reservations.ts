@@ -76,8 +76,16 @@ export type ReservationFinalization = {
   outcome: 'settle' | 'release';
   model?: string;
   provider?: string;
-  tokens?: { inputTokens: number; outputTokens: number };
+  tokens?: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens?: number;
+    cacheWriteInputTokens?: number;
+    reasoningTokens?: number;
+  };
   costRow?: ModelCost;
+  providerCostUsd?: number;
+  costSource?: 'provider_reported' | 'catalog_estimate';
   status?: number;
   latencyMs?: number;
   dedup?: {
@@ -90,6 +98,41 @@ export type ReservationFinalization = {
     upstreamStatus?: number;
   };
 };
+
+export async function resizeReservation(
+  requestId: string,
+  creditsInput: number,
+): Promise<ReservationResult> {
+  const credits = Math.max(1, Math.ceil(creditsInput));
+  return db.transaction(async (tx) => {
+    const reservation = await lockReservationAfterUser(tx, requestId);
+    if (reservation.status !== 'pending') {
+      return { ok: false, reason: 'request_already_reserved', balance: 0, reserved: reservation.reservedCredits };
+    }
+    const [ledger] = await tx.select({
+      balance: sql<number>`coalesce(sum(case when ${creditLedger.kind} = ${reservation.kind} then ${creditLedger.delta} else 0 end), 0)::int`,
+    }).from(creditLedger).where(eq(creditLedger.userId, reservation.userId));
+    const [active] = await tx.select({
+      reserved: sql<number>`coalesce(sum(${creditReservations.reservedCredits}), 0)::int`,
+    }).from(creditReservations).where(and(
+      eq(creditReservations.userId, reservation.userId),
+      eq(creditReservations.kind, reservation.kind),
+      eq(creditReservations.status, 'pending'),
+    ));
+    const balance = ledger?.balance ?? 0;
+    const reservedByOthers = Math.max(0, (active?.reserved ?? 0) - reservation.reservedCredits);
+    if (credits + reservedByOthers > balance + CREDIT_GRACE_THRESHOLD) {
+      log.warn('credit_reservation_resize_rejected', { request_id: requestId, user_id: reservation.userId, kind: reservation.kind as CreditKind, credits, balance, reserved: reservedByOthers });
+      return { ok: false, reason: 'insufficient_credits', balance, reserved: reservedByOthers };
+    }
+    const [updated] = await tx.update(creditReservations)
+      .set({ reservedCredits: credits, updatedAt: new Date() })
+      .where(eq(creditReservations.requestId, requestId))
+      .returning();
+    log.info('credit_reservation_resized', { request_id: requestId, user_id: reservation.userId, kind: reservation.kind as CreditKind, credits, balance, reserved: reservedByOthers });
+    return { ok: true, reservation: updated, balance, reserved: reservedByOthers };
+  });
+}
 
 async function finalizeRequestDedup(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -153,6 +196,24 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
     if (reservation.status !== 'pending') return 'already_terminal';
     const now = new Date();
     if (input.outcome === 'release') {
+      if (input.model && input.provider && input.status != null && input.latencyMs != null) {
+        await tx.insert(usage).values({
+          userId: reservation.userId,
+          model: input.model,
+          provider: input.provider,
+          inputTokens: input.tokens?.inputTokens ?? 0,
+          outputTokens: input.tokens?.outputTokens ?? 0,
+          cachedInputTokens: input.tokens?.cachedInputTokens ?? 0,
+          cacheWriteInputTokens: input.tokens?.cacheWriteInputTokens ?? 0,
+          reasoningTokens: input.tokens?.reasoningTokens ?? 0,
+          costCredits: 0,
+          upstreamCostMicrocents: 0,
+          upstreamCostSource: 'not_billed',
+          requestId: reservation.requestId,
+          status: input.status,
+          latencyMs: input.latencyMs,
+        });
+      }
       await tx.update(creditReservations).set({ status: 'released', actualCredits: 0, releasedAt: now, updatedAt: now })
         .where(eq(creditReservations.requestId, input.requestId));
       await finalizeRequestDedup(tx, input, now);
@@ -162,8 +223,22 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
     if (!input.model || !input.provider || !input.tokens || !input.costRow || input.status == null || input.latencyMs == null) {
       throw new Error('Settlement requires usage details');
     }
-    const costUsd = computeUsdCost(input.costRow, input.tokens.inputTokens, input.tokens.outputTokens);
-    const credits = usdToCredits(costUsd);
+    const providerCostUsd = input.providerCostUsd;
+    const hasProviderCost = providerCostUsd != null && Number.isFinite(providerCostUsd) && providerCostUsd >= 0;
+    const costUsd = hasProviderCost
+      ? providerCostUsd
+      : computeUsdCost(input.costRow, input.tokens.inputTokens, input.tokens.outputTokens, input.tokens);
+    const calculatedCredits = usdToCredits(costUsd);
+    const credits = Math.min(calculatedCredits, reservation.reservedCredits);
+    if (calculatedCredits > reservation.reservedCredits) {
+      log.error('provider_cost_exceeded_reservation', {
+        request_id: input.requestId,
+        user_id: reservation.userId,
+        reserved_credits: reservation.reservedCredits,
+        calculated_credits: calculatedCredits,
+        provider_cost_usd: costUsd,
+      });
+    }
     const microcents = usdToMicrocents(costUsd);
     await tx.insert(creditLedger).values({
       userId: reservation.userId,
@@ -178,8 +253,12 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
       provider: input.provider,
       inputTokens: input.tokens.inputTokens,
       outputTokens: input.tokens.outputTokens,
+      cachedInputTokens: input.tokens.cachedInputTokens ?? 0,
+      cacheWriteInputTokens: input.tokens.cacheWriteInputTokens ?? 0,
+      reasoningTokens: input.tokens.reasoningTokens ?? 0,
       costCredits: credits,
       upstreamCostMicrocents: microcents,
+      upstreamCostSource: hasProviderCost ? 'provider_reported' : (input.costSource ?? 'catalog_estimate'),
       requestId: reservation.requestId,
       status: input.status,
       latencyMs: input.latencyMs,

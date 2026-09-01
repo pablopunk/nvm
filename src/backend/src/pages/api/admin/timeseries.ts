@@ -18,7 +18,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     select
       to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
       count(*)::text as requests,
-      sum(case when status is null or status >= 400 then 1 else 0 end)::text as errors,
+      sum(case when status >= 400 then 1 else 0 end)::text as errors,
       sum(cost_credits)::text as credits,
       percentile_cont(0.5) within group (order by latency_ms) filter (where latency_ms is not null)::text as p50,
       percentile_cont(0.95) within group (order by latency_ms) filter (where latency_ms is not null)::text as p95

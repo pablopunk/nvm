@@ -868,7 +868,13 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
     forwardedBody = JSON.parse(String(init?.body));
     return Response.json({
       choices: [{ message: { role: 'assistant', content: 'Hello.' } }],
-      usage: { prompt_tokens: 2, completion_tokens: 3 },
+      usage: {
+        prompt_tokens: 2,
+        completion_tokens: 3,
+        prompt_tokens_details: { cached_tokens: 1 },
+        completion_tokens_details: { reasoning_tokens: 2 },
+        cost: 1,
+      },
     });
   };
 
@@ -918,6 +924,11 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
     (db.insertedValues.at(-1) as any).model,
     'google/gemini-2.5-flash',
   );
+  assert.equal((db.insertedValues.at(-1) as any).upstreamCostMicrocents, 100_000_000);
+  assert.equal((db.insertedValues.at(-1) as any).upstreamCostSource, 'provider_reported');
+  assert.equal((db.insertedValues.at(-1) as any).costCredits, 1, 'provider cost cannot charge beyond the reservation');
+  assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 1);
+  assert.equal((db.insertedValues.at(-1) as any).reasoningTokens, 2);
 });
 
 test('OpenRouter proxy reserves prompt context from the requested output limit', async () => {
@@ -977,6 +988,42 @@ test('OpenRouter proxy reserves prompt context from the requested output limit',
     1_048_576 - estimateInputTokensFromBody(JSON.stringify(body)) - 4_096,
   );
   assert.equal(forwardedBody.max_completion_tokens, undefined);
+});
+
+test('OpenRouter streaming requests require usage and settle provider-reported cost', async () => {
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(createFakeDb({
+    selects: proxySelects({
+      free: 1_000,
+      model: 'google/gemini-2.5-flash',
+      routeProvider: 'openrouter',
+      providerChainDepth: 3,
+    }),
+  }));
+  let forwardedBody: any;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ openrouter: { models: { 'google/gemini-2.5-flash': { id: 'google/gemini-2.5-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    forwardedBody = JSON.parse(String(init?.body));
+    return new Response('data: {"usage":{"prompt_tokens":20,"completion_tokens":4,"prompt_tokens_details":{"cached_tokens":10},"cost":0.002}}\n\ndata: [DONE]\n\n', {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const response = await postChatCompletion(routeContext(authorizedChatRequest(
+    { stream: true, messages: [{ role: 'user', content: 'hello' }] },
+    { 'x-nevermind-ai-model': 'fast' },
+  )));
+  await response.text();
+
+  assert.deepEqual(forwardedBody.stream_options, { include_usage: true });
+  assert.equal((db.insertedValues.at(-1) as any).upstreamCostMicrocents, 200_000);
+  assert.equal((db.insertedValues.at(-1) as any).upstreamCostSource, 'provider_reported');
+  assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 10);
 });
 
 test('proxy bills paid credits without granting a Free user Pro model entitlement', async () => {
@@ -1188,7 +1235,7 @@ test('proxy retries release when settlement throws after reservation', async () 
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
 });
 
-test('stream cancellation before output releases exactly once without charge or usage', async () => {
+test('stream cancellation before output releases exactly once and records a failed request', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
@@ -1204,7 +1251,9 @@ test('stream cancellation before output releases exactly once without charge or 
   assert.equal(upstreamCancelCount, 1);
   assert.equal(countTerminalUpdates(db, 'released'), 1);
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
-  assert.equal(db.insertedValues.length, 1, 'cancellation before output records no charge or usage');
+  assert.equal(db.insertedValues.length, 2, 'cancellation before output records the reservation and failed usage');
+  assert.equal((db.insertedValues.at(-1) as any).costCredits, 0);
+  assert.equal((db.insertedValues.at(-1) as any).status, 499);
 });
 
 test('stream cancellation after a delivered chunk settles conservative usage exactly once', async () => {
@@ -1231,7 +1280,7 @@ test('stream cancellation after a delivered chunk settles conservative usage exa
   assert.equal(countTerminalUpdates(db, 'released'), 0);
   assert.equal(db.insertedValues.length, 3, 'delivered output records one conservative charge and usage row');
   assert.ok((db.insertedValues.at(-1) as any).inputTokens > 0);
-  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 1);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 2);
 });
 
 test('stream cancellation after observed usage settles exactly one charge and usage row', async () => {
@@ -1274,7 +1323,9 @@ test('stream reader failure releases exactly once when no output was observed', 
 
   assert.equal(countTerminalUpdates(db, 'released'), 1);
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
-  assert.equal(db.insertedValues.length, 1);
+  assert.equal(db.insertedValues.length, 2);
+  assert.equal((db.insertedValues.at(-1) as any).costCredits, 0);
+  assert.equal((db.insertedValues.at(-1) as any).status, 499);
 });
 
 test('malformed stream usage reaches one conservative settlement on natural completion', async () => {
@@ -1410,7 +1461,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   process.env.GOOGLE_API_KEY = 'fallback-key';
   process.env.GOOGLE_BASE_URL = 'https://fallback.example';
   const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
-  const providerChain = [{ providerId: 'google' }];
+  const providerChain = [{ providerId: 'google', modelId: 'gemini-3-fast' }];
   const db = installDb(createFakeDb({
     selects: [
       [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
@@ -1432,7 +1483,10 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } }, google: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
+        google: { models: { 'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 }, limit: { context: 64_000, output: 4_096 } } } },
+      });
     }
     if (url.startsWith('https://primary.example')) {
       primaryCalled = true;
@@ -1440,6 +1494,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
     }
     if (url.startsWith('https://fallback.example')) {
       fallbackCalled = true;
+      assert.equal(url, 'https://fallback.example/models/gemini-3-fast:streamGenerateContent?alt=sse');
       assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'fallback-key');
       return Response.json({ usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, thoughtsTokenCount: 0 } });
     }
@@ -1455,6 +1510,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues[1] as any).kind, 'paid');
   assert.equal((db.insertedValues.at(-1) as any).provider, 'google');
+  assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 5);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 10);
 });

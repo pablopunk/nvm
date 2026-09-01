@@ -248,10 +248,12 @@ export function listKnownProviders(): string[] {
 
 // ── Provider chain (failover) ──
 
-export async function getModelProviderChain(slot: ModelRouteSlot, modelId: string): Promise<string[]> {
+export type ModelProviderRoute = { providerId: string; modelId: string };
+
+export async function getModelProviderRoutes(slot: ModelRouteSlot, modelId: string): Promise<ModelProviderRoute[]> {
   for (const candidateSlot of [slot, ...legacyFallbackRouteSlots(slot)]) {
     const rows = await db
-      .select({ providerId: modelProviders.providerId })
+      .select({ providerId: modelProviders.providerId, modelId: modelProviders.providerModelId })
       .from(modelProviders)
       .innerJoin(providers, eq(modelProviders.providerId, providers.id))
       .where(
@@ -262,15 +264,28 @@ export async function getModelProviderChain(slot: ModelRouteSlot, modelId: strin
         ),
       )
       .orderBy(modelProviders.priority);
-    if (rows.length > 0) return rows.map((row) => row.providerId);
+    if (rows.length > 0) return rows.map((row) => ({ providerId: row.providerId, modelId: row.modelId ?? modelId }));
   }
   return [];
+}
+
+export async function getModelProviderChain(slot: ModelRouteSlot, modelId: string): Promise<string[]> {
+  return (await getModelProviderRoutes(slot, modelId)).map((route) => route.providerId);
+}
+
+export async function getConfiguredModelProviderRoutes(slot: ModelRouteSlot, modelId: string): Promise<ModelProviderRoute[]> {
+  const rows = await db
+    .select({ providerId: modelProviders.providerId, modelId: modelProviders.providerModelId })
+    .from(modelProviders)
+    .where(and(eq(modelProviders.routeSlot, slot), eq(modelProviders.modelId, modelId)))
+    .orderBy(modelProviders.priority);
+  return rows.map((row) => ({ providerId: row.providerId, modelId: row.modelId ?? modelId }));
 }
 
 export async function setModelProviderChain(
   slot: ModelRouteSlot,
   modelId: string,
-  providerIds: string[],
+  providerRoutes: Array<string | ModelProviderRoute>,
 ) {
   await db.transaction(async (tx) => {
     await tx
@@ -282,12 +297,13 @@ export async function setModelProviderChain(
         ),
       );
 
-    if (providerIds.length === 0) return;
+    if (providerRoutes.length === 0) return;
 
-    const values = providerIds.map((providerId, i) => ({
+    const values = providerRoutes.map((route, i) => ({
       routeSlot: slot,
       modelId,
-      providerId,
+      providerId: typeof route === 'string' ? route : route.providerId,
+      providerModelId: typeof route === 'string' ? modelId : route.modelId,
       priority: i,
     }));
 
@@ -301,6 +317,14 @@ export async function listEnabledProviders() {
     .from(providers)
     .where(eq(providers.enabled, 'true'))
     .orderBy(providers.priority);
+}
+
+export async function isProviderEnabled(providerId: string): Promise<boolean> {
+  const [provider] = await db.select({ enabled: providers.enabled })
+    .from(providers)
+    .where(eq(providers.id, providerId))
+    .limit(1);
+  return provider?.enabled === 'true';
 }
 
 export async function listAllProviders() {

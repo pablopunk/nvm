@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
-import { lookupModelCost, lookupModelDescriptor, resetPricingCacheForTests } from './pricing';
+import { listModelsForProvider, lookupModelCost, lookupModelDescriptor, lookupModelPricing, resetPricingCacheForTests } from './pricing';
 
 let originalFetch: typeof globalThis.fetch;
 
@@ -80,6 +80,48 @@ test('lookupModelCost returns null for unmapped provider', async () => {
 
   const result = await lookupModelCost('unknown-provider', 'some-model');
   assert.strictEqual(result, null);
+});
+
+test('lookupModelPricing preserves source cache and tier prices', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: {
+      models: {
+        'openai/test': {
+          id: 'openai/test',
+          cost: {
+            input: 2,
+            output: 10,
+            cache_read: 0.2,
+            cache_write: 2.5,
+            tiers: [{ input: 4, output: 15, tier: { type: 'context', size: 272_000 } }],
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(await lookupModelPricing('openrouter', 'openai/test'), {
+    provider: 'openrouter',
+    modelId: 'openai/test',
+    inputUsdPerMtok: 2,
+    outputUsdPerMtok: 10,
+    cacheReadUsdPerMtok: 0.2,
+    cacheWriteUsdPerMtok: 2.5,
+    tiers: [{
+      thresholdTokens: 272_000,
+      inputUsdPerMtok: 4,
+      outputUsdPerMtok: 15,
+      cacheReadUsdPerMtok: null,
+      cacheWriteUsdPerMtok: null,
+    }],
+    source: 'models.dev',
+  });
+});
+
+test('admin model listing includes bundled runtime models', async () => {
+  globalThis.fetch = mockFetch({ openrouter: { models: {} } });
+  const models = await listModelsForProvider('openrouter');
+  assert.ok(models.includes('deepseek/deepseek-v4-flash-0731'));
 });
 
 test('active runtime models do not wait for the remote catalog', async () => {

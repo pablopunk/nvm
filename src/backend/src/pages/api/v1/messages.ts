@@ -18,7 +18,12 @@ function rewriteAnthropicModel(
 function parseUsageFromAnthropicJson(json: any): UsageTokens | null {
   const u = json?.usage;
   if (!u) return null;
-  return { inputTokens: u.input_tokens ?? 0, outputTokens: u.output_tokens ?? 0 };
+  return {
+    inputTokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+    outputTokens: u.output_tokens ?? 0,
+    cachedInputTokens: u.cache_read_input_tokens ?? 0,
+    cacheWriteInputTokens: u.cache_creation_input_tokens ?? 0,
+  };
 }
 
 function parseUsageFromAnthropicStreamChunk(chunkText: string, acc: StreamUsageAccumulator, finalize = false): void {
@@ -28,8 +33,15 @@ function parseUsageFromAnthropicStreamChunk(chunkText: string, acc: StreamUsageA
     const payload = trimmed.slice(5).trim();
     if (!payload) continue;
     const obj = parseStreamUsageJson(payload, acc);
+    const text = obj?.delta?.text;
+    if (typeof text === 'string') acc.observedOutputCharacters = (acc.observedOutputCharacters ?? 0) + text.length;
+    const partialJson = obj?.delta?.partial_json;
+    if (typeof partialJson === 'string') acc.observedOutputCharacters = (acc.observedOutputCharacters ?? 0) + partialJson.length;
     if (obj?.type === 'message_start' && obj?.message?.usage) {
-      acc.inputTokens = obj.message.usage.input_tokens ?? acc.inputTokens;
+      const usage = obj.message.usage;
+      acc.cachedInputTokens = usage.cache_read_input_tokens ?? acc.cachedInputTokens;
+      acc.cacheWriteInputTokens = usage.cache_creation_input_tokens ?? acc.cacheWriteInputTokens;
+      acc.inputTokens = (usage.input_tokens ?? 0) + (acc.cachedInputTokens ?? 0) + (acc.cacheWriteInputTokens ?? 0);
       acc.outputTokens = obj.message.usage.output_tokens ?? acc.outputTokens;
     } else if (obj?.type === 'message_delta' && obj?.usage) {
       if (typeof obj.usage.input_tokens === 'number') acc.inputTokens = obj.usage.input_tokens;

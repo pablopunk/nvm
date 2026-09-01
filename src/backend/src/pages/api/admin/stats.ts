@@ -32,6 +32,12 @@ export const GET: APIRoute = async ({ request }) => {
       outputTokens: sql<number>`sum(${usage.outputTokens})::int`,
       costCredits: sql<number>`sum(${usage.costCredits})::int`,
       upstreamCostMicrocents: sql<number>`coalesce(sum(${usage.upstreamCostMicrocents}),0)::bigint`,
+      providerReportedRequests: sql<number>`sum(case when ${usage.upstreamCostSource} = 'provider_reported' then 1 else 0 end)::int`,
+      estimatedRequests: sql<number>`sum(case when ${usage.upstreamCostSource} = 'catalog_estimate' then 1 else 0 end)::int`,
+      failedRequests: sql<number>`sum(case when ${usage.status} >= 400 then 1 else 0 end)::int`,
+      cachedInputTokens: sql<number>`coalesce(sum(${usage.cachedInputTokens}),0)::bigint`,
+      cacheWriteInputTokens: sql<number>`coalesce(sum(${usage.cacheWriteInputTokens}),0)::bigint`,
+      reasoningTokens: sql<number>`coalesce(sum(${usage.reasoningTokens}),0)::bigint`,
     })
     .from(usage)
     .groupBy(usage.model, usage.provider)

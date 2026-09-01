@@ -66,6 +66,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
           </select>
         </label>
         <span class="status" data-status-for="pro-smart"></span>
+        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
       </div>
       <div class="model-route-row" data-model-route="pro-fast">
         <strong class="model-route-row__name">Pro fast</strong>
@@ -80,6 +81,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
           </select>
         </label>
         <span class="status" data-status-for="pro-fast"></span>
+        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
       </div>
       <div class="model-route-row" data-model-route="free-smart">
         <strong class="model-route-row__name">Free smart</strong>
@@ -94,6 +96,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
           </select>
         </label>
         <span class="status" data-status-for="free-smart"></span>
+        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
       </div>
       <div class="model-route-row" data-model-route="free-fast">
         <strong class="model-route-row__name">Free fast</strong>
@@ -108,6 +111,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
           </select>
         </label>
         <span class="status" data-status-for="free-fast"></span>
+        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
       </div>
     </div>
   </div>
@@ -137,7 +141,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
     <div style="margin-top:16px;" class="card">
       <h3>Usage by model</h3>
       <table class="table" id="by-model">
-        <thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Input tok</th><th>Output tok</th><th>Credits</th><th>Raw cost</th><th>Retail value</th></tr></thead>
+        <thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Failed</th><th>Input tok</th><th>Cached tok</th><th>Output tok</th><th>Reasoning tok</th><th>Credits</th><th>Upstream cost</th><th>Cost source</th><th>Retail value</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -186,6 +190,129 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       if (!str) return '';
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+    function routeModelId(row) {
+      const ref = row.querySelector('.model-select').value;
+      return ref.slice(ref.indexOf('/') + 1);
+    }
+    function moneyPerMillion(value) {
+      return value == null ? '—' : `$${Number(value).toFixed(3)}/M`;
+    }
+    function pricingSummary(pricing) {
+      if (!pricing) return '<span class="status status--err">Pricing unavailable</span>';
+      const cache = pricing.cacheReadUsdPerMtok == null
+        ? ''
+        : ` · cache read ${moneyPerMillion(pricing.cacheReadUsdPerMtok)} · cache write ${moneyPerMillion(pricing.cacheWriteUsdPerMtok)}`;
+      const tiers = pricing.tiers.map((tier) => ` · over ${Number(tier.thresholdTokens).toLocaleString()} tokens: ${moneyPerMillion(tier.inputUsdPerMtok)} in / ${moneyPerMillion(tier.outputUsdPerMtok)} out`).join('');
+      return `${moneyPerMillion(pricing.inputUsdPerMtok)} in · ${moneyPerMillion(pricing.outputUsdPerMtok)} out${cache}${tiers} · ${esc(pricing.source)}`;
+    }
+    function providerOptionsHtml(providers, selected) {
+      return providers.map((provider) => `<option value="${esc(provider.id)}" ${provider.id === selected ? 'selected' : ''} ${provider.enabled ? '' : 'disabled'}>${esc(provider.displayName)}${provider.enabled ? '' : ' (disabled)'}</option>`).join('');
+    }
+    function modelOptionsHtml(provider, selected) {
+      return provider.compatibleModels.map((model) => `<option value="${esc(model)}" ${model === selected ? 'selected' : ''}>${esc(model)}</option>`).join('');
+    }
+    function chainRowsHtml(data) {
+      return data.routes.map((route, index) => {
+        const provider = data.providers.find((candidate) => candidate.id === route.providerId);
+        return `<div class="chain-row" data-chain-row>
+          <label class="field">Provider<select class="input chain-provider" aria-label="Fallback provider">${providerOptionsHtml(data.providers, route.providerId)}</select></label>
+          <label class="field">Model<select class="input chain-model" aria-label="Fallback model">${modelOptionsHtml(provider || { compatibleModels: [] }, route.modelId)}</select></label>
+          <span class="muted chain-price">${pricingSummary(route.pricing)}</span>
+          <div class="chain-actions">
+            <button type="button" class="button chain-up" aria-label="Move fallback earlier" ${index === 0 ? 'disabled' : ''}>Up</button>
+            <button type="button" class="button chain-down" aria-label="Move fallback later" ${index === data.routes.length - 1 ? 'disabled' : ''}>Down</button>
+            <button type="button" class="button chain-probe">Probe</button>
+            <button type="button" class="button chain-remove">Remove</button>
+          </div>
+          <span class="probe-status" aria-live="polite"></span>
+        </div>`;
+      }).join('');
+    }
+    async function saveRouteChain(row) {
+      const details = row.querySelector('[data-route-details]');
+      const routes = [...details.querySelectorAll('[data-chain-row]')].map((chainRow) => ({
+        providerId: chainRow.querySelector('.chain-provider').value,
+        modelId: chainRow.querySelector('.chain-model').value,
+      }));
+      const status = details.querySelector('[data-chain-status]');
+      status.textContent = 'Saving…';
+      const res = await fetch('/api/admin/model-providers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: row.dataset.modelRoute, modelId: routeModelId(row), routes }),
+      });
+      if (!res.ok) {
+        status.textContent = `Save failed: ${await res.text()}`;
+        status.className = 'status status--err';
+        return;
+      }
+      await loadRouteDetails(row);
+    }
+    function wireRouteChain(row, data) {
+      const details = row.querySelector('[data-route-details]');
+      details.querySelectorAll('.chain-provider').forEach((select) => {
+        select.addEventListener('change', () => {
+          const provider = data.providers.find((candidate) => candidate.id === select.value);
+          const modelSelect = select.closest('[data-chain-row]').querySelector('.chain-model');
+          modelSelect.innerHTML = modelOptionsHtml(provider, provider?.compatibleModels?.[0]);
+          saveRouteChain(row);
+        });
+      });
+      details.querySelectorAll('.chain-model').forEach((select) => select.addEventListener('change', () => saveRouteChain(row)));
+      details.querySelectorAll('.chain-remove').forEach((button) => button.addEventListener('click', () => {
+        button.closest('[data-chain-row]').remove();
+        saveRouteChain(row);
+      }));
+      details.querySelectorAll('.chain-up, .chain-down').forEach((button) => button.addEventListener('click', () => {
+        const chainRow = button.closest('[data-chain-row]');
+        const sibling = button.classList.contains('chain-up') ? chainRow.previousElementSibling : chainRow.nextElementSibling;
+        if (sibling?.matches('[data-chain-row]')) {
+          button.classList.contains('chain-up') ? sibling.before(chainRow) : sibling.after(chainRow);
+          saveRouteChain(row);
+        }
+      }));
+      details.querySelectorAll('.chain-probe').forEach((button) => button.addEventListener('click', async () => {
+        const chainRow = button.closest('[data-chain-row]');
+        const providerId = chainRow.querySelector('.chain-provider').value;
+        const status = chainRow.querySelector('.probe-status');
+        status.textContent = 'Checking…';
+        const res = await fetch(`/api/admin/probe/${providerId}`);
+        const result = await res.json();
+        status.textContent = result.ok ? `Healthy · ${result.latencyMs}ms` : `Unavailable · ${result.error || result.status}`;
+        status.className = `probe-status ${result.ok ? 'status--ok' : 'status--err'}`;
+      }));
+      details.querySelector('[data-add-fallback]').addEventListener('click', () => {
+        const used = new Set([...details.querySelectorAll('.chain-provider')].map((select) => select.value));
+        const provider = data.providers.find((candidate) => candidate.enabled && candidate.compatibleModels.length && !used.has(candidate.id));
+        if (!provider) {
+          const status = details.querySelector('[data-chain-status]');
+          status.textContent = 'No additional compatible provider is available.';
+          status.className = 'status status--err';
+          return;
+        }
+        data.routes.push({ providerId: provider.id, modelId: provider.compatibleModels[0], pricing: null });
+        const container = details.querySelector('[data-chain-rows]');
+        container.insertAdjacentHTML('beforeend', chainRowsHtml({ ...data, routes: [data.routes.at(-1)] }));
+        saveRouteChain(row);
+      });
+    }
+    async function loadRouteDetails(row) {
+      const details = row.querySelector('[data-route-details]');
+      details.textContent = 'Loading pricing and failover…';
+      try {
+        const query = new URLSearchParams({ slot: row.dataset.modelRoute, modelId: routeModelId(row) });
+        const res = await fetch(`/api/admin/model-providers?${query}`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        details.innerHTML = `<div><strong>Primary pricing</strong> <span class="muted">${pricingSummary(data.primaryPricing)}</span></div>
+          <fieldset class="chain-editor"><legend>Failover chain</legend><div data-chain-rows>${chainRowsHtml(data)}</div>
+          <div class="chain-footer"><button type="button" class="button" data-add-fallback>Add fallback</button><span class="status" data-chain-status aria-live="polite"></span></div></fieldset>`;
+        wireRouteChain(row, data);
+      } catch (error) {
+        details.innerHTML = `<span class="status status--err" role="alert">Could not load pricing and failover: ${esc(error instanceof Error ? error.message : String(error))}</span> <button type="button" class="button" data-retry-route>Retry</button>`;
+        details.querySelector('[data-retry-route]').addEventListener('click', () => loadRouteDetails(row));
+      }
+    }
     async function loadStats() {
       const res = await fetch('/api/admin/stats');
       const s = await res.json();
@@ -200,8 +327,15 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       tbody.innerHTML = s.byModel.map((r) => {
         const usd = Number(r.upstreamCostMicrocents || 0) / 1e8;
         const collectedUsd = (r.costCredits || 0) * creditUsd;
-        return `<tr><td>${esc(r.provider) || '—'}</td><td><code>${esc(r.model)}</code></td><td>${r.requests}</td><td>${r.inputTokens}</td><td>${r.outputTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
-      }).join('') || '<tr><td colspan="8" class="muted">No usage yet</td></tr>';
+        const source = r.providerReportedRequests && !r.estimatedRequests
+          ? 'Provider reported'
+          : r.estimatedRequests && !r.providerReportedRequests
+            ? 'Catalog estimate'
+            : !r.providerReportedRequests && !r.estimatedRequests
+              ? 'Not billed'
+              : 'Mixed';
+        return `<tr><td>${esc(r.provider) || '—'}</td><td><code>${esc(r.model)}</code></td><td>${r.requests}</td><td>${r.failedRequests}</td><td>${r.inputTokens}</td><td>${r.cachedInputTokens}</td><td>${r.outputTokens}</td><td>${r.reasoningTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>${source}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
+      }).join('') || '<tr><td colspan="12" class="muted">No usage yet</td></tr>';
     }
     function statusEl(purpose) {
       return document.querySelector(`[data-status-for="${purpose}"]`);
@@ -240,13 +374,19 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
             purpose,
           }),
         });
-        setState(status, res.ok ? 'saved' : 'error');
+        if (res.ok) {
+          setState(status, 'saved');
+          await loadRouteDetails(row);
+        } else {
+          status.className = 'status status--err';
+          status.textContent = `Save failed: ${await res.text()}`;
+        }
       } catch {
         setState(status, 'error');
       } finally {
         setSelectDisabled(modelSelect, false);
         setSelectDisabled(thinkingSelect, false);
-        setTimeout(() => setState(status, 'idle'), 1500);
+        if (status.classList.contains('status--ok')) setTimeout(() => setState(status, 'idle'), 1500);
       }
     }
     function wireAutosave() {
@@ -257,6 +397,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       });
     }
     wireAutosave();
+    document.querySelectorAll('.model-route-row').forEach((row) => loadRouteDetails(row));
     async function loadUsers() {
       const res = await fetch('/api/admin/users');
       const { users } = await res.json();
@@ -378,7 +519,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
           </td>
           <td>${p.priority}</td>
           <td><span class="probe-status" data-provider="${p.id}">—</span></td>
-          <td><button type="button" class="btn btn--sm probe-btn" data-id="${p.id}">Probe</button></td>
+          <td><button type="button" class="button probe-btn" data-id="${p.id}">Probe</button></td>
         </tr>
       `).join('');
 
