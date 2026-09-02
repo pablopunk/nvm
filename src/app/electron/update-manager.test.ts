@@ -5,6 +5,7 @@ mock.module('electron', {
   namedExports: {
     app: { isPackaged: true },
     shell: {},
+    systemPreferences: { isTrustedAccessibilityClient: () => false },
   },
 });
 
