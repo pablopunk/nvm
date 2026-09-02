@@ -44,12 +44,13 @@ Versioned via drizzle-kit. SQL lives in `src/backend/drizzle/`.
 `Database migration` workflow is the only migration and deployment owner. It uses
 the `database-development`, `database-preview`, or `database-production` GitHub
 environment, where each environment must provide its own `DATABASE_URL` secret.
-Configure required reviewers on `database-production`; production also requires
-the workflow's explicit approval input. Workflow concurrency and a PostgreSQL
-advisory lock prevent two migrations from changing one target at the same time.
-Development runs migrations only. Preview and production deploy the selected
-workflow commit only after its migration succeeds; automatic Vercel Git
-deployments are disabled in `vercel.json`.
+Production runs automatically for the exact commit from each successful `main`
+push CI run. Manual production runs still require the workflow's explicit
+approval input. Workflow concurrency and a PostgreSQL advisory lock prevent two
+migrations from changing one target at the same time. Development runs
+migrations only. Preview and production deploy the selected workflow commit only
+after its migration succeeds; automatic Vercel Git deployments are disabled in
+`vercel.json` so this workflow remains the only deployment owner.
 
 Use expand-and-contract migrations: apply a backward-compatible schema change,
 deploy compatible code only after migration succeeds, migrate data if needed,

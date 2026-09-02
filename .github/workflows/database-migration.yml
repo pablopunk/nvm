@@ -1,6 +1,10 @@
 name: Database migration
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       target:
@@ -21,21 +25,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: database-migration-${{ inputs.target }}
+  group: database-migration-${{ github.event_name == 'workflow_run' && 'production' || inputs.target }}
   cancel-in-progress: false
 
 jobs:
   migrate:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: database-${{ inputs.target }}
+    environment: database-${{ github.event_name == 'workflow_run' && 'production' || inputs.target }}
     steps:
       - name: Require production approval
-        if: inputs.target == 'production' && !inputs.approve_production
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'production' && !inputs.approve_production
         run: exit 1
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup mise
         uses: jdx/mise-action@v2
@@ -46,14 +53,13 @@ jobs:
       - name: Apply migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NVM_ENV: ${{ inputs.target }}
-          NVM_DATABASE_ENV: ${{ inputs.target }}
-          NVM_PRODUCTION_MIGRATION_APPROVED: ${{ inputs.approve_production }}
+          NVM_ENV: ${{ github.event_name == 'workflow_run' && 'production' || inputs.target }}
+          NVM_DATABASE_ENV: ${{ github.event_name == 'workflow_run' && 'production' || inputs.target }}
+          NVM_PRODUCTION_MIGRATION_APPROVED: ${{ github.event_name == 'workflow_run' && 'true' || inputs.approve_production }}
         run: mise exec -- pnpm -C src/backend db:migrate
 
       - name: Deploy Preview
-        if: inputs.target == 'preview'
-        working-directory: src/backend
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'preview'
         env:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
@@ -61,8 +67,7 @@ jobs:
         run: mise exec -- pnpm dlx vercel@latest deploy --yes --token "$VERCEL_TOKEN"
 
       - name: Deploy production
-        if: inputs.target == 'production'
-        working-directory: src/backend
+        if: github.event_name == 'workflow_run' || inputs.target == 'production'
         env:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
