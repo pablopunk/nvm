@@ -1,10 +1,10 @@
-import type { Clipboard } from 'electron';
 import {
   type ClipboardHistoryItem,
   clipboardFilePaths,
   clipboardItemSubtitle,
   clipboardItemTitle,
 } from './clipboard-utils';
+import type { ClipboardApi, MaybePromise } from './electron-clipboard';
 
 export type ClipboardHistoryDeps = {
   // ── State ──────────────────────────────────────────────
@@ -14,7 +14,7 @@ export type ClipboardHistoryDeps = {
   getImagesDir: () => string;
 
   // ── Electron clipboard ─────────────────────────────────
-  clipboard: Clipboard;
+  clipboard: ClipboardApi;
   nativeImage: {
     createFromDataURL: (dataUrl: string) => Electron.NativeImage;
     createFromPath: (path: string) => Electron.NativeImage;
@@ -139,16 +139,16 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     };
   }
 
-  function cheapClipboardItem(): any {
-    const filePath = clipboardFilePath(deps.clipboard);
+  async function cheapClipboardItem(): Promise<any> {
+    const filePath = await clipboardFilePath(deps.clipboard);
     if (filePath && deps.isVideoPath(filePath))
       return videoClipboardItem(filePath);
-    const text = deps.clipboard.readText().trim();
+    const text = (await deps.clipboard.readText()).trim();
     return text ? textClipboardItem(text) : null;
   }
 
-  function readClipboardImageItem(): any {
-    const image = deps.clipboard.readImage();
+  async function readClipboardImageItem(): Promise<any> {
+    const image = await deps.clipboard.readImage();
     if (image.isEmpty()) return null;
     const png = image.toPNG();
     const hash = deps.hashValue(png);
@@ -162,7 +162,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   }
 
   async function readClipboardItem(): Promise<any | null> {
-    return cheapClipboardItem() || readClipboardImageItem();
+    return (await cheapClipboardItem()) || (await readClipboardImageItem());
   }
 
   // ── history mutation ────────────────────────────────────
@@ -518,7 +518,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   const CLIPBOARD_IMAGE_RECHECK_MS = 5000;
   let lastClipboardImageCheckAt = 0;
 
-  function throttledClipboardImageItem(): any {
+  async function throttledClipboardImageItem(): Promise<any> {
     const now = Date.now();
     if (now - lastClipboardImageCheckAt < CLIPBOARD_IMAGE_RECHECK_MS)
       return null;
@@ -527,7 +527,8 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   }
 
   async function pollClipboardChange() {
-    const item = cheapClipboardItem() || throttledClipboardImageItem();
+    const item =
+      (await cheapClipboardItem()) || (await throttledClipboardImageItem());
     if (!item || item.id === watcherLastId) return;
     const suppressed = deps.getSuppressedItemIds();
     const suppressUntil = suppressed.get(item.id) || 0;
@@ -551,31 +552,36 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   // ── snapshot ────────────────────────────────────────────
 
-  function clipboardSnapshot() {
-    const image = deps.clipboard.readImage();
+  async function clipboardSnapshot() {
+    const [image, text, html, rtf, bookmark] = await Promise.all([
+      deps.clipboard.readImage(),
+      deps.clipboard.readText(),
+      deps.clipboard.readHTML(),
+      deps.clipboard.readRTF(),
+      deps.clipboard.readBookmark(),
+    ]);
     return {
-      text: deps.clipboard.readText(),
-      html: deps.clipboard.readHTML(),
-      rtf: deps.clipboard.readRTF(),
-      bookmark: deps.clipboard.readBookmark(),
+      text,
+      html,
+      rtf,
+      bookmark,
       image: image.isEmpty() ? null : image,
     };
   }
 
-  function restoreClipboardSnapshot(
-    snapshot: ReturnType<typeof clipboardSnapshot>,
+  async function restoreClipboardSnapshot(
+    snapshot: MaybePromise<Awaited<ReturnType<typeof clipboardSnapshot>>>,
   ) {
-    if (!snapshot) return;
+    const current = await snapshot;
     const data: any = {};
-    if (snapshot.text) data.text = snapshot.text;
-    if (snapshot.html) data.html = snapshot.html;
-    if (snapshot.rtf) data.rtf = snapshot.rtf;
-    if (snapshot.bookmark?.title || snapshot.bookmark?.url)
-      data.bookmark = snapshot.bookmark;
-    if (snapshot.image && !snapshot.image.isEmpty())
-      data.image = snapshot.image;
-    if (Object.keys(data).length === 0) deps.clipboard.clear();
-    else deps.clipboard.write(data);
+    if (current.text) data.text = current.text;
+    if (current.html) data.html = current.html;
+    if (current.rtf) data.rtf = current.rtf;
+    if (current.bookmark?.title || current.bookmark?.url)
+      data.bookmark = current.bookmark;
+    if (current.image && !current.image.isEmpty()) data.image = current.image;
+    if (Object.keys(data).length === 0) await deps.clipboard.clear();
+    else await deps.clipboard.write(data);
   }
 
   function clipboardHistoryIdForText(text: string) {
@@ -589,16 +595,16 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   // ── paste actions ───────────────────────────────────────
 
-  function pasteTextAction(action: any) {
+  async function pasteTextAction(action: any) {
     const text = String(action.text || '');
     const restoreClipboard = Boolean(action.restoreClipboard);
     const concealed = Boolean(action.concealed || restoreClipboard);
-    const snapshot = restoreClipboard ? clipboardSnapshot() : null;
+    const snapshot = restoreClipboard ? await clipboardSnapshot() : null;
     const suppressedId = clipboardHistoryIdForText(text);
     if (concealed) suppressClipboardHistoryId(suppressedId);
     if (action.plainText === false && action.html)
-      deps.clipboard.write({ text, html: String(action.html) });
-    else deps.clipboard.writeText(text);
+      await deps.clipboard.write({ text, html: String(action.html) });
+    else await deps.clipboard.writeText(text);
     deps.pasteIntoFrontmostApp();
     if (restoreClipboard && snapshot) {
       const delay = Math.max(
@@ -607,25 +613,25 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       );
       setTimeout(() => {
         suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text));
-        restoreClipboardSnapshot(snapshot);
+        void restoreClipboardSnapshot(snapshot);
       }, delay).unref?.();
     }
   }
 
   // ── desktop clipboard ───────────────────────────────────
 
-  function clipboardFilePath(clipboard: Clipboard) {
-    return clipboardFilePaths(clipboard)[0] || null;
+  async function clipboardFilePath(clipboard: ClipboardApi) {
+    return (await clipboardFilePaths(clipboard))[0] || null;
   }
 
   async function clipboardFiles() {
     return Promise.all(
-      clipboardFilePaths(deps.clipboard).map(deps.fileToExtensionFile),
+      (await clipboardFilePaths(deps.clipboard)).map(deps.fileToExtensionFile),
     );
   }
 
-  function clipboardImageDataUrl() {
-    const image = deps.clipboard.readImage();
+  async function clipboardImageDataUrl() {
+    const image = await deps.clipboard.readImage();
     return image.isEmpty() ? null : image.toDataURL();
   }
 
@@ -648,25 +654,25 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         };
     }
     if (!formats || formats.has('image')) {
-      const image = clipboardImageDataUrl();
+      const image = await clipboardImageDataUrl();
       if (image) return { type: 'image', imageDataUrl: image, image };
     }
     if (!formats || formats.has('html')) {
-      const html = deps.clipboard.readHTML();
+      const html = await deps.clipboard.readHTML();
       if (html)
         return {
           type: 'html',
           html,
-          text: deps.clipboard.readText(),
+          text: await deps.clipboard.readText(),
         };
     }
     if (!formats || formats.has('text')) {
-      const text = deps.clipboard.readText();
+      const text = await deps.clipboard.readText();
       if (text)
         return {
           type: 'text',
           text,
-          html: deps.clipboard.readHTML() || undefined,
+          html: (await deps.clipboard.readHTML()) || undefined,
         };
     }
     return { type: 'empty' };
@@ -702,22 +708,22 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         );
   }
 
-  function writeDesktopClipboardFiles(paths: any) {
+  async function writeDesktopClipboardFiles(paths: any) {
     const resolvedPaths = (Array.isArray(paths) ? paths : [paths])
       .map((filePath: any) => deps.expandUserPath(String(filePath)))
       .filter(Boolean);
     const fileUrls = resolvedPaths
       .map((filePath: any) => deps.pathToFileURL(filePath).href)
       .join('\n');
-    deps.clipboard.write({ text: resolvedPaths.join('\n') });
-    if (fileUrls)
-      deps.clipboard.writeBuffer(
-        'public.file-url',
-        Buffer.from(fileUrls, 'utf8'),
-      );
+    await deps.clipboard.write({
+      text: resolvedPaths.join('\n'),
+      buffers: fileUrls
+        ? { 'public.file-url': Buffer.from(fileUrls, 'utf8') }
+        : undefined,
+    });
   }
 
-  function writeDesktopClipboard(item: any, options: any = {}) {
+  async function writeDesktopClipboard(item: any, options: any = {}) {
     const content =
       typeof item === 'string' ? { type: 'text', text: item } : item || {};
     if (content.concealed || options.concealed)
@@ -745,11 +751,11 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       return deps.clipboard.writeImage(image || deps.nativeImage.createEmpty());
   }
 
-  function pasteClipboardAction(action: any) {
+  async function pasteClipboardAction(action: any) {
     const restoreClipboard = Boolean(action.restoreClipboard);
-    const snapshot = restoreClipboard ? clipboardSnapshot() : null;
+    const snapshot = restoreClipboard ? await clipboardSnapshot() : null;
     const content = action.content || action.clipboard || action;
-    writeDesktopClipboard(content, {
+    await writeDesktopClipboard(content, {
       concealed: action.concealed || restoreClipboard,
     });
     deps.pasteIntoFrontmostApp();
@@ -758,7 +764,10 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         50,
         Math.min(5000, Number(action.restoreDelayMs || 250)),
       );
-      setTimeout(() => restoreClipboardSnapshot(snapshot), delay).unref?.();
+      setTimeout(
+        () => void restoreClipboardSnapshot(snapshot),
+        delay,
+      ).unref?.();
     }
   }
 

@@ -62,6 +62,10 @@ linux:
   icon: build/Icon.icon/Assets/icon.png
   category: Utility
   maintainer: Pablo Varela <pablo@pablopunk.com>
+  executableName: com.pablopunk.nvm
+  desktop:
+    entry:
+      StartupWMClass: com.pablopunk.nvm
   target:
     - target: AppImage
       arch:

@@ -311,6 +311,8 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
     osLabel: () =>
       dependent({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }, 'Linux'),
     scanWindowsApps: scanWindowsAppsForPlatform,
+    supportsProgrammaticWindowPositioning: () =>
+      processPlatform !== 'linux' || sessionType !== 'wayland',
     settingsTitle: () =>
       dependent({ darwin: 'Open System Settings' }, 'Open Settings'),
     setLaunchAtLoginEnabled: (enabled: boolean) => {
@@ -378,6 +380,10 @@ export function hasCapability(capability: string) {
 export function canRequestMediaPermission(permission: string) {
   if (permission === 'media') return hasCapability('camera');
   return true;
+}
+
+export function supportsProgrammaticWindowPositioning() {
+  return defaultOsAdapter.supportsProgrammaticWindowPositioning();
 }
 
 export function settingsTitle() {

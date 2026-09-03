@@ -521,20 +521,20 @@ test('suppressClipboardHistoryId adds suppression', () => {
 // clipboardSnapshot / restoreClipboardSnapshot
 // ═══════════════════════════════════════════════════════════
 
-test('clipboardSnapshot captures current clipboard state', () => {
+test('clipboardSnapshot captures current clipboard state', async () => {
   const { deps } = createFakes();
   (deps.clipboard as any).readText = () => 'snap text';
   (deps.clipboard as any).readHTML = () => '<b>snap</b>';
   const ch = createClipboardHistory(deps);
 
-  const snap = ch.clipboardSnapshot();
+  const snap = await ch.clipboardSnapshot();
 
   assert.equal(snap.text, 'snap text');
   assert.equal(snap.html, '<b>snap</b>');
   assert.equal(snap.image, null);
 });
 
-test('restoreClipboardSnapshot restores state', () => {
+test('restoreClipboardSnapshot restores state', async () => {
   const { clipboardHistory, deps } = createFakes();
   const snap = {
     text: 'restored',
@@ -544,19 +544,19 @@ test('restoreClipboardSnapshot restores state', () => {
     image: null as any,
   };
 
-  clipboardHistory.restoreClipboardSnapshot(snap);
+  await clipboardHistory.restoreClipboardSnapshot(snap);
 
   assert.equal((deps.clipboard as any).readText(), 'restored');
   assert.equal((deps.clipboard as any).readHTML(), '<b>restored</b>');
 });
 
-test('restoreClipboardSnapshot clears on empty snapshot', () => {
+test('restoreClipboardSnapshot clears on empty snapshot', async () => {
   const { clipboardHistory, deps } = createFakes();
   (deps.clipboard as any).write({
     text: 'before',
   });
 
-  clipboardHistory.restoreClipboardSnapshot({
+  await clipboardHistory.restoreClipboardSnapshot({
     text: '',
     html: '',
     rtf: '',
@@ -790,18 +790,21 @@ test('readDesktopClipboard returns empty when clipboard is empty', async () => {
 // writeDesktopClipboard
 // ═══════════════════════════════════════════════════════════
 
-test('writeDesktopClipboard writes text', () => {
+test('writeDesktopClipboard writes text', async () => {
   const { clipboardHistory, deps } = createFakes();
 
-  clipboardHistory.writeDesktopClipboard({ type: 'text', text: 'written' });
+  await clipboardHistory.writeDesktopClipboard({
+    type: 'text',
+    text: 'written',
+  });
 
   assert.equal((deps.clipboard as any).readText(), 'written');
 });
 
-test('writeDesktopClipboard suppresses history for concealed content', () => {
+test('writeDesktopClipboard suppresses history for concealed content', async () => {
   const { clipboardHistory, getSuppressed } = createFakes();
 
-  clipboardHistory.writeDesktopClipboard(
+  await clipboardHistory.writeDesktopClipboard(
     { type: 'text', text: 'secret' },
     { concealed: true },
   );

@@ -532,6 +532,36 @@ test('searches and invokes the safe built-in action, then hides and shows', asyn
   }
 });
 
+test('restores search focus after dismissing a root action panel', async () => {
+  test.setTimeout(40_000);
+  const focusUserDataDir = path.join(userDataDir, 'focus-restoration');
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    launched = await launchTestApplication(focusUserDataDir);
+    const input = launched.page.locator('input[placeholder]').first();
+    const rootTitle = 'Test: Confirm safe action';
+
+    await input.fill(rootTitle);
+    await expect(
+      launched.page.getByText(rootTitle, { exact: true }),
+    ).toBeVisible();
+    await launched.page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+K' : 'Control+K',
+    );
+    await expect(
+      launched.page.locator('input[placeholder^="Filter actions for"]').first(),
+    ).toBeVisible();
+    await launched.page.keyboard.press('Escape');
+    await expect(input).toBeFocused();
+    await launched.page.keyboard.type('x');
+    await expect(input).toHaveValue(/x/);
+  } finally {
+    if (launched)
+      await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
+
 test('saves a shortcut from the recorder with Enter', async () => {
   test.setTimeout(40_000);
   const shortcutUserDataDir = path.join(userDataDir, 'shortcut-recorder');

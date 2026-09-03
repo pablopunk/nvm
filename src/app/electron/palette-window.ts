@@ -16,6 +16,7 @@ import {
   applyPaletteWindowPolicy as applyOsPaletteWindowPolicy,
   canRequestMediaPermission,
   paletteBrowserWindowOptions,
+  supportsProgrammaticWindowPositioning,
 } from './os';
 import {
   isNvmTestMode,
@@ -257,18 +258,19 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         const centerX = x + width / 2;
         const centerY = y + height / 2;
         win.setSize(size.width, size.height, false);
-        win.setPosition(
-          Math.round(centerX - size.width / 2),
-          Math.round(centerY - size.height / 2),
-          false,
-        );
+        if (supportsProgrammaticWindowPositioning())
+          win.setPosition(
+            Math.round(centerX - size.width / 2),
+            Math.round(centerY - size.height / 2),
+            false,
+          );
       },
     );
   }
 
   function centerWindow() {
     measureDebugPerformanceSync('palette-window.center', undefined, () => {
-      if (!win) return;
+      if (!win || !supportsProgrammaticWindowPositioning()) return;
       const cursor = screen.getCursorScreenPoint();
       const display = screen.getDisplayNearestPoint(cursor);
       const { width, height } = win.getBounds();

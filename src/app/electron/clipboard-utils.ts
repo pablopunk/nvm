@@ -1,6 +1,6 @@
 // biome-ignore-all lint: This module normalizes heterogeneous persisted clipboard records.
 import path from 'node:path';
-import type { Clipboard } from 'electron';
+import type { ClipboardApi } from './electron-clipboard';
 import {
   expandUserPath,
   fileUrlForPath,
@@ -122,10 +122,10 @@ export function clipboardItemSubtitle(item: ClipboardHistoryItem) {
   return `Copied ${when}`;
 }
 
-export function clipboardFilePaths(clipboard: Clipboard) {
+export async function clipboardFilePaths(clipboard: ClipboardApi) {
   const candidates = [
-    clipboard.readBuffer('public.file-url').toString('utf8'),
-    clipboard.readText(),
+    (await clipboard.readBuffer('public.file-url')).toString('utf8'),
+    await clipboard.readText(),
   ];
   const paths: string[] = [];
   for (const candidate of candidates) {
@@ -143,6 +143,6 @@ export function clipboardFilePaths(clipboard: Clipboard) {
   return Array.from(new Set(paths));
 }
 
-export function clipboardFilePath(clipboard: Clipboard) {
-  return clipboardFilePaths(clipboard)[0] || null;
+export async function clipboardFilePath(clipboard: ClipboardApi) {
+  return (await clipboardFilePaths(clipboard))[0] || null;
 }

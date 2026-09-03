@@ -47,6 +47,27 @@ test('enables Linux auto-updates for package builds', linuxOnly, () => {
   assert.equal(os.supportsAutoUpdates(), true);
 });
 
+test('defers Linux Wayland window placement to the compositor', () => {
+  assert.equal(
+    os
+      .createOsAdapter({
+        processPlatform: 'linux',
+        sessionType: 'wayland',
+      })
+      .supportsProgrammaticWindowPositioning(),
+    false,
+  );
+  assert.equal(
+    os
+      .createOsAdapter({
+        processPlatform: 'linux',
+        sessionType: 'x11',
+      })
+      .supportsProgrammaticWindowPositioning(),
+    true,
+  );
+});
+
 test(
   'parses visible Linux desktop entries without filesystem access',
   linuxOnly,

@@ -7,6 +7,7 @@
   "private": true,
   "type": "module",
   "main": "dist/main/main.js",
+  "desktopName": "com.pablopunk.nvm.desktop",
   "scripts": {
     "predev": "node scripts/build-macos-selected-text-helper.cjs && node scripts/ensure-electron.cjs && node scripts/ensure-backend.cjs",
     "dev": "node ./scripts/electron-dev.cjs",
@@ -74,7 +75,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "cmdk": "^1.1.1",
     "concurrently": "^9.2.1",
-    "electron": "^41.5.0",
+    "electron": "^44.1.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "lucide-react": "^1.16.0",

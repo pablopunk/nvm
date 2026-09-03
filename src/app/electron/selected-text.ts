@@ -1,13 +1,14 @@
 import crypto from 'node:crypto';
+import type { MaybePromise } from './electron-clipboard';
 
 interface SelectedTextReaderDependencies<Snapshot, Target> {
   selectionTarget(): Target | null | Promise<Target | null>;
   readAccessibilityText(target: Target): Promise<string | null | undefined>;
   paletteIsFocused(): boolean;
-  clipboardSnapshot(): Snapshot;
-  readClipboardText(): string;
-  writeClipboardText(text: string): void;
-  restoreClipboardSnapshot(snapshot: Snapshot): void;
+  clipboardSnapshot(): MaybePromise<Snapshot>;
+  readClipboardText(): MaybePromise<string>;
+  writeClipboardText(text: string): MaybePromise<void>;
+  restoreClipboardSnapshot(snapshot: Snapshot): MaybePromise<void>;
   copySelectionIntoClipboard(target: Target): Promise<boolean>;
   concealClipboardText(text: string): void;
   delay?(durationMs: number): Promise<void>;
@@ -21,14 +22,14 @@ interface ClipboardPoll {
   attemptsLeft: number;
   concealText(text: string): void;
   delay(durationMs: number): Promise<void>;
-  readText(): string;
+  readText(): MaybePromise<string>;
   sentinel: string;
 }
 
 async function waitForClipboardText(
   poll: ClipboardPoll,
 ): Promise<string | null> {
-  const text = poll.readText();
+  const text = await poll.readText();
   if (text !== poll.sentinel) {
     poll.concealText(text);
     return text || null;
@@ -53,12 +54,12 @@ export function createSelectedTextReader<Snapshot, Target>(
       new Promise<void>((resolve) => setTimeout(resolve, durationMs)));
 
   async function readClipboardSelection(target: Target) {
-    const snapshot = dependencies.clipboardSnapshot();
+    const snapshot = await dependencies.clipboardSnapshot();
     const sentinel =
       dependencies.sentinel?.() ??
       `__NEVERMIND_SELECTION_${crypto.randomUUID()}__`;
     dependencies.concealClipboardText(sentinel);
-    dependencies.writeClipboardText(sentinel);
+    await dependencies.writeClipboardText(sentinel);
     try {
       if (!(await dependencies.copySelectionIntoClipboard(target))) {
         return null;
@@ -71,7 +72,7 @@ export function createSelectedTextReader<Snapshot, Target>(
         sentinel,
       });
     } finally {
-      dependencies.restoreClipboardSnapshot(snapshot);
+      await dependencies.restoreClipboardSnapshot(snapshot);
     }
   }
 

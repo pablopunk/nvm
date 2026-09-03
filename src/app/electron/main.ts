@@ -23,6 +23,7 @@ process.on('uncaughtException', (error) => {
 import {
   app,
   BrowserWindow,
+  ClipboardItem,
   clipboard,
   dialog,
   globalShortcut,
@@ -59,6 +60,7 @@ import { aiChatPreviewFiles, prepareAiChatPreview } from './ai-chat-previews';
 import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
+import { createElectronClipboardApi } from './electron-clipboard';
 import {
   DEEP_LINK_SCHEME,
   type ParsedAuthDeepLink,
@@ -303,6 +305,21 @@ const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 configureLogger(isDev);
 setDeepLinkLogger({ warn: logWarn });
+
+const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';
+if (process.platform === 'linux') {
+  app.setDesktopName(LINUX_DESKTOP_NAME);
+  const isWaylandSession =
+    String(process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' ||
+    Boolean(process.env.WAYLAND_DISPLAY);
+  if (isWaylandSession) {
+    app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+    app.commandLine.appendSwitch(
+      'disable-features',
+      'WaylandFractionalScaleV1',
+    );
+  }
+}
 
 const updateManager: any = isNvmTestMode
   ? {
@@ -664,6 +681,12 @@ const stateSafeQuit = createStateSafeQuit({
   exitFallbackMs: 5000,
 });
 
+const clipboardApi = createElectronClipboardApi({
+  clipboard,
+  nativeImage,
+  ClipboardItem,
+});
+
 clipboardService = createClipboardHistory({
   getHistory: () => clipboardHistory,
   setHistory: (h) => {
@@ -671,7 +694,7 @@ clipboardService = createClipboardHistory({
   },
   getSuppressedItemIds: () => suppressedClipboardItemIds,
   getImagesDir: () => clipboardImagesDir,
-  clipboard,
+  clipboard: clipboardApi,
   nativeImage,
   ensureDir: (dir) => fs.mkdir(dir, { recursive: true }).then(() => {}),
   writeFile: (filePath, data) => fs.writeFile(filePath, data),
@@ -719,11 +742,11 @@ const selectedText = createSelectedTextReader({
   paletteIsFocused: () =>
     Boolean(paletteWindow.win?.isVisible() && paletteWindow.win.isFocused()),
   clipboardSnapshot,
-  readClipboardText: () => clipboard.readText(),
-  writeClipboardText: (text) => clipboard.writeText(text),
-  restoreClipboardSnapshot: (snapshot) => {
+  readClipboardText: () => clipboardApi.readText(),
+  writeClipboardText: (text) => clipboardApi.writeText(text),
+  restoreClipboardSnapshot: async (snapshot) => {
     suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot?.text));
-    restoreClipboardSnapshot(snapshot);
+    await restoreClipboardSnapshot(snapshot);
   },
   copySelectionIntoClipboard,
   concealClipboardText: (text) =>
@@ -4731,14 +4754,12 @@ async function executeViewActionForIpc(action) {
   ) as Promise<any>;
 }
 
-function clipboardSnapshot() {
+async function clipboardSnapshot() {
   return clipboardService!.clipboardSnapshot();
 }
 
-function restoreClipboardSnapshot(
-  snapshot: ReturnType<typeof clipboardSnapshot>,
-) {
-  clipboardService!.restoreClipboardSnapshot(snapshot);
+async function restoreClipboardSnapshot(snapshot: any) {
+  await clipboardService!.restoreClipboardSnapshot(snapshot);
 }
 
 function clipboardHistoryIdForText(text: string) {
@@ -4749,8 +4770,8 @@ function suppressClipboardHistoryId(id: string, durationMs = 2000) {
   clipboardService!.suppressClipboardHistoryId(id, durationMs);
 }
 
-function pasteTextAction(action: any) {
-  clipboardService!.pasteTextAction(action);
+async function pasteTextAction(action: any) {
+  await clipboardService!.pasteTextAction(action);
 }
 
 function desktopAppIdentity(appInfo: any) {
@@ -4929,7 +4950,7 @@ async function executeViewAction(action, launchContext?: any) {
       }, action.traceId);
       break;
     case 'copyText':
-      clipboard.writeText(action.text || '');
+      await clipboardApi.writeText(action.text || '');
       break;
     case 'pasteText':
       if (
@@ -4944,15 +4965,15 @@ async function executeViewAction(action, launchContext?: any) {
           },
         };
       if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
-      pasteTextAction(action);
+      await pasteTextAction(action);
       return { toast: { message: 'Pasted' } };
     case 'insertCharacter':
       if (action.mode !== 'paste') {
-        clipboard.writeText(action.text || '');
+        await clipboardApi.writeText(action.text || '');
         break;
       }
       if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
-      pasteTextAction({
+      await pasteTextAction({
         ...action,
         type: 'pasteText',
         concealed: true,
@@ -4961,7 +4982,7 @@ async function executeViewAction(action, launchContext?: any) {
       return { toast: { message: 'Pasted' } };
     case 'pasteClipboard':
       if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
-      pasteClipboardAction(action);
+      await pasteClipboardAction(action);
       return { toast: { message: 'Pasted' } };
     case 'typeText': {
       const result = await typeTextIntoFrontmostApp(action.text || '', {
@@ -5003,13 +5024,15 @@ async function executeViewAction(action, launchContext?: any) {
       return executeWindowAction(action);
     case 'copyImage':
       if (action.path)
-        clipboard.writeImage(
+        await clipboardApi.writeImage(
           nativeImage.createFromPath(expandUserPath(action.path)),
         );
       else if (action.imagePath)
-        clipboard.writeImage(nativeImage.createFromPath(action.imagePath));
+        await clipboardApi.writeImage(
+          nativeImage.createFromPath(action.imagePath),
+        );
       else
-        clipboard.writeImage(
+        await clipboardApi.writeImage(
           nativeImage.createFromDataURL(action.imageDataUrl),
         );
       break;
@@ -6072,7 +6095,7 @@ async function clipboardFiles() {
   return clipboardService!.clipboardFiles();
 }
 
-function clipboardImageDataUrl() {
+async function clipboardImageDataUrl() {
   return clipboardService!.clipboardImageDataUrl();
 }
 
@@ -6092,16 +6115,16 @@ function suppressClipboardHistoryForContent(item: any) {
   clipboardService!.suppressClipboardHistoryForContent(item);
 }
 
-function writeDesktopClipboardFiles(paths) {
-  clipboardService!.writeDesktopClipboardFiles(paths);
+async function writeDesktopClipboardFiles(paths) {
+  await clipboardService!.writeDesktopClipboardFiles(paths);
 }
 
 function writeDesktopClipboard(item, options: any = {}) {
   return clipboardService!.writeDesktopClipboard(item, options);
 }
 
-function pasteClipboardAction(action: any) {
-  clipboardService!.pasteClipboardAction(action);
+async function pasteClipboardAction(action: any) {
+  await clipboardService!.pasteClipboardAction(action);
 }
 
 async function readDesktopSelection() {
@@ -6894,7 +6917,7 @@ async function expandTextTemplate(
     uuid: crypto.randomUUID(),
     clipboard:
       hostOptions.includeClipboard && options.includeClipboard !== false
-        ? clipboard.readText()
+        ? await clipboardApi.readText()
         : '',
     selectedText:
       options.includeSelectedText === false ? '' : await safeSelectedText(),
@@ -7299,10 +7322,10 @@ function createExtensionContext(
       },
       clipboard: canUseClipboard
         ? {
-            readText: () => clipboard.readText(),
+            readText: () => clipboardApi.readText(),
             writeText: (text, options: any = {}) =>
               writeDesktopClipboard({ type: 'text', text }, options),
-            readHtml: () => clipboard.readHTML(),
+            readHtml: () => clipboardApi.readHTML(),
             writeHtml: (html, text = '', options: any = {}) =>
               writeDesktopClipboard({ type: 'html', html, text }, options),
             readImage: clipboardImageDataUrl,
@@ -10843,11 +10866,16 @@ app.whenReady().then(async () => {
   await initNevermindAi();
   initExtensionContext({ nevermindAi });
   void restorePersistentExtensionWindows();
-  paletteWindow.createWindow();
-  paletteWindow.registerHotkey();
   flushBufferedDeepLinks();
   registerActionShortcuts();
-  await startClipboardWatcher();
+  try {
+    await startClipboardWatcher();
+  } catch (error) {
+    logWarn('clipboard.watcher.start.failed', error, {
+      source: 'host',
+      scope: 'clipboard',
+    });
+  }
   powerMonitor.on('resume', () => jobRegistry.emit('wake'));
   jobRegistry.emit('login');
 
@@ -10918,6 +10946,9 @@ app.whenReady().then(async () => {
       extensionPrSubmitter?.probe() ??
       Promise.resolve({ installed: false, authed: false }),
   });
+
+  paletteWindow.createWindow();
+  paletteWindow.registerHotkey();
 
   ipcMain.on('dictation:reply', (event, reply) => {
     if (event.sender !== paletteWindow.win?.webContents) return;

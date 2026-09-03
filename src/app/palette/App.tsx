@@ -2098,6 +2098,7 @@ export function App() {
     } else if (!isCompactActionMenuOpen && wasOpen) {
       selectValue(compactActionMenuOriginSelectionRef.current);
       compactActionMenuOriginSelectionRef.current = '';
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
     compactActionMenuWasOpenRef.current = isCompactActionMenuOpen;
   }, [isCompactActionMenuOpen]);
@@ -2689,7 +2690,7 @@ export function App() {
     }
     if (!wasChildOpenRef.current) return;
     wasChildOpenRef.current = false;
-    requestAnimationFrame(() => inputRef.current?.focus());
+    setTimeout(() => inputRef.current?.focus(), 0);
   }, [isChildOpen]);
 
   useLayoutEffect(() => {
