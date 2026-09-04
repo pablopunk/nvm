@@ -53,7 +53,7 @@ function readFormatsFor(format: string) {
 }
 
 function blobForBuffer(buffer: Buffer, type?: string) {
-  return new Blob([buffer], type ? { type } : undefined);
+  return new Blob([new Uint8Array(buffer)], type ? { type } : undefined);
 }
 
 async function findClipboardItem(clipboard: Clipboard, formats: string[]) {

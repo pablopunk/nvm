@@ -7,6 +7,9 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { env } = require('node:process');
 const { stripVTControlCharacters } = require('node:util');
+const {
+  resolveInstalledElectronExecutable,
+} = require('../../scripts/ensure-electron.cjs');
 
 const root = path.resolve(__dirname, '..', '..');
 const pnpmExecutable = env.PNPM_STANDALONE_PATH;
@@ -22,9 +25,9 @@ const startupMarkers = [
 ];
 
 function resolveElectronExecutable() {
-  const electronEntryPoint = require.resolve('electron', { paths: [root] });
-  delete require.cache[electronEntryPoint];
-  return require(electronEntryPoint);
+  const executablePath = resolveInstalledElectronExecutable();
+  if (!executablePath) throw new Error('Electron executable is not installed.');
+  return executablePath;
 }
 
 function stopProcessTree(pid) {

@@ -9,23 +9,28 @@ function resolveElectronPackageDirectory() {
   return path.dirname(require.resolve('electron/package.json'));
 }
 
-function resolveInstalledElectronExecutable() {
-  const electronEntryPoint = require.resolve('electron');
-  delete require.cache[electronEntryPoint];
-
+function resolveInstalledElectronExecutable({
+  electronPackageDirectory = resolveElectronPackageDirectory(),
+  environment = process.env,
+} = {}) {
+  let executableRelativePath;
   try {
-    const executablePath = require(electronEntryPoint);
-    if (
-      typeof executablePath === 'string' &&
-      fs.statSync(executablePath).isFile()
-    ) {
-      return executablePath;
-    }
+    executableRelativePath = fs
+      .readFileSync(path.join(electronPackageDirectory, 'path.txt'), 'utf8')
+      .trim();
   } catch {
-    // An absent path.txt or executable is repaired below.
+    return undefined;
   }
 
-  return undefined;
+  if (!executableRelativePath) return undefined;
+  const executablePath = environment.ELECTRON_OVERRIDE_DIST_PATH
+    ? path.join(environment.ELECTRON_OVERRIDE_DIST_PATH, executableRelativePath)
+    : path.join(electronPackageDirectory, 'dist', executableRelativePath);
+  try {
+    return fs.statSync(executablePath).isFile() ? executablePath : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function cleanElectronGeneratedPayload(electronPackageDirectory) {

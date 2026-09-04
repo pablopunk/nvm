@@ -10,6 +10,7 @@ const {
   electronInstallerEnvironment,
   ensureElectronAvailable,
   installElectronBinary,
+  resolveInstalledElectronExecutable,
 } = require('./ensure-electron.cjs');
 
 function createElectronFixture(t) {
@@ -54,6 +55,16 @@ test('keeps a healthy Electron payload without reinstalling', (t) => {
   });
 
   assert.equal(actual, executablePath);
+});
+
+test('resolves an installed Electron payload without loading its entrypoint', (t) => {
+  const electronPackageDirectory = createElectronFixture(t);
+  const executablePath = installFakeElectron(electronPackageDirectory);
+
+  assert.equal(
+    resolveInstalledElectronExecutable({ electronPackageDirectory }),
+    executablePath,
+  );
 });
 
 test('cleans stale dist when only path.txt is missing before installing', (t) => {
