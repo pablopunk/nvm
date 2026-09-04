@@ -115,6 +115,14 @@
       "surface": "camera"
     },
     {
+      "key": "main-direct-platform-30aa31c30033",
+      "file": "src/app/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "if:process.platform === 'linux'::direct-platform::if (process.platform === 'linux') { app.setDesktopName(LINUX_DESKTOP_NAME); const isWaylandSessi…#30aa31c30033::expression.left",
+      "disposition": "runtime-startup-adapter",
+      "surface": "window-behavior"
+    },
+    {
       "key": "main-known-folder-f76f4b588bf5",
       "file": "src/app/electron/main.ts",
       "category": "known-folder",
@@ -249,6 +257,14 @@
       "selector": "function:createOsAdapter/variable:processPlatform::injected-platform::const processPlatform = dependencies.processPlatform || process.platform;::declarationList.declarations[0].name",
       "disposition": "capability-layer",
       "surface": "system-actions-settings"
+    },
+    {
+      "key": "os-injected-platform-8f7b8e2c2b2a",
+      "file": "src/app/electron/os.ts",
+      "category": "injected-platform",
+      "selector": "function:createOsAdapter/property:supportsProgrammaticWindowPositioning::injected-platform::supportsProgrammaticWindowPositioning: () => processPlatform !== 'linux' || sessionType !== 'wayland'::initializer.body.left.left",
+      "disposition": "capability-layer",
+      "surface": "window-behavior"
     },
     {
       "key": "os-known-folder-9c4d2bf19f24",
