@@ -51,7 +51,7 @@ export type ClipboardHistoryDeps = {
   emitChanged: () => void;
   sendToRenderer: (channel: string, ...args: unknown[]) => void;
   patchOpenView: (viewId: string, patch: Record<string, unknown>) => void;
-  pasteIntoFrontmostApp: () => void;
+  pasteIntoFrontmostApp: () => MaybePromise<void>;
 
   // ── Settings ───────────────────────────────────────────
   getSetting: (id: string) => unknown;
@@ -605,7 +605,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     if (action.plainText === false && action.html)
       await deps.clipboard.write({ text, html: String(action.html) });
     else await deps.clipboard.writeText(text);
-    deps.pasteIntoFrontmostApp();
+    await deps.pasteIntoFrontmostApp();
     if (restoreClipboard && snapshot) {
       const delay = Math.max(
         50,
@@ -758,7 +758,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     await writeDesktopClipboard(content, {
       concealed: action.concealed || restoreClipboard,
     });
-    deps.pasteIntoFrontmostApp();
+    await deps.pasteIntoFrontmostApp();
     if (restoreClipboard && snapshot) {
       const delay = Math.max(
         50,

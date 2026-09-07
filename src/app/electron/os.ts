@@ -947,17 +947,22 @@ export async function fileDateAddedMs(paths: string[]) {
 }
 
 export function pasteIntoFrontmostApp() {
-  return osFunction({
-    darwin: () =>
-      execFile(
-        'osascript',
-        [
-          '-e',
-          'tell application "System Events" to keystroke "v" using command down',
-        ],
-        () => {},
-      ),
-  })();
+  return osFunction<[], Promise<void>>(
+    {
+      darwin: () =>
+        new Promise((resolve, reject) => {
+          execFile(
+            'osascript',
+            [
+              '-e',
+              'tell application "System Events" to keystroke "v" using command down',
+            ],
+            (error) => (error ? reject(error) : resolve()),
+          );
+        }),
+    },
+    async () => {},
+  )();
 }
 
 export type AppFocusTarget = {

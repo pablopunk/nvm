@@ -786,6 +786,58 @@ test('readDesktopClipboard returns empty when clipboard is empty', async () => {
   assert.equal(result.type, 'empty');
 });
 
+test('pasteTextAction waits for clipboard write before dispatching paste', async () => {
+  const calls: string[] = [];
+  let finishWrite!: () => void;
+  const writeFinished = new Promise<void>((resolve) => {
+    finishWrite = resolve;
+  });
+  const { clipboardHistory, deps } = createFakes({
+    pasteIntoFrontmostApp: async () => {
+      calls.push('paste');
+    },
+  });
+  (deps.clipboard as any).writeText = async () => {
+    calls.push('write:start');
+    await writeFinished;
+    calls.push('write:end');
+  };
+
+  const pasteFinished = clipboardHistory.pasteTextAction({ text: '😀' });
+  await Promise.resolve();
+  assert.deepEqual(calls, ['write:start']);
+
+  finishWrite();
+  await pasteFinished;
+  assert.deepEqual(calls, ['write:start', 'write:end', 'paste']);
+});
+
+test('pasteTextAction waits for paste dispatch to finish', async () => {
+  const calls: string[] = [];
+  let finishPaste!: () => void;
+  const pasteDispatched = new Promise<void>((resolve) => {
+    finishPaste = resolve;
+  });
+  const { clipboardHistory, deps } = createFakes({
+    pasteIntoFrontmostApp: async () => {
+      calls.push('paste:start');
+      await pasteDispatched;
+      calls.push('paste:end');
+    },
+  });
+  (deps.clipboard as any).writeText = async () => {
+    calls.push('write');
+  };
+
+  const pasteFinished = clipboardHistory.pasteTextAction({ text: '😀' });
+  await Promise.resolve();
+  assert.deepEqual(calls, ['write', 'paste:start']);
+
+  finishPaste();
+  await pasteFinished;
+  assert.deepEqual(calls, ['write', 'paste:start', 'paste:end']);
+});
+
 // ═══════════════════════════════════════════════════════════
 // writeDesktopClipboard
 // ═══════════════════════════════════════════════════════════
