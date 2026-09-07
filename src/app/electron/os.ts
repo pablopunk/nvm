@@ -17,11 +17,11 @@ import {
   type ExtensionWindowSession,
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
+import { warn as logWarn } from './logger';
 import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
-import { warn as logWarn } from './logger';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
@@ -977,12 +977,13 @@ function macosSelectedTextHelperPath() {
 }
 
 function runMacosSelectedTextHelper(
-  operation: 'copy' | 'read',
+  operation: 'copy' | 'read' | 'replace',
   target: AppFocusTarget,
+  input?: string,
 ) {
   return new Promise<{ exitCode: number; stderr: string; stdout: string }>(
     (resolve) => {
-      execFile(
+      const child = execFile(
         macosSelectedTextHelperPath(),
         [operation, String(target.pid)],
         { timeout: 5000 },
@@ -998,6 +999,7 @@ function runMacosSelectedTextHelper(
             stdout: String(stdout || ''),
           }),
       );
+      if (input !== undefined) child.stdin?.end(input);
     },
   );
 }
@@ -1010,6 +1012,31 @@ export function copySelectionIntoClipboard(target: AppFocusTarget) {
         if (result.exitCode !== 0)
           logWarn(
             'selected-text.copy.failed',
+            { exitCode: result.exitCode, error: result.stderr.trim() },
+            { source: 'host', scope: 'selected-text' },
+          );
+        return result.exitCode === 0;
+      },
+    },
+    async () => false,
+  )();
+}
+
+export function replaceSelectedText(
+  target: AppFocusTarget,
+  replacement: string,
+) {
+  return osFunction<[], Promise<boolean>>(
+    {
+      darwin: async () => {
+        const result = await runMacosSelectedTextHelper(
+          'replace',
+          target,
+          replacement,
+        );
+        if (result.exitCode !== 0 && result.exitCode !== 3)
+          logWarn(
+            'selected-text.replace.failed',
             { exitCode: result.exitCode, error: result.stderr.trim() },
             { source: 'host', scope: 'selected-text' },
           );

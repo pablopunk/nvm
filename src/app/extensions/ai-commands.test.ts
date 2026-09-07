@@ -20,6 +20,7 @@ function contextFor(
   frontmostApps: unknown[] = [
     { name: 'TextEdit', bundleId: 'com.apple.TextEdit' },
   ],
+  replaceText: (text: string) => boolean | Promise<boolean> = () => false,
 ) {
   const preparations: unknown[] = [];
   const aiCalls: unknown[] = [];
@@ -35,7 +36,7 @@ function contextFor(
       },
     },
     desktop: {
-      selection: { text: async () => selectedText },
+      selection: { text: async () => selectedText, replaceText },
       apps: {
         frontmost: async () =>
           frontmostApps[Math.min(frontmostCall++, frontmostApps.length - 1)],
@@ -112,6 +113,24 @@ test('corrects selected text with Fast AI and replaces it without changing the c
       ['hide', 'fix-selected-text-with-ai'],
     ],
   );
+});
+
+test('replaces writable selected text without using the clipboard', async () => {
+  const replacements: string[] = [];
+  const { context, actions } = contextFor(
+    'this are selected text',
+    ['This is corrected text.'],
+    [{ name: 'TextEdit', bundleId: 'com.apple.TextEdit' }],
+    (text) => {
+      replacements.push(text);
+      return true;
+    },
+  );
+
+  await commandHandler(context)(context, {});
+
+  assert.deepEqual(replacements, ['This is corrected text.']);
+  assert.deepEqual(actions, []);
 });
 
 test('treats conversational selected text as content to proofread', async () => {

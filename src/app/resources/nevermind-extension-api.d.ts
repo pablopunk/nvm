@@ -1706,6 +1706,8 @@ export type ExtensionContext = {
     };
     selection: {
       text(): Promise<string> | string;
+      /** Replace the editable selection in the frontmost app without using the clipboard; returns false when the app does not expose a writable selection. */
+      replaceText(text: string): Promise<boolean> | boolean;
       files(): Promise<string[]> | string[];
       read(): Promise<unknown> | unknown;
     };

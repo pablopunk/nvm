@@ -229,6 +229,7 @@ import {
   quickLookTitle,
   readAppIconResourcePng,
   recognizeTextInImage,
+  replaceSelectedText,
   reservedPaletteShortcutName,
   revealPathTitle,
   scanApps,
@@ -7340,6 +7341,12 @@ function createExtensionContext(
         : undefined,
       selection: {
         text: selectedText,
+        replaceText: async (text) => {
+          const target = await frontmostAppFocusTarget();
+          return target
+            ? replaceSelectedText(target, String(text || ''))
+            : false;
+        },
         files: selectedFiles,
         read: readDesktopSelection,
       },

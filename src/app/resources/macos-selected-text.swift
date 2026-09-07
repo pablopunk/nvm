@@ -144,6 +144,40 @@ private func selectedTextFromFocusedHierarchy(_ root: AXUIElement) -> String? {
   return nil
 }
 
+private func replaceSelectedTextInFocusedHierarchy(
+  _ root: AXUIElement,
+  _ replacement: String
+) -> Bool {
+  var current = root
+  for _ in 0..<8 {
+    if selectedText(current) != nil {
+      var settable = DarwinBoolean(false)
+      if
+        AXUIElementIsAttributeSettable(
+          current,
+          kAXSelectedTextAttribute as CFString,
+          &settable
+        ) == .success,
+        settable.boolValue,
+        AXUIElementSetAttributeValue(
+          current,
+          kAXSelectedTextAttribute as CFString,
+          replacement as CFTypeRef
+        ) == .success
+      {
+        return true
+      }
+    }
+    guard let focused = element(
+      attribute(current, kAXFocusedUIElementAttribute as CFString)
+    ) else {
+      return false
+    }
+    current = focused
+  }
+  return false
+}
+
 private func readSelection(pid: pid_t) -> Never {
   let app = AXUIElementCreateApplication(pid)
   AXUIElementSetAttributeValue(
@@ -187,6 +221,28 @@ private func copySelection(pid: pid_t) -> Never {
   exit(0)
 }
 
+private func replaceSelection(pid: pid_t) -> Never {
+  guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    fail("Selection target is not frontmost", code: 4)
+  }
+  let data = FileHandle.standardInput.readDataToEndOfFile()
+  guard let replacement = String(data: data, encoding: .utf8) else {
+    fail("Replacement text is not valid UTF-8")
+  }
+  let app = AXUIElementCreateApplication(pid)
+  AXUIElementSetAttributeValue(
+    app,
+    "AXManualAccessibility" as CFString,
+    kCFBooleanTrue
+  )
+  guard let focused = element(
+    attribute(app, kAXFocusedUIElementAttribute as CFString)
+  ), replaceSelectedTextInFocusedHierarchy(focused, replacement) else {
+    exit(noSelectionExitCode)
+  }
+  exit(0)
+}
+
 guard AXIsProcessTrusted() else {
   fail("Nevermind does not have Accessibility access", code: 2)
 }
@@ -194,11 +250,12 @@ guard
   CommandLine.arguments.count == 3,
   let pid = pid_t(CommandLine.arguments[2])
 else {
-  fail("Usage: macos-selected-text <read|copy> <pid>")
+  fail("Usage: macos-selected-text <read|copy|replace> <pid>")
 }
 
 switch CommandLine.arguments[1] {
 case "read": readSelection(pid: pid)
 case "copy": copySelection(pid: pid)
+case "replace": replaceSelection(pid: pid)
 default: fail("Unknown selected-text operation")
 }

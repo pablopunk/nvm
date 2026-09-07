@@ -164,6 +164,7 @@ async function fixSelectedText(ctx: ExtensionContext) {
       });
       return;
     }
+    if (await ctx.desktop.selection.replaceText(correctedText)) return;
 
     return ctx.navigation.run(
       ctx.actions.pasteText(correctedText, 'Replace Selected Text', {
