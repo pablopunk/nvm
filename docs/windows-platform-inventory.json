@@ -838,7 +838,7 @@
       "key": "os-platform-selector-a944a2c495d3",
       "file": "src/app/electron/os.ts",
       "category": "platform-selector",
-      "selector": "function:pasteIntoFrontmostApp::platform-selector::darwin: () => execFile( 'osascript', [ '-e', 'tell application \"System Events\" to keystroke \"v\" …#809c4aba6056::self",
+      "selector": "function:pasteIntoFrontmostApp::platform-selector::darwin: () => new Promise((resolve, reject) => { execFile( 'osascript', [ '-e', 'tell applicatio…#a2b2cad2877a::self",
       "disposition": "capability-selector",
       "surface": "clipboard-text-image-paste"
     },
