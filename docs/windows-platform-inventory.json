@@ -11,6 +11,14 @@
       "surface": "clipboard-text-image-paste"
     },
     {
+      "key": "os-platform-selector-820578c35758",
+      "file": "src/app/electron/os.ts",
+      "category": "platform-selector",
+      "selector": "function:replaceSelectedText::platform-selector::darwin: async () => { const result = await runMacosSelectedTextHelper( 'replace', target, replac…#820578c35758::self",
+      "disposition": "capability-selector",
+      "surface": "clipboard-text-image-paste"
+    },
+    {
       "key": "system-audio-direct-platform",
       "file": "src/app/electron/system-audio.ts",
       "category": "direct-platform",
