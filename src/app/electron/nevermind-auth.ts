@@ -145,6 +145,7 @@ function legacyAuthPath() {
 let cached: NevermindAuthSnapshot = null;
 let loadPromise: Promise<NevermindAuthSnapshot> | null = null;
 let activeSignIn: Promise<SignInResult> | null = null;
+let activeSignInVerificationUrl: string | null = null;
 
 function decryptToken(data: StoredAuth): string | null {
   if (data.encryptedToken && safeStorage.isEncryptionAvailable()) {
@@ -323,6 +324,8 @@ export function setNevermindAuthFilePathForTests(filePath: string | null) {
 export function clearNevermindAuthCacheForTests() {
   cached = null;
   loadPromise = null;
+  activeSignIn = null;
+  activeSignInVerificationUrl = null;
   activeBaseUrl = normalizedBaseUrl(DEFAULT_BASE_URL);
 }
 
@@ -454,7 +457,11 @@ export async function signInToNevermind({
   environment?: NevermindEnvironment;
   label?: string;
 } = {}): Promise<SignInResult> {
-  if (activeSignIn) return activeSignIn;
+  if (activeSignIn) {
+    if (activeSignInVerificationUrl)
+      await openExternalUrl(activeSignInVerificationUrl);
+    return activeSignIn;
+  }
   const trimmedBase = normalizedBaseUrl(baseUrl);
   activeSignIn = (async (): Promise<SignInResult> => {
     try {
@@ -472,6 +479,7 @@ export async function signInToNevermind({
           expiresAt: string;
           pollIntervalMs?: number;
         };
+      activeSignInVerificationUrl = verifyUrl;
       if (!(await openExternalUrl(verifyUrl)))
         return { ok: false, error: 'unsafe verification URL' };
       const deadline = new Date(expiresAt).getTime();
@@ -509,6 +517,7 @@ export async function signInToNevermind({
       return { ok: false, error: (err as Error).message };
     } finally {
       activeSignIn = null;
+      activeSignInVerificationUrl = null;
     }
   })();
   return activeSignIn;

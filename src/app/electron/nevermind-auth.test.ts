@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { mock } from 'node:test';
 
+const openedUrls: string[] = [];
+
 mock.module('electron', {
   namedExports: {
     app: {
@@ -14,6 +16,11 @@ mock.module('electron', {
       isEncryptionAvailable: () => false,
       encryptString: () => Buffer.from(''),
       decryptString: () => '',
+    },
+    shell: {
+      openExternal: async (url: string) => {
+        openedUrls.push(url);
+      },
     },
   },
 });
@@ -27,10 +34,19 @@ const {
   resolveDefaultNevermindBaseUrl,
   setActiveNevermindAuthBaseUrl,
   setNevermindAuthFilePathForTests,
+  signInToNevermind,
   signOutFromNevermind,
 } = await import('./nevermind-auth');
 
 const production = 'https://api.nvm.fyi';
+
+async function waitFor(predicate: () => boolean) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Timed out waiting for auth test state');
+}
 
 function storedAuth(baseUrl: string, token: string) {
   return {
@@ -179,6 +195,37 @@ test('dashboard URL follows the active backend origin', () => {
   );
   setActiveNevermindAuthBaseUrl(production);
   assert.equal(getNevermindDashboardUrl(), 'https://www.nvm.fyi/dashboard');
+  clearNevermindAuthCacheForTests();
+});
+
+test('reopens the verification URL for an active sign-in', async (t) => {
+  const baseUrl = 'http://localhost:4321';
+  const verifyUrl = `${baseUrl}/auth/device?code=test-code`;
+  openedUrls.length = 0;
+  clearNevermindAuthCacheForTests();
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const url = String(input);
+    if (url.endsWith('/api/compatibility'))
+      return new Response(null, { status: 404 });
+    if (url.endsWith('/api/auth/device/initiate'))
+      return Response.json({
+        code: 'test-code',
+        verifyUrl,
+        expiresAt: new Date(Date.now() + 5000).toISOString(),
+        pollIntervalMs: 1000,
+      });
+    if (url.endsWith('/api/auth/device/exchange'))
+      return new Response(null, { status: 410 });
+    throw new Error(`Unexpected URL: ${url}`);
+  });
+
+  const firstSignIn = signInToNevermind({ baseUrl, label: 'Test Mac' });
+  await waitFor(() => openedUrls.length > 0);
+  const repeatedSignIn = signInToNevermind({ baseUrl, label: 'Test Mac' });
+  await waitFor(() => openedUrls.length > 1);
+
+  assert.deepEqual(openedUrls, [verifyUrl, verifyUrl]);
+  assert.deepEqual(await repeatedSignIn, await firstSignIn);
   clearNevermindAuthCacheForTests();
 });
 

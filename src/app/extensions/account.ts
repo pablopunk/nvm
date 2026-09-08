@@ -9,6 +9,7 @@ import { showExtensionFeedback } from './feedback';
 
 export function createAccountExtension() {
   const extensionId = 'nevermind.account';
+  const loginIndicatorId = 'account-login';
 
   function accountItem() {
     const existing = getCachedNevermindAuth();
@@ -50,11 +51,20 @@ export function createAccountExtension() {
       subtitle: 'Connect this device to your Nevermind account',
       icon: 'person',
       score: 18,
+      background: true,
+      dismissAfterRun: 'auto',
       aliases: ['login', 'sign in', 'nevermind', 'account', 'connect'],
       primaryAction: {
         type: 'runExtensionAction',
         title: 'Log in',
         __handler: async (ctx: any) => {
+          ctx.ui.indicator.show({
+            id: loginIndicatorId,
+            title: 'Nevermind Account',
+            subtitle: 'Complete sign-in in your browser',
+            status: 'loading',
+            durationMs: 300_000,
+          });
           const result = await extensionContext.signInToNevermind();
           extensionContext.invalidateExtensionRootItems();
           if (result.ok)
@@ -65,12 +75,13 @@ export function createAccountExtension() {
           const message = result.ok
             ? `Logged in as ${result.auth.email}`
             : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`;
-          showExtensionFeedback(
-            ctx,
-            'Nevermind Account',
-            message,
-            result.ok ? 'success' : 'error',
-          );
+          ctx.ui.indicator.update({
+            id: loginIndicatorId,
+            title: 'Nevermind Account',
+            subtitle: message,
+            status: result.ok ? 'success' : 'error',
+            durationMs: result.ok ? 2200 : 4000,
+          });
         },
       },
     };
