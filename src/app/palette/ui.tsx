@@ -4,10 +4,14 @@ import { Folder } from 'lucide-react';
 import React, { type ReactNode, useId, useLayoutEffect, useRef } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { TextMorph } from 'torph/react';
 import { formKeyboardActionForEvent } from './form-keyboard';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
+import {
+  MorphingChatStatus,
+  MorphingIndicatorText,
+  StreamingChatText,
+} from './morphing-text';
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
 export const EMPTY_ROOT_SUBTITLE =
@@ -152,8 +156,10 @@ export interface ChatViewProps {
     role: string;
     content: ReactNode;
     images?: { url: string; alt?: string }[];
+    streaming?: boolean;
   }[];
   isBusy?: boolean;
+  busyLabel?: string;
   input?: ReactNode;
   messagesRef?: React.RefObject<HTMLDivElement | null>;
   banner?: ReactNode;
@@ -530,19 +536,6 @@ function normalizedProgressStatus(status?: string) {
     return 'active';
   if (['error', 'failed', 'failure'].includes(value)) return 'error';
   return 'pending';
-}
-
-function MorphingIndicatorText({ value }: { value: string }) {
-  return (
-    <TextMorph
-      className="indicatorMorphingText"
-      duration={180}
-      ease="cubic-bezier(0.4, 0, 0.2, 1)"
-      scale={false}
-    >
-      {value}
-    </TextMorph>
-  );
 }
 
 export function ProgressView({
@@ -1133,6 +1126,7 @@ export function GridView<T>({
 export function ChatView({
   messages,
   isBusy,
+  busyLabel = 'Thinking…',
   input,
   messagesRef,
   banner,
@@ -1154,10 +1148,22 @@ export function ChatView({
                 ))}
               </div>
             ) : null}
-            {message.content || null}
+            {message.streaming && typeof message.content === 'string' ? (
+              <StreamingChatText value={message.content} />
+            ) : (
+              message.content || null
+            )}
           </div>
         ))}
-        {isBusy ? <div className="chatBubble system">Thinking…</div> : null}
+        {isBusy ? (
+          <div
+            key="chat-busy-status"
+            className="chatBubble system"
+            role="status"
+          >
+            <MorphingChatStatus value={busyLabel} />
+          </div>
+        ) : null}
       </div>
       {input}
     </div>

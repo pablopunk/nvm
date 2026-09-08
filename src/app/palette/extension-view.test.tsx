@@ -100,6 +100,41 @@ test('renders sent and pending AI chat image attachments', () => {
   assert.match(html, /Remove Pending image/);
 });
 
+test('morphs AI chat status and plain streamed text before restoring markdown', () => {
+  const view: CommandView = {
+    type: 'chat',
+    title: 'AI Chat',
+    aiChat: true,
+    messages: [],
+  };
+  const thinking = renderExtensionView(view, { busy: true, messages: [] });
+  const nextTurnThinking = renderExtensionView(view, {
+    busy: true,
+    messages: [
+      { role: 'assistant', content: '# Previous answer' },
+      { role: 'user', content: 'Next question' },
+    ],
+  });
+  const streaming = renderExtensionView(view, {
+    busy: true,
+    messages: [{ role: 'assistant', content: '# Streaming answer' }],
+  });
+  const complete = renderExtensionView(view, {
+    busy: false,
+    messages: [{ role: 'assistant', content: '# Complete answer' }],
+  });
+
+  assert.match(thinking, /class="chatStatusMorph">Thinking…/);
+  assert.match(nextTurnThinking, /class="chatStatusMorph">Thinking…/);
+  assert.match(nextTurnThinking, /markdownHeading markdownHeading1/);
+  assert.doesNotMatch(nextTurnThinking, /chatStreamingText/);
+  assert.match(streaming, /class="chatStatusMorph">Writing…/);
+  assert.match(streaming, /class="chatStreamingText"># Streaming answer/);
+  assert.doesNotMatch(streaming, /markdownHeading/);
+  assert.match(complete, /markdownHeading markdownHeading1/);
+  assert.doesNotMatch(complete, /chatStreamingText|chatStatusMorph/);
+});
+
 test('renders the model picker only for selectable AI conversations', () => {
   const conversation = renderExtensionView(
     {

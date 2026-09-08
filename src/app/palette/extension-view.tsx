@@ -1015,9 +1015,24 @@ function ChatExtensionView({
           void aiChat.setModel?.(model);
         }
       : undefined;
-  const messages = (view.aiChat ? aiChat.messages : view.messages || []).map(
-    (message) => ({ ...message, content: renderMarkdown(message.content) }),
-  );
+  const sourceMessages = view.aiChat ? aiChat.messages : view.messages || [];
+  let streamingAssistantIndex = -1;
+  if (view.aiChat && aiChat.busy)
+    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
+      if (sourceMessages[index]?.role === 'assistant') {
+        streamingAssistantIndex = index;
+        break;
+      }
+      if (sourceMessages[index]?.role === 'user') break;
+    }
+  const messages = sourceMessages.map((message, index) => ({
+    ...message,
+    content:
+      index === streamingAssistantIndex
+        ? message.content
+        : renderMarkdown(message.content),
+    streaming: index === streamingAssistantIndex,
+  }));
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const [chatValue, setChatValue] = useState('');
   function resizeChatInput(textarea?: HTMLTextAreaElement | null) {
@@ -1076,6 +1091,7 @@ function ChatExtensionView({
     <ChatView
       messages={messages}
       isBusy={view.aiChat ? aiChat.busy : false}
+      busyLabel={streamingAssistantIndex >= 0 ? 'Writing…' : 'Thinking…'}
       input={input}
       messagesRef={view.aiChat ? aiChat.messagesRef : undefined}
       banner={limitBanner}

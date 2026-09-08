@@ -1244,6 +1244,12 @@ kbd {
   background: transparent;
 }
 
+.chatStreamingText {
+  max-width: 100%;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
+
 .chatBubble.user {
   align-self: flex-end;
   max-width: 78%;
