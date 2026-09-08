@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { waitUntil } from '@vercel/functions';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { creditReservations, requestDedup } from '../db/schema';
@@ -1190,13 +1191,23 @@ function teeStreamAndBill(
     }
   }
 
+  function finishNaturalStreamInBackground() {
+    const finalization = finish(true).catch((error) =>
+      log.error('stream_finalize_failed', {
+        request_id: billCtx.requestId,
+        error,
+      }),
+    );
+    waitUntil(finalization);
+  }
+
   const reader = upstreamResponse.body!.getReader();
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const { value, done } = await reader.read();
         if (done) {
-          await finish(true);
+          finishNaturalStreamInBackground();
           controller.close();
           return;
         }

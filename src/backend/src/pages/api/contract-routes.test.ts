@@ -209,6 +209,10 @@ function streamFromByteChunks(chunks: Uint8Array[]): ReadableStream<Uint8Array> 
   });
 }
 
+async function waitForBackgroundTasks() {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
 function installOpenAiFetch(upstreamResponse: () => Response) {
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -1019,6 +1023,7 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
     { 'x-nevermind-ai-model': 'fast' },
   )));
   await response.text();
+  await waitForBackgroundTasks();
 
   assert.deepEqual(forwardedBody.stream_options, { include_usage: true });
   assert.equal((db.insertedValues.at(-1) as any).upstreamCostMicrocents, 200_000);
@@ -1166,6 +1171,7 @@ test('proxy route preserves streaming responses and records stream usage', async
 
   const response = await postChatCompletion(routeContext(authorizedChatRequest()));
   const text = await response.text();
+  await waitForBackgroundTasks();
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-type'), 'text/event-stream');
@@ -1338,6 +1344,7 @@ test('malformed stream usage reaches one conservative settlement on natural comp
 
   const response = await postChatCompletion(routeContext(authorizedChatRequest()));
   await response.text();
+  await waitForBackgroundTasks();
 
   assert.equal(countTerminalUpdates(db, 'settled'), 1);
   assert.equal(countTerminalUpdates(db, 'released'), 0);
@@ -1378,6 +1385,7 @@ test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', as
 
   assert.equal(response.status, 200);
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), encodedFrame);
+  await waitForBackgroundTasks();
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 4);
 });
@@ -1408,6 +1416,7 @@ test('anthropic proxy records usage from a split final frame without a newline',
 
   assert.equal(response.status, 200);
   assert.equal(await response.text(), chunks.join(''));
+  await waitForBackgroundTasks();
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 11);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 5);
 });
@@ -1438,6 +1447,7 @@ test('google proxy records split streaming usage metadata', async () => {
   const request = authorizedGoogleRequest();
   const response = await postGoogleModel({ ...routeContext(request), params: { path: 'placeholder:streamGenerateContent' } } as any);
   const text = await response.text();
+  await waitForBackgroundTasks();
 
   assert.equal(response.status, 200);
   assert.equal(text, splitGoogleUsageStream.join(''));
