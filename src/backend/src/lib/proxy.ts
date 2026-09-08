@@ -371,6 +371,21 @@ function semanticHeaderValue(request: Request, name: string) {
   return request.headers.get(name)?.trim() ?? '';
 }
 
+function serializedByteLength(value: unknown) {
+  return value == null ? 0 : Buffer.byteLength(JSON.stringify(value));
+}
+
+function aiRequestShape(value: unknown) {
+  const body = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const tools = Array.isArray(body.tools) ? body.tools : [];
+  return {
+    message_bytes: serializedByteLength(body.messages ?? body.contents),
+    system_bytes: serializedByteLength(body.system ?? body.system_instruction),
+    tool_bytes: serializedByteLength(tools),
+    tool_count: tools.length,
+  };
+}
+
 export function aiRequestHash(request: Request, body: Uint8Array) {
   const requestedModel =
     parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ??
@@ -863,6 +878,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     let requestedOutput: number | undefined;
     let estimatedInputTokens = 0;
     let estimatedCredits: number | undefined;
+    let requestShape = aiRequestShape(null);
     if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
     const text = requestBodyText;
     estimatedInputTokens = estimateInputTokensFromBody(text);
@@ -875,6 +891,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     }
     let parsedBody: unknown = null;
     try { parsedBody = JSON.parse(text); } catch { /* upstream retains its existing invalid-JSON behavior */ }
+    requestShape = aiRequestShape(parsedBody);
     requestedOutput = requestedMaxOutputTokens(parsedBody);
     const maxOutputFor = async (candidate: ModelRouting) => {
       const descriptor = await lookupModelDescriptor(candidate.provider, candidate.activeModelId);
@@ -948,6 +965,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       rate_limit_ms: rateLimitFinishedAt - dedupFinishedAt,
       admission_ms: Date.now() - rateLimitFinishedAt,
       latency_ms: Date.now() - startedAt,
+      body_bytes: requestBodyBytes.byteLength,
+      estimated_input_tokens: estimatedInputTokens,
+      ...requestShape,
     });
     if (estimatedCredits + reservation.reserved > reservation.balance) {
       log.warn('credit_grace_used', {
