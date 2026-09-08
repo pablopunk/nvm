@@ -218,16 +218,16 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       return data.routes.map((route, index) => {
         const provider = data.providers.find((candidate) => candidate.id === route.providerId);
         return `<div class="chain-row" data-chain-row>
+          <button type="button" class="chain-drag" draggable="true" aria-label="Reorder fallback ${index + 1}" title="Drag to reorder; use arrow keys for keyboard reordering">
+            <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="5" cy="3" r="1"/><circle cx="11" cy="3" r="1"/><circle cx="5" cy="8" r="1"/><circle cx="11" cy="8" r="1"/><circle cx="5" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>
+          </button>
           <label class="field">Provider<select class="input chain-provider" aria-label="Fallback provider">${providerOptionsHtml(data.providers, route.providerId)}</select></label>
           <label class="field">Model<select class="input combo chain-model" aria-label="Fallback model">${modelOptionsHtml(provider || { compatibleModels: [] }, route.modelId)}</select></label>
-          <span class="muted chain-price">${pricingSummary(route.pricing)}</span>
           <div class="chain-actions">
-            <button type="button" class="button chain-up" aria-label="Move fallback earlier" ${index === 0 ? 'disabled' : ''}>Up</button>
-            <button type="button" class="button chain-down" aria-label="Move fallback later" ${index === data.routes.length - 1 ? 'disabled' : ''}>Down</button>
             <button type="button" class="button chain-probe">Probe</button>
             <button type="button" class="button chain-remove">Remove</button>
           </div>
-          <span class="probe-status" aria-live="polite"></span>
+          <div class="chain-meta"><span class="muted chain-price">${pricingSummary(route.pricing)}</span><span class="probe-status" aria-live="polite"></span></div>
         </div>`;
       }).join('');
     }
@@ -266,13 +266,40 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
         chainRow.remove();
         saveRouteChain(row);
       });
-      chainRow.querySelectorAll('.chain-up, .chain-down').forEach((button) => button.addEventListener('click', () => {
-        const sibling = button.classList.contains('chain-up') ? chainRow.previousElementSibling : chainRow.nextElementSibling;
+      const dragHandle = chainRow.querySelector('.chain-drag');
+      dragHandle.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        event.preventDefault();
+        const sibling = event.key === 'ArrowUp' ? chainRow.previousElementSibling : chainRow.nextElementSibling;
         if (sibling?.matches('[data-chain-row]')) {
-          button.classList.contains('chain-up') ? sibling.before(chainRow) : sibling.after(chainRow);
+          event.key === 'ArrowUp' ? sibling.before(chainRow) : sibling.after(chainRow);
+          dragHandle.focus();
           saveRouteChain(row);
         }
-      }));
+      });
+      dragHandle.addEventListener('dragstart', (event) => {
+        chainRow.classList.add('chain-row--dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', 'fallback');
+      });
+      dragHandle.addEventListener('dragend', () => {
+        chainRow.classList.remove('chain-row--dragging');
+        chainRow.parentElement.querySelectorAll('.chain-row--drop-target').forEach((candidate) => candidate.classList.remove('chain-row--drop-target'));
+      });
+      chainRow.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        if (!chainRow.classList.contains('chain-row--dragging')) chainRow.classList.add('chain-row--drop-target');
+      });
+      chainRow.addEventListener('dragleave', () => chainRow.classList.remove('chain-row--drop-target'));
+      chainRow.addEventListener('drop', (event) => {
+        event.preventDefault();
+        chainRow.classList.remove('chain-row--drop-target');
+        const dragged = chainRow.parentElement.querySelector('.chain-row--dragging');
+        if (!dragged || dragged === chainRow) return;
+        const after = event.clientY > chainRow.getBoundingClientRect().top + chainRow.offsetHeight / 2;
+        after ? chainRow.after(dragged) : chainRow.before(dragged);
+        saveRouteChain(row);
+      });
       chainRow.querySelector('.chain-probe').addEventListener('click', async () => {
         const providerId = chainRow.querySelector('.chain-provider').value;
         const status = chainRow.querySelector('.probe-status');

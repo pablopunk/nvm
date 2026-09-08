@@ -47,6 +47,10 @@ import 'tom-select/dist/css/tom-select.css';
     });
   };
   document.addEventListener('combobox:init', init);
+  new MutationObserver(init).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 </script>

@@ -82,10 +82,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
 .route-details { grid-column: 1 / -1; padding: 8px 0 12px 132px; font-size: 12px; }
 .chain-editor { margin: 8px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
 .chain-editor legend { padding: 0 4px; color: var(--muted); }
-.chain-row { display: grid; grid-template-columns: 150px minmax(220px, 1fr); gap: 8px 12px; align-items: end; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.chain-row { display: grid; grid-template-columns: 32px 150px minmax(220px, 1fr) auto; gap: 8px 12px; align-items: end; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .chain-row:last-child { border-bottom: 0; }
 .chain-row .ts-wrapper { width: 100%; min-width: 0; }
-.chain-price { grid-column: 1 / -1; }
+.chain-drag { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: grab; }
+.chain-drag:hover, .chain-drag:focus-visible { color: var(--text); background: var(--border-light); border-color: var(--border); }
+.chain-drag:active { cursor: grabbing; }
+.chain-drag svg { width: 16px; height: 16px; fill: currentColor; }
+.chain-row--dragging { opacity: 0.5; }
+.chain-row--drop-target { box-shadow: inset 0 2px var(--accent-highlight); }
+.chain-meta { grid-column: 2 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
+.chain-price { min-width: 0; overflow-wrap: anywhere; }
+.probe-status { flex: 0 0 auto; font-size: 12px; text-align: right; }
 .chain-actions { display: flex; gap: 4px; align-items: center; }
 .chain-actions .button, .chain-footer .button, .route-details > .button { padding: 4px 8px; font-size: 12px; }
 .chain-footer { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
@@ -95,7 +103,10 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
   .model-route-row__name { grid-column: 1 / -1; padding-bottom: 0; }
   .model-route-row .model-route-row__name + .field { grid-column: 1 / -1; }
   .route-details { padding-left: 0; }
-  .chain-row { grid-template-columns: 1fr; }
+  .chain-row { grid-template-columns: 32px 1fr; }
+  .chain-row .field, .chain-actions { grid-column: 2; }
+  .chain-meta { grid-column: 2; align-items: flex-start; flex-direction: column; gap: 4px; }
+  .probe-status { text-align: left; }
 }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
