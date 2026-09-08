@@ -84,6 +84,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
 .chain-editor legend { padding: 0 4px; color: var(--muted); }
 .chain-row { display: grid; grid-template-columns: 150px minmax(220px, 1fr); gap: 8px 12px; align-items: end; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .chain-row:last-child { border-bottom: 0; }
+.chain-row .ts-wrapper { width: 100%; min-width: 0; }
 .chain-price { grid-column: 1 / -1; }
 .chain-actions { display: flex; gap: 4px; align-items: center; }
 .chain-actions .button, .chain-footer .button, .route-details > .button { padding: 4px 8px; font-size: 12px; }

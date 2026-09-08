@@ -46,6 +46,7 @@ import 'tom-select/dist/css/tom-select.css';
       });
     });
   };
+  document.addEventListener('combobox:init', init);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 </script>
