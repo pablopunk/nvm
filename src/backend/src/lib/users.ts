@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { db } from '../db/client';
+import { db, getDb } from '../db/client';
 import { authIntents, invites, users, creditLedger } from '../db/schema';
 import { createHash } from 'node:crypto';
 import { isDisposableEmail } from './disposable';
@@ -121,7 +121,8 @@ export async function getUserByWorkosId(workosUserId: string) {
 
 export async function ensureMonthlyFreeCredits(userId: string, now = new Date()): Promise<void> {
   const period = currentFreeCreditPeriod(now);
-  const cached = monthlyGrantCache.get(db as object);
+  const currentDb = getDb();
+  const cached = monthlyGrantCache.get(currentDb);
   if (cached?.period === period && cached.userIds.has(userId)) return;
   await db.transaction(async (tx) => {
     const existingGrant = await tx
@@ -146,9 +147,9 @@ export async function ensureMonthlyFreeCredits(userId: string, now = new Date())
       refId: period,
     }).onConflictDoNothing({ target: [creditLedger.userId, creditLedger.reason, creditLedger.refId] });
   });
-  const current = monthlyGrantCache.get(db as object);
+  const current = monthlyGrantCache.get(currentDb);
   if (current?.period === period) current.userIds.add(userId);
-  else monthlyGrantCache.set(db as object, { period, userIds: new Set([userId]) });
+  else monthlyGrantCache.set(currentDb, { period, userIds: new Set([userId]) });
 }
 
 export async function getBalance(userId: string): Promise<number> {
