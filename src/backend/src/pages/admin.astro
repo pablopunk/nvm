@@ -29,6 +29,12 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
   const models = await listModelsForProvider(provider);
   return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
 }))).flat();
+const modelRoutes = [
+  { slot: 'pro-smart', title: 'Pro smart', route: proSmartRoute },
+  { slot: 'pro-fast', title: 'Pro fast', route: proFastRoute },
+  { slot: 'free-smart', title: 'Free smart', route: freeSmartRoute },
+  { slot: 'free-fast', title: 'Free fast', route: freeFastRoute },
+] as const;
 ---
 <Layout title="Nevermind · Admin" width="wide">
   <Combobox />
@@ -52,67 +58,26 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
   <div class="section card">
     <h3>Models</h3>
     <p class="muted">Choose Smart and Fast models independently for Pro and Free users.</p>
-    <div class="stack">
-      <div class="model-route-row" data-model-route="pro-smart">
-        <strong class="model-route-row__name">Pro smart</strong>
-        <label class="field">Model
-          <select id="model-select-pro-smart" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === proSmartRoute?.ref}>{m.ref}</option>)}
-          </select>
-        </label>
-        <label class="field">Thinking
-          <select id="thinking-select-pro-smart" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (proSmartRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
-          </select>
-        </label>
-        <span class="status" data-status-for="pro-smart"></span>
-        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
-      </div>
-      <div class="model-route-row" data-model-route="pro-fast">
-        <strong class="model-route-row__name">Pro fast</strong>
-        <label class="field">Model
-          <select id="model-select-pro-fast" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === proFastRoute?.ref}>{m.ref}</option>)}
-          </select>
-        </label>
-        <label class="field">Thinking
-          <select id="thinking-select-pro-fast" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (proFastRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
-          </select>
-        </label>
-        <span class="status" data-status-for="pro-fast"></span>
-        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
-      </div>
-      <div class="model-route-row" data-model-route="free-smart">
-        <strong class="model-route-row__name">Free smart</strong>
-        <label class="field">Model
-          <select id="model-select-free-smart" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeSmartRoute?.ref}>{m.ref}</option>)}
-          </select>
-        </label>
-        <label class="field">Thinking
-          <select id="thinking-select-free-smart" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (freeSmartRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
-          </select>
-        </label>
-        <span class="status" data-status-for="free-smart"></span>
-        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
-      </div>
-      <div class="model-route-row" data-model-route="free-fast">
-        <strong class="model-route-row__name">Free fast</strong>
-        <label class="field">Model
-          <select id="model-select-free-fast" class="input combo model-select">
-            {modelOptions.map((m) => <option value={m.ref} selected={m.ref === freeFastRoute?.ref}>{m.ref}</option>)}
-          </select>
-        </label>
-        <label class="field">Thinking
-          <select id="thinking-select-free-fast" class="input thinking-select">
-            {THINKING_LEVELS.map((level) => <option value={level} selected={level === (freeFastRoute?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
-          </select>
-        </label>
-        <span class="status" data-status-for="free-fast"></span>
-        <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
-      </div>
+    <div class="model-routes">
+      {modelRoutes.map(({ slot, title, route }) => (
+        <section class="model-route-row" data-model-route={slot}>
+          <header class="model-route-row__header">
+            <strong>{title}</strong>
+            <span class="status" data-status-for={slot}></span>
+          </header>
+          <label class="field">Model
+            <select id={`model-select-${slot}`} class="input combo model-select">
+              {modelOptions.map((model) => <option value={model.ref} selected={model.ref === route?.ref}>{model.ref}</option>)}
+            </select>
+          </label>
+          <label class="field model-route-row__thinking">Thinking
+            <select id={`thinking-select-${slot}`} class="input thinking-select">
+              {THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}
+            </select>
+          </label>
+          <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
+        </section>
+      ))}
     </div>
   </div>
 
@@ -202,11 +167,13 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
     }
     function pricingSummary(pricing) {
       if (!pricing) return '<span class="status status--err">Pricing unavailable</span>';
-      const cache = pricing.cacheReadUsdPerMtok == null
-        ? ''
-        : ` · cache read ${moneyPerMillion(pricing.cacheReadUsdPerMtok)} · cache write ${moneyPerMillion(pricing.cacheWriteUsdPerMtok)}`;
-      const tiers = pricing.tiers.map((tier) => ` · over ${Number(tier.thresholdTokens).toLocaleString()} tokens: ${moneyPerMillion(tier.inputUsdPerMtok)} in / ${moneyPerMillion(tier.outputUsdPerMtok)} out`).join('');
-      return `${moneyPerMillion(pricing.inputUsdPerMtok)} in · ${moneyPerMillion(pricing.outputUsdPerMtok)} out${cache}${tiers} · ${esc(pricing.source)}`;
+      const secondary = [
+        pricing.cacheReadUsdPerMtok == null ? '' : `Cache read ${moneyPerMillion(pricing.cacheReadUsdPerMtok)}`,
+        pricing.cacheWriteUsdPerMtok == null ? '' : `Cache write ${moneyPerMillion(pricing.cacheWriteUsdPerMtok)}`,
+        ...pricing.tiers.map((tier) => `Over ${Number(tier.thresholdTokens).toLocaleString()} tokens: ${moneyPerMillion(tier.inputUsdPerMtok)} in / ${moneyPerMillion(tier.outputUsdPerMtok)} out`),
+        esc(pricing.source),
+      ].filter(Boolean).join(' · ');
+      return `<span class="pricing"><span class="pricing__core"><span>Input <strong>${moneyPerMillion(pricing.inputUsdPerMtok)}</strong></span><span>Output <strong>${moneyPerMillion(pricing.outputUsdPerMtok)}</strong></span></span><details class="pricing__details"><summary>Details</summary><span class="pricing__secondary">${secondary}</span></details></span>`;
     }
     function providerOptionsHtml(providers, selected) {
       return providers.map((provider) => `<option value="${esc(provider.id)}" ${provider.id === selected ? 'selected' : ''} ${provider.enabled ? '' : 'disabled'}>${esc(provider.displayName)}${provider.enabled ? '' : ' (disabled)'}</option>`).join('');
@@ -345,9 +312,10 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
         const res = await fetch(`/api/admin/model-providers?${query}`);
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
-        details.innerHTML = `<div class="route-summary"><div><strong>Primary pricing</strong> <span class="muted">${pricingSummary(data.primaryPricing)}</span></div><div class="route-summary__probe"><button type="button" class="button" data-probe-primary>Probe primary</button><span class="probe-status" data-primary-probe-status aria-live="polite"></span></div></div>
-          <fieldset class="chain-editor"><legend>Failover chain</legend><div data-chain-rows>${chainRowsHtml(data)}</div>
-          <div class="chain-footer"><button type="button" class="button" data-add-fallback>Add fallback</button><span class="status" data-chain-status aria-live="polite"></span></div></fieldset>`;
+        const fallbackLabel = data.routes.length === 1 ? '1 fallback' : `${data.routes.length} fallbacks`;
+        details.innerHTML = `<div class="route-summary"><div class="route-summary__pricing"><span class="route-summary__label">Pricing</span>${pricingSummary(data.primaryPricing)}</div><div class="route-summary__probe"><button type="button" class="button" data-probe-primary>Probe primary</button><span class="probe-status" data-primary-probe-status aria-live="polite"></span></div></div>
+          <details class="chain-editor"><summary class="chain-editor__summary"><span>Failover</span><span class="muted">${fallbackLabel}</span></summary><div class="chain-editor__body"><div data-chain-rows>${chainRowsHtml(data)}</div>
+          <div class="chain-footer"><button type="button" class="button" data-add-fallback>Add fallback</button><span class="status" data-chain-status aria-live="polite"></span></div></div></details>`;
         details.querySelector('[data-probe-primary]').addEventListener('click', () => probeProvider(routeProviderId(row), details.querySelector('[data-primary-probe-status]')));
         wireRouteChain(row, data);
       } catch (error) {
