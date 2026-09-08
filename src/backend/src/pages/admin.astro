@@ -184,11 +184,15 @@ const modelRoutes = [
     function initializeComboboxes() {
       document.dispatchEvent(new Event('combobox:init'));
     }
-    async function probeProvider(providerId, status) {
+    async function probeProvider(providerId, status, modelId) {
       status.textContent = 'Checking…';
-      const res = await fetch(`/api/admin/probe/${providerId}`);
+      const res = await fetch(`/api/admin/probe/${encodeURIComponent(providerId)}`, modelId ? {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelId }),
+      } : undefined);
       const result = await res.json();
-      status.textContent = result.ok ? `Healthy · ${result.latencyMs}ms` : `Unavailable · ${result.error || result.status}`;
+      status.textContent = result.ok ? `${modelId ? 'First byte' : 'Healthy'} · ${result.latencyMs}ms` : `Unavailable · ${result.error || result.status}`;
       status.className = `probe-status ${result.ok ? 'status--ok' : 'status--err'}`;
     }
     function chainRowsHtml(data) {
@@ -279,8 +283,9 @@ const modelRoutes = [
       });
       chainRow.querySelector('.chain-probe').addEventListener('click', async () => {
         const providerId = chainRow.querySelector('.chain-provider').value;
+        const modelId = chainRow.querySelector('.chain-model').value;
         const status = chainRow.querySelector('.probe-status');
-        await probeProvider(providerId, status);
+        await probeProvider(providerId, status, modelId);
       });
     }
     function wireRouteChain(row, data) {
@@ -316,7 +321,7 @@ const modelRoutes = [
         details.innerHTML = `<div class="route-summary"><div class="route-summary__pricing"><span class="route-summary__label">Pricing</span>${pricingSummary(data.primaryPricing)}</div><div class="route-summary__probe"><button type="button" class="button" data-probe-primary>Probe primary</button><span class="probe-status" data-primary-probe-status aria-live="polite"></span></div></div>
           <details class="chain-editor"><summary class="chain-editor__summary"><span>Failover</span><span class="muted">${fallbackLabel}</span></summary><div class="chain-editor__body"><div data-chain-rows>${chainRowsHtml(data)}</div>
           <div class="chain-footer"><button type="button" class="button" data-add-fallback>Add fallback</button><span class="status" data-chain-status aria-live="polite"></span></div></div></details>`;
-        details.querySelector('[data-probe-primary]').addEventListener('click', () => probeProvider(routeProviderId(row), details.querySelector('[data-primary-probe-status]')));
+        details.querySelector('[data-probe-primary]').addEventListener('click', () => probeProvider(routeProviderId(row), details.querySelector('[data-primary-probe-status]'), routeModelId(row)));
         wireRouteChain(row, data);
       } catch (error) {
         details.innerHTML = `<span class="status status--err" role="alert">Could not load pricing and failover: ${esc(error instanceof Error ? error.message : String(error))}</span> <button type="button" class="button" data-retry-route>Retry</button>`;
