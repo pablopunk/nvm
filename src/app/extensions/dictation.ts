@@ -52,6 +52,16 @@ const NO_SPEECH_INDICATOR = {
   durationMs: TERMINAL_INDICATOR_DURATION_MS,
 };
 
+function unavailableDictationIndicator(error: unknown) {
+  return {
+    ...dictationIndicator(
+      `Dictation unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      'error',
+    ),
+    durationMs: 4_000,
+  };
+}
+
 export function createDeferredDictationIndicator(
   indicator: { update(input: unknown): void },
   options: {
@@ -436,13 +446,7 @@ async function runDictation(ctx: any) {
       return;
     } catch (error) {
       deferredIndicator.cancel();
-      ctx.ui.indicator.hide('dictation');
-      showExtensionFeedback(
-        ctx,
-        'Dictation',
-        `Dictation unavailable: ${error instanceof Error ? error.message : String(error)}`,
-        'error',
-      );
+      ctx.ui.indicator.update(unavailableDictationIndicator(error));
       return;
     }
   }

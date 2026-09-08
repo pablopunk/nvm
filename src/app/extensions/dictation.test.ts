@@ -281,6 +281,42 @@ test('prepares a missing model before opening the microphone', async () => {
   assert.equal(result, undefined);
 });
 
+test('keeps startup errors connected to the dictation indicator', async () => {
+  const indicatorUpdates: unknown[] = [];
+  const hiddenIndicators: string[] = [];
+  const context = {
+    storage: { get: async () => ({}) },
+    dictation: {
+      status: async () => 'idle',
+      modelCacheStatus: async () => {
+        throw new Error('Model unavailable');
+      },
+    },
+    ui: {
+      indicator: {
+        show: () => {},
+        update: (input: unknown) => indicatorUpdates.push(input),
+        hide: (id: string) => hiddenIndicators.push(id),
+      },
+    },
+    actions: actionBuilders(),
+  };
+  const handler = dictationHandlerFor(context);
+
+  await handler(context, {});
+
+  assert.deepEqual(indicatorUpdates, [
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'Dictation unavailable: Model unavailable',
+      status: 'error',
+      durationMs: 4_000,
+    },
+  ]);
+  assert.deepEqual(hiddenIndicators, []);
+});
+
 test('keeps the target listening state during fast microphone preparation', async () => {
   const indicatorShows: unknown[] = [];
   const indicatorUpdates: unknown[] = [];
