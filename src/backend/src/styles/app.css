@@ -80,6 +80,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
 .model-route-row .ts-wrapper { width: 100%; min-width: 0; }
 .model-route-row .thinking-select { width: 100%; }
 .route-details { grid-column: 1 / -1; padding: 8px 0 12px 132px; font-size: 12px; }
+.route-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.route-summary__probe { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
+.route-summary__probe .button { padding: 4px 8px; font-size: 12px; }
 .chain-editor { margin: 8px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
 .chain-editor legend { padding: 0 4px; color: var(--muted); }
 .chain-row { display: grid; grid-template-columns: 32px 150px minmax(220px, 1fr) auto; gap: 8px 12px; align-items: end; padding: 12px 0; border-bottom: 1px solid var(--border); }
@@ -103,6 +106,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
   .model-route-row__name { grid-column: 1 / -1; padding-bottom: 0; }
   .model-route-row .model-route-row__name + .field { grid-column: 1 / -1; }
   .route-details { padding-left: 0; }
+  .route-summary { align-items: flex-start; flex-direction: column; }
+  .route-summary__probe { justify-content: flex-start; }
   .chain-row { grid-template-columns: 32px 1fr; }
   .chain-row .field, .chain-actions { grid-column: 2; }
   .chain-meta { grid-column: 2; align-items: flex-start; flex-direction: column; gap: 4px; }

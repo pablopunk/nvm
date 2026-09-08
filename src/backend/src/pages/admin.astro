@@ -194,6 +194,9 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       const ref = row.querySelector('.model-select').value;
       return ref.slice(ref.indexOf('/') + 1);
     }
+    function routeProviderId(row) {
+      return row.querySelector('.model-select').value.split('/')[0];
+    }
     function moneyPerMillion(value) {
       return value == null ? '—' : `$${Number(value).toFixed(3)}/M`;
     }
@@ -213,6 +216,13 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
     }
     function initializeComboboxes() {
       document.dispatchEvent(new Event('combobox:init'));
+    }
+    async function probeProvider(providerId, status) {
+      status.textContent = 'Checking…';
+      const res = await fetch(`/api/admin/probe/${providerId}`);
+      const result = await res.json();
+      status.textContent = result.ok ? `Healthy · ${result.latencyMs}ms` : `Unavailable · ${result.error || result.status}`;
+      status.className = `probe-status ${result.ok ? 'status--ok' : 'status--err'}`;
     }
     function chainRowsHtml(data) {
       return data.routes.map((route, index) => {
@@ -303,11 +313,7 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
       chainRow.querySelector('.chain-probe').addEventListener('click', async () => {
         const providerId = chainRow.querySelector('.chain-provider').value;
         const status = chainRow.querySelector('.probe-status');
-        status.textContent = 'Checking…';
-        const res = await fetch(`/api/admin/probe/${providerId}`);
-        const result = await res.json();
-        status.textContent = result.ok ? `Healthy · ${result.latencyMs}ms` : `Unavailable · ${result.error || result.status}`;
-        status.className = `probe-status ${result.ok ? 'status--ok' : 'status--err'}`;
+        await probeProvider(providerId, status);
       });
     }
     function wireRouteChain(row, data) {
@@ -339,9 +345,10 @@ const modelOptions = (await Promise.all(listKnownProviders().map(async (provider
         const res = await fetch(`/api/admin/model-providers?${query}`);
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
-        details.innerHTML = `<div><strong>Primary pricing</strong> <span class="muted">${pricingSummary(data.primaryPricing)}</span></div>
+        details.innerHTML = `<div class="route-summary"><div><strong>Primary pricing</strong> <span class="muted">${pricingSummary(data.primaryPricing)}</span></div><div class="route-summary__probe"><button type="button" class="button" data-probe-primary>Probe primary</button><span class="probe-status" data-primary-probe-status aria-live="polite"></span></div></div>
           <fieldset class="chain-editor"><legend>Failover chain</legend><div data-chain-rows>${chainRowsHtml(data)}</div>
           <div class="chain-footer"><button type="button" class="button" data-add-fallback>Add fallback</button><span class="status" data-chain-status aria-live="polite"></span></div></fieldset>`;
+        details.querySelector('[data-probe-primary]').addEventListener('click', () => probeProvider(routeProviderId(row), details.querySelector('[data-primary-probe-status]')));
         wireRouteChain(row, data);
       } catch (error) {
         details.innerHTML = `<span class="status status--err" role="alert">Could not load pricing and failover: ${esc(error instanceof Error ? error.message : String(error))}</span> <button type="button" class="button" data-retry-route>Retry</button>`;
