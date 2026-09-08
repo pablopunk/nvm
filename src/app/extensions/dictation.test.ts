@@ -185,6 +185,59 @@ test('skips enabled AI cleaning when signed out', async () => {
   ]);
 });
 
+test('keeps no-speech feedback connected to the dictation indicator', async () => {
+  let recording = false;
+  const indicatorUpdates: unknown[] = [];
+  const hiddenIndicators: string[] = [];
+  const context = {
+    storage: {
+      get: async () => ({}),
+      set: async () => {},
+    },
+    dictation: {
+      status: async () => (recording ? 'recording' : 'idle'),
+      modelCacheStatus: async () => 'cached',
+      start: async () => {
+        recording = true;
+      },
+      stop: async () => {
+        recording = false;
+        return '';
+      },
+    },
+    ui: {
+      indicator: {
+        show: () => {},
+        update: (input: unknown) => indicatorUpdates.push(input),
+        hide: (id: string) => hiddenIndicators.push(id),
+      },
+    },
+    actions: actionBuilders(),
+    navigation: { run: (action: unknown) => action },
+  };
+  const handler = dictationHandlerFor(context);
+
+  await handler(context, {});
+  await handler(context, {});
+
+  assert.deepEqual(indicatorUpdates, [
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'Transcribing',
+      status: 'transcribing',
+    },
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'No speech detected',
+      status: '',
+      durationMs: 2_200,
+    },
+  ]);
+  assert.deepEqual(hiddenIndicators, []);
+});
+
 test('prepares a missing model before opening the microphone', async () => {
   const events: string[] = [];
   const prepared: unknown[] = [];
