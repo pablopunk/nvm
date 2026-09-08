@@ -100,7 +100,7 @@ test('renders sent and pending AI chat image attachments', () => {
   assert.match(html, /Remove Pending image/);
 });
 
-test('morphs AI chat status and plain streamed text before restoring markdown', () => {
+test('morphs plain streamed AI text before restoring markdown', () => {
   const view: CommandView = {
     type: 'chat',
     title: 'AI Chat',
@@ -124,15 +124,14 @@ test('morphs AI chat status and plain streamed text before restoring markdown', 
     messages: [{ role: 'assistant', content: '# Complete answer' }],
   });
 
-  assert.match(thinking, /class="chatStatusMorph">Thinking…/);
-  assert.match(nextTurnThinking, /class="chatStatusMorph">Thinking…/);
+  assert.match(thinking, />Thinking…</);
+  assert.match(nextTurnThinking, />Thinking…</);
   assert.match(nextTurnThinking, /markdownHeading markdownHeading1/);
   assert.doesNotMatch(nextTurnThinking, /chatStreamingText/);
-  assert.match(streaming, /class="chatStatusMorph">Writing…/);
   assert.match(streaming, /class="chatStreamingText"># Streaming answer/);
-  assert.doesNotMatch(streaming, /markdownHeading/);
+  assert.doesNotMatch(streaming, /Thinking…|Writing…|markdownHeading/);
   assert.match(complete, /markdownHeading markdownHeading1/);
-  assert.doesNotMatch(complete, /chatStreamingText|chatStatusMorph/);
+  assert.doesNotMatch(complete, /chatStreamingText|Thinking…|Writing…/);
 });
 
 test('renders the model picker only for selectable AI conversations', () => {

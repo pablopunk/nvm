@@ -54,17 +54,3 @@ export function StreamingChatText({ value }: { value: string }) {
     </TextMorph>
   );
 }
-
-export function MorphingChatStatus({ value }: { value: string }) {
-  return (
-    <TextMorph
-      className="chatStatusMorph"
-      duration={180}
-      ease={MORPH_EASING}
-      scale={false}
-      numbers={false}
-    >
-      {value}
-    </TextMorph>
-  );
-}

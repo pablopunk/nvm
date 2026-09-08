@@ -1090,8 +1090,7 @@ function ChatExtensionView({
   return (
     <ChatView
       messages={messages}
-      isBusy={view.aiChat ? aiChat.busy : false}
-      busyLabel={streamingAssistantIndex >= 0 ? 'Writing…' : 'Thinking…'}
+      isBusy={view.aiChat ? aiChat.busy && streamingAssistantIndex < 0 : false}
       input={input}
       messagesRef={view.aiChat ? aiChat.messagesRef : undefined}
       banner={limitBanner}

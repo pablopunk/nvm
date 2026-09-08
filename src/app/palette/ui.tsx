@@ -7,11 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { formKeyboardActionForEvent } from './form-keyboard';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
-import {
-  MorphingChatStatus,
-  MorphingIndicatorText,
-  StreamingChatText,
-} from './morphing-text';
+import { MorphingIndicatorText, StreamingChatText } from './morphing-text';
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
 export const EMPTY_ROOT_SUBTITLE =
@@ -159,7 +155,6 @@ export interface ChatViewProps {
     streaming?: boolean;
   }[];
   isBusy?: boolean;
-  busyLabel?: string;
   input?: ReactNode;
   messagesRef?: React.RefObject<HTMLDivElement | null>;
   banner?: ReactNode;
@@ -1126,7 +1121,6 @@ export function GridView<T>({
 export function ChatView({
   messages,
   isBusy,
-  busyLabel = 'Thinking…',
   input,
   messagesRef,
   banner,
@@ -1161,7 +1155,7 @@ export function ChatView({
             className="chatBubble system"
             role="status"
           >
-            <MorphingChatStatus value={busyLabel} />
+            Thinking…
           </div>
         ) : null}
       </div>
