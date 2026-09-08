@@ -44,8 +44,8 @@ import {
   AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
 } from '../shared/ai-chat-images';
 import {
-  aiChatModelForChat,
   AUTOMATE_AI_CHAT_MODEL,
+  aiChatModelForChat,
   DEFAULT_AI_CHAT_MODEL,
   isAiChatModel,
   normalizeAiChatModel,
@@ -55,18 +55,18 @@ import {
   type NormalizedAiChatImage,
   normalizeAiChatImages,
 } from './ai-chat-images';
-import { trustedAiLimitAction } from './ai-limit-action-policy';
 import { aiChatPreviewFiles, prepareAiChatPreview } from './ai-chat-previews';
+import { trustedAiLimitAction } from './ai-limit-action-policy';
 import { getByoKey } from './byo-key';
 import { createClipboardHistory } from './clipboard-history';
 import { normalizeClipboardHistory } from './clipboard-utils';
-import { createElectronClipboardApi } from './electron-clipboard';
 import {
   DEEP_LINK_SCHEME,
   type ParsedAuthDeepLink,
   parseAuthDeepLink,
   setDeepLinkLogger,
 } from './deep-link';
+import { createElectronClipboardApi } from './electron-clipboard';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -86,8 +86,8 @@ import {
 import {
   consumeDeviceCode,
   getDefaultNevermindBaseUrl,
-  getNevermindDashboardUrl,
   getNevermindAuth,
+  getNevermindDashboardUrl,
   isSigningIn,
   nevermindEnvironmentForBaseUrl,
   setActiveNevermindAuthBaseUrl,
@@ -115,6 +115,12 @@ if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
 if (!isNvmTestMode) initSentry();
 
+import {
+  INTERNAL_EXTENSION_FACTORIES,
+  INTERNAL_EXTENSION_SOURCE_FILES,
+} from '../extensions';
+import { initExtensionContext } from '../extensions/_context';
+import { createAiBuilderExtension } from '../extensions/ai-builder';
 import { feedbackView } from '../palette/feedback';
 import {
   type CommandAction,
@@ -122,19 +128,20 @@ import {
   extensionLoadingView,
 } from '../palette/model';
 import {
+  actionFromExecutionRecord,
+  createActionExecutionCapabilities,
+  currentActionExecutionRecord,
+  mutableViewActionFields,
+} from './action-execution-policy';
+import { actionMatchesExecutionRecord } from './action-execution-record';
+import {
   actionTextSearchScore,
   appResultMarker,
   effectiveLastUsed,
   priorityBoost,
   recencyBoost,
 } from './action-ranking';
-import { actionMatchesExecutionRecord } from './action-execution-record';
-import {
-  actionFromExecutionRecord,
-  createActionExecutionCapabilities,
-  currentActionExecutionRecord,
-  mutableViewActionFields,
-} from './action-execution-policy';
+import { expiredConversationAiChatIds } from './ai-chat-retention';
 import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService, trackFirstSeenApps } from './app-index-service';
@@ -152,11 +159,6 @@ import {
   resolveLoaderEmptyView,
 } from './data-loader';
 import {
-  createDictationService,
-  type DictationRendererReply,
-} from './dictation-service';
-import { createSystemAudioMuteCapability } from './system-audio';
-import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
@@ -164,13 +166,17 @@ import {
   recordDebugPerformance,
   summarizeDebugValue,
 } from './debug-performance';
-import { filterWebviewPermissionsForExtension } from './extension-capabilities';
-import { extensionCommandAction } from './extension-command-action';
+import {
+  createDictationService,
+  type DictationRendererReply,
+} from './dictation-service';
 import {
   CHARACTER_RECORDS_BY_ID,
   characterCodePoints,
   characterWithSkinTone,
 } from './emoji-symbol-catalog';
+import { filterWebviewPermissionsForExtension } from './extension-capabilities';
+import { extensionCommandAction } from './extension-command-action';
 import { createExtensionDraftStore } from './extension-draft-store';
 import { createExtensionJsonStore } from './extension-json-store';
 import { createStandaloneExtensionFork } from './extension-manifest';
@@ -179,12 +185,6 @@ import { createExtensionStorage as createPersistentExtensionStorage } from './ex
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowActions } from './extension-window-actions';
 import { createExtensionWindowManager } from './extension-window-manager';
-import {
-  INTERNAL_EXTENSION_FACTORIES,
-  INTERNAL_EXTENSION_SOURCE_FILES,
-} from '../extensions';
-import { initExtensionContext } from '../extensions/_context';
-import { createAiBuilderExtension } from '../extensions/ai-builder';
 import {
   applyDateAdded,
   findFilesNeedsStats,
@@ -206,8 +206,8 @@ import {
 } from './logger';
 import { compatibleOpenWithApps } from './open-with-apps';
 import {
-  appIconSources,
   type AppFocusTarget,
+  appIconSources,
   appIdentityKey,
   autoUpdatesUnavailableMessage,
   captureScreenImage,
@@ -227,21 +227,20 @@ import {
   pasteIntoFrontmostApp,
   prepareAppWindowPolicy,
   quickLookTitle,
+  selectedText as readAccessibilitySelectedText,
   readAppIconResourcePng,
   recognizeTextInImage,
   replaceSelectedText,
   reservedPaletteShortcutName,
+  restoreAppFocus,
   revealPathTitle,
   scanApps,
   selectedFilePaths,
-  selectedText as readAccessibilitySelectedText,
-  restoreAppFocus,
   setLaunchAtLoginEnabled,
   settingsTitle,
   typeTextIntoFrontmostApp,
   watchApps,
 } from './os';
-import { createSelectedTextReader } from './selected-text';
 import {
   createPaletteWindowController,
   installPermissionHandlers,
@@ -264,7 +263,6 @@ import {
   searchProviderDescriptors,
 } from './search-snapshot';
 import { createProgressiveSearchTestExtension } from './search-test-extension';
-import { expiredConversationAiChatIds } from './ai-chat-retention';
 import {
   calculate,
   calculateDetailed,
@@ -275,19 +273,21 @@ import {
   parseRateExpression,
   score,
 } from './search-utils';
+import { createSelectedTextReader } from './selected-text';
 import {
   SETTING_DEFINITIONS,
   settingDefinition,
   settingValue,
   toggledSettingValue,
 } from './settings';
-import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
-import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils';
 import {
   shortcutActionRunsWithoutView,
   withInheritedShortcutLifecycle,
 } from './shortcut-lifecycle';
+import { buildShortcutByAiChatIdMap } from './shortcut-ownership';
+import { isSpotlightAccelerator, normalizeAccelerator } from './shortcut-utils';
 import { createStateSafeQuit } from './state-safe-quit';
+import { createSystemAudioMuteCapability } from './system-audio';
 import { systemSettingsPaneUrl } from './system-settings';
 import { createUpdateManager } from './update-manager';
 import { openExternalUrl } from './url-utils';
@@ -346,6 +346,7 @@ const paletteWindow = createPaletteWindowController({
   captureFocusReturnTarget: frontmostAppFocusTarget,
   restoreFocusReturnTarget: (target) =>
     restoreAppFocus(target as { bundleId?: string | null }),
+  onOpen: warmConversationAiOnPaletteOpen,
 });
 const systemAudioMute = createSystemAudioMuteCapability();
 const dictationService = createDictationService(
@@ -599,6 +600,29 @@ const pendingAiChatSends = new Map<
 >();
 const CONVERSATION_SYSTEM_PROMPT =
   'You are Nevermind AI, a helpful conversational assistant. Answer the user directly and concisely. You cannot create, modify, validate, install, or remove Nevermind extensions.';
+const CONVERSATION_AI_WARM_INTERVAL_MS = 30_000;
+let lastConversationAiWarmAt = 0;
+
+function warmConversationAiOnPaletteOpen() {
+  if (
+    !nevermindAi ||
+    Date.now() - lastConversationAiWarmAt < CONVERSATION_AI_WARM_INTERVAL_MS
+  )
+    return;
+  lastConversationAiWarmAt = Date.now();
+  void nevermindAi
+    .prepare({
+      model: 'fast',
+      system: CONVERSATION_SYSTEM_PROMPT,
+      toolMode: 'conversation',
+    })
+    .catch((error) =>
+      logWarn('ai.conversation.palette-warm.failed', error, {
+        source: 'host',
+        scope: 'ai',
+      }),
+    );
+}
 const viewLoaderRegistry = createViewLoaderRegistry({
   sendHydrate: (viewId, payload) =>
     paletteWindow.win?.webContents.send('view:hydrate', { viewId, ...payload }),

@@ -11,8 +11,8 @@ import {
   streamedOneShotAssistantText,
 } from './ai-one-shot-result';
 import {
-  aiPromptUsesDirectModel,
   type AiToolMode,
+  aiPromptUsesDirectModel,
   CONVERSATION_AI_TOOLS,
   missingConversationAiTools,
 } from './ai-tool-policy';
@@ -468,8 +468,7 @@ function createNevermindAi(options: NevermindAiOptions) {
         );
         if (directResult !== null) return directResult;
       }
-      session = await (takePreparedFallbackSession(askOptions) ??
-        generalSession(askOptions, prompt.length));
+      session = await generalSession(askOptions, prompt.length);
       unsubscribe = session.subscribe((event) => {
         if (isMessageUpdateEvent(event)) {
           if (firstDeltaAt === undefined) {
@@ -618,12 +617,15 @@ function createNevermindAi(options: NevermindAiOptions) {
     },
     initialPromptChars = 0,
   ) {
-    if (!sessionOptions.sessionId)
+    if (!sessionOptions.sessionId) {
+      const prepared = takePreparedFallbackSession(sessionOptions);
+      if (prepared) return prepared;
       return measureDebugPerformance(
         'ai.general-session.create',
         { model: sessionOptions.model, alwaysLog: true },
         () => createGeneralSession(options, sessionOptions, initialPromptChars),
       );
+    }
     const key = generalSessionCacheKey(
       sessionOptions.sessionId,
       sessionOptions.model,
@@ -631,11 +633,14 @@ function createNevermindAi(options: NevermindAiOptions) {
     );
     let promise = generalSessions.get(key);
     if (!promise) {
-      promise = measureDebugPerformance(
-        'ai.general-session.create',
-        { sessionId: key, alwaysLog: true },
-        () => createGeneralSession(options, sessionOptions, initialPromptChars),
-      );
+      promise =
+        takePreparedFallbackSession(sessionOptions) ??
+        measureDebugPerformance(
+          'ai.general-session.create',
+          { sessionId: key, alwaysLog: true },
+          () =>
+            createGeneralSession(options, sessionOptions, initialPromptChars),
+        );
       generalSessions.set(key, promise);
       promise.catch(() => {
         if (generalSessions.get(key) === promise) generalSessions.delete(key);

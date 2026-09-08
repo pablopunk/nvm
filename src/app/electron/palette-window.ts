@@ -19,8 +19,8 @@ import {
   supportsProgrammaticWindowPositioning,
 } from './os';
 import {
-  isNvmTestMode,
   isNvmHeadlessTestMode,
+  isNvmTestMode,
   recordPackagedStartupReady,
   recordTestWindowEvent,
 } from './test-mode';
@@ -44,6 +44,7 @@ type PaletteWindowOptions = {
   getPaletteHotkey: () => string;
   captureFocusReturnTarget?: () => Promise<unknown>;
   restoreFocusReturnTarget?: (target: unknown) => Promise<unknown>;
+  onOpen?: () => void;
 };
 
 const WINDOW_BLUR_MARGIN = 96;
@@ -300,9 +301,11 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       { options: showOptions },
       () => {
         if (!win) return;
-        if (!win.isVisible()) {
+        const wasVisible = win.isVisible();
+        if (!wasVisible) {
           restoredFocusReturnTarget = null;
           focusReturnTarget = showOptions.focusReturnTarget ?? null;
+          options.onOpen?.();
         }
         markDebugPerformance('palette-window.show.start', {
           visible: win.isVisible(),
