@@ -12,6 +12,7 @@ function readNonNegativeIntEnv(key: string, fallback: number): number {
 }
 
 export const MONTHLY_FREE_CREDITS = readNonNegativeIntEnv('MONTHLY_FREE_CREDITS', 500);
+const monthlyGrantCache = new WeakMap<object, { period: string; userIds: Set<string> }>();
 
 function currentFreeCreditPeriod(now = new Date()): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -120,6 +121,8 @@ export async function getUserByWorkosId(workosUserId: string) {
 
 export async function ensureMonthlyFreeCredits(userId: string, now = new Date()): Promise<void> {
   const period = currentFreeCreditPeriod(now);
+  const cached = monthlyGrantCache.get(db as object);
+  if (cached?.period === period && cached.userIds.has(userId)) return;
   await db.transaction(async (tx) => {
     const existingGrant = await tx
       .select({ id: creditLedger.id })
@@ -143,6 +146,9 @@ export async function ensureMonthlyFreeCredits(userId: string, now = new Date())
       refId: period,
     }).onConflictDoNothing({ target: [creditLedger.userId, creditLedger.reason, creditLedger.refId] });
   });
+  const current = monthlyGrantCache.get(db as object);
+  if (current?.period === period) current.userIds.add(userId);
+  else monthlyGrantCache.set(db as object, { period, userIds: new Set([userId]) });
 }
 
 export async function getBalance(userId: string): Promise<number> {

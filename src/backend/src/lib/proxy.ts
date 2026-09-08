@@ -817,6 +817,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   if (client.apiVersion) Sentry.getCurrentScope().setTag('client_api_version', String(client.apiVersion));
   let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
+  const routingFinishedAt = Date.now();
 
   Sentry.getCurrentScope().setUser({ id: routing.user.id });
 
@@ -824,6 +825,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const requestBodyBytes = new Uint8Array(requestBodyBuffer);
   const requestBodyText = new TextDecoder().decode(requestBodyBytes);
   const requestHash = aiRequestHash(cfg.request, requestBodyBytes);
+  const requestPreparedAt = Date.now();
 
   const idempotencyKey = cfg.idempotencyKey;
   const dedupEnabled = idempotencyKey && !backendKillSwitchEnabled('idempotency_dedup');
@@ -844,10 +846,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     );
     if (dedupResult instanceof Response) return dedupResult;
   }
+  const dedupFinishedAt = Date.now();
 
   let reservationCommitted = false;
   try {
     const rateDecision = await rateLimitChat(routing.user.id, routing.kind);
+    const rateLimitFinishedAt = Date.now();
     if (!rateDecision.ok) {
       log.warn('rate_limited', { request_id: requestId, user_id: routing.user.id, scope: rateDecision.scope, client_version: client.version, client_api_version: client.apiVersion });
       await markDedupFailed(dedupClaim);
@@ -936,6 +940,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       ), requestId);
     }
     reservationCommitted = true;
+    log.info('proxy_preflight', {
+      request_id: requestId,
+      routing_ms: routingFinishedAt - startedAt,
+      request_prepare_ms: requestPreparedAt - routingFinishedAt,
+      dedup_ms: dedupFinishedAt - requestPreparedAt,
+      rate_limit_ms: rateLimitFinishedAt - dedupFinishedAt,
+      admission_ms: Date.now() - rateLimitFinishedAt,
+      latency_ms: Date.now() - startedAt,
+    });
     if (estimatedCredits + reservation.reserved > reservation.balance) {
       log.warn('credit_grace_used', {
         request_id: requestId,

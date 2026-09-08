@@ -66,11 +66,13 @@ async function checkPair(
     }
     return { ok: true };
   }
-  const minRes = await perMin.limit(key);
+  const [minRes, dayRes] = await Promise.all([
+    perMin.limit(key),
+    perDay.limit(key),
+  ]);
   if (!minRes.success) {
     return { ok: false, scope: `${scope}:minute`, retryAfterSec: Math.max(1, Math.ceil((minRes.reset - Date.now()) / 1000)) };
   }
-  const dayRes = await perDay.limit(key);
   if (!dayRes.success) {
     return { ok: false, scope: `${scope}:day`, retryAfterSec: Math.max(1, Math.ceil((dayRes.reset - Date.now()) / 1000)) };
   }

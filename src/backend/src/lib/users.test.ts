@@ -83,6 +83,16 @@ test('monthly free credits skip when the current period was already granted', as
   assert.deepEqual(db.insertedValues, []);
 });
 
+test('monthly free credits skip repeated database work in one process', async () => {
+  const db = createFakeDb([[], [{ free: 125 }]]);
+  setDbForTests(db as any);
+
+  await ensureMonthlyFreeCredits('user_1', new Date('2026-06-15T12:00:00Z'));
+  await ensureMonthlyFreeCredits('user_1', new Date('2026-06-20T12:00:00Z'));
+
+  assert.equal(db.insertedValues.length, 1);
+});
+
 // ── getBalances ──
 
 test('getBalances returns free/paid/total split', async () => {
