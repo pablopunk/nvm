@@ -15,11 +15,12 @@ Object.assign(process.env, {
   VERCEL_ENV: 'production',
 });
 
-const [{ GET: productionSignIn }, { GET: previewStart }, { workos }] = await Promise.all([
+const [{ GET: productionSignIn }, { GET: previewStart }, { workosClient }] = await Promise.all([
   import('./signin'),
   import('./preview-start'),
   import('../../../lib/workos'),
 ]);
+const workos = workosClient();
 
 function noSideEffectResponse(response: Response) {
   assert.equal(response.status, 503);

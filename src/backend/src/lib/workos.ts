@@ -3,18 +3,35 @@ import { SignJWT, jwtVerify } from 'jose';
 import { env } from './env';
 
 export const WORKOS_CLIENT_ID = env('WORKOS_CLIENT_ID') as string;
-export const workos = new WorkOS(env('WORKOS_API_KEY'), {
-  clientId: WORKOS_CLIENT_ID,
-});
 export const COOKIE_PASSWORD = env('WORKOS_COOKIE_PASSWORD') as string;
 export const SESSION_COOKIE = 'nvm_session';
 export const PREVIEW_SESSION_COOKIE = 'nvm_preview_session';
+
+export class WorkosConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkosConfigurationError';
+  }
+}
+
+let workosInstance: WorkOS | null = null;
+
+export function workosClient(): WorkOS {
+  if (workosInstance) return workosInstance;
+  const apiKey = env('WORKOS_API_KEY')?.trim();
+  const clientId = env('WORKOS_CLIENT_ID')?.trim();
+  if (!apiKey && !clientId) {
+    throw new WorkosConfigurationError('WORKOS_API_KEY or WORKOS_CLIENT_ID is not configured');
+  }
+  workosInstance = new WorkOS(apiKey, { clientId });
+  return workosInstance;
+}
 
 export function authorizationUrlForState(state: string, redirectUri: string): string | null {
   const clientId = env('WORKOS_CLIENT_ID')?.trim();
   if (!clientId) return null;
   try {
-    return workos.userManagement.getAuthorizationUrl({
+    return workosClient().userManagement.getAuthorizationUrl({
       provider: 'authkit',
       clientId,
       redirectUri,
@@ -66,7 +83,7 @@ export async function getSessionFromCookies(cookieHeader: string | null) {
   if (!match) return null;
   const sealed = decodeURIComponent(match.slice(SESSION_COOKIE.length + 1));
   try {
-    const session = workos.userManagement.loadSealedSession({
+    const session = workosClient().userManagement.loadSealedSession({
       sessionData: sealed,
       cookiePassword: COOKIE_PASSWORD,
     });

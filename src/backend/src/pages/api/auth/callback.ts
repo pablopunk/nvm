@@ -3,7 +3,7 @@ import {
   COOKIE_PASSWORD,
   SESSION_COOKIE,
   WORKOS_CLIENT_ID,
-  workos,
+  workosClient,
 } from '../../../lib/workos';
 import {
   createUserFromInviteIntent,
@@ -33,12 +33,13 @@ import {
   authCorrelationMatches,
 } from '../../../lib/auth-correlation';
 
+type WorkosClient = ReturnType<typeof workosClient>;
 type CallbackDependencies = {
   authenticateWithCode: (
     input: Parameters<
-      typeof workos.userManagement.authenticateWithCode
+      WorkosClient['userManagement']['authenticateWithCode']
     >[0],
-  ) => ReturnType<typeof workos.userManagement.authenticateWithCode>;
+  ) => ReturnType<WorkosClient['userManagement']['authenticateWithCode']>;
   consumeState: typeof consumeGatewayState;
   createPreviewGrant: typeof createPreviewSessionGrant;
   findUser: typeof getUserByWorkosId;
@@ -49,7 +50,7 @@ type CallbackDependencies = {
 
 const defaultDependencies: CallbackDependencies = {
   authenticateWithCode: (input) =>
-    workos.userManagement.authenticateWithCode(input),
+    workosClient().userManagement.authenticateWithCode(input),
   consumeState: consumeGatewayState,
   createPreviewGrant: createPreviewSessionGrant,
   findUser: getUserByWorkosId,

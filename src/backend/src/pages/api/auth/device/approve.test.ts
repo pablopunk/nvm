@@ -9,12 +9,13 @@ process.env.NVM_DATABASE_ENV = 'production';
 process.env.NVM_ENV = 'production';
 process.env.VERCEL_ENV = 'production';
 
-const [{ POST }, { setDbForTests, resetDbForTests }, { workos }] =
+const [{ POST }, { setDbForTests, resetDbForTests }, { workosClient }] =
   await Promise.all([
     import('./approve'),
     import('../../../../db/client'),
     import('../../../../lib/workos'),
   ]);
+const workos = workosClient();
 
 function chain(result: unknown) {
   const promise = () => Promise.resolve(result);
