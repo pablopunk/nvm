@@ -7921,6 +7921,11 @@ async function initNevermindAi() {
   void Promise.all([
     nevermindAi.prepare({ model: 'fast' }),
     nevermindAi.prepare({ model: 'smart' }),
+    nevermindAi.prepare({
+      model: 'fast',
+      system: CONVERSATION_SYSTEM_PROMPT,
+      toolMode: 'conversation',
+    }),
   ]).catch((error) =>
     logWarn('ai.one-shot.startup-warm.failed', error, {
       source: 'host',

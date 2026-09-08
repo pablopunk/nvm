@@ -563,6 +563,10 @@ function createNevermindAi(options: NevermindAiOptions) {
       await generalSession(prepareOptions, 1);
       return;
     }
+    if (!aiPromptUsesDirectModel(prepareOptions)) {
+      await prepareFallbackSession(prepareOptions);
+      return;
+    }
     const [, resolved] = await awaitWithAiSignal(
       measureDebugPerformance(
         'ai.one-shot.prepare',
@@ -573,6 +577,10 @@ function createNevermindAi(options: NevermindAiOptions) {
       prepareOptions.signal,
     );
     if (resolved) return;
+    await prepareFallbackSession(prepareOptions);
+  }
+
+  async function prepareFallbackSession(prepareOptions: AiPromptOptions) {
     const key = preparedFallbackSessionKey(prepareOptions);
     let promise = preparedFallbackSessions.get(key);
     if (!promise) {
