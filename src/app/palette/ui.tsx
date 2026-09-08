@@ -4,6 +4,7 @@ import { Folder } from 'lucide-react';
 import React, { type ReactNode, useId, useLayoutEffect, useRef } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { TextMorph } from 'torph/react';
 import { formKeyboardActionForEvent } from './form-keyboard';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
@@ -75,6 +76,7 @@ export interface ProgressViewProps {
   total?: number;
   label?: string;
   status?: string;
+  animateSummaryText?: boolean;
 }
 export type FormValue = string | boolean | string[];
 export interface FormField {
@@ -530,12 +532,26 @@ function normalizedProgressStatus(status?: string) {
   return 'pending';
 }
 
+function MorphingIndicatorText({ value }: { value: string }) {
+  return (
+    <TextMorph
+      className="indicatorMorphingText"
+      duration={180}
+      ease="cubic-bezier(0.4, 0, 0.2, 1)"
+      scale={false}
+    >
+      {value}
+    </TextMorph>
+  );
+}
+
 export function ProgressView({
   steps,
   value,
   total,
   label,
   status,
+  animateSummaryText = false,
 }: ProgressViewProps) {
   const normalizedStatus = normalizedProgressStatus(status);
   const hasProgress =
@@ -543,6 +559,8 @@ export function ProgressView({
   const ratio = hasProgress ? Math.max(0, Math.min(1, value / total)) : 0;
   const percent = Math.round(ratio * 100);
   const showSummary = Boolean(label || status) || hasProgress;
+  const summaryLabel = label || status || 'Working…';
+  const progressLabel = `${value} of ${total} · ${percent}%`;
   return (
     <div className="extensionView progressView">
       {showSummary ? (
@@ -552,10 +570,20 @@ export function ProgressView({
           role={normalizedStatus === 'error' ? 'alert' : 'status'}
         >
           <div>
-            <strong>{label || status || 'Working…'}</strong>
+            <strong>
+              {animateSummaryText ? (
+                <MorphingIndicatorText value={summaryLabel} />
+              ) : (
+                summaryLabel
+              )}
+            </strong>
             {hasProgress ? (
               <small>
-                {value} of {total} · {percent}%
+                {animateSummaryText ? (
+                  <MorphingIndicatorText value={progressLabel} />
+                ) : (
+                  progressLabel
+                )}
               </small>
             ) : null}
           </div>

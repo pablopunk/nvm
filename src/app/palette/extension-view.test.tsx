@@ -229,6 +229,26 @@ test('loading views do not render an inline placeholder', () => {
   assert.doesNotMatch(loadingView, /loadingSpinner|spinnerIcon/);
 });
 
+test('morphs host indicator status text without an extension API option', () => {
+  const indicator = renderExtensionView({
+    id: 'indicator:dictation:default',
+    type: 'progress',
+    title: 'Dictation',
+    label: 'Transcribing',
+    status: 'transcribing',
+  });
+  const extensionProgress = renderExtensionView({
+    id: 'extension-progress',
+    type: 'progress',
+    title: 'Import',
+    label: 'Transcribing',
+    status: 'active',
+  });
+
+  assert.match(indicator, /class="indicatorMorphingText"/);
+  assert.doesNotMatch(extensionProgress, /indicatorMorphingText/);
+});
+
 test('renders an opted-in side preview for the selected list item', () => {
   const html = renderExtensionView({
     type: 'list',

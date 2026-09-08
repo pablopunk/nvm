@@ -6,6 +6,8 @@ allowBuilds:
   esbuild: true
   protobufjs: true
   sharp: true
+minimumReleaseAgeExclude:
+  - torph@0.1.3
 onlyBuiltDependencies:
   - '@google/genai'
   - electron

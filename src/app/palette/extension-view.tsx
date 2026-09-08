@@ -1233,6 +1233,10 @@ function PreviewExtensionView({
   );
 }
 
+function isHostIndicatorView(view: CommandView) {
+  return String(view.id || '').startsWith('indicator:');
+}
+
 function ExtensionViewSurface(props: ExtensionViewRendererProps) {
   const surfaceProps: ExtensionViewSurfaceProps = {
     ...props,
@@ -1256,6 +1260,7 @@ function ExtensionViewSurface(props: ExtensionViewRendererProps) {
         total={props.view.total}
         label={props.view.label}
         status={props.view.status}
+        animateSummaryText={isHostIndicatorView(props.view)}
       />
     );
   if (props.view.type === 'webview')
