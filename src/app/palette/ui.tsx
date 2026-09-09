@@ -7,11 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { formKeyboardActionForEvent } from './form-keyboard';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
-import {
-  MorphingActivityText,
-  MorphingIndicatorText,
-  StreamingChatText,
-} from './morphing-text';
+import { MorphingActivityText, MorphingIndicatorText } from './morphing-text';
 import {
   type SystemTheme,
   themedImageSource,
@@ -1172,7 +1168,7 @@ export function ChatView({
               </div>
             ) : null}
             {message.streaming && typeof message.content === 'string' ? (
-              <StreamingChatText value={message.content} />
+              <span className="chatStreamingText">{message.content}</span>
             ) : (
               message.content || null
             )}

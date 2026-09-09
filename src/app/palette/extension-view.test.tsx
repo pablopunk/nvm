@@ -100,7 +100,7 @@ test('renders sent and pending AI chat image attachments', () => {
   assert.match(html, /Remove Pending image/);
 });
 
-test('morphs plain streamed AI text before restoring markdown', () => {
+test('renders plain streamed AI text before restoring markdown', () => {
   const view: CommandView = {
     type: 'chat',
     title: 'AI Chat',
