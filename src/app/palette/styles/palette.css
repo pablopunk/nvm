@@ -347,7 +347,7 @@ kbd {
   background: var(--surface-selected);
 }
 
-.result:hover {
+.result:not([data-disabled="true"]):hover {
   background: var(--surface-selected);
 }
 

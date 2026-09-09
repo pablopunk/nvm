@@ -664,6 +664,50 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     if (!noteWindow) throw new Error('Floating Notes window not found');
     const editor = noteWindow.locator('[contenteditable="true"]');
     await expect(editor).toBeVisible();
+
+    await launched.app.evaluate(({ nativeTheme }) => {
+      nativeTheme.themeSource = 'light';
+    });
+    await expect
+      .poll(() =>
+        launched!.page.evaluate(
+          () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+        ),
+      )
+      .toBe(false);
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(() =>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--surface-canvas')
+            .trim(),
+        ),
+      )
+      .toBe('#ece9e2');
+
+    await launched.app.evaluate(({ nativeTheme }) => {
+      nativeTheme.themeSource = 'dark';
+    });
+    await expect
+      .poll(() =>
+        launched!.page.evaluate(
+          () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+        ),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(() =>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--surface-canvas')
+            .trim(),
+        ),
+      )
+      .toBe('#151617');
+    await launched.app.evaluate(({ nativeTheme }) => {
+      nativeTheme.themeSource = 'system';
+    });
+
     await noteWindow.bringToFront();
     await editor.focus();
 
