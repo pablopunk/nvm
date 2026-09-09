@@ -703,7 +703,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
             .trim(),
         ),
       )
-      .toBe('#151617');
+      .toBe('#12151b');
     await launched.app.evaluate(({ nativeTheme }) => {
       nativeTheme.themeSource = 'system';
     });

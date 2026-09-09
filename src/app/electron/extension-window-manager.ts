@@ -187,7 +187,7 @@ const INDICATOR_HORIZONTAL_CHROME = 56;
 const INDICATOR_APPROXIMATE_CHARACTER_WIDTH = 8;
 const INDICATOR_SHADOW_HORIZONTAL_GUTTER = 80;
 export const EXTENSION_WINDOW_BACKGROUND = Object.freeze({
-  dark: '#151617',
+  dark: '#12151b',
   light: '#ece9e2',
   transparent: '#00000000',
 });

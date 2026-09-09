@@ -97,21 +97,21 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface-canvas: #151617;
-    --surface-panel: #1d1e20;
-    --surface-raised: #242527;
-    --surface-interactive: #2a2b2e;
-    --surface-selected: #343539;
-    --surface-sunken: #111214;
-    --surface-overlay: #292a2d;
-    --surface-media: #0e0f11;
-    --material-panel: rgba(29, 30, 32, 0.965);
-    --material-raised: rgba(36, 37, 39, 0.97);
-    --material-overlay: rgba(41, 42, 45, 0.98);
+    --surface-canvas: #12151b;
+    --surface-panel: #1a1f28;
+    --surface-raised: #222834;
+    --surface-interactive: #29303d;
+    --surface-selected: #343d4d;
+    --surface-sunken: #0e1117;
+    --surface-overlay: #252c37;
+    --surface-media: #0b0e13;
+    --material-panel: rgba(26, 31, 40, 0.965);
+    --material-raised: rgba(34, 40, 52, 0.97);
+    --material-overlay: rgba(37, 44, 55, 0.98);
 
-    --edge-subtle: rgba(255, 255, 255, 0.1);
-    --edge-strong: rgba(255, 255, 255, 0.17);
-    --edge-highlight: rgba(255, 255, 255, 0.09);
+    --edge-subtle: rgba(211, 224, 245, 0.1);
+    --edge-strong: rgba(211, 224, 245, 0.18);
+    --edge-highlight: rgba(220, 231, 249, 0.1);
 
     --shadow-panel:
       0 2px 5px rgba(0, 0, 0, 0.42), 0 18px 44px rgba(0, 0, 0, 0.42),
@@ -129,11 +129,11 @@
       inset 0 -1px 0 rgba(0, 0, 0, 0.42);
     --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.5);
 
-    --text-strong: #f2f0ea;
-    --text-primary: #e3e1dc;
-    --text-secondary: #bbb8b1;
-    --text-tertiary: #a09d96;
-    --text-muted: #918e87;
+    --text-strong: #f0f3f7;
+    --text-primary: #e0e5ec;
+    --text-secondary: #b8c0cc;
+    --text-tertiary: #9ca6b4;
+    --text-muted: #8f99a7;
     --link: #d7c574;
 
     --item-foreground-yellow: #dfce84;
