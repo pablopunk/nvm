@@ -74,7 +74,7 @@ The whole window chrome should be draggable except interactive elements.
 
 - Wait for `ready-to-show` before showing the BrowserWindow. Never show a white flash.
 - Match system appearance: `nativeTheme.shouldUseDarkColors` and `prefers-color-scheme`.
-- For a palette window: `frame: false`, `transparent: true`, `vibrancy: 'hud'` (macOS), `visualEffectState: 'active'`.
+- For a palette window, use `frame: false` and `transparent: true`; CSS `backdrop-filter` cannot reliably blur the desktop behind a transparent `BrowserWindow`, so use alpha surfaces cross-platform or an explicit native platform material when desktop blur is required.
 - `titleBarStyle: 'hiddenInset'` for main windows that need traffic lights but no title.
 - Restore window position and size between launches. Never re-center on every open unless it's the palette.
 
