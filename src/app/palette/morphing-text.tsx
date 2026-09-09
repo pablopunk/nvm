@@ -1,4 +1,4 @@
-import type React from 'react';
+import React from 'react';
 import { TextMorph } from 'torph/react';
 
 const MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
