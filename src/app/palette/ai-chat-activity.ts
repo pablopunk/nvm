@@ -31,6 +31,17 @@ const TOOL_ACTIVITY_LABELS = new Map([
   ['grep', 'Searching files'],
   ['find', 'Finding files'],
   ['ls', 'Listing files'],
+  ['read_extension_api', 'Reading the extension API'],
+  ['list_capabilities', 'Listing capabilities'],
+  ['list_shortcuts', 'Listing shortcuts'],
+  ['read_app_logs', 'Reading app logs'],
+  ['list_extensions', 'Listing extensions'],
+  ['read_extension', 'Reading an extension'],
+  ['read_current_extension', 'Reading the current extension'],
+  ['write_extension', 'Writing the extension'],
+  ['remove_extension', 'Removing the extension'],
+  ['validate_extension', 'Validating the extension'],
+  ['install_extension', 'Installing the extension'],
 ]);
 
 function toolActivityLabel(toolName: string) {
@@ -39,7 +50,7 @@ function toolActivityLabel(toolName: string) {
     return label;
   }
   const readableName = toolName.replaceAll('_', ' ').trim() || 'tool';
-  return `Calling ${readableName}`;
+  return `Using ${readableName}`;
 }
 
 function aiChatDeltaHasVisibleText(text?: string) {

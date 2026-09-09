@@ -141,7 +141,8 @@ test('clears thinking immediately when a turn ends without a tool', () => {
 
 test('uses concise fallback labels without decorative dots', () => {
   assert.equal(toolActivityLabel('grep'), 'Searching files');
-  assert.equal(toolActivityLabel('custom_tool'), 'Calling custom tool');
+  assert.equal(toolActivityLabel('list_capabilities'), 'Listing capabilities');
+  assert.equal(toolActivityLabel('custom_tool'), 'Using custom tool');
   assert.equal(toolActivityLabel('web_search').includes('.'), false);
   assert.equal(toolActivityLabel('web_search').includes('…'), false);
 });

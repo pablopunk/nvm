@@ -50,6 +50,7 @@ import {
   isAiChatModel,
   normalizeAiChatModel,
 } from '../shared/ai-chat-model';
+import { withoutAiToolCallHistory } from '../shared/ai-chat-tool-history';
 import { createNevermindAi } from './ai';
 import {
   type NormalizedAiChatImage,
@@ -7841,8 +7842,6 @@ async function initNevermindAi() {
         learningStore?.recordStatus(chatId, 'start', metadata);
       if (chatId && event.type === 'delta' && event.text)
         appendAiChatDelta(chatId, event.text);
-      if (chatId && event.type === 'tool_start' && event.name)
-        appendAiChatMessage(chatId, 'system', event.name);
       if (chatId && event.type === 'tool_trace_start' && event.name)
         learningStore?.recordToolStart(
           chatId,
@@ -10119,16 +10118,23 @@ async function migrateAiChats() {
       )
       .catch(() => []),
   );
-  let modelsChanged = false;
+  let chatsChanged = false;
   for (const chat of Object.values(userState.aiChats || {}) as any[]) {
     const expectedModel = isConversationAiChat(chat)
       ? normalizeAiChatModel(chat.model)
       : AUTOMATE_AI_CHAT_MODEL;
     if (chat.model !== expectedModel) {
       chat.model = expectedModel;
-      modelsChanged = true;
+      chatsChanged = true;
     }
     if (isConversationAiChat(chat)) continue;
+    if (Array.isArray(chat.messages)) {
+      const messages = withoutAiToolCallHistory(chat.messages);
+      if (messages.length !== chat.messages.length) {
+        chat.messages = messages;
+        chatsChanged = true;
+      }
+    }
     if (chat.generatedExtensionFile && !chat.touchedExtensionFiles)
       chat.touchedExtensionFiles = [chat.generatedExtensionFile];
     if (chat.generatedExtensionFile && !chat.contextExtensionFile)
@@ -10149,7 +10155,7 @@ async function migrateAiChats() {
       delete chat.selectedBuilderPreviewFilename;
     }
   }
-  return modelsChanged;
+  return chatsChanged;
 }
 
 async function persistClipboardImage(png, hash) {
