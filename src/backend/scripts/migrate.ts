@@ -21,7 +21,10 @@ if (!DATABASE_URL) {
 }
 validateMigrationEnvironment(process.env);
 
-async function markBaselineAppliedIfPreexistingDb(db: ReturnType<typeof drizzle>) {
+type MigrationDatabase = ReturnType<typeof drizzle>;
+type MigrationExecutor = Pick<MigrationDatabase, 'execute'>;
+
+async function markBaselineAppliedIfPreexistingDb(db: MigrationExecutor) {
   await db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
@@ -53,12 +56,17 @@ const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
 const db = drizzle(pool);
 
 try {
-  const { rows } = await db.execute<{ acquired: boolean }>(
-    sql`SELECT pg_try_advisory_lock(hashtext('nevermind_schema_migration')) AS acquired`,
-  );
-  if (!rows[0]?.acquired) throw new Error('Another migration is already running');
-  await markBaselineAppliedIfPreexistingDb(db);
-  await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  await db.transaction(async (transaction) => {
+    const { rows } = await transaction.execute<{ acquired: boolean }>(
+      sql`SELECT pg_try_advisory_xact_lock(hashtext('nevermind_schema_migration')) AS acquired`,
+    );
+    if (!rows[0]?.acquired)
+      throw new Error('Another migration is already running');
+    await markBaselineAppliedIfPreexistingDb(transaction);
+    await migrate(transaction as unknown as MigrationDatabase, {
+      migrationsFolder: MIGRATIONS_DIR,
+    });
+  });
   console.log('[migrate] done');
 } finally {
   await pool.end();
