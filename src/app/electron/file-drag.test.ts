@@ -4,10 +4,15 @@ import { fileDragIconForPath } from './file-drag';
 
 const PNG_DATA_URL = /^data:image\/png;base64,/;
 
-function fakeImage(empty: boolean, name: string) {
+interface FakeImage {
+  isEmpty(): boolean;
+  resize(options: unknown): FakeImage;
+}
+
+function fakeImage(empty: boolean, name: string): FakeImage {
   return {
     isEmpty: () => empty,
-    resize: (options: unknown) => ({ name, options }),
+    resize: (options: unknown) => ({ name, options }) as unknown as FakeImage,
   };
 }
 
