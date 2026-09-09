@@ -28,3 +28,15 @@ test('extension item icons render known lucide aliases', () => {
   assert.match(html, /<svg/);
   assert.match(html, /lucide/);
 });
+
+test('item images let their draggable result row own the drag gesture', () => {
+  const html = renderToString(
+    iconForItem({
+      id: 'app',
+      title: 'App',
+      image: 'file:///Applications/App.app/Contents/Resources/App.png',
+    } as any),
+  );
+
+  assert.match(html, /draggable="false"/);
+});

@@ -130,7 +130,7 @@ function CommandItemIcon({
   const image = themedImageSource(item.image, theme);
   return image ? (
     <span className="thumbnailIcon">
-      <img src={image} alt="" />
+      <img src={image} alt="" draggable={false} />
     </span>
   ) : (
     <Icon size={18} />
