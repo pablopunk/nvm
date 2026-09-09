@@ -29,6 +29,9 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           fetch-depth: 0
 
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
       - name: Collect failed CI logs
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
