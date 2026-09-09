@@ -27,6 +27,10 @@
   --surface-sunken: #e3dfd7;
   --surface-overlay: #f8f5ee;
   --surface-media: #dad6cd;
+  --material-panel: rgba(245, 242, 235, 0.965);
+  --material-raised: rgba(250, 248, 243, 0.97);
+  --material-overlay: rgba(248, 245, 238, 0.98);
+  --material-backdrop: blur(12px) saturate(1.04);
 
   --edge-subtle: rgba(54, 49, 41, 0.14);
   --edge-strong: rgba(54, 49, 41, 0.24);
@@ -102,6 +106,10 @@
     --surface-sunken: #111214;
     --surface-overlay: #292a2d;
     --surface-media: #0e0f11;
+    --material-panel: rgba(29, 30, 32, 0.965);
+    --material-raised: rgba(36, 37, 39, 0.97);
+    --material-overlay: rgba(41, 42, 45, 0.98);
+    --material-backdrop: blur(12px) saturate(1.04);
 
     --edge-subtle: rgba(255, 255, 255, 0.1);
     --edge-strong: rgba(255, 255, 255, 0.17);
@@ -174,6 +182,10 @@
     --surface-sunken: Canvas;
     --surface-overlay: Canvas;
     --surface-media: Canvas;
+    --material-panel: Canvas;
+    --material-raised: Canvas;
+    --material-overlay: Canvas;
+    --material-backdrop: none;
     --text-strong: CanvasText;
     --text-primary: CanvasText;
     --text-secondary: CanvasText;

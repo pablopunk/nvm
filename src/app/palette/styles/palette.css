@@ -51,18 +51,20 @@
   position: relative;
   border: 1px solid var(--edge-subtle);
   border-radius: var(--radius-xl);
-  background: var(--surface-panel);
+  background: var(--material-panel);
   box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--material-backdrop);
+  -webkit-backdrop-filter: var(--material-backdrop);
   -webkit-app-region: drag;
 }
 
 .searchCard {
-  background: var(--surface-raised);
+  background: var(--material-raised);
   box-shadow: var(--shadow-raised);
 }
 
 .optionsCard {
-  background: var(--surface-overlay);
+  background: var(--material-overlay);
   box-shadow: var(--shadow-overlay);
 }
 
