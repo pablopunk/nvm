@@ -39,6 +39,7 @@ const requiredThemeTokens = [
   '--edge-highlight',
   '--shadow-panel',
   '--shadow-raised',
+  '--shadow-contact',
   '--shadow-overlay',
   '--shadow-selected',
   '--shadow-inset',

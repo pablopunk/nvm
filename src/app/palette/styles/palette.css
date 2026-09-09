@@ -58,7 +58,7 @@
 
 .searchCard {
   background: var(--material-raised);
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-contact);
 }
 
 .optionsCard {
