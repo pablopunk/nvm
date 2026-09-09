@@ -37,6 +37,7 @@ const requiredThemeTokens = [
   '--shadow-panel',
   '--shadow-raised',
   '--shadow-overlay',
+  '--shadow-selected',
   '--shadow-inset',
   '--text-strong',
   '--text-primary',

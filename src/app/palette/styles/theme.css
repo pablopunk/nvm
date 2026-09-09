@@ -43,6 +43,8 @@
     inset 0 1px 0 var(--edge-highlight);
   --shadow-interactive:
     0 1px 2px rgba(62, 53, 40, 0.14), inset 0 1px 0 var(--edge-highlight);
+  --shadow-selected:
+    inset 0 1px 0 var(--edge-highlight), inset 0 -1px 0 var(--edge-subtle);
   --shadow-inset: inset 0 1px 3px rgba(62, 53, 40, 0.16);
 
   --text-strong: #282721;
@@ -116,6 +118,9 @@
       inset 0 1px 0 var(--edge-highlight);
     --shadow-interactive:
       0 1px 2px rgba(0, 0, 0, 0.36), inset 0 1px 0 var(--edge-highlight);
+    --shadow-selected:
+      inset 0 1px 0 rgba(255, 255, 255, 0.13),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.42);
     --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.5);
 
     --text-strong: #f2f0ea;
@@ -183,6 +188,7 @@
     --shadow-raised: none;
     --shadow-overlay: none;
     --shadow-interactive: none;
+    --shadow-selected: none;
     --shadow-inset: none;
   }
 }

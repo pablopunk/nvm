@@ -343,12 +343,10 @@ kbd {
   background: var(--accent-soft);
 }
 
-.result[data-selected="true"] {
-  background: var(--surface-selected);
-}
-
+.result[data-selected="true"],
 .result:not([data-disabled="true"]):hover {
   background: var(--surface-selected);
+  box-shadow: var(--shadow-selected);
 }
 
 .result[data-background="accent"][data-selected="true"] {
