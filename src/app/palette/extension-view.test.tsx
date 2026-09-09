@@ -48,7 +48,7 @@ function renderExtensionView(
     setFormValues: () => {},
     filterItems: (items) => items || [],
     filterSections: (currentView) => currentView.sections,
-    renderMarkdown: (content) => content,
+    renderMarkdown: (content) => <MarkdownContent content={content} />,
     renderActionPanel: () => null,
     actionPanelRows: () => [],
     renderRootIcon: () => null,

@@ -919,9 +919,7 @@ function ChatInputForm({
           placeholder={
             attaching
               ? 'Attaching image…'
-              : busy
-                ? 'Thinking'
-                : placeholder || 'Message AI'
+              : placeholder || (busy ? 'Thinking' : 'Message AI')
           }
         />
         <div className="chatComposerFooter">
@@ -1066,7 +1064,9 @@ function ChatExtensionView({
       onSubmit={() => sendAiPrompt(aiChat.input)}
       busy={aiChat.busy}
       inputRef={aiChat.inputRef}
-      placeholder={aiChat.busy ? 'Thinking' : 'Message AI'}
+      placeholder={
+        aiChat.busy && streamingAssistantIndex < 0 ? 'Thinking' : 'Message AI'
+      }
       onAbort={abortAiChat}
       chatId={view.chatId}
       model={selectableModel}

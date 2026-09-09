@@ -1,5 +1,5 @@
 import { Search, Sparkles } from 'lucide-react';
-import type { DragEvent, ReactNode } from 'react';
+import React, { type DragEvent, type ReactNode } from 'react';
 import {
   actionsFromPanel,
   type CommandAction,

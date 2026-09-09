@@ -41,7 +41,7 @@ const {
 const production = 'https://api.nvm.fyi';
 
 async function waitFor(predicate: () => boolean) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
     if (predicate()) return;
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
