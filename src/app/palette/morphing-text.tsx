@@ -4,6 +4,20 @@ import { TextMorph } from 'torph/react';
 const MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const STREAMING_CHAT_MORPH_INTERVAL_MS = 100;
 const STREAMING_CHAT_MORPH_MAX_CHARACTERS = 2000;
+const activityGraphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: 'grapheme',
+});
+
+function activityLetterEntries(value: string) {
+  return Array.from(activityGraphemeSegmenter.segment(value), (entry) => ({
+    id: `${entry.index}:${entry.segment}`,
+    grapheme: entry.segment === ' ' ? '\u00a0' : entry.segment,
+  }));
+}
+
+export function activityGraphemes(value: string) {
+  return activityLetterEntries(value).map(({ grapheme }) => grapheme);
+}
 
 export function MorphingIndicatorText({ value }: { value: string }) {
   return (
@@ -19,54 +33,23 @@ export function MorphingIndicatorText({ value }: { value: string }) {
 }
 
 export function MorphingActivityText({ value }: { value: string }) {
-  const activityTextRef = React.useRef<HTMLSpanElement>(null);
-
-  React.useEffect(() => {
-    const activityText = activityTextRef.current;
-    if (!activityText) {
-      return;
-    }
-    let animationFrame: number | null = null;
-
-    function restartLetterAnimation() {
-      if (animationFrame !== null) {
-        cancelAnimationFrame(animationFrame);
-      }
-      const letters =
-        activityText.querySelectorAll<HTMLElement>('[torph-item]');
-      for (const letter of letters) {
-        letter.classList.remove('chatActivityLetter');
-      }
-      animationFrame = requestAnimationFrame(() => {
-        letters.forEach((letter, index) => {
-          letter.style.setProperty('--activity-letter-index', String(index));
-          letter.classList.add('chatActivityLetter');
-        });
-      });
-    }
-
-    restartLetterAnimation();
-    const observer = new MutationObserver(restartLetterAnimation);
-    observer.observe(activityText, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      if (animationFrame !== null) {
-        cancelAnimationFrame(animationFrame);
-      }
-    };
-  }, [value]);
-
   return (
-    <span ref={activityTextRef} className="chatActivityGlow">
-      <TextMorph
-        className="chatActivityText"
-        duration={220}
-        ease={MORPH_EASING}
-        scale={false}
-        numbers={false}
-      >
-        {value}
-      </TextMorph>
+    <span className="chatActivityGlow">
+      <span className="chatActivityText">{value}</span>
+      <span className="chatActivityLetters" aria-hidden="true">
+        {activityLetterEntries(value).map(({ grapheme, id }, index) => (
+          <span
+            key={id}
+            style={
+              {
+                '--activity-letter-index': index,
+              } as React.CSSProperties
+            }
+          >
+            {grapheme}
+          </span>
+        ))}
+      </span>
     </span>
   );
 }

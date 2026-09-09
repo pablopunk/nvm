@@ -31,9 +31,9 @@ const INHERITED_ACTIVITY_COLOR_PATTERN = /color: inherit;/;
 const VISIBLE_ACTIVITY_COLOR_PATTERN = /color: var\(--accent\);/;
 const TRANSPARENT_ACTIVITY_TEXT_PATTERN = /color: transparent|text-fill-color/;
 const ACTIVE_GOLD_ANIMATION_PATTERN =
-  /\.chatActivityText \[torph-item\]\.chatActivityLetter \{[\s\S]*?animation: activityLetterGold 1\.1s ease-in-out infinite;[\s\S]*?animation-delay: calc\(var\(--activity-letter-index, 0\) \* 45ms - 1\.1s\);/;
+  /\.chatActivityLetters > span \{[\s\S]*?animation: activityLetterGold 1\.1s ease-in-out infinite;[\s\S]*?animation-delay: calc\(var\(--activity-letter-index, 0\) \* 45ms - 1\.1s\);/;
 const ACTIVE_GOLD_COLOR_PATTERN =
-  /@keyframes activityLetterGold \{[\s\S]*?color: var\(--accent\);[\s\S]*?color: var\(--tool-active-highlight\);/;
+  /@keyframes activityLetterGold \{[\s\S]*?color: transparent;[\s\S]*?color: var\(--tool-active-highlight\);/;
 
 const requiredThemeTokens = [
   '--surface-canvas',

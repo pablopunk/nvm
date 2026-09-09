@@ -1144,6 +1144,13 @@ export function ChatView({
   messagesRef,
   banner,
 }: ChatViewProps) {
+  const statusRef = useRef<HTMLDivElement>(null);
+  const latestMessage = messages[messages.length - 1];
+
+  useLayoutEffect(() => {
+    statusRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activity, isBusy, latestMessage?.content]);
+
   return (
     <div className="extensionView chatView">
       {banner ? <div className="chatBanner">{banner}</div> : null}
@@ -1170,6 +1177,7 @@ export function ChatView({
         ))}
         {activity || isBusy ? (
           <div
+            ref={statusRef}
             key="chat-busy-status"
             className="chatBubble system chatActivity"
             data-status="active"

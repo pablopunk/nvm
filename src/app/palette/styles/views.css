@@ -677,6 +677,7 @@
 }
 
 .chatActivityGlow {
+  position: relative;
   display: inline-block;
   color: var(--accent);
 }
@@ -686,8 +687,15 @@
   color: inherit;
 }
 
-.chatActivityText [torph-item].chatActivityLetter {
-  color: var(--accent);
+.chatActivityLetters {
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chatActivityLetters > span {
+  color: transparent;
   animation: activityLetterGold 1.1s ease-in-out infinite;
   animation-delay: calc(var(--activity-letter-index, 0) * 45ms - 1.1s);
 }
@@ -695,7 +703,7 @@
 @keyframes activityLetterGold {
   0%,
   100% {
-    color: var(--accent);
+    color: transparent;
   }
   50% {
     color: var(--tool-active-highlight);
@@ -703,10 +711,12 @@
 }
 
 @media (forced-colors: active) {
-  .chatActivityGlow,
-  .chatActivityText [torph-item].chatActivityLetter {
+  .chatActivityGlow {
     color: Highlight;
-    animation: none;
+  }
+
+  .chatActivityLetters {
+    display: none;
   }
 }
 
