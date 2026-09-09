@@ -50,13 +50,13 @@ jobs:
           opencode run \
             --auto \
             --model opencode-go/gpt-5.6-luna \
-            -f /tmp/opencode-ci-failure.log \
             "Fix the CI failure described in /tmp/opencode-ci-failure.log.
 
             Inspect the repository and reproduce the failure where possible.
             Make the smallest correct code change.
             Follow the repository instructions and run the relevant checks with mise exec -- pnpm.
-            Do not commit or push; leave the changes in the working tree."
+            Do not commit or push; leave the changes in the working tree." \
+            --file /tmp/opencode-ci-failure.log
 
       - name: Commit and open pull request
         env:
