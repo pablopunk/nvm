@@ -15,6 +15,7 @@ import {
 } from '../shared/ai-chat-model';
 import {
   type AiChatActivityEvent,
+  aiChatDeltaHasVisibleText,
   EMPTY_AI_CHAT_ACTIVITY,
   transitionAiChatActivity,
 } from './ai-chat-activity';
@@ -711,7 +712,7 @@ export function useAiChat(
     if (event.type === 'aborted') {
       finishActiveAiTrace('ai.aborted', 'cancelled', event.traceId);
     }
-    if (event.type === 'delta' && event.text) {
+    if (event.type === 'delta' && aiChatDeltaHasVisibleText(event.text)) {
       updateActivity({ type: 'delta' });
       appendDelta(event.text);
     }

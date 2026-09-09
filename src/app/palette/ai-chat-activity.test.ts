@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  aiChatDeltaHasVisibleText,
   EMPTY_AI_CHAT_ACTIVITY,
   MINIMUM_TOOL_ACTIVITY_MS,
   toolActivityLabel,
@@ -66,6 +67,12 @@ test('does not let deltas erase a retained tool label', () => {
   assert.equal(streaming.label, 'Reading a file');
   assert.equal(ended.label, 'Reading a file');
   assert.equal(settled.label, null);
+});
+
+test('distinguishes visible streaming text from empty provider deltas', () => {
+  assert.equal(aiChatDeltaHasVisibleText(), false);
+  assert.equal(aiChatDeltaHasVisibleText(' \n '), false);
+  assert.equal(aiChatDeltaHasVisibleText('Answer'), true);
 });
 
 test('returns to thinking after a tool when no response is streaming', () => {

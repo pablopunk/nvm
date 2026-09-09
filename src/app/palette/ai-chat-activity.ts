@@ -42,6 +42,10 @@ function toolActivityLabel(toolName: string) {
   return `Calling ${readableName}`;
 }
 
+function aiChatDeltaHasVisibleText(text?: string) {
+  return Boolean(text?.trim());
+}
+
 function toolStarted(toolName: string, now: number): AiChatActivityState {
   return {
     label: toolActivityLabel(toolName),
@@ -119,6 +123,7 @@ function transitionAiChatActivity(
 
 export type { AiChatActivityEvent, AiChatActivityState };
 export {
+  aiChatDeltaHasVisibleText,
   EMPTY_AI_CHAT_ACTIVITY,
   MINIMUM_TOOL_ACTIVITY_MS,
   toolActivityLabel,
