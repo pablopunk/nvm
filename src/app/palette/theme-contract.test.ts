@@ -16,6 +16,10 @@ const styleEntryCss = fs.readFileSync(
   path.join(paletteDirectory, 'styles.css'),
   'utf8',
 );
+const viewsCss = fs.readFileSync(
+  path.join(stylesDirectory, 'views.css'),
+  'utf8',
+);
 const DARK_THEME_PATTERN =
   /@media \(prefers-color-scheme: dark\) \{([\s\S]*?)\n\}/;
 const LIGHT_COLOR_SCHEME_PATTERN = /color-scheme: light;/;
@@ -103,6 +107,15 @@ test('palette style modules use theme tokens instead of raw colors', () => {
     const css = fs.readFileSync(path.join(stylesDirectory, file), 'utf8');
     assert.doesNotMatch(css, RAW_COLOR_PATTERN, file);
   }
+});
+
+test('Torph activity text inherits a visible animated color', () => {
+  const activityRule = viewsCss.match(
+    /\.chatActivityText \{([\s\S]*?)\n\}/,
+  )?.[1];
+  assert.ok(activityRule);
+  assert.match(activityRule, /color: var\(--accent\);/);
+  assert.doesNotMatch(activityRule, /color: transparent|text-fill-color/);
 });
 
 test('semantic text colors meet WCAG AA on panel materials', () => {
