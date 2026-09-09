@@ -185,6 +185,7 @@ import { createExtensionStorage as createPersistentExtensionStorage } from './ex
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowActions } from './extension-window-actions';
 import { createExtensionWindowManager } from './extension-window-manager';
+import { fileDragIconForPath } from './file-drag';
 import {
   applyDateAdded,
   findFilesNeedsStats,
@@ -5991,21 +5992,18 @@ async function findFiles(roots, options: any = {}) {
   );
 }
 
-function dragIconForPath(filePath) {
-  const image = nativeImage.createFromPath(filePath);
-  if (!image.isEmpty())
-    return image.resize({ width: 64, height: 64, quality: 'good' });
-  return nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
-  );
-}
-
 function startFileDrag(event, filePath) {
   const resolvedPath = expandUserPath(filePath);
   if (!(resolvedPath && path.isAbsolute(resolvedPath))) return;
   event.sender.startDrag({
     file: resolvedPath,
-    icon: dragIconForPath(resolvedPath),
+    icon: fileDragIconForPath(
+      {
+        createFromPath: (candidate) => nativeImage.createFromPath(candidate),
+        createFallback: (dataUrl) => nativeImage.createFromDataURL(dataUrl),
+      },
+      resolvedPath,
+    ),
   });
 }
 
