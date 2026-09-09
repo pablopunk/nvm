@@ -48,6 +48,7 @@ type BrowserWindowConstructor = new (
 type ExtensionWindowRecord = {
   id: string;
   win: ExtensionWindowLike;
+  frameless: boolean;
   view: any;
   options: any;
   compatibility: ExtensionWindowCompatibility;
@@ -695,6 +696,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     const record: ExtensionWindowRecord = {
       id,
       win,
+      frameless,
       view: normalizedView,
       options: { ...safeOptions, id },
       compatibility: compatibilityForOptions(id, safeOptions),
@@ -998,10 +1000,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     for (const record of records.values()) {
       if (record.win.isDestroyed()) continue;
       record.win.setBackgroundColor(
-        extensionWindowBackgroundColor(
-          record.options?.chrome === 'none',
-          shouldUseDarkColors,
-        ),
+        extensionWindowBackgroundColor(record.frameless, shouldUseDarkColors),
       );
     }
   }

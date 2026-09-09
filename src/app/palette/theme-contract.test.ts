@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { EXTENSION_WINDOW_BACKGROUND } from '../electron/extension-window-manager';
 
 const paletteDirectory = path.dirname(fileURLToPath(import.meta.url));
 const stylesDirectory = path.join(paletteDirectory, 'styles');
@@ -157,5 +158,24 @@ test('palette style entry imports modules in cascade order', () => {
       '@import "./styles/motion.css";',
       '',
     ].join('\n'),
+  );
+});
+
+test('native extension-window backgrounds match renderer canvases', () => {
+  const darkTheme = themeCss.match(DARK_THEME_PATTERN)?.[1];
+  assert.ok(darkTheme);
+  const darkThemeStart = themeCss.indexOf(
+    '@media (prefers-color-scheme: dark)',
+  );
+  const lightTokens = hexThemeTokens(themeCss.slice(0, darkThemeStart));
+  const darkTokens = hexThemeTokens(darkTheme);
+
+  assert.equal(
+    lightTokens['--surface-canvas'],
+    EXTENSION_WINDOW_BACKGROUND.light,
+  );
+  assert.equal(
+    darkTokens['--surface-canvas'],
+    EXTENSION_WINDOW_BACKGROUND.dark,
   );
 });
