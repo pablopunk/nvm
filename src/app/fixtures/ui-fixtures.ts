@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { showExtensionFeedback } from '../extensions/feedback.ts';
 import type {
   ExtensionAction,
   ExtensionContext,
@@ -10,7 +11,6 @@ import type {
   ExtensionOcrResult,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { showExtensionFeedback } from '../extensions/feedback.ts';
 
 const WATCH_FIXTURE_ROOT = path.join(
   os.tmpdir(),
@@ -363,7 +363,9 @@ function renderingPolishView(ctx: ExtensionContext) {
           { text: 'AI', tone: 'accent', tooltip: 'Generated-friendly host UI' },
         ],
         image: {
-          src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="16" fill="%23202232"/%3E%3Cpath d="M18 40L29 18l6 16 11-10-10 24-7-16z" fill="%23ffd84d"/%3E%3C/svg%3E',
+          light:
+            'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="16" fill="%23f5f1e8"/%3E%3Cpath d="M18 40L29 18l6 16 11-10-10 24-7-16z" fill="%23906f00"/%3E%3C/svg%3E',
+          dark: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="16" fill="%23202232"/%3E%3Cpath d="M18 40L29 18l6 16 11-10-10 24-7-16z" fill="%23ffd84d"/%3E%3C/svg%3E',
           shape: 'rounded',
           alt: 'Nevermind fixture mark',
         },

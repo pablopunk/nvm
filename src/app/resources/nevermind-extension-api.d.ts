@@ -459,9 +459,13 @@ export type ExtensionItemAccessory = {
 export type ExtensionImage =
   | string
   | {
+      /** Default image used when a theme-specific image is not available. */
       src?: string;
+      /** Image used while the operating system uses a light appearance. */
       light?: string;
+      /** Image used while the operating system uses a dark appearance. */
       dark?: string;
+      /** Final fallback when no default or theme-specific image is available. */
       fallback?: string;
       alt?: string;
       fit?: 'cover' | 'contain';

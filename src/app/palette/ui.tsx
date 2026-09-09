@@ -8,6 +8,11 @@ import { formKeyboardActionForEvent } from './form-keyboard';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
 import { MorphingIndicatorText, StreamingChatText } from './morphing-text';
+import {
+  type SystemTheme,
+  themedImageSource,
+  useSystemTheme,
+} from './system-theme';
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
 export const EMPTY_ROOT_SUBTITLE =
@@ -251,12 +256,12 @@ export function KeyHints({
 
 const MAX_VISIBLE_ACCESSORIES = 3;
 
-function imageProps(image?: CommandImage) {
+function imageProps(image: CommandImage | undefined, theme: SystemTheme) {
   if (!image) return null;
   if (typeof image === 'string')
     return { src: image, alt: '', fit: undefined, shape: undefined };
   return {
-    src: image.dark || image.src || image.light || image.fallback || '',
+    src: themedImageSource(image, theme),
     alt: image.alt || '',
     fit: image.fit,
     shape: image.shape || image.mask,
@@ -359,7 +364,8 @@ export function CommandTile({
   onDragStart,
   onSelect,
 }: CommandTileProps) {
-  const media = imageProps(image);
+  const theme = useSystemTheme();
+  const media = imageProps(image, theme);
   const visual = glyph ? (
     <span className="tileIcon tileGlyph" aria-hidden="true">
       {glyph}
@@ -497,7 +503,8 @@ export function PreviewView({
   poster,
   actions,
 }: PreviewViewProps) {
-  const media = imageProps(image);
+  const theme = useSystemTheme();
+  const media = imageProps(image, theme);
   return (
     <div className="extensionView previewView">
       {video ? (

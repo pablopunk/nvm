@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import React, { type ComponentType } from 'react';
 import type { CommandAction, CommandItem } from './model';
+import { themedImageSource, useSystemTheme } from './system-theme';
 
 type LucideComponent = ComponentType<{ size?: number; className?: string }>;
 type CommandIconName = string;
@@ -114,25 +115,19 @@ function iconForAction(action: CommandAction) {
   return <Globe size={18} />;
 }
 
-function imageSource(image: CommandItem['image']) {
-  if (!image) {
-    return '';
-  }
-  if (typeof image === 'string') {
-    return image;
-  }
-  return image.dark || image.src || image.light || image.fallback || '';
-}
-
-function iconForItem(
-  item: CommandItem,
-  fallback: CommandIconName = 'sparkles',
-) {
+function CommandItemIcon({
+  item,
+  fallback = 'sparkles',
+}: {
+  item: CommandItem;
+  fallback?: CommandIconName;
+}) {
+  const theme = useSystemTheme();
   const Icon = lucideIcon(
     item.icon,
     fallback as keyof typeof curatedIconAliases,
   );
-  const image = imageSource(item.image);
+  const image = themedImageSource(item.image, theme);
   return image ? (
     <span className="thumbnailIcon">
       <img src={image} alt="" />
@@ -140,6 +135,13 @@ function iconForItem(
   ) : (
     <Icon size={18} />
   );
+}
+
+function iconForItem(
+  item: CommandItem,
+  fallback: CommandIconName = 'sparkles',
+) {
+  return <CommandItemIcon item={item} fallback={fallback} />;
 }
 
 export type { CommandIconName };

@@ -16,6 +16,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { canSendAiChatMessage } from '../shared/ai-chat-images';
+import type { AiChatModel } from '../shared/ai-chat-model';
 import { iconForItem } from './command-icons';
 import { RootCommandList } from './command-list';
 import { titleFromFirstContentLine } from './editor-title';
@@ -25,6 +27,7 @@ import {
   type CommandItem,
   type CommandView,
 } from './model';
+import { themedImageSource, useSystemTheme } from './system-theme';
 import {
   ChatView,
   CommandRow,
@@ -39,10 +42,7 @@ import {
   PreviewView,
   ProgressView,
 } from './ui';
-import type { AiLimitState } from './use-ai-chat';
-import type { AiChatAttachment } from './use-ai-chat';
-import { canSendAiChatMessage } from '../shared/ai-chat-images';
-import type { AiChatModel } from '../shared/ai-chat-model';
+import type { AiChatAttachment, AiLimitState } from './use-ai-chat';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
@@ -184,12 +184,6 @@ class ExtensionRenderBoundary extends React.Component<
   }
 }
 
-function imageSource(image: CommandItem['image']) {
-  if (!image) return '';
-  if (typeof image === 'string') return image;
-  return image.dark || image.src || image.light || image.fallback || '';
-}
-
 function MetadataRows({
   items = [],
 }: {
@@ -248,6 +242,7 @@ function ExtensionItemDetail({
   actionPanelRows: ExtensionViewRendererProps['actionPanelRows'];
   mediaPreview?: boolean;
 }) {
+  const theme = useSystemTheme();
   const detail = item?.detail;
   if (!(item && detail)) return null;
   const actions = detail.actions?.length
@@ -260,7 +255,7 @@ function ExtensionItemDetail({
         ),
       )
     : null;
-  const image = imageSource(detail.image || item.image);
+  const image = themedImageSource(detail.image || item.image, theme);
   const video = mediaPreview ? detail.video : undefined;
   const textOnlyPreview =
     mediaPreview && detail.text !== undefined && !image && !video;
