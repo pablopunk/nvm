@@ -3,7 +3,7 @@ import { TextMorph } from 'torph/react';
 
 const MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const STREAMING_CHAT_MORPH_INTERVAL_MS = 100;
-const STREAMING_CHAT_MORPH_MAX_CHARACTERS = 2_000;
+const STREAMING_CHAT_MORPH_MAX_CHARACTERS = 2000;
 
 export function MorphingIndicatorText({ value }: { value: string }) {
   return (
@@ -19,8 +19,45 @@ export function MorphingIndicatorText({ value }: { value: string }) {
 }
 
 export function MorphingActivityText({ value }: { value: string }) {
+  const activityTextRef = React.useRef<HTMLSpanElement>(null);
+
+  React.useEffect(() => {
+    const activityText = activityTextRef.current;
+    if (!activityText) {
+      return;
+    }
+    let animationFrame: number | null = null;
+
+    function restartLetterAnimation() {
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+      }
+      const letters =
+        activityText.querySelectorAll<HTMLElement>('[torph-item]');
+      for (const letter of letters) {
+        letter.classList.remove('chatActivityLetter');
+      }
+      animationFrame = requestAnimationFrame(() => {
+        letters.forEach((letter, index) => {
+          letter.style.setProperty('--activity-letter-index', String(index));
+          letter.classList.add('chatActivityLetter');
+        });
+      });
+    }
+
+    restartLetterAnimation();
+    const observer = new MutationObserver(restartLetterAnimation);
+    observer.observe(activityText, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [value]);
+
   return (
-    <span className="chatActivityGlow">
+    <span ref={activityTextRef} className="chatActivityGlow">
       <TextMorph
         className="chatActivityText"
         duration={220}
@@ -43,7 +80,9 @@ export function StreamingChatText({ value }: { value: string }) {
 
   React.useEffect(() => {
     pendingValueRef.current = value;
-    if (flushTimerRef.current) return;
+    if (flushTimerRef.current) {
+      return;
+    }
     flushTimerRef.current = setTimeout(() => {
       flushTimerRef.current = null;
       setVisibleValue(pendingValueRef.current);
@@ -52,7 +91,9 @@ export function StreamingChatText({ value }: { value: string }) {
 
   React.useEffect(
     () => () => {
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+      }
     },
     [],
   );

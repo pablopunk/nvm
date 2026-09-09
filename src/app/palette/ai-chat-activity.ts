@@ -1,4 +1,4 @@
-const MINIMUM_TOOL_ACTIVITY_MS = 1_200;
+const MINIMUM_TOOL_ACTIVITY_MS = 1800;
 
 interface AiChatActivityState {
   label: string | null;

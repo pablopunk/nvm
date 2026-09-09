@@ -26,13 +26,14 @@ const LIGHT_COLOR_SCHEME_PATTERN = /color-scheme: light;/;
 const DARK_COLOR_SCHEME_PATTERN = /color-scheme: dark;/;
 const RAW_COLOR_PATTERN = /#[\da-f]{3,8}\b|rgba?\(/i;
 const HEX_TOKEN_PATTERN = /(--[\w-]+):\s*(#[\da-f]{6})\s*;/gi;
-const CHAT_ACTIVITY_RULE_PATTERN = /\.chatActivityGlow \{([\s\S]*?)\n\}/;
+const CHAT_ACTIVITY_RULE_PATTERN = /\.chatActivityText \{([\s\S]*?)\n\}/;
+const INHERITED_ACTIVITY_COLOR_PATTERN = /color: inherit;/;
 const VISIBLE_ACTIVITY_COLOR_PATTERN = /color: var\(--accent\);/;
 const TRANSPARENT_ACTIVITY_TEXT_PATTERN = /color: transparent|text-fill-color/;
 const ACTIVE_GOLD_ANIMATION_PATTERN =
-  /animation: activityTextGold 700ms ease-in-out infinite;/;
-const ACTIVE_GOLD_OPACITY_PATTERN =
-  /@keyframes activityTextGold \{[\s\S]*?opacity: 0\.65;[\s\S]*?opacity: 1;/;
+  /\.chatActivityText \[torph-item\]\.chatActivityLetter \{[\s\S]*?animation: activityLetterGold 1\.1s ease-in-out infinite;[\s\S]*?animation-delay: calc\(var\(--activity-letter-index, 0\) \* 45ms - 1\.1s\);/;
+const ACTIVE_GOLD_COLOR_PATTERN =
+  /@keyframes activityLetterGold \{[\s\S]*?color: var\(--accent\);[\s\S]*?color: var\(--tool-active-highlight\);/;
 
 const requiredThemeTokens = [
   '--surface-canvas',
@@ -119,10 +120,11 @@ test('palette style modules use theme tokens instead of raw colors', () => {
 test('Torph activity text inherits a visible animated color', () => {
   const activityRule = viewsCss.match(CHAT_ACTIVITY_RULE_PATTERN)?.[1];
   assert.ok(activityRule);
-  assert.match(activityRule, VISIBLE_ACTIVITY_COLOR_PATTERN);
-  assert.match(activityRule, ACTIVE_GOLD_ANIMATION_PATTERN);
+  assert.match(activityRule, INHERITED_ACTIVITY_COLOR_PATTERN);
   assert.doesNotMatch(activityRule, TRANSPARENT_ACTIVITY_TEXT_PATTERN);
-  assert.match(viewsCss, ACTIVE_GOLD_OPACITY_PATTERN);
+  assert.match(viewsCss, VISIBLE_ACTIVITY_COLOR_PATTERN);
+  assert.match(viewsCss, ACTIVE_GOLD_ANIMATION_PATTERN);
+  assert.match(viewsCss, ACTIVE_GOLD_COLOR_PATTERN);
 });
 
 test('semantic text colors meet WCAG AA on panel materials', () => {
