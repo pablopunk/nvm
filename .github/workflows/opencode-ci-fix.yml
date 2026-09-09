@@ -1,0 +1,82 @@
+name: OpenCode CI fix
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: opencode-ci-fix-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix:
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout failed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+
+      - name: Collect failed CI logs
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run view "$RUN_ID" --log-failed > /tmp/opencode-ci-failure.log || true
+
+      - name: Install OpenCode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Create repair branch
+        run: git switch -c "opencode/ci-fix-${{ github.event.workflow_run.id }}"
+
+      - name: Ask OpenCode to fix CI
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          opencode run \
+            --auto \
+            --model opencode-go/gpt-5.6-luna \
+            -f /tmp/opencode-ci-failure.log \
+            "Fix the CI failure described in /tmp/opencode-ci-failure.log.
+
+            Inspect the repository and reproduce the failure where possible.
+            Make the smallest correct code change.
+            Follow the repository instructions and run the relevant checks with mise exec -- pnpm.
+            Do not commit or push; leave the changes in the working tree."
+
+      - name: Commit and open pull request
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          BRANCH: opencode/ci-fix-${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "OpenCode made no changes"
+            exit 0
+          fi
+
+          git config user.name "OpenCode"
+          git config user.email "opencode@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: repair CI failure"
+          git push --set-upstream origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "fix: repair CI failure" \
+            --body "OpenCode attempted to fix failed CI run $RUN_URL."
