@@ -1,5 +1,5 @@
 import { Search, Sparkles } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import {
   actionsFromPanel,
   type CommandAction,
@@ -20,6 +20,8 @@ export type RootCommandListProps = {
   emptySubtitle?: string;
   isLoading?: boolean;
   extraForItem?: (item: CommandItem) => string[];
+  dragPathForItem?: (item: CommandItem) => string | null | undefined;
+  startItemDrag?: (event: DragEvent, item: CommandItem) => void;
 };
 
 function isGlobalShortcut(action?: CommandAction) {
@@ -45,6 +47,8 @@ export function RootCommandList({
   emptySubtitle = EMPTY_ROOT_SUBTITLE,
   isLoading = false,
   extraForItem,
+  dragPathForItem,
+  startItemDrag,
 }: RootCommandListProps) {
   if (items.length === 0 && isLoading) return null;
   if (items.length === 0)
@@ -62,6 +66,7 @@ export function RootCommandList({
           item.primaryAction ||
           actionsFromPanel(item.actionPanel, item.actions || [])[0];
         const { shortcut, selectedOnly } = itemShortcut(item, primaryAction);
+        const dragPath = dragPathForItem?.(item);
         return (
           <CommandRow
             key={item.id}
@@ -75,6 +80,12 @@ export function RootCommandList({
             appearance={item.appearance}
             extras={extraForItem?.(item)}
             selectedOnlyShortcut={selectedOnly}
+            draggable={Boolean(dragPath && startItemDrag)}
+            onDragStart={
+              dragPath && startItemDrag
+                ? (event) => startItemDrag(event, item)
+                : undefined
+            }
             onSelect={() => onSelect(item)}
           />
         );

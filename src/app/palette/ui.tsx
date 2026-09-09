@@ -43,6 +43,8 @@ export interface CommandRowProps {
   appearance?: ItemAppearance;
   selectedOnlyShortcut?: boolean;
   disabled?: boolean;
+  draggable?: boolean;
+  onDragStart?: (event: React.DragEvent) => void;
   onSelect: () => void;
 }
 export interface CommandTileProps {
@@ -273,6 +275,8 @@ export function CommandRow({
   appearance,
   selectedOnlyShortcut = false,
   disabled,
+  draggable,
+  onDragStart,
   onSelect,
 }: CommandRowProps) {
   const keyHints = selectedOnlyShortcut ? (
@@ -303,6 +307,8 @@ export function CommandRow({
       disabled={disabled}
       data-disabled={disabled ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
+      draggable={draggable}
+      onDragStart={onDragStart}
       onSelect={() => {
         if (!disabled) onSelect();
       }}

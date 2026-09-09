@@ -1006,7 +1006,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   function dragPathForItem(item: ExtensionViewItem) {
-    return item.path || item.filePath || null;
+    if (item.path || item.filePath) return item.path || item.filePath;
+    const actions = [
+      item.primaryAction,
+      ...actionsFromPanel(item.actionPanel, item.actions || []),
+    ].filter(Boolean) as ExtensionViewAction[];
+    return actions.find((action) => action.path)?.path || null;
   }
 
   function startItemDrag(event: React.DragEvent, item: ExtensionViewItem) {
@@ -4376,6 +4381,7 @@ export function App() {
         iconUrls[appPathForIcon(action) || ''] ||
         undefined,
       appearance: action.appearance,
+      filePath: diskPathForAction(action) || undefined,
       className: runningAppClassName(action),
       primaryAction: {
         type: 'nativeAction',
@@ -4434,6 +4440,8 @@ export function App() {
         items={items}
         iconForItem={iconForCommandItem}
         onSelect={runCommandItem}
+        dragPathForItem={dragPathForItem}
+        startItemDrag={startItemDrag}
       />
     );
   }

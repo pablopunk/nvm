@@ -750,6 +750,8 @@ function ListExtensionView({
   renderMarkdown,
   renderActionPanel,
   actionPanelRows,
+  dragPathForItem,
+  startItemDrag,
   runDefaultAction,
   runAction,
   selectedItemId,
@@ -764,6 +766,8 @@ function ListExtensionView({
         isLoading={view.isLoading}
         emptyTitle={view.emptyView?.title || EMPTY_ITEMS_TITLE}
         emptySubtitle={view.emptyView?.subtitle}
+        dragPathForItem={dragPathForItem}
+        startItemDrag={startItemDrag}
       />
     );
   const selected = items.find((item) => item.id === selectedItemId) || items[0];
@@ -789,6 +793,8 @@ function ListExtensionView({
             selectedOnlyShortcut={shortcut.selectedOnly}
             appearance={item.appearance}
             disabled={item.disabled}
+            draggable={Boolean(dragPathForItem(item))}
+            onDragStart={(event) => startItemDrag(event, item)}
             onSelect={() => runDefaultAction(item)}
           />
         );

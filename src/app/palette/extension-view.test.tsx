@@ -56,7 +56,7 @@ function renderExtensionView(
     runAction: () => {},
     sendAiPrompt: () => {},
     abortAiChat: () => {},
-    dragPathForItem: () => null,
+    dragPathForItem: (item) => item.path || item.filePath || null,
     startItemDrag: () => {},
   };
   return renderToStaticMarkup(
@@ -394,6 +394,30 @@ test('bounds rendered grid items without removing them from the searchable view'
 
   assert.match(html, />One<\/strong>/);
   assert.doesNotMatch(html, />Two<\/strong>/);
+});
+
+test('makes file-backed list and root results draggable', () => {
+  const list = renderExtensionView({
+    type: 'list',
+    title: 'Files',
+    items: [{ id: 'folder', title: 'Folder', path: '/Users/tester/Folder' }],
+  });
+  const root = renderExtensionView({
+    type: 'list',
+    presentation: 'root',
+    title: 'Applications',
+    items: [
+      {
+        id: 'app:manet',
+        title: 'Manet',
+        subtitle: 'Launch application',
+        filePath: '/Applications/Manet.app',
+      },
+    ],
+  });
+
+  assert.match(list, /draggable="true"/);
+  assert.match(root, /draggable="true"/);
 });
 
 test('renders markdown headings with host typography hooks', () => {
