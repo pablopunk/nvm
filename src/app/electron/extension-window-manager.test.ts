@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createExtensionWindowManager,
+  EXTENSION_WINDOW_BACKGROUND,
   EXTENSION_WINDOW_OPTION_DEFAULTS,
+  extensionWindowBackgroundColor,
   extensionWindowId,
   extensionWindowSize,
   normalizeExtensionWindowOptions,
@@ -30,6 +32,7 @@ class FakeBrowserWindow {
   hideCount = 0;
   focusCount = 0;
   ignoredMouseEvents: boolean[] = [];
+  backgroundColors: string[] = [];
   webContents = {
     send: (channel: string, payload: unknown) =>
       this.sent.push({ channel, payload }),
@@ -69,6 +72,9 @@ class FakeBrowserWindow {
   }
   setTitle(title: string) {
     this.title = title;
+  }
+  setBackgroundColor(color: string) {
+    this.backgroundColors.push(color);
   }
   once(event: string, listener: (...args: any[]) => void) {
     this.handlers.set(`once:${event}`, listener);
@@ -119,6 +125,7 @@ function createManager(
     schedule(callback: () => void, delayMs: number): unknown;
     cancel(timer: unknown): void;
   },
+  shouldUseDarkColors: () => boolean = () => true,
 ) {
   FakeBrowserWindow.instances = [];
   const trustedChecks: Array<{ id: string; url: string }> = [];
@@ -142,7 +149,7 @@ function createManager(
     rendererIndexPath: '/index.html',
     rendererUrl: 'http://localhost:5173/',
     isDev: true,
-    shouldUseDarkColors: () => true,
+    shouldUseDarkColors,
     getCursorScreenPoint: () => ({ x: 0, y: 0 }),
     getDisplayNearestPoint: () => ({
       workArea: { x: 10, y: 20, width: 1000, height: 800 },
@@ -234,6 +241,35 @@ test('extension window helpers clamp size and derive stable ids', () => {
     extensionWindowId({ id: 'view-id' }, { id: 'option-id' }, () => 'abc'),
     'option-id',
   );
+});
+
+test('extension window backgrounds follow the active system theme', () => {
+  let dark = false;
+  const { manager } = createManager([], undefined, undefined, () => dark);
+  manager.createOrUpdate({ id: 'panel', type: 'list', items: [] });
+  manager.createOrUpdate(
+    { id: 'indicator', type: 'progress' },
+    { chrome: 'none' },
+  );
+  const [panel, indicator] = FakeBrowserWindow.instances;
+
+  assert.equal(
+    panel.options.backgroundColor,
+    EXTENSION_WINDOW_BACKGROUND.light,
+  );
+  assert.equal(
+    indicator.options.backgroundColor,
+    EXTENSION_WINDOW_BACKGROUND.transparent,
+  );
+
+  dark = true;
+  manager.updateTheme();
+
+  assert.deepEqual(panel.backgroundColors, [EXTENSION_WINDOW_BACKGROUND.dark]);
+  assert.deepEqual(indicator.backgroundColors, [
+    EXTENSION_WINDOW_BACKGROUND.transparent,
+  ]);
+  assert.equal(extensionWindowBackgroundColor(false, false), '#ece9e2');
 });
 
 test('broadcast sends clone-safe host events to each live extension window', () => {
@@ -389,7 +425,7 @@ test('creates extension windows with hardened renderer preferences and state', (
     nodeIntegration: false,
     sandbox: true,
   });
-  assert.equal(win.options.backgroundColor, '#111111');
+  assert.equal(win.options.backgroundColor, EXTENSION_WINDOW_BACKGROUND.dark);
   assert.deepEqual(manager.getState('panel'), {
     id: 'panel',
     view: { title: 'Panel', normalized: true },

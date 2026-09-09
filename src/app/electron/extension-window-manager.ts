@@ -23,6 +23,7 @@ type ExtensionWindowLike = {
     options?: { visibleOnFullScreen?: boolean },
   ): void;
   setTitle(title: string): void;
+  setBackgroundColor(color: string): void;
   once(event: string, listener: (...args: any[]) => void): void;
   on(event: string, listener: (...args: any[]) => void): void;
   isDestroyed(): boolean;
@@ -184,6 +185,21 @@ const INDICATOR_WINDOW_MAX_WIDTH = 420;
 const INDICATOR_HORIZONTAL_CHROME = 56;
 const INDICATOR_APPROXIMATE_CHARACTER_WIDTH = 8;
 const INDICATOR_SHADOW_HORIZONTAL_GUTTER = 80;
+export const EXTENSION_WINDOW_BACKGROUND = Object.freeze({
+  dark: '#151617',
+  light: '#ece9e2',
+  transparent: '#00000000',
+});
+
+export function extensionWindowBackgroundColor(
+  frameless: boolean,
+  shouldUseDarkColors: boolean,
+) {
+  if (frameless) return EXTENSION_WINDOW_BACKGROUND.transparent;
+  return shouldUseDarkColors
+    ? EXTENSION_WINDOW_BACKGROUND.dark
+    : EXTENSION_WINDOW_BACKGROUND.light;
+}
 
 function invalidWindowInput(message: string): never {
   throw new Error(`Invalid extension window input: ${message}`);
@@ -665,11 +681,10 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       title: String(
         (safeOptions as any).title || normalizedView.title || 'Nevermind',
       ),
-      backgroundColor: frameless
-        ? '#00000000'
-        : deps.shouldUseDarkColors()
-          ? '#111111'
-          : '#f7f7f7',
+      backgroundColor: extensionWindowBackgroundColor(
+        frameless,
+        deps.shouldUseDarkColors(),
+      ),
       webPreferences: {
         preload: deps.preloadPath,
         contextIsolation: true,
@@ -978,6 +993,19 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     }
   }
 
+  function updateTheme() {
+    const shouldUseDarkColors = deps.shouldUseDarkColors();
+    for (const record of records.values()) {
+      if (record.win.isDestroyed()) continue;
+      record.win.setBackgroundColor(
+        extensionWindowBackgroundColor(
+          record.options?.chrome === 'none',
+          shouldUseDarkColors,
+        ),
+      );
+    }
+  }
+
   return {
     records,
     createOrUpdate,
@@ -989,6 +1017,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     updateIndicator,
     hideIndicator,
     broadcast,
+    updateTheme,
     closeAll,
     persistentWindowRecords,
     forgetPersistentWindow,

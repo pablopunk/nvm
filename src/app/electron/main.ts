@@ -337,6 +337,7 @@ const updateManager: any = isNvmTestMode
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
+nativeTheme.themeSource = 'system';
 const paletteWindow = createPaletteWindowController({
   isDev: Boolean(rendererUrl),
   preloadPath,
@@ -390,6 +391,7 @@ const extensionWindowManager = createExtensionWindowManager({
     loggerDebug(message, data, { source: 'host', scope: 'extensions' }),
   performanceTrace: performanceTraces,
 });
+nativeTheme.on('updated', () => extensionWindowManager.updateTheme());
 const appIconCache = createAppIconCache({
   hasAppIcons: () => hasCapability('app-icons'),
   hashValue,
@@ -10868,7 +10870,6 @@ app.whenReady().then(async () => {
     paletteWindow.showPaletteWhenReady();
     return;
   }
-  nativeTheme.themeSource = 'dark';
   prepareAppWindowPolicy();
   registerLocalFileProtocol();
   installPermissionHandlers(isDev, rendererUrl, rendererIndexPath);
