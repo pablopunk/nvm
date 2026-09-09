@@ -129,9 +129,11 @@ test('morphs plain streamed AI text before restoring markdown', () => {
   assert.match(nextTurnThinking, /markdownHeading markdownHeading1/);
   assert.doesNotMatch(nextTurnThinking, /chatStreamingText/);
   assert.match(streaming, /class="chatStreamingText"># Streaming answer/);
-  assert.doesNotMatch(streaming, /Thinking|Writing|markdownHeading/);
+  assert.match(streaming, /data-status="inactive"/);
+  assert.doesNotMatch(streaming, /Writing|markdownHeading/);
   assert.match(complete, /markdownHeading markdownHeading1/);
-  assert.doesNotMatch(complete, /chatStreamingText|Thinking|Writing/);
+  assert.match(complete, /data-status="inactive"/);
+  assert.doesNotMatch(complete, /chatStreamingText|Writing/);
 });
 
 test('renders one transient morphing activity label', () => {
@@ -156,7 +158,8 @@ test('renders one transient morphing activity label', () => {
   assert.ok(active.includes('chatActivityText'));
   assert.ok(active.includes('Searching the web'));
   assert.equal(active.includes('…'), false);
-  assert.equal(complete.includes('chatActivity'), false);
+  assert.ok(complete.includes('chatActivity'));
+  assert.ok(complete.includes('data-status="inactive"'));
 });
 
 test('renders the model picker only for selectable AI conversations', () => {

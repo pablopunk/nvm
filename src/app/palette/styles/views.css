@@ -676,6 +676,12 @@
   letter-spacing: 0.01em;
 }
 
+.chatBubble.chatActivity[data-status="inactive"] {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .chatActivityGlow {
   position: relative;
   display: inline-block;

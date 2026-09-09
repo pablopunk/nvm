@@ -1146,10 +1146,13 @@ export function ChatView({
 }: ChatViewProps) {
   const statusRef = useRef<HTMLDivElement>(null);
   const latestMessage = messages[messages.length - 1];
+  const activityIsVisible = Boolean(activity || isBusy);
 
   useLayoutEffect(() => {
-    statusRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [activity, isBusy, latestMessage?.content]);
+    if (activityIsVisible) {
+      statusRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activityIsVisible, activity, latestMessage?.content]);
 
   return (
     <div className="extensionView chatView">
@@ -1175,17 +1178,15 @@ export function ChatView({
             )}
           </div>
         ))}
-        {activity || isBusy ? (
-          <div
-            ref={statusRef}
-            key="chat-busy-status"
-            className="chatBubble system chatActivity"
-            data-status="active"
-            role="status"
-          >
-            <MorphingActivityText value={activity || 'Thinking'} />
-          </div>
-        ) : null}
+        <div
+          ref={statusRef}
+          className="chatBubble system chatActivity"
+          data-status={activityIsVisible ? 'active' : 'inactive'}
+          role="status"
+          aria-hidden={!activityIsVisible}
+        >
+          <MorphingActivityText value={activity || 'Thinking'} />
+        </div>
       </div>
       {input}
     </div>
