@@ -53,8 +53,6 @@
   border-radius: var(--radius-xl);
   background: var(--material-panel);
   box-shadow: var(--shadow-panel);
-  backdrop-filter: var(--material-backdrop);
-  -webkit-backdrop-filter: var(--material-backdrop);
   -webkit-app-region: drag;
 }
 

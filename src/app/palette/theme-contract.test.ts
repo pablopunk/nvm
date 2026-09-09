@@ -34,7 +34,6 @@ const requiredThemeTokens = [
   '--material-panel',
   '--material-raised',
   '--material-overlay',
-  '--material-backdrop',
   '--edge-subtle',
   '--edge-strong',
   '--edge-highlight',
