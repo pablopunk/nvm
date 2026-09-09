@@ -35,8 +35,16 @@ export function MorphingIndicatorText({ value }: { value: string }) {
 export function MorphingActivityText({ value }: { value: string }) {
   return (
     <span className="chatActivityGlow">
-      <span className="chatActivityText">{value}</span>
-      <span className="chatActivityLetters" aria-hidden="true">
+      <TextMorph
+        className="chatActivityText"
+        duration={320}
+        ease={MORPH_EASING}
+        scale={false}
+        numbers={false}
+      >
+        {value}
+      </TextMorph>
+      <span key={value} className="chatActivityLetters" aria-hidden="true">
         {activityLetterEntries(value).map(({ grapheme, id }, index) => (
           <span
             key={id}

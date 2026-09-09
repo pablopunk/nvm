@@ -697,7 +697,7 @@
 .chatActivityLetters > span {
   color: transparent;
   animation: activityLetterGold 1.1s ease-in-out infinite;
-  animation-delay: calc(var(--activity-letter-index, 0) * 45ms - 1.1s);
+  animation-delay: calc(320ms + var(--activity-letter-index, 0) * 45ms);
 }
 
 @keyframes activityLetterGold {
