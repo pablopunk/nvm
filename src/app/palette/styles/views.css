@@ -678,35 +678,24 @@
 
 .chatActivityText {
   display: inline-block;
-  color: transparent;
-  background-image: linear-gradient(
-    100deg,
-    var(--accent) 15%,
-    var(--tool-active-highlight) 45%,
-    var(--accent) 75%
-  );
-  background-position: 100% 50%;
-  background-size: 220% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: activityTextShimmer 1.8s ease-in-out infinite;
+  color: var(--accent);
+  animation: activityTextGold 1.8s ease-in-out infinite;
 }
 
-@keyframes activityTextShimmer {
-  from {
-    background-position: 100% 50%;
+@keyframes activityTextGold {
+  0%,
+  100% {
+    color: var(--accent);
   }
-  to {
-    background-position: -100% 50%;
+  50% {
+    color: var(--tool-active-highlight);
   }
 }
 
 @media (forced-colors: active) {
   .chatActivityText {
     color: Highlight;
-    background: none;
-    -webkit-text-fill-color: currentColor;
+    animation: none;
   }
 }
 
