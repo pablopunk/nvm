@@ -9,18 +9,23 @@ import {
   canSendAiChatMessage,
 } from '../shared/ai-chat-images';
 import {
+  type AiChatModel,
   DEFAULT_AI_CHAT_MODEL,
   isAiChatModel,
-  type AiChatModel,
 } from '../shared/ai-chat-model';
+import {
+  type AiChatActivityEvent,
+  EMPTY_AI_CHAT_ACTIVITY,
+  transitionAiChatActivity,
+} from './ai-chat-activity';
 import {
   markDebugPerformance,
   measureDebugPerformance,
   measureDebugPerformanceSync,
   recordPerformanceTrace,
 } from './debug-performance';
-import { createRendererPerformanceTrace } from './performance-trace';
 import type { CommandAction, CommandView } from './model';
+import { createRendererPerformanceTrace } from './performance-trace';
 
 export type AiLimitState = {
   kind?: string;
@@ -150,24 +155,6 @@ export function userMessageFromEvent(event: AiChatEvent) {
   };
 }
 
-const TOOL_ACTIVITY_LABELS: Record<string, string> = {
-  web_search: 'Searching the web',
-  code_search: 'Searching code',
-  fetch_content: 'Reading a page',
-  get_search_content: 'Reading a search result',
-  read: 'Reading a file',
-  grep: 'Searching files',
-  find: 'Finding files',
-  ls: 'Listing files',
-};
-
-export function toolActivityLabel(toolName: string) {
-  const label = TOOL_ACTIVITY_LABELS[toolName];
-  if (label) return label;
-  const readableName = toolName.replaceAll('_', ' ').trim() || 'tool';
-  return `Calling ${readableName}`;
-}
-
 function latestUserMessageIndex(
   messages: NonNullable<CommandView['messages']>,
 ) {
@@ -202,7 +189,8 @@ export function useAiChat(
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const busyByChatIdRef = useRef(new Map<string, boolean>());
-  const [activity, setActivity] = useState<string | null>(null);
+  const [activity, setActivity] = useState(EMPTY_AI_CHAT_ACTIVITY);
+  const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [model, setModelState] = useState<AiChatModel>(DEFAULT_AI_CHAT_MODEL);
   const modelRef = useRef<AiChatModel>(DEFAULT_AI_CHAT_MODEL);
   const [modelChanging, setModelChangingState] = useState(false);
@@ -216,6 +204,12 @@ export function useAiChat(
   const activeTraceStartedAtRef = useRef<number | undefined>(undefined);
   const firstPaintRecordedRef = useRef(false);
   const openChatIdRef = useRef<string | undefined>(undefined);
+
+  function updateActivity(event: AiChatActivityEvent) {
+    setActivity((current) =>
+      transitionAiChatActivity(current, event, performance.now()),
+    );
+  }
 
   function updateBusy(nextBusy: boolean) {
     busyRef.current = nextBusy;
@@ -231,7 +225,9 @@ export function useAiChat(
     busyByChatIdRef.current.set(key, nextBusy);
     if (key === chatStateKey(openChatIdRef.current)) {
       updateBusy(nextBusy);
-      if (!nextBusy) setActivity(null);
+      if (!nextBusy) {
+        updateActivity({ type: 'terminal' });
+      }
     }
   }
 
@@ -560,8 +556,9 @@ export function useAiChat(
     )
       return;
     updateChatBusy(targetChatId, true);
-    if (chatStateKey(targetChatId) === chatStateKey(openChatIdRef.current))
-      setActivity('Thinking');
+    if (chatStateKey(targetChatId) === chatStateKey(openChatIdRef.current)) {
+      updateActivity({ type: 'start' });
+    }
     setLimit(null);
     setCreditNotice(null);
     appendMessage(
@@ -628,13 +625,13 @@ export function useAiChat(
       async () => {
         openChatIdRef.current = view.chatId;
         updateBusy(
-          busyByChatIdRef.current.get(chatStateKey(view.chatId)) || false,
+          Boolean(busyByChatIdRef.current.get(chatStateKey(view.chatId))),
         );
-        setActivity(
-          busyByChatIdRef.current.get(chatStateKey(view.chatId))
-            ? 'Thinking'
-            : null,
-        );
+        updateActivity({
+          type: busyByChatIdRef.current.get(chatStateKey(view.chatId))
+            ? 'start'
+            : 'terminal',
+        });
         pendingDeltaRef.current = '';
         cancelDeltaFlush();
         setMessages(view.messages || []);
@@ -665,16 +662,22 @@ export function useAiChat(
     );
   }
 
-  function handleEvent(event: AiChatEvent, activeChatId?: string) {
+  function handleEvent(event: AiChatEvent) {
+    const activeChatId = openChatIdRef.current;
     const eventChatId = event.chatId || activeChatId;
-    if (event.type === 'start') updateChatBusy(eventChatId, true);
+    if (event.type === 'start') {
+      updateChatBusy(eventChatId, true);
+    }
     if (
       event.type === 'done' ||
       event.type === 'error' ||
       event.type === 'aborted'
-    )
+    ) {
       updateChatBusy(eventChatId, false);
-    if (!aiChatEventMatchesActiveChat(event, activeChatId)) return;
+    }
+    if (!aiChatEventMatchesActiveChat(event, activeChatId)) {
+      return;
+    }
     if (event.type === 'user_message') {
       applyUserMessageEvent(event);
       return;
@@ -691,12 +694,13 @@ export function useAiChat(
       event.traceId &&
       activeTraceIdRef.current &&
       event.traceId !== activeTraceIdRef.current
-    )
+    ) {
       return;
+    }
     if (event.type === 'start') {
       setLimit(null);
       setCreditNotice(null);
-      setActivity('Thinking');
+      updateActivity({ type: 'start' });
     }
     if (event.type === 'done') {
       finishActiveAiTrace('ai.done', 'ok', event.traceId);
@@ -708,24 +712,52 @@ export function useAiChat(
       finishActiveAiTrace('ai.aborted', 'cancelled', event.traceId);
     }
     if (event.type === 'delta' && event.text) {
-      setActivity(null);
+      updateActivity({ type: 'delta' });
       appendDelta(event.text);
     }
-    if (event.type === 'tool_start' && event.name)
-      setActivity(toolActivityLabel(event.name));
-    if (event.type === 'tool_end') setActivity('Thinking');
-    if (event.type === 'credit_warning' && event.message)
+    if (event.type === 'tool_start' && event.name) {
+      updateActivity({ type: 'tool_start', toolName: event.name });
+    }
+    if (event.type === 'tool_end') {
+      updateActivity({ type: 'tool_end', toolName: event.name });
+    }
+    if (event.type === 'credit_warning' && event.message) {
       setCreditNotice(event.message);
+    }
     if (event.type === 'error') {
       const nextLimit = limitStateFromEvent(event);
-      if (nextLimit) setLimit(nextLimit);
-      else if (event.message) appendMessage('system', event.message);
+      if (nextLimit) {
+        setLimit(nextLimit);
+      } else if (event.message) {
+        appendMessage('system', event.message);
+      }
     }
   }
 
   useLayoutEffect(() => {
     resizeInput();
   }, [input]);
+
+  useEffect(() => {
+    if (activityTimerRef.current) {
+      clearTimeout(activityTimerRef.current);
+    }
+    activityTimerRef.current = null;
+    if (activity.activeToolName || activity.toolVisibleUntil == null) {
+      return;
+    }
+    const remaining = activity.toolVisibleUntil - performance.now();
+    activityTimerRef.current = setTimeout(
+      () => updateActivity({ type: 'settle' }),
+      Math.max(0, remaining),
+    );
+    return () => {
+      if (activityTimerRef.current) {
+        clearTimeout(activityTimerRef.current);
+      }
+      activityTimerRef.current = null;
+    };
+  }, [activity]);
 
   useEffect(
     () => () => {
@@ -739,6 +771,9 @@ export function useAiChat(
       activeTraceStartedAtRef.current = undefined;
       firstPaintRecordedRef.current = false;
       busyByChatIdRef.current.clear();
+      if (activityTimerRef.current) {
+        clearTimeout(activityTimerRef.current);
+      }
     },
     [],
   );
@@ -746,7 +781,7 @@ export function useAiChat(
   return {
     messages,
     setMessages: replaceMessages,
-    activity,
+    activity: activity.label,
     input,
     setInput,
     attachments,

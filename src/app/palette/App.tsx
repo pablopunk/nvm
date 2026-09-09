@@ -408,7 +408,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     window.nvm.setAiChatModel,
     window.nvm.resetAiChat,
   );
-  const windowAiChatIdRef = useRef<string | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const compactSearchInputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -486,15 +485,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     setConfirmFor(null);
   }, [viewKey]);
 
-  useEffect(() => {
-    windowAiChatIdRef.current = view?.chatId;
-  }, [view?.chatId]);
-
   useEffect(
-    () =>
-      window.nvm.onAiChatEvent((event) =>
-        aiChat.handleEvent(event, windowAiChatIdRef.current),
-      ),
+    () => window.nvm.onAiChatEvent((event) => aiChat.handleEvent(event)),
     [],
   );
 
@@ -2051,7 +2043,7 @@ export function App() {
           `Nevermind AI: ${event.label || ''}`,
           event.data,
         );
-      aiChat.handleEvent(event, aiChatIdRef.current);
+      aiChat.handleEvent(event);
       if (
         event.type === 'extension_activated' &&
         (!event.chatId || event.chatId === aiChatIdRef.current)

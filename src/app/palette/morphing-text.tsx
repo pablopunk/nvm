@@ -20,15 +20,17 @@ export function MorphingIndicatorText({ value }: { value: string }) {
 
 export function MorphingActivityText({ value }: { value: string }) {
   return (
-    <TextMorph
-      className="chatActivityText"
-      duration={220}
-      ease={MORPH_EASING}
-      scale={false}
-      numbers={false}
-    >
-      {value}
-    </TextMorph>
+    <span className="chatActivityGlow">
+      <TextMorph
+        className="chatActivityText"
+        duration={220}
+        ease={MORPH_EASING}
+        scale={false}
+        numbers={false}
+      >
+        {value}
+      </TextMorph>
+    </span>
   );
 }
 

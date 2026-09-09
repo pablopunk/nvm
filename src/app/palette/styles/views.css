@@ -676,24 +676,31 @@
   letter-spacing: 0.01em;
 }
 
-.chatActivityText {
+.chatActivityGlow {
   display: inline-block;
   color: var(--accent);
-  animation: activityTextGold 1.8s ease-in-out infinite;
+  animation: activityTextGold 700ms ease-in-out infinite;
+}
+
+.chatActivityText {
+  display: inline-block;
+  color: inherit;
 }
 
 @keyframes activityTextGold {
   0%,
   100% {
     color: var(--accent);
+    opacity: 0.65;
   }
   50% {
     color: var(--tool-active-highlight);
+    opacity: 1;
   }
 }
 
 @media (forced-colors: active) {
-  .chatActivityText {
+  .chatActivityGlow {
     color: Highlight;
     animation: none;
   }
