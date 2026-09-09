@@ -1,0 +1,1740 @@
+/* biome-ignore-all lint/style/noDescendingSpecificity lint/complexity/noImportantStyles: Shared view state selectors intentionally override their base primitives. */
+/* Shared host-rendered extension views and controls. */
+.extensionView {
+  padding: 16px;
+}
+
+.aiChatResultsCard {
+  flex: 1 1 0;
+}
+
+.aiChatResultsCard > [cmdk-list-sizer],
+.builderResultsCard > [cmdk-list-sizer] {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+}
+
+.builderWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.builderChatPane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--edge-subtle);
+}
+
+.builderChatPane > .chatView {
+  height: 100%;
+}
+
+.builderPreviewPane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  background: var(--surface-sunken);
+}
+
+.builderPreviewPane[data-focused="true"] {
+  box-shadow: inset 2px 0 var(--accent-emphasis);
+}
+
+.builderPreviewHeader {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--edge-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.builderPreviewSwitcher {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.builderPreviewSwitcher button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  color: var(--text-tertiary);
+  background: transparent;
+  font-size: var(--fs-xs);
+}
+
+.builderPreviewSwitcher button[data-selected="true"] {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+
+.builderPreviewBody {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.builderPreviewBody .extensionView {
+  padding: 12px;
+}
+
+@media (max-width: 700px) {
+  .builderWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .builderChatPane {
+    border-right: 0;
+    border-bottom: 1px solid var(--edge-subtle);
+  }
+}
+
+.extensionSubtitle {
+  margin: 0 0 12px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+
+.extensionGrid {
+  --grid-columns: 4;
+  --tile-aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
+  gap: 12px;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 92px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  scroll-padding: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.extensionTile {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-interactive);
+  outline: none;
+}
+
+.extensionTile[data-background="accent"] {
+  border-color: var(--accent-muted);
+  background: var(--accent-soft);
+}
+
+.extensionTile[data-selected="true"] {
+  border-color: var(--edge-strong);
+  background: var(--surface-selected);
+  outline: 2px solid var(--accent-emphasis);
+  outline-offset: 1px;
+}
+
+.extensionTile[data-background="accent"][data-selected="true"] {
+  background: var(--accent-muted);
+}
+
+.extensionTile[data-selected="true"] img,
+.extensionTile[data-selected="true"] video,
+.extensionTile[data-selected="true"] .tileIcon {
+  box-shadow: none;
+}
+
+.tileMedia {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.tileMedia[data-fit="contain"] img,
+.previewMedia[data-fit="contain"] {
+  object-fit: contain;
+}
+
+.tileMedia[data-shape="circle"] img,
+.previewMedia[data-shape="circle"] {
+  border-radius: var(--radius-pill);
+}
+
+.tileMedia[data-shape="rounded"] img,
+.previewMedia[data-shape="rounded"] {
+  border-radius: var(--radius-md);
+}
+
+.extensionGrid-wide {
+  --grid-columns: 3;
+  --tile-aspect-ratio: 16 / 9;
+}
+
+.extensionGrid-compact {
+  --grid-columns: 5;
+}
+
+.extensionTile img,
+.extensionTile video,
+.tileIcon {
+  width: 100%;
+  aspect-ratio: var(--tile-aspect-ratio);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-interactive);
+}
+
+.tileIcon {
+  display: grid;
+  place-items: center;
+}
+
+.tileGlyph {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", sans-serif;
+  font-size: 32px;
+  line-height: 1;
+  user-select: none;
+}
+
+.extensionTile strong,
+.extensionTile small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extensionTile strong {
+  font-size: var(--fs-xs);
+}
+
+.extensionTile small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-2xs);
+}
+
+.viewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.viewAction {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 4px 8px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  font: inherit;
+  font-size: var(--fs-2xs);
+}
+
+.extensionListItem {
+  margin-bottom: 0;
+}
+
+.resultsCard > .extensionView {
+  padding: 0;
+}
+
+.resultsCard > .extensionView.chatView {
+  padding: 8px 12px 12px;
+  gap: 8px;
+}
+
+.chatView,
+.formView,
+.progressView,
+.editorView {
+  display: grid;
+  gap: 12px;
+}
+
+.formView,
+.progressView,
+.previewView,
+.editorView {
+  max-height: calc(
+    100vh -
+    var(--window-blur-margin) *
+    2 -
+    var(--search-row-height) -
+    var(--palette-stack-gap)
+  );
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.editorViewSplit {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.editorPane,
+.editorPreviewPane {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-inset);
+}
+
+.editorPreviewPane {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.editorToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--edge-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.editorToolbar small {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.editorTextarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font:
+    13px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+
+.editorTextarea:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.editorPreviewPane .previewText {
+  overflow: auto;
+  padding: 12px;
+}
+
+.editorSubmitButton {
+  margin: 10px;
+}
+
+.editorActions {
+  display: grid;
+  gap: 4px;
+  grid-column: 1 / -1;
+}
+
+.chatView {
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+  gap: 12px;
+}
+
+.chatMessages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px 4px 8px;
+  scroll-padding-bottom: 12px;
+}
+
+.chatInputRow {
+  position: relative;
+  display: block;
+  min-height: 0;
+}
+
+.chatInputShell {
+  overflow: hidden;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-interactive);
+}
+
+.chatComposerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 8px 8px;
+}
+
+.chatModelPicker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.chatModelPicker svg {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+}
+
+.chatModelSelect {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: 4px 24px 4px 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-xs);
+  outline: none;
+}
+
+.chatModelSelect:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--surface-interactive);
+}
+
+.chatModelSelect:disabled {
+  opacity: 0.55;
+}
+
+.chatInputRow:focus-within .chatInputShell {
+  border-color: var(--edge-strong);
+  background: var(--surface-raised);
+}
+
+.chatAttachments {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 44px 0 8px;
+}
+
+.chatAttachment {
+  position: relative;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+}
+
+.chatAttachment img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.chatAttachment button {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-pill);
+  padding: 0;
+  color: var(--text-primary);
+  background: var(--surface-selected);
+}
+
+.chatAttachmentError {
+  padding: 4px 44px 0 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-xs);
+}
+
+.nevermindSignInGate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  min-height: 280px;
+}
+
+.nevermindSignInGateInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  max-width: 360px;
+}
+
+.nevermindSignInGateInner h2 {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+
+.nevermindSignInGateInner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
+.nevermindSignInButton {
+  margin-top: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-selected);
+  background: var(--surface-raised);
+  color: inherit;
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+.nevermindSignInButton:hover:not(:disabled) {
+  background: var(--surface-selected);
+  border-color: var(--surface-selected);
+}
+
+.nevermindSignInButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.chatInputRow textarea {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  max-height: 144px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  padding: 10px 12px 2px;
+  color: var(--text-primary);
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  overflow: hidden;
+  resize: none;
+  font: inherit;
+  font-size: var(--fs-md);
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+
+.chatIconButton {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  transform: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 0;
+  font: inherit;
+}
+
+.chatEnterButton {
+  color: var(--text-secondary);
+  background: var(--surface-interactive);
+}
+
+.chatEnterButton:not(:disabled) {
+  color: var(--accent-contrast);
+  background: var(--accent-fill);
+}
+
+.chatEnterButton:disabled {
+  opacity: 0.35;
+}
+
+.chatStopButton {
+  color: var(--danger-text);
+  background: var(--danger-surface);
+}
+
+.chatInputRow textarea:focus {
+  background: transparent;
+}
+
+.chatBubble,
+.progressStep,
+.progressOverview {
+  display: grid;
+  gap: 4px;
+  border-radius: var(--radius-md);
+}
+
+.chatBubble {
+  max-width: min(760px, 92%);
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
+.chatBubble.assistant {
+  align-self: flex-start;
+  max-width: 90%;
+  padding: 4px 0;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.chatStreamingText {
+  max-width: 100%;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
+
+.chatBubble.user {
+  align-self: flex-end;
+  max-width: 78%;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--surface-interactive);
+}
+
+.chatMessageImages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 440px;
+}
+
+.chatMessageImages img {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
+.chatMessageImages img:only-child {
+  grid-column: 1 / -1;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.chatBubble.system {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  font-size: var(--fs-xs);
+}
+
+.chatBubble.system::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-emphasis);
+  content: "";
+}
+
+.chatBanner {
+  flex-shrink: 0;
+}
+
+.creditNoticeBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-interactive);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+
+.progressOverview {
+  padding: 8px 10px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-inset);
+}
+
+.progressStep {
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--edge-subtle);
+  background: transparent;
+}
+
+.progressOverview {
+  gap: 8px;
+}
+
+.progressOverview > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progressOverview small,
+.progressStep small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.progressBar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.progressBar span {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-fill));
+}
+
+.progressStep {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.progressStep > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.progressStep strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressStep small {
+  flex: none;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-pill);
+  padding: 1px 6px;
+  background: var(--surface-interactive);
+  line-height: 1.4;
+}
+
+.progressStepMarker {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.progressStep[data-status="done"] .progressStepMarker {
+  border-color: var(--success-text);
+  background: var(--success-text);
+}
+
+.progressStep[data-status="done"] .progressStepMarker::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--progress-marker-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.progressStep[data-status="active"] .progressStepMarker {
+  border-color: var(--accent-fill);
+  background: transparent;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.progressStep[data-status="active"] .progressStepMarker::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.progressStep[data-status="done"] small {
+  color: var(--success-text);
+  background: var(--surface-interactive);
+}
+
+.progressStep[data-status="active"] small {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+
+.progressStep[data-status="error"] .progressStepMarker {
+  border-color: var(--danger-text);
+  background: var(--danger-text);
+}
+
+.progressStep[data-status="error"] small {
+  color: var(--danger-text);
+  background: var(--danger-surface);
+}
+
+.markdownContent {
+  display: grid;
+  gap: 8px;
+}
+
+.markdownContent p {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.markdownContent ol,
+.markdownContent ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.markdownContent li {
+  margin: 0;
+}
+
+.markdownContent pre {
+  max-width: 100%;
+  margin: 4px 0;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: var(--surface-sunken);
+}
+
+.markdownContent code {
+  border-radius: var(--radius-xs);
+  padding: 2px 4px;
+  color: var(--text-primary);
+  background: var(--surface-interactive);
+  font-family:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.markdownContent pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.markdownContent a {
+  color: var(--link);
+}
+
+.markdownContent table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0;
+  font-size: var(--fs-sm);
+}
+
+.markdownContent th,
+.markdownContent td {
+  border-bottom: 1px solid var(--edge-subtle);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdownContent th {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.markdownHeading {
+  display: block;
+  margin: 0;
+  color: var(--text-strong);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.markdownHeading1 {
+  font-size: var(--fs-2xl);
+}
+
+.markdownHeading2 {
+  font-size: var(--fs-xl);
+}
+
+.markdownHeading3,
+.markdownHeading4,
+.markdownHeading5,
+.markdownHeading6 {
+  font-size: var(--fs-lg);
+}
+
+.markdownBullet {
+  padding-left: 4px;
+}
+
+.formView {
+  min-height: 0;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.formFields {
+  display: grid;
+  gap: 12px;
+  padding: 4px;
+}
+
+.formField,
+.formStaticField {
+  display: grid;
+  gap: 4px;
+}
+
+.formFieldLabel,
+.formCheckbox {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.formView input:not([type="checkbox"]),
+.formView textarea,
+.formView select,
+.formMultiselect {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-inset);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+
+.formView input:not([type="checkbox"]):focus,
+.formView textarea:focus,
+.formView select:focus {
+  border-color: var(--edge-strong);
+  background: var(--surface-sunken);
+}
+
+.previewText {
+  min-width: 0;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.previewText .markdownContent {
+  white-space: normal;
+}
+
+.formView textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.formCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.formCheckbox input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent-fill);
+}
+
+.formMultiselect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.formMultiselect legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.formMultiselect label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-xs);
+  padding: 5px 8px;
+  color: var(--text-secondary);
+  background: var(--surface-interactive);
+  font-size: var(--fs-xs);
+}
+
+.formMultiselect label:has(input:checked) {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+}
+
+.formMultiselect input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent-fill);
+}
+
+.formPickerControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.formPickerControl pre {
+  min-width: 0;
+  max-height: 72px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--surface-sunken);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.formPickerControl button {
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-interactive);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.formPickerControl button:hover {
+  background: var(--surface-selected);
+}
+
+.formPickerControl button:focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 2px;
+}
+
+.formPickerClear {
+  color: var(--text-tertiary) !important;
+  background: var(--surface-sunken) !important;
+}
+
+.formSubmitButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--accent-contrast);
+  background: var(--accent-fill);
+  box-shadow: var(--shadow-interactive);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.formSubmitButton:focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 2px;
+}
+
+.formSubmitButton:hover {
+  background: var(--accent-fill);
+}
+
+.formSubmitButton > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formSubmitButton kbd,
+.formKeyboardHint kbd {
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--fs-2xs);
+}
+
+.formFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.formKeyboardHint {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+}
+
+.formDescription,
+.formField small {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.formFieldError {
+  color: var(--danger-text) !important;
+}
+
+.formSeparator {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--edge-subtle);
+}
+
+.formStaticField-separator {
+  padding-block: 4px;
+}
+
+.resultText {
+  min-width: 0;
+}
+
+.resultText strong,
+.resultText small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultText strong {
+  color: var(--text-strong);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.resultText small {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.accessories,
+.keyHints {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accessories {
+  margin-left: auto;
+  min-width: 0;
+}
+
+.keyHints {
+  flex: none;
+}
+
+.resultTrailing {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.resultTrailing .accessories {
+  margin-left: 0;
+}
+
+.accessory {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 160px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.accessory[data-tone="accent"] {
+  color: var(--accent);
+}
+.accessory[data-tone="success"] {
+  color: var(--item-foreground-green);
+}
+.accessory[data-tone="warning"] {
+  color: var(--item-foreground-orange);
+}
+.accessory[data-tone="danger"] {
+  color: var(--danger-text);
+}
+.accessory[data-tone="muted"] {
+  color: var(--text-muted);
+}
+
+.runningAppResult .resultIcon {
+  position: relative;
+  overflow: visible;
+}
+
+.runningAppResult .resultIcon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 2px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--item-foreground-green);
+  box-shadow: 0 0 0 2px var(--surface-interactive);
+  transform: translateX(-50%);
+}
+
+.accessoryText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accessoryOverflow {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.shortcutHint,
+.enterHint {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcutHint {
+  padding: 2px 8px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-xs);
+  background: var(--surface-interactive);
+  box-shadow: var(--shadow-interactive);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.enterHint {
+  font-size: var(--fs-lg);
+}
+
+.selectedOnlyEnter {
+  opacity: 0;
+}
+
+.result[data-selected="true"] .selectedOnlyEnter,
+.extensionTile[data-selected="true"] .selectedOnlyEnter {
+  opacity: 1;
+}
+
+.loadingBorder::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--loading-border-angle),
+    transparent 0deg,
+    transparent 265deg,
+    var(--loading-accent-faint) 292deg,
+    var(--loading-accent-strong) 320deg,
+    var(--loading-accent-faint) 348deg,
+    transparent 360deg
+  );
+  pointer-events: none;
+  animation: loadingBorderSweep var(--loading-border-duration, 900ms) linear
+    infinite;
+  -webkit-mask:
+    linear-gradient(var(--mask-fill) 0 0) content-box,
+    linear-gradient(var(--mask-fill) 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(var(--mask-fill) 0 0) content-box,
+    linear-gradient(var(--mask-fill) 0 0);
+  mask-composite: exclude;
+}
+
+.extensionWindowShell.loadingBorder::after {
+  inset: 0;
+}
+
+@property --loading-border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes loadingBorderSweep {
+  from {
+    --loading-border-angle: 0deg;
+  }
+  to {
+    --loading-border-angle: 360deg;
+  }
+}
+
+.loadMoreButton {
+  margin: 8px auto 0;
+  padding: 8px 12px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface-interactive);
+  font: inherit;
+}
+
+.loadMoreButton:hover {
+  background: var(--surface-raised);
+}
+
+.itemSection {
+  display: grid;
+  gap: 4px;
+}
+
+.itemSection + .itemSection {
+  margin-top: 8px;
+}
+
+.extensionListWithDetail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.extensionListPane {
+  min-width: 0;
+}
+
+.sidePreviewCard .extensionListWithDetail {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 40%);
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
+.sidePreviewCard .extensionListPane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.extensionDetailPane {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 116px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-inset);
+  -webkit-app-region: no-drag;
+}
+
+.sidePreviewCard .extensionDetailPane {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+
+.extensionDetailPreview {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  place-items: center;
+  overflow: auto;
+}
+
+.sidePreviewTextOnly .extensionDetailPreview {
+  place-items: start;
+}
+
+.extensionDetailMedia {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
+.extensionDetailText {
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.sidePreviewDetailPane .extensionDetailText {
+  width: 100%;
+}
+
+.extensionDetailHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.extensionDetailHeader img {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--surface-interactive);
+}
+
+.extensionDetailHeader strong,
+.extensionDetailHeader small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extensionDetailHeader strong {
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+}
+
+.extensionDetailHeader small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
+.detailMarkdown {
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+
+.extensionMetadata {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.extensionMetadata > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.extensionMetadata dt {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.extensionMetadata dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.extensionMetadata a {
+  color: var(--link);
+  text-decoration: none;
+}
+
+.metadataSeparator {
+  height: 1px;
+  background: var(--edge-subtle);
+}
+
+.metadataTag {
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .extensionListWithDetail {
+    grid-template-columns: 1fr;
+  }
+
+  .sidePreviewCard .extensionListWithDetail {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .sidePreviewCard .extensionListPane {
+    overflow: visible;
+  }
+
+  .sidePreviewCard .extensionDetailPane {
+    height: auto;
+    max-height: calc(100vh - var(--window-blur-margin) * 2 - 116px);
+  }
+}
+
+.actionSectionHeader {
+  padding: 8px 12px 0;
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.actionSectionSubtitle {
+  padding: 0 12px 8px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.empty strong {
+  color: var(--text-secondary);
+}
+
+.siblingPane.inertSibling {
+  flex: 0 0 auto;
+  width: calc(100% - 58px);
+  margin: 0 0 8px 34px;
+  padding: 12px 16px 16px;
+  pointer-events: none;
+  position: relative;
+  overflow: visible;
+}
+
+.siblingPane.interactiveSibling {
+  pointer-events: auto;
+}
+
+.siblingPane.inertSibling .siblingHeader,
+.siblingPane.inertSibling .siblingBody {
+  opacity: 0.82;
+}
+
+.siblingPane.inertSibling::before {
+  content: "";
+  position: absolute;
+  left: -19px;
+  top: -11px;
+  width: 16px;
+  height: 40px;
+  border-left: 2px solid var(--edge-strong);
+  border-bottom: 2px solid var(--edge-subtle);
+  border-radius: 0 0 0 12px;
+}
+
+.siblingPane .siblingHeader {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.siblingPane .siblingBody {
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.siblingPane-aiChat .siblingBody {
+  max-height: none;
+  overflow: visible;
+}
+
+.siblingPane-aiChat .chatView {
+  height: clamp(260px, 34vh, 340px);
+  padding: 8px 12px 12px;
+  gap: 8px;
+}
+
+.siblingPane-aiChat .chatMessages {
+  overflow: auto;
+}
+
+.webviewSurface,
+.cameraSurface {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 280px;
+}
+
+.largeResultsCard {
+  flex: 1 1 0;
+}
+
+.largeResultsCard > [cmdk-list-sizer] {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+}
+
+.resultsCard > .webviewSurface.webviewLarge,
+.largeResultsCard .webviewSurface.webviewLarge,
+.resultsCard > .cameraSurface.cameraLarge,
+.largeResultsCard .cameraSurface.cameraLarge,
+.largeResultsCard .previewMode {
+  height: 100%;
+  min-height: 0;
+}
+
+.extensionWebview,
+.cameraFrame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface-media);
+}
+
+.cameraFrame {
+  position: relative;
+  overflow: hidden;
+}
+
+.cameraVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.cameraStatus {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+}
+
+.cameraSwitchButton {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: calc(100% - 140px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  padding: 4px 12px;
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.cameraError {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.cameraError strong {
+  color: var(--danger-text);
+}

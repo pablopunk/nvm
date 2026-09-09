@@ -1,0 +1,56 @@
+/* Global renderer behavior and native control defaults. */
+* {
+  box-sizing: border-box;
+}
+
+input,
+textarea,
+[contenteditable],
+.selectable,
+.markdownContent {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button,
+[role="button"] {
+  cursor: default;
+}
+
+a[href] {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[cmdk-input]:focus-visible {
+  outline: none;
+}
+
+.palettePromptConcealed {
+  -webkit-text-security: disc;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+button,
+input,
+[cmdk-root],
+[cmdk-item] {
+  font: inherit;
+}

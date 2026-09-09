@@ -1,0 +1,486 @@
+/* biome-ignore-all lint/style/noDescendingSpecificity lint/complexity/noImportantStyles: The palette cascade preserves established state and accessibility overrides. */
+/* Command palette shell, cards, results, and previews. */
+.shell {
+  width: 100%;
+  height: 100%;
+  padding: var(--window-blur-margin);
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+.shell .palette {
+  -webkit-app-region: no-drag;
+}
+
+.palette {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow: visible;
+  padding: 0;
+}
+
+.palette.fitContent {
+  height: auto;
+}
+
+.palette::before {
+  display: none;
+}
+
+.palette.isStacked {
+  overflow: visible;
+  padding-right: 34px;
+}
+
+.palette.isStacked::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: var(--spine-top, 58px);
+  height: var(--spine-height, 0);
+  width: 2px;
+  background: var(--edge-strong);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.card {
+  position: relative;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-panel);
+  -webkit-app-region: drag;
+}
+
+.searchCard {
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+}
+
+.optionsCard {
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.card.results,
+.card .results,
+.card input,
+.card .searchAccessory,
+.card .tabHint,
+.card [cmdk-item],
+.card button,
+.card textarea,
+.card select,
+.card .extensionView,
+.card .extensionTile,
+.card .chatInputRow {
+  -webkit-app-region: no-drag;
+}
+
+.stackParentCard {
+  z-index: 2;
+  width: calc(100% - 24px);
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 var(--search-row-height);
+  height: var(--search-row-height);
+  padding: 0 16px;
+  -webkit-app-region: drag;
+}
+
+.searchRow input,
+.searchRow .searchAccessory,
+.searchRow .tabHint {
+  -webkit-app-region: no-drag;
+}
+
+.brandIcon {
+  color: var(--accent);
+  -webkit-app-region: drag;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text-strong);
+  background: transparent;
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.02em;
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+
+input[readonly] {
+  opacity: 0.7;
+}
+
+kbd {
+  font-family:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabHint kbd {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+}
+
+.searchAccessory {
+  max-width: 160px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  padding: 4px 8px;
+  outline: none;
+  font-size: var(--fs-sm);
+}
+
+.searchAccessory:hover {
+  color: var(--text-primary);
+  background: var(--surface-interactive);
+}
+
+.tabHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  color: var(--text-secondary);
+  background: var(--surface-interactive);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.results {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+}
+
+.results > [cmdk-list-sizer] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.results.sidePreviewCard {
+  flex: 1 1 0;
+}
+
+.sidePreviewCard > [cmdk-list-sizer] {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+}
+
+.optionsCard {
+  flex: 0 1 auto;
+  height: auto !important;
+  min-height: 0;
+  width: calc(100% - var(--stack-card-right-inset));
+  margin-left: 34px;
+  overflow: visible;
+}
+
+.optionsCard.loadingBorder {
+  flex: 1 1 auto;
+}
+
+.results.fitContentCard,
+.results.fitContentCard > [cmdk-list-sizer] {
+  flex: 0 1 auto;
+}
+
+.optionsCard > [cmdk-list-sizer] {
+  max-height: calc(
+    100vh -
+    var(--window-blur-margin) *
+    2 -
+    var(--search-row-height) -
+    var(--palette-stack-gap)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.optionsCard::before {
+  content: "";
+  position: absolute;
+  left: -19px;
+  top: -11px;
+  width: 16px;
+  height: 40px;
+  border-left: 2px solid var(--edge-strong);
+  border-bottom: 2px solid var(--edge-subtle);
+  border-radius: 0 0 0 12px;
+}
+
+.clipboardSiblingCard {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.shortcutRecorder {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.shortcutKeys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.shortcutKeys kbd {
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-interactive);
+}
+
+.result {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(0, 42%);
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-lg);
+  padding: 6px 8px;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: left;
+  cursor: default;
+}
+
+.dangerResult strong {
+  color: var(--danger-text);
+}
+
+.result[data-foreground="yellow"] strong,
+.result[data-foreground="yellow"] .resultIcon,
+.extensionTile[data-foreground="yellow"] strong,
+.extensionTile[data-foreground="yellow"] .tileIcon {
+  color: var(--item-foreground-yellow);
+}
+
+.result[data-foreground="blue"] strong,
+.result[data-foreground="blue"] .resultIcon,
+.extensionTile[data-foreground="blue"] strong,
+.extensionTile[data-foreground="blue"] .tileIcon {
+  color: var(--item-foreground-blue);
+}
+
+.result[data-foreground="purple"] strong,
+.result[data-foreground="purple"] .resultIcon,
+.extensionTile[data-foreground="purple"] strong,
+.extensionTile[data-foreground="purple"] .tileIcon {
+  color: var(--item-foreground-purple);
+}
+
+.result[data-foreground="green"] strong,
+.result[data-foreground="green"] .resultIcon,
+.extensionTile[data-foreground="green"] strong,
+.extensionTile[data-foreground="green"] .tileIcon {
+  color: var(--item-foreground-green);
+}
+
+.result[data-foreground="red"] strong,
+.result[data-foreground="red"] .resultIcon,
+.extensionTile[data-foreground="red"] strong,
+.extensionTile[data-foreground="red"] .tileIcon {
+  color: var(--item-foreground-red);
+}
+
+.result[data-foreground="orange"] strong,
+.result[data-foreground="orange"] .resultIcon,
+.extensionTile[data-foreground="orange"] strong,
+.extensionTile[data-foreground="orange"] .tileIcon {
+  color: var(--item-foreground-orange);
+}
+
+.result[data-foreground="pink"] strong,
+.result[data-foreground="pink"] .resultIcon,
+.extensionTile[data-foreground="pink"] strong,
+.extensionTile[data-foreground="pink"] .tileIcon {
+  color: var(--item-foreground-pink);
+}
+
+.result[data-background="accent"] {
+  background: var(--accent-soft);
+}
+
+.result[data-selected="true"] {
+  background: var(--surface-selected);
+}
+
+.result:hover {
+  background: var(--surface-selected);
+}
+
+.result[data-background="accent"][data-selected="true"] {
+  background: var(--accent-muted);
+}
+
+.result[data-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.resultIcon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface-interactive);
+  box-shadow: var(--shadow-interactive);
+  overflow: hidden;
+}
+
+.placeholderResultIcon {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.placeholderEmptyIcon {
+  color: var(--accent);
+}
+
+.resultIcon img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.thumbnailIcon img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.previewPane {
+  display: grid;
+  min-height: 0;
+  height: 100%;
+  padding: 16px;
+}
+
+.previewImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 106px);
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  background: var(--surface-media);
+  box-shadow: var(--shadow-inset);
+}
+
+.previewMedia {
+  width: 100%;
+  max-height: min(360px, calc(100vh - var(--window-blur-margin) * 2 - 106px));
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--surface-media);
+  box-shadow: var(--shadow-inset);
+}
+
+.previewMode .extensionView {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.previewView {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.previewView > .result {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  min-height: 44px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-interactive);
+}
+
+.previewView > .result[data-selected="true"] {
+  border-color: var(--edge-strong);
+  background: var(--surface-raised);
+}
+
+.previewView > .result .resultIcon {
+  width: 28px;
+  height: 28px;
+}
+
+.previewMode .previewMedia {
+  height: 100%;
+  min-height: 0;
+  max-height: calc(100vh - var(--window-blur-margin) * 2 - 134px);
+}
+
+.previewText {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.previewDetails {
+  display: grid;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.previewDetails strong {
+  font-size: var(--fs-xl);
+}
+
+.previewDetails span {
+  color: var(--text-tertiary);
+}
