@@ -7,7 +7,7 @@ const PNG_DATA_URL = /^data:image\/png;base64,/;
 function fakeImage(empty: boolean, name: string) {
   return {
     isEmpty: () => empty,
-    resize: (options: unknown) => ({ name, options }),
+    resize: (options: unknown) => ({ name, options }) as any,
   };
 }
 
