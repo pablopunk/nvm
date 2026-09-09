@@ -52,6 +52,7 @@ const requiredThemeTokens = [
   '--accent-fill',
   '--accent-contrast',
   '--accent-soft',
+  '--tool-active-highlight',
   '--success-text',
   '--warning-text',
   '--danger-text',

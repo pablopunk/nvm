@@ -124,14 +124,39 @@ test('morphs plain streamed AI text before restoring markdown', () => {
     messages: [{ role: 'assistant', content: '# Complete answer' }],
   });
 
-  assert.match(thinking, />Thinking…</);
-  assert.match(nextTurnThinking, />Thinking…</);
+  assert.match(thinking, />Thinking</);
+  assert.match(nextTurnThinking, />Thinking</);
   assert.match(nextTurnThinking, /markdownHeading markdownHeading1/);
   assert.doesNotMatch(nextTurnThinking, /chatStreamingText/);
   assert.match(streaming, /class="chatStreamingText"># Streaming answer/);
-  assert.doesNotMatch(streaming, /Thinking…|Writing…|markdownHeading/);
+  assert.doesNotMatch(streaming, /Thinking|Writing|markdownHeading/);
   assert.match(complete, /markdownHeading markdownHeading1/);
-  assert.doesNotMatch(complete, /chatStreamingText|Thinking…|Writing…/);
+  assert.doesNotMatch(complete, /chatStreamingText|Thinking|Writing/);
+});
+
+test('renders one transient morphing activity label', () => {
+  const view: CommandView = {
+    type: 'chat',
+    title: 'AI Chat',
+    aiChat: true,
+    messages: [],
+  };
+  const active = renderExtensionView(view, {
+    busy: true,
+    activity: 'Searching the web',
+    messages: [],
+  });
+  const complete = renderExtensionView(view, {
+    busy: false,
+    activity: null,
+    messages: [],
+  });
+
+  assert.ok(active.includes('chatActivity'));
+  assert.ok(active.includes('chatActivityText'));
+  assert.ok(active.includes('Searching the web'));
+  assert.equal(active.includes('…'), false);
+  assert.equal(complete.includes('chatActivity'), false);
 });
 
 test('renders the model picker only for selectable AI conversations', () => {

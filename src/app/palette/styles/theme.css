@@ -73,6 +73,7 @@
   --accent-emphasis: rgba(138, 106, 0, 0.52);
   --accent-muted: rgba(138, 106, 0, 0.22);
   --accent-soft: rgba(138, 106, 0, 0.11);
+  --tool-active-highlight: #5f4800;
 
   --success-text: #356d45;
   --warning-text: #80531f;
@@ -154,6 +155,7 @@
     --accent-emphasis: rgba(241, 207, 84, 0.5);
     --accent-muted: rgba(241, 207, 84, 0.24);
     --accent-soft: rgba(241, 207, 84, 0.12);
+    --tool-active-highlight: #fff0ad;
 
     --success-text: #9fc9a8;
     --warning-text: #dcb681;

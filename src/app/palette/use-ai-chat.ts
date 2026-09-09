@@ -150,6 +150,24 @@ export function userMessageFromEvent(event: AiChatEvent) {
   };
 }
 
+const TOOL_ACTIVITY_LABELS: Record<string, string> = {
+  web_search: 'Searching the web',
+  code_search: 'Searching code',
+  fetch_content: 'Reading a page',
+  get_search_content: 'Reading a search result',
+  read: 'Reading a file',
+  grep: 'Searching files',
+  find: 'Finding files',
+  ls: 'Listing files',
+};
+
+export function toolActivityLabel(toolName: string) {
+  const label = TOOL_ACTIVITY_LABELS[toolName];
+  if (label) return label;
+  const readableName = toolName.replaceAll('_', ' ').trim() || 'tool';
+  return `Calling ${readableName}`;
+}
+
 function latestUserMessageIndex(
   messages: NonNullable<CommandView['messages']>,
 ) {
@@ -184,6 +202,7 @@ export function useAiChat(
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const busyByChatIdRef = useRef(new Map<string, boolean>());
+  const [activity, setActivity] = useState<string | null>(null);
   const [model, setModelState] = useState<AiChatModel>(DEFAULT_AI_CHAT_MODEL);
   const modelRef = useRef<AiChatModel>(DEFAULT_AI_CHAT_MODEL);
   const [modelChanging, setModelChangingState] = useState(false);
@@ -210,7 +229,10 @@ export function useAiChat(
   function updateChatBusy(chatId: string | undefined, nextBusy: boolean) {
     const key = chatStateKey(chatId);
     busyByChatIdRef.current.set(key, nextBusy);
-    if (key === chatStateKey(openChatIdRef.current)) updateBusy(nextBusy);
+    if (key === chatStateKey(openChatIdRef.current)) {
+      updateBusy(nextBusy);
+      if (!nextBusy) setActivity(null);
+    }
   }
 
   function finishActiveAiTrace(
@@ -538,6 +560,8 @@ export function useAiChat(
     )
       return;
     updateChatBusy(targetChatId, true);
+    if (chatStateKey(targetChatId) === chatStateKey(openChatIdRef.current))
+      setActivity('Thinking');
     setLimit(null);
     setCreditNotice(null);
     appendMessage(
@@ -606,6 +630,11 @@ export function useAiChat(
         updateBusy(
           busyByChatIdRef.current.get(chatStateKey(view.chatId)) || false,
         );
+        setActivity(
+          busyByChatIdRef.current.get(chatStateKey(view.chatId))
+            ? 'Thinking'
+            : null,
+        );
         pendingDeltaRef.current = '';
         cancelDeltaFlush();
         setMessages(view.messages || []);
@@ -667,16 +696,24 @@ export function useAiChat(
     if (event.type === 'start') {
       setLimit(null);
       setCreditNotice(null);
+      setActivity('Thinking');
     }
-    if (event.type === 'done')
+    if (event.type === 'done') {
       finishActiveAiTrace('ai.done', 'ok', event.traceId);
-    if (event.type === 'error')
+    }
+    if (event.type === 'error') {
       finishActiveAiTrace('ai.error', 'error', event.traceId);
-    if (event.type === 'aborted')
+    }
+    if (event.type === 'aborted') {
       finishActiveAiTrace('ai.aborted', 'cancelled', event.traceId);
-    if (event.type === 'delta' && event.text) appendDelta(event.text);
+    }
+    if (event.type === 'delta' && event.text) {
+      setActivity(null);
+      appendDelta(event.text);
+    }
     if (event.type === 'tool_start' && event.name)
-      appendMessage('system', `Using ${event.name}…`);
+      setActivity(toolActivityLabel(event.name));
+    if (event.type === 'tool_end') setActivity('Thinking');
     if (event.type === 'credit_warning' && event.message)
       setCreditNotice(event.message);
     if (event.type === 'error') {
@@ -709,6 +746,7 @@ export function useAiChat(
   return {
     messages,
     setMessages: replaceMessages,
+    activity,
     input,
     setInput,
     attachments,

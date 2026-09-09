@@ -18,6 +18,20 @@ export function MorphingIndicatorText({ value }: { value: string }) {
   );
 }
 
+export function MorphingActivityText({ value }: { value: string }) {
+  return (
+    <TextMorph
+      className="chatActivityText"
+      duration={220}
+      ease={MORPH_EASING}
+      scale={false}
+      numbers={false}
+    >
+      {value}
+    </TextMorph>
+  );
+}
+
 export function StreamingChatText({ value }: { value: string }) {
   const [visibleValue, setVisibleValue] = React.useState(value);
   const pendingValueRef = React.useRef(value);

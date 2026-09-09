@@ -46,6 +46,7 @@ import type { AiChatAttachment, AiLimitState } from './use-ai-chat';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
+  activity?: string | null;
   input: string;
   setInput: (value: string) => void;
   attachments: AiChatAttachment[];
@@ -919,7 +920,7 @@ function ChatInputForm({
             attaching
               ? 'Attaching image…'
               : busy
-                ? 'Thinking…'
+                ? 'Thinking'
                 : placeholder || 'Message AI'
           }
         />
@@ -1065,7 +1066,7 @@ function ChatExtensionView({
       onSubmit={() => sendAiPrompt(aiChat.input)}
       busy={aiChat.busy}
       inputRef={aiChat.inputRef}
-      placeholder={aiChat.busy ? 'Thinking…' : 'Message AI'}
+      placeholder={aiChat.busy ? 'Thinking' : 'Message AI'}
       onAbort={abortAiChat}
       chatId={view.chatId}
       model={selectableModel}
@@ -1092,6 +1093,7 @@ function ChatExtensionView({
     <ChatView
       messages={messages}
       isBusy={view.aiChat ? aiChat.busy && streamingAssistantIndex < 0 : false}
+      activity={view.aiChat ? aiChat.activity : null}
       input={input}
       messagesRef={view.aiChat ? aiChat.messagesRef : undefined}
       banner={limitBanner}
