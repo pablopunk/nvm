@@ -110,9 +110,8 @@ export function createElectronClipboardApi(deps: {
       'image/png',
       'image/jpeg',
     ]);
-    return buffer.length
-      ? deps.nativeImage.createFromBuffer(buffer)
-      : deps.nativeImage.createEmpty();
+    if (buffer.length) return deps.nativeImage.createFromBuffer(buffer);
+    return deps.clipboard.readImage();
   }
 
   function addBufferFormats(
