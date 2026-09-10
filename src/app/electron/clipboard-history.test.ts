@@ -301,6 +301,25 @@ test('pollClipboardChange detects text changes without reading images', async ()
   assert.equal(getHistory()[0]?.text, 'hello world');
 });
 
+test('pollClipboardChange captures image files copied with a file url', async () => {
+  const { clipboardHistory, deps, getHistory, getFiles } = createFakes();
+  (deps.clipboard as any).readBuffer = () =>
+    Buffer.from('file:///tmp/screenshot.png');
+  (deps.clipboard as any).readText = () => '';
+
+  await clipboardHistory.pollClipboardChange();
+
+  assert.equal(getHistory().length, 1);
+  assert.equal(getHistory()[0].type, 'image');
+  assert.equal(getFiles().size, 1, 'image file should be persisted once');
+  await clipboardHistory.pollClipboardChange();
+  assert.equal(
+    getFiles().size,
+    1,
+    'unchanged image file should not be persisted again',
+  );
+});
+
 // ═══════════════════════════════════════════════════════════
 // rememberClipboardItem
 // ═══════════════════════════════════════════════════════════

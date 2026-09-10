@@ -130,6 +130,27 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     };
   }
 
+  function imageFileClipboardItem(filePath: string): any {
+    return {
+      id: `image-file:${deps.hashValue(deps.expandUserPath(filePath))}`,
+      type: 'image',
+      filePath,
+      createdAt: Date.now(),
+    };
+  }
+
+  async function imageItemFromFilePath(item: any): Promise<any | null> {
+    try {
+      const image = deps.nativeImage.createFromPath(item.filePath);
+      if (image.isEmpty()) return null;
+      const png = image.toPNG();
+      if (!png?.length) return null;
+      return { ...item, png, hash: deps.hashValue(png) };
+    } catch {
+      return null;
+    }
+  }
+
   function textClipboardItem(text: string): any {
     return {
       id: `text:${deps.hashValue(text)}`,
@@ -143,6 +164,8 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     const filePath = await clipboardFilePath(deps.clipboard);
     if (filePath && deps.isVideoPath(filePath))
       return videoClipboardItem(filePath);
+    if (filePath && deps.isImagePath(filePath))
+      return imageFileClipboardItem(filePath);
     const text = (await deps.clipboard.readText()).trim();
     return text ? textClipboardItem(text) : null;
   }
@@ -537,6 +560,11 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       return;
     }
     if (suppressUntil) suppressed.delete(item.id);
+    if (item.type === 'image' && item.filePath && !item.png) {
+      const fileItem = await imageItemFromFilePath(item);
+      if (!fileItem) return;
+      Object.assign(item, fileItem);
+    }
     if (item.type === 'image') {
       const imagePath = await persistClipboardImage(item.png, item.hash);
       if (!imagePath) return;
@@ -545,6 +573,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       item.thumbnailUrl = deps.thumbnailUrlForPath(imagePath);
       delete item.png;
       delete item.hash;
+      delete item.filePath;
     }
     watcherLastId = item.id;
     rememberClipboardItem(item);
@@ -553,12 +582,13 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   // ── snapshot ────────────────────────────────────────────
 
   async function clipboardSnapshot() {
-    const [image, text, html, rtf, bookmark] = await Promise.all([
+    const [image, text, html, rtf, bookmark, filePaths] = await Promise.all([
       deps.clipboard.readImage(),
       deps.clipboard.readText(),
       deps.clipboard.readHTML(),
       deps.clipboard.readRTF(),
       deps.clipboard.readBookmark(),
+      clipboardFilePaths(deps.clipboard),
     ]);
     return {
       text,
@@ -566,6 +596,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       rtf,
       bookmark,
       image: image.isEmpty() ? null : image,
+      filePaths,
     };
   }
 
@@ -573,6 +604,8 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     snapshot: MaybePromise<Awaited<ReturnType<typeof clipboardSnapshot>>>,
   ) {
     const current = await snapshot;
+    if (Array.isArray(current.filePaths) && current.filePaths.length)
+      return writeDesktopClipboardFiles(current.filePaths);
     const data: any = {};
     if (current.text) data.text = current.text;
     if (current.html) data.html = current.html;
