@@ -32,7 +32,23 @@ function createFakes(
   const api = createElectronClipboardApi({
     clipboard: clipboard as any,
     nativeImage: nativeImage as any,
-    ClipboardItem: class {},
+    ClipboardItem: class {
+      constructor(
+        _items: Record<string, string | Blob | { title: string; url: string }>,
+      ) {}
+      getType(
+        type: 'electron application/bookmark',
+      ): Promise<{ title: string; url: string }>;
+      getType(type: string): Promise<Blob>;
+      getType(type: string) {
+        return Promise.resolve(
+          type === 'electron application/bookmark'
+            ? { title: '', url: '' }
+            : new Blob(),
+        );
+      }
+      types: string[] = [];
+    },
   });
   return { api, calls };
 }
@@ -49,7 +65,7 @@ test('readImage decodes explicit png clipboard items', async () => {
   assert.equal(calls.readImage, 0, 'native fallback should not be used');
 });
 
-test('readImage falls back to native readImage for non-png formats', async () => {
+test('readImage decodes non-png image clipboard items', async () => {
   const { api, calls } = createFakes([
     { types: ['image/tiff'], value: new Blob([Buffer.from('tiff-bytes')]) },
   ]);
@@ -57,15 +73,15 @@ test('readImage falls back to native readImage for non-png formats', async () =>
   const image = await api.readImage();
 
   assert.equal(image.isEmpty(), false);
-  assert.equal(calls.createFromBuffer, 0);
-  assert.equal(calls.readImage, 1, 'native readImage should be used');
+  assert.equal(calls.createFromBuffer, 1);
+  assert.equal(calls.readImage, 0);
 });
 
-test('readImage falls back to native readImage for empty clipboards', async () => {
+test('readImage returns an empty image for empty clipboards', async () => {
   const { api, calls } = createFakes([]);
 
   const image = await api.readImage();
 
-  assert.equal(image.isEmpty(), false);
-  assert.equal(calls.readImage, 1);
+  assert.equal(image.isEmpty(), true);
+  assert.equal(calls.readImage, 0);
 });

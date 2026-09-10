@@ -65,6 +65,17 @@ async function findClipboardItem(clipboard: Clipboard, formats: string[]) {
   return null;
 }
 
+async function findClipboardImageItem(clipboard: Clipboard) {
+  const items = await clipboard.read();
+  for (const item of items) {
+    const format = item.types.find((candidate) =>
+      candidate.startsWith('image/'),
+    );
+    if (format) return { item, format };
+  }
+  return null;
+}
+
 async function readClipboardBuffer(clipboard: Clipboard, formats: string[]) {
   const found = await findClipboardItem(clipboard, formats);
   if (!found) return Buffer.alloc(0);
@@ -106,12 +117,14 @@ export function createElectronClipboardApi(deps: {
   }
 
   async function readImage() {
-    const buffer = await readClipboardBuffer(deps.clipboard, [
-      'image/png',
-      'image/jpeg',
-    ]);
+    const found = await findClipboardImageItem(deps.clipboard);
+    const value = found ? await found.item.getType(found.format) : null;
+    const buffer =
+      value && typeof (value as Blob).arrayBuffer === 'function'
+        ? Buffer.from(await (value as Blob).arrayBuffer())
+        : Buffer.alloc(0);
     if (buffer.length) return deps.nativeImage.createFromBuffer(buffer);
-    return deps.clipboard.readImage();
+    return deps.nativeImage.createEmpty();
   }
 
   function addBufferFormats(
