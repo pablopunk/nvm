@@ -561,6 +561,7 @@ test('restoreClipboardSnapshot restores state', async () => {
     rtf: '',
     bookmark: null as any,
     image: null as any,
+    filePaths: [],
   };
 
   await clipboardHistory.restoreClipboardSnapshot(snap);
@@ -581,6 +582,7 @@ test('restoreClipboardSnapshot clears on empty snapshot', async () => {
     rtf: '',
     bookmark: null as any,
     image: null as any,
+    filePaths: [],
   });
 
   assert.equal((deps.clipboard as any).readText(), '');
