@@ -20,6 +20,7 @@ function contextFor(
   frontmostApps: unknown[] = [
     { name: 'TextEdit', bundleId: 'com.apple.TextEdit' },
   ],
+  replaceText?: (text: string) => boolean | Promise<boolean>,
 ) {
   const preparations: unknown[] = [];
   const aiCalls: unknown[] = [];
@@ -35,7 +36,10 @@ function contextFor(
       },
     },
     desktop: {
-      selection: { text: async () => selectedText },
+      selection: {
+        text: async () => selectedText,
+        ...(replaceText ? { replaceText } : {}),
+      },
       apps: {
         frontmost: async () =>
           frontmostApps[Math.min(frontmostCall++, frontmostApps.length - 1)],
@@ -112,6 +116,25 @@ test('corrects selected text with Fast AI and replaces it without changing the c
       ['hide', 'fix-selected-text-with-ai'],
     ],
   );
+});
+
+test('pastes corrected text without consulting the accessibility write', async () => {
+  const replacementRequests: string[] = [];
+  const { context, actions } = contextFor(
+    'this are selected text',
+    ['This is corrected text.'],
+    [{ name: 'TextEdit', bundleId: 'com.apple.TextEdit' }],
+    (text) => {
+      replacementRequests.push(text);
+      return true;
+    },
+  );
+
+  await commandHandler(context)(context, {});
+
+  assert.deepEqual(replacementRequests, []);
+  assert.equal(actions.length, 1);
+  assert.equal((actions[0] as any).type, 'pasteText');
 });
 
 test('does not paste when the AI returns the selected text unchanged', async () => {
