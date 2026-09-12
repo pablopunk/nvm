@@ -61,7 +61,7 @@ jobs:
 
           opencode run \
             --auto \
-            --model opencode-go/gpt-5.6-luna \
+            --model opencode-go/deepseek-v4.1-flash \
             "Fix the CI failure described in /tmp/opencode-ci-failure.log.
 
             Inspect the repository and reproduce the failure where possible.
