@@ -151,6 +151,15 @@ async function fixSelectedText(ctx: ExtensionContext) {
       });
       return;
     }
+    if (correctedText === selectedText) {
+      keepFinalIndicatorVisible = true;
+      ctx.ui.indicator.update({
+        ...indicator('No changes needed'),
+        status: 'success',
+        durationMs: 2000,
+      });
+      return;
+    }
     const targetApp = await ctx.desktop.apps?.frontmost?.();
     if (
       appIdentity(sourceApp) &&
@@ -164,7 +173,6 @@ async function fixSelectedText(ctx: ExtensionContext) {
       });
       return;
     }
-    if (await ctx.desktop.selection.replaceText(correctedText)) return;
 
     return ctx.navigation.run(
       ctx.actions.pasteText(correctedText, 'Replace Selected Text', {
