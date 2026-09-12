@@ -17,7 +17,7 @@ import {
   type ExtensionWindowSession,
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
-import { warn as logWarn } from './logger';
+import { debug as logDebug, warn as logWarn } from './logger';
 import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
@@ -1038,6 +1038,12 @@ export function replaceSelectedText(
           logWarn(
             'selected-text.replace.failed',
             { exitCode: result.exitCode, error: result.stderr.trim() },
+            { source: 'host', scope: 'selected-text' },
+          );
+        else if (result.exitCode === 3)
+          logDebug(
+            'selected-text.replace.notApplied',
+            { pid: target.pid },
             { source: 'host', scope: 'selected-text' },
           );
         return result.exitCode === 0;

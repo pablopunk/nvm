@@ -144,6 +144,24 @@ private func selectedTextFromFocusedHierarchy(_ root: AXUIElement) -> String? {
   return nil
 }
 
+private func textValue(_ element: AXUIElement) -> String? {
+  attribute(element, kAXValueAttribute as CFString) as? String
+}
+
+private func replacementApplied(
+  _ element: AXUIElement,
+  _ replacement: String,
+  _ valueBefore: String?
+) -> Bool {
+  for attempt in 0..<8 {
+    if attempt > 0 { Thread.sleep(forTimeInterval: 0.04) }
+    guard let valueAfter = textValue(element) else { return false }
+    if valueAfter == valueBefore { continue }
+    return valueAfter.contains(replacement)
+  }
+  return false
+}
+
 private func replaceSelectedTextInFocusedHierarchy(
   _ root: AXUIElement,
   _ replacement: String
@@ -158,14 +176,18 @@ private func replaceSelectedTextInFocusedHierarchy(
           kAXSelectedTextAttribute as CFString,
           &settable
         ) == .success,
-        settable.boolValue,
-        AXUIElementSetAttributeValue(
-          current,
-          kAXSelectedTextAttribute as CFString,
-          replacement as CFTypeRef
-        ) == .success
+        settable.boolValue
       {
-        return true
+        let valueBefore = textValue(current)
+        if
+          AXUIElementSetAttributeValue(
+            current,
+            kAXSelectedTextAttribute as CFString,
+            replacement as CFTypeRef
+          ) == .success
+        {
+          return replacementApplied(current, replacement, valueBefore)
+        }
       }
     }
     guard let focused = element(
