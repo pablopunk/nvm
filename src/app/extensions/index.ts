@@ -14,6 +14,7 @@ import { createFloatingNotesExtension } from './floating-notes';
 import { createKeyboardShortcutsExtension } from './keyboard-shortcuts';
 import { createQuitAppsExtension } from './quit-apps';
 import { createSettingsExtension } from './settings';
+import { createPermissionsExtension } from './permissions';
 import { createPlacesExtension, createSystemExtension } from './system';
 import { createUpdatesExtension } from './updates';
 import { createWebSearchExtension } from './web-search';
@@ -32,6 +33,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createFloatingNotesExtension,
   createExtensionsExtension,
   createAiBuilderExtension,
+  createPermissionsExtension,
   createUpdatesExtension,
   createKeyboardShortcutsExtension,
   createQuitAppsExtension,
@@ -53,6 +55,7 @@ export const INTERNAL_EXTENSION_SOURCE_FILES = [
   'extensions.ts',
   'files.ts',
   'floating-notes.ts',
+  'permissions.ts',
   'keyboard-shortcuts.ts',
   'quit-apps.ts',
   'settings.ts',

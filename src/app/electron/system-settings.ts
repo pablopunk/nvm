@@ -122,13 +122,15 @@ function systemSettingsEntriesFromSidebar(sidebarPlist: string) {
 function systemSettingsPaneUrl(
   paneId?: string,
   platform: NodeJS.Platform = process.platform,
+  anchor?: string,
 ) {
   if (
     !(platform === 'darwin' && paneId && MAC_SYSTEM_SETTINGS_BY_ID.has(paneId))
   ) {
     return null;
   }
-  return `${SYSTEM_SETTINGS_URL}${paneId}`;
+  const section = anchor && /^[A-Za-z]+$/.test(anchor) ? `?${anchor}` : '';
+  return `${SYSTEM_SETTINGS_URL}${paneId}${section}`;
 }
 
 function systemSettingsEntries() {

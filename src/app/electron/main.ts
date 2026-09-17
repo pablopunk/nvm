@@ -5164,7 +5164,11 @@ async function executeViewAction(action, launchContext?: any) {
       break;
     case 'openSystemSettings':
       runInBackground(() => {
-        const paneUrl = systemSettingsPaneUrl(action.paneId);
+        const paneUrl = systemSettingsPaneUrl(
+          action.paneId,
+          process.platform,
+          action.anchor,
+        );
         return paneUrl
           ? shell.openExternal(paneUrl)
           : executeSystemBuiltin({ builtin: 'settings' }, () => {});

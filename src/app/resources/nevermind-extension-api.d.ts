@@ -1533,7 +1533,7 @@ export type ExtensionContext = {
       nativeAction: unknown,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** OS-owned system actions. Declare the `system` capability for review. Titles default to OS-appropriate labels. */
+    /** OS-owned system actions. Declare the `system` capability for review. Titles default to OS-appropriate labels. `openSystemSettings` accepts `{ paneId, anchor }` to deep-link a settings pane and section. */
     system: Record<
       | 'lockScreen'
       | 'sleep'

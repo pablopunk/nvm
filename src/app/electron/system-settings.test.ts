@@ -34,6 +34,22 @@ test('system settings URLs only accept known pane identifiers', () => {
     systemSettingsPaneUrl('com.apple.Keyboard-Settings.extension', 'darwin'),
     'x-apple.systempreferences:com.apple.Keyboard-Settings.extension',
   );
+  assert.equal(
+    systemSettingsPaneUrl(
+      'com.apple.settings.PrivacySecurity.extension',
+      'darwin',
+      'Microphone',
+    ),
+    'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Microphone',
+  );
+  assert.equal(
+    systemSettingsPaneUrl(
+      'com.apple.settings.PrivacySecurity.extension',
+      'darwin',
+      'javascript:alert(1)',
+    ),
+    'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension',
+  );
   assert.equal(systemSettingsPaneUrl('javascript:alert(1)', 'darwin'), null);
   assert.equal(
     systemSettingsPaneUrl('com.apple.Keyboard-Settings.extension', 'win32'),
