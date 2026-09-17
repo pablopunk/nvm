@@ -10991,6 +10991,9 @@ app.whenReady().then(async () => {
   paletteWindow.createWindow();
   paletteWindow.registerHotkey();
 
+  ipcMain.handle('microphone:get-status', () =>
+    systemPreferences.getMediaAccessStatus('microphone'),
+  );
   ipcMain.on('dictation:reply', (event, reply) => {
     if (event.sender !== paletteWindow.win?.webContents) return;
     if (!reply || typeof reply !== 'object') return;

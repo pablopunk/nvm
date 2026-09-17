@@ -1391,6 +1391,24 @@ function DictationRendererController() {
 
       if (command.type === 'start') {
         if (startPromiseRef.current || recordingRef.current) return;
+        try {
+          const micStatus = await window.nvm
+            .getMicrophoneAccessStatus()
+            .catch(() => 'unknown');
+          window.nvm
+            .log('debug', 'dictation.mic-status', { status: micStatus })
+            .catch(() => {});
+          if (micStatus === 'denied' || micStatus === 'restricted') {
+            window.nvm.replyDictation({
+              type: 'error',
+              message:
+                'Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.',
+            });
+            return;
+          }
+        } catch {
+          // Fall through to getUserMedia so the system prompt can appear.
+        }
         const modelKeepAliveMs = command.modelKeepAliveMs;
         async function openMicrophone(deviceId: string | undefined) {
           const startPromise = recordDictation(

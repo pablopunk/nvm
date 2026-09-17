@@ -158,6 +158,7 @@ export type DictationReply =
         transcribeMs?: number;
         trackLabel?: string;
         trackSampleRate?: number;
+        trackMuted?: boolean | null;
       };
     }
   | {
@@ -219,6 +220,7 @@ export type NevermindApi = {
     accelerator: string,
   ) => Promise<SaveResult & { spotlightConflict?: boolean }>;
   getSetting: (id: string) => Promise<string | boolean | undefined>;
+  getMicrophoneAccessStatus: () => Promise<string>;
   openSystemKeyboardSettings: () => Promise<{ ok: boolean }>;
   getShortcuts: () => Promise<ShortcutRecord[]>;
   removeShortcut: (actionId: string) => Promise<SaveResult>;

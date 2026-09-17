@@ -195,6 +195,7 @@ export async function recordDictation(
             Math.round((performance.now() - transcribeStartedAt) * 100) / 100,
           trackLabel,
           trackSampleRate,
+          trackMuted: track?.muted ?? null,
         },
       };
     },
