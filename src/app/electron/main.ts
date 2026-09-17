@@ -10999,6 +10999,11 @@ app.whenReady().then(async () => {
       return;
     }
     if (reply.type === 'result' && typeof reply.text === 'string') {
+      if (reply.debug && typeof reply.debug === 'object')
+        loggerDebug('dictation.capture-stats', reply.debug, {
+          source: 'renderer',
+          scope: 'dictation',
+        });
       dictationService.reply(reply as DictationRendererReply);
       return;
     }

@@ -1439,9 +1439,11 @@ function DictationRendererController() {
             recordingRef.current || (await startPromiseRef.current);
           if (!recording) throw new Error('Dictation is not recording');
           recordingRef.current = null;
+          const stopped = await recording.stop();
           window.nvm.replyDictation({
             type: 'result',
-            text: await recording.stop(),
+            text: stopped.text,
+            debug: stopped.debug,
           });
         } catch (error) {
           window.nvm.replyDictation({

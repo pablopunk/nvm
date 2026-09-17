@@ -464,6 +464,7 @@ async function runDictation(ctx: any) {
     ctx.logs?.debug?.('Dictation transcription completed', {
       durationMs: Math.round(transcribedAt - stoppedAt),
       transcriptLength: transcript.length,
+      deviceId: settings.deviceId,
     });
     if (!transcript.trim()) {
       ctx.ui.indicator.update(NO_SPEECH_INDICATOR);

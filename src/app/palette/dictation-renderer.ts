@@ -170,13 +170,33 @@ export async function recordDictation(
       onState?.('transcribing');
       recorder.stop();
       const blob = await recording;
-      stream.getTracks().forEach((track) => track.stop());
+      const track = stream.getAudioTracks()[0];
+      const trackLabel = track?.label || 'unknown';
+      const trackSampleRate = track?.getSettings()?.sampleRate;
+      stream.getTracks().forEach((streamTrack) => streamTrack.stop());
+      const mimeType = blob.type || recorder.mimeType || 'unknown';
       const audio = await decodeAudio(blob);
+      const { peak, rms } = audioCaptureStats(audio);
       if (!loadedModel) onState?.('loading-model');
       const model = await modelLoadPromise;
+      const transcribeStartedAt = performance.now();
       const result = await model.transcribe(audio, SAMPLE_RATE);
       scheduleModelEviction(modelKeepAliveMs);
-      return result.utterance_text.trim();
+      return {
+        text: result.utterance_text.trim(),
+        debug: {
+          mimeType,
+          blobBytes: blob.size,
+          decodedFrames: audio.length,
+          durationSeconds: Math.round((audio.length / SAMPLE_RATE) * 100) / 100,
+          peak: Math.round(peak * 1_000_000) / 1_000_000,
+          rms: Math.round(rms * 1_000_000) / 1_000_000,
+          transcribeMs:
+            Math.round((performance.now() - transcribeStartedAt) * 100) / 100,
+          trackLabel,
+          trackSampleRate,
+        },
+      };
     },
     cancel: () => {
       void modelLoadPromise.catch(() => {});
@@ -270,6 +290,20 @@ registerProcessor('dictation-readiness', DictationReadinessProcessor);`,
     silentOutput.disconnect();
     await context.close();
   }
+}
+
+function audioCaptureStats(samples: Float32Array) {
+  let peak = 0;
+  let sumSquares = 0;
+  for (const sample of samples) {
+    const absolute = Math.abs(sample);
+    if (absolute > peak) peak = absolute;
+    sumSquares += sample * sample;
+  }
+  return {
+    peak,
+    rms: samples.length ? Math.sqrt(sumSquares / samples.length) : 0,
+  };
 }
 
 async function decodeAudio(blob: Blob) {

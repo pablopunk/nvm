@@ -8,7 +8,7 @@ export type DictationRendererCommand =
 
 export type DictationRendererReply =
   | { type: 'recording' }
-  | { type: 'result'; text: string }
+  | { type: 'result'; text: string; debug?: Record<string, unknown> }
   | {
       type: 'devices';
       devices: Array<{ id: string; title: string; isDefault: boolean }>;

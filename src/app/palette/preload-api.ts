@@ -145,7 +145,21 @@ export type DictationCommand =
 
 export type DictationReply =
   | { type: 'recording' }
-  | { type: 'result'; text: string }
+  | {
+      type: 'result';
+      text: string;
+      debug?: {
+        mimeType?: string;
+        blobBytes?: number;
+        decodedFrames?: number;
+        durationSeconds?: number;
+        peak?: number;
+        rms?: number;
+        transcribeMs?: number;
+        trackLabel?: string;
+        trackSampleRate?: number;
+      };
+    }
   | {
       type: 'devices';
       devices: Array<{ id: string; title: string; isDefault: boolean }>;
