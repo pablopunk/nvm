@@ -1136,6 +1136,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       onFocusCapture={rememberBaseFocus}
       onKeyDownCapture={onShellKeyDown}
     >
+      <IndicatorMicLevelController windowId={windowId} />
       {searchable &&
       !compactViewOpen &&
       (!compactActionSurface ||
@@ -1335,6 +1336,28 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   );
 }
 
+function IndicatorMicLevelController({ windowId }: { windowId: string }) {
+  useEffect(() => {
+    if (!windowId.startsWith('indicator:')) return;
+    const root = document.documentElement;
+    const unsubscribe = window.nvm.onIndicatorMicLevel((level) => {
+      if (level == null) {
+        delete root.dataset.micLive;
+        root.style.removeProperty('--mic-level');
+      } else {
+        root.dataset.micLive = 'true';
+        root.style.setProperty('--mic-level', String(level));
+      }
+    });
+    return () => {
+      unsubscribe();
+      delete root.dataset.micLive;
+      root.style.removeProperty('--mic-level');
+    };
+  }, [windowId]);
+  return null;
+}
+
 function DictationRendererController() {
   const recordingRef = useRef<Awaited<
     ReturnType<typeof recordDictation>
@@ -1415,6 +1438,7 @@ function DictationRendererController() {
             deviceId,
             undefined,
             modelKeepAliveMs,
+            (level) => window.nvm.sendDictationLevel(level),
           );
           startPromiseRef.current = startPromise;
           const recording = await startPromise;

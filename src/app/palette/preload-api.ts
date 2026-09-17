@@ -301,6 +301,8 @@ export type NevermindApi = {
     callback: (command: DictationCommand) => void,
   ) => () => void;
   replyDictation: (reply: DictationReply) => void;
+  sendDictationLevel: (level: number | null) => void;
+  onIndicatorMicLevel: (callback: (level: number | null) => void) => () => void;
   getExtensionWindowState: () => Promise<{
     id: string;
     view: CommandView;

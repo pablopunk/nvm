@@ -10994,6 +10994,19 @@ app.whenReady().then(async () => {
   ipcMain.handle('microphone:get-status', () =>
     systemPreferences.getMediaAccessStatus('microphone'),
   );
+  ipcMain.on('dictation:level', (event, level) => {
+    if (event.sender !== paletteWindow.win?.webContents) return;
+    const normalized =
+      typeof level === 'number' && Number.isFinite(level)
+        ? Math.min(1, Math.max(0, level))
+        : null;
+    extensionWindowManager.sendToIndicator(
+      'nevermind.dictation',
+      'dictation',
+      'indicator:mic-level',
+      normalized,
+    );
+  });
   ipcMain.on('dictation:reply', (event, reply) => {
     if (event.sender !== paletteWindow.win?.webContents) return;
     if (!reply || typeof reply !== 'object') return;

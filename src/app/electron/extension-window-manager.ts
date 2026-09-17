@@ -979,6 +979,19 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     records.get(id)?.win.hide();
   }
 
+  function sendToIndicator(
+    ownerExtensionId: string,
+    localId: unknown,
+    channel: string,
+    payload: unknown,
+  ) {
+    structuredClone(payload);
+    const record = records.get(indicatorWindowId(ownerExtensionId, localId));
+    if (!record || record.win.isDestroyed()) return false;
+    record.win.webContents.send(channel, payload);
+    return true;
+  }
+
   function closeAll() {
     quitting = true;
     for (const id of indicatorHideTimers.keys()) cancelIndicatorHide(id);
@@ -1015,6 +1028,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     showIndicator,
     updateIndicator,
     hideIndicator,
+    sendToIndicator,
     broadcast,
     updateTheme,
     closeAll,

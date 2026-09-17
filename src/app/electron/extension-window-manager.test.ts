@@ -338,6 +338,52 @@ test('indicators show without focus and ignore mouse events', () => {
   assert.equal(win.visible, false);
 });
 
+test('indicator levels reach only the matching indicator window', () => {
+  const { manager } = createManager();
+  manager.showIndicator(
+    {
+      id: 'dictation',
+      title: 'Dictation',
+      subtitle: 'Listening',
+      status: 'recording',
+    },
+    'nevermind.dictation',
+  );
+  manager.showIndicator(
+    { id: 'other', title: 'Other', subtitle: 'Working' },
+    'nevermind.other',
+  );
+
+  assert.equal(
+    manager.sendToIndicator(
+      'nevermind.dictation',
+      'dictation',
+      'indicator:mic-level',
+      0.5,
+    ),
+    true,
+  );
+  assert.deepEqual(FakeBrowserWindow.instances[0].sent.at(-1), {
+    channel: 'indicator:mic-level',
+    payload: 0.5,
+  });
+  assert.equal(
+    FakeBrowserWindow.instances[1].sent.some(
+      ({ channel }) => channel === 'indicator:mic-level',
+    ),
+    false,
+  );
+  assert.equal(
+    manager.sendToIndicator(
+      'nevermind.dictation',
+      'missing',
+      'indicator:mic-level',
+      0.5,
+    ),
+    false,
+  );
+});
+
 test('timed indicators dismiss and updates replace the pending dismissal', () => {
   const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
   const cancelled: unknown[] = [];

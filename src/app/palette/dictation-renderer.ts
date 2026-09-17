@@ -1,4 +1,5 @@
 import { fromHub, type ParakeetModel } from 'parakeet.js';
+import { smoothMicLevel } from './mic-level';
 import {
   createMicrophoneReadinessTracker,
   needsBluetoothMicrophoneReadiness,
@@ -138,6 +139,7 @@ export async function recordDictation(
   deviceId: string | undefined,
   onState?: (state: 'recording' | 'transcribing' | 'loading-model') => void,
   modelKeepAliveMs = DEFAULT_MODEL_KEEP_ALIVE_MS,
+  onLevel?: (level: number | null) => void,
 ) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: deviceId ? { deviceId: { exact: deviceId } } : true,
@@ -155,6 +157,7 @@ export async function recordDictation(
   });
 
   recorder.start();
+  const levelMonitor = onLevel ? startMicLevelMonitor(stream, onLevel) : null;
   const ready = waitForCapturedAudioFrame(stream).then(() => {
     onState?.('recording');
   });
@@ -168,6 +171,8 @@ export async function recordDictation(
     ready,
     stop: async () => {
       onState?.('transcribing');
+      levelMonitor?.stop();
+      onLevel?.(null);
       recorder.stop();
       const blob = await recording;
       const track = stream.getAudioTracks()[0];
@@ -200,9 +205,51 @@ export async function recordDictation(
       };
     },
     cancel: () => {
+      levelMonitor?.stop();
+      onLevel?.(null);
       void modelLoadPromise.catch(() => {});
       recorder.stop();
       stream.getTracks().forEach((track) => track.stop());
+    },
+  };
+}
+
+const MIC_LEVEL_MONITOR_INTERVAL_MS = 100;
+
+function startMicLevelMonitor(
+  stream: MediaStream,
+  onLevel: (level: number | null) => void,
+) {
+  const context = new AudioContext();
+  const source = context.createMediaStreamSource(stream);
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 512;
+  source.connect(analyser);
+  const samples = new Float32Array(analyser.fftSize);
+  let smoothed = 0;
+  let lastSent = -1;
+  let stopped = false;
+  const timer = window.setInterval(() => {
+    if (stopped) return;
+    analyser.getFloatTimeDomainData(samples);
+    let peak = 0;
+    for (const sample of samples) {
+      const absolute = Math.abs(sample);
+      if (absolute > peak) peak = absolute;
+    }
+    smoothed = smoothMicLevel(smoothed, peak);
+    const rounded = Math.round(smoothed * 100) / 100;
+    if (rounded === lastSent) return;
+    lastSent = rounded;
+    onLevel(rounded);
+  }, MIC_LEVEL_MONITOR_INTERVAL_MS);
+  return {
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      window.clearInterval(timer);
+      source.disconnect();
+      void context.close().catch(() => {});
     },
   };
 }

@@ -262,6 +262,15 @@ const api: NevermindApi = {
   replyDictation: (reply: DictationReply) => {
     ipcRenderer.send('dictation:reply', reply);
   },
+  sendDictationLevel: (level) => {
+    ipcRenderer.send('dictation:level', level);
+  },
+  onIndicatorMicLevel: (callback) => {
+    const listener = (_event: IpcRendererEvent, level: number | null) =>
+      callback(level);
+    ipcRenderer.on('indicator:mic-level', listener);
+    return () => ipcRenderer.removeListener('indicator:mic-level', listener);
+  },
   onExtensionWindowView: (callback) => {
     const listener = (
       _event: IpcRendererEvent,

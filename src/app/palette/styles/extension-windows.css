@@ -384,6 +384,14 @@
   animation: indicatorPulse 1.6s ease-in-out infinite;
 }
 
+html[data-mic-live="true"]
+  .extensionWindowChromeNone
+  .progressOverview::before {
+  animation: none;
+  opacity: 1;
+  transform: scale(calc(0.7 + var(--mic-level, 0) * 0.8));
+}
+
 .extensionWindowChromeNone .progressOverview[data-status="done"]::before {
   background: var(--success-text);
   box-shadow: none;
