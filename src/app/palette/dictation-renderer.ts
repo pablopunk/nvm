@@ -215,6 +215,7 @@ export async function recordDictation(
 }
 
 const MIC_LEVEL_MONITOR_INTERVAL_MS = 100;
+const MIC_LEVEL_WORKLET_BLOCK_FRAMES = 4096;
 
 function startMicLevelMonitor(
   stream: MediaStream,
@@ -222,33 +223,96 @@ function startMicLevelMonitor(
 ) {
   const context = new AudioContext();
   const source = context.createMediaStreamSource(stream);
-  const analyser = context.createAnalyser();
-  analyser.fftSize = 512;
-  source.connect(analyser);
-  const samples = new Float32Array(analyser.fftSize);
-  let smoothed = 0;
-  let lastSent = -1;
-  let stopped = false;
-  const timer = window.setInterval(() => {
-    if (stopped) return;
-    analyser.getFloatTimeDomainData(samples);
-    let peak = 0;
-    for (const sample of samples) {
-      const absolute = Math.abs(sample);
-      if (absolute > peak) peak = absolute;
-    }
-    smoothed = smoothMicLevel(smoothed, peak);
-    const rounded = Math.round(smoothed * 100) / 100;
-    if (rounded === lastSent) return;
-    lastSent = rounded;
+  const silentOutput = context.createGain();
+  silentOutput.gain.value = 0;
+  const monitor = {
+    smoothed: 0,
+    lastSent: -1,
+    stopped: false,
+  };
+  function emit(peak: number) {
+    if (monitor.stopped) return;
+    monitor.smoothed = smoothMicLevel(monitor.smoothed, peak);
+    const rounded = Math.round(monitor.smoothed * 100) / 100;
+    if (rounded === monitor.lastSent) return;
+    monitor.lastSent = rounded;
     onLevel(rounded);
-  }, MIC_LEVEL_MONITOR_INTERVAL_MS);
+  }
+
+  let worklet: AudioWorkletNode | undefined;
+  let fallbackTimer: number | undefined;
+  function startIntervalFallback() {
+    if (monitor.stopped || fallbackTimer !== undefined) return;
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    fallbackTimer = window.setInterval(() => {
+      if (monitor.stopped) return;
+      analyser.getFloatTimeDomainData(samples);
+      let peak = 0;
+      for (const sample of samples) {
+        const absolute = Math.abs(sample);
+        if (absolute > peak) peak = absolute;
+      }
+      emit(peak);
+    }, MIC_LEVEL_MONITOR_INTERVAL_MS);
+  }
+
+  const workletUrl = URL.createObjectURL(
+    new Blob(
+      [
+        `class MicLevelProcessor extends AudioWorkletProcessor {
+  blockPeak = 0;
+  blockFrames = 0;
+
+  process(inputs) {
+    const channel = inputs[0]?.[0];
+    if (channel?.length) {
+      for (const sample of channel) {
+        this.blockPeak = Math.max(this.blockPeak, Math.abs(sample));
+      }
+      this.blockFrames += channel.length;
+      if (this.blockFrames >= ${MIC_LEVEL_WORKLET_BLOCK_FRAMES}) {
+        this.port.postMessage(this.blockPeak);
+        this.blockPeak = 0;
+        this.blockFrames = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('mic-level', MicLevelProcessor);`,
+      ],
+      { type: 'text/javascript' },
+    ),
+  );
+  try {
+    void context.audioWorklet
+      .addModule(workletUrl)
+      .then(() => {
+        if (monitor.stopped) return;
+        worklet = new AudioWorkletNode(context, 'mic-level');
+        worklet.port.onmessage = (event) => emit(Number(event.data) || 0);
+        source
+          .connect(worklet)
+          .connect(silentOutput)
+          .connect(context.destination);
+      })
+      .catch(() => startIntervalFallback());
+  } catch {
+    startIntervalFallback();
+  }
+
   return {
     stop() {
-      if (stopped) return;
-      stopped = true;
-      window.clearInterval(timer);
+      if (monitor.stopped) return;
+      monitor.stopped = true;
+      if (fallbackTimer !== undefined) window.clearInterval(fallbackTimer);
+      URL.revokeObjectURL(workletUrl);
       source.disconnect();
+      worklet?.disconnect();
+      silentOutput.disconnect();
       void context.close().catch(() => {});
     },
   };
