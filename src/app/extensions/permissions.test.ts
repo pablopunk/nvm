@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import {
+import test, { mock } from 'node:test';
+import type { PermissionReader } from './permissions';
+
+mock.module('electron', {
+  namedExports: {
+    systemPreferences: {
+      getMediaAccessStatus: () => 'unknown',
+      isTrustedAccessibilityClient: () => false,
+      askForMediaAccess: async () => true,
+    },
+  },
+});
+
+const {
   createPermissionsExtension,
   normalizeMediaPermissionState,
   permissionsView,
   readOsPermissions,
-  type PermissionReader,
-} from './permissions';
+} = await import('./permissions');
 
 const PRIVACY_PANE_ID = 'com.apple.settings.PrivacySecurity.extension';
 

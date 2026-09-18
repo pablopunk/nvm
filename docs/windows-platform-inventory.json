@@ -1145,6 +1145,30 @@
       "selector": "function:createQuitAppsExtension/method:actions/property:run/property:onConfirm/call:ctx.actions.run('Quitting Apps')/variable:script::os-label::const script = ` set quitList to {} tell application \"System Events\" set appProcesses to every p…#777de162467b::declarationList.declarations[0].initializer",
       "disposition": "extension-author-documentation",
       "surface": "extensions-generated"
+    },
+    {
+      "key": "main-direct-platform-open-system-settings-pane",
+      "file": "src/app/electron/main.ts",
+      "category": "direct-platform",
+      "selector": "function:executeViewAction/case:'openSystemSettings'/variable:paneUrl::direct-platform::const paneUrl = systemSettingsPaneUrl( action.paneId, process.platform, action.anchor, );::declarationList.declarations[0].initializer.arguments[1]",
+      "disposition": "capability-adapter",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "permissions-direct-platform-electron-permission-reader",
+      "file": "src/app/extensions/permissions.ts",
+      "category": "direct-platform",
+      "selector": "function:electronPermissionReader/property:platform::direct-platform::platform: process.platform::initializer",
+      "disposition": "injected-service-default",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "palette-app-os-label-dictation-microphone-settings",
+      "file": "src/app/palette/App.tsx",
+      "category": "os-label",
+      "selector": "function:DictationRendererController/function:handleCommand/if:command.type === 'start'/if:micStatus === 'denied' || micStatus === 'restricted'/property:message::os-label::message: 'Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.'::initializer",
+      "disposition": "platform-neutral-copy",
+      "surface": "system-actions-settings"
     }
   ],
   "resolvedEntries": [
