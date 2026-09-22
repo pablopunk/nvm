@@ -37,7 +37,11 @@ const modelRoutes = [
   { slot: 'free-fast', title: 'Free fast', route: freeFastRoute },
 ] as const;
 const audioRoute = await getAudioModelRoute().catch(() => null);
-const audioModels = await listTranscriptionModels().catch(() => []);
+const audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
+const audioModels = (await listTranscriptionModels().catch(() => [])).map((model) => ({
+  ...model,
+  ref: modelRouteToRef(model),
+}));
 ---
 <Layout title="Nevermind · Admin" width="wide">
   <Combobox />
@@ -81,22 +85,22 @@ const audioModels = await listTranscriptionModels().catch(() => []);
           <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
         </section>
       ))}
-      <section class="audio-model-row" data-audio-model-route>
+      <section class="model-route-row" data-audio-model-route>
         <header class="model-route-row__header">
           <strong>Dictation audio</strong>
           <span class="status" data-audio-model-status></span>
         </header>
         <label class="field">Model
-          <select id="audio-model-select" class="input combo">
+          <select id="audio-model-select" class="input combo model-select">
             {audioModels.map((model) => (
               <option
-                value={`${model.provider}/${model.modelId}`}
-                selected={model.provider === audioRoute?.provider && model.modelId === audioRoute?.modelId}
-              >{model.name} · {model.modelId}</option>
+                value={model.ref}
+                selected={model.ref === audioRouteRef}
+              >{model.ref}</option>
             ))}
           </select>
         </label>
-        <p class="muted">Only OpenRouter models with audio input and transcription output are shown.</p>
+        <div class="route-details muted">Only OpenRouter models with audio input and transcription output are shown.</div>
       </section>
     </div>
   </div>
@@ -426,18 +430,17 @@ const audioModels = await listTranscriptionModels().catch(() => []);
       }
     }
     function wireAutosave() {
-      document.querySelectorAll('.model-route-row').forEach((row) => {
+      document.querySelectorAll('[data-model-route]').forEach((row) => {
         row.querySelectorAll('select').forEach((select) => {
           select.addEventListener('change', () => autosave(row));
         });
       });
     }
     wireAutosave();
-    const audioModelSelect = document.getElementById('audio-model-select');
-    audioModelSelect?.addEventListener('change', async () => {
+    async function autosaveAudioModel(audioModelSelect) {
       const status = document.querySelector('[data-audio-model-status]');
-      status.className = 'status';
-      status.textContent = 'Saving…';
+      setState(status, 'saving');
+      setSelectDisabled(audioModelSelect, true);
       const separator = audioModelSelect.value.indexOf('/');
       const provider = audioModelSelect.value.slice(0, separator);
       const modelId = audioModelSelect.value.slice(separator + 1);
@@ -448,14 +451,17 @@ const audioModels = await listTranscriptionModels().catch(() => []);
           body: JSON.stringify({ provider, modelId }),
         });
         if (!response.ok) throw new Error(await response.text());
-        status.className = 'status status--ok';
-        status.textContent = 'Saved ✓';
-      } catch (error) {
-        status.className = 'status status--err';
-        status.textContent = error instanceof Error ? error.message : 'Failed';
+        setState(status, 'saved');
+      } catch {
+        setState(status, 'error');
+      } finally {
+        setSelectDisabled(audioModelSelect, false);
+        if (status.classList.contains('status--ok')) setTimeout(() => setState(status, 'idle'), 1500);
       }
-    });
-    document.querySelectorAll('.model-route-row').forEach((row) => loadRouteDetails(row));
+    }
+    const audioModelSelect = document.getElementById('audio-model-select');
+    audioModelSelect?.addEventListener('change', () => autosaveAudioModel(audioModelSelect));
+    document.querySelectorAll('[data-model-route]').forEach((row) => loadRouteDetails(row));
     async function loadUsers() {
       const res = await fetch('/api/admin/users');
       const { users } = await res.json();
