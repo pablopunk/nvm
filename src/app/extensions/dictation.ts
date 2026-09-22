@@ -407,10 +407,7 @@ async function cleanTranscript(
     .join('\n')
     .trim()
     .slice(0, 4000);
-  const screenText = promptTerms.screenTerms
-    .join('\n')
-    .trim()
-    .slice(0, 2000);
+  const screenText = promptTerms.screenTerms.join('\n').trim().slice(0, 2000);
   const dictionaryPrompt = dictionaryText
     ? `\nPreferred terms and spellings (use only when supported by the dictated context):\n${dictionaryText}\n`
     : '';
