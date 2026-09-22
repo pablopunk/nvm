@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   measureDebugPerformance,
   measureDebugPerformanceSync,
+  recordDebugPerformance,
 } from './debug-performance';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import { getNevermindAuth } from './nevermind-auth';
