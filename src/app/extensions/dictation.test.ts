@@ -43,7 +43,20 @@ function dictationHandlerFor(context: any) {
     action: (input: unknown) => input,
   })[0];
   if (!contribution.run) throw new Error('Dictation action handler missing');
-  return contribution.run;
+  const run = contribution.run as (ctx: any, action: any) => unknown;
+  return (invocationContext: any, action: any) =>
+    run(
+      {
+        ...invocationContext,
+        dictation: invocationContext.dictation
+          ? {
+              apiAvailable: async () => true,
+              ...invocationContext.dictation,
+            }
+          : invocationContext.dictation,
+      },
+      action,
+    );
 }
 
 test('exposes Dictate and Dictation History root items', () => {
