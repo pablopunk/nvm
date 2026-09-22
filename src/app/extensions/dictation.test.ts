@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   createDeferredDictationIndicator,
   createDictationExtension,
+  extractScreenTerms,
+  mergeDictionaryTerms,
 } from './dictation';
 
 function actionFactory(title: string, handler: unknown, options = {}) {
@@ -667,6 +669,18 @@ test('renders and saves multiline dictionary settings', async () => {
     view.fields.find((field: any) => field.id === 'copyToClipboard').value,
     true,
   );
+  assert.equal(
+    view.fields.find((field: any) => field.id === 'useScreenContext').value,
+    false,
+  );
+  assert.equal(
+    view.fields.find((field: any) => field.id === 'useScreenContext').label,
+    'Use screen text',
+  );
+  assert.equal(
+    view.fields.find((field: any) => field.id === 'screenTermLimit').value,
+    '30',
+  );
   if (!saveHandler) throw new Error('Settings save handler was not registered');
 
   await saveHandler(context, {
@@ -676,6 +690,8 @@ test('renders and saves multiline dictionary settings', async () => {
       cleanupWithAi: true,
       dictionary: 'Nevermind\nParakeet\nWASM',
       copyToClipboard: false,
+      useScreenContext: true,
+      screenTermLimit: '50',
     },
   });
   assert.deepEqual(saved, [
@@ -686,6 +702,8 @@ test('renders and saves multiline dictionary settings', async () => {
         cleanupWithAi: true,
         dictionary: 'Nevermind\nParakeet\nWASM',
         copyToClipboard: false,
+        useScreenContext: true,
+        screenTermLimit: 50,
       },
     ],
   ]);
@@ -713,6 +731,235 @@ test('renders and saves multiline dictionary settings', async () => {
     },
   });
   assert.equal((saved.at(-1) as any)[1].cleanupWithAi, false);
+});
+
+test('extracts screen terms with stop-word filtering, dedup, and limits', () => {
+  assert.deepEqual(
+    extractScreenTerms('Nevermind Parakeet nevermind the and 42 ab', 30),
+    ['Nevermind', 'Parakeet'],
+  );
+  assert.deepEqual(extractScreenTerms('one two three four five', 3), [
+    'one',
+    'two',
+    'three',
+  ]);
+  assert.deepEqual(extractScreenTerms('', 30), []);
+  assert.deepEqual(extractScreenTerms('the and of to 7 x', 30), []);
+});
+
+test('merges dictionary terms before novel screen terms without repeats', () => {
+  assert.deepEqual(
+    mergeDictionaryTerms('Nevermind\nParakeet', ['parakeet', 'WASM']),
+    ['Nevermind', 'Parakeet', 'WASM'],
+  );
+  assert.deepEqual(mergeDictionaryTerms('', []), []);
+});
+
+test('adds screen terms as a separate cleanup section with counts only in logs', async () => {
+  const aiCalls: unknown[] = [];
+  const debugLogs: unknown[] = [];
+  const warnLogs: unknown[] = [];
+  let recording = false;
+  let screenCalls = 0;
+  const context = {
+    storage: {
+      get: async () => ({
+        deviceId: 'default',
+        keepAliveMs: 300_000,
+        cleanupWithAi: true,
+        dictionary: 'Nevermind',
+        copyToClipboard: false,
+        useScreenContext: true,
+        screenTermLimit: 30,
+      }),
+      set: async () => {},
+    },
+    dictation: {
+      status: async () => (recording ? 'recording' : 'idle'),
+      modelCacheStatus: async () => 'cached',
+      start: async () => {
+        recording = true;
+      },
+      stop: async () => {
+        recording = false;
+        return 'hello never mind dashboard';
+      },
+    },
+    ai: {
+      isAvailable: async () => true,
+      ask: async (...input: unknown[]) => {
+        aiCalls.push(input);
+        return 'Hello Nevermind Dashboard.';
+      },
+    },
+    system: { capabilities: { has: () => true } },
+    ocr: {
+      screen: async () => {
+        screenCalls += 1;
+        return { text: 'Nevermind Dashboard the settings', blocks: [] };
+      },
+    },
+    logs: {
+      debug: (...input: unknown[]) => {
+        debugLogs.push(input);
+      },
+      warn: (...input: unknown[]) => {
+        warnLogs.push(input);
+      },
+    },
+    ui: {
+      indicator: { show: () => {}, update: () => {}, hide: () => {} },
+    },
+    actions: actionBuilders({
+      pasteText: (text: string) => ({ type: 'pasteText', text }),
+    }),
+    navigation: { run: (action: unknown) => action },
+  };
+  const handler = dictationHandlerFor(context);
+
+  await handler(context, {});
+  await handler(context, {});
+
+  assert.equal(screenCalls, 1);
+  assert.equal(aiCalls.length, 1);
+  const prompt = String((aiCalls[0] as any)[0]);
+  assert.match(prompt, /Preferred terms and spellings/);
+  assert.match(prompt, /Nevermind/);
+  assert.match(prompt, /Screen terms/);
+  assert.match(prompt, /Dashboard/);
+  assert.equal(warnLogs.length, 0);
+  const screenLog = debugLogs.find((entry) =>
+    String((entry as any)[0]).includes('screen context'),
+  ) as any;
+  assert.equal(screenLog[1].screenTermCount, 2);
+  assert.equal(JSON.stringify(debugLogs).includes('Dashboard'), false);
+});
+
+test('falls back to plain cleanup when screen capture fails', async () => {
+  const aiCalls: unknown[] = [];
+  const warnLogs: unknown[] = [];
+  let recording = false;
+  const context = {
+    storage: {
+      get: async () => ({
+        cleanupWithAi: true,
+        dictionary: '',
+        useScreenContext: true,
+        screenTermLimit: 30,
+      }),
+      set: async () => {},
+    },
+    dictation: {
+      status: async () => (recording ? 'recording' : 'idle'),
+      modelCacheStatus: async () => 'cached',
+      start: async () => {
+        recording = true;
+      },
+      stop: async () => {
+        recording = false;
+        return 'raw transcript';
+      },
+    },
+    ai: {
+      isAvailable: async () => true,
+      ask: async (...input: unknown[]) => {
+        aiCalls.push(input);
+        return 'Raw transcript.';
+      },
+    },
+    system: { capabilities: { has: () => true } },
+    ocr: {
+      screen: async () => {
+        throw new Error('Screen recording denied');
+      },
+    },
+    logs: {
+      debug: () => {},
+      warn: (...input: unknown[]) => {
+        warnLogs.push(input);
+      },
+    },
+    ui: {
+      indicator: { show: () => {}, update: () => {}, hide: () => {} },
+    },
+    actions: actionBuilders({
+      pasteText: (text: string) => ({ type: 'pasteText', text }),
+    }),
+    navigation: { run: (action: unknown) => action },
+  };
+  const handler = dictationHandlerFor(context);
+
+  await handler(context, {});
+  const result = await handler(context, {});
+
+  assert.equal(aiCalls.length, 1);
+  assert.equal(String((aiCalls[0] as any)[0]).includes('Screen terms'), false);
+  assert.equal(warnLogs.length, 1);
+  assert.deepEqual(result, { type: 'pasteText', text: 'Raw transcript.' });
+});
+
+test('skips screen capture without OCR support or opt-in', async () => {
+  for (const settings of [
+    { useScreenContext: true, capabilities: { has: () => false } },
+    { useScreenContext: false, capabilities: { has: () => true } },
+  ]) {
+    let recording = false;
+    let screenCalls = 0;
+    const aiCalls: unknown[] = [];
+    const context = {
+      storage: {
+        get: async () => ({
+          cleanupWithAi: true,
+          dictionary: '',
+          screenTermLimit: 30,
+          useScreenContext: settings.useScreenContext,
+        }),
+        set: async () => {},
+      },
+      dictation: {
+        status: async () => (recording ? 'recording' : 'idle'),
+        modelCacheStatus: async () => 'cached',
+        start: async () => {
+          recording = true;
+        },
+        stop: async () => {
+          recording = false;
+          return 'raw transcript';
+        },
+      },
+      ai: {
+        isAvailable: async () => true,
+        ask: async (...input: unknown[]) => {
+          aiCalls.push(input);
+          return 'Raw transcript.';
+        },
+      },
+      system: settings,
+      ocr: {
+        screen: async () => {
+          screenCalls += 1;
+          return { text: 'Dashboard', blocks: [] };
+        },
+      },
+      ui: {
+        indicator: { show: () => {}, update: () => {}, hide: () => {} },
+      },
+      actions: actionBuilders({
+        pasteText: (text: string) => ({ type: 'pasteText', text }),
+      }),
+      navigation: { run: (action: unknown) => action },
+    };
+    const handler = dictationHandlerFor(context);
+
+    await handler(context, {});
+    await handler(context, {});
+
+    assert.equal(screenCalls, 0);
+    assert.equal(
+      String((aiCalls[0] as any)[0]).includes('Screen terms'),
+      false,
+    );
+  }
 });
 
 test('stores cleaned transcripts and manages bounded dictation history', async () => {
