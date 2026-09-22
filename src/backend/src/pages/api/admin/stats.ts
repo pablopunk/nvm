@@ -27,6 +27,7 @@ export const GET: APIRoute = async ({ request }) => {
     .select({
       model: usage.model,
       provider: usage.provider,
+      modality: usage.modality,
       requests: sql<number>`count(*)::int`,
       inputTokens: sql<number>`sum(${usage.inputTokens})::int`,
       outputTokens: sql<number>`sum(${usage.outputTokens})::int`,
@@ -38,9 +39,10 @@ export const GET: APIRoute = async ({ request }) => {
       cachedInputTokens: sql<number>`coalesce(sum(${usage.cachedInputTokens}),0)::bigint`,
       cacheWriteInputTokens: sql<number>`coalesce(sum(${usage.cacheWriteInputTokens}),0)::bigint`,
       reasoningTokens: sql<number>`coalesce(sum(${usage.reasoningTokens}),0)::bigint`,
+      audioDurationMs: sql<number>`coalesce(sum(${usage.audioDurationMs}),0)::bigint`,
     })
     .from(usage)
-    .groupBy(usage.model, usage.provider)
+    .groupBy(usage.model, usage.provider, usage.modality)
     .orderBy(sql`count(*) desc`);
 
   return Response.json({

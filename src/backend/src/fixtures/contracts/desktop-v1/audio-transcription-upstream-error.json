@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "upstream_error",
+    "message": "The transcription provider could not process the audio."
+  }
+}

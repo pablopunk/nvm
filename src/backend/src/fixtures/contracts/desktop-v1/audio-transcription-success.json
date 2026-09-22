@@ -1,0 +1,7 @@
+{
+  "text": "Hello from Dictate.",
+  "requestId": "request-audio-1",
+  "usage": {
+    "seconds": 1.25
+  }
+}

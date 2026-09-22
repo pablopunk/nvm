@@ -9,6 +9,7 @@ import { estimateInputTokensFromBody } from '../../lib/limits';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
+import { POST as postAudioTranscription } from './v1/audio/transcriptions';
 import { POST as postChatCompletion } from './v1/chat/completions';
 import { POST as postGoogleModel } from './v1/models/[...path]';
 
@@ -237,6 +238,7 @@ afterEach(() => {
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.OPENROUTER_BASE_URL;
   delete process.env.NEVERMIND_KILL_SWITCHES;
+  delete process.env.NEVERMIND_FEATURE_FLAGS;
   resetPricingCacheForTests();
 });
 
@@ -245,6 +247,48 @@ test('credit reservation reconciliation has an automatic daily schedule', () => 
   assert.deepEqual(
     vercelConfig.crons.find((cron: { path: string }) => cron.path === '/api/cron/credit-reservations'),
     { path: '/api/cron/credit-reservations', schedule: '15 6 * * *' },
+  );
+});
+
+test('audio transcription is additive and feature-gated for desktop v1', async () => {
+  installDb(
+    createFakeDb({
+      selects: [
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'free',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
+      ],
+    }),
+  );
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcriptions',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'application/json',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify({
+        input_audio: { data: 'unused', format: 'webm' },
+      }),
+    },
+  );
+  const response = await postAudioTranscription(routeContext(request));
+  assert.equal(response.status, 503);
+  assert.deepEqual(
+    await response.json(),
+    fixture('audio-transcription-feature-unavailable-error'),
   );
 });
 

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "feature_unavailable",
+    "message": "API dictation is not available."
+  }
+}

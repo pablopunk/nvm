@@ -2,9 +2,10 @@
 import Layout from '../layouts/Layout.astro';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { DEFAULT_THINKING_LEVEL, getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError, THINKING_LEVELS, type ModelRouteConfig, type ModelRouteSlot } from '../lib/settings';
+import { DEFAULT_THINKING_LEVEL, getAudioModelRoute, getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError, THINKING_LEVELS, type ModelRouteConfig, type ModelRouteSlot } from '../lib/settings';
 import { listModelsForProvider } from '../lib/pricing';
 import { CREDIT_USD } from '../lib/cost';
+import { listTranscriptionModels } from '../lib/transcription-models';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
@@ -35,6 +36,8 @@ const modelRoutes = [
   { slot: 'free-smart', title: 'Free smart', route: freeSmartRoute },
   { slot: 'free-fast', title: 'Free fast', route: freeFastRoute },
 ] as const;
+const audioRoute = await getAudioModelRoute().catch(() => null);
+const audioModels = await listTranscriptionModels().catch(() => []);
 ---
 <Layout title="Nevermind · Admin" width="wide">
   <Combobox />
@@ -57,7 +60,7 @@ const modelRoutes = [
 
   <div class="section card">
     <h3>Models</h3>
-    <p class="muted">Choose Smart and Fast models independently for Pro and Free users.</p>
+    <p class="muted">Choose Smart and Fast models independently for Pro and Free users, plus one Dictation audio model.</p>
     <div class="model-routes">
       {modelRoutes.map(({ slot, title, route }) => (
         <section class="model-route-row" data-model-route={slot}>
@@ -78,6 +81,23 @@ const modelRoutes = [
           <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
         </section>
       ))}
+      <section class="audio-model-row" data-audio-model-route>
+        <header class="model-route-row__header">
+          <strong>Dictation audio</strong>
+          <span class="status" data-audio-model-status></span>
+        </header>
+        <label class="field">Model
+          <select id="audio-model-select" class="input combo">
+            {audioModels.map((model) => (
+              <option
+                value={`${model.provider}/${model.modelId}`}
+                selected={model.provider === audioRoute?.provider && model.modelId === audioRoute?.modelId}
+              >{model.name} · {model.modelId}</option>
+            ))}
+          </select>
+        </label>
+        <p class="muted">Only OpenRouter models with audio input and transcription output are shown.</p>
+      </section>
     </div>
   </div>
 
@@ -106,7 +126,7 @@ const modelRoutes = [
     <div style="margin-top:16px;" class="card">
       <h3>Usage by model</h3>
       <table class="table" id="by-model">
-        <thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Failed</th><th>Input tok</th><th>Cached tok</th><th>Output tok</th><th>Reasoning tok</th><th>Credits</th><th>Upstream cost</th><th>Cost source</th><th>Retail value</th></tr></thead>
+        <thead><tr><th>Provider</th><th>Model</th><th>Mode</th><th>Requests</th><th>Failed</th><th>Input tok</th><th>Cached tok</th><th>Output tok</th><th>Reasoning tok</th><th>Audio</th><th>Credits</th><th>Upstream cost</th><th>Cost source</th><th>Retail value</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -349,8 +369,9 @@ const modelRoutes = [
             : !r.providerReportedRequests && !r.estimatedRequests
               ? 'Not billed'
               : 'Mixed';
-        return `<tr><td>${esc(r.provider) || '—'}</td><td><code>${esc(r.model)}</code></td><td>${r.requests}</td><td>${r.failedRequests}</td><td>${r.inputTokens}</td><td>${r.cachedInputTokens}</td><td>${r.outputTokens}</td><td>${r.reasoningTokens}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>${source}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
-      }).join('') || '<tr><td colspan="12" class="muted">No usage yet</td></tr>';
+        const audioSeconds = Number(r.audioDurationMs || 0) / 1000;
+        return `<tr><td>${esc(r.provider) || '—'}</td><td><code>${esc(r.model)}</code></td><td>${esc(r.modality || 'text')}</td><td>${r.requests}</td><td>${r.failedRequests}</td><td>${r.inputTokens}</td><td>${r.cachedInputTokens}</td><td>${r.outputTokens}</td><td>${r.reasoningTokens}</td><td>${audioSeconds ? `${audioSeconds.toFixed(1)}s` : '—'}</td><td>${r.costCredits}</td><td>$${usd.toFixed(4)}</td><td>${source}</td><td>$${collectedUsd.toFixed(4)}</td></tr>`;
+      }).join('') || '<tr><td colspan="14" class="muted">No usage yet</td></tr>';
     }
     function statusEl(purpose) {
       return document.querySelector(`[data-status-for="${purpose}"]`);
@@ -412,6 +433,28 @@ const modelRoutes = [
       });
     }
     wireAutosave();
+    const audioModelSelect = document.getElementById('audio-model-select');
+    audioModelSelect?.addEventListener('change', async () => {
+      const status = document.querySelector('[data-audio-model-status]');
+      status.className = 'status';
+      status.textContent = 'Saving…';
+      const separator = audioModelSelect.value.indexOf('/');
+      const provider = audioModelSelect.value.slice(0, separator);
+      const modelId = audioModelSelect.value.slice(separator + 1);
+      try {
+        const response = await fetch('/api/admin/audio-model', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, modelId }),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        status.className = 'status status--ok';
+        status.textContent = 'Saved ✓';
+      } catch (error) {
+        status.className = 'status status--err';
+        status.textContent = error instanceof Error ? error.message : 'Failed';
+      }
+    });
     document.querySelectorAll('.model-route-row').forEach((row) => loadRouteDetails(row));
     async function loadUsers() {
       const res = await fetch('/api/admin/users');

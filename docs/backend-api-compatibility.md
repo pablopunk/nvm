@@ -43,7 +43,7 @@ Feature flags may be returned by `GET /api/compatibility` in the `features` obje
 
 Desktop must use `requireNevermindCompatibilityFeature` or `nevermindCompatibilityFeatureEnabled` before relying on new backend-advertised behavior. The backend currently advertises `active_model_descriptor`, `proxy_streaming`, and `extension_ai_model_roles` by default so desktop can gate dynamic model routing, future streaming behavior, and admin-defined extension AI model roles explicitly.
 
-Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes. `NEVERMIND_KILL_SWITCHES` supports comma-list or JSON boolean switches for `ai_proxy`, `ai_streaming`, and `auth_device`.
+Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes. `NEVERMIND_KILL_SWITCHES` supports comma-list or JSON boolean switches for `ai_proxy`, `ai_streaming`, `audio_transcription`, and `auth_device`.
 
 ## API-major breaking-change criteria
 

@@ -56,6 +56,8 @@ export const usage = pgTable(
     cachedInputTokens: integer('cached_input_tokens').notNull().default(0),
     cacheWriteInputTokens: integer('cache_write_input_tokens').notNull().default(0),
     reasoningTokens: integer('reasoning_tokens').notNull().default(0),
+    modality: text('modality').notNull().default('text'),
+    audioDurationMs: integer('audio_duration_ms').notNull().default(0),
     costCredits: integer('cost_credits').notNull(),
     upstreamCostMicrocents: bigint('upstream_cost_microcents', { mode: 'number' }).notNull().default(0),
     upstreamCostSource: text('upstream_cost_source').notNull().default('catalog_estimate'),

@@ -35,6 +35,8 @@ const chatPerMinFree = makeLimiter('chat:min:free', 5, '1 m');
 const chatPerDayFree = makeLimiter('chat:day:free', 20, '1 d');
 const chatPerMinPaid = makeLimiter('chat:min:paid', 60, '1 m');
 const chatPerDayPaid = makeLimiter('chat:day:paid', 5000, '1 d');
+const transcriptionPerMin = makeLimiter('transcription:min', 20, '1 m');
+const transcriptionPerDay = makeLimiter('transcription:day', 1000, '1 d');
 
 export type RateLimitDecision = { ok: true } | { ok: false; retryAfterSec: number; scope: string };
 
@@ -83,6 +85,17 @@ export async function rateLimitChat(userId: string, kind: 'free' | 'paid'): Prom
   if (testOverrides.chat) return testOverrides.chat(userId, kind);
   const [perMin, perDay] = kind === 'free' ? [chatPerMinFree, chatPerDayFree] : [chatPerMinPaid, chatPerDayPaid];
   return checkPair(userId, `chat:${kind}`, perMin, perDay);
+}
+
+export async function rateLimitTranscription(
+  userId: string,
+): Promise<RateLimitDecision> {
+  return checkPair(
+    userId,
+    'transcription',
+    transcriptionPerMin,
+    transcriptionPerDay,
+  );
 }
 
 const ipLimiters = new Map<string, Ratelimit | null>();

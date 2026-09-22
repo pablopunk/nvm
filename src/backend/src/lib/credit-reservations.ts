@@ -85,6 +85,8 @@ export type ReservationFinalization = {
   };
   costRow?: ModelCost;
   providerCostUsd?: number;
+  modality?: 'text' | 'audio';
+  audioDurationMs?: number;
   costSource?: 'provider_reported' | 'catalog_estimate';
   status?: number;
   latencyMs?: number;
@@ -206,6 +208,8 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
           cachedInputTokens: input.tokens?.cachedInputTokens ?? 0,
           cacheWriteInputTokens: input.tokens?.cacheWriteInputTokens ?? 0,
           reasoningTokens: input.tokens?.reasoningTokens ?? 0,
+          modality: input.modality ?? 'text',
+          audioDurationMs: input.audioDurationMs ?? 0,
           costCredits: 0,
           upstreamCostMicrocents: 0,
           upstreamCostSource: 'not_billed',
@@ -220,14 +224,26 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
       log.info('credit_reservation_released', { request_id: input.requestId, user_id: reservation.userId, reserved_credits: reservation.reservedCredits });
       return 'released';
     }
-    if (!input.model || !input.provider || !input.tokens || !input.costRow || input.status == null || input.latencyMs == null) {
+    if (
+      !input.model ||
+      !input.provider ||
+      !input.tokens ||
+      (input.costRow == null && input.providerCostUsd == null) ||
+      input.status == null ||
+      input.latencyMs == null
+    ) {
       throw new Error('Settlement requires usage details');
     }
     const providerCostUsd = input.providerCostUsd;
     const hasProviderCost = providerCostUsd != null && Number.isFinite(providerCostUsd) && providerCostUsd >= 0;
     const costUsd = hasProviderCost
       ? providerCostUsd
-      : computeUsdCost(input.costRow, input.tokens.inputTokens, input.tokens.outputTokens, input.tokens);
+      : computeUsdCost(
+          input.costRow!,
+          input.tokens.inputTokens,
+          input.tokens.outputTokens,
+          input.tokens,
+        );
     const calculatedCredits = usdToCredits(costUsd);
     const credits = Math.min(calculatedCredits, reservation.reservedCredits);
     if (calculatedCredits > reservation.reservedCredits) {
@@ -256,6 +272,8 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
       cachedInputTokens: input.tokens.cachedInputTokens ?? 0,
       cacheWriteInputTokens: input.tokens.cacheWriteInputTokens ?? 0,
       reasoningTokens: input.tokens.reasoningTokens ?? 0,
+      modality: input.modality ?? 'text',
+      audioDurationMs: input.audioDurationMs ?? 0,
       costCredits: credits,
       upstreamCostMicrocents: microcents,
       upstreamCostSource: hasProviderCost ? 'provider_reported' : (input.costSource ?? 'catalog_estimate'),

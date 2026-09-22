@@ -22,6 +22,7 @@ const PRO_SMART_MODEL_ROUTE_KEY = 'pro_smart_model_route';
 const PRO_FAST_MODEL_ROUTE_KEY = 'pro_fast_model_route';
 const FREE_SMART_MODEL_ROUTE_KEY = 'free_smart_model_route';
 const FREE_FAST_MODEL_ROUTE_KEY = 'free_fast_model_route';
+const AUDIO_MODEL_ROUTE_KEY = 'audio_model_route';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
 const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter', 'anthropic', 'openai', 'google']);
@@ -32,6 +33,7 @@ export type TieredModelRouteSlot = `${ModelTier}-${ExtensionAiModelRole}`;
 type LegacyModelTier = 'free' | 'paid';
 export type ModelRouteSlot = LegacyModelTier | ExtensionAiModelRole | TieredModelRouteSlot;
 export type ModelRoute = { provider: string; modelId: string };
+export type AudioModelRoute = ModelRoute;
 export const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
@@ -46,7 +48,8 @@ type ModelSettingKey =
   | 'pro_smart_model_route'
   | 'pro_fast_model_route'
   | 'free_smart_model_route'
-  | 'free_fast_model_route';
+  | 'free_fast_model_route'
+  | 'audio_model_route';
 
 export class ModelNotConfiguredError extends Error {
   constructor(public key: ModelSettingKey) {
@@ -133,6 +136,21 @@ function modelRouteKey(slot: ModelRouteSlot): string {
   if (slot === 'free-smart') return FREE_SMART_MODEL_ROUTE_KEY;
   if (slot === 'free-fast') return FREE_FAST_MODEL_ROUTE_KEY;
   return slot === 'free' ? FREE_MODEL_ROUTE_KEY : ACTIVE_MODEL_ROUTE_KEY;
+}
+
+export async function getAudioModelRoute(): Promise<AudioModelRoute> {
+  const stored = parseStoredModelRoute(await getSetting(AUDIO_MODEL_ROUTE_KEY));
+  if (!stored) throw new ModelNotConfiguredError(AUDIO_MODEL_ROUTE_KEY);
+  return { provider: stored.provider, modelId: stored.modelId };
+}
+
+export async function setAudioModelRoute(route: AudioModelRoute) {
+  if (!KNOWN_PROVIDERS.has(route.provider))
+    throw new Error(`Unknown provider: ${route.provider}`);
+  await setSetting(
+    AUDIO_MODEL_ROUTE_KEY,
+    JSON.stringify({ ...route, thinkingLevel: 'off' }),
+  );
 }
 
 function legacyFallbackRouteSlots(slot: ModelRouteSlot): ModelRouteSlot[] {
