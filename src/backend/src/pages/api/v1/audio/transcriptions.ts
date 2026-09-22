@@ -27,7 +27,6 @@ import {
   ModelNotConfiguredError,
 } from '../../../../lib/settings';
 import { getUserFromBearer } from '../../../../lib/tokens';
-import { isCompatibleTranscriptionModel } from '../../../../lib/transcription-models';
 import { getUpstreamConfig, UpstreamConfigError } from '../../../../lib/upstream';
 import { ensureMonthlyFreeCredits, getBalances } from '../../../../lib/users';
 
@@ -74,6 +73,14 @@ type OpenRouterTranscription = {
   };
 };
 
+type TranscriptionTimings = Record<string, number>;
+
+function serverTimingHeader(timings: TranscriptionTimings) {
+  return Object.entries(timings)
+    .map(([name, duration]) => `${name};dur=${duration}`)
+    .join(', ');
+}
+
 function finiteNonnegative(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? value
@@ -89,10 +96,17 @@ function decodeBase64Audio(data: string) {
   return bytes;
 }
 
-function responseWithRequestId(body: unknown, status: number, requestId: string) {
+function responseWithRequestId(
+  body: unknown,
+  status: number,
+  requestId: string,
+  timings?: TranscriptionTimings,
+) {
+  const headers = compatibilityHeaders(requestId);
+  if (timings) headers.set('server-timing', serverTimingHeader(timings));
   return Response.json(body, {
     status,
-    headers: compatibilityHeaders(requestId),
+    headers,
   });
 }
 
@@ -124,10 +138,22 @@ async function releaseAfterFailure(input: {
 
 export const POST: APIRoute = async ({ request }) => {
   const startedAt = performance.now();
+  const timings: TranscriptionTimings = {};
+  async function timePhase<T>(name: string, task: () => Promise<T>) {
+    const phaseStartedAt = performance.now();
+    try {
+      return await task();
+    } finally {
+      timings[name] =
+        Math.round((performance.now() - phaseStartedAt) * 100) / 100;
+    }
+  }
   const requestId = requestIdFromHeaders(request.headers);
   const client = desktopClientFromRequest(request);
   if (unsupportedClientReason(client)) return compatibilityError(request);
-  const user = await getUserFromBearer(request.headers.get('authorization'));
+  const user = await timePhase('auth', () =>
+    getUserFromBearer(request.headers.get('authorization')),
+  );
   if (!user)
     return responseWithRequestId(
       { error: { type: 'unauthorized', message: 'Sign in to use API dictation.' } },
@@ -147,6 +173,7 @@ export const POST: APIRoute = async ({ request }) => {
       413,
       requestId,
     );
+  const requestStartedAt = performance.now();
   const rawBody = await request.text();
   if (Buffer.byteLength(rawBody) > MAX_REQUEST_BYTES)
     return responseWithRequestId(
@@ -178,6 +205,8 @@ export const POST: APIRoute = async ({ request }) => {
       400,
       requestId,
     );
+  timings.request =
+    Math.round((performance.now() - requestStartedAt) * 100) / 100;
   const idempotencyKey = request.headers.get('idempotency-key')?.trim();
   if (!idempotencyKey)
     return responseWithRequestId(
@@ -189,17 +218,36 @@ export const POST: APIRoute = async ({ request }) => {
     .update('/api/v1/audio/transcriptions\0')
     .update(rawBody)
     .digest('hex');
-  const duplicate = await handleDedup(
-    idempotencyKey,
-    user.id,
-    requestHash,
-    requestId,
+  const duplicate = await timePhase('dedup', () =>
+    handleDedup(idempotencyKey, user.id, requestHash, requestId),
   );
   if (duplicate) return duplicate;
-  await ensureMonthlyFreeCredits(user.id);
-  const balances = await getBalances(user.id);
+  const balancesPromise = (async () => {
+    await timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
+    return timePhase('balance', () => getBalances(user.id));
+  })();
+  const rateLimitPromise = timePhase('rate_limit', () =>
+    rateLimitTranscription(user.id),
+  );
+  const routePromise = timePhase('model', async () => {
+    const [route, providerEnabled] = await Promise.all([
+      getAudioModelRoute(),
+      isProviderEnabled('openrouter'),
+    ]);
+    if (route.provider !== 'openrouter')
+      throw new Error('Audio model provider must be OpenRouter');
+    if (!providerEnabled) throw new Error('Audio model provider is disabled');
+    return route;
+  }).then(
+    (route) => ({ route }),
+    (error: unknown) => ({ error }),
+  );
+  const [balances, rateLimit, routeResult] = await Promise.all([
+    balancesPromise,
+    rateLimitPromise,
+    routePromise,
+  ]);
   const kind = balances.paid > 0 ? 'paid' : 'free';
-  const rateLimit = await rateLimitTranscription(user.id);
   if (!rateLimit.ok) {
     await markDedupFailed({
       userId: user.id,
@@ -209,16 +257,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
     return tooManyRequests(rateLimit);
   }
-  let route: Awaited<ReturnType<typeof getAudioModelRoute>>;
-  try {
-    route = await getAudioModelRoute();
-    if (route.provider !== 'openrouter')
-      throw new Error('Audio model provider must be OpenRouter');
-    if (!(await isProviderEnabled(route.provider)))
-      throw new Error('Audio model provider is disabled');
-    if (!(await isCompatibleTranscriptionModel(route.provider, route.modelId)))
-      throw new Error('Audio model is no longer compatible');
-  } catch (error) {
+  if ('error' in routeResult) {
     await markDedupFailed({
       userId: user.id,
       idempotencyKey,
@@ -226,7 +265,7 @@ export const POST: APIRoute = async ({ request }) => {
       requestHash,
     });
     const message =
-      error instanceof ModelNotConfiguredError
+      routeResult.error instanceof ModelNotConfiguredError
         ? 'No audio transcription model is configured.'
         : 'Audio transcription is unavailable.';
     return responseWithRequestId(
@@ -235,12 +274,15 @@ export const POST: APIRoute = async ({ request }) => {
       requestId,
     );
   }
-  const reservation = await reserveCredits({
-    requestId,
-    userId: user.id,
-    kind,
-    credits: RESERVATION_CREDITS,
-  });
+  const route = routeResult.route;
+  const reservation = await timePhase('reserve', () =>
+    reserveCredits({
+      requestId,
+      userId: user.id,
+      kind,
+      credits: RESERVATION_CREDITS,
+    }),
+  );
   if (!reservation.ok) {
     await markDedupFailed({
       userId: user.id,
@@ -262,22 +304,28 @@ export const POST: APIRoute = async ({ request }) => {
   }
   try {
     const upstream = getUpstreamConfig('openrouter');
-    const upstreamResponse = await fetch(`${upstream.baseUrl}/audio/transcriptions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${upstream.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: route.modelId,
-        input_audio: parsed.data.input_audio,
-        response_format: 'json',
-      }),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    const { upstreamResponse, body } = await timePhase('provider', async () => {
+      const upstreamResponse = await fetch(
+        `${upstream.baseUrl}/audio/transcriptions`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${upstream.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: route.modelId,
+            input_audio: parsed.data.input_audio,
+            response_format: 'json',
+          }),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        },
+      );
+      const body = (await upstreamResponse.json().catch(() => null)) as
+        | OpenRouterTranscription
+        | null;
+      return { upstreamResponse, body };
     });
-    const body = (await upstreamResponse.json().catch(() => null)) as
-      | OpenRouterTranscription
-      | null;
     if (!upstreamResponse.ok || typeof body?.text !== 'string') {
       await releaseAfterFailure({
         requestId,
@@ -328,28 +376,31 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     const seconds = finiteNonnegative(body.usage?.seconds);
-    await finalizeReservation({
-      requestId,
-      outcome: 'settle',
-      model: route.modelId,
-      provider: route.provider,
-      modality: 'audio',
-      audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1_000),
-      tokens: {
-        inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
-        outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,
-      },
-      providerCostUsd,
-      status: upstreamResponse.status,
-      latencyMs: Math.round(performance.now() - startedAt),
-      dedup: {
-        userId: user.id,
-        idempotencyKey,
-        requestHash,
-        status: 'completed',
-        upstreamStatus: upstreamResponse.status,
-      },
-    });
+    await timePhase('settle', () =>
+      finalizeReservation({
+        requestId,
+        outcome: 'settle',
+        model: route.modelId,
+        provider: route.provider,
+        modality: 'audio',
+        audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1_000),
+        tokens: {
+          inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
+          outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,
+        },
+        providerCostUsd,
+        status: upstreamResponse.status,
+        latencyMs: Math.round(performance.now() - startedAt),
+        dedup: {
+          userId: user.id,
+          idempotencyKey,
+          requestHash,
+          status: 'completed',
+          upstreamStatus: upstreamResponse.status,
+        },
+      }),
+    );
+    timings.total = Math.round((performance.now() - startedAt) * 100) / 100;
     log.info('audio_transcription', {
       request_id: requestId,
       user_id: user.id,
@@ -359,6 +410,7 @@ export const POST: APIRoute = async ({ request }) => {
       latency_ms: Math.round(performance.now() - startedAt),
       audio_bytes: audio.length,
       audio_duration_ms: seconds == null ? undefined : Math.round(seconds * 1_000),
+      timings_ms: timings,
     });
     return responseWithRequestId(
       {
@@ -368,6 +420,7 @@ export const POST: APIRoute = async ({ request }) => {
       },
       200,
       requestId,
+      timings,
     );
   } catch (error) {
     log.warn('audio_transcription_failed', {

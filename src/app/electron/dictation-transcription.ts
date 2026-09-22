@@ -1,16 +1,43 @@
 import { randomUUID } from 'node:crypto';
+import {
+  measureDebugPerformance,
+  measureDebugPerformanceSync,
+} from './debug-performance';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import { getNevermindAuth } from './nevermind-auth';
-import { checkNevermindCompatibility } from './nevermind-compatibility';
 
 const MAX_AUDIO_BYTES = 4_194_304;
 const TRANSCRIPTION_TIMEOUT_MS = 16_000;
 const TRAILING_SLASH_PATTERN = /\/$/;
+const SERVER_TIMING_ENTRY_PATTERN = /^([a-z_]+);dur=([0-9.]+)$/;
 
 class ApiDictationUnavailableError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ApiDictationUnavailableError';
+  }
+}
+
+function recordBackendTimings(
+  header: string | null,
+  detail: Record<string, unknown>,
+) {
+  if (!header) {
+    return;
+  }
+  for (const rawEntry of header.split(',')) {
+    const match = rawEntry.trim().match(SERVER_TIMING_ENTRY_PATTERN);
+    if (!match) {
+      continue;
+    }
+    const durationMs = Number(match[2]);
+    if (!Number.isFinite(durationMs)) {
+      continue;
+    }
+    recordDebugPerformance(`dictation.backend.${match[1]}`, durationMs, {
+      ...detail,
+      alwaysLog: true,
+    });
   }
 }
 
@@ -32,18 +59,36 @@ async function transcribeDictationAudio(input: {
   ) {
     throw new ApiDictationUnavailableError('Unsupported dictation audio');
   }
-  const auth = await getNevermindAuth();
+  const timingDetail = { operationId: input.operationId, alwaysLog: true };
+  const auth = await measureDebugPerformance(
+    'dictation.auth',
+    timingDetail,
+    getNevermindAuth,
+  );
   if (!auth) {
     throw new ApiDictationUnavailableError('Sign in required');
   }
-  await checkNevermindCompatibility(auth.baseUrl);
   const timeout = AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS);
   const signal = AbortSignal.any([input.signal, timeout]);
-  const response = await requestTranscription(auth, input, signal);
-  const body = (await response.json().catch(() => null)) as {
-    text?: unknown;
-    error?: { message?: unknown };
-  } | null;
+  const requestId = randomUUID();
+  const response = await measureDebugPerformance(
+    'dictation.http-request',
+    { ...timingDetail, requestId, audioBytes: input.audio.byteLength },
+    () => requestTranscription(auth, input, signal, requestId),
+  );
+  recordBackendTimings(response.headers.get('server-timing'), {
+    operationId: input.operationId,
+    requestId,
+  });
+  const body = await measureDebugPerformance(
+    'dictation.response-parse',
+    { ...timingDetail, requestId, status: response.status },
+    async () =>
+      (await response.json().catch(() => null)) as {
+        text?: unknown;
+        error?: { message?: unknown };
+      } | null,
+  );
   if (!response.ok || typeof body?.text !== 'string') {
     throw new ApiDictationUnavailableError(
       typeof body?.error?.message === 'string'
@@ -62,7 +107,29 @@ async function requestTranscription(
     signal: AbortSignal;
   },
   signal: AbortSignal,
+  requestId: string,
 ) {
+  const timingDetail = {
+    operationId: input.operationId,
+    requestId,
+    alwaysLog: true,
+  };
+  const body = measureDebugPerformanceSync(
+    'dictation.request-encode',
+    { ...timingDetail, audioBytes: input.audio.byteLength },
+    () =>
+      JSON.stringify(
+        Object.fromEntries([
+          [
+            'input_audio',
+            {
+              data: Buffer.from(input.audio).toString('base64'),
+              format: 'webm',
+            },
+          ],
+        ]),
+      ),
+  );
   let response: Response;
   try {
     response = await fetch(
@@ -74,20 +141,10 @@ async function requestTranscription(
             ['Authorization', `Bearer ${auth.token}`],
             ['Content-Type', 'application/json'],
             ['Idempotency-Key', input.operationId],
-            ['X-Request-ID', randomUUID()],
+            ['X-Request-ID', requestId],
           ]),
         ),
-        body: JSON.stringify(
-          Object.fromEntries([
-            [
-              'input_audio',
-              {
-                data: Buffer.from(input.audio).toString('base64'),
-                format: 'webm',
-              },
-            ],
-          ]),
-        ),
+        body,
         signal,
       },
     );

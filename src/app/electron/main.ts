@@ -4807,6 +4807,18 @@ function suppressClipboardHistoryId(id: string, durationMs = 2000) {
 }
 
 async function pasteTextAction(action: any) {
+  if (action?.title === 'Paste Dictation') {
+    await measureDebugPerformance(
+      'dictation.host-paste',
+      {
+        textLength: String(action.text || '').length,
+        restoreClipboard: Boolean(action.restoreClipboard),
+        alwaysLog: true,
+      },
+      () => clipboardService!.pasteTextAction(action),
+    );
+    return;
+  }
   await clipboardService!.pasteTextAction(action);
 }
 

@@ -24,14 +24,12 @@ import {
 import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
-  confirmationReturnSurface,
   type ConfirmationReturnSurface,
+  confirmationReturnSurface,
 } from './action-menu-presentation';
+import { ActionPanel } from './action-panel';
 import { restoredAiChatView } from './ai-chat-navigation';
 import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
-import { recordDictation } from './dictation-renderer';
-import { dictationDevices } from './dictation-devices';
-import { ActionPanel } from './action-panel';
 import { isAppIconPath } from './app-icons';
 import {
   applyBuilderPreviewActionResult,
@@ -59,7 +57,8 @@ import {
   measureDebugPerformanceSync,
   recordPerformanceTrace,
 } from './debug-performance';
-import { createRendererPerformanceTrace } from './performance-trace';
+import { dictationDevices } from './dictation-devices';
+import { recordDictation } from './dictation-renderer';
 import { ExtensionViewRenderer } from './extension-view';
 import { feedbackView } from './feedback';
 import {
@@ -88,6 +87,7 @@ import {
   rootResultSelection,
 } from './palette-lifecycle';
 import { usePalettePrompt } from './palette-prompt';
+import { createRendererPerformanceTrace } from './performance-trace';
 import type {
   DictationCommand,
   NevermindApi,
@@ -1354,6 +1354,21 @@ function IndicatorMicLevelController({ windowId }: { windowId: string }) {
   return null;
 }
 
+function logDictationTiming(
+  name: string,
+  startedAt: number,
+  operationId: string,
+  detail: Record<string, unknown> = {},
+) {
+  void window.nvm.log('debug', 'performance.measure', {
+    name,
+    durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+    operationId,
+    ...detail,
+    alwaysLog: true,
+  });
+}
+
 function DictationRendererController() {
   const recordingRef = useRef<Awaited<
     ReturnType<typeof recordDictation>
@@ -1383,11 +1398,19 @@ function DictationRendererController() {
 
       if (command.type === 'start') {
         if (startPromiseRef.current || recordingRef.current) return;
+        const commandStartedAt = performance.now();
         dictationOperationRef.current = command.operationId;
         try {
+          const permissionStartedAt = performance.now();
           const micStatus = await window.nvm
             .getMicrophoneAccessStatus()
             .catch(() => 'unknown');
+          logDictationTiming(
+            'dictation.microphone-permission',
+            permissionStartedAt,
+            command.operationId,
+            { status: micStatus },
+          );
           window.nvm
             .log('debug', 'dictation.mic-status', { status: micStatus })
             .catch(() => {});
@@ -1404,11 +1427,18 @@ function DictationRendererController() {
           // Fall through to getUserMedia so the system prompt can appear.
         }
         async function openMicrophone(deviceId: string | undefined) {
+          const microphoneStartedAt = performance.now();
           const startPromise = recordDictation(deviceId, undefined, (level) =>
             window.nvm.sendDictationLevel(level),
           );
           startPromiseRef.current = startPromise;
           const recording = await startPromise;
+          logDictationTiming(
+            'dictation.microphone-open',
+            microphoneStartedAt,
+            command.operationId,
+            { requestedDevice: deviceId ? 'selected' : 'default' },
+          );
           recordingRef.current = recording;
           return recording;
         }
@@ -1428,6 +1458,11 @@ function DictationRendererController() {
             }
           }
           await recording.ready;
+          logDictationTiming(
+            'dictation.microphone-ready.renderer',
+            commandStartedAt,
+            command.operationId,
+          );
           window.nvm.replyDictation({
             type: 'recording',
             operationId: command.operationId,
@@ -1448,12 +1483,19 @@ function DictationRendererController() {
 
       if (command.type === 'stop') {
         if (command.operationId !== dictationOperationRef.current) return;
+        const stopStartedAt = performance.now();
         try {
           const recording =
             recordingRef.current || (await startPromiseRef.current);
           if (!recording) throw new Error('Dictation is not recording');
           recordingRef.current = null;
           const stopped = await recording.stop();
+          logDictationTiming(
+            'dictation.audio-finalize.renderer',
+            stopStartedAt,
+            command.operationId,
+            { audioBytes: stopped.audio.byteLength },
+          );
           window.nvm.replyDictation({
             type: 'audio',
             operationId: command.operationId,

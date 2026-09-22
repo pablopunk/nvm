@@ -1,4 +1,12 @@
+import { performance } from 'node:perf_hooks';
+import { recordDebugPerformance } from './debug-performance';
+
 const OPERATION_ID_RADIX = 36;
+
+interface DictationTiming {
+  startedAt: number;
+  stopRequestedAt?: number;
+}
 
 export type DictationRendererCommand =
   | {
@@ -40,6 +48,7 @@ export interface DictationService {
   reply(reply: DictationRendererReply): void;
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: One stateful lifecycle owns each dictation operation.
 export function createDictationService(
   send: (command: DictationRendererCommand) => void,
   dependencies: {
@@ -73,7 +82,21 @@ export function createDictationService(
   let systemAudioMute: { restore(): Promise<void> } | null = null;
   let operationCounter = 0;
   let activeOperationId: string | null = null;
+  let activeTiming: DictationTiming | null = null;
   let transcriptionAbort: AbortController | null = null;
+
+  function recordTiming(
+    name: string,
+    startedAt: number,
+    operationId: string,
+    detail: Record<string, unknown> = {},
+  ) {
+    recordDebugPerformance(name, performance.now() - startedAt, {
+      operationId,
+      ...detail,
+      alwaysLog: true,
+    });
+  }
 
   async function restoreSystemAudio() {
     const mute = systemAudioMute;
@@ -119,6 +142,7 @@ export function createDictationService(
     currentStatus = 'recording';
     const operationId = `dictation-${Date.now().toString(OPERATION_ID_RADIX)}-${(++operationCounter).toString(OPERATION_ID_RADIX)}`;
     activeOperationId = operationId;
+    activeTiming = { startedAt: performance.now() };
     const { muteSystemAudioWhileRecording, ...rendererOptions } = options;
     const command = { type: 'start' as const, operationId, ...rendererOptions };
     if (muteSystemAudioWhileRecording && dependencies.muteSystemAudio) {
@@ -137,6 +161,8 @@ export function createDictationService(
             error instanceof Error ? error : new Error(String(error)),
           );
           pendingStart = null;
+          activeOperationId = null;
+          activeTiming = null;
         });
     } else {
       send(command);
@@ -154,6 +180,9 @@ export function createDictationService(
       return Promise.reject(new Error('Dictation operation is unavailable'));
     }
     currentStatus = 'transcribing';
+    if (activeTiming) {
+      activeTiming.stopRequestedAt = performance.now();
+    }
     const promise = new Promise<string>((resolve, reject) => {
       pendingStop = { resolve, reject };
     });
@@ -174,6 +203,7 @@ export function createDictationService(
     pendingStop = null;
     const operationId = activeOperationId ?? undefined;
     activeOperationId = null;
+    activeTiming = null;
     return restoreSystemAudio().finally(() =>
       send({ type: 'cancel', operationId }),
     );
@@ -199,6 +229,13 @@ export function createDictationService(
       }
       pendingStart?.resolve();
       pendingStart = null;
+      if (activeTiming) {
+        recordTiming(
+          'dictation.microphone-ready',
+          activeTiming.startedAt,
+          reply.operationId,
+        );
+      }
       return;
     }
     if (reply.type === 'audio') {
@@ -231,6 +268,15 @@ export function createDictationService(
     }
     const controller = new AbortController();
     transcriptionAbort = controller;
+    const audioReceivedAt = performance.now();
+    if (activeTiming?.stopRequestedAt) {
+      recordTiming(
+        'dictation.audio-finalize',
+        activeTiming.stopRequestedAt,
+        reply.operationId,
+        { audioBytes: reply.audio.byteLength },
+      );
+    }
     dependencies
       .transcribeAudio({
         operationId: reply.operationId,
@@ -242,6 +288,12 @@ export function createDictationService(
         if (reply.operationId !== activeOperationId) {
           return;
         }
+        recordTiming(
+          'dictation.cloud-transcription',
+          audioReceivedAt,
+          reply.operationId,
+          { transcriptLength: text.length },
+        );
         finishTranscription(reply.operationId, text);
       })
       .catch((error) => {
@@ -279,15 +331,25 @@ export function createDictationService(
       send({ type: 'release', operationId: reply.operationId });
     }
     activeOperationId = null;
+    activeTiming = null;
   }
 
   function finishTranscription(operationId: string, text: string) {
+    if (activeTiming?.stopRequestedAt) {
+      recordTiming(
+        'dictation.stop-to-transcript',
+        activeTiming.stopRequestedAt,
+        operationId,
+        { transcriptLength: text.length },
+      );
+    }
     currentStatus = 'idle';
     restoreSystemAudio();
     pendingStop?.resolve(text);
     pendingStop = null;
     send({ type: 'release', operationId });
     activeOperationId = null;
+    activeTiming = null;
   }
 
   function failTranscription(operationId: string, error: Error) {
@@ -296,6 +358,7 @@ export function createDictationService(
     pendingStop = null;
     send({ type: 'release', operationId });
     activeOperationId = null;
+    activeTiming = null;
   }
 
   return {
