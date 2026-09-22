@@ -1399,7 +1399,8 @@ function DictationRendererController() {
       if (command.type === 'start') {
         if (startPromiseRef.current || recordingRef.current) return;
         const commandStartedAt = performance.now();
-        dictationOperationRef.current = command.operationId;
+        const operationId = command.operationId;
+        dictationOperationRef.current = operationId;
         try {
           const permissionStartedAt = performance.now();
           const micStatus = await window.nvm
@@ -1436,7 +1437,7 @@ function DictationRendererController() {
           logDictationTiming(
             'dictation.microphone-open',
             microphoneStartedAt,
-            command.operationId,
+            operationId,
             { requestedDevice: deviceId ? 'selected' : 'default' },
           );
           recordingRef.current = recording;

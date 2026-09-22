@@ -1,5 +1,4 @@
 import { performance } from 'node:perf_hooks';
-import { recordDebugPerformance } from './debug-performance';
 
 const OPERATION_ID_RADIX = 36;
 
@@ -61,6 +60,11 @@ export function createDictationService(
       signal: AbortSignal;
     }) => Promise<string>;
     apiAvailable?: () => Promise<boolean>;
+    recordTiming?: (
+      name: string,
+      durationMs: number,
+      detail?: Record<string, unknown>,
+    ) => void;
   } = {},
 ): DictationService {
   let currentStatus = 'idle';
@@ -91,7 +95,7 @@ export function createDictationService(
     operationId: string,
     detail: Record<string, unknown> = {},
   ) {
-    recordDebugPerformance(name, performance.now() - startedAt, {
+    dependencies.recordTiming?.(name, performance.now() - startedAt, {
       operationId,
       ...detail,
       alwaysLog: true,

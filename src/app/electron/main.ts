@@ -370,6 +370,7 @@ const dictationService = createDictationService(
       }),
     apiAvailable: apiDictationIsAvailable,
     transcribeAudio: transcribeDictationAudio,
+    recordTiming: recordDebugPerformance,
   },
 );
 const extensionWindowManager = createExtensionWindowManager({
