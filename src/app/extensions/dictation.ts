@@ -171,6 +171,24 @@ export function mergeDictionaryTerms(
   return merged;
 }
 
+function cleanupPromptTermGroups(dictionary: string, screenTerms: string[]) {
+  const dictionaryKeys = new Set(
+    dictionary
+      .split('\n')
+      .map((line) => line.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const mergedTerms = mergeDictionaryTerms(dictionary, screenTerms);
+  return {
+    dictionaryTerms: mergedTerms.filter((term) =>
+      dictionaryKeys.has(term.toLowerCase()),
+    ),
+    screenTerms: mergedTerms.filter(
+      (term) => !dictionaryKeys.has(term.toLowerCase()),
+    ),
+  };
+}
+
 function screenResultText(result: unknown) {
   if (typeof result === 'string') return result;
   if (!result || typeof result !== 'object') return '';
@@ -384,20 +402,12 @@ async function cleanTranscript(
   screenTerms: string[] = [],
 ) {
   if (!(enabled && ctx.ai)) return transcript;
-  const mergedTerms = mergeDictionaryTerms(dictionary, screenTerms);
-  const dictionaryKeys = new Set(
-    dictionary
-      .split('\n')
-      .map((line) => line.trim().toLowerCase())
-      .filter(Boolean),
-  );
-  const dictionaryText = mergedTerms
-    .filter((term) => dictionaryKeys.has(term.toLowerCase()))
+  const promptTerms = cleanupPromptTermGroups(dictionary, screenTerms);
+  const dictionaryText = promptTerms.dictionaryTerms
     .join('\n')
     .trim()
     .slice(0, 4000);
-  const screenText = mergedTerms
-    .filter((term) => !dictionaryKeys.has(term.toLowerCase()))
+  const screenText = promptTerms.screenTerms
     .join('\n')
     .trim()
     .slice(0, 2000);
@@ -587,9 +597,13 @@ async function runDictation(ctx: any) {
     const transcript = await ctx.dictation.stop();
     const transcribedAt = performance.now();
     const screenTerms = await screenTermsPromise;
+    const promptTerms = cleanupPromptTermGroups(
+      settings.dictionary,
+      screenTerms,
+    );
     ctx.logs?.debug?.('Dictation screen context ready', {
       enabled: settings.useScreenContext,
-      screenTermCount: screenTerms.length,
+      screenTermCount: promptTerms.screenTerms.length,
     });
     ctx.logs?.debug?.('Dictation transcription completed', {
       durationMs: Math.round(transcribedAt - stoppedAt),
