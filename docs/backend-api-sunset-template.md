@@ -7,7 +7,7 @@ Use this document when a real breaking change requires a new backend API major s
 - Current API major:
 - New API major:
 - Breaking change summary:
-- Why additive fields, feature flags, or compatibility shims are insufficient:
+- Why additive fields or compatibility shims are insufficient:
 
 ## Client count evidence
 

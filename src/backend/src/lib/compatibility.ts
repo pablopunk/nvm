@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { log } from './log';
 
 export const DESKTOP_API_VERSION = 1;
@@ -12,25 +12,14 @@ export type DesktopClient = {
   arch: string | null;
 };
 
-const DEFAULT_FEATURES: Record<string, FeatureFlagRule> = {
+const LEGACY_COMPATIBILITY_FEATURES = {
   active_model_descriptor: true,
   ai_credit_status: true,
   proxy_streaming: true,
   extension_ai_model_roles: true,
-};
+} as const;
 
-type FeatureFlagRule = boolean | {
-  enabled?: boolean;
-  minDesktopVersion?: string;
-  maxDesktopVersion?: string;
-  users?: string[];
-  plans?: string[];
-  rolloutPercent?: number;
-};
-
-export type FeatureFlagContext = {
-  userId?: string | null;
-  plan?: string | null;
+export type CompatibilityContext = {
   requestId?: string | null;
   route?: string;
 };
@@ -95,12 +84,10 @@ export function desktopClientFromRequest(request: Request): DesktopClient {
   };
 }
 
-export function compatibilityManifestForRequest(request: Request, context: FeatureFlagContext = {}): CompatibilityManifest {
+export function compatibilityManifestForRequest(request: Request, context: CompatibilityContext = {}): CompatibilityManifest {
   const client = desktopClientFromRequest(request);
   const unsupportedReason = unsupportedClientReason(client);
-  const features = compatibilityFeaturesForClient(client, context);
   logDesktopClientSeen(client, context, !unsupportedReason);
-  logFeatureEvaluations(features, client, context);
   return {
     backend: {
       version: backendVersion(),
@@ -121,7 +108,7 @@ export function compatibilityManifestForRequest(request: Request, context: Featu
       compatible: !unsupportedReason,
       unsupportedReason,
     },
-    features,
+    features: { ...LEGACY_COMPATIBILITY_FEATURES },
     notices: [],
   };
 }
@@ -131,11 +118,6 @@ export function compatibilityHeaders(requestId?: string) {
   headers.set('x-nevermind-backend-version', backendVersion());
   if (requestId) headers.set('x-request-id', requestId);
   return headers;
-}
-
-export function compatibilityFeaturesForClient(client: DesktopClient, context: FeatureFlagContext = {}) {
-  const definitions = featureFlagDefinitions();
-  return Object.fromEntries(Object.entries(definitions).map(([name, rule]) => [name, evaluateFeatureFlag(name, rule, client, context)]));
 }
 
 export function backendKillSwitchEnabled(name: string) {
@@ -194,40 +176,7 @@ export function compareVersions(left: string, right: string) {
   return 0;
 }
 
-function featureFlagDefinitions(): Record<string, FeatureFlagRule> {
-  const raw = process.env.NEVERMIND_FEATURE_FLAGS?.trim();
-  if (!raw) return DEFAULT_FEATURES;
-  if (!raw.startsWith('{')) {
-    const envFeatures = Object.fromEntries(raw.split(',').map((name) => [name.trim(), true]).filter(([name]) => Boolean(name)));
-    return { ...DEFAULT_FEATURES, ...envFeatures };
-  }
-  try {
-    const parsed = JSON.parse(raw) as Record<string, FeatureFlagRule>;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...DEFAULT_FEATURES, ...parsed } : DEFAULT_FEATURES;
-  } catch (error) {
-    log.warn('feature_flags_parse_failed', { error });
-    return DEFAULT_FEATURES;
-  }
-}
-
-function evaluateFeatureFlag(name: string, rule: FeatureFlagRule, client: DesktopClient, context: FeatureFlagContext) {
-  if (typeof rule === 'boolean') return rule;
-  if (!rule || rule.enabled === false) return false;
-  if (rule.minDesktopVersion && (!client.version || compareVersions(client.version, rule.minDesktopVersion) < 0)) return false;
-  if (rule.maxDesktopVersion && (!client.version || compareVersions(client.version, rule.maxDesktopVersion) > 0)) return false;
-  if (rule.users?.length && (!context.userId || !rule.users.includes(context.userId))) return false;
-  if (rule.plans?.length && (!context.plan || !rule.plans.includes(context.plan))) return false;
-  if (typeof rule.rolloutPercent === 'number' && rolloutBucket(name, client, context) >= Math.max(0, Math.min(100, rule.rolloutPercent))) return false;
-  return true;
-}
-
-function rolloutBucket(name: string, client: DesktopClient, context: FeatureFlagContext) {
-  const key = [name, context.userId, context.plan, client.name, client.version, client.platform, client.arch].filter(Boolean).join(':') || name;
-  const hex = createHash('sha256').update(key).digest('hex').slice(0, 8);
-  return Number.parseInt(hex, 16) % 100;
-}
-
-function logDesktopClientSeen(client: DesktopClient, context: FeatureFlagContext, compatible: boolean) {
+function logDesktopClientSeen(client: DesktopClient, context: CompatibilityContext, compatible: boolean) {
   log.info('desktop_client_seen', {
     request_id: context.requestId || undefined,
     route: context.route || 'compatibility',
@@ -237,20 +186,6 @@ function logDesktopClientSeen(client: DesktopClient, context: FeatureFlagContext
     client_platform: client.platform,
     client_arch: client.arch,
     compatible,
-  });
-}
-
-function logFeatureEvaluations(features: Record<string, boolean>, client: DesktopClient, context: FeatureFlagContext) {
-  if (!Object.keys(features).length) return;
-  log.info('feature_flags_evaluated', {
-    request_id: context.requestId || undefined,
-    route: context.route || 'compatibility',
-    user_id: context.userId || undefined,
-    plan: context.plan || undefined,
-    client_name: client.name,
-    client_version: client.version,
-    client_api_version: client.apiVersion,
-    features,
   });
 }
 

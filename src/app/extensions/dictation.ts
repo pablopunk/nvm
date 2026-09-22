@@ -389,10 +389,7 @@ async function runDictation(ctx: any) {
       const apiAvailable =
         typeof ctx.dictation.apiAvailable === 'function' &&
         (await ctx.dictation.apiAvailable().catch(() => false));
-      if (!apiAvailable)
-        throw new Error(
-          'Cloud dictation is unavailable; sign in and try again',
-        );
+      if (!apiAvailable) throw new Error('Sign in to use cloud dictation');
       deferredIndicator.begin(WAITING_FOR_MICROPHONE_INDICATOR);
       const devicesPromise = ctx.dictation.devices?.().catch(() => []) ?? [];
       const startPromise = ctx.dictation.start({

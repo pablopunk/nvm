@@ -26,8 +26,7 @@
     "active_model_descriptor": true,
     "ai_credit_status": true,
     "proxy_streaming": true,
-    "extension_ai_model_roles": true,
-    "streaming_v2": true
+    "extension_ai_model_roles": true
   },
   "notices": []
 }

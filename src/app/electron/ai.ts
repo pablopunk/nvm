@@ -31,10 +31,7 @@ import {
   getNevermindDashboardUrl,
   NevermindAuthRequiredError,
 } from './nevermind-auth';
-import {
-  checkNevermindCompatibility,
-  requireNevermindCompatibilityFeature,
-} from './nevermind-compatibility';
+import { checkNevermindCompatibility } from './nevermind-compatibility';
 
 type AiEvent = {
   type: string;
@@ -1380,10 +1377,7 @@ async function fetchActiveModelDescriptor(
   forceFree = false,
 ): Promise<BackendDescriptor> {
   const trimmed = baseUrl.replace(/\/$/, '');
-  const manifest = await checkNevermindCompatibility(trimmed);
-  requireNevermindCompatibilityFeature('active_model_descriptor', manifest);
-  if (modelRole)
-    requireNevermindCompatibilityFeature('extension_ai_model_roles', manifest);
+  await checkNevermindCompatibility(trimmed);
   const query = new URLSearchParams();
   if (modelRole) query.set('model', modelRole);
   if (chars && chars > 0) query.set('chars', String(chars));

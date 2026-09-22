@@ -238,7 +238,6 @@ afterEach(() => {
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.OPENROUTER_BASE_URL;
   delete process.env.NEVERMIND_KILL_SWITCHES;
-  delete process.env.NEVERMIND_FEATURE_FLAGS;
   resetPricingCacheForTests();
 });
 
@@ -250,7 +249,8 @@ test('credit reservation reconciliation has an automatic daily schedule', () => 
   );
 });
 
-test('audio transcription is additive and feature-gated for desktop v1', async () => {
+test('audio transcription supports an emergency kill switch for desktop v1', async () => {
+  process.env.NEVERMIND_KILL_SWITCHES = 'audio_transcription';
   installDb(
     createFakeDb({
       selects: [
@@ -288,7 +288,7 @@ test('audio transcription is additive and feature-gated for desktop v1', async (
   assert.equal(response.status, 503);
   assert.deepEqual(
     await response.json(),
-    fixture('audio-transcription-feature-unavailable-error'),
+    fixture('audio-transcription-disabled-error'),
   );
 });
 

@@ -321,8 +321,7 @@ test('keeps startup errors connected to the dictation indicator', async () => {
     {
       id: 'dictation',
       title: 'Dictation',
-      subtitle:
-        'Dictation unavailable: Cloud dictation is unavailable; sign in and try again',
+      subtitle: 'Dictation unavailable: Sign in to use cloud dictation',
       status: 'error',
       durationMs: 4_000,
     },

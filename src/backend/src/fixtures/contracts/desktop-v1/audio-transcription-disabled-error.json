@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "service_unavailable",
+    "message": "API dictation is temporarily unavailable."
+  }
+}

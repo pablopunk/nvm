@@ -11,5 +11,4 @@ If this PR changes backend routes, proxy/auth/token/device flows, model descript
 
 - [ ] Updated route-level contract tests.
 - [ ] Updated `src/backend/src/fixtures/contracts/` fixtures when supported desktop clients depend on the changed shape.
-- [ ] Confirmed the change is additive, feature-gated, versioned, or has explicit unsupported-client update UX.
-
+- [ ] Confirmed the change is additive, versioned, shimmed, or has explicit unsupported-client update UX.

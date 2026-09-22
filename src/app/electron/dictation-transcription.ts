@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import { getNevermindAuth } from './nevermind-auth';
-import {
-  checkNevermindCompatibility,
-  nevermindCompatibilityFeatureEnabled,
-} from './nevermind-compatibility';
+import { checkNevermindCompatibility } from './nevermind-compatibility';
 
 const MAX_AUDIO_BYTES = 4_194_304;
 const TRANSCRIPTION_TIMEOUT_MS = 16_000;
@@ -19,14 +16,7 @@ class ApiDictationUnavailableError extends Error {
 
 async function apiDictationIsAvailable() {
   const auth = await getNevermindAuth();
-  if (!auth) {
-    return false;
-  }
-  const manifest = await checkNevermindCompatibility(auth.baseUrl);
-  return nevermindCompatibilityFeatureEnabled(
-    'dictation_transcription_api',
-    manifest,
-  );
+  return auth !== null;
 }
 
 async function transcribeDictationAudio(input: {
@@ -46,15 +36,7 @@ async function transcribeDictationAudio(input: {
   if (!auth) {
     throw new ApiDictationUnavailableError('Sign in required');
   }
-  const manifest = await checkNevermindCompatibility(auth.baseUrl);
-  if (
-    !nevermindCompatibilityFeatureEnabled(
-      'dictation_transcription_api',
-      manifest,
-    )
-  ) {
-    throw new ApiDictationUnavailableError('API dictation is unavailable');
-  }
+  await checkNevermindCompatibility(auth.baseUrl);
   const timeout = AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS);
   const signal = AbortSignal.any([input.signal, timeout]);
   const response = await requestTranscription(auth, input, signal);

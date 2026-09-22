@@ -21,11 +21,11 @@ Emergency security blocks may shorten the window, but the backend must return a 
 
 Desktop backend requests should include non-secret identity metadata: app name, desktop app version, requested API contract version, platform, architecture, and an optional request ID.
 
-These values are for compatibility, observability, support, and feature gating. They are not authentication and must not replace token/session checks.
+These values are for compatibility, observability, and support. They are not authentication and must not replace token/session checks.
 
 ## Compatibility manifest
 
-The backend owns a small manifest that desktop can fetch during startup, sign-in, and AI setup. The manifest should describe the backend deployment, current and supported API majors, minimum supported desktop version, latest known desktop version, available feature flags, and any deprecation or force-update notices.
+The backend owns a small manifest that desktop can fetch during startup, sign-in, and AI setup. The manifest should describe the backend deployment, current and supported API majors, minimum supported desktop version, latest known desktop version, and any deprecation or force-update notices.
 
 Desktop should cache the last successful manifest, show cached state immediately, and refresh in place.
 
@@ -35,19 +35,15 @@ Compatibility failures should use a consistent JSON shape with a machine-readabl
 
 Desktop should translate these responses into palette-safe account/update UI and reuse the existing update actions where possible.
 
-## Feature rollout
+## Feature delivery
 
-New backend capabilities should be gated by explicit manifest features, not inferred from backend deploy versions. Desktop should ignore unknown features and only enable new behavior when the expected feature is present.
-
-Feature flags may be returned by `GET /api/compatibility` in the `features` object. Backend configuration supports simple comma-list flags and JSON rules with desktop version, user, plan, and rollout constraints. Rollout percentages must be deterministic for a client/user so support can reason about why a user did or did not receive a feature.
-
-Desktop must use `requireNevermindCompatibilityFeature` or `nevermindCompatibilityFeatureEnabled` before relying on new backend-advertised behavior. The backend currently advertises `active_model_descriptor`, `proxy_streaming`, and `extension_ai_model_roles` by default so desktop can gate dynamic model routing, future streaming behavior, and admin-defined extension AI model roles explicitly.
+Ship features directly with additive contracts or compatibility shims. Nevermind does not use feature flags or staged rollouts. The manifest retains its legacy `features` object with always-on values only for compatibility with released desktop clients.
 
 Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes. `NEVERMIND_KILL_SWITCHES` supports comma-list or JSON boolean switches for `ai_proxy`, `ai_streaming`, `audio_transcription`, and `auth_device`.
 
 ## API-major breaking-change criteria
 
-Create a new API major, such as `/api/v2`, only when a backend change cannot be safely represented as an additive field, optional feature flag, compatibility shim, or explicit unsupported-client block inside the current major.
+Create a new API major, such as `/api/v2`, only when a backend change cannot be safely represented as an additive field, compatibility shim, or explicit unsupported-client block inside the current major.
 
 A change is API-major breaking when it removes or renames a field used by a supported desktop release, changes an error type/status that desktop handles specially, changes auth or billing semantics, changes model descriptor/provider routing in a way old clients cannot understand, changes streaming framing or termination semantics, or requires desktop to send a new non-optional request field/header.
 
@@ -81,7 +77,7 @@ For any PR touching `src/backend/src/pages/api`, `src/backend/src/lib/proxy.ts`,
 Before changing a backend route used by desktop, decide whether the change is:
 
 1. Additive and safe for older clients.
-2. Gated by a feature flag or desktop version.
+2. Compatible through an existing desktop version boundary.
 3. A new API major version.
 4. A compatibility shim that keeps old clients working.
 5. An intentional unsupported-client block with update UX.

@@ -49,13 +49,6 @@ const invalidationVersions = new Map<string, number>();
 const listeners = new Set<CompatibilityListener>();
 let cacheLoadPromise: Promise<void> | null = null;
 
-export class NevermindFeatureUnavailableError extends Error {
-  constructor(public feature: string) {
-    super(`Nevermind backend feature is unavailable: ${feature}`);
-    this.name = 'NevermindFeatureUnavailableError';
-  }
-}
-
 export class NevermindCompatibilityError extends Error {
   updateUrl?: string;
   minimumSupportedVersion?: string;
@@ -97,21 +90,6 @@ export function currentNevermindCompatibilityManifest(baseUrl?: string) {
 export async function getCachedNevermindCompatibilityManifest(baseUrl: string) {
   await loadCompatibilityCache();
   return currentNevermindCompatibilityManifest(baseUrl);
-}
-
-export function nevermindCompatibilityFeatureEnabled(
-  feature: string,
-  manifest = currentNevermindCompatibilityManifest(),
-) {
-  return manifest?.features?.[feature] === true;
-}
-
-export function requireNevermindCompatibilityFeature(
-  feature: string,
-  manifest = currentNevermindCompatibilityManifest(),
-) {
-  if (!nevermindCompatibilityFeatureEnabled(feature, manifest))
-    throw new NevermindFeatureUnavailableError(feature);
 }
 
 export function warmNevermindCompatibilityCache(baseUrl: string) {

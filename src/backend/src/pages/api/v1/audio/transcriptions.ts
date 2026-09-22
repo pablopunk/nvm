@@ -9,7 +9,6 @@ import {
 import {
   backendKillSwitchEnabled,
   compatibilityError,
-  compatibilityFeaturesForClient,
   compatibilityHeaders,
   desktopClientFromRequest,
   killSwitchResponse,
@@ -133,23 +132,6 @@ export const POST: APIRoute = async ({ request }) => {
     return responseWithRequestId(
       { error: { type: 'unauthorized', message: 'Sign in to use API dictation.' } },
       401,
-      requestId,
-    );
-  const features = compatibilityFeaturesForClient(client, {
-    userId: user.id,
-    plan: user.plan,
-    requestId,
-    route: '/api/v1/audio/transcriptions',
-  });
-  if (features.dictation_transcription_api !== true)
-    return responseWithRequestId(
-      {
-        error: {
-          type: 'feature_unavailable',
-          message: 'API dictation is not available.',
-        },
-      },
-      503,
       requestId,
     );
   if (backendKillSwitchEnabled('audio_transcription'))
