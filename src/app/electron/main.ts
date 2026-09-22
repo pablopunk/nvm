@@ -173,6 +173,8 @@ import {
 } from './dictation-service';
 import {
   apiDictationIsAvailable,
+  cancelDictationPreparation,
+  prepareDictationTranscription,
   transcribeDictationAudio,
 } from './dictation-transcription';
 import {
@@ -369,6 +371,8 @@ const dictationService = createDictationService(
         scope: 'dictation',
       }),
     apiAvailable: apiDictationIsAvailable,
+    prepareTranscription: prepareDictationTranscription,
+    cancelPreparedTranscription: cancelDictationPreparation,
     transcribeAudio: transcribeDictationAudio,
     recordTiming: recordDebugPerformance,
   },

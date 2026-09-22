@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { PRODUCTION_WEB_ORIGIN } from '../../../../../../app/shared/public-origin';
 import {
   finalizeReservation,
+  preparedReservationExists,
   reserveCredits,
 } from '../../../../lib/credit-reservations';
 import {
@@ -223,9 +224,20 @@ export const POST: APIRoute = async ({ request }) => {
     handleDedup(idempotencyKey, user.id, requestHash, requestId),
   );
   if (duplicate) return duplicate;
-  const creditsPromise = timePhase('credits', () =>
-    ensureMonthlyFreeCredits(user.id),
-  );
+  const preparationRequested =
+    request.headers.get('x-nevermind-dictation-preparation') === idempotencyKey;
+  const preparedPromise = preparationRequested
+    ? timePhase('prepared', () =>
+        preparedReservationExists({
+          requestId: idempotencyKey,
+          userId: user.id,
+          credits: RESERVATION_CREDITS,
+        }),
+      )
+    : Promise.resolve(false);
+  const creditsPromise = preparationRequested
+    ? Promise.resolve()
+    : timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
   const rateLimitPromise = timePhase('rate_limit', () =>
     rateLimitTranscription(user.id),
   );
@@ -242,10 +254,11 @@ export const POST: APIRoute = async ({ request }) => {
     (route) => ({ route }),
     (error: unknown) => ({ error }),
   );
-  const [, rateLimit, routeResult] = await Promise.all([
+  const [, rateLimit, routeResult, prepared] = await Promise.all([
     creditsPromise,
     rateLimitPromise,
     routePromise,
+    preparedPromise,
   ]);
   if (!rateLimit.ok) {
     await markDedupFailed({
@@ -274,14 +287,18 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
   const route = routeResult.route;
-  const reservation = await timePhase('reserve', () =>
-    reserveCredits({
-      requestId,
-      userId: user.id,
-      credits: RESERVATION_CREDITS,
-    }),
-  );
-  if (!reservation.ok) {
+  if (preparationRequested && !prepared)
+    await timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
+  const reservation = prepared
+    ? null
+    : await timePhase('reserve', () =>
+        reserveCredits({
+          requestId,
+          userId: user.id,
+          credits: RESERVATION_CREDITS,
+        }),
+      );
+  if (reservation && !reservation.ok) {
     await markDedupFailed({
       userId: user.id,
       idempotencyKey,

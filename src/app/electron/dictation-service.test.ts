@@ -149,7 +149,18 @@ test('rejects start when renderer microphone startup fails', async () => {
 
 test('cancels a pending transcription', async () => {
   const commands: DictationRendererCommand[] = [];
-  const service = createDictationService((command) => commands.push(command));
+  const prepared: string[] = [];
+  const cancelledPreparations: string[] = [];
+  const service = createDictationService((command) => commands.push(command), {
+    prepareTranscription: (operationId) => {
+      prepared.push(operationId);
+      return Promise.resolve();
+    },
+    cancelPreparedTranscription: (operationId) => {
+      cancelledPreparations.push(operationId);
+      return Promise.resolve();
+    },
+  });
   const start = service.start();
   const operationId = (
     commands[0] as Extract<DictationRendererCommand, { type: 'start' }>
@@ -160,6 +171,8 @@ test('cancels a pending transcription', async () => {
   await service.cancel();
   await assert.rejects(stopped, DICTATION_CANCELLED_PATTERN);
   assert.equal(await service.status(), 'idle');
+  assert.deepEqual(prepared, [operationId]);
+  assert.deepEqual(cancelledPreparations, [operationId]);
 });
 
 test('sends captured audio to cloud transcription and releases the operation', async () => {

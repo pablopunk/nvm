@@ -24,6 +24,7 @@ export async function reserveCredits(input: {
   kind?: CreditKind;
   credits: number;
   now?: Date;
+  allowExistingPending?: boolean;
 }): Promise<ReservationResult> {
   const now = input.now ?? new Date();
   const credits = Math.max(1, Math.ceil(input.credits));
@@ -38,6 +39,9 @@ export async function reserveCredits(input: {
     if (existing) {
       if (existing.userId !== input.userId || (input.kind && existing.kind !== input.kind) || existing.reservedCredits !== credits) {
         throw new Error('Reservation request ID was reused with different billing parameters');
+      }
+      if (input.allowExistingPending && existing.status === 'pending') {
+        return { ok: true, reservation: existing, balance: 0, reserved: existing.reservedCredits };
       }
       return { ok: false, reason: 'request_already_reserved', balance: 0, reserved: existing.reservedCredits };
     }
@@ -73,8 +77,29 @@ export async function reserveCredits(input: {
   });
 }
 
+export async function preparedReservationExists(input: {
+  requestId: string;
+  userId: string;
+  credits: number;
+}) {
+  const [reservation] = await db
+    .select({ requestId: creditReservations.requestId })
+    .from(creditReservations)
+    .where(
+      and(
+        eq(creditReservations.requestId, input.requestId),
+        eq(creditReservations.userId, input.userId),
+        eq(creditReservations.reservedCredits, Math.max(1, Math.ceil(input.credits))),
+        eq(creditReservations.status, 'pending'),
+      ),
+    )
+    .limit(1);
+  return Boolean(reservation);
+}
+
 export type ReservationFinalization = {
   requestId: string;
+  expectedUserId?: string;
   outcome: 'settle' | 'release';
   model?: string;
   provider?: string;
@@ -194,6 +219,9 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
     // user first, reservation second. This matches admission and prevents a
     // same-request admission/finalization cycle through the FK-backed rows.
     const reservation = await lockReservationAfterUser(tx, input.requestId);
+    if (input.expectedUserId && input.expectedUserId !== reservation.userId) {
+      throw new Error(`User does not own reservation ${input.requestId}`);
+    }
     if (input.dedup && input.dedup.userId !== reservation.userId) {
       throw new Error(`Idempotency claim user does not own reservation ${input.requestId}`);
     }

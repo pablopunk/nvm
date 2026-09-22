@@ -1,6 +1,5 @@
+import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-
-const OPERATION_ID_RADIX = 36;
 
 interface DictationTiming {
   startedAt: number;
@@ -60,6 +59,8 @@ export function createDictationService(
       signal: AbortSignal;
     }) => Promise<string>;
     apiAvailable?: () => Promise<boolean>;
+    prepareTranscription?: (operationId: string) => Promise<void>;
+    cancelPreparedTranscription?: (operationId: string) => Promise<void>;
     recordTiming?: (
       name: string,
       durationMs: number,
@@ -84,7 +85,6 @@ export function createDictationService(
     reject: (error: Error) => void;
   } | null = null;
   let systemAudioMute: { restore(): Promise<void> } | null = null;
-  let operationCounter = 0;
   let activeOperationId: string | null = null;
   let activeTiming: DictationTiming | null = null;
   let transcriptionAbort: AbortController | null = null;
@@ -100,6 +100,19 @@ export function createDictationService(
       ...detail,
       alwaysLog: true,
     });
+  }
+
+  function cancelPreparedTranscription(operationId: string | null) {
+    if (!operationId) {
+      return;
+    }
+    dependencies
+      .cancelPreparedTranscription?.(operationId)
+      .catch(ignorePreparationFailure);
+  }
+
+  function ignorePreparationFailure() {
+    return;
   }
 
   async function restoreSystemAudio() {
@@ -144,9 +157,12 @@ export function createDictationService(
     });
     pendingStart = { promise, resolve: resolveStart, reject: rejectStart };
     currentStatus = 'recording';
-    const operationId = `dictation-${Date.now().toString(OPERATION_ID_RADIX)}-${(++operationCounter).toString(OPERATION_ID_RADIX)}`;
+    const operationId = `dictation-${randomUUID()}`;
     activeOperationId = operationId;
     activeTiming = { startedAt: performance.now() };
+    dependencies
+      .prepareTranscription?.(operationId)
+      .catch(ignorePreparationFailure);
     const { muteSystemAudioWhileRecording, ...rendererOptions } = options;
     const command = { type: 'start' as const, operationId, ...rendererOptions };
     if (muteSystemAudioWhileRecording && dependencies.muteSystemAudio) {
@@ -165,6 +181,7 @@ export function createDictationService(
             error instanceof Error ? error : new Error(String(error)),
           );
           pendingStart = null;
+          cancelPreparedTranscription(operationId);
           activeOperationId = null;
           activeTiming = null;
         });
@@ -206,6 +223,7 @@ export function createDictationService(
     pendingStop?.reject(new Error('Dictation cancelled'));
     pendingStop = null;
     const operationId = activeOperationId ?? undefined;
+    cancelPreparedTranscription(activeOperationId);
     activeOperationId = null;
     activeTiming = null;
     return restoreSystemAudio().finally(() =>
@@ -333,6 +351,7 @@ export function createDictationService(
     pendingDevices = null;
     if (reply.operationId) {
       send({ type: 'release', operationId: reply.operationId });
+      cancelPreparedTranscription(reply.operationId);
     }
     activeOperationId = null;
     activeTiming = null;
@@ -358,6 +377,7 @@ export function createDictationService(
 
   function failTranscription(operationId: string, error: Error) {
     currentStatus = 'idle';
+    cancelPreparedTranscription(operationId);
     pendingStop?.reject(error);
     pendingStop = null;
     send({ type: 'release', operationId });

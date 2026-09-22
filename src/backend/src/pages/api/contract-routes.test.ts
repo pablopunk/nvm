@@ -9,6 +9,7 @@ import { estimateInputTokensFromBody } from '../../lib/limits';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
+import { POST as prepareAudioTranscription } from './v1/audio/transcription-preparations';
 import { POST as postAudioTranscription } from './v1/audio/transcriptions';
 import { POST as postChatCompletion } from './v1/chat/completions';
 import { POST as postGoogleModel } from './v1/models/[...path]';
@@ -285,6 +286,47 @@ test('audio transcription supports an emergency kill switch for desktop v1', asy
     },
   );
   const response = await postAudioTranscription(routeContext(request));
+  assert.equal(response.status, 503);
+  assert.deepEqual(
+    await response.json(),
+    fixture('audio-transcription-disabled-error'),
+  );
+});
+
+test('audio transcription preparation uses the transcription kill switch', async () => {
+  process.env.NEVERMIND_KILL_SWITCHES = 'audio_transcription';
+  installDb(
+    createFakeDb({
+      selects: [
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'free',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
+      ],
+    }),
+  );
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcription-preparations',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'application/json',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify({ operationId: 'dictation-test-1' }),
+    },
+  );
+  const response = await prepareAudioTranscription(routeContext(request));
   assert.equal(response.status, 503);
   assert.deepEqual(
     await response.json(),
