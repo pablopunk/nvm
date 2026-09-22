@@ -68,7 +68,7 @@ async function operationIdFromRequest(request: Request) {
 
 export const POST: APIRoute = async ({ request }) => {
   const auth = await authenticatedRequest(request);
-  if ('error' in auth) return auth.error;
+  if (auth.error) return auth.error;
   const operationId = await operationIdFromRequest(request);
   if (!operationId)
     return response(
@@ -116,7 +116,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const DELETE: APIRoute = async ({ request }) => {
   const auth = await authenticatedRequest(request, false);
-  if ('error' in auth) return auth.error;
+  if (auth.error) return auth.error;
   const operationId = await operationIdFromRequest(request);
   if (!operationId)
     return response(
