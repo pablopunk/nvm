@@ -194,11 +194,14 @@ function screenResultText(result: unknown) {
           .filter(Boolean)
           .join('\n')
       : '';
-  if (Array.isArray(candidate.blocks)) return joinedBlocks(candidate.blocks);
-  if (Array.isArray(candidate.observations))
-    return joinedBlocks(candidate.observations);
-  if (typeof candidate.text === 'string') return candidate.text;
-  if (typeof candidate.transcript === 'string') return candidate.transcript;
+  if (typeof candidate.text === 'string' && candidate.text.trim())
+    return candidate.text;
+  if (typeof candidate.transcript === 'string' && candidate.transcript.trim())
+    return candidate.transcript;
+  const blockText = joinedBlocks(candidate.blocks);
+  if (blockText) return blockText;
+  const observationText = joinedBlocks(candidate.observations);
+  if (observationText) return observationText;
   return '';
 }
 
