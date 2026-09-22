@@ -37,6 +37,9 @@ function dictationHandlerFor(context: any) {
   const extension = createDictationExtension();
   const contribution = extension.actions({
     ...context,
+    dictation: context.dictation
+      ? { apiAvailable: async () => true, ...context.dictation }
+      : context.dictation,
     action: (input: unknown) => input,
   })[0];
   if (!contribution.run) throw new Error('Dictation action handler missing');
@@ -160,7 +163,6 @@ test('skips enabled AI cleaning when signed out', async () => {
   assert.deepEqual(starts, [
     {
       deviceId: 'default',
-      modelKeepAliveMs: 300_000,
       muteSystemAudioWhileRecording: true,
     },
   ]);
@@ -238,9 +240,8 @@ test('keeps no-speech feedback connected to the dictation indicator', async () =
   assert.deepEqual(hiddenIndicators, []);
 });
 
-test('prepares a missing model before opening the microphone', async () => {
+test('opens the microphone without preparing a local model', async () => {
   const events: string[] = [];
-  const prepared: unknown[] = [];
   const context = {
     storage: {
       get: async () => ({
@@ -251,13 +252,14 @@ test('prepares a missing model before opening the microphone', async () => {
     },
     dictation: {
       status: async () => 'idle',
+      apiAvailable: async () => true,
       modelCacheStatus: async () => {
         events.push('cache-status');
         return 'missing';
       },
       prepareModel: async (options: unknown) => {
         events.push('prepare-model');
-        prepared.push(options);
+        void options;
       },
       start: async () => {
         events.push('start');
@@ -276,8 +278,7 @@ test('prepares a missing model before opening the microphone', async () => {
   const handler = dictationHandlerFor(context);
 
   const result = await handler(context, {});
-  assert.deepEqual(events, ['cache-status', 'prepare-model', 'start']);
-  assert.deepEqual(prepared, [{ modelKeepAliveMs: 300_000 }]);
+  assert.deepEqual(events, ['start']);
   assert.equal(result, undefined);
 });
 
@@ -288,9 +289,7 @@ test('keeps startup errors connected to the dictation indicator', async () => {
     storage: { get: async () => ({}) },
     dictation: {
       status: async () => 'idle',
-      modelCacheStatus: async () => {
-        throw new Error('Model unavailable');
-      },
+      apiAvailable: async () => false,
     },
     ui: {
       indicator: {
@@ -309,7 +308,8 @@ test('keeps startup errors connected to the dictation indicator', async () => {
     {
       id: 'dictation',
       title: 'Dictation',
-      subtitle: 'Dictation unavailable: Model unavailable',
+      subtitle:
+        'Dictation unavailable: Cloud dictation is unavailable; sign in and try again',
       status: 'error',
       durationMs: 4_000,
     },
@@ -671,7 +671,6 @@ test('renders and saves multiline dictionary settings', async () => {
       'settings',
       {
         deviceId: 'default',
-        keepAliveMs: 1_800_000,
         cleanupWithAi: true,
         dictionary: 'Nevermind\nParakeet\nWASM',
         copyToClipboard: false,

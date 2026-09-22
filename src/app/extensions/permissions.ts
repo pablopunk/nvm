@@ -70,7 +70,7 @@ export function readOsPermissions(
     {
       key: 'microphone',
       title: 'Microphone',
-      description: 'Local voice dictation input',
+      description: 'Voice dictation input',
       icon: 'mic',
       anchor: 'Microphone',
       state: normalizeMediaPermissionState(reader.mediaStatus('microphone')),

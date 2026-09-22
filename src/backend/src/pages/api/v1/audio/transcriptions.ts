@@ -290,7 +290,6 @@ export const POST: APIRoute = async ({ request }) => {
         model: route.modelId,
         input_audio: parsed.data.input_audio,
         response_format: 'json',
-        provider: { zdr: true, data_collection: 'deny' },
       }),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });

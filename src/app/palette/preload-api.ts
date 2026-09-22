@@ -136,38 +136,30 @@ export type AiChatEvent = {
 };
 
 export type DictationCommand =
-  | { type: 'start'; deviceId?: string; modelKeepAliveMs?: number }
-  | { type: 'stop' }
-  | { type: 'cancel' }
-  | { type: 'devices' }
-  | { type: 'model-cache-status' }
-  | { type: 'prepare-model'; modelKeepAliveMs?: number };
+  | {
+      type: 'start';
+      operationId: string;
+      deviceId?: string;
+    }
+  | { type: 'stop'; operationId: string }
+  | { type: 'release'; operationId: string }
+  | { type: 'cancel'; operationId?: string }
+  | { type: 'devices' };
 
 export type DictationReply =
-  | { type: 'recording' }
+  | { type: 'recording'; operationId: string }
   | {
-      type: 'result';
-      text: string;
-      debug?: {
-        mimeType?: string;
-        blobBytes?: number;
-        decodedFrames?: number;
-        durationSeconds?: number;
-        peak?: number;
-        rms?: number;
-        transcribeMs?: number;
-        trackLabel?: string;
-        trackSampleRate?: number;
-        trackMuted?: boolean | null;
-      };
+      type: 'audio';
+      operationId: string;
+      audio: Uint8Array;
+      mimeType: string;
+      debug?: Record<string, unknown>;
     }
   | {
       type: 'devices';
       devices: Array<{ id: string; title: string; isDefault: boolean }>;
     }
-  | { type: 'model-cache-status'; cached: boolean }
-  | { type: 'model-ready' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; operationId?: string };
 
 export type ViewHydratePayload = {
   viewId: string;

@@ -5,13 +5,9 @@ export const extensionContext: {
   clipboardService: { createClipboardExtension: () => any } | null;
   dictationService: {
     status: () => Promise<string>;
+    apiAvailable: () => Promise<boolean>;
     devices: () => Promise<any[]>;
-    modelCacheStatus: () => Promise<'cached' | 'missing'>;
-    prepareModel: (options?: { modelKeepAliveMs?: number }) => Promise<void>;
-    start: (options?: {
-      deviceId?: string;
-      modelKeepAliveMs?: number;
-    }) => Promise<void>;
+    start: (options?: { deviceId?: string }) => Promise<void>;
     stop: () => Promise<string>;
     cancel: () => Promise<void>;
   } | null;

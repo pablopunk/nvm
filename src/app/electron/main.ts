@@ -172,6 +172,10 @@ import {
   type DictationRendererReply,
 } from './dictation-service';
 import {
+  apiDictationIsAvailable,
+  transcribeDictationAudio,
+} from './dictation-transcription';
+import {
   CHARACTER_RECORDS_BY_ID,
   characterCodePoints,
   characterWithSkinTone,
@@ -352,6 +356,7 @@ const paletteWindow = createPaletteWindowController({
   onOpen: warmConversationAiOnPaletteOpen,
 });
 const systemAudioMute = createSystemAudioMuteCapability();
+const MAX_DICTATION_AUDIO_BYTES = 4_194_304;
 const dictationService = createDictationService(
   (command) => {
     paletteWindow.win?.webContents.send('dictation:command', command);
@@ -363,6 +368,8 @@ const dictationService = createDictationService(
         source: 'host',
         scope: 'dictation',
       }),
+    apiAvailable: apiDictationIsAvailable,
+    transcribeAudio: transcribeDictationAudio,
   },
 );
 const extensionWindowManager = createExtensionWindowManager({
@@ -11014,11 +11021,19 @@ app.whenReady().then(async () => {
   ipcMain.on('dictation:reply', (event, reply) => {
     if (event.sender !== paletteWindow.win?.webContents) return;
     if (!reply || typeof reply !== 'object') return;
-    if (reply.type === 'recording') {
+    if (reply.type === 'recording' && typeof reply.operationId === 'string') {
       dictationService.reply(reply as DictationRendererReply);
       return;
     }
-    if (reply.type === 'result' && typeof reply.text === 'string') {
+    if (
+      reply.type === 'audio' &&
+      typeof reply.operationId === 'string' &&
+      typeof reply.mimeType === 'string' &&
+      reply.mimeType.toLowerCase().startsWith('audio/webm') &&
+      reply.audio instanceof Uint8Array &&
+      reply.audio.byteLength > 0 &&
+      reply.audio.byteLength <= MAX_DICTATION_AUDIO_BYTES
+    ) {
       if (reply.debug && typeof reply.debug === 'object')
         loggerDebug('dictation.capture-stats', reply.debug, {
           source: 'renderer',
@@ -11027,22 +11042,23 @@ app.whenReady().then(async () => {
       dictationService.reply(reply as DictationRendererReply);
       return;
     }
+    if (reply.type === 'audio' && typeof reply.operationId === 'string') {
+      dictationService.reply({
+        type: 'error',
+        operationId: reply.operationId,
+        message: 'The dictation recording is empty, unsupported, or too large.',
+      });
+      return;
+    }
     if (reply.type === 'devices' && Array.isArray(reply.devices)) {
       dictationService.reply(reply as DictationRendererReply);
       return;
     }
     if (
-      reply.type === 'model-cache-status' &&
-      typeof reply.cached === 'boolean'
-    ) {
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (reply.type === 'model-ready') {
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (reply.type === 'error' && typeof reply.message === 'string')
+      reply.type === 'error' &&
+      typeof reply.message === 'string' &&
+      (reply.operationId === undefined || typeof reply.operationId === 'string')
+    )
       dictationService.reply(reply as DictationRendererReply);
   });
 

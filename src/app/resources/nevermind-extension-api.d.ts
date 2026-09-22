@@ -922,18 +922,16 @@ export type ExtensionDictationStatus =
 
 export type ExtensionDictation = {
   status(): Promise<ExtensionDictationStatus>;
+  /** Whether authenticated hosted transcription is available for this client. */
+  apiAvailable(): Promise<boolean>;
   devices(): Promise<ExtensionDictationDevice[]>;
-  /** Check required backend assets in IndexedDB; this does not load the model into memory. */
-  modelCacheStatus(): Promise<'cached' | 'missing'>;
-  /** Download and initialize the model, retaining it according to the requested policy. */
-  prepareModel(options?: { modelKeepAliveMs?: number }): Promise<void>;
-  /** Resolves after the microphone has delivered usable, stable audio. */
+  /** Resolves after the microphone has delivered usable, stable audio. Audio is transcribed by Nevermind's hosted service after `stop()`. */
   start(options?: {
     deviceId?: string;
-    modelKeepAliveMs?: number;
     /** Mute system output while recording and restore its prior state before transcription. */
     muteSystemAudioWhileRecording?: boolean;
   }): Promise<void>;
+  /** Stops capture and resolves with the hosted transcription. Recorded audio is not exposed to extension code. */
   stop(): Promise<string>;
   cancel(): Promise<void>;
 };
@@ -1816,7 +1814,7 @@ export type ExtensionContext = {
     discard(key: string): Promise<void> | void;
   };
   settings: ExtensionSettings;
-  /** Cross-platform local speech dictation. Declare `dictation` for review. */
+  /** Cross-platform speech dictation. Declare `dictation` for review. */
   dictation?: ExtensionDictation;
   shortcuts: {
     /** Active global action shortcuts, including user overrides and declared extension shortcuts. */

@@ -2,7 +2,6 @@ import { showExtensionFeedback } from './feedback';
 
 type DictationSettings = {
   deviceId: string;
-  keepAliveMs: number;
   cleanupWithAi: boolean;
   dictionary: string;
   copyToClipboard: boolean;
@@ -16,7 +15,6 @@ type DictationHistoryEntry = {
 
 const DEFAULT_SETTINGS: DictationSettings = {
   deviceId: 'default',
-  keepAliveMs: 5 * 60 * 1000,
   cleanupWithAi: false,
   dictionary: '',
   copyToClipboard: false,
@@ -34,14 +32,6 @@ function dictationIndicator(subtitle: string, status: string) {
 }
 
 const LISTENING_INDICATOR = dictationIndicator('Listening', 'recording');
-const CHECKING_MODEL_INDICATOR = dictationIndicator(
-  'Checking speech model',
-  'loading',
-);
-const DOWNLOADING_MODEL_INDICATOR = dictationIndicator(
-  'Downloading speech model',
-  'loading',
-);
 const WAITING_FOR_MICROPHONE_INDICATOR = dictationIndicator(
   'Waiting for microphone',
   'loading',
@@ -122,19 +112,11 @@ export function createDeferredDictationIndicator(
   return { begin, refine, finish, cancel: cancelPending };
 }
 
-function normalizedKeepAliveMs(value: unknown) {
-  const number = Number(value);
-  return [300_000, 1_800_000, -1].includes(number)
-    ? number
-    : DEFAULT_SETTINGS.keepAliveMs;
-}
-
 async function readSettings(ctx: any): Promise<DictationSettings> {
   const stored = await ctx.storage.get('settings', DEFAULT_SETTINGS);
   return {
     ...DEFAULT_SETTINGS,
     ...(stored && typeof stored === 'object' ? stored : {}),
-    keepAliveMs: normalizedKeepAliveMs(stored?.keepAliveMs),
     cleanupWithAi: stored?.cleanupWithAi === true,
     copyToClipboard: stored?.copyToClipboard === true,
   };
@@ -335,7 +317,6 @@ async function settingsView(ctx: any) {
         Boolean(values.cleanupWithAi) && (await aiIsAvailable(innerCtx));
       await innerCtx.storage.set('settings', {
         deviceId: String(values.deviceId || 'default'),
-        keepAliveMs: normalizedKeepAliveMs(values.keepAliveMs),
         cleanupWithAi: cleanWithAi,
         dictionary: String(values.dictionary || ''),
         copyToClipboard: Boolean(values.copyToClipboard),
@@ -347,7 +328,7 @@ async function settingsView(ctx: any) {
   return ctx.ui.form({
     id: 'dictation-settings',
     title: 'Dictation Settings',
-    subtitle: 'Local Parakeet speech recognition',
+    subtitle: 'Cloud speech recognition',
     fields: [
       {
         id: 'deviceId',
@@ -358,17 +339,6 @@ async function settingsView(ctx: any) {
           title: device.title,
           value: device.id,
         })),
-      },
-      {
-        id: 'keepAliveMs',
-        label: 'Keep model loaded',
-        type: 'dropdown',
-        value: String(settings.keepAliveMs),
-        options: [
-          { title: '5 minutes', value: '300000' },
-          { title: '30 minutes', value: '1800000' },
-          { title: 'Until Nevermind quits', value: '-1' },
-        ],
       },
       {
         id: 'cleanupWithAi',
@@ -416,19 +386,17 @@ async function runDictation(ctx: any) {
       ctx.ui.indicator,
     );
     try {
-      deferredIndicator.begin(CHECKING_MODEL_INDICATOR);
-      const modelCacheStatus = await ctx.dictation.modelCacheStatus();
-      if (modelCacheStatus === 'missing') {
-        deferredIndicator.begin(DOWNLOADING_MODEL_INDICATOR);
-        await ctx.dictation.prepareModel({
-          modelKeepAliveMs: settings.keepAliveMs,
-        });
-      }
+      const apiAvailable =
+        typeof ctx.dictation.apiAvailable === 'function' &&
+        (await ctx.dictation.apiAvailable().catch(() => false));
+      if (!apiAvailable)
+        throw new Error(
+          'Cloud dictation is unavailable; sign in and try again',
+        );
       deferredIndicator.begin(WAITING_FOR_MICROPHONE_INDICATOR);
       const devicesPromise = ctx.dictation.devices?.().catch(() => []) ?? [];
       const startPromise = ctx.dictation.start({
         deviceId: settings.deviceId,
-        modelKeepAliveMs: settings.keepAliveMs,
         muteSystemAudioWhileRecording: true,
       });
       void startPromise.catch(() => {});
@@ -521,7 +489,7 @@ function dictationRootItem(ctx: any) {
   return {
     id: 'dictation',
     title: 'Dictate',
-    subtitle: 'Start or stop local voice dictation',
+    subtitle: 'Start or stop cloud voice dictation',
     icon: 'mic',
     aliases: ['dictate', 'dictation', 'voice dictation'],
     primaryAction: dictateAction,
@@ -555,7 +523,7 @@ function dictationActionContribution(ctx: any) {
     id: 'dictate',
     actionId: 'dictation',
     title: 'Dictate',
-    subtitle: 'Start or stop local voice dictation',
+    subtitle: 'Start or stop cloud voice dictation',
     icon: 'mic',
     aliases: ['dictate', 'dictation', 'voice dictation'],
     background: true,
@@ -570,7 +538,7 @@ export function createDictationExtension() {
   return {
     id: 'nevermind.dictation',
     title: 'Dictation',
-    subtitle: 'Local Parakeet speech-to-text',
+    subtitle: 'Cloud speech-to-text',
     capabilities: ['dictation', 'ai'] as const,
     actions(ctx: any) {
       return [dictationActionContribution(ctx)];

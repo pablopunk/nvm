@@ -29,11 +29,7 @@ import {
 } from './action-menu-presentation';
 import { restoredAiChatView } from './ai-chat-navigation';
 import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
-import {
-  isDictationModelCached,
-  prepareDictationModel,
-  recordDictation,
-} from './dictation-renderer';
+import { recordDictation } from './dictation-renderer';
 import { dictationDevices } from './dictation-devices';
 import { ActionPanel } from './action-panel';
 import { isAppIconPath } from './app-icons';
@@ -1365,37 +1361,10 @@ function DictationRendererController() {
   const startPromiseRef = useRef<Promise<
     Awaited<ReturnType<typeof recordDictation>>
   > | null>(null);
+  const dictationOperationRef = useRef<string | null>(null);
 
   useEffect(() => {
     async function handleCommand(command: DictationCommand) {
-      if (command.type === 'model-cache-status') {
-        try {
-          window.nvm.replyDictation({
-            type: 'model-cache-status',
-            cached: await isDictationModelCached(),
-          });
-        } catch (error) {
-          window.nvm.replyDictation({
-            type: 'error',
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-        return;
-      }
-
-      if (command.type === 'prepare-model') {
-        try {
-          await prepareDictationModel(command.modelKeepAliveMs);
-          window.nvm.replyDictation({ type: 'model-ready' });
-        } catch (error) {
-          window.nvm.replyDictation({
-            type: 'error',
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-        return;
-      }
-
       if (command.type === 'devices') {
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -1403,10 +1372,10 @@ function DictationRendererController() {
             type: 'devices',
             devices: dictationDevices(devices),
           });
-        } catch (error) {
+        } catch {
           window.nvm.replyDictation({
-            type: 'error',
-            message: error instanceof Error ? error.message : String(error),
+            type: 'devices',
+            devices: [],
           });
         }
         return;
@@ -1414,6 +1383,7 @@ function DictationRendererController() {
 
       if (command.type === 'start') {
         if (startPromiseRef.current || recordingRef.current) return;
+        dictationOperationRef.current = command.operationId;
         try {
           const micStatus = await window.nvm
             .getMicrophoneAccessStatus()
@@ -1424,6 +1394,7 @@ function DictationRendererController() {
           if (micStatus === 'denied' || micStatus === 'restricted') {
             window.nvm.replyDictation({
               type: 'error',
+              operationId: command.operationId,
               message:
                 'Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.',
             });
@@ -1432,13 +1403,9 @@ function DictationRendererController() {
         } catch {
           // Fall through to getUserMedia so the system prompt can appear.
         }
-        const modelKeepAliveMs = command.modelKeepAliveMs;
         async function openMicrophone(deviceId: string | undefined) {
-          const startPromise = recordDictation(
-            deviceId,
-            undefined,
-            modelKeepAliveMs,
-            (level) => window.nvm.sendDictationLevel(level),
+          const startPromise = recordDictation(deviceId, undefined, (level) =>
+            window.nvm.sendDictationLevel(level),
           );
           startPromiseRef.current = startPromise;
           const recording = await startPromise;
@@ -1461,12 +1428,16 @@ function DictationRendererController() {
             }
           }
           await recording.ready;
-          window.nvm.replyDictation({ type: 'recording' });
+          window.nvm.replyDictation({
+            type: 'recording',
+            operationId: command.operationId,
+          });
         } catch (error) {
           recordingRef.current?.cancel();
           recordingRef.current = null;
           window.nvm.replyDictation({
             type: 'error',
+            operationId: command.operationId,
             message: error instanceof Error ? error.message : String(error),
           });
         } finally {
@@ -1476,6 +1447,7 @@ function DictationRendererController() {
       }
 
       if (command.type === 'stop') {
+        if (command.operationId !== dictationOperationRef.current) return;
         try {
           const recording =
             recordingRef.current || (await startPromiseRef.current);
@@ -1483,16 +1455,25 @@ function DictationRendererController() {
           recordingRef.current = null;
           const stopped = await recording.stop();
           window.nvm.replyDictation({
-            type: 'result',
-            text: stopped.text,
+            type: 'audio',
+            operationId: command.operationId,
+            audio: stopped.audio,
+            mimeType: stopped.mimeType,
             debug: stopped.debug,
           });
         } catch (error) {
           window.nvm.replyDictation({
             type: 'error',
+            operationId: command.operationId,
             message: error instanceof Error ? error.message : String(error),
           });
         }
+        return;
+      }
+
+      if (command.type === 'release') {
+        if (command.operationId === dictationOperationRef.current)
+          dictationOperationRef.current = null;
         return;
       }
 
@@ -1503,6 +1484,7 @@ function DictationRendererController() {
       } finally {
         recordingRef.current = null;
         startPromiseRef.current = null;
+        dictationOperationRef.current = null;
       }
     }
 
@@ -1514,6 +1496,7 @@ function DictationRendererController() {
       recordingRef.current?.cancel();
       recordingRef.current = null;
       startPromiseRef.current = null;
+      dictationOperationRef.current = null;
     };
   }, []);
 

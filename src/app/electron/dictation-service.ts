@@ -1,45 +1,57 @@
+const OPERATION_ID_RADIX = 36;
+
 export type DictationRendererCommand =
-  | { type: 'start'; deviceId?: string; modelKeepAliveMs?: number }
-  | { type: 'stop' }
-  | { type: 'cancel' }
-  | { type: 'devices' }
-  | { type: 'model-cache-status' }
-  | { type: 'prepare-model'; modelKeepAliveMs?: number };
+  | {
+      type: 'start';
+      operationId: string;
+      deviceId?: string;
+    }
+  | { type: 'stop'; operationId: string }
+  | { type: 'release'; operationId: string }
+  | { type: 'cancel'; operationId?: string }
+  | { type: 'devices' };
 
 export type DictationRendererReply =
-  | { type: 'recording' }
-  | { type: 'result'; text: string; debug?: Record<string, unknown> }
+  | { type: 'recording'; operationId: string }
+  | {
+      type: 'audio';
+      operationId: string;
+      audio: Uint8Array;
+      mimeType: string;
+      debug?: Record<string, unknown>;
+    }
   | {
       type: 'devices';
       devices: Array<{ id: string; title: string; isDefault: boolean }>;
     }
-  | { type: 'model-cache-status'; cached: boolean }
-  | { type: 'model-ready' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; operationId?: string };
 
-export type DictationModelCacheStatus = 'cached' | 'missing';
-
-export type DictationService = {
+export interface DictationService {
   status(): Promise<string>;
+  apiAvailable(): Promise<boolean>;
   devices(): Promise<Array<{ id: string; title: string; isDefault: boolean }>>;
-  modelCacheStatus(): Promise<DictationModelCacheStatus>;
-  prepareModel(options?: { modelKeepAliveMs?: number }): Promise<void>;
   start(options?: {
     deviceId?: string;
-    modelKeepAliveMs?: number;
     muteSystemAudioWhileRecording?: boolean;
   }): Promise<void>;
   stop(): Promise<string>;
   cancel(): Promise<void>;
   dispose(): Promise<void>;
   reply(reply: DictationRendererReply): void;
-};
+}
 
 export function createDictationService(
   send: (command: DictationRendererCommand) => void,
   dependencies: {
     muteSystemAudio?: () => Promise<{ restore(): Promise<void> }>;
     onSystemAudioError?: (error: unknown) => void;
+    transcribeAudio?: (input: {
+      operationId: string;
+      audio: Uint8Array;
+      mimeType: string;
+      signal: AbortSignal;
+    }) => Promise<string>;
+    apiAvailable?: () => Promise<boolean>;
   } = {},
 ): DictationService {
   let currentStatus = 'idle';
@@ -58,24 +70,21 @@ export function createDictationService(
     ) => void;
     reject: (error: Error) => void;
   } | null = null;
-  let pendingModelCacheStatus: {
-    promise: Promise<DictationModelCacheStatus>;
-    resolve: (status: DictationModelCacheStatus) => void;
-    reject: (error: Error) => void;
-  } | null = null;
-  let pendingModelPreparation: {
-    promise: Promise<void>;
-    resolve: () => void;
-    reject: (error: Error) => void;
-  } | null = null;
   let systemAudioMute: { restore(): Promise<void> } | null = null;
+  let operationCounter = 0;
+  let activeOperationId: string | null = null;
+  let transcriptionAbort: AbortController | null = null;
 
   async function restoreSystemAudio() {
     const mute = systemAudioMute;
-    if (!mute) return;
+    if (!mute) {
+      return;
+    }
     try {
       await mute.restore();
-      if (systemAudioMute === mute) systemAudioMute = null;
+      if (systemAudioMute === mute) {
+        systemAudioMute = null;
+      }
     } catch (error) {
       dependencies.onSystemAudioError?.(error);
     }
@@ -85,15 +94,21 @@ export function createDictationService(
     return Promise.resolve(currentStatus);
   }
 
+  function apiAvailable() {
+    return (
+      dependencies.apiAvailable?.().catch(() => false) ?? Promise.resolve(false)
+    );
+  }
+
   function start(
     options: {
       deviceId?: string;
-      modelKeepAliveMs?: number;
       muteSystemAudioWhileRecording?: boolean;
     } = {},
   ) {
-    if (currentStatus !== 'idle')
+    if (currentStatus !== 'idle') {
       return pendingStart?.promise || Promise.resolve();
+    }
     let resolveStart!: () => void;
     let rejectStart!: (error: Error) => void;
     const promise = new Promise<void>((resolve, reject) => {
@@ -102,14 +117,19 @@ export function createDictationService(
     });
     pendingStart = { promise, resolve: resolveStart, reject: rejectStart };
     currentStatus = 'recording';
+    const operationId = `dictation-${Date.now().toString(OPERATION_ID_RADIX)}-${(++operationCounter).toString(OPERATION_ID_RADIX)}`;
+    activeOperationId = operationId;
     const { muteSystemAudioWhileRecording, ...rendererOptions } = options;
+    const command = { type: 'start' as const, operationId, ...rendererOptions };
     if (muteSystemAudioWhileRecording && dependencies.muteSystemAudio) {
-      void dependencies
+      dependencies
         .muteSystemAudio()
         .then((mute) => {
-          if (currentStatus !== 'recording') return mute.restore();
+          if (currentStatus !== 'recording') {
+            return mute.restore();
+          }
           systemAudioMute = mute;
-          send({ type: 'start', ...rendererOptions });
+          send(command);
         })
         .catch((error) => {
           currentStatus = 'idle';
@@ -119,30 +139,44 @@ export function createDictationService(
           pendingStart = null;
         });
     } else {
-      send({ type: 'start', ...rendererOptions });
+      send(command);
     }
     return promise;
   }
 
   function stop() {
-    if (currentStatus !== 'recording')
+    if (currentStatus !== 'recording') {
       return Promise.reject(new Error('Dictation is not recording'));
+    }
+    const operationId = activeOperationId;
+    if (!operationId) {
+      currentStatus = 'idle';
+      return Promise.reject(new Error('Dictation operation is unavailable'));
+    }
     currentStatus = 'transcribing';
     const promise = new Promise<string>((resolve, reject) => {
       pendingStop = { resolve, reject };
     });
-    void restoreSystemAudio().finally(() => send({ type: 'stop' }));
+    restoreSystemAudio().finally(() => send({ type: 'stop', operationId }));
     return promise;
   }
 
   function cancel() {
-    if (currentStatus === 'idle') return Promise.resolve();
+    if (currentStatus === 'idle') {
+      return Promise.resolve();
+    }
     currentStatus = 'idle';
+    transcriptionAbort?.abort();
+    transcriptionAbort = null;
     pendingStart?.reject(new Error('Dictation cancelled'));
     pendingStart = null;
     pendingStop?.reject(new Error('Dictation cancelled'));
     pendingStop = null;
-    return restoreSystemAudio().finally(() => send({ type: 'cancel' }));
+    const operationId = activeOperationId ?? undefined;
+    activeOperationId = null;
+    return restoreSystemAudio().finally(() =>
+      send({ type: 'cancel', operationId }),
+    );
   }
 
   function dispose() {
@@ -158,53 +192,17 @@ export function createDictationService(
     });
   }
 
-  function modelCacheStatus() {
-    if (pendingModelCacheStatus) return pendingModelCacheStatus.promise;
-    let resolvePromise!: (status: DictationModelCacheStatus) => void;
-    let rejectPromise!: (error: Error) => void;
-    const promise = new Promise<DictationModelCacheStatus>(
-      (resolve, reject) => {
-        resolvePromise = resolve;
-        rejectPromise = reject;
-      },
-    );
-    pendingModelCacheStatus = {
-      promise,
-      resolve: resolvePromise,
-      reject: rejectPromise,
-    };
-    send({ type: 'model-cache-status' });
-    return promise;
-  }
-
-  function prepareModel(options: { modelKeepAliveMs?: number } = {}) {
-    if (pendingModelPreparation) return pendingModelPreparation.promise;
-    let resolvePromise!: () => void;
-    let rejectPromise!: (error: Error) => void;
-    const promise = new Promise<void>((resolve, reject) => {
-      resolvePromise = resolve;
-      rejectPromise = reject;
-    });
-    pendingModelPreparation = {
-      promise,
-      resolve: resolvePromise,
-      reject: rejectPromise,
-    };
-    send({ type: 'prepare-model', ...options });
-    return promise;
-  }
-
   function reply(reply: DictationRendererReply) {
     if (reply.type === 'recording') {
+      if (reply.operationId !== activeOperationId) {
+        return;
+      }
       pendingStart?.resolve();
       pendingStart = null;
       return;
     }
-    if (reply.type === 'result') {
-      currentStatus = 'idle';
-      void restoreSystemAudio();
-      pendingStop?.resolve(reply.text);
-      pendingStop = null;
+    if (reply.type === 'audio') {
+      transcribeCapturedAudio(reply);
       return;
     }
     if (reply.type === 'devices') {
@@ -212,18 +210,64 @@ export function createDictationService(
       pendingDevices = null;
       return;
     }
-    if (reply.type === 'model-cache-status') {
-      pendingModelCacheStatus?.resolve(reply.cached ? 'cached' : 'missing');
-      pendingModelCacheStatus = null;
+    handleRendererError(reply);
+  }
+
+  function transcribeCapturedAudio(
+    reply: Extract<DictationRendererReply, { type: 'audio' }>,
+  ) {
+    if (
+      reply.operationId !== activeOperationId ||
+      currentStatus !== 'transcribing'
+    ) {
       return;
     }
-    if (reply.type === 'model-ready') {
-      pendingModelPreparation?.resolve();
-      pendingModelPreparation = null;
+    if (!dependencies.transcribeAudio) {
+      failTranscription(
+        reply.operationId,
+        new Error('API dictation is unavailable'),
+      );
+      return;
+    }
+    const controller = new AbortController();
+    transcriptionAbort = controller;
+    dependencies
+      .transcribeAudio({
+        operationId: reply.operationId,
+        audio: reply.audio,
+        mimeType: reply.mimeType,
+        signal: controller.signal,
+      })
+      .then((text) => {
+        if (reply.operationId !== activeOperationId) {
+          return;
+        }
+        finishTranscription(reply.operationId, text);
+      })
+      .catch((error) => {
+        if (reply.operationId !== activeOperationId) {
+          return;
+        }
+        failTranscription(
+          reply.operationId,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      })
+      .finally(() => {
+        if (transcriptionAbort === controller) {
+          transcriptionAbort = null;
+        }
+      });
+  }
+
+  function handleRendererError(
+    reply: Extract<DictationRendererReply, { type: 'error' }>,
+  ) {
+    if (reply.operationId && reply.operationId !== activeOperationId) {
       return;
     }
     currentStatus = 'idle';
-    void restoreSystemAudio();
+    restoreSystemAudio();
     const error = new Error(reply.message);
     pendingStart?.reject(error);
     pendingStart = null;
@@ -231,17 +275,33 @@ export function createDictationService(
     pendingDevices?.reject(error);
     pendingStop = null;
     pendingDevices = null;
-    pendingModelCacheStatus?.reject(error);
-    pendingModelCacheStatus = null;
-    pendingModelPreparation?.reject(error);
-    pendingModelPreparation = null;
+    if (reply.operationId) {
+      send({ type: 'release', operationId: reply.operationId });
+    }
+    activeOperationId = null;
+  }
+
+  function finishTranscription(operationId: string, text: string) {
+    currentStatus = 'idle';
+    restoreSystemAudio();
+    pendingStop?.resolve(text);
+    pendingStop = null;
+    send({ type: 'release', operationId });
+    activeOperationId = null;
+  }
+
+  function failTranscription(operationId: string, error: Error) {
+    currentStatus = 'idle';
+    pendingStop?.reject(error);
+    pendingStop = null;
+    send({ type: 'release', operationId });
+    activeOperationId = null;
   }
 
   return {
     status,
+    apiAvailable,
     devices,
-    modelCacheStatus,
-    prepareModel,
     start,
     stop,
     cancel,
