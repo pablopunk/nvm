@@ -21,7 +21,7 @@ export type ReservationResult =
 export async function reserveCredits(input: {
   requestId: string;
   userId: string;
-  kind: CreditKind;
+  kind?: CreditKind;
   credits: number;
   now?: Date;
 }): Promise<ReservationResult> {
@@ -36,37 +36,39 @@ export async function reserveCredits(input: {
     const [existing] = await tx.select().from(creditReservations)
       .where(eq(creditReservations.requestId, input.requestId)).limit(1).for('update');
     if (existing) {
-      if (existing.userId !== input.userId || existing.kind !== input.kind || existing.reservedCredits !== credits) {
+      if (existing.userId !== input.userId || (input.kind && existing.kind !== input.kind) || existing.reservedCredits !== credits) {
         throw new Error('Reservation request ID was reused with different billing parameters');
       }
       return { ok: false, reason: 'request_already_reserved', balance: 0, reserved: existing.reservedCredits };
     }
 
     const [ledger] = await tx.select({
-      balance: sql<number>`coalesce(sum(case when ${creditLedger.kind} = ${input.kind} then ${creditLedger.delta} else 0 end), 0)::int`,
+      free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
+      paid: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'paid' then ${creditLedger.delta} else 0 end), 0)::int`,
     }).from(creditLedger).where(eq(creditLedger.userId, input.userId));
+    const kind = input.kind ?? ((ledger?.paid ?? 0) > 0 ? 'paid' : 'free');
     const [active] = await tx.select({
       reserved: sql<number>`coalesce(sum(${creditReservations.reservedCredits}), 0)::int`,
     }).from(creditReservations).where(and(
       eq(creditReservations.userId, input.userId),
-      eq(creditReservations.kind, input.kind),
+      eq(creditReservations.kind, kind),
       eq(creditReservations.status, 'pending'),
     ));
-    const balance = ledger?.balance ?? 0;
+    const balance = ledger?.[kind] ?? 0;
     const reserved = active?.reserved ?? 0;
     if (credits + reserved > balance + CREDIT_GRACE_THRESHOLD) {
-      log.warn('credit_reservation_rejected', { request_id: input.requestId, user_id: input.userId, kind: input.kind, credits, balance, reserved });
+      log.warn('credit_reservation_rejected', { request_id: input.requestId, user_id: input.userId, kind, credits, balance, reserved });
       return { ok: false, reason: 'insufficient_credits', balance, reserved };
     }
 
     const [reservation] = await tx.insert(creditReservations).values({
       requestId: input.requestId,
       userId: input.userId,
-      kind: input.kind,
+      kind,
       reservedCredits: credits,
       expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
     }).returning();
-    log.info('credit_reserved', { request_id: input.requestId, user_id: input.userId, kind: input.kind, credits, balance, reserved });
+    log.info('credit_reserved', { request_id: input.requestId, user_id: input.userId, kind, credits, balance, reserved });
     return { ok: true, reservation, balance, reserved };
   });
 }

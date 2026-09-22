@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { waitUntil } from '@vercel/functions';
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { PRODUCTION_WEB_ORIGIN } from '../../../../../../app/shared/public-origin';
@@ -28,7 +29,7 @@ import {
 } from '../../../../lib/settings';
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { getUpstreamConfig, UpstreamConfigError } from '../../../../lib/upstream';
-import { ensureMonthlyFreeCredits, getBalances } from '../../../../lib/users';
+import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 
 export const config = { maxDuration: 60 };
 
@@ -222,10 +223,9 @@ export const POST: APIRoute = async ({ request }) => {
     handleDedup(idempotencyKey, user.id, requestHash, requestId),
   );
   if (duplicate) return duplicate;
-  const balancesPromise = (async () => {
-    await timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
-    return timePhase('balance', () => getBalances(user.id));
-  })();
+  const creditsPromise = timePhase('credits', () =>
+    ensureMonthlyFreeCredits(user.id),
+  );
   const rateLimitPromise = timePhase('rate_limit', () =>
     rateLimitTranscription(user.id),
   );
@@ -242,12 +242,11 @@ export const POST: APIRoute = async ({ request }) => {
     (route) => ({ route }),
     (error: unknown) => ({ error }),
   );
-  const [balances, rateLimit, routeResult] = await Promise.all([
-    balancesPromise,
+  const [, rateLimit, routeResult] = await Promise.all([
+    creditsPromise,
     rateLimitPromise,
     routePromise,
   ]);
-  const kind = balances.paid > 0 ? 'paid' : 'free';
   if (!rateLimit.ok) {
     await markDedupFailed({
       userId: user.id,
@@ -279,7 +278,6 @@ export const POST: APIRoute = async ({ request }) => {
     reserveCredits({
       requestId,
       userId: user.id,
-      kind,
       credits: RESERVATION_CREDITS,
     }),
   );
@@ -376,30 +374,43 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     const seconds = finiteNonnegative(body.usage?.seconds);
-    await timePhase('settle', () =>
-      finalizeReservation({
-        requestId,
-        outcome: 'settle',
-        model: route.modelId,
-        provider: route.provider,
-        modality: 'audio',
-        audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1_000),
-        tokens: {
-          inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
-          outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,
-        },
-        providerCostUsd,
-        status: upstreamResponse.status,
-        latencyMs: Math.round(performance.now() - startedAt),
-        dedup: {
-          userId: user.id,
-          idempotencyKey,
-          requestHash,
-          status: 'completed',
-          upstreamStatus: upstreamResponse.status,
-        },
-      }),
-    );
+    const settlementStartedAt = performance.now();
+    const settlement = finalizeReservation({
+      requestId,
+      outcome: 'settle',
+      model: route.modelId,
+      provider: route.provider,
+      modality: 'audio',
+      audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1_000),
+      tokens: {
+        inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
+        outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,
+      },
+      providerCostUsd,
+      status: upstreamResponse.status,
+      latencyMs: Math.round(performance.now() - startedAt),
+      dedup: {
+        userId: user.id,
+        idempotencyKey,
+        requestHash,
+        status: 'completed',
+        upstreamStatus: upstreamResponse.status,
+      },
+    })
+      .then(() => {
+        log.info('audio_transcription_settled', {
+          request_id: requestId,
+          settlement_ms:
+            Math.round((performance.now() - settlementStartedAt) * 100) / 100,
+        });
+      })
+      .catch((error) => {
+        log.error('audio_transcription_settlement_failed', {
+          request_id: requestId,
+          error,
+        });
+      });
+    waitUntil(settlement);
     timings.total = Math.round((performance.now() - startedAt) * 100) / 100;
     log.info('audio_transcription', {
       request_id: requestId,
@@ -411,6 +422,7 @@ export const POST: APIRoute = async ({ request }) => {
       audio_bytes: audio.length,
       audio_duration_ms: seconds == null ? undefined : Math.round(seconds * 1_000),
       timings_ms: timings,
+      settlement_deferred: true,
     });
     return responseWithRequestId(
       {
