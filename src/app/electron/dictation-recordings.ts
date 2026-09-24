@@ -6,6 +6,7 @@ export type SavedDictation = {
   createdAt: number;
   segmentCount: number;
 };
+const MAX_SAVED_RECORDINGS = 100;
 
 export function createDictationRecordings(directory: string) {
   function recordingPath(id: string) {
@@ -30,6 +31,9 @@ export function createDictationRecordings(directory: string) {
       }),
       { mode: 0o600 },
     );
+    const recordings = await list();
+    for (const expired of recordings.slice(MAX_SAVED_RECORDINGS))
+      await remove(expired.id);
   }
 
   async function list(): Promise<SavedDictation[]> {

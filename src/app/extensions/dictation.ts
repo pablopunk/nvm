@@ -307,16 +307,41 @@ function historyEntryTitle(text: string) {
 }
 
 async function historyView(ctx: any) {
-  const entries = await readHistory(ctx);
+  let entries = await readHistory(ctx);
   const recordings: Array<{
     id: string;
     createdAt: number;
     segmentCount: number;
   }> = (await ctx.dictation?.recordings?.().catch(() => [])) ?? [];
+  const retainedIds = new Set(
+    [
+      ...entries.map((entry) => ({ id: entry.id, createdAt: entry.createdAt })),
+      ...recordings.map((entry) => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+      })),
+    ]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, MAX_HISTORY_ENTRIES)
+      .map((entry) => entry.id),
+  );
+  for (const recording of recordings)
+    if (!retainedIds.has(recording.id))
+      await ctx.dictation.deleteRecording(recording.id);
+  const savedRecordings = recordings.filter((entry) =>
+    retainedIds.has(entry.id),
+  );
+  const keptEntries = entries.filter((entry) => retainedIds.has(entry.id));
+  if (keptEntries.length !== entries.length)
+    await writeHistory(ctx, keptEntries);
+  entries = keptEntries;
   const clearHistory = ctx.actions.run(
     'Clear History',
     async (innerCtx: any) => {
       await writeHistory(innerCtx, []);
+      const saved = (await innerCtx.dictation?.recordings?.()) ?? [];
+      for (const recording of saved)
+        await innerCtx.dictation.deleteRecording(recording.id);
       showExtensionFeedback(
         innerCtx,
         'Dictation',
@@ -332,7 +357,8 @@ async function historyView(ctx: any) {
       icon: 'trash-2',
       style: 'destructive',
       requiresConfirmation: true,
-      confirmMessage: 'Clear all dictation history? This cannot be undone.',
+      confirmMessage:
+        'Delete all transcripts and saved recordings? This cannot be undone.',
       confirmLabel: 'Clear history',
     },
   );
@@ -340,14 +366,14 @@ async function historyView(ctx: any) {
   return ctx.ui.list({
     id: 'dictation-history',
     title: 'Dictation History',
-    subtitle: `${entries.length} transcripts · ${recordings.length} saved recordings`,
+    subtitle: `${entries.length} transcripts · ${savedRecordings.length} saved recordings`,
     searchBarPlaceholder: 'Search dictation history',
     emptyView: {
       title: 'No dictation history',
       subtitle: 'Completed dictations will appear here.',
     },
     items: [
-      ...recordings.map((recording) => {
+      ...savedRecordings.map((recording) => {
         const retry = ctx.actions.run(
           'Retry Transcription',
           async (innerCtx: any) => {
@@ -442,10 +468,11 @@ async function historyView(ctx: any) {
         };
       }),
     ],
-    actions: entries.length ? [clearHistory] : [],
-    actionPanel: entries.length
-      ? { sections: [{ actions: [clearHistory] }] }
-      : undefined,
+    actions: entries.length || savedRecordings.length ? [clearHistory] : [],
+    actionPanel:
+      entries.length || savedRecordings.length
+        ? { sections: [{ actions: [clearHistory] }] }
+        : undefined,
   });
 }
 

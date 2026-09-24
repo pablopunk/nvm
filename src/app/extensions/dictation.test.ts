@@ -1042,3 +1042,110 @@ test('stores cleaned transcripts and manages bounded dictation history', async (
   await refreshed.actions[0].__handler(context, {});
   assert.deepEqual(stored.history, []);
 });
+
+test('keeps failed recordings in history until retry, deletion, or history cleanup', async () => {
+  const now = Date.now();
+  const stored: Record<string, unknown> = {
+    history: [{ id: 'old', text: 'old transcript', createdAt: now - 2_000 }],
+  };
+  const saved = new Map([
+    ['dictation-new', { id: 'dictation-new', createdAt: now, segmentCount: 2 }],
+    [
+      'dictation-old',
+      { id: 'dictation-old', createdAt: now - 3_000, segmentCount: 1 },
+    ],
+  ]);
+  const context: any = {
+    storage: {
+      get: async (key: string, fallback: unknown) => stored[key] ?? fallback,
+      set: async (key: string, value: unknown) => {
+        stored[key] = value;
+      },
+    },
+    dictation: {
+      recordings: async () => [...saved.values()],
+      retry: async () => 'recovered transcript',
+      deleteRecording: async (id: string) => {
+        saved.delete(id);
+      },
+    },
+    actions: actionBuilders({
+      copyText: (text: string) => ({ text }),
+      push: (title: string, view: unknown) => ({ title, view }),
+    }),
+    ui: { list: (input: unknown) => input, indicator: { show: () => {} } },
+  };
+  const root = createDictationExtension()
+    .rootItems(context)
+    .find((item: any) => item.id === 'dictation-history') as any;
+  const history = (await root.primaryAction.__handler(context, {})).view as any;
+  assert.equal(history.items.length, 3);
+  assert.equal(history.items[0].title, 'Unfinished dictation');
+  await history.items[0].primaryAction.__handler(context, {});
+  assert.equal(saved.has('dictation-new'), false);
+  assert.equal((stored.history as any[])[0].text, 'recovered transcript');
+
+  stored.history = [];
+  const refreshed = (await root.primaryAction.__handler(context, {}))
+    .view as any;
+  assert.equal(refreshed.items.length, 1);
+  await refreshed.actions[0].__handler(context, {});
+  assert.deepEqual(stored.history, []);
+  assert.equal(saved.size, 0);
+});
+
+test('keeps failed recordings in the same bounded history and clears their audio', async () => {
+  const now = Date.now();
+  const stored: Record<string, unknown> = {
+    history: Array.from({ length: 99 }, (_, index) => ({
+      id: `transcript-${index}`,
+      text: `Transcript ${index}`,
+      createdAt: now - index,
+    })),
+  };
+  const recordings = [
+    { id: 'older-failure', createdAt: now - 200, segmentCount: 1 },
+    { id: 'recent-failure', createdAt: now + 1, segmentCount: 2 },
+  ];
+  const deleted: string[] = [];
+  const context: any = {
+    storage: {
+      get: async (key: string, fallback: unknown) => stored[key] ?? fallback,
+      set: async (key: string, value: unknown) => {
+        stored[key] = value;
+      },
+    },
+    dictation: {
+      recordings: async () =>
+        recordings.filter((entry) => !deleted.includes(entry.id)),
+      deleteRecording: async (id: string) => {
+        deleted.push(id);
+      },
+      retry: async () => 'Recovered transcript',
+    },
+    ui: { list: (input: unknown) => input, indicator: { show: () => {} } },
+    actions: actionBuilders({
+      copyText: (text: string) => ({ text }),
+      push: (title: string, view: unknown) => ({ title, view }),
+    }),
+  };
+  const root = createDictationExtension()
+    .rootItems(context)
+    .find((item: any) => item.id === 'dictation-history') as any;
+  const view = (await root.primaryAction.__handler(context, {})).view as any;
+  assert.equal(view.items.length, 100);
+  assert.equal(view.items[0].title, 'Unfinished dictation');
+  assert.deepEqual(deleted, ['older-failure']);
+
+  await view.items[0].primaryAction.__handler(context, {});
+  assert.ok(
+    (stored.history as any[]).some(
+      (entry) => entry.text === 'Recovered transcript',
+    ),
+  );
+  assert.deepEqual(deleted, ['older-failure', 'recent-failure']);
+
+  const afterRetry = (await root.primaryAction.__handler(context, {}))
+    .view as any;
+  assert.equal(afterRetry.items.length, 100);
+});
