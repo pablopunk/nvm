@@ -171,6 +171,7 @@ import {
   createDictationService,
   type DictationRendererReply,
 } from './dictation-service';
+import { createDictationRecordings } from './dictation-recordings';
 import {
   apiDictationIsAvailable,
   cancelDictationPreparation,
@@ -374,6 +375,9 @@ const dictationService = createDictationService(
     prepareTranscription: prepareDictationTranscription,
     cancelPreparedTranscription: cancelDictationPreparation,
     transcribeAudio: transcribeDictationAudio,
+    recordings: createDictationRecordings(
+      path.join(app.getPath('userData'), 'dictation-recordings'),
+    ),
     recordTiming: recordDebugPerformance,
   },
 );
@@ -7560,7 +7564,18 @@ function createExtensionContext(
             throw trustedExtensionApiUnavailable('settings.write');
           },
     },
-    dictation: canUseDictation ? dictationService : undefined,
+    dictation: canUseDictation
+      ? extension.id === 'nevermind.dictation'
+        ? dictationService
+        : {
+            status: dictationService.status,
+            apiAvailable: dictationService.apiAvailable,
+            devices: dictationService.devices,
+            start: dictationService.start,
+            stop: dictationService.stop,
+            cancel: dictationService.cancel,
+          }
+      : undefined,
     shortcuts: canUseShortcuts
       ? {
           list: () => extensionShortcutRecords(),
@@ -11047,9 +11062,15 @@ app.whenReady().then(async () => {
       typeof reply.operationId === 'string' &&
       typeof reply.mimeType === 'string' &&
       reply.mimeType.toLowerCase().startsWith('audio/webm') &&
-      reply.audio instanceof Uint8Array &&
-      reply.audio.byteLength > 0 &&
-      reply.audio.byteLength <= MAX_DICTATION_AUDIO_BYTES
+      Array.isArray(reply.segments) &&
+      reply.segments.length > 0 &&
+      reply.segments.length <= 120 &&
+      reply.segments.every(
+        (segment) =>
+          segment instanceof Uint8Array &&
+          segment.byteLength > 0 &&
+          segment.byteLength <= MAX_DICTATION_AUDIO_BYTES,
+      )
     ) {
       if (reply.debug && typeof reply.debug === 'object')
         loggerDebug('dictation.capture-stats', reply.debug, {

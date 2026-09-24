@@ -98,6 +98,32 @@ function decodeBase64Audio(data: string) {
   return bytes;
 }
 
+async function readTranscriptionAudio(request: Request) {
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_REQUEST_BYTES) return { error: 'too_large' as const };
+  if (request.headers.get('content-type')?.split(';')[0].trim() === 'audio/webm') {
+    const bytes = Buffer.from(await request.arrayBuffer());
+    if (bytes.length > MAX_AUDIO_BYTES) return { error: 'too_large' as const };
+    if (bytes.subarray(0, 4).toString('hex') !== '1a45dfa3')
+      return { error: 'invalid_audio' as const };
+    return { audio: bytes, inputAudio: { data: bytes.toString('base64'), format: 'webm' } as const, requestHash: bytes };
+  }
+  const rawBody = await request.text();
+  if (Buffer.byteLength(rawBody) > MAX_REQUEST_BYTES)
+    return { error: 'too_large' as const };
+  let json: unknown;
+  try {
+    json = JSON.parse(rawBody);
+  } catch {
+    return { error: 'invalid_json' as const };
+  }
+  const parsed = requestSchema.safeParse(json);
+  if (!parsed.success) return { error: 'invalid_request' as const };
+  const audio = decodeBase64Audio(parsed.data.input_audio.data);
+  if (!audio) return { error: 'invalid_audio' as const };
+  return { audio, inputAudio: parsed.data.input_audio, requestHash: rawBody };
+}
+
 function responseWithRequestId(
   body: unknown,
   status: number,
@@ -168,40 +194,27 @@ export const POST: APIRoute = async ({ request }) => {
       'API dictation is temporarily unavailable.',
       requestId,
     );
-  const contentLength = Number(request.headers.get('content-length') ?? 0);
-  if (contentLength > MAX_REQUEST_BYTES)
-    return responseWithRequestId(
-      { error: { type: 'payload_too_large', message: 'Dictation audio is too large.' } },
-      413,
-      requestId,
-    );
   const requestStartedAt = performance.now();
-  const rawBody = await request.text();
-  if (Buffer.byteLength(rawBody) > MAX_REQUEST_BYTES)
+  const parsedAudio = await readTranscriptionAudio(request);
+  if (parsedAudio.error === 'too_large')
     return responseWithRequestId(
       { error: { type: 'payload_too_large', message: 'Dictation audio is too large.' } },
       413,
       requestId,
     );
-  let json: unknown;
-  try {
-    json = JSON.parse(rawBody);
-  } catch {
+  if (parsedAudio.error === 'invalid_json')
     return responseWithRequestId(
       { error: { type: 'invalid_request', message: 'Invalid JSON body.' } },
       400,
       requestId,
     );
-  }
-  const parsed = requestSchema.safeParse(json);
-  if (!parsed.success)
+  if (parsedAudio.error === 'invalid_request')
     return responseWithRequestId(
       { error: { type: 'invalid_request', message: 'Invalid transcription request.' } },
       400,
       requestId,
     );
-  const audio = decodeBase64Audio(parsed.data.input_audio.data);
-  if (!audio)
+  if (parsedAudio.error === 'invalid_audio')
     return responseWithRequestId(
       { error: { type: 'invalid_audio', message: 'Invalid or oversized WebM audio.' } },
       400,
@@ -218,7 +231,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
   const requestHash = createHash('sha256')
     .update('/api/v1/audio/transcriptions\0')
-    .update(rawBody)
+    .update(parsedAudio.requestHash)
     .digest('hex');
   const duplicate = await timePhase('dedup', () =>
     handleDedup(idempotencyKey, user.id, requestHash, requestId),
@@ -330,7 +343,7 @@ export const POST: APIRoute = async ({ request }) => {
           },
           body: JSON.stringify({
             model: route.modelId,
-            input_audio: parsed.data.input_audio,
+            input_audio: parsedAudio.inputAudio,
             response_format: 'json',
           }),
           signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
@@ -436,7 +449,7 @@ export const POST: APIRoute = async ({ request }) => {
       model: route.modelId,
       status: upstreamResponse.status,
       latency_ms: Math.round(performance.now() - startedAt),
-      audio_bytes: audio.length,
+      audio_bytes: parsedAudio.audio.length,
       audio_duration_ms: seconds == null ? undefined : Math.round(seconds * 1_000),
       timings_ms: timings,
       settlement_deferred: true,

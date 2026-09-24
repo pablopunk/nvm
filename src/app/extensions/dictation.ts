@@ -308,6 +308,11 @@ function historyEntryTitle(text: string) {
 
 async function historyView(ctx: any) {
   const entries = await readHistory(ctx);
+  const recordings: Array<{
+    id: string;
+    createdAt: number;
+    segmentCount: number;
+  }> = (await ctx.dictation?.recordings?.().catch(() => [])) ?? [];
   const clearHistory = ctx.actions.run(
     'Clear History',
     async (innerCtx: any) => {
@@ -335,58 +340,108 @@ async function historyView(ctx: any) {
   return ctx.ui.list({
     id: 'dictation-history',
     title: 'Dictation History',
-    subtitle: `${entries.length} ${entries.length === 1 ? 'dictation' : 'dictations'}`,
+    subtitle: `${entries.length} transcripts · ${recordings.length} saved recordings`,
     searchBarPlaceholder: 'Search dictation history',
     emptyView: {
       title: 'No dictation history',
       subtitle: 'Completed dictations will appear here.',
     },
-    items: entries.map((entry) => {
-      const open = ctx.actions.push('View Transcript', {
-        type: 'preview',
-        title: 'Dictation',
-        subtitle: new Date(entry.createdAt).toLocaleString(),
-        content: entry.text,
-        actions: [ctx.actions.copyText(entry.text, 'Copy Transcript')],
-      });
-      const copy = ctx.actions.copyText(entry.text, 'Copy Transcript');
-      const remove = ctx.actions.run(
-        'Delete Transcript',
-        async (innerCtx: any) => {
-          await writeHistory(
-            innerCtx,
-            (await readHistory(innerCtx)).filter(
-              (item) => item.id !== entry.id,
-            ),
-          );
-          showExtensionFeedback(
-            innerCtx,
-            'Dictation',
-            'Transcript deleted',
-            'success',
-          );
-          return {
-            view: await historyView(innerCtx),
-            navigation: 'replace',
-          };
-        },
-        {
-          icon: 'trash-2',
-          style: 'destructive',
-          requiresConfirmation: true,
-          confirmMessage: 'Delete this transcript? This cannot be undone.',
-          confirmLabel: 'Delete transcript',
-        },
-      );
-      return {
-        id: entry.id,
-        title: historyEntryTitle(entry.text),
-        subtitle: new Date(entry.createdAt).toLocaleString(),
-        icon: 'file-text',
-        primaryAction: open,
-        actions: [copy, remove],
-      };
-    }),
+    items: [
+      ...recordings.map((recording) => {
+        const retry = ctx.actions.run(
+          'Retry Transcription',
+          async (innerCtx: any) => {
+            const text = await innerCtx.dictation.retry(recording.id);
+            if (!text.trim()) {
+              showExtensionFeedback(
+                innerCtx,
+                'Dictation',
+                'No speech detected',
+                'error',
+              );
+              return;
+            }
+            await addHistoryEntry(innerCtx, text);
+            await innerCtx.dictation.deleteRecording(recording.id);
+            showExtensionFeedback(
+              innerCtx,
+              'Dictation',
+              'Transcription recovered',
+              'success',
+            );
+            return { view: await historyView(innerCtx), navigation: 'replace' };
+          },
+        );
+        const remove = ctx.actions.run(
+          'Delete Recording',
+          async (innerCtx: any) => {
+            await innerCtx.dictation.deleteRecording(recording.id);
+            return { view: await historyView(innerCtx), navigation: 'replace' };
+          },
+          {
+            icon: 'trash-2',
+            style: 'destructive',
+            requiresConfirmation: true,
+            confirmMessage: 'Delete this saved audio? It cannot be recovered.',
+            confirmLabel: 'Delete recording',
+          },
+        );
+        return {
+          id: recording.id,
+          title: 'Unfinished dictation',
+          subtitle: `${new Date(recording.createdAt).toLocaleString()} · ${recording.segmentCount} audio segments`,
+          icon: 'mic',
+          primaryAction: retry,
+          actions: [remove],
+        };
+      }),
+      ...entries.map((entry) => {
+        const open = ctx.actions.push('View Transcript', {
+          type: 'preview',
+          title: 'Dictation',
+          subtitle: new Date(entry.createdAt).toLocaleString(),
+          content: entry.text,
+          actions: [ctx.actions.copyText(entry.text, 'Copy Transcript')],
+        });
+        const copy = ctx.actions.copyText(entry.text, 'Copy Transcript');
+        const remove = ctx.actions.run(
+          'Delete Transcript',
+          async (innerCtx: any) => {
+            await writeHistory(
+              innerCtx,
+              (await readHistory(innerCtx)).filter(
+                (item) => item.id !== entry.id,
+              ),
+            );
+            showExtensionFeedback(
+              innerCtx,
+              'Dictation',
+              'Transcript deleted',
+              'success',
+            );
+            return {
+              view: await historyView(innerCtx),
+              navigation: 'replace',
+            };
+          },
+          {
+            icon: 'trash-2',
+            style: 'destructive',
+            requiresConfirmation: true,
+            confirmMessage: 'Delete this transcript? This cannot be undone.',
+            confirmLabel: 'Delete transcript',
+          },
+        );
+        return {
+          id: entry.id,
+          title: historyEntryTitle(entry.text),
+          subtitle: new Date(entry.createdAt).toLocaleString(),
+          icon: 'file-text',
+          primaryAction: open,
+          actions: [copy, remove],
+        };
+      }),
+    ],
     actions: entries.length ? [clearHistory] : [],
     actionPanel: entries.length
       ? { sections: [{ actions: [clearHistory] }] }
@@ -539,6 +594,7 @@ async function runDictation(ctx: any) {
   const settings = await readSettings(ctx);
   const cleanWithAi = settings.cleanupWithAi && (await aiIsAvailable(ctx));
   const status = await ctx.dictation.status();
+  if (status === 'transcribing') return;
   if (status === 'idle') {
     ctx.ui.indicator.show(LISTENING_INDICATOR);
     if (cleanWithAi)

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
   measureDebugPerformance,
-  measureDebugPerformanceSync,
   recordDebugPerformance,
 } from './debug-performance';
 import { nevermindDesktopHeaders } from './nevermind-api';
@@ -195,22 +194,7 @@ async function requestTranscription(options: {
     requestId,
     alwaysLog: true,
   };
-  const body = measureDebugPerformanceSync(
-    'dictation.request-encode',
-    { ...timingDetail, audioBytes: input.audio.byteLength },
-    () =>
-      JSON.stringify(
-        Object.fromEntries([
-          [
-            'input_audio',
-            {
-              data: Buffer.from(input.audio).toString('base64'),
-              format: 'webm',
-            },
-          ],
-        ]),
-      ),
-  );
+  const body = input.audio;
   let response: Response;
   try {
     response = await fetch(
@@ -220,7 +204,7 @@ async function requestTranscription(options: {
         headers: nevermindDesktopHeaders(
           Object.fromEntries([
             ['Authorization', `Bearer ${auth.token}`],
-            ['Content-Type', 'application/json'],
+            ['Content-Type', 'audio/webm'],
             ['Idempotency-Key', input.operationId],
             ['X-Request-ID', requestId],
             ...(prepared
@@ -233,7 +217,7 @@ async function requestTranscription(options: {
               : []),
           ]),
         ),
-        body,
+        body: Buffer.from(body),
         signal,
       },
     );

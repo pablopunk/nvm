@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import type { SavedDictation } from './dictation-recordings';
 
 interface DictationTiming {
   startedAt: number;
@@ -22,7 +23,8 @@ export type DictationRendererReply =
   | {
       type: 'audio';
       operationId: string;
-      audio: Uint8Array;
+      audio?: Uint8Array;
+      segments?: Uint8Array[];
       mimeType: string;
       debug?: Record<string, unknown>;
     }
@@ -43,6 +45,9 @@ export interface DictationService {
   stop(): Promise<string>;
   cancel(): Promise<void>;
   dispose(): Promise<void>;
+  recordings(): Promise<SavedDictation[]>;
+  retry(id: string): Promise<string>;
+  deleteRecording(id: string): Promise<void>;
   reply(reply: DictationRendererReply): void;
 }
 
@@ -60,6 +65,12 @@ export function createDictationService(
     }) => Promise<string>;
     apiAvailable?: () => Promise<boolean>;
     prepareTranscription?: (operationId: string) => Promise<void>;
+    recordings?: {
+      save(id: string, segments: Uint8Array[]): Promise<void>;
+      list(): Promise<SavedDictation[]>;
+      load(id: string): Promise<Uint8Array[]>;
+      remove(id: string): Promise<void>;
+    };
     cancelPreparedTranscription?: (operationId: string) => Promise<void>;
     recordTiming?: (
       name: string,
@@ -290,22 +301,36 @@ export function createDictationService(
     }
     const controller = new AbortController();
     transcriptionAbort = controller;
+    let recordingSaved = false;
     const audioReceivedAt = performance.now();
     if (activeTiming?.stopRequestedAt) {
       recordTiming(
         'dictation.audio-finalize',
         activeTiming.stopRequestedAt,
         reply.operationId,
-        { audioBytes: reply.audio.byteLength },
+        {
+          audioBytes: (
+            reply.segments ?? (reply.audio ? [reply.audio] : [])
+          ).reduce((size, segment) => size + segment.byteLength, 0),
+        },
       );
     }
-    dependencies
-      .transcribeAudio({
-        operationId: reply.operationId,
-        audio: reply.audio,
-        mimeType: reply.mimeType,
-        signal: controller.signal,
-      })
+    (async () => {
+      const segments = reply.segments ?? (reply.audio ? [reply.audio] : []);
+      if (dependencies.recordings) {
+        await dependencies.recordings.save(reply.operationId, segments);
+        recordingSaved = true;
+      }
+      const text = await transcribeSegments(
+        reply.operationId,
+        segments,
+        reply.mimeType,
+        controller.signal,
+      );
+      if (dependencies.recordings)
+        await dependencies.recordings.remove(reply.operationId);
+      return text;
+    })()
       .then((text) => {
         if (reply.operationId !== activeOperationId) {
           return;
@@ -324,7 +349,9 @@ export function createDictationService(
         }
         failTranscription(
           reply.operationId,
-          error instanceof Error ? error : new Error(String(error)),
+          new Error(
+            `${error instanceof Error ? error.message : String(error)}${recordingSaved ? ' Your recording was saved. Open Dictation History to retry.' : ''}`,
+          ),
         );
       })
       .finally(() => {
@@ -385,6 +412,49 @@ export function createDictationService(
     activeTiming = null;
   }
 
+  async function transcribeSegments(
+    operationId: string,
+    segments: Uint8Array[],
+    mimeType: string,
+    signal: AbortSignal,
+  ) {
+    if (!dependencies.transcribeAudio)
+      throw new Error('Cloud transcription is unavailable');
+    const parts: string[] = [];
+    for (const [index, audio] of segments.entries()) {
+      parts.push(
+        await dependencies.transcribeAudio({
+          operationId: index === 0 ? operationId : `${operationId}-${index}`,
+          audio,
+          mimeType,
+          signal,
+        }),
+      );
+    }
+    return parts.join(' ').trim();
+  }
+
+  async function retry(id: string) {
+    if (currentStatus !== 'idle' || !dependencies.recordings)
+      throw new Error('Dictation is busy or recordings are unavailable');
+    currentStatus = 'transcribing';
+    const controller = new AbortController();
+    transcriptionAbort = controller;
+    try {
+      const segments = await dependencies.recordings.load(id);
+      const text = await transcribeSegments(
+        id,
+        segments,
+        'audio/webm',
+        controller.signal,
+      );
+      return text;
+    } finally {
+      currentStatus = 'idle';
+      transcriptionAbort = null;
+    }
+  }
+
   return {
     status,
     apiAvailable,
@@ -393,6 +463,10 @@ export function createDictationService(
     stop,
     cancel,
     dispose,
+    recordings: () => dependencies.recordings?.list() ?? Promise.resolve([]),
+    retry,
+    deleteRecording: (id) =>
+      dependencies.recordings?.remove(id) ?? Promise.resolve(),
     reply,
   };
 }

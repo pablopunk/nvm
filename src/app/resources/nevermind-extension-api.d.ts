@@ -934,6 +934,14 @@ export type ExtensionDictation = {
   /** Stops capture and resolves with the hosted transcription. Recorded audio is not exposed to extension code. */
   stop(): Promise<string>;
   cancel(): Promise<void>;
+  /** Built-in Dictation only: lists locally saved recordings whose hosted transcription did not complete. Audio stays on this device. */
+  recordings?(): Promise<
+    Array<{ id: string; createdAt: number; segmentCount: number }>
+  >;
+  /** Built-in Dictation only: retries transcription of a saved recording. Delete the audio after saving the returned transcript. */
+  retry?(id: string): Promise<string>;
+  /** Built-in Dictation only: permanently deletes a saved recording from this device. */
+  deleteRecording?(id: string): Promise<void>;
 };
 
 export type ExtensionShortcutRecord = {

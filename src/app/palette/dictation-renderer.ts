@@ -7,6 +7,7 @@ import { smoothMicLevel } from './mic-level';
 const MICROPHONE_READY_TIMEOUT_MS = 7_000;
 const MICROPHONE_SIGNAL_THRESHOLD = 0.000_01;
 const MAX_DICTATION_AUDIO_BYTES = 4_194_304;
+const DICTATION_SEGMENT_MS = 60_000;
 
 export async function recordDictation(
   deviceId: string | undefined,
@@ -17,25 +18,38 @@ export async function recordDictation(
     audio: deviceId ? { deviceId: { exact: deviceId } } : true,
   });
   const preferredMimeType = 'audio/webm;codecs=opus';
-  const recorder = new MediaRecorder(
-    stream,
-    MediaRecorder.isTypeSupported(preferredMimeType)
-      ? { mimeType: preferredMimeType }
-      : undefined,
-  );
-  const chunks: Blob[] = [];
+  const recorderOptions = MediaRecorder.isTypeSupported(preferredMimeType)
+    ? { mimeType: preferredMimeType }
+    : undefined;
+  const segments: Promise<Blob>[] = [];
+  let recorder: MediaRecorder;
+  let rotationTimer: number | undefined;
+  let stopped = false;
+  function startSegment() {
+    const next = new MediaRecorder(stream, recorderOptions);
+    const chunks: Blob[] = [];
+    const segment = new Promise<Blob>((resolve, reject) => {
+      next.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+      };
+      next.onerror = () => reject(new Error('Recording failed'));
+      next.onstop = () => resolve(new Blob(chunks, { type: next.mimeType }));
+    });
+    segments.push(segment);
+    void segment.catch(() => {});
+    next.start();
+    return next;
+  }
+  function rotateSegment() {
+    if (stopped) return;
+    const previous = recorder;
+    recorder = startSegment();
+    previous.stop();
+    rotationTimer = window.setTimeout(rotateSegment, DICTATION_SEGMENT_MS);
+  }
   const recordedAt = performance.now();
-  const recording = new Promise<Blob>((resolve, reject) => {
-    recorder.ondataavailable = (event) => {
-      if (event.data.size === 0) return;
-      chunks.push(event.data);
-    };
-    recorder.onerror = () => reject(new Error('Recording failed'));
-    recorder.onstop = () =>
-      resolve(new Blob(chunks, { type: recorder.mimeType }));
-  });
-
-  recorder.start();
+  recorder = startSegment();
+  rotationTimer = window.setTimeout(rotateSegment, DICTATION_SEGMENT_MS);
   const levelMonitor = onLevel ? startMicLevelMonitor(stream, onLevel) : null;
   const ready = waitForCapturedAudioFrame(stream).then(() => {
     onState?.('recording');
@@ -44,23 +58,32 @@ export async function recordDictation(
     ready,
     stop: async () => {
       onState?.('transcribing');
+      if (rotationTimer !== undefined) window.clearTimeout(rotationTimer);
       levelMonitor?.stop();
       onLevel?.(null);
-      recorder.stop();
-      const blob = await recording;
+      if (!stopped) recorder.stop();
+      stopped = true;
       const track = stream.getAudioTracks()[0];
       const trackSampleRate = track?.getSettings()?.sampleRate;
       stream.getTracks().forEach((streamTrack) => streamTrack.stop());
-      const mimeType = blob.type || recorder.mimeType || 'unknown';
-      if (blob.size === 0 || blob.size > MAX_DICTATION_AUDIO_BYTES) {
+      const blobs = await Promise.all(segments);
+      const mimeType = blobs[0]?.type || recorder.mimeType || 'unknown';
+      if (
+        blobs.some(
+          (blob) => blob.size === 0 || blob.size > MAX_DICTATION_AUDIO_BYTES,
+        )
+      ) {
         throw new Error('The dictation recording is empty or too large.');
       }
       return {
-        audio: new Uint8Array(await blob.arrayBuffer()),
+        segments: await Promise.all(
+          blobs.map(async (blob) => new Uint8Array(await blob.arrayBuffer())),
+        ),
         mimeType,
         debug: {
           mimeType,
-          blobBytes: blob.size,
+          blobBytes: blobs.reduce((sum, blob) => sum + blob.size, 0),
+          segmentCount: blobs.length,
           durationSeconds:
             Math.round(((performance.now() - recordedAt) / 1_000) * 100) / 100,
           trackSampleRate,
@@ -69,9 +92,11 @@ export async function recordDictation(
       };
     },
     cancel: () => {
+      if (rotationTimer !== undefined) window.clearTimeout(rotationTimer);
       levelMonitor?.stop();
       onLevel?.(null);
-      recorder.stop();
+      if (!stopped) recorder.stop();
+      stopped = true;
       stream.getTracks().forEach((track) => track.stop());
     },
   };

@@ -1495,12 +1495,17 @@ function DictationRendererController() {
             'dictation.audio-finalize.renderer',
             stopStartedAt,
             command.operationId,
-            { audioBytes: stopped.audio.byteLength },
+            {
+              audioBytes: stopped.segments.reduce(
+                (size, segment) => size + segment.byteLength,
+                0,
+              ),
+            },
           );
           window.nvm.replyDictation({
             type: 'audio',
             operationId: command.operationId,
-            audio: stopped.audio,
+            segments: stopped.segments,
             mimeType: stopped.mimeType,
             debug: stopped.debug,
           });

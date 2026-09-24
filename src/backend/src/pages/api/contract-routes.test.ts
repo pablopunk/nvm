@@ -293,6 +293,55 @@ test('audio transcription supports an emergency kill switch for desktop v1', asy
   );
 });
 
+test('audio transcription accepts raw WebM without changing the legacy JSON contract', async () => {
+  installDb(createFakeDb({
+    selects: [[{
+      user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' },
+      tokenId: 'token_1',
+    }]],
+  }));
+  const request = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer nvm_pat_test',
+      'content-type': 'audio/webm',
+      'x-nevermind-client': 'desktop',
+      'x-nevermind-client-version': '0.17.5',
+      'x-nevermind-api-version': '1',
+    },
+    body: new Uint8Array([0, 1, 2, 3]),
+  });
+  const response = await postAudioTranscription(routeContext(request));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json() as { error: { type: string } }).error.type, 'invalid_audio');
+
+  for (const [contentType, body] of [
+    ['audio/webm', new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])],
+    ['application/json', JSON.stringify({ input_audio: { data: 'GkXfow==', format: 'webm' } })],
+  ] as const) {
+    installDb(createFakeDb({
+      selects: [[{
+        user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' },
+        tokenId: 'token_1',
+      }]],
+    }));
+    const validRequest = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': contentType,
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body,
+    });
+    const validResponse = await postAudioTranscription(routeContext(validRequest));
+    assert.equal(validResponse.status, 400);
+    assert.equal((await validResponse.json() as { error: { message: string } }).error.message, 'Idempotency-Key is required.');
+  }
+});
+
 test('audio transcription preparation uses the transcription kill switch', async () => {
   process.env.NEVERMIND_KILL_SWITCHES = 'audio_transcription';
   installDb(

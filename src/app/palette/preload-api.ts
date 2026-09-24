@@ -151,7 +151,7 @@ export type DictationReply =
   | {
       type: 'audio';
       operationId: string;
-      audio: Uint8Array;
+      segments: Uint8Array[];
       mimeType: string;
       debug?: Record<string, unknown>;
     }

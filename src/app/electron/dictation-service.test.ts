@@ -203,6 +203,52 @@ test('sends captured audio to cloud transcription and releases the operation', a
   assert.equal(commands.at(-1)?.type, 'release');
 });
 
+test('keeps failed segmented recordings for retry and removes them after transcription', async () => {
+  const commands: DictationRendererCommand[] = [];
+  const saved = new Map<string, Uint8Array[]>();
+  const calls: string[] = [];
+  let shouldFail = true;
+  const service = createDictationService((command) => commands.push(command), {
+    recordings: {
+      save: async (id, segments) => {
+        saved.set(id, segments);
+      },
+      list: async () =>
+        [...saved.keys()].map((id) => ({ id, createdAt: 1, segmentCount: 2 })),
+      load: async (id) => saved.get(id) ?? [],
+      remove: async (id) => {
+        saved.delete(id);
+      },
+    },
+    transcribeAudio: async ({ operationId }) => {
+      calls.push(operationId);
+      if (shouldFail) throw new Error('Upload rejected');
+      return operationId.endsWith('-1') ? 'world' : 'hello';
+    },
+  });
+  const started = service.start();
+  const operationId = (
+    commands[0] as Extract<DictationRendererCommand, { type: 'start' }>
+  ).operationId;
+  service.reply({ type: 'recording', operationId });
+  await started;
+  const stopped = service.stop();
+  service.reply({
+    type: 'audio',
+    operationId,
+    segments: [WEBM_AUDIO, WEBM_AUDIO],
+    mimeType: 'audio/webm',
+  });
+  await assert.rejects(stopped, /Upload rejected/);
+  assert.equal((await service.recordings()).length, 1);
+  shouldFail = false;
+  assert.equal(await service.retry(operationId), 'hello world');
+  assert.deepEqual(calls, [operationId, operationId, `${operationId}-1`]);
+  assert.equal((await service.recordings()).length, 1);
+  await service.deleteRecording(operationId);
+  assert.deepEqual(await service.recordings(), []);
+});
+
 test('rejects cloud transcription failures and releases the operation', async () => {
   const commands: DictationRendererCommand[] = [];
   const service = createDictationService((command) => commands.push(command), {
