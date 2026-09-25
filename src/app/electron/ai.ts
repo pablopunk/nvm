@@ -1205,7 +1205,7 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       kind: 'prompt_too_large',
       title: 'Prompt too large',
       message:
-        'This chat contains too much content. Shorten the message, remove attachments, or start a new chat.',
+        'This chat history is too large for one request. Start a new chat, or send a shorter message without pasting large outputs.',
     };
   }
   if (

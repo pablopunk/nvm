@@ -39,6 +39,10 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import {
+  joinAiChatTranscript,
+  truncateAiChatTranscriptContent,
+} from '../shared/ai-chat-context';
+import {
   AI_CHAT_IMAGE_LIMIT,
   AI_CHAT_IMAGE_MIME_TYPES,
   AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
@@ -167,11 +171,11 @@ import {
   recordDebugPerformance,
   summarizeDebugValue,
 } from './debug-performance';
+import { createDictationRecordings } from './dictation-recordings';
 import {
   createDictationService,
   type DictationRendererReply,
 } from './dictation-service';
-import { createDictationRecordings } from './dictation-recordings';
 import {
   apiDictationIsAvailable,
   cancelDictationPreparation,
@@ -606,6 +610,7 @@ const activeConversationRequests = new Map<
   { abort: () => void; result: Promise<unknown> }
 >();
 const activeConversationSessionIds = new Set<string>();
+const activeBuilderSessionIds = new Set<string>();
 const pendingAiChatModelChanges = new Set<string>();
 let aiChatModelChangeQueue = Promise.resolve();
 const pendingAiChatSends = new Map<
@@ -2873,6 +2878,7 @@ async function disposeAiSessions() {
   await Promise.allSettled(conversations.map((request) => request.result));
   activeConversationRequests.clear();
   activeConversationSessionIds.clear();
+  activeBuilderSessionIds.clear();
   await nevermindAi?.disposeAllSessions?.();
 }
 
@@ -7937,6 +7943,16 @@ async function initNevermindAi() {
       }
       if (chatId && event.type === 'error' && event.message)
         appendAiChatMessage(chatId, 'system', event.message);
+      if (
+        chatId &&
+        event.type === 'error' &&
+        /prompt[_ -]?too[_ -]?large|prompt exceeds|413\b/i.test(
+          String(event.message || ''),
+        )
+      ) {
+        activeBuilderSessionIds.delete(chatId);
+        void nevermindAi?.reset(chatId).catch(() => {});
+      }
       if (chatId && event.type === 'extension_activated' && event.data) {
         const preview = event.data as any;
         if (preview.filename && preview.preview) {
@@ -8078,26 +8094,27 @@ function aiChatPromptWithContext(message, chatId) {
   if (!messages.length)
     return `Use this Nevermind AI chat transcript as context. If the user has provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}${learnings}\n\nNew user message:\n${message}`;
 
-  const transcript = messages
-    .map(
+  const transcript = joinAiChatTranscript(
+    messages.map(
       (item) =>
         `${item.role === 'user' ? 'User' : 'Assistant'}: ${aiChatTranscriptContent(item)}`,
-    )
-    .join('\n\n');
+    ),
+  );
 
   return `Use this Nevermind AI chat transcript as context. Do not ask questions that the user already answered. If the user has now provided enough details, proceed by calling read_extension_api immediately; do not merely say you will.${focused}${learnings}\n\n${transcript}\n\nNew user message:\n${message}`;
 }
 
 function conversationPromptWithContext(message, chatId) {
   const chat = userState.aiChats[chatId];
-  const transcript = (chat?.messages || [])
-    .filter((item) => item.role === 'user' || item.role === 'assistant')
-    .slice(-20)
-    .map(
-      (item) =>
-        `${item.role === 'user' ? 'User' : 'Assistant'}: ${aiChatTranscriptContent(item)}`,
-    )
-    .join('\n\n');
+  const transcript = joinAiChatTranscript(
+    (chat?.messages || [])
+      .filter((item) => item.role === 'user' || item.role === 'assistant')
+      .slice(-20)
+      .map(
+        (item) =>
+          `${item.role === 'user' ? 'User' : 'Assistant'}: ${aiChatTranscriptContent(item)}`,
+      ),
+  );
   return transcript ? `${transcript}\n\nUser: ${message}` : message;
 }
 
@@ -8105,9 +8122,9 @@ function aiChatTranscriptContent(message) {
   const imageCount = Array.isArray(message.images) ? message.images.length : 0;
   const imageNotice =
     imageCount === 1 ? '[Attached image]' : `[Attached ${imageCount} images]`;
-  return [message.content, imageCount ? imageNotice : '']
-    .filter(Boolean)
-    .join('\n');
+  return truncateAiChatTranscriptContent(
+    [message.content, imageCount ? imageNotice : ''].filter(Boolean).join('\n'),
+  );
 }
 
 function aiChatPromptMessage(message, imageCount) {
@@ -8407,7 +8424,9 @@ async function sendAiChatMessage(message, chatId, traceId, images) {
         ? activeConversationSessionIds.has(targetChatId)
           ? promptMessage
           : conversationPromptWithContext(promptMessage, targetChatId)
-        : aiChatPromptWithContext(promptMessage, targetChatId);
+        : activeBuilderSessionIds.has(targetChatId)
+          ? promptMessage
+          : aiChatPromptWithContext(promptMessage, targetChatId);
       try {
         if (!nevermindAi) await initNevermindAi();
         let modelImages = piImages(normalizedImages);
@@ -8447,6 +8466,7 @@ async function sendAiChatMessage(message, chatId, traceId, images) {
             requestTraceId,
             modelImages,
           );
+        activeBuilderSessionIds.add(targetChatId);
         return nevermindAi.send(
           prompt,
           targetChatId,
@@ -8572,6 +8592,7 @@ async function resetAiChat(chatId) {
       ?.session(targetChatId, { toolMode: 'conversation' })
       .reset();
   }
+  activeBuilderSessionIds.delete(targetChatId);
   return nevermindAi?.reset(targetChatId);
 }
 
@@ -10781,6 +10802,7 @@ async function cleanupExpiredAiConversations() {
     }
     delete userState.aiChats[chatId];
     activeConversationSessionIds.delete(chatId);
+    activeBuilderSessionIds.delete(chatId);
     delete userState.recents?.[`ai-chat:${chatId}`];
     patchAiChatsRemove(chatId);
     removedChatIds.push(chatId);
