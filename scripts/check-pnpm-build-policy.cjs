@@ -49,10 +49,10 @@ const electronRepairScript = path.join(root, 'scripts', 'ensure-electron.cjs');
 const backendRepairScript = path.join(root, 'scripts', 'ensure-backend.cjs');
 if (
   manifest.scripts.predev !==
-  'node scripts/build-macos-selected-text-helper.cjs && node scripts/ensure-electron.cjs && node scripts/ensure-backend.cjs'
+  'node scripts/build-macos-selected-text-helper.cjs && node scripts/build-windows-desktop-text-helper.cjs && node scripts/ensure-electron.cjs && node scripts/ensure-backend.cjs'
 ) {
   throw new Error(
-    'package.json predev must build the macOS helper and run the conditional Electron and backend repair scripts.',
+    'package.json predev must build the desktop helpers and run the conditional Electron and backend repair scripts.',
   );
 }
 if (!fs.existsSync(electronRepairScript)) {

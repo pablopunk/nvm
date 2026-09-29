@@ -92,6 +92,7 @@ export function createElectronClipboardApi(deps: {
     createEmpty: () => NativeImage;
   };
   ClipboardItem: ClipboardItemConstructor;
+  writeText?: (text: string) => MaybePromise<void>;
 }): ClipboardApi {
   async function readFormat(format: string) {
     return readClipboardBuffer(deps.clipboard, readFormatsFor(format)).then(
@@ -161,7 +162,8 @@ export function createElectronClipboardApi(deps: {
     readBuffer: (format) =>
       readClipboardBuffer(deps.clipboard, readFormatsFor(format)),
     write,
-    writeText: (text) => deps.clipboard.writeText(text),
+    writeText: (text) =>
+      deps.writeText ? deps.writeText(text) : deps.clipboard.writeText(text),
     writeBuffer: (format, buffer) => write({ buffers: { [format]: buffer } }),
     writeImage: (image) => write({ image }),
   };

@@ -98,8 +98,10 @@ try {
   $blockmap = Resolve-UniqueArtifact 'Nevermind-*-win-*-setup.exe.blockmap' "$setupName.blockmap"
   $unpacked = Get-Item -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/Nevermind.exe')
   $asar = Get-Item -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/resources/app.asar')
+  $desktopTextHelper = Get-Item -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/resources/windows-desktop-text.exe')
   Assert-Condition ($unpacked.Length -gt 0) 'win-unpacked/Nevermind.exe is empty.'
   Assert-Condition ($asar.Length -gt 0) 'win-unpacked/resources/app.asar is empty.'
+  Assert-Condition ($desktopTextHelper.Length -gt 0) 'Windows desktop-text helper is empty.'
 
   $setupSignature = Assert-Unsigned $setup
   $portableSignature = Assert-Unsigned $portable

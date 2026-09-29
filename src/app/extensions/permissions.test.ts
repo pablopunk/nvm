@@ -209,3 +209,31 @@ test('does not label an unavailable helper as allowed or request permission for 
   assert.match(accessibility.subtitle, /Could not check access/);
   assert.equal(accessibility.primaryAction.type, 'openSystemSettings');
 });
+
+test('shows Linux selected-text capability state without a macOS settings link', async () => {
+  const ctx = {
+    ...testContext(),
+    desktop: {
+      selection: {
+        access: async () => ({
+          state: 'unavailable',
+          message: 'Install xdotool to enable selected-text control.',
+        }),
+      },
+    },
+  };
+  const reader = {
+    ...fakeReader({ microphone: 'granted' }),
+    platform: 'linux' as const,
+  };
+  const view = (await permissionsView(ctx, reader)) as any;
+  const row = view.items.find(
+    (item: any) => item.id === 'os-permission:selected-text',
+  );
+  assert.equal(
+    row.subtitle,
+    'Install xdotool to enable selected-text control.',
+  );
+  assert.equal(row.primaryAction.type, 'runExtensionAction');
+  assert.equal(row.primaryAction.paneId, undefined);
+});

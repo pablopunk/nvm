@@ -204,6 +204,7 @@ export function createAiCommandsExtension() {
     subtitle: 'Transform selected text with AI',
     capabilities: ['ai', 'system'],
     actions(ctx) {
+      if (!ctx.system.capabilities.has('selected-text')) return [];
       return [
         ctx.action({
           id: 'fix-selected-text-with-ai',

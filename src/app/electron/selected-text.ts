@@ -6,6 +6,7 @@ interface SelectedTextReaderDependencies<Snapshot, Target> {
   readAccessibilityText(target: Target): Promise<string | null | undefined>;
   paletteIsFocused(): boolean;
   clipboardSnapshot(): MaybePromise<Snapshot>;
+  validateClipboardSnapshot?(snapshot: Snapshot): void;
   readClipboardText(): MaybePromise<string>;
   writeClipboardText(text: string): MaybePromise<void>;
   restoreClipboardSnapshot(snapshot: Snapshot): MaybePromise<void>;
@@ -59,6 +60,7 @@ export function createSelectedTextReader<Snapshot, Target>(
 
   async function readClipboardSelection(target: Target) {
     const snapshot = await dependencies.clipboardSnapshot();
+    dependencies.validateClipboardSnapshot?.(snapshot);
     const sentinel =
       dependencies.sentinel?.() ??
       `__NEVERMIND_SELECTION_${crypto.randomUUID()}__`;

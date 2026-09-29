@@ -153,6 +153,33 @@ test('does not touch the clipboard after an Accessibility failure', async () => 
   assert.equal(fixture.restoreCalls(), 0);
 });
 
+test('rejects an unsafe clipboard snapshot before writing the sentinel or sending Copy', async () => {
+  let copied = false;
+  let wrote = false;
+  const reader = createSelectedTextReader({
+    selectionTarget: () => 'source',
+    readAccessibilityText: async () => null,
+    paletteIsFocused: () => false,
+    clipboardSnapshot: () => ({ html: '<b>source</b>' }),
+    validateClipboardSnapshot: () => {
+      throw new Error('Cannot preserve a formatted X11 clipboard');
+    },
+    readClipboardText: () => '',
+    writeClipboardText: () => {
+      wrote = true;
+    },
+    restoreClipboardSnapshot: () => {},
+    copySelectionIntoClipboard: async () => {
+      copied = true;
+      return true;
+    },
+    concealClipboardText: () => {},
+  });
+  await assert.rejects(reader(), /Cannot preserve a formatted X11 clipboard/);
+  assert.equal(wrote, false);
+  assert.equal(copied, false);
+});
+
 test('restores the clipboard on clipboard read failure', async () => {
   const error = new Error('Clipboard unavailable');
   const fixture = reader({ clipboardReadError: error });

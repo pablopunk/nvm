@@ -72,6 +72,7 @@ import {
   setDeepLinkLogger,
 } from './deep-link';
 import { createElectronClipboardApi } from './electron-clipboard';
+import { createLinuxX11Clipboard } from './linux-x11-clipboard';
 import {
   configureLocalFileUrlSecret,
   expandUserPath,
@@ -241,6 +242,7 @@ import {
   prepareAppWindowPolicy,
   quickLookTitle,
   selectedText as readAccessibilitySelectedText,
+  selectedTextAccess,
   readAppIconResourcePng,
   recognizeTextInImage,
   replaceSelectedText,
@@ -359,7 +361,7 @@ const paletteWindow = createPaletteWindowController({
   getPaletteHotkey: () => String(getPaletteHotkey()),
   captureFocusReturnTarget: frontmostAppFocusTarget,
   restoreFocusReturnTarget: (target) =>
-    restoreAppFocus(target as { bundleId?: string | null }),
+    restoreAppFocus(target as AppFocusTarget),
   onOpen: warmConversationAiOnPaletteOpen,
 });
 const systemAudioMute = createSystemAudioMuteCapability();
@@ -731,10 +733,15 @@ const stateSafeQuit = createStateSafeQuit({
   exitFallbackMs: 5000,
 });
 
+const linuxX11Clipboard = createLinuxX11Clipboard();
 const clipboardApi = createElectronClipboardApi({
   clipboard,
   nativeImage,
   ClipboardItem,
+  writeText:
+    linuxX11Clipboard.enabled() && linuxX11Clipboard.available()
+      ? linuxX11Clipboard.writeText
+      : undefined,
 });
 
 clipboardService = createClipboardHistory({
@@ -792,6 +799,7 @@ const selectedText = createSelectedTextReader({
   paletteIsFocused: () =>
     Boolean(paletteWindow.win?.isVisible() && paletteWindow.win.isFocused()),
   clipboardSnapshot,
+  validateClipboardSnapshot: linuxX11Clipboard.validateSnapshot,
   readClipboardText: () => clipboardApi.readText(),
   writeClipboardText: (text) => clipboardApi.writeText(text),
   restoreClipboardSnapshot: async (snapshot) => {
@@ -802,7 +810,7 @@ const selectedText = createSelectedTextReader({
   concealClipboardText: (text) =>
     suppressClipboardHistoryId(clipboardHistoryIdForText(text)),
   selectionRead: (result) =>
-    logDebug('selected-text.read.result', result, {
+    loggerDebug('selected-text.read.result', result, {
       source: 'host',
       scope: 'selected-text',
     }),
@@ -7410,6 +7418,7 @@ function createExtensionContext(
           }
         : undefined,
       selection: {
+        access: selectedTextAccess,
         text: selectedText,
         replaceText: async (text) => {
           const target = await frontmostAppFocusTarget();

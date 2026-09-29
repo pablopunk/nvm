@@ -1717,10 +1717,17 @@ export type ExtensionContext = {
       ): unknown;
     };
     selection: {
+      /** Check desktop access without prompting; distinguishes denied permissions, missing tools, and unsupported desktop sessions. Windows elevated apps can reject access even when the current desktop check succeeds. */
+      access(): Promise<{
+        state: 'allowed' | 'denied' | 'unavailable' | 'unsupported' | 'unknown';
+        message: string;
+      }>;
       /**
        * Read selected text after the palette releases focus, with a clipboard-preserving Copy fallback.
        * Returns null when no text can be captured; this does not prove the source app has no selection.
-       * Rejects on denied Accessibility access, lost source-app focus, or native helper failure.
+       * Supported on macOS, Windows, Linux X11 (xdotool + xclip), Hyprland (hyprctl), and Sway (swaymsg + wtype).
+       * Other Wayland desktops do not expose the required window-control capability.
+       * Rejects on denied desktop access, lost source-window focus, missing tools, or native helper failure.
        * Show the error message to the user instead of reporting these failures as an empty selection.
        */
       text(): Promise<string | null> | string | null;

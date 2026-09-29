@@ -7,6 +7,7 @@ function commandHandler(context: any) {
   const extension = createAiCommandsExtension();
   const contribution = extension.actions({
     ...context,
+    system: { capabilities: { has: () => true } },
     action: (input: unknown) => input,
   })[0];
   assert.equal(contribution.title, 'Fix Selected Text with AI');
@@ -253,4 +254,15 @@ test('shows selection permission failures instead of asking the user to select t
   assert.equal((indicatorEvents.at(-1) as any)[1].status, 'error');
   assert.equal(aiCalls.length, 0);
   assert.equal(actions.length, 0);
+});
+
+test('omits selected-text command where the OS has no safe input capability', () => {
+  const extension = createAiCommandsExtension();
+  assert.deepEqual(
+    extension.actions({
+      system: { capabilities: { has: () => false } },
+      action: (input: unknown) => input,
+    } as any),
+    [],
+  );
 });
