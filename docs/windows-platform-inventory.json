@@ -1203,30 +1203,6 @@
       "surface": "app-discovery-launch-quit"
     },
     {
-      "key": "shortcut-utils-direct-platform-51b407ba638b",
-      "file": "src/app/electron/shortcut-utils.ts",
-      "category": "direct-platform",
-      "selector": "function:formatShortcut::direct-platform::processPlatform: NodeJS.Platform = process.platform::initializer",
-      "disposition": "presentation-adapter",
-      "surface": "palette-hotkey"
-    },
-    {
-      "key": "shortcut-utils-injected-platform-c08ad0e7e21a",
-      "file": "src/app/electron/shortcut-utils.ts",
-      "category": "injected-platform",
-      "selector": "function:formatShortcut::injected-platform::processPlatform: NodeJS.Platform = process.platform::name",
-      "disposition": "presentation-adapter",
-      "surface": "palette-hotkey"
-    },
-    {
-      "key": "shortcut-utils-injected-platform-1eae6fed4b9a",
-      "file": "src/app/electron/shortcut-utils.ts",
-      "category": "injected-platform",
-      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { return parts.join('+'); }::expression.left",
-      "disposition": "presentation-adapter",
-      "surface": "palette-hotkey"
-    },
-    {
       "key": "system-settings-direct-platform-53bd60c81cd6",
       "file": "src/app/electron/system-settings.ts",
       "category": "direct-platform",
@@ -1313,6 +1289,70 @@
       "selector": "function:DictationRendererController/function:handleCommand/if:command.type === 'start'/if:micStatus === 'denied' || micStatus === 'restricted'/property:message::os-label::message: 'Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.'::initializer",
       "disposition": "platform-neutral-copy",
       "surface": "system-actions-settings"
+    },
+    {
+      "key": "palette-window-direct-platform-isHotkeyReserved",
+      "file": "src/app/electron/palette-window.ts",
+      "category": "direct-platform",
+      "selector": "function:createPaletteWindowController/function:isHotkeyReserved::direct-platform::return isPaletteHotkeyReserved( accelerator, options.getPaletteHotkey(), hotkeyStatus?.recoveryA…#90d3b2b43a37::expression.arguments[3]",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "palette-window-direct-platform-registerHotkey",
+      "file": "src/app/electron/palette-window.ts",
+      "category": "direct-platform",
+      "selector": "function:createPaletteWindowController/function:registerHotkey/variable:status/property:platform::direct-platform::platform: process.platform::initializer",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "preload-direct-platform-api-platform",
+      "file": "src/app/electron/preload.ts",
+      "category": "direct-platform",
+      "selector": "variable:api/property:platform::direct-platform::platform: process.platform::initializer",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "settings-injected-platform-settingValue-param",
+      "file": "src/app/electron/settings.ts",
+      "category": "injected-platform",
+      "selector": "function:settingValue::injected-platform::processPlatform: NodeJS.Platform = process.platform::name",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "settings-direct-platform-settingValue-default",
+      "file": "src/app/electron/settings.ts",
+      "category": "direct-platform",
+      "selector": "function:settingValue::direct-platform::processPlatform: NodeJS.Platform = process.platform::initializer",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "settings-injected-platform-platformDefault",
+      "file": "src/app/electron/settings.ts",
+      "category": "injected-platform",
+      "selector": "function:settingValue/variable:platformDefault::injected-platform::const platformDefault = definition.type === 'shortcut' ? definition.platformDefaults?.[ processP…#8fb5a5a224fe::declarationList.declarations[0].initializer.whenTrue.argumentExpression.expression",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shared-shortcut-utils-injected-platform-param",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:formatShortcut::injected-platform::processPlatform: ShortcutPlatform::name",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shared-shortcut-utils-injected-platform-darwin-check",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { return parts.join('+'); }::expression.left",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
     }
   ],
   "resolvedEntries": [
