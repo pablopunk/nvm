@@ -95,6 +95,7 @@ async function invokeMeasured<T>(
 }
 
 const api: NevermindApi = {
+  platform: process.platform,
   search: (query, options) =>
     invokeMeasured('actions:search', { query, ...options }),
   cancelSearch: (generation) =>

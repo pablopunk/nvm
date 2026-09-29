@@ -7,6 +7,7 @@ import type {
 } from './model';
 import type { AiChatImageInput } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
+import type { ShortcutPlatform } from '../shared/shortcut-utils';
 
 export type RootAction = {
   id: string;
@@ -170,6 +171,7 @@ export type ViewHydratePayload = {
 };
 
 export type NevermindApi = {
+  platform: ShortcutPlatform;
   search: (
     query: string,
     options: SearchOptions,

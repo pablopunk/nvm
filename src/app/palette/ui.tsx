@@ -5,6 +5,11 @@ import React, { type ReactNode, useLayoutEffect, useRef } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
+  formatShortcut,
+  normalizeAccelerator,
+  type ShortcutPlatform,
+} from '../shared/shortcut-utils';
+import {
   FORM_SAVE_ROW_ID,
   formFieldMatches,
   formFieldValue,
@@ -208,36 +213,25 @@ export function setShortcutLabelHyperKey(shortcut: unknown) {
 }
 
 function shortcutLabelParts(shortcut?: string) {
-  const parts = String(shortcut || '')
+  const parts = normalizeAccelerator(shortcut).split('+').filter(Boolean);
+  const hyperParts = normalizeAccelerator(shortcutLabelHyperKey)
     .split('+')
     .filter(Boolean);
-  const hyperParts = shortcutLabelHyperKey.split('+').filter(Boolean);
   const startsWithHyper =
     hyperParts.length > 0 &&
     hyperParts.every((part, index) => parts[index] === part);
   return startsWithHyper ? ['✦', ...parts.slice(hyperParts.length)] : parts;
 }
 
-export function shortcutLabel(shortcut?: string) {
-  return shortcutLabelParts(shortcut)
-    .map(
-      (part) =>
-        ({
-          Command: '⌘',
-          Cmd: '⌘',
-          Control: '⌃',
-          Ctrl: '⌃',
-          Alt: '⌥',
-          Option: '⌥',
-          Shift: '⇧',
-          Enter: '↵',
-          Return: '↵',
-          Backspace: '⌫',
-          Escape: 'Esc',
-          Tab: 'Tab',
-        })[part] || part,
-    )
-    .join('');
+export function shortcutLabel(
+  shortcut?: string,
+  platform: ShortcutPlatform = window.nvm.platform,
+) {
+  const parts = shortcutLabelParts(shortcut);
+  const startsWithHyper = parts[0] === '✦';
+  const formattedParts = startsWithHyper ? parts.slice(1) : parts;
+  const label = formatShortcut(formattedParts.join('+'), platform);
+  return startsWithHyper ? `✦${label}` : label;
 }
 
 export function KeyHints({
