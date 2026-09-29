@@ -996,6 +996,34 @@
   margin-top: 8px;
 }
 
+.formView .formSaveRow,
+.formView .formSaveRow[data-selected="true"],
+.formView .formSaveRow:not([data-disabled="true"]):hover {
+  background: var(--accent-fill);
+}
+
+.formView .formSaveRow[data-selected="true"],
+.formView .formSaveRow:hover {
+  box-shadow: inset 0 0 0 2px var(--accent-contrast);
+}
+
+.formSaveRow .resultText strong,
+.formSaveRow .resultIcon,
+.formSaveRow .enterHint {
+  color: var(--accent-contrast);
+}
+
+.formSaveRow .resultIcon {
+  background: transparent;
+  box-shadow: none;
+}
+
+.formSaveRow .shortcutHint {
+  color: var(--accent-contrast);
+  border-color: var(--accent-emphasis);
+  background: var(--accent-soft);
+}
+
 .formView .formDescription {
   padding: 8px 12px 4px;
 }

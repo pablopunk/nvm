@@ -222,6 +222,7 @@ test('renders form fields as selectable palette rows', () => {
   assert.match(html, /title="Your name"/);
   assert.match(html, /class="result formSaveRow"/);
   assert.match(html, /<strong>Save Account<\/strong>/);
+  assert.doesNotMatch(html, /Save changes/);
   assert.doesNotMatch(html, /<input|<select|<textarea/);
 });
 

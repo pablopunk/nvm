@@ -690,7 +690,6 @@ export function FormView({
           value={FORM_SAVE_ROW_ID}
           icon={<Check size={18} />}
           title={submitTitle}
-          subtitle="Save changes"
           shortcut="Command+Enter"
           className="formSaveRow"
           onSelect={() => onSubmit?.()}
