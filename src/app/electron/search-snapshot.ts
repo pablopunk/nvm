@@ -19,6 +19,7 @@ export interface SearchProviderDescriptor<Extension extends SearchExtension> {
 
 export interface SearchAssemblyAction extends Record<string, unknown> {
   __ranked?: boolean;
+  commandId?: unknown;
   extensionId?: unknown;
   id?: unknown;
   kind?: unknown;
@@ -96,6 +97,18 @@ export function rankSearchProviderContributions<
     .slice(0, SEARCH_PROVIDER_RESULT_LIMIT);
 }
 
+function extensionContributionIdentity(action: SearchAssemblyAction) {
+  if (
+    (action.kind !== 'extension-action' &&
+      action.kind !== 'extension-root-item') ||
+    typeof action.extensionId !== 'string' ||
+    typeof action.commandId !== 'string'
+  ) {
+    return null;
+  }
+  return JSON.stringify([action.extensionId, action.commandId]);
+}
+
 export function createSearchSnapshotAssembler<
   Action extends SearchAssemblyAction,
   Prepared,
@@ -115,7 +128,7 @@ export function createSearchSnapshotAssembler<
   });
 
   return (resultsByProvider: ReadonlyMap<string, Action[]>) => {
-    const results = [...options.localItems];
+    const providerResults: Action[] = [];
     for (const key of options.providerKeys) {
       for (const item of resultsByProvider.get(key) || []) {
         const withShortcut = options.withShortcutHint(item);
@@ -123,10 +136,27 @@ export function createSearchSnapshotAssembler<
           ? withShortcut
           : options.rankAction(withShortcut, options.query);
         if (ranked) {
-          results.push(ranked);
+          providerResults.push(ranked);
         }
       }
     }
+
+    const isRootPaletteSearch = !options.query.trim();
+    const rootProviderIdentities = new Set(
+      isRootPaletteSearch
+        ? providerResults
+            .filter((action) => action.kind === 'extension-root-item')
+            .map(extensionContributionIdentity)
+            .filter((identity): identity is string => identity !== null)
+        : [],
+    );
+    const results = options.localItems.filter((action) => {
+      if (!isRootPaletteSearch || action.kind !== 'extension-action')
+        return true;
+      const identity = extensionContributionIdentity(action);
+      return !identity || !rootProviderIdentities.has(identity);
+    });
+    results.push(...providerResults);
 
     const prepared = prepareRows(
       results

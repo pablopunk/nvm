@@ -20,10 +20,12 @@ import { normalize, scoreNormalized } from './search-utils';
 
 interface CharacterizedAction extends SearchAssemblyAction {
   aliases?: string[];
+  commandId?: string;
   extensionId: string;
   id: string;
   kind: string;
   lastUsed: number;
+  rootAction?: { type: string };
   score: number;
   title: string;
 }
@@ -278,6 +280,77 @@ test('preserves provider registration order for exact ties despite reverse settl
   assert.deepEqual(
     assembler('', [], keys)(results).map(({ id }) => id),
     ['first', 'second'],
+  );
+});
+
+test('prefers root provider rows over duplicate command representations', () => {
+  const commandResults = [
+    action('command:updates:check', 'Check for Updates', {
+      commandId: 'updates:check',
+      kind: 'extension-action',
+      rootAction: { type: 'open-update-view' },
+      score: 23,
+    }),
+    action('command:builtin:lock-screen', 'Lock Screen', {
+      commandId: 'builtin:lock-screen',
+      kind: 'extension-action',
+      rootAction: { type: 'run-command' },
+      score: 22,
+    }),
+  ];
+  const rootProviderResults = [
+    action('root:updates:check', 'Check for Updates', {
+      commandId: 'updates:check',
+      kind: 'extension-root-item',
+      rootAction: { type: 'check-for-updates' },
+      score: 23,
+    }),
+    action('root:builtin:lock-screen', 'Lock Screen', {
+      commandId: 'builtin:lock-screen',
+      kind: 'extension-root-item',
+      rootAction: { type: 'lock-screen' },
+      score: 22,
+    }),
+  ];
+
+  const results = assembler('', commandResults, ['provider:root'])(
+    new Map([['provider:root', rootProviderResults]]),
+  );
+
+  assert.deepEqual(
+    results.map(({ title, kind }) => ({ title, kind })),
+    [
+      { title: 'Check for Updates', kind: 'extension-root-item' },
+      { title: 'Lock Screen', kind: 'extension-root-item' },
+    ],
+  );
+  assert.deepEqual(
+    results.map(({ rootAction }) => rootAction),
+    rootProviderResults.map(({ rootAction }) => rootAction),
+  );
+});
+
+test('keeps behavior-distinct command and provider actions in query search', () => {
+  const command = action('command:updates:check', 'Check for Updates', {
+    commandId: 'updates:check',
+    kind: 'extension-action',
+    rootAction: { type: 'open-update-view' },
+  });
+  const provider = action('provider:updates:check', 'Check for Updates', {
+    commandId: 'updates:check',
+    kind: 'extension-root-item',
+    rootAction: { type: 'check-for-updates' },
+  });
+
+  const results = assembler(
+    'check for updates',
+    [command],
+    ['provider:query'],
+  )(new Map([['provider:query', [provider]]]));
+
+  assert.deepEqual(
+    results.map(({ rootAction }) => rootAction),
+    [command.rootAction, provider.rootAction],
   );
 });
 
