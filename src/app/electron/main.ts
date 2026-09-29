@@ -208,6 +208,7 @@ import {
 } from './file-index-sorting';
 import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 import { markInternalExtension } from './internal-extension';
+import { missingRequiredInternalCommands } from './internal-extension-requirements';
 import { type JobDefinition, JobRegistry, type JobSnapshot } from './jobs';
 import { type LearningKind, LocalLearningStore } from './learning-store';
 import {
@@ -1749,6 +1750,7 @@ const REQUIRED_INTERNAL_COMMANDS = [
   {
     extensionId: 'nevermind.ai-commands',
     commandId: 'fix-selected-text-with-ai',
+    capability: 'selected-text',
   },
 ];
 
@@ -9685,9 +9687,10 @@ function assertInternalExtensionsRegistered() {
   const missingExtensions = REQUIRED_INTERNAL_EXTENSIONS.filter(
     (extensionId) => !extensionModules.has(extensionId),
   );
-  const missingCommands = REQUIRED_INTERNAL_COMMANDS.filter(
-    ({ extensionId, commandId }) =>
-      !extensionActionRegistry.has(`${extensionId}:${commandId}`),
+  const missingCommands = missingRequiredInternalCommands(
+    REQUIRED_INTERNAL_COMMANDS,
+    extensionActionRegistry,
+    hasCapability,
   );
   if (missingExtensions.length || missingCommands.length) {
     const details = [
