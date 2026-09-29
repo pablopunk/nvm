@@ -807,6 +807,17 @@ test('startClipboardWatcher returns job descriptor', async () => {
   assert.equal(typeof job.run, 'function');
 });
 
+test('startClipboardWatcher ignores non-string clipboard text', async () => {
+  for (const text of [null, Buffer.from('unexpected clipboard data')]) {
+    const { clipboardHistory, deps } = createFakes();
+    (deps.clipboard as any).readText = () => text;
+
+    const job = await clipboardHistory.startClipboardWatcher();
+
+    assert.equal(job.id, 'clipboard.poll');
+  }
+});
+
 // ═══════════════════════════════════════════════════════════
 // readDesktopClipboard
 // ═══════════════════════════════════════════════════════════

@@ -99,6 +99,11 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     return deps.measureSync(name, data, fn);
   }
 
+  async function readClipboardText(): Promise<string> {
+    const text = await deps.clipboard.readText();
+    return typeof text === 'string' ? text : '';
+  }
+
   // ── clipboard read / persist ────────────────────────────
 
   async function persistClipboardImage(
@@ -166,7 +171,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       return videoClipboardItem(filePath);
     if (filePath && deps.isImagePath(filePath))
       return imageFileClipboardItem(filePath);
-    const text = (await deps.clipboard.readText()).trim();
+    const text = (await readClipboardText()).trim();
     return text ? textClipboardItem(text) : null;
   }
 
@@ -584,7 +589,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   async function clipboardSnapshot() {
     const [image, text, html, rtf, bookmark, filePaths] = await Promise.all([
       deps.clipboard.readImage(),
-      deps.clipboard.readText(),
+      readClipboardText(),
       deps.clipboard.readHTML(),
       deps.clipboard.readRTF(),
       deps.clipboard.readBookmark(),
@@ -706,11 +711,11 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         return {
           type: 'html',
           html,
-          text: await deps.clipboard.readText(),
+          text: await readClipboardText(),
         };
     }
     if (!formats || formats.has('text')) {
-      const text = await deps.clipboard.readText();
+      const text = await readClipboardText();
       if (text)
         return {
           type: 'text',
