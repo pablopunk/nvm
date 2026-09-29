@@ -68,6 +68,12 @@ import {
   valuesMatch,
 } from './filtering';
 import {
+  FORM_SAVE_ROW_ID,
+  formFieldMatches,
+  formFieldValue,
+  formRowId,
+} from './form-fields';
+import {
   actionDefinition,
   actionDescription,
   actionPanelFromActions,
@@ -86,6 +92,7 @@ import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
+import { usePaletteForm } from './palette-form';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -345,6 +352,17 @@ function seedFormValuesFromView(view: ExtensionView | null) {
 
 function selectedItemIdForView(view: ExtensionView | null, current = '') {
   if (!view) return '';
+  if (view.type === 'form') {
+    const fields = (view.fields || []).filter(
+      (field) =>
+        field.type !== 'description' &&
+        field.type !== 'separator' &&
+        !field.disabled,
+    );
+    const ids = fields.map((field) => formRowId(field.id));
+    if (view.submitAction) ids.push(FORM_SAVE_ROW_ID);
+    return ids.includes(current) ? current : ids[0] || '';
+  }
   const items = allViewItems(view);
   const declaredSelection =
     view.selectedItemId && items.some((item) => item.id === view.selectedItemId)
@@ -356,16 +374,6 @@ function selectedItemIdForView(view: ExtensionView | null, current = '') {
       ? current
       : items[0]?.id || '')
   );
-}
-
-function extensionWindowViewIdentity(view: ExtensionView | null) {
-  if (!view) return '';
-  const submitActionIdentity =
-    view.submitAction?.handlerId ||
-    view.submitAction?.registeredActionId ||
-    view.submitAction?.actionId ||
-    '';
-  return `${view.type}:${view.id || submitActionIdentity}`;
 }
 
 function isEditableKeyTarget(target: EventTarget | null) {
@@ -386,7 +394,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     {},
   );
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
-  const [formFocusKey, setFormFocusKey] = useState(0);
   const [selectedValue, setSelectedValue] = useState('');
   const [compactSelectedValue, setCompactSelectedValue] = useState('');
   const [query, setQuery] = useState('');
@@ -429,7 +436,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       .catch(() => setNevermindAuthed(false));
     window.nvm.getExtensionWindowState().then((state) => {
       if (state?.view) {
-        setFormFocusKey((current) => current + 1);
         viewRef.current = state.view;
         setView(state.view);
         setCompactView(null);
@@ -442,11 +448,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     });
     const stopView = window.nvm.onExtensionWindowView((payload) => {
       if (payload.id === windowId) {
-        if (
-          extensionWindowViewIdentity(viewRef.current) !==
-          extensionWindowViewIdentity(payload.view)
-        )
-          setFormFocusKey((current) => current + 1);
         viewRef.current = payload.view;
         setView(payload.view);
         setCompactView(null);
@@ -510,7 +511,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     if (result.navigation === 'pop') {
       const previous = backStack.at(-1);
       if (previous) {
-        setFormFocusKey((current) => current + 1);
         setBackStack((current) => current.slice(0, -1));
         setView(previous);
         setFormValues(seedFormValuesFromView(previous));
@@ -527,7 +527,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       setCompactQuery('');
       setCompactSelectedValue(selectedItemIdForView(result.view));
     } else if (result.view) {
-      setFormFocusKey((current) => current + 1);
       if (result.navigation === 'push' && view)
         setBackStack((current) => [...current, view]);
       else if (result.navigation === 'root') setBackStack([]);
@@ -593,6 +592,16 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   }
 
   const palettePrompt = usePalettePrompt(view, runAction);
+  const paletteForm = usePaletteForm(
+    view,
+    formValues,
+    setFormValues,
+    runAction,
+    (value) => {
+      setQuery('');
+      setSelectedValue(value);
+    },
+  );
 
   function popWindowView() {
     const previous = backStack.at(-1);
@@ -601,7 +610,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       return;
     }
     setBackStack((current) => current.slice(0, -1));
-    setFormFocusKey((current) => current + 1);
     setView(previous);
     setCompactView(null);
     setActionSubmenuFor(null);
@@ -919,18 +927,12 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       !event.altKey
     )
       return;
-    if (
-      event.target instanceof Element &&
-      event.target.closest('.formView') &&
-      (event.metaKey || event.ctrlKey) &&
-      event.key === 'Enter'
-    )
-      return;
     if (event.key === 'Escape') {
       if (confirmFor) returnFromConfirmation();
       else if (actionSubmenuFor) returnFromSubmenu();
       else if (panelOpen) closeActionPanel();
       else if (compactView) closeCompactView();
+      else if (paletteForm.editing) paletteForm.closeEditor();
       else if (palettePrompt.active) popWindowView();
       else if (query) setQuery('');
       else void window.nvm.closeExtensionWindow();
@@ -940,6 +942,18 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     const accelerator = acceleratorFromKeyboardEvent(event.nativeEvent);
     if (!accelerator) return;
     const normalized = normalizedShortcut(accelerator);
+    if (
+      normalized === 'command+enter' &&
+      paletteForm.active &&
+      !panelOpen &&
+      !actionSubmenuFor &&
+      !confirmFor
+    ) {
+      event.preventDefault();
+      if (paletteForm.editor) paletteForm.commit(paletteForm.query);
+      else if (!paletteForm.editing) paletteForm.save();
+      return;
+    }
     if (palettePrompt.active) return;
     if (normalized === 'command+k') {
       event.preventDefault();
@@ -1024,9 +1038,13 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const { panel, fallback } = panelContents();
   const surfaceRows = confirmFor
     ? confirmRows()
-    : palettePrompt.active
-      ? palettePrompt.rows
-      : filteredRows(actionPanelRows(panel, fallback), compactQuery);
+    : actionSurfaceOpen
+      ? filteredRows(actionPanelRows(panel, fallback), compactQuery)
+      : palettePrompt.active
+        ? palettePrompt.rows
+        : paletteForm.choices
+          ? paletteForm.rows
+          : [];
   const surfaceSelectionKey = surfaceRows
     .filter((row) => !row.sectionHeader)
     .map((row) => row.value)
@@ -1035,17 +1053,19 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     actionSurfaceOpen ||
     compactViewOpen ||
     palettePrompt.active ||
+    paletteForm.active ||
     view?.type === 'list' ||
     view?.type === 'grid';
   useEffect(() => {
     if (!searchableView) return;
     requestAnimationFrame(() => {
+      if (paletteForm.editor) return;
       const input =
         compactActionSurface || compactViewOpen
           ? compactSearchInputRef.current
           : searchInputRef.current;
       input?.focus();
-      if (palettePrompt.active) input?.select();
+      if (palettePrompt.active || paletteForm.choices) input?.select();
     });
   }, [
     searchableView,
@@ -1056,6 +1076,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     actionSubmenuFor,
     confirmFor,
     palettePrompt.fieldIndex,
+    paletteForm.editing,
   ]);
 
   useEffect(() => {
@@ -1068,7 +1089,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       pendingCompactSelectionRef.current = null;
       return;
     }
-    if (!(palettePrompt.active || actionSurfaceOpen)) return;
+    if (!(palettePrompt.active || paletteForm.choices || actionSurfaceOpen))
+      return;
     const firstValue =
       surfaceRows.find((row) => !row.sectionHeader)?.value || '';
     if (compactActionSurface) {
@@ -1085,6 +1107,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     palettePrompt.active,
     palettePrompt.fieldIndex,
     palettePrompt.selectionKey,
+    paletteForm.selectionKey,
+    paletteForm.choices,
     actionSurfaceOpen,
     compactActionSurface,
     compactQuery,
@@ -1104,7 +1128,9 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     );
 
   const surfaceOpen =
-    palettePrompt.active || (actionSurfaceOpen && !compactActionSurface);
+    palettePrompt.active ||
+    paletteForm.choices ||
+    (actionSurfaceOpen && !compactActionSurface);
   const overlayOpen = surfaceOpen || compactActionSurface || compactViewOpen;
   const searchable = searchableView;
   const hasActions =
@@ -1146,11 +1172,28 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
           <Command.Input
             ref={searchInputRef}
             autoFocus
-            className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
-            value={palettePrompt.active ? palettePrompt.query : query}
-            onValueChange={
-              palettePrompt.active ? palettePrompt.setQuery : setQuery
+            className={
+              palettePrompt.concealed || paletteForm.concealed
+                ? 'palettePromptConcealed'
+                : ''
             }
+            value={
+              palettePrompt.active
+                ? palettePrompt.query
+                : paletteForm.editing
+                  ? paletteForm.editor
+                    ? paletteForm.field?.label || ''
+                    : paletteForm.query
+                  : query
+            }
+            onValueChange={
+              palettePrompt.active
+                ? palettePrompt.setQuery
+                : paletteForm.editing
+                  ? paletteForm.setQuery
+                  : setQuery
+            }
+            readOnly={paletteForm.editor}
             placeholder={
               confirmFor
                 ? 'Confirm action'
@@ -1160,7 +1203,9 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                     ? `Filter ${actionSubmenuFor.title}`
                     : palettePrompt.active
                       ? palettePrompt.placeholder
-                      : view.searchBarPlaceholder || 'Search…'
+                      : paletteForm.editing
+                        ? paletteForm.placeholder
+                        : view.searchBarPlaceholder || 'Search…'
             }
             spellCheck={false}
           />
@@ -1188,6 +1233,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                     .then((result) => setNevermindAuthed(Boolean(result.ok)))
                 }
                 formValues={formValues}
+                formController={paletteForm}
+                formQuery={query}
                 setFormValues={setFormValues}
                 filterItems={(items) =>
                   filterCommandItems(
@@ -1225,8 +1272,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                 dragPathForItem={dragPathForItem}
                 startItemDrag={startItemDrag}
                 selectedItemId={selectedValue}
-                autoFocusForm={!overlayOpen}
-                formFocusKey={formFocusKey}
                 surface="window"
               />
             </>
@@ -1271,6 +1316,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                     nevermindAuthed={nevermindAuthed}
                     onSignInToNevermind={() => {}}
                     formValues={formValues}
+                    formController={paletteForm}
+                    formQuery={compactQuery}
                     setFormValues={setFormValues}
                     filterItems={(items) =>
                       filterCommandItems(items || [], compactQuery, {
@@ -1300,8 +1347,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                     dragPathForItem={dragPathForItem}
                     startItemDrag={startItemDrag}
                     selectedItemId={compactSelectedValue}
-                    autoFocusForm={false}
-                    formFocusKey={formFocusKey}
                     surface="window"
                   />
                 ) : null}
@@ -1649,6 +1694,16 @@ export function App() {
     useState<ShortcutRecord | null>(null);
   const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
   const palettePrompt = usePalettePrompt(extensionView, runViewAction);
+  const paletteForm = usePaletteForm(
+    extensionView,
+    formValues,
+    setFormValues,
+    runViewAction,
+    (value) => {
+      setChildQuery('');
+      selectValue(value);
+    },
+  );
   const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([]);
   const extensionViewRef = useRef<ExtensionView | null>(null);
   const wasChildOpenRef = useRef(false);
@@ -2219,9 +2274,40 @@ export function App() {
       selectValue(getExtensionItemActionRows()[0]?.value ?? '');
     else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '');
     else if (previewFor) selectValue('preview');
+    else if (paletteForm.choices)
+      selectValue(
+        paletteForm.rows.some((row) => row.value === selectedValueRef.current)
+          ? selectedValueRef.current
+          : (paletteForm.rows[0]?.value ?? ''),
+      );
     else if (palettePrompt.active)
       selectValue(palettePrompt.rows[0]?.value ?? '');
-    else if (extensionView && isFilterableExtensionView)
+    else if (paletteForm.active) {
+      const fields = (extensionView?.fields || []).filter(
+        (field) =>
+          field.type !== 'description' &&
+          field.type !== 'separator' &&
+          formFieldMatches(
+            field,
+            formFieldValue(field, formValues),
+            childQuery,
+          ),
+      );
+      const ids = fields.map((field) => formRowId(field.id));
+      if (
+        extensionView?.submitAction &&
+        (!childQuery ||
+          extensionView.submitAction.title
+            .toLowerCase()
+            .includes(childQuery.toLowerCase()))
+      )
+        ids.push(FORM_SAVE_ROW_ID);
+      selectValue(
+        ids.includes(selectedValueRef.current)
+          ? selectedValueRef.current
+          : ids[0] || '',
+      );
+    } else if (extensionView && isFilterableExtensionView)
       selectExtensionItem(extensionView);
     else if (extensionView?.actions?.length)
       selectValue(
@@ -2253,6 +2339,9 @@ export function App() {
     optionsFor,
     previewFor,
     palettePrompt.selectionKey,
+    paletteForm.selectionKey,
+    paletteForm.editing,
+    formValues,
     query,
     extensionViewSelectionKey,
     shortcutFor,
@@ -2285,6 +2374,11 @@ export function App() {
     if (!palettePrompt.active) return;
     requestAnimationFrame(() => inputRef.current?.select());
   }, [palettePrompt.resetKey, palettePrompt.fieldIndex]);
+
+  useEffect(() => {
+    if (!paletteForm.active || paletteForm.editor) return;
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [paletteForm.editing]);
 
   useEffect(() => {
     if (!(pendingShortcutReveal && extensionView)) return;
@@ -2543,6 +2637,7 @@ export function App() {
   const isFilterableExtensionView =
     extensionView?.type === 'list' ||
     extensionView?.type === 'grid' ||
+    extensionView?.type === 'form' ||
     palettePrompt.active;
   const isRootLikeExtensionView =
     isPrimaryExtensionView ||
@@ -2624,9 +2719,11 @@ export function App() {
                   ? `Alias for “${aliasFor.title}”`
                   : palettePrompt.active
                     ? palettePrompt.placeholder
-                    : extensionView
-                      ? `Filter ${extensionView.title}`
-                      : '';
+                    : paletteForm.editing
+                      ? paletteForm.placeholder
+                      : extensionView
+                        ? `Filter ${extensionView.title}`
+                        : '';
   const compactActionPlaceholder = actionSubmenuFor
     ? `Filter ${actionSubmenuFor.title}`
     : shortcutOptionsFor
@@ -2640,33 +2737,43 @@ export function App() {
     ? recordedShortcut
     : palettePrompt.active
       ? palettePrompt.query
-      : isActionWorkflowOpen
-        ? actionQuery
-        : isFilterableChildOpen
-          ? childQuery
-          : previewFor
-            ? previewFor.title
-            : extensionView
-              ? extensionView.title
-              : optionsFor && !compactActionMenuVisible && !query
-                ? optionsFor.title
-                : query;
+      : paletteForm.editing
+        ? paletteForm.editor
+          ? paletteForm.field?.label || ''
+          : paletteForm.query
+        : isActionWorkflowOpen
+          ? actionQuery
+          : isFilterableChildOpen
+            ? childQuery
+            : previewFor
+              ? previewFor.title
+              : extensionView
+                ? extensionView.title
+                : optionsFor && !compactActionMenuVisible && !query
+                  ? optionsFor.title
+                  : query;
   const placeholder = shortcutFor
     ? 'Press a keyboard shortcut'
     : palettePrompt.active
       ? palettePrompt.placeholder
-      : isFilterableChildOpen
-        ? extensionView?.searchBarPlaceholder || childPlaceholder
-        : SEARCH_PLACEHOLDERS[placeholderIndex];
+      : paletteForm.editing
+        ? paletteForm.placeholder
+        : isFilterableChildOpen
+          ? extensionView?.searchBarPlaceholder || childPlaceholder
+          : SEARCH_PLACEHOLDERS[placeholderIndex];
   const activeSearchQuery = palettePrompt.active
     ? palettePrompt.query
-    : isActionWorkflowOpen
-      ? actionQuery
-      : !shortcutFor && isFilterableChildOpen
-        ? childQuery
-        : isChildOpen
-          ? ''
-          : query;
+    : paletteForm.editing
+      ? paletteForm.editor
+        ? ''
+        : paletteForm.query
+      : isActionWorkflowOpen
+        ? actionQuery
+        : !shortcutFor && isFilterableChildOpen
+          ? childQuery
+          : isChildOpen
+            ? ''
+            : query;
   const activeSearchScope = isActionWorkflowOpen
     ? `action-workflow:${aliasFor?.id || confirmRemoveFor?.id || confirmViewActionFor?.title}`
     : !shortcutFor && isFilterableChildOpen
@@ -4725,7 +4832,6 @@ export function App() {
             dragPathForItem={() => null}
             startItemDrag={() => {}}
             selectedItemId={preview.selectedItemId}
-            autoFocusForm={false}
             onSelectItem={(item) =>
               selectBuilderPreviewItem(preview.filename, item.id)
             }
@@ -4735,7 +4841,7 @@ export function App() {
     );
   }
 
-  function renderExtensionView(view: ExtensionView, autoFocusForm = true) {
+  function renderExtensionView(view: ExtensionView) {
     return (
       <ExtensionViewRenderer
         view={view}
@@ -4751,6 +4857,8 @@ export function App() {
             );
         }}
         formValues={formValues}
+        formController={paletteForm}
+        formQuery={childQuery}
         setFormValues={setFormValues}
         filterItems={(items) =>
           filterExtensionItems(items).map(hydrateExtensionItemIcon)
@@ -4768,8 +4876,6 @@ export function App() {
         dragPathForItem={dragPathForItem}
         startItemDrag={startItemDrag}
         selectedItemId={selectedValue}
-        autoFocusForm={autoFocusForm}
-        formFocusKey={extensionNavigation.navigationKey}
       />
     );
   }
@@ -5036,6 +5142,19 @@ export function App() {
       return;
     }
 
+    if (
+      paletteForm.active &&
+      !isCompactActionMenuOpen &&
+      !isActionWorkflowOpen &&
+      (event.metaKey || event.ctrlKey) &&
+      event.key === 'Enter'
+    ) {
+      event.preventDefault();
+      if (paletteForm.editor) paletteForm.commit(paletteForm.query);
+      else if (!paletteForm.editing) paletteForm.save();
+      return;
+    }
+
     const localAccelerator = acceleratorFromEvent(event);
     const eventTarget = event.target;
     const builderPreviewEventTargetsEditableControl =
@@ -5172,7 +5291,8 @@ export function App() {
       else if (builderPreviewFocused) {
         setBuilderPreviewFocused(false);
         aiChat.inputRef.current?.focus();
-      } else if (extensionView) popExtensionView();
+      } else if (paletteForm.editing) paletteForm.closeEditor();
+      else if (extensionView) popExtensionView();
       else window.nvm.hide();
       return;
     }
@@ -5317,6 +5437,7 @@ export function App() {
       else if (extensionItemOptionsFor) setExtensionItemOptionsFor(null);
       else if (optionsFor) setOptionsFor(null);
       else if (previewFor) setPreviewFor(null);
+      else if (paletteForm.editing) paletteForm.closeEditor();
       else if (extensionView) popExtensionView();
       return;
     }
@@ -5415,11 +5536,16 @@ export function App() {
           <Command.Input
             ref={inputRef}
             onKeyDown={shortcutFor ? onShortcutRecorderKeyDown : undefined}
-            className={palettePrompt.concealed ? 'palettePromptConcealed' : ''}
+            className={
+              palettePrompt.concealed || paletteForm.concealed
+                ? 'palettePromptConcealed'
+                : ''
+            }
             value={inputValue}
             onValueChange={(value) => {
               if (shortcutFor) return;
               if (palettePrompt.active) palettePrompt.setQuery(value);
+              else if (paletteForm.editing) paletteForm.setQuery(value);
               else if (isActionWorkflowOpen) setActionQuery(value);
               else if (isFilterableChildOpen) setChildQuery(value);
               else if (!isChildOpen) setRootQuery(value);
@@ -5427,6 +5553,7 @@ export function App() {
             placeholder={placeholder}
             readOnly={
               compactActionMenuVisible ||
+              paletteForm.editor ||
               (!(shortcutFor || isFilterableChildOpen) && isChildOpen)
             }
             spellCheck={false}
@@ -5446,13 +5573,13 @@ export function App() {
             aria-hidden={sib.aiChat ? undefined : true}
           >
             <div className="siblingHeader">{sib.title}</div>
-            <div className="siblingBody">{renderExtensionView(sib, false)}</div>
+            <div className="siblingBody">{renderExtensionView(sib)}</div>
           </div>
         ))}
 
         <Command.List
           ref={resultsListRef}
-          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
         >
           {shortcutFor ? (
             <div className="shortcutRecorder" aria-busy={savingShortcut}>
@@ -5512,6 +5639,11 @@ export function App() {
           ) : palettePrompt.active ? (
             <ActionPanel
               rows={palettePrompt.rows}
+              emptyMessage="No matching choices"
+            />
+          ) : paletteForm.choices ? (
+            <ActionPanel
+              rows={paletteForm.rows}
               emptyMessage="No matching choices"
             />
           ) : extensionView ? (

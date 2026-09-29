@@ -42,6 +42,7 @@ import {
   PreviewView,
   ProgressView,
 } from './ui';
+import type { usePaletteForm } from './palette-form';
 import type { AiChatAttachment, AiLimitState } from './use-ai-chat';
 
 type AiChatState = {
@@ -71,6 +72,8 @@ export type ExtensionViewRendererProps = {
   nevermindAuthed: boolean | null;
   onSignInToNevermind: () => void;
   formValues: Record<string, FormValue>;
+  formController?: ReturnType<typeof usePaletteForm>;
+  formQuery?: string;
   setFormValues: React.Dispatch<
     React.SetStateAction<Record<string, FormValue>>
   >;
@@ -94,8 +97,6 @@ export type ExtensionViewRendererProps = {
   startItemDrag: (event: React.DragEvent, item: CommandItem) => void;
   selectedItemId?: string;
   onSelectItem?: (item: CommandItem) => void;
-  autoFocusForm?: boolean;
-  formFocusKey?: string | number;
   /** Rendering host; windows get compact headers and no palette chrome. */
   surface?: 'palette' | 'window';
 };
@@ -1104,26 +1105,40 @@ function ChatExtensionView({
 function FormExtensionView({
   view,
   formValues,
-  setFormValues,
+  formController,
+  formQuery,
   runAction,
-  autoFocusForm,
-  formFocusKey,
 }: ExtensionViewSurfaceProps) {
+  if (formController?.choices) return null;
+  if (formController?.editor && formController.field)
+    return (
+      <EditorView
+        title={formController.field.label || formController.field.id}
+        subtitle={formController.field.description}
+        value={formController.query}
+        placeholder={formController.field.placeholder}
+        autoFocus
+        submitTitle="Apply"
+        onChange={formController.setQuery}
+        onSubmit={() => formController.commit(formController.query)}
+      />
+    );
   return (
     <FormView
       fields={view.fields || []}
       values={formValues}
-      onChange={(id, value) =>
-        setFormValues((current) => ({ ...current, [id]: value }))
-      }
+      query={formQuery}
+      errors={formController?.errors}
+      onEdit={formController?.open}
       onSubmit={
         view.submitAction
-          ? () => runAction({ ...view.submitAction!, formValues })
+          ? () =>
+              formController
+                ? formController.save()
+                : runAction({ ...view.submitAction!, formValues })
           : undefined
       }
       submitTitle={view.submitAction?.title}
-      autoFocus={autoFocusForm}
-      autoFocusKey={formFocusKey}
     />
   );
 }

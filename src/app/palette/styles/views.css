@@ -263,7 +263,6 @@
   gap: 12px;
 }
 
-.formView,
 .progressView,
 .previewView,
 .editorView {
@@ -972,52 +971,38 @@
 }
 
 .formView {
-  min-height: 0;
-  gap: 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  gap: 2px;
+  align-content: start;
+  overflow: visible;
 }
 
-.formFields {
-  display: grid;
-  gap: 12px;
-  padding: 4px;
+.formListRow .accessoryText {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.formField,
-.formStaticField {
-  display: grid;
-  gap: 4px;
-}
-
-.formFieldLabel,
-.formCheckbox {
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-}
-
-.formView input:not([type="checkbox"]),
-.formView textarea,
-.formView select,
-.formMultiselect {
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  color: var(--text-primary);
-  background: var(--surface-sunken);
-  box-shadow: var(--shadow-inset);
-  font: inherit;
+.formListRow .resultText strong {
   font-size: var(--fs-sm);
-  line-height: 1.4;
 }
 
-.formView input:not([type="checkbox"]):focus,
-.formView textarea:focus,
-.formView select:focus {
-  border-color: var(--edge-strong);
-  background: var(--surface-sunken);
+.formListRow[data-selected="true"] .resultText small,
+.formListRow[data-disabled="true"] .resultText small {
+  overflow: visible;
+  white-space: normal;
+}
+
+.formListRowError .resultText small {
+  color: var(--danger-text);
+}
+
+.formSaveRow {
+  margin-top: 8px;
+}
+
+.formView .formDescription {
+  padding: 8px 12px 4px;
 }
 
 .previewText {
@@ -1029,117 +1014,6 @@
 
 .previewText .markdownContent {
   white-space: normal;
-}
-
-.formView textarea {
-  min-height: 96px;
-  resize: vertical;
-}
-
-.formCheckbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.formCheckbox input {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--accent-fill);
-}
-
-.formMultiselect {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  background: transparent;
-}
-
-.formMultiselect legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.formMultiselect label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: var(--radius-xs);
-  padding: 5px 8px;
-  color: var(--text-secondary);
-  background: var(--surface-interactive);
-  font-size: var(--fs-xs);
-}
-
-.formMultiselect label:has(input:checked) {
-  color: var(--text-primary);
-  background: var(--accent-soft);
-}
-
-.formMultiselect input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--accent-fill);
-}
-
-.formPickerControl {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: stretch;
-  gap: 8px;
-}
-
-.formPickerControl pre {
-  min-width: 0;
-  max-height: 72px;
-  margin: 0;
-  overflow: auto;
-  border: 1px solid var(--edge-strong);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  color: var(--text-primary);
-  background: var(--surface-sunken);
-  font: inherit;
-  font-size: var(--fs-sm);
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-.formPickerControl button {
-  border: 1px solid var(--edge-strong);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  color: var(--text-primary);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-interactive);
-  font: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-}
-
-.formPickerControl button:hover {
-  background: var(--surface-selected);
-}
-
-.formPickerControl button:focus-visible {
-  outline: 2px solid var(--accent-fill);
-  outline-offset: 2px;
-}
-
-.formPickerClear {
-  color: var(--text-tertiary) !important;
-  background: var(--surface-sunken) !important;
 }
 
 .formSubmitButton {
@@ -1168,52 +1042,17 @@
   background: var(--accent-fill);
 }
 
-.formSubmitButton > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.formSubmitButton kbd,
-.formKeyboardHint kbd {
-  color: var(--text-tertiary);
-  font: inherit;
-  font-size: var(--fs-2xs);
-}
-
-.formFooter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.formKeyboardHint {
-  color: var(--text-muted);
-  font-size: var(--fs-2xs);
-}
-
-.formDescription,
-.formField small {
+.formDescription {
   margin: 0;
   color: var(--text-tertiary);
   font-size: var(--fs-xs);
   line-height: 1.4;
 }
 
-.formFieldError {
-  color: var(--danger-text) !important;
-}
-
 .formSeparator {
   width: 100%;
   border: 0;
   border-top: 1px solid var(--edge-subtle);
-}
-
-.formStaticField-separator {
-  padding-block: 4px;
 }
 
 .resultText {

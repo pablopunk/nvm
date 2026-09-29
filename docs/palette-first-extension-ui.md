@@ -34,6 +34,8 @@ host-owned view, but its commands, navigation, and follow-up choices still
 belong in the palette. Custom webviews are a last resort, not a way to recreate
 forms that the palette primitives already cover.
 
-Legacy `ctx.ui.form` views remain supported for compatibility with genuinely
-structured workflows. Do not use them for lightweight arguments that fit
-`ctx.input.prompt`, an editor, result-row choices, or a native picker.
+`ctx.ui.form` is for genuinely structured workflows. The host shows fields as
+searchable list rows with current values and one save row; opening a field uses
+the palette input, choice rows, editor, or native picker as appropriate. Values
+stay in a draft until submission. Do not use forms for lightweight arguments
+that fit `ctx.input.prompt`.

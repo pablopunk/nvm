@@ -1,10 +1,16 @@
 // biome-ignore-all lint: This legacy shared UI module retains established renderer conventions.
 import { Command } from 'cmdk';
-import { Folder } from 'lucide-react';
-import React, { type ReactNode, useId, useLayoutEffect, useRef } from 'react';
+import { Check, ChevronRight, Folder, Search } from 'lucide-react';
+import React, { type ReactNode, useLayoutEffect, useRef } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { formKeyboardActionForEvent } from './form-keyboard';
+import {
+  FORM_SAVE_ROW_ID,
+  formFieldMatches,
+  formFieldValue,
+  formRowId,
+  formValueLabel,
+} from './form-fields';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
 import { MorphingActivityText, MorphingIndicatorText } from './morphing-text';
@@ -107,11 +113,11 @@ export interface FormField {
 export interface FormViewProps {
   fields: FormField[];
   values?: Record<string, FormValue>;
-  onChange?: (id: string, value: FormValue) => void;
+  onEdit?: (field: FormField) => void;
   onSubmit?: () => void;
   submitTitle?: string;
-  autoFocus?: boolean;
-  autoFocusKey?: string | number;
+  query?: string;
+  errors?: Record<string, string>;
 }
 export interface EditorViewProps {
   value: string;
@@ -618,350 +624,78 @@ export function ProgressView({
   );
 }
 
-function normalizedFormValue(value: FormValue | undefined) {
-  return value === undefined ? '' : value;
-}
-
-function formFieldErrorId(formId: string, field: FormField) {
-  return `${formId}-form-field-error-${field.id}`;
-}
-
-function formFieldDescriptionId(formId: string, field: FormField) {
-  return `${formId}-form-field-description-${field.id}`;
-}
-
-function formFieldControlId(formId: string, field: FormField) {
-  return `${formId}-form-field-control-${field.id}`;
-}
-
-function formFieldDescribedBy(formId: string, field: FormField) {
-  return [
-    field.description ? formFieldDescriptionId(formId, field) : '',
-    field.error ? formFieldErrorId(formId, field) : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
-function formFieldControl(
-  field: FormField,
-  value: FormValue,
-  formId: string,
-  onChange?: FormViewProps['onChange'],
-) {
-  const type = field.type || 'text';
-  const controlId = formFieldControlId(formId, field);
-  const describedBy = formFieldDescribedBy(formId, field) || undefined;
-  if (type === 'file' || type === 'files' || type === 'folder') {
-    const values = Array.isArray(value)
-      ? value
-      : String(value || '')
-          .split('\n')
-          .map((item) => item.trim())
-          .filter(Boolean);
-    const label = values.length ? values.join('\n') : '';
-    const placeholder =
-      field.placeholder ||
-      (type === 'folder'
-        ? 'No folder selected'
-        : type === 'files'
-          ? 'No files selected'
-          : 'No file selected');
-    async function choosePath() {
-      const result = await window.nvm.pickFormFieldPaths({
-        type: type as 'file' | 'files' | 'folder',
-        title: field.label,
-        buttonLabel: field.buttonLabel,
-        defaultPath: field.defaultPath,
-        extensions: field.extensions,
-        filterName: field.filterName,
-        canCreateDirectories: field.canCreateDirectories,
-      });
-      if (result.canceled) return;
-      onChange?.(
-        field.id,
-        type === 'files' ? result.paths : result.paths[0] || '',
-      );
-    }
-    function clearPath() {
-      onChange?.(field.id, type === 'files' ? [] : '');
-    }
-    return (
-      <div className="formPickerControl">
-        <pre title={label || placeholder}>{label || placeholder}</pre>
-        <button
-          type="button"
-          disabled={field.disabled}
-          aria-label={`${field.buttonLabel || 'Choose'} ${field.label || field.id}`}
-          onClick={choosePath}
-        >
-          {field.buttonLabel || 'Choose…'}
-        </button>
-        {values.length ? (
-          <button
-            type="button"
-            disabled={field.disabled}
-            className="formPickerClear"
-            aria-label={`Clear ${field.label || field.id}`}
-            onClick={clearPath}
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-  if (type === 'description')
-    return (
-      <p className="formDescription">{field.description || field.label}</p>
-    );
-  if (type === 'separator') return <hr className="formSeparator" />;
-  if (type === 'textarea')
-    return (
-      <textarea
-        id={controlId}
-        value={String(value)}
-        placeholder={field.placeholder}
-        required={field.required}
-        disabled={field.disabled}
-        aria-invalid={field.error ? true : undefined}
-        aria-describedby={describedBy}
-        rows={field.rows || 4}
-        onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
-      />
-    );
-  if (type === 'checkbox')
-    return (
-      <label className="formCheckbox">
-        <input
-          id={controlId}
-          checked={Boolean(value)}
-          required={field.required}
-          disabled={field.disabled}
-          type="checkbox"
-          aria-invalid={field.error ? true : undefined}
-          aria-describedby={describedBy}
-          onChange={(event) =>
-            onChange?.(field.id, event.currentTarget.checked)
-          }
-        />
-        <span>{field.label}</span>
-      </label>
-    );
-  if (type === 'dropdown' || type === 'select')
-    return (
-      <select
-        id={controlId}
-        value={String(value)}
-        required={field.required}
-        disabled={field.disabled}
-        aria-invalid={field.error ? true : undefined}
-        aria-describedby={describedBy}
-        onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
-      >
-        {field.placeholder ? (
-          <option value="">{field.placeholder}</option>
-        ) : null}
-        {(field.options || []).map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.title}
-          </option>
-        ))}
-      </select>
-    );
-  if (type === 'multiselect') {
-    const selected = Array.isArray(value)
-      ? value
-      : String(value || '')
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean);
-    return (
-      <fieldset
-        id={controlId}
-        className="formMultiselect"
-        disabled={field.disabled}
-        aria-invalid={field.error ? true : undefined}
-        aria-describedby={describedBy}
-      >
-        <legend>{field.label || field.id}</legend>
-        {(field.options || []).map((option, index) => (
-          <label key={option.value}>
-            <input
-              type="checkbox"
-              checked={selected.includes(option.value)}
-              required={field.required && selected.length === 0 && index === 0}
-              onChange={(event) =>
-                onChange?.(
-                  field.id,
-                  event.currentTarget.checked
-                    ? [...selected, option.value]
-                    : selected.filter((value) => value !== option.value),
-                )
-              }
-            />
-            <span>{option.title}</span>
-          </label>
-        ))}
-      </fieldset>
-    );
-  }
-  return (
-    <input
-      id={controlId}
-      value={String(value)}
-      placeholder={field.placeholder}
-      required={field.required}
-      disabled={field.disabled}
-      type={type}
-      aria-invalid={field.error ? true : undefined}
-      aria-describedby={describedBy}
-      onChange={(event) => onChange?.(field.id, event.currentTarget.value)}
-    />
-  );
-}
-
 export function FormView({
   fields,
   values = {},
-  onChange,
+  onEdit,
   onSubmit,
   submitTitle = 'Submit',
-  autoFocus = true,
-  autoFocusKey = 0,
+  query = '',
+  errors = {},
 }: FormViewProps) {
-  const formRef = useRef<HTMLFormElement>(null);
-  const hasAutoFocusedRef = useRef(false);
-  const previousAutoFocusKeyRef = useRef(autoFocusKey);
-  const formId = useId();
-  useLayoutEffect(() => {
-    if (previousAutoFocusKeyRef.current !== autoFocusKey) {
-      previousAutoFocusKeyRef.current = autoFocusKey;
-      hasAutoFocusedRef.current = false;
-    }
-    if (!autoFocus || hasAutoFocusedRef.current) return;
-    const frame = requestAnimationFrame(() => {
-      hasAutoFocusedRef.current = true;
-      formRef.current
-        ?.querySelector<HTMLElement>(
-          'input:not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled)',
-        )
-        ?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [autoFocus, autoFocusKey]);
-
+  const filter = query.trim().toLowerCase();
+  const matchingFields = fields.filter((field) => {
+    if (field.type === 'description' || field.type === 'separator')
+      return !filter;
+    const value = formFieldValue(field, values);
+    return formFieldMatches(field, value, filter);
+  });
+  const showSubmit =
+    onSubmit && (!filter || submitTitle.toLowerCase().includes(filter));
   return (
-    <form
-      ref={formRef}
-      className="extensionView formView"
-      aria-keyshortcuts="Meta+Enter Control+Enter"
-      onKeyDown={(event) => {
-        const control = event.target;
-        const action = formKeyboardActionForEvent({
-          key: event.key,
-          metaKey: event.metaKey,
-          ctrlKey: event.ctrlKey,
-          altKey: event.altKey,
-          shiftKey: event.shiftKey,
-          targetTag:
-            control instanceof HTMLElement ? control.tagName : undefined,
-          inputType:
-            control instanceof HTMLInputElement ? control.type : undefined,
-        });
-        if (action === 'host') return;
-        if (action === 'submit') {
-          event.preventDefault();
-          event.stopPropagation();
-          event.currentTarget.requestSubmit();
-          return;
-        }
-        event.stopPropagation();
-        if (action === 'field' || !(control instanceof HTMLInputElement))
-          return;
-        if (action === 'toggle') {
-          event.preventDefault();
-          control.click();
-          return;
-        }
-        event.preventDefault();
-        const controls = Array.from(
-          event.currentTarget.querySelectorAll<HTMLElement>(
-            'input:not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled)',
-          ),
-        );
-        controls[controls.indexOf(control) + 1]?.focus();
-      }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit?.();
-      }}
-    >
-      <div className="formFields">
-        {fields.map((field) => {
-          const type = field.type || 'text';
-          const value = normalizedFormValue(values[field.id] ?? field.value);
-          if (type === 'description' || type === 'separator')
-            return (
-              <div
-                key={field.id}
-                className={`formStaticField formStaticField-${type}`}
-              >
-                {formFieldControl(field, value, formId, onChange)}
-              </div>
-            );
+    <div className="extensionView formView">
+      {matchingFields.map((field) => {
+        if (field.type === 'separator')
+          return <hr key={field.id} className="formSeparator" />;
+        if (field.type === 'description')
           return (
-            <div key={field.id} className={`formField formField-${type}`}>
-              {type !== 'checkbox' &&
-              type !== 'multiselect' &&
-              type !== 'file' &&
-              type !== 'files' &&
-              type !== 'folder' ? (
-                <label
-                  className="formFieldLabel"
-                  htmlFor={formFieldControlId(formId, field)}
-                >
-                  {field.label || field.id}
-                </label>
-              ) : type !== 'checkbox' ? (
-                <span className="formFieldLabel">
-                  {field.label || field.id}
-                </span>
-              ) : null}
-              {formFieldControl(field, value, formId, onChange)}
-              {field.description ? (
-                <small id={formFieldDescriptionId(formId, field)}>
-                  {field.description}
-                </small>
-              ) : null}
-              {field.error ? (
-                <small
-                  id={formFieldErrorId(formId, field)}
-                  className="formFieldError"
-                >
-                  {field.error}
-                </small>
-              ) : null}
-            </div>
+            <p key={field.id} className="formDescription">
+              {field.description || field.label}
+            </p>
           );
-        })}
-      </div>
-      {onSubmit ? (
-        <footer className="formFooter">
-          <span className="formKeyboardHint">
-            <kbd>Tab</kbd> Move between fields
-          </span>
-          <button
-            className="formSubmitButton"
-            type="submit"
-            title="Command+Enter"
-          >
-            <span>{submitTitle}</span>
-            <kbd>{shortcutLabel('Command+Enter')}</kbd>
-          </button>
-        </footer>
+        const value = formFieldValue(field, values);
+        const error =
+          errors[field.id] || (value === field.value ? field.error : undefined);
+        return (
+          <CommandRow
+            key={field.id}
+            value={formRowId(field.id)}
+            icon={
+              field.type === 'checkbox' && value ? (
+                <Check size={18} />
+              ) : (
+                <ChevronRight size={18} />
+              )
+            }
+            title={field.label || field.id}
+            subtitle={error || field.description}
+            accessories={[
+              {
+                text: formValueLabel(field, value),
+                tone: error ? 'danger' : 'default',
+              },
+            ]}
+            className={`formListRow${error ? ' formListRowError' : ''}`}
+            disabled={field.disabled}
+            onSelect={() => onEdit?.(field)}
+          />
+        );
+      })}
+      {showSubmit ? (
+        <CommandRow
+          value={FORM_SAVE_ROW_ID}
+          icon={<Check size={18} />}
+          title={submitTitle}
+          subtitle="Save changes"
+          shortcut="Command+Enter"
+          className="formSaveRow"
+          onSelect={() => onSubmit?.()}
+        />
       ) : null}
-    </form>
+      {!matchingFields.length && !showSubmit ? (
+        <EmptyState icon={<Search size={20} />} title="No matching fields" />
+      ) : null}
+    </div>
   );
 }
 

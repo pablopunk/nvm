@@ -29,13 +29,13 @@ function formView(ctx: ExtensionContext) {
   return ctx.ui.form({
     id: 'dev-ui-form',
     title: 'Dev UI · Form Fields',
-    subtitle: 'Exercises every host-rendered form field type',
+    subtitle: 'Search fields, edit with Enter, then save',
     fields: [
       {
         id: 'intro',
         type: 'description',
         description:
-          'This dev-only extension is loaded only in electron-vite dev mode.',
+          'Choose any field with the arrow keys. Enter edits it; Escape returns to the list. Save when ready.',
       },
       {
         id: 'name',

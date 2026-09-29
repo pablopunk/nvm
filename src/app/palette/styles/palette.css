@@ -228,6 +228,22 @@ kbd {
   overscroll-behavior: contain;
 }
 
+.formResultsCard > [cmdk-list-sizer] {
+  max-height: none;
+  overflow: visible;
+}
+
+.formResultsCard.optionsCard {
+  max-height: calc(
+    100vh -
+    var(--window-blur-margin) *
+    2 -
+    var(--search-row-height) -
+    var(--palette-stack-gap)
+  );
+  overflow-y: auto;
+}
+
 .optionsCard::before {
   content: "";
   position: absolute;
