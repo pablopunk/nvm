@@ -570,6 +570,30 @@ test('restoreClipboardSnapshot restores state', async () => {
   assert.equal((deps.clipboard as any).readHTML(), '<b>restored</b>');
 });
 
+test('restoreClipboardSnapshot restores plain text through the platform text writer', async () => {
+  const { clipboardHistory, deps } = createFakes();
+  let restored = '';
+  (deps.clipboard as any).write = () => {
+    throw new Error(
+      'Formatted clipboard writes must not replace the X11 Primary selection',
+    );
+  };
+  (deps.clipboard as any).writeText = (text: string) => {
+    restored = text;
+  };
+
+  await clipboardHistory.restoreClipboardSnapshot({
+    text: 'restored',
+    html: '',
+    rtf: '',
+    bookmark: null as any,
+    image: null as any,
+    filePaths: [],
+  });
+
+  assert.equal(restored, 'restored');
+});
+
 test('restoreClipboardSnapshot clears on empty snapshot', async () => {
   const { clipboardHistory, deps } = createFakes();
   (deps.clipboard as any).write({

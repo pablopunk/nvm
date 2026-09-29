@@ -11,6 +11,7 @@ files:
     filter:
       - '**/*'
       - '!macos-selected-text.swift'
+      - '!windows-desktop-text.cs'
   - from: src/app/extensions
     to: src/app/extensions
     filter:
@@ -81,6 +82,9 @@ linux:
   artifactName: '${productName}-${version}-linux-${arch}.${ext}'
 win:
   icon: build/Icon.icon/Assets/icon.png
+  extraResources:
+    - from: build/native/windows-desktop-text.exe
+      to: windows-desktop-text.exe
   target:
     - nsis
     - portable

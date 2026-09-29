@@ -4,6 +4,8 @@ import type { PermissionReader } from './permissions';
 
 mock.module('electron', {
   namedExports: {
+    app: { isPackaged: false },
+    shell: {},
     systemPreferences: {
       getMediaAccessStatus: () => 'unknown',
       isTrustedAccessibilityClient: () => false,
@@ -28,7 +30,12 @@ function fakeReader(
   return {
     platform: 'darwin',
     mediaStatus: (kind) => states[kind] ?? 'unknown',
-    accessibilityTrusted: () => states.accessibility === 'granted',
+    accessibilityState: async () =>
+      states.accessibility === 'unknown'
+        ? 'unknown'
+        : states.accessibility === 'granted'
+          ? 'allowed'
+          : 'denied',
     requestMediaAccess: async (kind) => {
       requested.push(kind);
       return true;
@@ -78,8 +85,8 @@ test('normalizes media permission states', () => {
   assert.equal(normalizeMediaPermissionState(undefined), 'unknown');
 });
 
-test('reads permission rows with attention first', () => {
-  const rows = readOsPermissions(
+test('reads permission rows with attention first', async () => {
+  const rows = await readOsPermissions(
     fakeReader({
       microphone: 'granted',
       camera: 'denied',
@@ -188,4 +195,45 @@ test('requests accessibility access through the system prompt', async () => {
   const result = await accessibility.primaryAction.__handler(context);
   assert.deepEqual(requested, ['accessibility']);
   assert.equal(result.navigation, 'replace');
+});
+
+test('does not label an unavailable helper as allowed or request permission for a helper failure', async () => {
+  const context = testContext();
+  const view = (await permissionsView(
+    context,
+    fakeReader({ accessibility: 'unknown' }),
+  )) as any;
+  const accessibility = view.items.find(
+    (item: any) => item.id === 'os-permission:accessibility',
+  );
+  assert.match(accessibility.subtitle, /Could not check access/);
+  assert.equal(accessibility.primaryAction.type, 'openSystemSettings');
+});
+
+test('shows Linux selected-text capability state without a macOS settings link', async () => {
+  const ctx = {
+    ...testContext(),
+    desktop: {
+      selection: {
+        access: async () => ({
+          state: 'unavailable',
+          message: 'Install xdotool to enable selected-text control.',
+        }),
+      },
+    },
+  };
+  const reader = {
+    ...fakeReader({ microphone: 'granted' }),
+    platform: 'linux' as const,
+  };
+  const view = (await permissionsView(ctx, reader)) as any;
+  const row = view.items.find(
+    (item: any) => item.id === 'os-permission:selected-text',
+  );
+  assert.equal(
+    row.subtitle,
+    'Install xdotool to enable selected-text control.',
+  );
+  assert.equal(row.primaryAction.type, 'runExtensionAction');
+  assert.equal(row.primaryAction.paneId, undefined);
 });

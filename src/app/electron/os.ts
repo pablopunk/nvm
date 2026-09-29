@@ -10,7 +10,6 @@ import {
   type BrowserWindow,
   type BrowserWindowConstructorOptions,
   shell,
-  systemPreferences,
 } from 'electron';
 import {
   EXTENSION_WINDOW_CAPABILITIES,
@@ -18,6 +17,13 @@ import {
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
 import { debug as logDebug, warn as logWarn } from './logger';
+import { macosSelectionAccess } from './macos-selected-text';
+import { createLinuxDesktopText } from './linux-desktop-text';
+import { createWindowsDesktopText } from './windows-desktop-text';
+import type {
+  DesktopTextAccess,
+  DesktopTextTarget,
+} from './desktop-text-access';
 import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
@@ -59,9 +65,6 @@ export type OsAdapterDependencies = {
 const macOnlyCapabilities = new Set([
   'quick-look',
   'selected-files',
-  'selected-text',
-  'frontmost-app',
-  'frontmost-paste',
   'keyboard.type-text',
   'applescript',
   'open-with-app-filtering',
@@ -83,6 +86,7 @@ export function validatedWindowsImageName(rawName: string) {
 export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   const processPlatform = dependencies.processPlatform || process.platform;
   const environment = dependencies.environment || process.env;
+  const linuxTextSupport = createLinuxDesktopText({ environment });
   const sessionType =
     dependencies.sessionType ||
     (String(environment.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' ||
@@ -108,6 +112,12 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   }
 
   function hasCapabilityForPlatform(capability: string) {
+    if (
+      ['selected-text', 'frontmost-app', 'frontmost-paste'].includes(capability)
+    )
+      return processPlatform === 'linux'
+        ? linuxTextSupport.available()
+        : processPlatform === 'darwin' || processPlatform === 'win32';
     if (
       EXTENSION_WINDOW_CAPABILITIES.includes(
         capability as (typeof EXTENSION_WINDOW_CAPABILITIES)[number],
@@ -946,9 +956,14 @@ export async function fileDateAddedMs(paths: string[]) {
   return dates;
 }
 
-export function pasteIntoFrontmostApp() {
+const linuxDesktopText = createLinuxDesktopText();
+const windowsDesktopText = createWindowsDesktopText();
+
+export function pasteIntoFrontmostApp(expectedAppId?: string) {
   return osFunction<[], Promise<void>>(
     {
+      linux: () => linuxDesktopText.paste(expectedAppId),
+      win32: () => windowsDesktopText.paste(expectedAppId),
       darwin: () =>
         new Promise((resolve, reject) => {
           execFile(
@@ -961,62 +976,50 @@ export function pasteIntoFrontmostApp() {
           );
         }),
     },
-    async () => {},
+    async () => {
+      throw new Error('Desktop paste is not supported on this platform.');
+    },
   )();
 }
 
-export type AppFocusTarget = {
-  bundleId: string;
-  pid: number;
-};
+export type AppFocusTarget = DesktopTextTarget;
 
-function macosSelectedTextHelperPath() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'macos-selected-text')
-    : path.join(app.getAppPath(), 'build', 'native', 'macos-selected-text');
+export function selectedTextAccess(): Promise<DesktopTextAccess> {
+  return osFunction<[], Promise<DesktopTextAccess>>(
+    {
+      darwin: async () => {
+        const state = await macosSelectionAccess.permissionState();
+        return {
+          state,
+          message:
+            state === 'allowed'
+              ? 'Accessibility access is allowed.'
+              : 'Review Accessibility access in Nevermind OS Permissions.',
+        };
+      },
+      linux: linuxDesktopText.access,
+      win32: windowsDesktopText.access,
+    },
+    async () => ({
+      state: 'unsupported',
+      message: 'Selected-text control is not supported on this platform.',
+    }),
+  )();
 }
 
-function runMacosSelectedTextHelper(
-  operation: 'copy' | 'read' | 'replace',
-  target: AppFocusTarget,
-  input?: string,
-) {
-  return new Promise<{ exitCode: number; stderr: string; stdout: string }>(
-    (resolve) => {
-      const child = execFile(
-        macosSelectedTextHelperPath(),
-        [operation, String(target.pid)],
-        { timeout: 5000 },
-        (error, stdout, stderr) =>
-          resolve({
-            exitCode:
-              typeof (error as NodeJS.ErrnoException | null)?.code === 'number'
-                ? Number((error as NodeJS.ErrnoException).code)
-                : error
-                  ? 1
-                  : 0,
-            stderr: String(stderr || error?.message || ''),
-            stdout: String(stdout || ''),
-          }),
-      );
-      if (input !== undefined) child.stdin?.end(input);
-    },
-  );
+export function selectedTextAccessState() {
+  return osFunction<[], Promise<'allowed' | 'denied' | 'unknown'>>(
+    { darwin: macosSelectionAccess.permissionState },
+    async () => 'unknown',
+  )();
 }
 
 export function copySelectionIntoClipboard(target: AppFocusTarget) {
   return osFunction<[], Promise<boolean>>(
     {
-      darwin: async () => {
-        const result = await runMacosSelectedTextHelper('copy', target);
-        if (result.exitCode !== 0)
-          logWarn(
-            'selected-text.copy.failed',
-            { exitCode: result.exitCode, error: result.stderr.trim() },
-            { source: 'host', scope: 'selected-text' },
-          );
-        return result.exitCode === 0;
-      },
+      darwin: () => macosSelectionAccess.copy(target),
+      linux: () => linuxDesktopText.copy(target),
+      win32: () => windowsDesktopText.copy(target),
     },
     async () => false,
   )();
@@ -1028,26 +1031,7 @@ export function replaceSelectedText(
 ) {
   return osFunction<[], Promise<boolean>>(
     {
-      darwin: async () => {
-        const result = await runMacosSelectedTextHelper(
-          'replace',
-          target,
-          replacement,
-        );
-        if (result.exitCode !== 0 && result.exitCode !== 3)
-          logWarn(
-            'selected-text.replace.failed',
-            { exitCode: result.exitCode, error: result.stderr.trim() },
-            { source: 'host', scope: 'selected-text' },
-          );
-        else if (result.exitCode === 3)
-          logDebug(
-            'selected-text.replace.notApplied',
-            { pid: target.pid },
-            { source: 'host', scope: 'selected-text' },
-          );
-        return result.exitCode === 0;
-      },
+      darwin: () => macosSelectionAccess.replace(target, replacement),
     },
     async () => false,
   )();
@@ -1120,26 +1104,9 @@ export async function selectedFilePaths() {
 export async function selectedText(target: AppFocusTarget) {
   return osFunction(
     {
-      darwin: async () => {
-        if (!systemPreferences.isTrustedAccessibilityClient(true)) {
-          throw new Error(
-            'Accessibility access is required. Enable Nevermind in System Settings, then restart it.',
-          );
-        }
-        const result = await runMacosSelectedTextHelper('read', target);
-        if (result.exitCode === 2) {
-          throw new Error(
-            'Accessibility access is required. Enable Nevermind in System Settings, then restart it.',
-          );
-        }
-        if (result.exitCode !== 0 && result.exitCode !== 3)
-          logWarn(
-            'selected-text.read.failed',
-            { exitCode: result.exitCode, error: result.stderr.trim() },
-            { source: 'host', scope: 'selected-text' },
-          );
-        return result.exitCode === 0 ? result.stdout || null : null;
-      },
+      darwin: () => macosSelectionAccess.read(target),
+      linux: () => linuxDesktopText.read(target),
+      win32: () => windowsDesktopText.read(target),
     },
     async () => null,
   )();
@@ -1148,6 +1115,8 @@ export async function selectedText(target: AppFocusTarget) {
 export async function frontmostApp() {
   return osFunction(
     {
+      linux: async () => desktopTextApp(await linuxDesktopText.target()),
+      win32: async () => desktopTextApp(await windowsDesktopText.target()),
       darwin: async () => {
         const script =
           'tell application "System Events"\nset frontProcess to first application process whose frontmost is true\nset appName to name of frontProcess\nset appBundle to bundle identifier of frontProcess\ntry\nset appPath to POSIX path of (file of frontProcess as alias)\non error\nset appPath to ""\nend try\nreturn appName & linefeed & appBundle & linefeed & appPath\nend tell';
@@ -1163,9 +1132,22 @@ export async function frontmostApp() {
   )();
 }
 
+function desktopTextApp(target: DesktopTextTarget | null) {
+  return target
+    ? {
+        ...target,
+        id: target.bundleId,
+        name: `Application ${target.pid}`,
+        path: null,
+      }
+    : null;
+}
+
 export async function frontmostAppFocusTarget() {
   return osFunction(
     {
+      linux: linuxDesktopText.target,
+      win32: windowsDesktopText.target,
       darwin: () =>
         new Promise<AppFocusTarget | null>((resolve) => {
           execFile('/usr/bin/lsappinfo', ['front'], (frontError, stdout) => {
@@ -1195,11 +1177,15 @@ export async function frontmostAppFocusTarget() {
 
 export async function restoreAppFocus(appIdentity: {
   bundleId?: string | null;
+  pid?: number;
+  windowId?: string;
 }) {
   const bundleId = String(appIdentity?.bundleId || '');
   if (!bundleId) return false;
   return osFunction(
     {
+      linux: () => linuxDesktopText.restore(appIdentity as DesktopTextTarget),
+      win32: () => windowsDesktopText.restore(appIdentity as DesktopTextTarget),
       darwin: async () => {
         const script = `tell application "System Events"
 set matchingProcesses to application processes whose bundle identifier is ${appleScriptString(bundleId)}

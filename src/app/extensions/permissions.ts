@@ -1,4 +1,6 @@
 import { systemPreferences } from 'electron';
+import { selectedTextAccessState } from '../electron/os';
+import type { DesktopTextAccess } from '../electron/desktop-text-access';
 
 export type OsPermissionState =
   | 'allowed'
@@ -11,7 +13,7 @@ export type MediaPermissionKind = 'microphone' | 'camera' | 'screen';
 export type PermissionReader = {
   platform: NodeJS.Platform;
   mediaStatus: (kind: MediaPermissionKind) => string;
-  accessibilityTrusted: () => boolean;
+  accessibilityState: () => OsPermissionState | Promise<OsPermissionState>;
   requestMediaAccess: (kind: 'microphone' | 'camera') => Promise<boolean>;
   requestAccessibilityAccess: () => boolean;
 };
@@ -26,13 +28,7 @@ export function electronPermissionReader(): PermissionReader {
         return 'unknown';
       }
     },
-    accessibilityTrusted: () => {
-      try {
-        return systemPreferences.isTrustedAccessibilityClient(false);
-      } catch {
-        return false;
-      }
-    },
+    accessibilityState: selectedTextAccessState,
     requestMediaAccess: (kind) => systemPreferences.askForMediaAccess(kind),
     requestAccessibilityAccess: () => {
       try {
@@ -63,9 +59,10 @@ export type OsPermissionRow = {
   canRequest: boolean;
 };
 
-export function readOsPermissions(
+export async function readOsPermissions(
   reader: PermissionReader = electronPermissionReader(),
-): OsPermissionRow[] {
+  selectionAccess?: () => Promise<DesktopTextAccess>,
+): Promise<OsPermissionRow[]> {
   const rows: OsPermissionRow[] = [
     {
       key: 'microphone',
@@ -94,7 +91,7 @@ export function readOsPermissions(
         description: 'Paste text and read selected text',
         icon: 'accessibility',
         anchor: 'Accessibility',
-        state: reader.accessibilityTrusted() ? 'allowed' : 'denied',
+        state: await reader.accessibilityState(),
         canRequest: true,
       },
       {
@@ -116,6 +113,20 @@ export function readOsPermissions(
         canRequest: false,
       },
     );
+  } else if (selectionAccess) {
+    const access = await selectionAccess();
+    rows.push({
+      key: 'selected-text',
+      title: 'Selected Text',
+      icon: 'text-cursor-input',
+      description: access.message,
+      anchor: '',
+      canRequest: false,
+      state:
+        access.state === 'allowed' || access.state === 'denied'
+          ? access.state
+          : 'unknown',
+    });
   }
   const attentionFirst = (row: OsPermissionRow) =>
     row.state === 'denied' || row.state === 'not-determined' ? 0 : 1;
@@ -125,6 +136,7 @@ export function readOsPermissions(
 const PRIVACY_PANE_ID = 'com.apple.settings.PrivacySecurity.extension';
 
 function permissionSubtitle(row: OsPermissionRow) {
+  if (row.key === 'selected-text') return row.description;
   switch (row.state) {
     case 'allowed':
       return 'Allowed — press Enter to review in Settings';
@@ -133,12 +145,14 @@ function permissionSubtitle(row: OsPermissionRow) {
     case 'not-determined':
       return 'Not asked yet — press Enter to allow';
     default:
-      return 'Review in Settings — press Enter to open';
+      return row.key === 'accessibility'
+        ? 'Could not check access — press Enter to open Settings'
+        : 'Review in Settings — press Enter to open';
   }
 }
 
 export async function permissionsView(ctx: any, reader?: PermissionReader) {
-  const rows = readOsPermissions(reader);
+  const rows = await readOsPermissions(reader, ctx.desktop?.selection?.access);
   const known = rows.filter((row) => row.state !== 'unknown');
   const allowed = known.filter((row) => row.state === 'allowed').length;
 
@@ -155,6 +169,20 @@ export async function permissionsView(ctx: any, reader?: PermissionReader) {
       subtitle: 'No OS permissions apply on this platform.',
     },
     items: rows.map((row) => {
+      if (row.key === 'selected-text')
+        return {
+          id: `os-permission:${row.key}`,
+          title: row.title,
+          subtitle: permissionSubtitle(row),
+          icon: row.icon,
+          primaryAction: ctx.actions.run(
+            'Check Selected Text Access',
+            async (innerCtx: any) => ({
+              view: await permissionsView(innerCtx, reader),
+              navigation: 'replace',
+            }),
+          ),
+        };
       const openSettings = ctx.actions.system.openSystemSettings(row.title, {
         paneId: PRIVACY_PANE_ID,
         anchor: row.anchor,
@@ -163,7 +191,7 @@ export async function permissionsView(ctx: any, reader?: PermissionReader) {
         (row.canRequest &&
           row.state === 'not-determined' &&
           row.key !== 'accessibility') ||
-        (row.key === 'accessibility' && row.state !== 'allowed');
+        (row.key === 'accessibility' && row.state === 'denied');
       const primaryAction = !needsPrompt
         ? openSettings
         : ctx.actions.run(`Allow ${row.title}`, async (innerCtx: any) => {

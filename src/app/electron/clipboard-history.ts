@@ -51,7 +51,7 @@ export type ClipboardHistoryDeps = {
   emitChanged: () => void;
   sendToRenderer: (channel: string, ...args: unknown[]) => void;
   patchOpenView: (viewId: string, patch: Record<string, unknown>) => void;
-  pasteIntoFrontmostApp: () => MaybePromise<void>;
+  pasteIntoFrontmostApp: (expectedAppId?: string) => MaybePromise<void>;
 
   // ── Settings ───────────────────────────────────────────
   getSetting: (id: string) => unknown;
@@ -70,7 +70,7 @@ export type ClipboardHistoryDeps = {
   ) => Promise<unknown[]>;
   selectedFilePaths: () => Promise<string[]>;
   selectedExtensionFiles: () => Promise<unknown[]>;
-  selectedText: () => Promise<string>;
+  selectedText: () => Promise<string | null>;
   selectedFiles: () => Promise<string[]>;
   frontmostApp: () => Promise<{ name: string; path: string } | null>;
   readDesktopSelection: (opts?: Record<string, unknown>) => Promise<unknown>;
@@ -614,6 +614,8 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       data.bookmark = current.bookmark;
     if (current.image && !current.image.isEmpty()) data.image = current.image;
     if (Object.keys(data).length === 0) await deps.clipboard.clear();
+    else if (Object.keys(data).length === 1 && data.text)
+      await deps.clipboard.writeText(data.text);
     else await deps.clipboard.write(data);
   }
 
@@ -635,10 +637,18 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     const snapshot = restoreClipboard ? await clipboardSnapshot() : null;
     const suppressedId = clipboardHistoryIdForText(text);
     if (concealed) suppressClipboardHistoryId(suppressedId);
-    if (action.plainText === false && action.html)
-      await deps.clipboard.write({ text, html: String(action.html) });
-    else await deps.clipboard.writeText(text);
-    await deps.pasteIntoFrontmostApp();
+    try {
+      if (action.plainText === false && action.html)
+        await deps.clipboard.write({ text, html: String(action.html) });
+      else await deps.clipboard.writeText(text);
+      await deps.pasteIntoFrontmostApp(action.expectedFrontmostAppId);
+    } catch (error) {
+      if (restoreClipboard && snapshot) {
+        suppressClipboardHistoryId(clipboardHistoryIdForText(snapshot.text));
+        await restoreClipboardSnapshot(snapshot);
+      }
+      throw error;
+    }
     if (restoreClipboard && snapshot) {
       const delay = Math.max(
         50,

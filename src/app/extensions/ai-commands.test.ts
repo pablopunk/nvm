@@ -7,6 +7,7 @@ function commandHandler(context: any) {
   const extension = createAiCommandsExtension();
   const contribution = extension.actions({
     ...context,
+    system: { capabilities: { has: () => true } },
     action: (input: unknown) => input,
   })[0];
   assert.equal(contribution.title, 'Fix Selected Text with AI');
@@ -200,7 +201,7 @@ test('does not call AI when no text is selected', async () => {
   assert.equal(result, undefined);
   assert.equal(
     (indicatorEvents.at(-1) as any)[1].subtitle,
-    'Select text to fix',
+    'Could not read selected text. Select it and try again',
   );
   assert.equal((indicatorEvents.at(-1) as any)[1].status, 'error');
   assert.equal(aiCalls.length, 0);
@@ -215,7 +216,7 @@ test('treats a null host selection as no selected text', async () => {
   assert.equal(result, undefined);
   assert.equal(
     (indicatorEvents.at(-1) as any)[1].subtitle,
-    'Select text to fix',
+    'Could not read selected text. Select it and try again',
   );
   assert.equal(aiCalls.length, 0);
   assert.equal(actions.length, 0);
@@ -238,5 +239,30 @@ test('does not paste into a different frontmost application', async () => {
   assert.equal(
     (indicatorEvents.at(-1) as any)[1].subtitle,
     'Frontmost app changed. Select the text and try again',
+  );
+});
+
+test('shows selection permission failures instead of asking the user to select text', async () => {
+  const { context, aiCalls, actions, indicatorEvents } = contextFor(null);
+  const message =
+    'Accessibility access is blocked. Open Nevermind OS Permissions.';
+  context.desktop.selection.text = async () => {
+    throw new Error(message);
+  };
+  await commandHandler(context)(context, {});
+  assert.equal((indicatorEvents.at(-1) as any)[1].subtitle, message);
+  assert.equal((indicatorEvents.at(-1) as any)[1].status, 'error');
+  assert.equal(aiCalls.length, 0);
+  assert.equal(actions.length, 0);
+});
+
+test('omits selected-text command where the OS has no safe input capability', () => {
+  const extension = createAiCommandsExtension();
+  assert.deepEqual(
+    extension.actions({
+      system: { capabilities: { has: () => false } },
+      action: (input: unknown) => input,
+    } as any),
+    [],
   );
 });

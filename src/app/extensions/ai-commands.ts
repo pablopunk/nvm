@@ -123,7 +123,7 @@ async function fixSelectedText(ctx: ExtensionContext) {
     if (!selectedText.trim()) {
       keepFinalIndicatorVisible = true;
       ctx.ui.indicator.update({
-        ...indicator('Select text to fix'),
+        ...indicator('Could not read selected text. Select it and try again'),
         status: 'error',
         durationMs: 4000,
       });
@@ -204,6 +204,7 @@ export function createAiCommandsExtension() {
     subtitle: 'Transform selected text with AI',
     capabilities: ['ai', 'system'],
     actions(ctx) {
+      if (!ctx.system.capabilities.has('selected-text')) return [];
       return [
         ctx.action({
           id: 'fix-selected-text-with-ai',
