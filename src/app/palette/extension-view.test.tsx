@@ -215,10 +215,12 @@ test('renders form fields as selectable palette rows', () => {
   });
 
   assert.match(html, /class="extensionView formView"/);
-  assert.match(html, /data-value="form:field:name"/);
-  assert.match(html, /data-value="form:field:roles"/);
+  assert.match(html, /class="result formListRow"/);
+  assert.match(html, /<strong>Name<\/strong>/);
+  assert.match(html, /<strong>Roles<\/strong>/);
   assert.match(html, /Your name/);
-  assert.match(html, /data-value="form:save"/);
+  assert.match(html, /class="result formSaveRow"/);
+  assert.match(html, /<strong>Save Account<\/strong>/);
   assert.doesNotMatch(html, /<input|<select|<textarea/);
 });
 
