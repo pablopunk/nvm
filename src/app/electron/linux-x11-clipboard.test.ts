@@ -8,7 +8,7 @@ test('writes only the X11 Clipboard, not the Primary selection', async () => {
   const calls: string[][] = [];
   const clipboard = createLinuxX11Clipboard({
     environment: { DISPLAY: ':99', XDG_SESSION_TYPE: 'x11' },
-    findCommand: () => '/usr/bin/xclip',
+    findCommand: async () => '/usr/bin/xclip',
     spawnCommand: ((_command: string, args: string[]) => {
       calls.push(args);
       const child = new EventEmitter() as ChildProcess;
@@ -24,7 +24,6 @@ test('writes only the X11 Clipboard, not the Primary selection', async () => {
       return child;
     }) as typeof spawn,
   });
-  assert.equal(clipboard.available(), true);
   await clipboard.writeText('probe');
   assert.deepEqual(calls, [['-selection', 'clipboard', '-in']]);
 });
@@ -34,7 +33,6 @@ test('reports a missing X11 Clipboard writer as unavailable', async () => {
     environment: { DISPLAY: ':99' },
     findCommand: () => null,
   });
-  assert.equal(clipboard.available(), false);
   await assert.rejects(clipboard.writeText('probe'), /Install xclip/);
 });
 

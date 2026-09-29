@@ -41,7 +41,7 @@ function targetForWindow(
 export function createLinuxDesktopText(
   dependencies: {
     environment?: NodeJS.ProcessEnv;
-    findCommand?: (command: string) => string | null;
+    findCommand?: (command: string) => string | null | Promise<string | null>;
     run?: typeof runDesktopTextCommand;
   } = {},
 ) {
@@ -60,7 +60,7 @@ export function createLinuxDesktopText(
       : environment.SWAYSOCK
         ? 'sway'
         : null;
-  const tools = new Map<string, string | null>();
+  const tools = new Map<string, Promise<string | null>>();
   const requiredTools =
     backend === 'x11'
       ? ['xdotool', 'xclip']
@@ -71,11 +71,11 @@ export function createLinuxDesktopText(
           : [];
 
   function tool(name: string) {
-    if (!tools.has(name)) tools.set(name, findCommand(name));
-    return tools.get(name);
+    if (!tools.has(name)) tools.set(name, Promise.resolve(findCommand(name)));
+    return tools.get(name)!;
   }
 
-  function assertAvailable() {
+  async function assertAvailable() {
     if (!backend)
       throw new DesktopTextAccessError(
         'unsupported',
@@ -86,7 +86,8 @@ export function createLinuxDesktopText(
         'unavailable',
         'No X11 desktop is connected. Start Nevermind in your desktop session.',
       );
-    const missing = requiredTools.filter((name) => !tool(name));
+    const paths = await Promise.all(requiredTools.map(tool));
+    const missing = requiredTools.filter((_name, index) => !paths[index]);
     if (missing.length)
       throw new DesktopTextAccessError(
         'unavailable',
@@ -95,18 +96,13 @@ export function createLinuxDesktopText(
   }
 
   function available() {
-    try {
-      assertAvailable();
-      return true;
-    } catch {
-      return false;
-    }
+    return Boolean(backend && (backend !== 'x11' || environment.DISPLAY));
   }
 
   async function command(name: string, args: string[]) {
-    assertAvailable();
+    await assertAvailable();
     try {
-      return await run(tool(name)!, args);
+      return await run((await tool(name))!, args);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'EACCES')
@@ -127,7 +123,7 @@ export function createLinuxDesktopText(
   }
 
   async function target(): Promise<DesktopTextTarget | null> {
-    assertAvailable();
+    await assertAvailable();
     if (backend === 'x11') {
       const windowId = (await command('xdotool', ['getactivewindow'])).trim();
       if (!/^\d+$/.test(windowId)) return null;
@@ -154,7 +150,7 @@ export function createLinuxDesktopText(
   }
 
   async function restore(expected: DesktopTextTarget) {
-    assertAvailable();
+    await assertAvailable();
     if (
       !expected.windowId ||
       !expected.bundleId.startsWith(`linux:${backend}:`)
@@ -237,7 +233,7 @@ export function createLinuxDesktopText(
 
   async function access() {
     try {
-      assertAvailable();
+      await assertAvailable();
       if (backend === 'x11') await command('xdotool', ['getdisplaygeometry']);
       else if (backend === 'hyprland')
         await command('hyprctl', ['-j', 'version']);

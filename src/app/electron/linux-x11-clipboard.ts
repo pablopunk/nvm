@@ -7,7 +7,7 @@ import {
 export function createLinuxX11Clipboard(
   dependencies: {
     environment?: NodeJS.ProcessEnv;
-    findCommand?: (name: string) => string | null;
+    findCommand?: (name: string) => string | null | Promise<string | null>;
     spawnCommand?: typeof spawn;
   } = {},
 ) {
@@ -16,6 +16,12 @@ export function createLinuxX11Clipboard(
     dependencies.findCommand ??
     ((name) => findDesktopTextCommand(name, environment.PATH ?? ''));
   const spawnCommand = dependencies.spawnCommand ?? spawn;
+  let executablePath: Promise<string | null> | null = null;
+
+  function commandPath() {
+    executablePath ??= Promise.resolve(findCommand('xclip'));
+    return executablePath;
+  }
 
   function enabled() {
     return (
@@ -24,10 +30,6 @@ export function createLinuxX11Clipboard(
       !environment.WAYLAND_DISPLAY &&
       Boolean(environment.DISPLAY)
     );
-  }
-
-  function available() {
-    return !enabled() || Boolean(findCommand('xclip'));
   }
 
   function validateSnapshot(snapshot: {
@@ -55,7 +57,7 @@ export function createLinuxX11Clipboard(
   }
 
   async function writeText(text: string) {
-    const executable = findCommand('xclip');
+    const executable = await commandPath();
     if (!executable)
       throw new DesktopTextAccessError(
         'unavailable',
@@ -93,5 +95,5 @@ export function createLinuxX11Clipboard(
     });
   }
 
-  return { enabled, available, validateSnapshot, writeText };
+  return { enabled, validateSnapshot, writeText };
 }

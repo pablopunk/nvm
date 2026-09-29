@@ -7,7 +7,7 @@ test('uses one X11 window identity for capture, focus, Copy, and paste', async (
   let activeWindow = '42';
   const desktop = createLinuxDesktopText({
     environment: { DISPLAY: ':99', XDG_SESSION_TYPE: 'x11' },
-    findCommand: (name) => `/usr/bin/${name}`,
+    findCommand: async (name) => `/usr/bin/${name}`,
     run: async (_command, args) => {
       calls.push(args.join(' '));
       if (args[0] === 'getactivewindow') return activeWindow;
@@ -60,7 +60,7 @@ test('reports missing tools and unsupported Wayland explicitly', async () => {
     message:
       'Install xdotool and xclip to enable selected-text control, then restart Nevermind.',
   });
-  assert.equal(missing.available(), false);
+  assert.equal(missing.available(), true);
   const unsupported = createLinuxDesktopText({
     environment: { XDG_SESSION_TYPE: 'wayland' },
   });

@@ -738,10 +738,9 @@ const clipboardApi = createElectronClipboardApi({
   clipboard,
   nativeImage,
   ClipboardItem,
-  writeText:
-    linuxX11Clipboard.enabled() && linuxX11Clipboard.available()
-      ? linuxX11Clipboard.writeText
-      : undefined,
+  writeText: linuxX11Clipboard.enabled()
+    ? linuxX11Clipboard.writeText
+    : undefined,
 });
 
 clipboardService = createClipboardHistory({

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Automation;
+using System.Windows.Automation.Text;
 
 internal static class DesktopText {
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();

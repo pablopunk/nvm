@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { accessSync, constants } from 'node:fs';
+import { constants } from 'node:fs';
+import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -36,11 +37,14 @@ export async function runDesktopTextCommand(command: string, args: string[]) {
   return stdout;
 }
 
-export function findDesktopTextCommand(command: string, searchPath: string) {
+export async function findDesktopTextCommand(
+  command: string,
+  searchPath: string,
+) {
   for (const directory of searchPath.split(path.delimiter).filter(Boolean)) {
     const executable = path.join(directory, command);
     try {
-      accessSync(executable, constants.X_OK);
+      await access(executable, constants.X_OK);
       return executable;
     } catch {}
   }
