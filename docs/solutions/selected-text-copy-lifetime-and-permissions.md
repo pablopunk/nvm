@@ -43,6 +43,14 @@ git diff --check
 mise exec -- pnpm check src/app/electron/selected-text.ts src/app/electron/selected-text.test.ts src/app/electron/macos-selected-text.ts src/app/electron/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
 ```
 
-The initial `mise exec -- pnpm check:changed 299e43e` attempt processed no files before commit; it is not lint evidence.
+The initial `mise exec -- pnpm check:changed 299e43e` attempt processed no files before commit; it is not lint evidence. The following checks then passed for repair commit `6fe754d` on `fix/selected-text-access`:
+
+```sh
+mise exec -- pnpm check:staged
+mise exec -- pnpm check:changed 299e43e
+git diff 299e43e --check
+```
+
+The commit hook ran the staged check against all 11 touched TypeScript files. This is formatter/linter evidence only, not runtime or packaged-app evidence.
 
 Keywords: Slack, Select text to fix, Accessibility allowed, clipboard fallback, return await, finally, selected-text helper, CGPreflightPostEventAccess, apiDisabled.
