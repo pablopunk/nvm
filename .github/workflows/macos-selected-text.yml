@@ -1,0 +1,27 @@
+name: macOS selected-text helper
+
+on:
+  pull_request:
+    paths:
+      - src/app/resources/macos-selected-text.swift
+      - scripts/build-macos-selected-text-helper.cjs
+      - .github/workflows/macos-selected-text.yml
+  push:
+    branches: [main]
+    paths:
+      - src/app/resources/macos-selected-text.swift
+      - scripts/build-macos-selected-text-helper.cjs
+      - .github/workflows/macos-selected-text.yml
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - name: Compile both supported macOS architectures
+        run: mise exec -- node scripts/build-macos-selected-text-helper.cjs --universal

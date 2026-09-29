@@ -1,4 +1,5 @@
 import { systemPreferences } from 'electron';
+import { selectedTextAccessState } from '../electron/os';
 
 export type OsPermissionState =
   | 'allowed'
@@ -11,7 +12,7 @@ export type MediaPermissionKind = 'microphone' | 'camera' | 'screen';
 export type PermissionReader = {
   platform: NodeJS.Platform;
   mediaStatus: (kind: MediaPermissionKind) => string;
-  accessibilityTrusted: () => boolean;
+  accessibilityState: () => OsPermissionState | Promise<OsPermissionState>;
   requestMediaAccess: (kind: 'microphone' | 'camera') => Promise<boolean>;
   requestAccessibilityAccess: () => boolean;
 };
@@ -26,13 +27,7 @@ export function electronPermissionReader(): PermissionReader {
         return 'unknown';
       }
     },
-    accessibilityTrusted: () => {
-      try {
-        return systemPreferences.isTrustedAccessibilityClient(false);
-      } catch {
-        return false;
-      }
-    },
+    accessibilityState: selectedTextAccessState,
     requestMediaAccess: (kind) => systemPreferences.askForMediaAccess(kind),
     requestAccessibilityAccess: () => {
       try {
@@ -63,9 +58,9 @@ export type OsPermissionRow = {
   canRequest: boolean;
 };
 
-export function readOsPermissions(
+export async function readOsPermissions(
   reader: PermissionReader = electronPermissionReader(),
-): OsPermissionRow[] {
+): Promise<OsPermissionRow[]> {
   const rows: OsPermissionRow[] = [
     {
       key: 'microphone',
@@ -94,7 +89,7 @@ export function readOsPermissions(
         description: 'Paste text and read selected text',
         icon: 'accessibility',
         anchor: 'Accessibility',
-        state: reader.accessibilityTrusted() ? 'allowed' : 'denied',
+        state: await reader.accessibilityState(),
         canRequest: true,
       },
       {
@@ -133,12 +128,14 @@ function permissionSubtitle(row: OsPermissionRow) {
     case 'not-determined':
       return 'Not asked yet — press Enter to allow';
     default:
-      return 'Review in Settings — press Enter to open';
+      return row.key === 'accessibility'
+        ? 'Could not check access — press Enter to open Settings'
+        : 'Review in Settings — press Enter to open';
   }
 }
 
 export async function permissionsView(ctx: any, reader?: PermissionReader) {
-  const rows = readOsPermissions(reader);
+  const rows = await readOsPermissions(reader);
   const known = rows.filter((row) => row.state !== 'unknown');
   const allowed = known.filter((row) => row.state === 'allowed').length;
 
@@ -163,7 +160,7 @@ export async function permissionsView(ctx: any, reader?: PermissionReader) {
         (row.canRequest &&
           row.state === 'not-determined' &&
           row.key !== 'accessibility') ||
-        (row.key === 'accessibility' && row.state !== 'allowed');
+        (row.key === 'accessibility' && row.state === 'denied');
       const primaryAction = !needsPrompt
         ? openSettings
         : ctx.actions.run(`Allow ${row.title}`, async (innerCtx: any) => {

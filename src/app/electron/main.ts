@@ -801,6 +801,11 @@ const selectedText = createSelectedTextReader({
   copySelectionIntoClipboard,
   concealClipboardText: (text) =>
     suppressClipboardHistoryId(clipboardHistoryIdForText(text)),
+  selectionRead: (result) =>
+    logDebug('selected-text.read.result', result, {
+      source: 'host',
+      scope: 'selected-text',
+    }),
 });
 
 function osCacheRoot() {

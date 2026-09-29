@@ -10,7 +10,6 @@ import {
   type BrowserWindow,
   type BrowserWindowConstructorOptions,
   shell,
-  systemPreferences,
 } from 'electron';
 import {
   EXTENSION_WINDOW_CAPABILITIES,
@@ -18,6 +17,7 @@ import {
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
 import { debug as logDebug, warn as logWarn } from './logger';
+import { macosSelectionAccess } from './macos-selected-text';
 import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
@@ -970,53 +970,17 @@ export type AppFocusTarget = {
   pid: number;
 };
 
-function macosSelectedTextHelperPath() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'macos-selected-text')
-    : path.join(app.getAppPath(), 'build', 'native', 'macos-selected-text');
-}
-
-function runMacosSelectedTextHelper(
-  operation: 'copy' | 'read' | 'replace',
-  target: AppFocusTarget,
-  input?: string,
-) {
-  return new Promise<{ exitCode: number; stderr: string; stdout: string }>(
-    (resolve) => {
-      const child = execFile(
-        macosSelectedTextHelperPath(),
-        [operation, String(target.pid)],
-        { timeout: 5000 },
-        (error, stdout, stderr) =>
-          resolve({
-            exitCode:
-              typeof (error as NodeJS.ErrnoException | null)?.code === 'number'
-                ? Number((error as NodeJS.ErrnoException).code)
-                : error
-                  ? 1
-                  : 0,
-            stderr: String(stderr || error?.message || ''),
-            stdout: String(stdout || ''),
-          }),
-      );
-      if (input !== undefined) child.stdin?.end(input);
-    },
-  );
+export function selectedTextAccessState() {
+  return osFunction<[], Promise<'allowed' | 'denied' | 'unknown'>>(
+    { darwin: macosSelectionAccess.permissionState },
+    async () => 'unknown',
+  )();
 }
 
 export function copySelectionIntoClipboard(target: AppFocusTarget) {
   return osFunction<[], Promise<boolean>>(
     {
-      darwin: async () => {
-        const result = await runMacosSelectedTextHelper('copy', target);
-        if (result.exitCode !== 0)
-          logWarn(
-            'selected-text.copy.failed',
-            { exitCode: result.exitCode, error: result.stderr.trim() },
-            { source: 'host', scope: 'selected-text' },
-          );
-        return result.exitCode === 0;
-      },
+      darwin: () => macosSelectionAccess.copy(target),
     },
     async () => false,
   )();
@@ -1028,26 +992,7 @@ export function replaceSelectedText(
 ) {
   return osFunction<[], Promise<boolean>>(
     {
-      darwin: async () => {
-        const result = await runMacosSelectedTextHelper(
-          'replace',
-          target,
-          replacement,
-        );
-        if (result.exitCode !== 0 && result.exitCode !== 3)
-          logWarn(
-            'selected-text.replace.failed',
-            { exitCode: result.exitCode, error: result.stderr.trim() },
-            { source: 'host', scope: 'selected-text' },
-          );
-        else if (result.exitCode === 3)
-          logDebug(
-            'selected-text.replace.notApplied',
-            { pid: target.pid },
-            { source: 'host', scope: 'selected-text' },
-          );
-        return result.exitCode === 0;
-      },
+      darwin: () => macosSelectionAccess.replace(target, replacement),
     },
     async () => false,
   )();
@@ -1120,26 +1065,7 @@ export async function selectedFilePaths() {
 export async function selectedText(target: AppFocusTarget) {
   return osFunction(
     {
-      darwin: async () => {
-        if (!systemPreferences.isTrustedAccessibilityClient(true)) {
-          throw new Error(
-            'Accessibility access is required. Enable Nevermind in System Settings, then restart it.',
-          );
-        }
-        const result = await runMacosSelectedTextHelper('read', target);
-        if (result.exitCode === 2) {
-          throw new Error(
-            'Accessibility access is required. Enable Nevermind in System Settings, then restart it.',
-          );
-        }
-        if (result.exitCode !== 0 && result.exitCode !== 3)
-          logWarn(
-            'selected-text.read.failed',
-            { exitCode: result.exitCode, error: result.stderr.trim() },
-            { source: 'host', scope: 'selected-text' },
-          );
-        return result.exitCode === 0 ? result.stdout || null : null;
-      },
+      darwin: () => macosSelectionAccess.read(target),
     },
     async () => null,
   )();

@@ -11,6 +11,10 @@ interface SelectedTextReaderDependencies<Snapshot, Target> {
   restoreClipboardSnapshot(snapshot: Snapshot): MaybePromise<void>;
   copySelectionIntoClipboard(target: Target): Promise<boolean>;
   concealClipboardText(text: string): void;
+  selectionRead?(result: {
+    method: 'accessibility' | 'clipboard';
+    length: number;
+  }): void;
   delay?(durationMs: number): Promise<void>;
   sentinel?(): string;
 }
@@ -59,12 +63,14 @@ export function createSelectedTextReader<Snapshot, Target>(
       dependencies.sentinel?.() ??
       `__NEVERMIND_SELECTION_${crypto.randomUUID()}__`;
     dependencies.concealClipboardText(sentinel);
-    await dependencies.writeClipboardText(sentinel);
     try {
+      await dependencies.writeClipboardText(sentinel);
       if (!(await dependencies.copySelectionIntoClipboard(target))) {
-        return null;
+        throw new Error(
+          'Could not copy selected text. Select it and try again.',
+        );
       }
-      return waitForClipboardText({
+      return await waitForClipboardText({
         attemptsLeft: CLIPBOARD_POLL_ATTEMPTS,
         concealText: dependencies.concealClipboardText,
         delay,
@@ -79,21 +85,36 @@ export function createSelectedTextReader<Snapshot, Target>(
   async function read() {
     const target = await dependencies.selectionTarget();
     if (!target) {
-      return null;
+      throw new Error(
+        'Could not identify the source app. Select the text and try again.',
+      );
     }
     if (dependencies.paletteIsFocused()) {
-      return null;
+      throw new Error(
+        'Nevermind still has focus. Return to the source app and try again.',
+      );
     }
     const accessibilityText = String(
       (await dependencies.readAccessibilityText(target)) ?? '',
     );
     if (accessibilityText) {
+      dependencies.selectionRead?.({
+        method: 'accessibility',
+        length: accessibilityText.length,
+      });
       return accessibilityText;
     }
     if (dependencies.paletteIsFocused()) {
-      return null;
+      throw new Error(
+        'Nevermind regained focus. Return to the source app and try again.',
+      );
     }
-    return readClipboardSelection(target);
+    const text = await readClipboardSelection(target);
+    dependencies.selectionRead?.({
+      method: 'clipboard',
+      length: text?.length ?? 0,
+    });
+    return text;
   }
 
   return function selectedText() {

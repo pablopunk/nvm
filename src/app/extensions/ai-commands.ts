@@ -123,7 +123,7 @@ async function fixSelectedText(ctx: ExtensionContext) {
     if (!selectedText.trim()) {
       keepFinalIndicatorVisible = true;
       ctx.ui.indicator.update({
-        ...indicator('Select text to fix'),
+        ...indicator('Could not read selected text. Select it and try again'),
         status: 'error',
         durationMs: 4000,
       });

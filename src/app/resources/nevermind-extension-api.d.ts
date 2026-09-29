@@ -1717,8 +1717,14 @@ export type ExtensionContext = {
       ): unknown;
     };
     selection: {
-      text(): Promise<string> | string;
-      /** Replace the editable selection in the frontmost app without using the clipboard; returns false unless the app confirms the change, so callers can fall back to pasting. */
+      /**
+       * Read selected text after the palette releases focus, with a clipboard-preserving Copy fallback.
+       * Returns null when no text can be captured; this does not prove the source app has no selection.
+       * Rejects on denied Accessibility access, lost source-app focus, or native helper failure.
+       * Show the error message to the user instead of reporting these failures as an empty selection.
+       */
+      text(): Promise<string | null> | string | null;
+      /** Replace the editable selection without using the clipboard; returns false for an unconfirmed write so callers can fall back to pasting, and rejects on denied access, lost focus, or native helper failure. */
       replaceText(text: string): Promise<boolean> | boolean;
       files(): Promise<string[]> | string[];
       read(): Promise<unknown> | unknown;

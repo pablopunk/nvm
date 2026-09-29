@@ -11,7 +11,11 @@ private func fail(_ message: String, code: Int32 = 1) -> Never {
 
 private func attribute(_ element: AXUIElement, _ name: CFString) -> AnyObject? {
   var value: AnyObject?
-  guard AXUIElementCopyAttributeValue(element, name, &value) == .success else {
+  let result = AXUIElementCopyAttributeValue(element, name, &value)
+  guard result != .apiDisabled else {
+    fail("Accessibility access is blocked", code: 2)
+  }
+  guard result == .success else {
     return nil
   }
   return value
@@ -23,14 +27,16 @@ private func parameterizedAttribute(
   _ parameter: AnyObject
 ) -> AnyObject? {
   var value: AnyObject?
-  guard
-    AXUIElementCopyParameterizedAttributeValue(
-      element,
-      name,
-      parameter,
-      &value
-    ) == .success
-  else {
+  let result = AXUIElementCopyParameterizedAttributeValue(
+    element,
+    name,
+    parameter,
+    &value
+  )
+  guard result != .apiDisabled else {
+    fail("Accessibility access is blocked", code: 2)
+  }
+  guard result == .success else {
     return nil
   }
   return value
@@ -209,18 +215,27 @@ private func readSelection(pid: pid_t) -> Never {
   )
 
   for attempt in 0..<2 {
-    if let focused = element(
-      attribute(app, kAXFocusedUIElementAttribute as CFString)
-    ), let result = selectedTextFromFocusedHierarchy(focused) {
+    if
+      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+      let focused = element(
+        attribute(app, kAXFocusedUIElementAttribute as CFString)
+      ), let result = selectedTextFromFocusedHierarchy(focused)
+    {
       FileHandle.standardOutput.write(Data(result.utf8))
       exit(0)
     }
     if attempt == 0 { Thread.sleep(forTimeInterval: 0.06) }
   }
+  guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    fail("Selection target is not frontmost", code: 4)
+  }
   exit(noSelectionExitCode)
 }
 
 private func copySelection(pid: pid_t) -> Never {
+  guard CGPreflightPostEventAccess() else {
+    fail("Accessibility access for keyboard events is blocked", code: 2)
+  }
   guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
     fail("Selection target is not frontmost", code: 4)
   }
@@ -268,11 +283,18 @@ private func replaceSelection(pid: pid_t) -> Never {
 guard AXIsProcessTrusted() else {
   fail("Nevermind does not have Accessibility access", code: 2)
 }
+if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "permissions" {
+  guard CGPreflightPostEventAccess() else {
+    fail("Accessibility access for keyboard events is blocked", code: 2)
+  }
+  _ = attribute(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString)
+  exit(0)
+}
 guard
   CommandLine.arguments.count == 3,
   let pid = pid_t(CommandLine.arguments[2])
 else {
-  fail("Usage: macos-selected-text <read|copy|replace> <pid>")
+  fail("Usage: macos-selected-text <read|copy|replace> <pid> | permissions")
 }
 
 switch CommandLine.arguments[1] {
