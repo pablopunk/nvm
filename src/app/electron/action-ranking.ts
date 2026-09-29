@@ -12,6 +12,7 @@ interface RankedAction {
 
 const APP_RESULT_PRIORITY_BOOST = 25;
 const EXACT_SEARCH_SCORE = 1000;
+const EXACT_ALIAS_SEARCH_SCORE = 1050;
 const MAX_RECENCY_BOOST = 20;
 const MILLISECONDS_PER_HOUR = 36e5;
 
@@ -37,15 +38,15 @@ export function actionTextSearchScore(
   additionalAliases: unknown[] = [],
 ) {
   let best = prioritizedTitleSearchScore(action.title, query);
+  if (best >= EXACT_SEARCH_SCORE) return best;
   best = Math.max(best, scoreNormalized(action.subtitle, query));
   for (const alias of [
     ...(Array.isArray(action.aliases) ? action.aliases : []),
     ...additionalAliases,
   ]) {
-    best = Math.max(best, prioritizedTitleSearchScore(alias, query));
-    if (best >= EXACT_SEARCH_SCORE) {
-      break;
-    }
+    const aliasScore = prioritizedTitleSearchScore(alias, query);
+    if (aliasScore >= EXACT_SEARCH_SCORE) return EXACT_ALIAS_SEARCH_SCORE;
+    best = Math.max(best, aliasScore);
   }
   return best;
 }

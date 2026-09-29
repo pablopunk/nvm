@@ -113,6 +113,23 @@ test('leading query words in a command outrank generated search fallbacks', () =
   assert.ok(commandScore > webSearchScore);
 });
 
+test('exact sign-in aliases outrank title-only matches', () => {
+  const signInAction = {
+    title: 'Log in to Nevermind',
+    subtitle: 'Connect this device to your Nevermind account',
+    aliases: ['login', 'sign in', 'nevermind', 'account', 'connect'],
+  };
+
+  for (const query of ['login', 'sign in', 'account']) {
+    const aliasScore = actionTextSearchScore(signInAction, query);
+    const titleOnlyScore = actionTextSearchScore({ title: query }, query);
+
+    assert.equal(aliasScore, 1050, query);
+    assert.equal(titleOnlyScore, 1000, query);
+    assert.ok(aliasScore > titleOnlyScore, query);
+  }
+});
+
 test('only marked application launch results receive the app boost', () => {
   assert.equal(
     priorityBoost({ isAppResult: true, score: 50, lastUsed: 0 }),
