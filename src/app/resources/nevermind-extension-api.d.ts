@@ -500,6 +500,8 @@ export type ExtensionItemAppearance = {
   foreground?: ForegroundColor;
   /** Subtle accent-tinted row background for a result that should stand out without replacing selection state. */
   background?: 'accent';
+  /** Elevate one consequential action as the primary result on a list, root, or grid surface. Keep other actions at normal prominence. The host owns its focus, selection, and depth; do not use this for decoration. */
+  prominence?: 'primary';
 };
 
 /** Item displayed in root/search providers, list views, and grid views. */

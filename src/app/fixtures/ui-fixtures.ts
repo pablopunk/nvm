@@ -394,7 +394,7 @@ function renderingPolishView(ctx: ExtensionContext) {
       ctx.ui.item({
         id: 'accent-background',
         title: 'Accent Background',
-        subtitle: 'Highlights a primary result without replacing selection',
+        subtitle: 'Highlights a result without replacing selection',
         icon: 'sparkles',
         appearance: { foreground: 'yellow', background: 'accent' },
         detail: {
@@ -402,6 +402,17 @@ function renderingPolishView(ctx: ExtensionContext) {
           markdown:
             '`appearance.background: "accent"` adds a subtle semantic highlight while the selected state remains visible.',
         },
+      }),
+      ctx.ui.item({
+        id: 'primary-action',
+        title: 'Copy Fixture Label',
+        subtitle: 'Primary action with host-owned elevation and selection',
+        icon: 'copy',
+        appearance: { prominence: 'primary' },
+        primaryAction: ctx.actions.copyText(
+          'Primary action',
+          'Copy Fixture Label',
+        ),
       }),
       ctx.ui.item({
         id: 'warning',
@@ -1247,9 +1258,10 @@ async function gridView(ctx: ExtensionContext) {
         items: [
           {
             id: 'glyph',
-            title: 'Sparkles',
-            subtitle: 'Native glyph tile',
+            title: 'Copy Sparkles',
+            subtitle: 'Primary native glyph tile',
             glyph: '✨',
+            appearance: { prominence: 'primary' },
             primaryAction: ctx.actions.copyText('✨', 'Copy Sparkles'),
             actions: [ctx.actions.copyText('✨', 'Copy Sparkles')],
           },

@@ -1127,7 +1127,7 @@ function FormExtensionView({
             icon={<Check size={18} />}
             title="Apply"
             shortcut="Command+Enter"
-            className="formPrimaryRow"
+            appearance={{ prominence: 'primary' }}
             onSelect={() => formController.commit(formController.query)}
           />
         }

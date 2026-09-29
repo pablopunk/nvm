@@ -3746,9 +3746,11 @@ function refreshExtensionRootActions(extension, cacheKey, traceId?: string) {
 function normalizeItemAppearance(appearance) {
   const foreground = appearance?.foreground;
   const background = appearance?.background;
+  const prominence = appearance?.prominence;
   const normalized = {
     ...(ITEM_FOREGROUND_COLORS.has(foreground) ? { foreground } : {}),
     ...(background === 'accent' ? { background } : {}),
+    ...(prominence === 'primary' ? { prominence } : {}),
   };
   return Object.keys(normalized).length ? normalized : undefined;
 }

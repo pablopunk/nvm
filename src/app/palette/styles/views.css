@@ -139,6 +139,11 @@
   background: var(--accent-soft);
 }
 
+.extensionTile[data-prominence="primary"] {
+  border-color: var(--accent-muted);
+  background: var(--accent-soft);
+}
+
 .extensionTile[data-selected="true"] {
   border-color: var(--edge-strong);
   background: var(--surface-selected);
@@ -148,6 +153,15 @@
 
 .extensionTile[data-background="accent"][data-selected="true"] {
   background: var(--accent-muted);
+}
+
+.extensionTile[data-prominence="primary"][data-selected="true"] {
+  background: var(--accent-muted);
+}
+
+.extensionTile[data-prominence="primary"] .tileIcon {
+  color: var(--accent);
+  box-shadow: var(--shadow-interactive);
 }
 
 .extensionTile[data-selected="true"] img,
@@ -1023,34 +1037,6 @@
 
 .formSaveRow {
   margin-top: 8px;
-}
-
-.formPrimaryRow.result,
-.formPrimaryRow.result[data-selected="true"],
-.formPrimaryRow.result:not([data-disabled="true"]):hover {
-  background: var(--accent-fill);
-}
-
-.formPrimaryRow.result[data-selected="true"],
-.formPrimaryRow.result:hover {
-  box-shadow: inset 0 0 0 2px var(--accent-contrast);
-}
-
-.formPrimaryRow .resultText strong,
-.formPrimaryRow .resultIcon,
-.formPrimaryRow .enterHint {
-  color: var(--accent-contrast);
-}
-
-.formPrimaryRow .resultIcon {
-  background: transparent;
-  box-shadow: none;
-}
-
-.formPrimaryRow .shortcutHint {
-  color: var(--accent-contrast);
-  border-color: var(--accent-emphasis);
-  background: var(--accent-soft);
 }
 
 .formView .formDescription {

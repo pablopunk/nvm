@@ -492,6 +492,7 @@ export type CommandItemForeground = ForegroundColor;
 export interface CommandItemAppearance {
   foreground?: CommandItemForeground;
   background?: 'accent';
+  prominence?: 'primary';
 }
 
 export type CommandItemPatch = Partial<Omit<CommandItem, 'id'>> & {

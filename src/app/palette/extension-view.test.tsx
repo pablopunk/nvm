@@ -222,7 +222,10 @@ test('renders form fields as selectable palette rows', () => {
   assert.match(html, /<strong>Roles<\/strong>/);
   assert.match(html, /Your name/);
   assert.match(html, /title="Your name"/);
-  assert.match(html, /class="result formPrimaryRow formSaveRow"/);
+  assert.match(
+    html,
+    /class="result formSaveRow"[^>]*data-prominence="primary"/,
+  );
   assert.match(html, /<strong>Save Account<\/strong>/);
   assert.doesNotMatch(html, /Save changes/);
   assert.doesNotMatch(html, /<input|<select|<textarea/);
@@ -262,11 +265,35 @@ test('renders a textarea form field with Apply as a palette row', () => {
 
   assert.match(html, /class="extensionView editorView formFieldEditor/);
   assert.match(html, /<textarea[^>]*>Nevermind<\/textarea>/);
-  assert.match(html, /class="result formPrimaryRow"/);
+  assert.match(html, /class="result"[^>]*data-prominence="primary"/);
   assert.match(html, /cmdk-item="" role="option"/);
   assert.match(html, /<strong>Apply<\/strong>/);
   assert.match(html, /⌘↵/);
   assert.doesNotMatch(html, /formSubmitButton|<button/);
+});
+
+test('renders primary extension items through the shared row and tile appearance', () => {
+  const item = {
+    id: 'continue',
+    title: 'Continue',
+    appearance: { prominence: 'primary' as const },
+  };
+  const list = renderExtensionView({
+    type: 'list',
+    title: 'Results',
+    items: [item],
+  });
+  const grid = renderExtensionView({
+    type: 'grid',
+    title: 'Tiles',
+    items: [item],
+  });
+
+  assert.match(
+    list,
+    /class="result[^"]*extensionListItem"[^>]*data-prominence="primary"/,
+  );
+  assert.match(grid, /class="extensionTile"[^>]*data-prominence="primary"/);
 });
 
 test('renders unsupported-client update UI with structured updater action', () => {

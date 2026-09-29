@@ -359,6 +359,11 @@ kbd {
   background: var(--accent-soft);
 }
 
+.result[data-prominence="primary"] {
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-interactive);
+}
+
 .result[data-selected="true"],
 .result:not([data-disabled="true"]):hover {
   background: var(--surface-selected);
@@ -367,6 +372,14 @@ kbd {
 
 .result[data-background="accent"][data-selected="true"] {
   background: var(--accent-muted);
+}
+
+.result[data-prominence="primary"][data-selected="true"],
+.result[data-prominence="primary"]:not([data-disabled="true"]):hover {
+  background: var(--accent-muted);
+  box-shadow:
+    var(--shadow-interactive),
+    inset 0 -1px 0 var(--accent-emphasis);
 }
 
 .result[data-disabled="true"] {
@@ -384,6 +397,12 @@ kbd {
   background: var(--surface-interactive);
   box-shadow: var(--shadow-interactive);
   overflow: hidden;
+}
+
+.result[data-prominence="primary"] .resultIcon {
+  color: var(--accent-contrast);
+  background: var(--accent-fill);
+  box-shadow: var(--shadow-interactive);
 }
 
 .placeholderResultIcon {

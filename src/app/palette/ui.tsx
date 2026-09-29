@@ -36,6 +36,7 @@ export interface KeyHintsProps {
 export interface ItemAppearance {
   foreground?: string;
   background?: 'accent';
+  prominence?: 'primary';
 }
 export interface CommandRowProps {
   value: string;
@@ -320,6 +321,7 @@ export function CommandRow({
       title={tooltip}
       data-foreground={appearance?.foreground}
       data-background={appearance?.background}
+      data-prominence={appearance?.prominence}
       disabled={disabled}
       data-disabled={disabled ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
@@ -412,6 +414,7 @@ export function CommandTile({
       data-extension-item-id={value}
       data-foreground={appearance?.foreground}
       data-background={appearance?.background}
+      data-prominence={appearance?.prominence}
       draggable={draggable}
       onDragStart={onDragStart}
       onSelect={onSelect}
@@ -692,7 +695,8 @@ export function FormView({
           icon={<Check size={18} />}
           title={submitTitle}
           shortcut="Command+Enter"
-          className="formPrimaryRow formSaveRow"
+          className="formSaveRow"
+          appearance={{ prominence: 'primary' }}
           onSelect={() => onSubmit?.()}
         />
       ) : null}
