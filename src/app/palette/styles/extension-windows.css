@@ -135,6 +135,14 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.extensionWindowShell .formFieldEditor.editorView {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.extensionWindowShell .formFieldEditor.editorView:not(:has(.editorHeader)) {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .extensionWindowShell .editorPane,
 .extensionWindowShell .editorPreviewPane {
   border: 0;

@@ -121,6 +121,7 @@ export interface FormViewProps {
   errors?: Record<string, string>;
 }
 export interface EditorViewProps {
+  className?: string;
   value: string;
   title?: string;
   subtitle?: string;
@@ -691,7 +692,7 @@ export function FormView({
           icon={<Check size={18} />}
           title={submitTitle}
           shortcut="Command+Enter"
-          className="formSaveRow"
+          className="formPrimaryRow formSaveRow"
           onSelect={() => onSubmit?.()}
         />
       ) : null}
@@ -703,6 +704,7 @@ export function FormView({
 }
 
 export function EditorView({
+  className,
   value,
   title,
   subtitle,
@@ -721,13 +723,23 @@ export function EditorView({
   const showsPreview = format === 'markdown' && Boolean(preview);
   return (
     <div
-      className={`extensionView editorView ${showsPreview ? 'editorViewSplit' : ''} ${format === 'markdown' ? 'editorViewMarkdown' : ''}`}
+      className={[
+        'extensionView',
+        'editorView',
+        className,
+        showsPreview && 'editorViewSplit',
+        format === 'markdown' && 'editorViewMarkdown',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       {title || subtitle ? (
         <header className="editorHeader">
           {title ? <span className="editorHeaderTitle">{title}</span> : null}
           {subtitle ? (
-            <span className="editorHeaderSubtitle">{subtitle}</span>
+            <span className="editorHeaderSubtitle" title={subtitle}>
+              {subtitle}
+            </span>
           ) : null}
         </header>
       ) : null}

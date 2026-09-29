@@ -1,5 +1,6 @@
 // biome-ignore-all lint: This established renderer retains existing declarative view conventions.
 import {
+  Check,
   ChevronDown,
   CornerDownLeft,
   CreditCard,
@@ -21,6 +22,7 @@ import type { AiChatModel } from '../shared/ai-chat-model';
 import { iconForItem } from './command-icons';
 import { RootCommandList } from './command-list';
 import { titleFromFirstContentLine } from './editor-title';
+import { formApplyRowId } from './form-fields';
 import {
   actionsFromPanel,
   type CommandAction,
@@ -1113,14 +1115,22 @@ function FormExtensionView({
   if (formController?.editor && formController.field)
     return (
       <EditorView
-        title={formController.field.label || formController.field.id}
+        className="formFieldEditor"
         subtitle={formController.field.description}
         value={formController.query}
         placeholder={formController.field.placeholder}
         autoFocus
-        submitTitle="Apply"
         onChange={formController.setQuery}
-        onSubmit={() => formController.commit(formController.query)}
+        actions={
+          <CommandRow
+            value={formApplyRowId(formController.field.id)}
+            icon={<Check size={18} />}
+            title="Apply"
+            shortcut="Command+Enter"
+            className="formPrimaryRow"
+            onSelect={() => formController.commit(formController.query)}
+          />
+        }
       />
     );
   return (

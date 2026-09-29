@@ -43,7 +43,7 @@ export function usePaletteForm(
     const id = editingId;
     setEditingId(null);
     setQuery('');
-    if (id) select(formRowId(id));
+    if (id) requestAnimationFrame(() => select(formRowId(id)));
   }
 
   function save() {

@@ -6,6 +6,10 @@ export function formRowId(id: string) {
 
 export const FORM_SAVE_ROW_ID = 'form:save';
 
+export function formApplyRowId(id: string) {
+  return `form:apply:${id}`;
+}
+
 export function formFieldValue(
   field: FormField,
   values: Record<string, FormValue>,

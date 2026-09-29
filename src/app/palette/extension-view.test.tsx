@@ -12,7 +12,7 @@ import {
   NevermindLimitGate,
 } from './extension-view';
 import { feedbackView } from './feedback';
-import type { CommandAction, CommandView } from './model';
+import type { CommandAction, CommandFormField, CommandView } from './model';
 import { MarkdownContent } from './ui';
 import {
   nextNavigationState,
@@ -22,6 +22,7 @@ import {
 function renderExtensionView(
   view: CommandView,
   aiChatOverrides: Partial<ExtensionViewRendererProps['aiChat']> = {},
+  overrides: Partial<ExtensionViewRendererProps> = {},
 ) {
   const props: ExtensionViewRendererProps = {
     view,
@@ -58,6 +59,7 @@ function renderExtensionView(
     abortAiChat: () => {},
     dragPathForItem: (item) => item.path || item.filePath || null,
     startItemDrag: () => {},
+    ...overrides,
   };
   return renderToStaticMarkup(
     <Command>
@@ -220,10 +222,51 @@ test('renders form fields as selectable palette rows', () => {
   assert.match(html, /<strong>Roles<\/strong>/);
   assert.match(html, /Your name/);
   assert.match(html, /title="Your name"/);
-  assert.match(html, /class="result formSaveRow"/);
+  assert.match(html, /class="result formPrimaryRow formSaveRow"/);
   assert.match(html, /<strong>Save Account<\/strong>/);
   assert.doesNotMatch(html, /Save changes/);
   assert.doesNotMatch(html, /<input|<select|<textarea/);
+});
+
+test('renders a textarea form field with Apply as a palette row', () => {
+  const field: CommandFormField = {
+    id: 'dictionary',
+    label: 'Custom dictionary',
+    type: 'textarea',
+    description: 'Add one term per line.',
+  };
+  const html = renderExtensionView(
+    { type: 'form', title: 'Dictation Settings', fields: [field] },
+    {},
+    {
+      formController: {
+        active: true,
+        editing: true,
+        editor: true,
+        choices: false,
+        field,
+        query: 'Nevermind',
+        setQuery: () => {},
+        errors: {},
+        rows: [],
+        open: async () => {},
+        save: () => {},
+        closeEditor: () => {},
+        commit: () => {},
+        placeholder: 'One term per line',
+        concealed: false,
+        selectionKey: 'dictionary:Nevermind',
+      },
+    },
+  );
+
+  assert.match(html, /class="extensionView editorView formFieldEditor/);
+  assert.match(html, /<textarea[^>]*>Nevermind<\/textarea>/);
+  assert.match(html, /class="result formPrimaryRow"/);
+  assert.match(html, /cmdk-item="" role="option"/);
+  assert.match(html, /<strong>Apply<\/strong>/);
+  assert.match(html, /⌘↵/);
+  assert.doesNotMatch(html, /formSubmitButton|<button/);
 });
 
 test('renders unsupported-client update UI with structured updater action', () => {

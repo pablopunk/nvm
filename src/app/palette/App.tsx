@@ -69,6 +69,7 @@ import {
 } from './filtering';
 import {
   FORM_SAVE_ROW_ID,
+  formApplyRowId,
   formFieldMatches,
   formFieldValue,
   formRowId,
@@ -2274,6 +2275,8 @@ export function App() {
       selectValue(getExtensionItemActionRows()[0]?.value ?? '');
     else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '');
     else if (previewFor) selectValue('preview');
+    else if (paletteForm.editor && paletteForm.field)
+      selectValue(formApplyRowId(paletteForm.field.id));
     else if (paletteForm.choices)
       selectValue(
         paletteForm.rows.some((row) => row.value === selectedValueRef.current)
