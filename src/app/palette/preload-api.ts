@@ -8,6 +8,7 @@ import type {
 import type { AiChatImageInput } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
 import type { ShortcutPlatform } from '../shared/shortcut-utils';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 
 export type RootAction = {
   id: string;
@@ -279,12 +280,18 @@ export type NevermindApi = {
     active: { environment: string; baseUrl: string };
     backend: { environment: string; version: string } | null;
   }>;
+  getNevermindDeviceSignInStatus: () => Promise<NevermindDeviceSignInStatus | null>;
   getGhStatus: () => Promise<{ installed: boolean; authed: boolean }>;
   signInToNevermind: () => Promise<{
     ok: boolean;
     email?: string;
     error?: string;
   }>;
+  retryNevermindDeviceSignInBrowser: () => Promise<boolean>;
+  cancelNevermindDeviceSignIn: () => Promise<boolean>;
+  onNevermindDeviceSignInChanged: (
+    callback: (status: NevermindDeviceSignInStatus | null) => void,
+  ) => () => void;
   onNevermindAuthChanged: (
     callback: (status: { authed: boolean; email?: string }) => void,
   ) => () => void;

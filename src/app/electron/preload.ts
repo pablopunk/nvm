@@ -185,7 +185,20 @@ const api: NevermindApi = {
   },
   getNevermindAuthStatus: () => invokeMeasured('nevermind:auth-status'),
   getNevermindDebugStatus: () => invokeMeasured('nevermind:debug-status'),
+  getNevermindDeviceSignInStatus: () =>
+    invokeMeasured('nevermind:device-sign-in-status'),
+  retryNevermindDeviceSignInBrowser: () =>
+    invokeMeasured('nevermind:device-sign-in-retry-browser'),
+  cancelNevermindDeviceSignIn: () =>
+    invokeMeasured('nevermind:device-sign-in-cancel'),
   signInToNevermind: () => invokeMeasured('nevermind:sign-in'),
+  onNevermindDeviceSignInChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, status: unknown) =>
+      callback(status as Parameters<typeof callback>[0]);
+    ipcRenderer.on('nevermind:device-sign-in-changed', listener);
+    return () =>
+      ipcRenderer.removeListener('nevermind:device-sign-in-changed', listener);
+  },
   onNevermindAuthChanged: (callback) => {
     const listener = (
       _event: IpcRendererEvent,

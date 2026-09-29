@@ -3,6 +3,7 @@ import {
   type IpcMainLike,
 } from './ipc-registration';
 import type { PaletteHotkeyStatus } from '../palette/preload-api';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 
 export interface AppIpcHandlersDeps {
   ipcMain: IpcMainLike & {
@@ -73,10 +74,19 @@ export interface AppIpcHandlersDeps {
   warmNevermindCompatibilityCache: (baseUrl: string) => unknown;
   logInfo: (message: string, data?: unknown, context?: unknown) => unknown;
   userDataPath: () => string;
-  signInToNevermind: () => Promise<
+  signInToNevermind: (
+    onStatusChange?: (status: NevermindDeviceSignInStatus | null) => void,
+  ) => Promise<
     | { ok: true; auth: { baseUrl: string; email?: string } }
     | { ok: false; error?: string }
   >;
+  getNevermindDeviceSignInState: () => NevermindDeviceSignInStatus | null;
+  sendNevermindDeviceSignInStatus: (
+    sender: unknown,
+    status: NevermindDeviceSignInStatus | null,
+  ) => void;
+  retryNevermindDeviceSignInBrowser: () => Promise<boolean>;
+  cancelNevermindDeviceSignIn: () => boolean;
   invalidateExtensionRootItems: () => unknown;
   broadcastAuthChanged: (status: {
     authed: boolean;
@@ -263,8 +273,29 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('nevermind:debug-status', () =>
     deps.getNevermindDebugStatus(),
   );
-  ipcHandleMeasured('nevermind:sign-in', async () => {
-    const result = await deps.signInToNevermind();
+  ipcHandleMeasured('nevermind:device-sign-in-status', () =>
+    deps.getNevermindDeviceSignInState(),
+  );
+  ipcHandleMeasured('nevermind:device-sign-in-retry-browser', async (event) => {
+    const opened = await deps.retryNevermindDeviceSignInBrowser();
+    deps.sendNevermindDeviceSignInStatus(
+      event.sender,
+      deps.getNevermindDeviceSignInState(),
+    );
+    return opened;
+  });
+  ipcHandleMeasured('nevermind:device-sign-in-cancel', (event) => {
+    const cancelled = deps.cancelNevermindDeviceSignIn();
+    deps.sendNevermindDeviceSignInStatus(
+      event.sender,
+      deps.getNevermindDeviceSignInState(),
+    );
+    return cancelled;
+  });
+  ipcHandleMeasured('nevermind:sign-in', async (event) => {
+    const result = await deps.signInToNevermind((status) =>
+      deps.sendNevermindDeviceSignInStatus(event.sender, status),
+    );
     if (result.ok) {
       deps.setActiveNevermindBaseUrl(result.auth.baseUrl);
       deps.warmNevermindCompatibilityCache(result.auth.baseUrl);
@@ -272,7 +303,16 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       deps.broadcastAuthChanged({ authed: true, email: result.auth.email });
       return { ok: true, email: result.auth.email };
     }
-    return { ok: false, error: 'Unable to sign in' };
+    const status = deps.getNevermindDeviceSignInState();
+    const error =
+      status?.state === 'cancelled'
+        ? 'Sign-in cancelled'
+        : status?.state === 'expired'
+          ? 'Sign-in code expired'
+          : status?.state === 'failed'
+            ? status.message
+            : 'Unable to sign in';
+    return { ok: false, error };
   });
   ipcHandleMeasured('apps:icon', (_event, appPath) =>
     deps.appIconCache.get(appPath),

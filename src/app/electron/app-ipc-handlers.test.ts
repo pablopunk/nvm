@@ -67,6 +67,10 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
       active: { environment: 'production', baseUrl: 'https://api.nvm.fyi' },
       backend: { environment: 'production', version: 'dev' },
     }),
+    getNevermindDeviceSignInState: () => null,
+    sendNevermindDeviceSignInStatus: () => {},
+    retryNevermindDeviceSignInBrowser: async () => false,
+    cancelNevermindDeviceSignIn: () => false,
     setActiveNevermindBaseUrl: (baseUrl) => calls.push(`base:${baseUrl || ''}`),
     warmNevermindCompatibilityCache: (baseUrl) => calls.push(`warm:${baseUrl}`),
     logInfo: (message) => calls.push(`info:${message}`),
@@ -118,6 +122,9 @@ test('registerAppIpcHandlers registers core invoke handlers and drag listener', 
   assert.equal(handles.has('view:refresh'), true);
   assert.equal(handles.has('nevermind:auth-status'), true);
   assert.equal(handles.has('nevermind:debug-status'), true);
+  assert.equal(handles.has('nevermind:device-sign-in-status'), true);
+  assert.equal(handles.has('nevermind:device-sign-in-retry-browser'), true);
+  assert.equal(handles.has('nevermind:device-sign-in-cancel'), true);
   assert.equal(handles.has('camera:request-access'), true);
   assert.equal(handles.has('indicator:show'), true);
   assert.equal(handles.has('logs:write'), true);
@@ -355,6 +362,49 @@ test('registerAppIpcHandlers exposes backend debug status', async () => {
   const { handles } = createDeps({ getNevermindDebugStatus: () => status });
 
   assert.deepEqual(await handles.get('nevermind:debug-status')?.({}), status);
+});
+
+test('registerAppIpcHandlers exposes device sign-in recovery actions', async () => {
+  const status = {
+    state: 'pending' as const,
+    verificationUrl: 'https://www.nvm.fyi/auth/device?code=one-time-code',
+    code: 'one-time-code',
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    browserOpenFailed: true,
+  };
+  const statusSends: string[] = [];
+  const { handles } = createDeps({
+    getNevermindDeviceSignInState: () => status,
+    sendNevermindDeviceSignInStatus: (sender, nextStatus) =>
+      statusSends.push(
+        `status:${String(sender)}:${nextStatus?.state || 'none'}`,
+      ),
+    retryNevermindDeviceSignInBrowser: async () => true,
+    cancelNevermindDeviceSignIn: () => true,
+  });
+
+  assert.deepEqual(
+    await handles.get('nevermind:device-sign-in-status')?.({
+      sender: 'window',
+    }),
+    status,
+  );
+  assert.equal(
+    await handles.get('nevermind:device-sign-in-retry-browser')?.({
+      sender: 'window',
+    }),
+    true,
+  );
+  assert.equal(
+    await handles.get('nevermind:device-sign-in-cancel')?.({
+      sender: 'window',
+    }),
+    true,
+  );
+  assert.deepEqual(statusSends, [
+    'status:window:pending',
+    'status:window:pending',
+  ]);
 });
 
 test('registerAppIpcHandlers handles auth status and sign in side effects', async () => {

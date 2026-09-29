@@ -44,7 +44,10 @@ function renderExtensionView(
       ...aiChatOverrides,
     },
     nevermindAuthed: null,
+    deviceSignInStatus: null,
     onSignInToNevermind: () => {},
+    onRetryDeviceSignInBrowser: async () => false,
+    onCancelDeviceSignIn: async () => false,
     formValues: {},
     setFormValues: () => {},
     filterItems: (items) => items || [],
@@ -67,6 +70,76 @@ function renderExtensionView(
     </Command>,
   );
 }
+
+test('shows manual URL and code recovery when automatic browser launch fails', () => {
+  const code = 'one-time-device-code';
+  const verificationUrl = `https://www.nvm.fyi/auth/device?code=${code}`;
+  const html = renderExtensionView(
+    { type: 'chat', title: 'Nevermind AI', aiChat: true, messages: [] },
+    {},
+    {
+      nevermindAuthed: false,
+      deviceSignInStatus: {
+        state: 'pending',
+        verificationUrl,
+        code,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        browserOpenFailed: true,
+      },
+    },
+  );
+
+  assert.match(html, /Your browser could not be opened/);
+  assert.ok(html.includes(verificationUrl));
+  assert.ok(html.includes(code));
+  assert.match(html, /One-time user code/);
+  assert.match(html, /Copy URL/);
+  assert.match(html, /Copy code/);
+  assert.match(html, /Retry opening browser/);
+  assert.match(html, /Cancel sign-in/);
+});
+
+test('renders approved, expired, and cancelled device sign-in states clearly', () => {
+  const view = {
+    type: 'chat' as const,
+    title: 'Nevermind AI',
+    aiChat: true,
+    messages: [],
+  };
+  const base = {
+    nevermindAuthed: false,
+    deviceSignInStatus: null,
+  };
+  const approved = renderExtensionView(
+    view,
+    {},
+    {
+      ...base,
+      deviceSignInStatus: { state: 'approved', email: 'pablo@example.com' },
+    },
+  );
+  const expired = renderExtensionView(
+    view,
+    {},
+    {
+      ...base,
+      deviceSignInStatus: { state: 'expired' },
+    },
+  );
+  const cancelled = renderExtensionView(
+    view,
+    {},
+    {
+      ...base,
+      deviceSignInStatus: { state: 'cancelled' },
+    },
+  );
+
+  assert.match(approved, /Sign-in approved/);
+  assert.match(approved, /pablo@example\.com/);
+  assert.match(expired, /one-time sign-in code expired/i);
+  assert.match(cancelled, /Sign-in cancelled/);
+});
 
 test('renders sent and pending AI chat image attachments', () => {
   const html = renderExtensionView(

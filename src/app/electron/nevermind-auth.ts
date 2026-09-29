@@ -13,6 +13,7 @@ import { nevermindDesktopHeaders } from './nevermind-api';
 import { checkNevermindCompatibility } from './nevermind-compatibility';
 import { writePrivateFile } from './private-file';
 import { openExternalUrl } from './url-utils';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 
 const FILENAME = 'nevermind-auth.json';
 const STORE_FILENAME = 'nevermind-auth-by-origin.json';
@@ -145,7 +146,100 @@ function legacyAuthPath() {
 let cached: NevermindAuthSnapshot = null;
 let loadPromise: Promise<NevermindAuthSnapshot> | null = null;
 let activeSignIn: Promise<SignInResult> | null = null;
-let activeSignInVerificationUrl: string | null = null;
+let activeSignInAbortController: AbortController | null = null;
+let deviceSignInStatus: NevermindDeviceSignInStatus | null = null;
+let browserOpenAttempt = 0;
+const deviceSignInListeners = new Set<
+  (status: NevermindDeviceSignInStatus | null) => void
+>();
+
+function publishDeviceSignInStatus(status: NevermindDeviceSignInStatus | null) {
+  deviceSignInStatus = status ? { ...status } : null;
+  for (const listener of deviceSignInListeners) {
+    try {
+      listener(deviceSignInStatus ? { ...deviceSignInStatus } : null);
+    } catch {
+      logger.warn('nevermind.device-sign-in.listener.failed');
+    }
+  }
+}
+
+export function getNevermindDeviceSignInState() {
+  return deviceSignInStatus ? { ...deviceSignInStatus } : null;
+}
+
+export function onNevermindDeviceSignInChanged(
+  listener: (status: NevermindDeviceSignInStatus | null) => void,
+) {
+  deviceSignInListeners.add(listener);
+  return () => {
+    deviceSignInListeners.delete(listener);
+  };
+}
+
+async function openDeviceSignInBrowser(
+  controller: AbortController,
+  verificationUrl: string,
+) {
+  const attempt = ++browserOpenAttempt;
+  const opened = await openExternalUrl(verificationUrl);
+  const current = deviceSignInStatus;
+  if (
+    activeSignInAbortController === controller &&
+    browserOpenAttempt === attempt &&
+    current?.state === 'pending' &&
+    current.browserOpenFailed !== !opened
+  ) {
+    publishDeviceSignInStatus({
+      ...current,
+      browserOpenFailed: !opened,
+    });
+  }
+  return opened;
+}
+
+export async function retryNevermindDeviceSignInBrowser() {
+  const controller = activeSignInAbortController;
+  const current = deviceSignInStatus;
+  if (!controller || current?.state !== 'pending') return false;
+  return openDeviceSignInBrowser(controller, current.verificationUrl);
+}
+
+export function cancelNevermindDeviceSignIn() {
+  if (
+    !activeSignInAbortController ||
+    !['starting', 'pending'].includes(deviceSignInStatus?.state || '')
+  )
+    return false;
+  publishDeviceSignInStatus({ state: 'cancelled' });
+  activeSignInAbortController.abort();
+  return true;
+}
+
+function cancelledSignInResult(controller: AbortController): SignInResult {
+  if (
+    activeSignInAbortController === controller &&
+    deviceSignInStatus?.state !== 'cancelled'
+  )
+    publishDeviceSignInStatus({ state: 'cancelled' });
+  return { ok: false, error: 'Sign-in cancelled' };
+}
+
+function waitForSignInInterval(intervalMs: number, signal: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(finish, intervalMs);
+    function finish() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    }
+    signal.addEventListener('abort', finish, { once: true });
+  });
+}
 
 function decryptToken(data: StoredAuth): string | null {
   if (data.encryptedToken && safeStorage.isEncryptionAvailable()) {
@@ -315,6 +409,7 @@ export async function clearNevermindAuth() {
   await writePrivateFile(currentAuthPath(), JSON.stringify(store, null, 2));
   cached = null;
   loadPromise = Promise.resolve(null);
+  publishDeviceSignInStatus(null);
 }
 
 export function setNevermindAuthFilePathForTests(filePath: string | null) {
@@ -322,10 +417,12 @@ export function setNevermindAuthFilePathForTests(filePath: string | null) {
 }
 
 export function clearNevermindAuthCacheForTests() {
+  activeSignInAbortController?.abort();
   cached = null;
   loadPromise = null;
   activeSignIn = null;
-  activeSignInVerificationUrl = null;
+  activeSignInAbortController = null;
+  publishDeviceSignInStatus(null);
   activeBaseUrl = normalizedBaseUrl(DEFAULT_BASE_URL);
 }
 
@@ -374,11 +471,12 @@ function defaultDeviceLabel() {
   return `${os.hostname()} (${process.platform})`;
 }
 
-async function postJson(url: string, body: unknown) {
+async function postJson(url: string, body: unknown, signal?: AbortSignal) {
   return fetch(url, {
     method: 'POST',
     headers: nevermindDesktopHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
+    signal,
   });
 }
 
@@ -439,7 +537,7 @@ export async function consumeDeviceCode({
       }
       return { ok: false, error: 'timed out waiting for approval' };
     } catch (err) {
-      logger.error('consumeDeviceCode failed', err as Error);
+      logger.error('consumeDeviceCode failed');
       return { ok: false, error: (err as Error).message };
     } finally {
       activeSignIn = null;
@@ -458,20 +556,36 @@ export async function signInToNevermind({
   label?: string;
 } = {}): Promise<SignInResult> {
   if (activeSignIn) {
-    if (activeSignInVerificationUrl)
-      await openExternalUrl(activeSignInVerificationUrl);
-    return activeSignIn;
+    if (deviceSignInStatus?.state === 'pending')
+      void retryNevermindDeviceSignInBrowser();
+    if (
+      deviceSignInStatus?.state === 'starting' ||
+      deviceSignInStatus?.state === 'pending'
+    )
+      return activeSignIn;
+    await activeSignIn;
   }
   const trimmedBase = normalizedBaseUrl(baseUrl);
-  activeSignIn = (async (): Promise<SignInResult> => {
+  const controller = new AbortController();
+  activeSignInAbortController = controller;
+  publishDeviceSignInStatus({ state: 'starting' });
+  const operation = (async (): Promise<SignInResult> => {
     try {
+      if (controller.signal.aborted) return cancelledSignInResult(controller);
       await checkNevermindCompatibility(trimmedBase);
+      if (controller.signal.aborted) return cancelledSignInResult(controller);
       const initRes = await postJson(
         `${trimmedBase}/api/auth/device/initiate`,
         { label },
+        controller.signal,
       );
-      if (!initRes.ok)
+      if (!initRes.ok) {
+        publishDeviceSignInStatus({
+          state: 'failed',
+          message: 'The sign-in request could not be started. Try again.',
+        });
         return { ok: false, error: `initiate failed: ${initRes.status}` };
+      }
       const { code, verifyUrl, expiresAt, pollIntervalMs } =
         (await initRes.json()) as {
           code: string;
@@ -479,18 +593,32 @@ export async function signInToNevermind({
           expiresAt: string;
           pollIntervalMs?: number;
         };
-      activeSignInVerificationUrl = verifyUrl;
-      if (!(await openExternalUrl(verifyUrl)))
-        return { ok: false, error: 'unsafe verification URL' };
+      const pendingStatus: NevermindDeviceSignInStatus = {
+        state: 'pending',
+        verificationUrl: verifyUrl,
+        code,
+        expiresAt,
+        browserOpenFailed: false,
+      };
+      publishDeviceSignInStatus(pendingStatus);
+      await openDeviceSignInBrowser(controller, verifyUrl);
+      if (controller.signal.aborted) return cancelledSignInResult(controller);
       const deadline = new Date(expiresAt).getTime();
       const interval = Math.max(1000, pollIntervalMs ?? 2000);
       while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, interval));
-        const res = await postJson(`${trimmedBase}/api/auth/device/exchange`, {
-          code,
-        });
-        if (res.status === 410)
+        await waitForSignInInterval(interval, controller.signal);
+        if (controller.signal.aborted) return cancelledSignInResult(controller);
+        if (Date.now() >= deadline) break;
+        const res = await postJson(
+          `${trimmedBase}/api/auth/device/exchange`,
+          { code },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return cancelledSignInResult(controller);
+        if (res.status === 410) {
+          publishDeviceSignInStatus({ state: 'expired' });
           return { ok: false, error: 'code expired or already used' };
+        }
         if (!res.ok) {
           logger.warn(`device exchange returned ${res.status}`);
           continue;
@@ -508,17 +636,31 @@ export async function signInToNevermind({
             baseUrl: trimmedBase,
             environment,
           });
+          publishDeviceSignInStatus({
+            state: 'approved',
+            email: auth.email,
+          });
           return { ok: true, auth };
         }
       }
+      publishDeviceSignInStatus({ state: 'expired' });
       return { ok: false, error: 'timed out waiting for approval' };
     } catch (err) {
-      logger.error('signInToNevermind failed', err as Error);
+      if (controller.signal.aborted) return cancelledSignInResult(controller);
+      logger.error('signInToNevermind failed');
+      publishDeviceSignInStatus({
+        state: 'failed',
+        message:
+          'Unable to start sign-in. Check your connection and try again.',
+      });
       return { ok: false, error: (err as Error).message };
     } finally {
-      activeSignIn = null;
-      activeSignInVerificationUrl = null;
+      if (activeSignInAbortController === controller) {
+        activeSignIn = null;
+        activeSignInAbortController = null;
+      }
     }
   })();
-  return activeSignIn;
+  activeSignIn = operation;
+  return operation;
 }

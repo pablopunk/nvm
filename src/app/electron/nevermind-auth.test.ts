@@ -5,6 +5,12 @@ import path from 'node:path';
 import test, { mock } from 'node:test';
 
 const openedUrls: string[] = [];
+const authLogEntries: string[] = [];
+let failNextOpenExternal = false;
+
+function recordAuthLog(...args: unknown[]) {
+  authLogEntries.push(args.map((value) => String(value)).join(' '));
+}
 
 mock.module('electron', {
   namedExports: {
@@ -19,9 +25,20 @@ mock.module('electron', {
     },
     shell: {
       openExternal: async (url: string) => {
+        if (failNextOpenExternal) {
+          failNextOpenExternal = false;
+          throw new Error('xdg-open is unavailable');
+        }
         openedUrls.push(url);
       },
     },
+  },
+});
+
+mock.module('./logger', {
+  namedExports: {
+    warn: recordAuthLog,
+    error: recordAuthLog,
   },
 });
 
@@ -29,8 +46,12 @@ const {
   clearNevermindAuth,
   clearNevermindAuthCacheForTests,
   getCachedNevermindAuth,
+  getNevermindDeviceSignInState,
   getNevermindDashboardUrl,
   getNevermindAuth,
+  onNevermindDeviceSignInChanged,
+  retryNevermindDeviceSignInBrowser,
+  cancelNevermindDeviceSignIn,
   resolveDefaultNevermindBaseUrl,
   setActiveNevermindAuthBaseUrl,
   setNevermindAuthFilePathForTests,
@@ -225,7 +246,124 @@ test('reopens the verification URL for an active sign-in', async (t) => {
   await waitFor(() => openedUrls.length > 1);
 
   assert.deepEqual(openedUrls, [verifyUrl, verifyUrl]);
-  assert.deepEqual(await repeatedSignIn, await firstSignIn);
+  const result = await firstSignIn;
+  assert.deepEqual(await repeatedSignIn, result);
+  assert.deepEqual(getNevermindDeviceSignInState(), { state: 'expired' });
+  clearNevermindAuthCacheForTests();
+});
+
+test('manual URL and code approval completes after browser launch fails', async (t) => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const baseUrl = 'http://localhost:4321';
+  const code = 'manual-device-code';
+  const verifyUrl = `${baseUrl}/auth/device?code=${code}`;
+  let manuallyApproved = false;
+  let exchangeCalls = 0;
+  const states: string[] = [];
+  const browserLaunchFailures: boolean[] = [];
+  authLogEntries.length = 0;
+  openedUrls.length = 0;
+  failNextOpenExternal = true;
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(baseUrl);
+  clearNevermindAuthCacheForTests();
+  setActiveNevermindAuthBaseUrl(baseUrl);
+  const unsubscribe = onNevermindDeviceSignInChanged((status) => {
+    if (status) {
+      states.push(status.state);
+      if (status.state === 'pending')
+        browserLaunchFailures.push(status.browserOpenFailed);
+    }
+  });
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/api/compatibility'))
+      return new Response(null, { status: 404 });
+    if (url.endsWith('/api/auth/device/initiate'))
+      return Response.json({
+        code,
+        verifyUrl,
+        expiresAt: new Date(Date.now() + 10_000).toISOString(),
+        pollIntervalMs: 1000,
+      });
+    if (url.endsWith('/api/auth/device/exchange')) {
+      exchangeCalls += 1;
+      assert.deepEqual(JSON.parse(String(init?.body)), { code });
+      return manuallyApproved
+        ? Response.json({
+            status: 'ok',
+            token: 'manually-approved-token',
+            user: { email: 'pablo@example.com', role: 'member' },
+          })
+        : Response.json({ status: 'pending' });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  });
+
+  const signIn = signInToNevermind({ baseUrl, label: 'QA VM' });
+  await waitFor(() => {
+    const status = getNevermindDeviceSignInState();
+    return status?.state === 'pending' && status.browserOpenFailed;
+  });
+  const pending = getNevermindDeviceSignInState();
+  assert.equal(pending?.state, 'pending');
+  if (pending?.state !== 'pending')
+    throw new Error('Sign-in did not become pending');
+  assert.equal(pending.verificationUrl, verifyUrl);
+  assert.equal(pending.code, code);
+
+  assert.equal(await retryNevermindDeviceSignInBrowser(), true);
+  assert.deepEqual(openedUrls, [verifyUrl]);
+  manuallyApproved = true;
+  const result = await signIn;
+
+  assert.equal(result.ok, true);
+  assert.ok(exchangeCalls > 0);
+  assert.ok(states.includes('pending'));
+  assert.ok(states.includes('approved'));
+  assert.deepEqual(browserLaunchFailures, [false, true, false]);
+  assert.equal((await getNevermindAuth())?.email, 'pablo@example.com');
+  assert.equal(
+    authLogEntries.some(
+      (entry) => entry.includes(code) || entry.includes(verifyUrl),
+    ),
+    false,
+  );
+
+  unsubscribe();
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('cancelling a pending device sign-in clears its code and stops polling', async (t) => {
+  const baseUrl = 'http://localhost:4321';
+  const code = 'cancel-device-code';
+  const verifyUrl = `${baseUrl}/auth/device?code=${code}`;
+  openedUrls.length = 0;
+  clearNevermindAuthCacheForTests();
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const url = String(input);
+    if (url.endsWith('/api/compatibility'))
+      return new Response(null, { status: 404 });
+    if (url.endsWith('/api/auth/device/initiate'))
+      return Response.json({
+        code,
+        verifyUrl,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        pollIntervalMs: 1000,
+      });
+    if (url.endsWith('/api/auth/device/exchange'))
+      return Response.json({ status: 'pending' });
+    throw new Error(`Unexpected URL: ${url}`);
+  });
+
+  const signIn = signInToNevermind({ baseUrl, label: 'QA VM' });
+  await waitFor(() => getNevermindDeviceSignInState()?.state === 'pending');
+  assert.equal(cancelNevermindDeviceSignIn(), true);
+  assert.deepEqual(await signIn, { ok: false, error: 'Sign-in cancelled' });
+  assert.deepEqual(getNevermindDeviceSignInState(), { state: 'cancelled' });
   clearNevermindAuthCacheForTests();
 });
 

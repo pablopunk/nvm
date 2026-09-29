@@ -4,6 +4,95 @@
   padding: 16px;
 }
 
+.nevermindSignInGate {
+  display: grid;
+  gap: 12px;
+}
+
+.nevermindSignInNotice {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.nevermindSignInRecovery {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+}
+
+.nevermindSignInRecovery > strong {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+
+.nevermindSignInRecovery > p {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.nevermindSignInValue {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.nevermindSignInValue > span {
+  grid-column: 1 / -1;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.nevermindSignInValue > code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+
+.nevermindSignInRecovery button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: var(--surface-interactive);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.nevermindSignInRecovery button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+
+.nevermindSignInRecovery button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.nevermindSignInControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nevermindSignInRecovery > small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+
 .aiChatResultsCard {
   flex: 1 1 0;
 }

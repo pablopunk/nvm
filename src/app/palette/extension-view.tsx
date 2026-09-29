@@ -2,9 +2,11 @@
 import {
   Check,
   ChevronDown,
+  Copy,
   CornerDownLeft,
   CreditCard,
   LogIn,
+  RotateCw,
   Search,
   Square,
   X,
@@ -19,6 +21,7 @@ import React, {
 } from 'react';
 import { canSendAiChatMessage } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import { iconForItem } from './command-icons';
 import { RootCommandList } from './command-list';
 import { titleFromFirstContentLine } from './editor-title';
@@ -72,7 +75,10 @@ export type ExtensionViewRendererProps = {
   view: CommandView;
   aiChat: AiChatState;
   nevermindAuthed: boolean | null;
-  onSignInToNevermind: () => void;
+  deviceSignInStatus: NevermindDeviceSignInStatus | null;
+  onSignInToNevermind: () => void | Promise<void>;
+  onRetryDeviceSignInBrowser: () => Promise<boolean>;
+  onCancelDeviceSignIn: () => Promise<boolean>;
   formValues: Record<string, FormValue>;
   formController?: ReturnType<typeof usePaletteForm>;
   formQuery?: string;
@@ -319,9 +325,23 @@ function ExtensionItemDetail({
   );
 }
 
-function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
+function NevermindSignInGate({
+  status,
+  onSignIn,
+  onRetry,
+  onCancel,
+}: {
+  status: NevermindDeviceSignInStatus | null;
+  onSignIn: () => void | Promise<void>;
+  onRetry: () => Promise<boolean>;
+  onCancel: () => Promise<boolean>;
+}) {
   const [busy, setBusy] = useState(false);
-  async function handle() {
+  const [retrying, setRetrying] = useState(false);
+  const [copyMessage, setCopyMessage] = useState('');
+  const [retryMessage, setRetryMessage] = useState('');
+
+  async function handleSignIn() {
     if (busy) return;
     setBusy(true);
     try {
@@ -330,18 +350,154 @@ function NevermindSignInGate({ onSignIn }: { onSignIn: () => void }) {
       setBusy(false);
     }
   }
-  return (
-    <EmptyState
-      icon={<LogIn size={24} />}
-      title="Sign in to Nevermind"
-      subtitle="Connect this device to your Nevermind account to use AI chats."
-      action={{
+
+  async function copyValue(label: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyMessage(`${label} copied`);
+    } catch {
+      setCopyMessage(`Could not copy ${label.toLowerCase()}`);
+    }
+  }
+
+  async function retryBrowser() {
+    if (retrying) return;
+    setRetrying(true);
+    setRetryMessage('');
+    try {
+      const opened = await onRetry();
+      setRetryMessage(
+        opened
+          ? 'Verification page opened.'
+          : 'Browser could not be opened. Open the URL manually or copy it below.',
+      );
+    } catch {
+      setRetryMessage(
+        'Browser could not be opened. Open the URL manually or copy it below.',
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  const isPending = status?.state === 'pending';
+  const signInAction = isPending
+    ? undefined
+    : {
         value: 'sign-in',
         icon: <LogIn size={16} />,
-        title: busy ? 'Opening browser…' : 'Sign in to Nevermind',
-        onSelect: handle,
-      }}
-    />
+        title: busy
+          ? 'Waiting for approval…'
+          : status?.state === 'expired' ||
+              status?.state === 'cancelled' ||
+              status?.state === 'failed'
+            ? 'Try signing in again'
+            : 'Sign in to Nevermind',
+        onSelect: handleSignIn,
+      };
+
+  return (
+    <div className="nevermindSignInGate">
+      <EmptyState
+        icon={<LogIn size={24} />}
+        title="Sign in to Nevermind"
+        subtitle="Connect this device to your Nevermind account to use AI chats."
+        action={signInAction}
+      />
+      {status?.state === 'starting' ? (
+        <p className="nevermindSignInNotice" role="status">
+          Requesting a one-time sign-in code…
+        </p>
+      ) : null}
+      {status?.state === 'pending' ? (
+        <section
+          className="nevermindSignInRecovery"
+          aria-live="polite"
+          role={status.browserOpenFailed ? 'alert' : 'status'}
+        >
+          <strong>
+            {status.browserOpenFailed
+              ? 'Your browser could not be opened.'
+              : 'Waiting for sign-in approval.'}
+          </strong>
+          <p>
+            Open the verification URL manually. If prompted, use the one-time
+            user code below.
+          </p>
+          <div className="nevermindSignInValue">
+            <span>Verification URL</span>
+            <code>{status.verificationUrl}</code>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void copyValue('Verification URL', status.verificationUrl);
+              }}
+            >
+              <Copy size={14} /> Copy URL
+            </button>
+          </div>
+          <div className="nevermindSignInValue">
+            <span>One-time user code</span>
+            <code>{status.code}</code>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void copyValue('One-time code', status.code);
+              }}
+            >
+              <Copy size={14} /> Copy code
+            </button>
+          </div>
+          <div className="nevermindSignInControls">
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={(event) => {
+                event.stopPropagation();
+                void retryBrowser();
+              }}
+            >
+              <RotateCw size={14} />
+              {retrying ? 'Opening browser…' : 'Retry opening browser'}
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void onCancel();
+              }}
+            >
+              <X size={14} /> Cancel sign-in
+            </button>
+          </div>
+          {copyMessage || retryMessage ? (
+            <small role="status">{retryMessage || copyMessage}</small>
+          ) : null}
+        </section>
+      ) : null}
+      {status?.state === 'approved' ? (
+        <p className="nevermindSignInNotice" role="status">
+          Sign-in approved. Signed in as {status.email}.
+        </p>
+      ) : null}
+      {status?.state === 'expired' ? (
+        <p className="nevermindSignInNotice" role="alert">
+          The one-time sign-in code expired. Try again to request a new code.
+        </p>
+      ) : null}
+      {status?.state === 'cancelled' ? (
+        <p className="nevermindSignInNotice" role="status">
+          Sign-in cancelled.
+        </p>
+      ) : null}
+      {status?.state === 'failed' ? (
+        <p className="nevermindSignInNotice" role="alert">
+          {status.message}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -997,14 +1153,24 @@ function ChatExtensionView({
   view,
   aiChat,
   nevermindAuthed,
+  deviceSignInStatus,
   onSignInToNevermind,
+  onRetryDeviceSignInBrowser,
+  onCancelDeviceSignIn,
   renderMarkdown,
   runAction,
   sendAiPrompt,
   abortAiChat,
 }: ExtensionViewSurfaceProps) {
   if (view.aiChat && nevermindAuthed === false)
-    return <NevermindSignInGate onSignIn={onSignInToNevermind} />;
+    return (
+      <NevermindSignInGate
+        status={deviceSignInStatus}
+        onSignIn={onSignInToNevermind}
+        onRetry={onRetryDeviceSignInBrowser}
+        onCancel={onCancelDeviceSignIn}
+      />
+    );
   const limitBanner =
     view.aiChat && aiChat.limit ? (
       <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />

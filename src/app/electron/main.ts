@@ -90,12 +90,16 @@ import {
   verifyLocalFileToken,
 } from './file-utils';
 import {
+  cancelNevermindDeviceSignIn,
   consumeDeviceCode,
   getDefaultNevermindBaseUrl,
   getNevermindAuth,
   getNevermindDashboardUrl,
+  getNevermindDeviceSignInState,
   isSigningIn,
   nevermindEnvironmentForBaseUrl,
+  onNevermindDeviceSignInChanged,
+  retryNevermindDeviceSignInBrowser,
   setActiveNevermindAuthBaseUrl,
   signInToNevermind,
 } from './nevermind-auth';
@@ -107,6 +111,7 @@ import {
   onNevermindCompatibilityChanged,
   warmNevermindCompatibilityCache,
 } from './nevermind-compatibility';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
 import { captureException, initSentry } from './sentry';
 import {
@@ -2749,7 +2754,6 @@ async function handleAuthDeepLink(parsed: ParsedAuthDeepLink) {
   const baseUrl = parsed.baseUrl || getDefaultNevermindBaseUrl();
   logInfo('deep_link.handle', {
     source: 'deep_link',
-    code: parsed.code.slice(0, 8),
     baseUrl,
     intent: parsed.intent,
   });
@@ -2785,12 +2789,12 @@ async function handleAuthDeepLink(parsed: ParsedAuthDeepLink) {
     } else {
       logWarn(
         'deep_link.auth_failed',
-        { error: (result as { error?: string }).error },
+        { reason: 'Device authorization was not completed' },
         { source: 'host', scope: 'deep_link' },
       );
     }
-  } catch (err) {
-    logError('deep_link.handle.failed', err, {
+  } catch {
+    logError('deep_link.handle.failed', undefined, {
       source: 'host',
       scope: 'deep_link',
     });
@@ -2840,18 +2844,32 @@ function getNevermindDebugStatus() {
   };
 }
 
-async function signInToSelectedNevermindEnvironment() {
+async function signInToSelectedNevermindEnvironment(
+  onStatusChange?: (status: NevermindDeviceSignInStatus | null) => void,
+) {
   const selected = selectedNevermindEnvironment();
-  const result = await signInToNevermind({
-    baseUrl: selected.baseUrl,
-    environment: selected.environment,
+  const unsubscribe = onNevermindDeviceSignInChanged((status) => {
+    invalidateExtensionRootItems();
+    paletteWindow.win?.webContents.send(
+      'nevermind:device-sign-in-changed',
+      status,
+    );
+    onStatusChange?.(status);
   });
-  if (result.ok) {
-    activeNevermindBaseUrl = result.auth.baseUrl;
-    setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
-    warmNevermindCompatibilityCache(result.auth.baseUrl);
+  try {
+    const result = await signInToNevermind({
+      baseUrl: selected.baseUrl,
+      environment: selected.environment,
+    });
+    if (result.ok) {
+      activeNevermindBaseUrl = result.auth.baseUrl;
+      setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
+      warmNevermindCompatibilityCache(result.auth.baseUrl);
+    }
+    return result;
+  } finally {
+    unsubscribe();
   }
-  return result;
 }
 
 async function switchNevermindBackendEnvironment(input: {
@@ -4537,6 +4555,18 @@ function showRendererIndicator(sender: unknown, input: any) {
     paletteSender
       ? 'nevermind.host'
       : `nevermind.window.${String((extensionWindowState as any).id || 'unknown')}`,
+  );
+}
+
+function sendNevermindDeviceSignInStatus(
+  sender: unknown,
+  status: NevermindDeviceSignInStatus | null,
+) {
+  if (paletteWindow.win?.webContents === sender) return;
+  if (!extensionWindowManager.getStateForSender(sender)) return;
+  (sender as { send(channel: string, ...args: unknown[]): void }).send(
+    'nevermind:device-sign-in-changed',
+    status,
   );
 }
 
@@ -9124,6 +9154,10 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
         switchNevermindBackendEnvironment,
         getNevermindDebugStatus,
         signInToNevermind: signInToSelectedNevermindEnvironment,
+        getNevermindDeviceSignInState,
+        onNevermindDeviceSignInChanged,
+        retryNevermindDeviceSignInBrowser,
+        cancelNevermindDeviceSignIn,
         getPaletteHotkey,
         extensionShortcutRecords,
         patchKeyboardShortcutsView,
@@ -11057,6 +11091,10 @@ app.whenReady().then(async () => {
     logInfo,
     userDataPath: () => app.getPath('userData'),
     signInToNevermind: signInToSelectedNevermindEnvironment,
+    getNevermindDeviceSignInState,
+    sendNevermindDeviceSignInStatus,
+    retryNevermindDeviceSignInBrowser,
+    cancelNevermindDeviceSignIn,
     invalidateExtensionRootItems,
     broadcastAuthChanged,
     appIconCache,

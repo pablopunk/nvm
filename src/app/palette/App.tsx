@@ -103,6 +103,7 @@ import type {
   PaletteMode,
   ShortcutRecord,
 } from './preload-api';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -430,12 +431,28 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const confirmationReturnSurfaceRef =
     useRef<ConfirmationReturnSurface>('view');
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
+  const [deviceSignInStatus, setDeviceSignInStatus] =
+    useState<NevermindDeviceSignInStatus | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let signInEventCount = 0;
     window.nvm
       .getNevermindAuthStatus()
-      .then((status) => setNevermindAuthed(Boolean(status.authed)))
-      .catch(() => setNevermindAuthed(false));
+      .then((status) => {
+        if (!cancelled) setNevermindAuthed(Boolean(status.authed));
+      })
+      .catch(() => {
+        if (!cancelled) setNevermindAuthed(false);
+      });
+    window.nvm
+      .getNevermindDeviceSignInStatus()
+      .then((status) => {
+        if (!cancelled && signInEventCount === 0) setDeviceSignInStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled && signInEventCount === 0) setDeviceSignInStatus(null);
+      });
     window.nvm.getExtensionWindowState().then((state) => {
       if (state?.view) {
         viewRef.current = state.view;
@@ -462,12 +479,21 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     });
     const stopAuth = window.nvm.onNevermindAuthChanged((status) => {
       setNevermindAuthed(status.authed);
+      if (!status.authed) setDeviceSignInStatus(null);
       aiChat.setLimit(null);
       aiChat.setCreditNotice(null);
     });
+    const stopDeviceSignIn = window.nvm.onNevermindDeviceSignInChanged(
+      (status) => {
+        signInEventCount += 1;
+        setDeviceSignInStatus(status);
+      },
+    );
     return () => {
+      cancelled = true;
       stopView();
       stopAuth();
+      stopDeviceSignIn();
     };
   }, [windowId]);
 
@@ -1229,10 +1255,17 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                 view={view}
                 aiChat={aiChat}
                 nevermindAuthed={nevermindAuthed}
+                deviceSignInStatus={deviceSignInStatus}
                 onSignInToNevermind={() =>
                   window.nvm
                     .signInToNevermind()
                     .then((result) => setNevermindAuthed(Boolean(result.ok)))
+                }
+                onRetryDeviceSignInBrowser={() =>
+                  window.nvm.retryNevermindDeviceSignInBrowser()
+                }
+                onCancelDeviceSignIn={() =>
+                  window.nvm.cancelNevermindDeviceSignIn()
                 }
                 formValues={formValues}
                 formController={paletteForm}
@@ -1316,7 +1349,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
                     view={compactView}
                     aiChat={aiChat}
                     nevermindAuthed={nevermindAuthed}
+                    deviceSignInStatus={deviceSignInStatus}
                     onSignInToNevermind={() => {}}
+                    onRetryDeviceSignInBrowser={async () => false}
+                    onCancelDeviceSignIn={async () => false}
                     formValues={formValues}
                     formController={paletteForm}
                     formQuery={compactQuery}
@@ -1675,6 +1711,8 @@ export function App() {
     useState<string | null>(null);
   const [builderPreviewFocused, setBuilderPreviewFocused] = useState(false);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
+  const [deviceSignInStatus, setDeviceSignInStatus] =
+    useState<NevermindDeviceSignInStatus | null>(null);
   const [ghStatus, setGhStatus] = useState<{
     installed: boolean;
     authed: boolean;
@@ -1980,20 +2018,32 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    let signInEventCount = 0;
     window.nvm.getNevermindAuthStatus().then((status) => {
       if (!cancelled) setNevermindAuthed(status.authed);
+    });
+    window.nvm.getNevermindDeviceSignInStatus().then((status) => {
+      if (!cancelled && signInEventCount === 0) setDeviceSignInStatus(status);
     });
     window.nvm.getGhStatus().then((status) => {
       if (!cancelled) setGhStatus(status);
     });
     const stop = window.nvm.onNevermindAuthChanged((status) => {
       setNevermindAuthed(status.authed);
+      if (!status.authed) setDeviceSignInStatus(null);
       aiChat.setLimit(null);
       aiChat.setCreditNotice(null);
     });
+    const stopDeviceSignIn = window.nvm.onNevermindDeviceSignInChanged(
+      (status) => {
+        signInEventCount += 1;
+        setDeviceSignInStatus(status);
+      },
+    );
     return () => {
       cancelled = true;
       stop();
+      stopDeviceSignIn();
     };
   }, []);
 
@@ -4810,7 +4860,10 @@ export function App() {
             view={preview.view}
             aiChat={aiChat}
             nevermindAuthed={nevermindAuthed}
+            deviceSignInStatus={deviceSignInStatus}
             onSignInToNevermind={() => {}}
+            onRetryDeviceSignInBrowser={async () => false}
+            onCancelDeviceSignIn={async () => false}
             formValues={formValues}
             setFormValues={setFormValues}
             filterItems={(items) => items || []}
@@ -4868,6 +4921,7 @@ export function App() {
         view={view}
         aiChat={aiChat}
         nevermindAuthed={nevermindAuthed}
+        deviceSignInStatus={deviceSignInStatus}
         onSignInToNevermind={async () => {
           const result = await window.nvm.signInToNevermind();
           if (result.ok) setNevermindAuthed(true);
@@ -4877,6 +4931,10 @@ export function App() {
               'error',
             );
         }}
+        onRetryDeviceSignInBrowser={() =>
+          window.nvm.retryNevermindDeviceSignInBrowser()
+        }
+        onCancelDeviceSignIn={() => window.nvm.cancelNevermindDeviceSignIn()}
         formValues={formValues}
         formController={paletteForm}
         formQuery={childQuery}

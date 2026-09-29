@@ -80,7 +80,7 @@ function parseAuthDeepLink(
     try {
       decoded = decodeURIComponent(encodedBaseUrl).replace(/\/$/, '');
     } catch {
-      logWarn('deep_link_unparsable_base_url', { encoded: encodedBaseUrl });
+      logWarn('deep_link_unparsable_base_url');
     }
     if (decoded) {
       const migrated = migrateLegacyDesktopOrigin(decoded);
@@ -103,10 +103,7 @@ function parseAuthDeepLink(
       ) {
         resolvedBaseUrl = decoded;
       } else {
-        logWarn('deep_link_untrusted_base_url', {
-          decoded,
-          active: activeBaseUrl,
-        });
+        logWarn('deep_link_untrusted_base_url');
       }
     }
   }
