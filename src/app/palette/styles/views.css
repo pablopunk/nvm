@@ -971,6 +971,7 @@
 }
 
 .formView {
+  padding: 0;
   gap: 2px;
   align-content: start;
   overflow: visible;
@@ -985,12 +986,6 @@
 
 .formListRow .resultText strong {
   font-size: var(--fs-sm);
-}
-
-.formListRow[data-selected="true"] .resultText small,
-.formListRow[data-disabled="true"] .resultText small {
-  overflow: visible;
-  white-space: normal;
 }
 
 .formListRowError .resultText small {

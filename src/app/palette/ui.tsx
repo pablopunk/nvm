@@ -42,6 +42,7 @@ export interface CommandRowProps {
   icon: ReactNode;
   title: string;
   subtitle?: string;
+  tooltip?: string;
   accessories?: {
     text?: string;
     icon?: ReactNode;
@@ -280,6 +281,7 @@ export function CommandRow({
   icon,
   title,
   subtitle,
+  tooltip,
   accessories = [],
   shortcut,
   extras,
@@ -314,6 +316,7 @@ export function CommandRow({
     <Command.Item
       value={value}
       className={itemClassName}
+      title={tooltip}
       data-foreground={appearance?.foreground}
       data-background={appearance?.background}
       disabled={disabled}
@@ -669,6 +672,7 @@ export function FormView({
             }
             title={field.label || field.id}
             subtitle={error || field.description}
+            tooltip={error || field.description}
             accessories={[
               {
                 text: formValueLabel(field, value),
