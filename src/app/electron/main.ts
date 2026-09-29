@@ -690,6 +690,7 @@ let userState: AnyRecord = {
   clipboardHistory: [],
   aiChats: {},
   aiChatDefaultModel: DEFAULT_AI_CHAT_MODEL,
+  hasCompletedOnboarding: false,
   settings: {},
   jobSettings: {},
   rateCache: {},
@@ -10150,6 +10151,10 @@ async function loadUserState() {
       clipboardHistory: loaded.clipboardHistory || [],
       aiChats: loaded.aiChats || {},
       aiChatDefaultModel: normalizeAiChatModel(loaded.aiChatDefaultModel),
+      hasCompletedOnboarding:
+        typeof loaded.hasCompletedOnboarding === 'boolean'
+          ? loaded.hasCompletedOnboarding
+          : true,
       settings: loaded.settings || {},
       jobSettings: loaded.jobSettings || {},
       rateCache: loaded.rateCache || {},

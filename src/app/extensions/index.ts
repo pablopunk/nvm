@@ -11,6 +11,7 @@ import { createEmojiSymbolsExtension } from './emoji-symbols';
 import { createExtensionsExtension } from './extensions';
 import { createFilesExtension } from './files';
 import { createFloatingNotesExtension } from './floating-notes';
+import { createGettingStartedExtension } from './getting-started';
 import { createKeyboardShortcutsExtension } from './keyboard-shortcuts';
 import { createQuitAppsExtension } from './quit-apps';
 import { createSettingsExtension } from './settings';
@@ -40,6 +41,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createSettingsExtension,
   createBackgroundTasksExtension,
   createAccountExtension,
+  createGettingStartedExtension,
 ];
 
 export const INTERNAL_EXTENSION_SOURCE_FILES = [
@@ -55,6 +57,7 @@ export const INTERNAL_EXTENSION_SOURCE_FILES = [
   'extensions.ts',
   'files.ts',
   'floating-notes.ts',
+  'getting-started.ts',
   'permissions.ts',
   'keyboard-shortcuts.ts',
   'quit-apps.ts',

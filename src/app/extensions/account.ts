@@ -7,85 +7,86 @@ import {
 import { extensionContext } from './_context';
 import { showExtensionFeedback } from './feedback';
 
-export function createAccountExtension() {
-  const extensionId = 'nevermind.account';
-  const loginIndicatorId = 'account-login';
+const LOGIN_INDICATOR_ID = 'account-login';
 
-  function accountItem() {
-    const existing = getCachedNevermindAuth();
-    if (existing) {
-      return {
-        id: 'account-logout',
-        actionId: 'account-logout',
-        title: 'Log out of Nevermind',
-        subtitle: `Signed in as ${existing.email}`,
-        icon: 'person',
-        score: 18,
-        aliases: ['logout', 'sign out', 'nevermind', 'account', 'disconnect'],
-        primaryAction: {
-          type: 'runExtensionAction',
-          title: 'Log out',
-          __handler: async (ctx: any) => {
-            const { revoked } = await signOutFromNevermind();
-            extensionContext.setActiveNevermindBaseUrl(null);
-            await extensionContext.nevermindAi?.disposeAllSessions?.();
-            extensionContext.invalidateExtensionRootItems();
-            extensionContext.broadcastAuthChanged({ authed: false });
-            const suffix = revoked
-              ? ''
-              : ' (token revoke failed - check connection)';
-            showExtensionFeedback(
-              ctx,
-              'Nevermind Account',
-              `Logged out of ${existing.email}${suffix}`,
-              revoked ? 'success' : 'error',
-            );
-          },
-        },
-      };
-    }
+export function accountRootItem() {
+  const existing = getCachedNevermindAuth();
+  if (existing) {
     return {
-      id: 'account-login',
-      actionId: 'account-login',
-      title: 'Log in to Nevermind',
-      subtitle: 'Connect this device to your Nevermind account',
+      id: 'account-logout',
+      actionId: 'account-logout',
+      title: 'Log out of Nevermind',
+      subtitle: `Signed in as ${existing.email}`,
       icon: 'person',
       score: 18,
-      background: true,
-      dismissAfterRun: 'auto',
-      aliases: ['login', 'sign in', 'nevermind', 'account', 'connect'],
+      aliases: ['logout', 'sign out', 'nevermind', 'account', 'disconnect'],
       primaryAction: {
         type: 'runExtensionAction',
-        title: 'Log in',
+        title: 'Log out',
         __handler: async (ctx: any) => {
-          ctx.ui.indicator.show({
-            id: loginIndicatorId,
-            title: 'Nevermind Account',
-            subtitle: 'Complete sign-in in your browser',
-            status: 'loading',
-            durationMs: 300_000,
-          });
-          const result = await extensionContext.signInToNevermind();
+          const { revoked } = await signOutFromNevermind();
+          extensionContext.setActiveNevermindBaseUrl(null);
+          await extensionContext.nevermindAi?.disposeAllSessions?.();
           extensionContext.invalidateExtensionRootItems();
-          if (result.ok)
-            extensionContext.broadcastAuthChanged({
-              authed: true,
-              email: result.auth.email,
-            });
-          const message = result.ok
-            ? `Logged in as ${result.auth.email}`
-            : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`;
-          ctx.ui.indicator.update({
-            id: loginIndicatorId,
-            title: 'Nevermind Account',
-            subtitle: message,
-            status: result.ok ? 'success' : 'error',
-            durationMs: result.ok ? 2200 : 4000,
-          });
+          extensionContext.broadcastAuthChanged({ authed: false });
+          const suffix = revoked
+            ? ''
+            : ' (token revoke failed - check connection)';
+          showExtensionFeedback(
+            ctx,
+            'Nevermind Account',
+            `Logged out of ${existing.email}${suffix}`,
+            revoked ? 'success' : 'error',
+          );
         },
       },
     };
   }
+  return {
+    id: 'account-login',
+    actionId: 'account-login',
+    title: 'Log in to Nevermind',
+    subtitle: 'Connect this device to your Nevermind account',
+    icon: 'person',
+    score: 18,
+    background: true,
+    dismissAfterRun: 'auto',
+    aliases: ['login', 'sign in', 'nevermind', 'account', 'connect'],
+    primaryAction: {
+      type: 'runExtensionAction',
+      title: 'Log in',
+      __handler: async (ctx: any) => {
+        ctx.ui.indicator.show({
+          id: LOGIN_INDICATOR_ID,
+          title: 'Nevermind Account',
+          subtitle: 'Complete sign-in in your browser',
+          status: 'loading',
+          durationMs: 300_000,
+        });
+        const result = await extensionContext.signInToNevermind();
+        extensionContext.invalidateExtensionRootItems();
+        if (result.ok)
+          extensionContext.broadcastAuthChanged({
+            authed: true,
+            email: result.auth.email,
+          });
+        const message = result.ok
+          ? `Logged in as ${result.auth.email}`
+          : `Log-in failed: ${'error' in result ? result.error : 'unknown'}`;
+        ctx.ui.indicator.update({
+          id: LOGIN_INDICATOR_ID,
+          title: 'Nevermind Account',
+          subtitle: message,
+          status: result.ok ? 'success' : 'error',
+          durationMs: result.ok ? 2200 : 4000,
+        });
+      },
+    },
+  };
+}
+
+export function createAccountExtension() {
+  const extensionId = 'nevermind.account';
 
   function backendEnvironmentItem() {
     async function switchBackend(
@@ -294,7 +295,7 @@ export function createAccountExtension() {
     capabilities: [] as const,
     searchItems: () => {
       const items = [
-        accountItem(),
+        accountRootItem(),
         backendEnvironmentItem(),
         backendStatusItem(),
       ];
@@ -304,7 +305,7 @@ export function createAccountExtension() {
     },
     rootItems: () => {
       const items = [
-        accountItem(),
+        accountRootItem(),
         backendEnvironmentItem(),
         backendStatusItem(),
       ];
