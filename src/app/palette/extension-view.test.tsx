@@ -296,6 +296,42 @@ test('renders primary extension items through the shared row and tile appearance
   assert.match(grid, /class="extensionTile"[^>]*data-prominence="primary"/);
 });
 
+test('wraps permission guidance without changing other extension lists', () => {
+  const guidance =
+    'Desktop control is available; elevated apps can block access. Press Enter to check again.';
+  const permissionView = renderExtensionView({
+    type: 'list',
+    id: 'os-permissions',
+    title: 'Nevermind OS Permissions',
+    items: [
+      {
+        id: 'os-permission:selected-text',
+        title: 'Selected Text',
+        subtitle: guidance,
+      },
+    ],
+  });
+  const regularView = renderExtensionView({
+    type: 'list',
+    id: 'regular-list',
+    title: 'Regular list',
+    items: [
+      {
+        id: 'regular-item',
+        title: 'Regular item',
+        subtitle: guidance,
+      },
+    ],
+  });
+
+  assert.match(
+    permissionView,
+    /class="result extensionListItem extensionListItemWrapSubtitle"/,
+  );
+  assert.match(permissionView, /Press Enter to check again/);
+  assert.doesNotMatch(regularView, /extensionListItemWrapSubtitle/);
+});
+
 test('renders unsupported-client update UI with structured updater action', () => {
   const actions: CommandAction[] = [];
   const html = renderToStaticMarkup(

@@ -260,6 +260,14 @@
   margin-bottom: 0;
 }
 
+.extensionListItemWrapSubtitle .resultText small {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.4;
+}
+
 .resultsCard > .extensionView {
   padding: 0;
 }

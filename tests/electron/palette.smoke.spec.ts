@@ -347,6 +347,85 @@ async function closeTestApplication(
   }
 }
 
+test('keeps OS permission guidance readable at desktop and narrow sizes', async () => {
+  test.setTimeout(40_000);
+  const permissionsUserDataDir = path.join(userDataDir, 'permission-guidance');
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    await fs.mkdir(permissionsUserDataDir, { recursive: true });
+    await fs.mkdir(artifactDir, { recursive: true });
+    launched = await launchTestApplication(permissionsUserDataDir);
+    const input = launched.page.locator('input[placeholder]').first();
+    await input.fill('permissions');
+    await expect(
+      launched.page.getByText('Nevermind OS Permissions', { exact: true }),
+    ).toBeVisible();
+    await launched.page.keyboard.press('Enter');
+
+    const selectedTextRow = launched.page.locator(
+      '[data-value="os-permission:selected-text"]',
+    );
+    const permissionRow = (await selectedTextRow.count())
+      ? selectedTextRow
+      : launched.page.locator('.extensionListItemWrapSubtitle').first();
+    await expect(permissionRow).toBeVisible();
+    const subtitle = permissionRow.locator('.resultText small');
+    const guidance =
+      'Desktop control is available; elevated apps can block access. Press Enter to check again.';
+    await subtitle.evaluate((element, text) => {
+      element.textContent = text;
+    }, guidance);
+
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 520, height: 360 },
+    ]) {
+      await launched.page.setViewportSize(viewport);
+      await permissionRow.scrollIntoViewIfNeeded();
+      const layout = await subtitle.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          overflow: style.overflow,
+          scrollHeight: element.scrollHeight,
+          text: element.textContent || '',
+          textOverflow: style.textOverflow,
+          whiteSpace: style.whiteSpace,
+          clientHeight: element.clientHeight,
+        };
+      });
+      expect(layout.whiteSpace).toBe('normal');
+      expect(layout.overflow).toBe('visible');
+      expect(layout.textOverflow).toBe('clip');
+      expect(layout.scrollHeight).toBe(layout.clientHeight);
+      expect(layout.text).toBe(guidance);
+      await launched.page.screenshot({
+        path: path.join(
+          artifactDir,
+          `permissions-${viewport.width}x${viewport.height}.png`,
+        ),
+      });
+    }
+
+    const selectedBefore = await launched.page
+      .locator('[cmdk-item][data-selected="true"]')
+      .getAttribute('data-value');
+    await launched.page.keyboard.press('ArrowDown');
+    await expect
+      .poll(() =>
+        launched!.page
+          .locator('[cmdk-item][data-selected="true"]')
+          .getAttribute('data-value'),
+      )
+      .not.toBe(selectedBefore);
+  } finally {
+    if (launched) {
+      await closeTestApplication(launched.app, launched.trackedPids);
+    }
+    await fs.rm(permissionsUserDataDir, { recursive: true, force: true });
+  }
+});
+
 test('searches and invokes the safe built-in action, then hides and shows', async () => {
   await fs.mkdir(artifactDir, { recursive: true });
   await fs.writeFile(

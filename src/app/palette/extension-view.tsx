@@ -783,7 +783,11 @@ function ListExtensionView({
           <CommandRow
             key={item.id}
             value={item.id}
-            className="result extensionListItem"
+            className={
+              view.id === 'os-permissions'
+                ? 'extensionListItem extensionListItemWrapSubtitle'
+                : 'extensionListItem'
+            }
             icon={iconForItem(item)}
             title={item.title}
             subtitle={item.subtitle || item.text}
