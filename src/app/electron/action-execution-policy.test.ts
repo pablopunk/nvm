@@ -16,6 +16,7 @@ const CAPABILITY_SECRET = Buffer.from(
   'utf8',
 );
 const ACTIONS_BEYOND_RECORD_BUDGET = 2001;
+const LARGE_ACTION_IMAGE_BYTES = 8_388_608;
 const UNTRUSTED_ERROR = /Untrusted/;
 
 function records(action: unknown, createdAt = NOW) {
@@ -301,5 +302,28 @@ test('signed capabilities survive action counts beyond the record budget', () =>
       { scope: 'view', ownerIsCurrent: () => true },
     ),
     firstAction,
+  );
+});
+
+test('signed capabilities preserve 8 MiB image actions', () => {
+  const capabilities = createActionExecutionCapabilities(CAPABILITY_SECRET);
+  const imageDataUrl = `data:image/png;base64,${Buffer.alloc(LARGE_ACTION_IMAGE_BYTES).toString('base64')}`;
+  const action = { type: 'copyImage', title: 'Copy image', imageDataUrl };
+  const executionId = capabilities.issue(action, {
+    scope: 'view',
+    owner: 'extension:image-actions',
+    ownerVersion: 'current',
+  });
+
+  assert.deepEqual(
+    capabilities.resolve(
+      { ...action, executionId },
+      {
+        scope: 'view',
+        ownerIsCurrent: (owner, version) =>
+          owner === 'extension:image-actions' && version === 'current',
+      },
+    ),
+    action,
   );
 });
