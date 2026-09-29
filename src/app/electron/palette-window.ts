@@ -28,6 +28,11 @@ import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
 } from './window-navigation-policy';
+import {
+  isPaletteHotkeyReserved,
+  registerPaletteHotkey,
+} from './palette-shortcuts';
+import type { PaletteHotkeyStatus } from '../palette/preload-api';
 
 export type PaletteMode =
   | 'default'
@@ -130,6 +135,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let currentPaletteMode: PaletteMode = 'default';
   let focusReturnTarget: unknown = null;
   let restoredFocusReturnTarget: unknown = null;
+  let hotkeyStatus: PaletteHotkeyStatus | null = null;
+  const registeredHotkeys = new Set<string>();
 
   function debugLog(message: string, data?: unknown) {
     logger.debug(message, data, { source: 'host', scope: 'palette-window' });
@@ -433,24 +440,60 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     return target;
   }
 
-  function registerHotkey() {
-    const hotkey = options.getPaletteHotkey();
-    const ok = globalShortcut.register(hotkey, handlePaletteHotkey);
-    debugLog('registerHotkey', {
-      accelerator: hotkey,
-      ok,
-      isRegistered: globalShortcut.isRegistered(hotkey),
+  function unregisterHotkey() {
+    for (const accelerator of registeredHotkeys)
+      globalShortcut.unregister(accelerator);
+    registeredHotkeys.clear();
+  }
+
+  function getHotkeyStatus() {
+    return hotkeyStatus;
+  }
+
+  function isHotkeyReserved(accelerator: string) {
+    return isPaletteHotkeyReserved(
+      accelerator,
+      options.getPaletteHotkey(),
+      hotkeyStatus?.recoveryAccelerator,
+      process.platform,
+    );
+  }
+
+  function registerHotkey(accelerator = options.getPaletteHotkey()) {
+    unregisterHotkey();
+    const status = registerPaletteHotkey({
+      accelerator,
+      platform: process.platform,
+      register: (candidate, listener) => {
+        const ok = globalShortcut.register(candidate, listener);
+        if (ok) registeredHotkeys.add(candidate);
+        return ok;
+      },
+      listener: handlePaletteHotkey,
     });
-    if (ok)
+    hotkeyStatus = status;
+    debugLog('registerHotkey', {
+      accelerator: status.accelerator,
+      ok: status.registered,
+      isRegistered: globalShortcut.isRegistered(status.accelerator),
+      recoveryAccelerator: status.recoveryAccelerator,
+      recoveryIsRegistered: status.recoveryAccelerator
+        ? globalShortcut.isRegistered(status.recoveryAccelerator)
+        : false,
+    });
+    if (status.registered)
       logger.info(
         'globalShortcut.registered',
-        { hotkey },
+        { hotkey: status.accelerator },
         { source: 'host', scope: 'palette-window' },
       );
     else {
       logger.warn(
         'globalShortcut.register.failed',
-        { hotkey },
+        {
+          hotkey: status.accelerator,
+          recoveryHotkey: status.recoveryAccelerator,
+        },
         { source: 'host', scope: 'palette-window' },
       );
       showPaletteWhenReady();
@@ -466,6 +509,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       if (win?.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
       else win?.webContents.openDevTools({ mode: 'detach' });
     });
+    return status;
   }
 
   return {
@@ -483,6 +527,9 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     showPaletteWhenReady,
     togglePalette,
     takeRestoredFocusReturnTarget,
+    getHotkeyStatus,
+    isHotkeyReserved,
     registerHotkey,
+    unregisterHotkey,
   };
 }

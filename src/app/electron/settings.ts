@@ -6,6 +6,7 @@ export type SettingDefinition =
       icon: string;
       type: 'shortcut';
       default: string;
+      platformDefaults?: Partial<Record<'darwin' | 'linux' | 'win32', string>>;
     }
   | {
       id: 'showClipboardInRoot' | 'showClipboardInRootSearch' | 'startAtLogin';
@@ -28,6 +29,7 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     icon: 'keyboard',
     type: 'shortcut',
     default: 'Alt+Space',
+    platformDefaults: { linux: 'Control+Alt+K' },
   },
   {
     id: 'hyperKey',
@@ -71,11 +73,20 @@ export function settingDefinition(id: string) {
 export function settingValue(
   settings: SettingsState | undefined,
   id: SettingId,
+  processPlatform: NodeJS.Platform = process.platform,
 ) {
   const definition = settingDefinition(id);
   if (!definition) return undefined;
   const stored = settings?.[id];
-  return stored === undefined ? definition.default : stored;
+  const platformDefault =
+    definition.type === 'shortcut'
+      ? definition.platformDefaults?.[
+          processPlatform as 'darwin' | 'linux' | 'win32'
+        ]
+      : undefined;
+  return stored === undefined
+    ? (platformDefault ?? definition.default)
+    : stored;
 }
 
 export function toggledSettingValue(

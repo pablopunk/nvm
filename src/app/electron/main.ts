@@ -833,7 +833,9 @@ function osCacheRoot() {
 }
 
 function getPaletteHotkey() {
-  return getSetting('paletteHotkey') || 'Alt+Space';
+  return String(
+    getSetting('paletteHotkey') || settingValue(undefined, 'paletteHotkey'),
+  );
 }
 
 function settingIsAvailable(definition: any) {
@@ -10368,7 +10370,7 @@ async function executeShortcutAction(action) {
 }
 
 function bindGlobalActionShortcut(actionId, accelerator, action) {
-  if (accelerator === getPaletteHotkey()) return false;
+  if (paletteWindow.isHotkeyReserved(accelerator)) return false;
   globalShortcut.unregister(accelerator);
   registeredActionAccelerators.add(accelerator);
   const ok = globalShortcut.register(accelerator, () =>
@@ -10454,11 +10456,10 @@ function registerActionShortcuts() {
 }
 
 function suspendPaletteHotkey() {
-  globalShortcut.unregister(String(getPaletteHotkey()));
+  paletteWindow.unregisterHotkey();
 }
 
 function resumePaletteHotkey() {
-  globalShortcut.unregister(String(getPaletteHotkey()));
   paletteWindow.registerHotkey();
 }
 
@@ -10562,7 +10563,7 @@ async function setShortcut(action, shortcut) {
   if (!(action?.id && shortcut.trim()))
     return { ok: false, message: 'Missing shortcut' };
   const accelerator = normalizeAccelerator(shortcut);
-  if (accelerator === getPaletteHotkey())
+  if (paletteWindow.isHotkeyReserved(accelerator))
     return {
       ok: false,
       message: `${accelerator} is reserved for opening Nevermind`,
@@ -10625,10 +10626,10 @@ async function setPaletteHotkey(accelerator) {
       userState.shortcutActions[conflictingActionId]?.title || 'another action';
     return { ok: false, message: `${normalized} is already used by ${title}` };
   }
-  globalShortcut.unregister(current);
-  const ok = globalShortcut.register(normalized, paletteWindow.togglePalette);
-  if (!ok) {
-    globalShortcut.register(current, paletteWindow.togglePalette);
+  paletteWindow.unregisterHotkey();
+  const registration = paletteWindow.registerHotkey(normalized);
+  if (!registration.registered) {
+    paletteWindow.registerHotkey(current);
     const spotlightConflict = isSpotlightAccelerator(normalized);
     return {
       ok: false,
@@ -11148,7 +11149,7 @@ app.whenReady().then(async () => {
   );
 });
 
-app.on('activate', () => paletteWindow.showPalette());
+app.on('activate', () => paletteWindow.showPaletteWhenReady());
 app.on('before-quit', (event) => {
   nevermindApp.isQuiting = true;
   void dictationService.dispose();
@@ -11164,7 +11165,7 @@ if (!isDev && !isNvmTestMode) {
   if (gotLock) {
     app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
     app.on('second-instance', (_event, argv) => {
-      paletteWindow.showPalette();
+      paletteWindow.showPaletteWhenReady();
       const deepLinkArg = argv?.find((arg: string) =>
         arg.startsWith(`${DEEP_LINK_SCHEME}://`),
       );

@@ -133,6 +133,7 @@ const api: NevermindApi = {
     invokeMeasured('actions:set-shortcut', action, shortcut),
   setPaletteHotkey: (accelerator) =>
     invokeMeasured('palette:set-hotkey', accelerator),
+  getPaletteHotkeyStatus: () => invokeMeasured('palette:hotkey-status'),
   getSetting: (id) => invokeMeasured('settings:get', id),
   getMicrophoneAccessStatus: () => invokeMeasured('microphone:get-status'),
   openSystemKeyboardSettings: () =>

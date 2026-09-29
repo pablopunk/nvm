@@ -2,6 +2,7 @@ import {
   createMeasuredIpcRegistrar,
   type IpcMainLike,
 } from './ipc-registration';
+import type { PaletteHotkeyStatus } from '../palette/preload-api';
 
 export interface AppIpcHandlersDeps {
   ipcMain: IpcMainLike & {
@@ -88,6 +89,7 @@ export interface AppIpcHandlersDeps {
     centerWindow(): unknown;
     hidePalette(): unknown;
     revealPalette(): unknown;
+    getHotkeyStatus(): PaletteHotkeyStatus | null;
   };
   hasCapability: (capability: string) => boolean;
   processPlatform: NodeJS.Platform | string;
@@ -282,6 +284,9 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     deps.paletteWindow.setPaletteSizeForMode(mode);
   });
   ipcHandleMeasured('palette:hide', () => deps.paletteWindow.hidePalette());
+  ipcHandleMeasured('palette:hotkey-status', () =>
+    deps.paletteWindow.getHotkeyStatus(),
+  );
   ipcHandleMeasured('indicator:show', (event, input) =>
     deps.showRendererIndicator(event.sender, input),
   );

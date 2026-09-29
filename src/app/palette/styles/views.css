@@ -783,6 +783,38 @@
   font-size: var(--fs-xs);
 }
 
+.shortcutRegistrationNotice {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-interactive);
+  color: var(--warning-text);
+  font-size: var(--fs-xs);
+}
+
+.shortcutRegistrationMessage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shortcutRegistrationButton {
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-xs);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
 .progressOverview {
   padding: 8px 10px;
   background: var(--surface-sunken);

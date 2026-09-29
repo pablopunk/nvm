@@ -85,6 +85,13 @@ export type SaveResult = {
   message: string;
 };
 
+export type PaletteHotkeyStatus = {
+  accelerator: string;
+  registered: boolean;
+  recoveryAccelerator?: string;
+  platform: ShortcutPlatform;
+};
+
 export type ShortcutRecord = {
   actionId: string;
   accelerator: string;
@@ -213,6 +220,7 @@ export type NevermindApi = {
   setPaletteHotkey: (
     accelerator: string,
   ) => Promise<SaveResult & { spotlightConflict?: boolean }>;
+  getPaletteHotkeyStatus: () => Promise<PaletteHotkeyStatus | null>;
   getSetting: (id: string) => Promise<string | boolean | undefined>;
   getMicrophoneAccessStatus: () => Promise<string>;
   openSystemKeyboardSettings: () => Promise<{ ok: boolean }>;

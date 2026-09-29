@@ -99,6 +99,7 @@ import { createRendererPerformanceTrace } from './performance-trace';
 import type {
   DictationCommand,
   NevermindApi,
+  PaletteHotkeyStatus,
   PaletteMode,
   ShortcutRecord,
 } from './preload-api';
@@ -1681,6 +1682,8 @@ export function App() {
   const [placeholderIndex, setPlaceholderIndex] = useState(
     SEARCH_PLACEHOLDERS.length - 1,
   );
+  const [paletteHotkeyStatus, setPaletteHotkeyStatus] =
+    useState<PaletteHotkeyStatus | null>(null);
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false);
   const [isPrimaryExtensionView, setIsPrimaryExtensionView] = useState(false);
   const [childQuery, setChildQuery] = useState('');
@@ -1823,6 +1826,15 @@ export function App() {
     window.nvm
       .getSetting('hyperKey')
       .then(setShortcutLabelHyperKey)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    window.nvm
+      .getPaletteHotkeyStatus()
+      .then((status) =>
+        setPaletteHotkeyStatus(status && !status.registered ? status : null),
+      )
       .catch(() => {});
   }, []);
 
@@ -3734,6 +3746,12 @@ export function App() {
         const result = await window.nvm.setPaletteHotkey(accelerator);
         showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
         if (!(result.ok || result.spotlightConflict)) return;
+        if (result.ok) {
+          const status = await window.nvm
+            .getPaletteHotkeyStatus()
+            .catch(() => null);
+          setPaletteHotkeyStatus(status && !status.registered ? status : null);
+        }
         setShortcutFor(null);
         setRecordedShortcut('');
         setOptionsFor(null);
@@ -5568,6 +5586,36 @@ export function App() {
             </div>
           ) : null}
         </div>
+
+        {paletteHotkeyStatus ? (
+          <div className="shortcutRegistrationNotice" role="alert">
+            <Keyboard size={16} aria-hidden="true" />
+            <div className="shortcutRegistrationMessage">
+              <strong>
+                Could not register{' '}
+                {shortcutLabel(
+                  paletteHotkeyStatus.accelerator,
+                  paletteHotkeyStatus.platform,
+                )}
+                .
+              </strong>
+              <span>
+                {paletteHotkeyStatus.recoveryAccelerator
+                  ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
+                  : 'Open Nevermind again from your app launcher; the running app will come forward.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="shortcutRegistrationButton"
+              onClick={() =>
+                startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
+              }
+            >
+              Change shortcut
+            </button>
+          </div>
+        ) : null}
 
         {siblingViews.map((sib, index) => (
           <div

@@ -81,6 +81,12 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
       centerWindow: () => calls.push('center'),
       hidePalette: () => calls.push('hide'),
       revealPalette: () => calls.push('reveal'),
+      getHotkeyStatus: () => ({
+        accelerator: 'Alt+Space',
+        registered: false,
+        recoveryAccelerator: 'Control+Alt+K',
+        platform: 'linux',
+      }),
     },
     hasCapability: () => true,
     processPlatform: 'darwin',
@@ -188,6 +194,12 @@ test('indicator IPC stays scoped to the originating sender', async () => {
 test('registerAppIpcHandlers preserves palette, camera, and window behavior', async () => {
   const { handles, calls } = createDeps();
 
+  assert.deepEqual(await handles.get('palette:hotkey-status')?.({}), {
+    accelerator: 'Alt+Space',
+    registered: false,
+    recoveryAccelerator: 'Control+Alt+K',
+    platform: 'linux',
+  });
   assert.deepEqual(
     await handles.get('palette:set-mode')?.({}, 'preview'),
     undefined,
