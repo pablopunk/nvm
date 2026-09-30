@@ -6796,6 +6796,7 @@ function keyboardShortcutItem(record: any) {
     title: record.title,
     subtitle: record.subtitle,
     shortcut: record.accelerator,
+    shortcutScope: record.scope,
     icon: 'keyboard',
     primaryAction: changeAction,
     actionPanel: {

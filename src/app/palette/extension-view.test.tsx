@@ -578,6 +578,34 @@ test('keeps durable global shortcuts visible in extension lists', () => {
   assert.match(html, /<span class="shortcutHint">⌘Y<\/span>/);
 });
 
+test('shows global shortcut keys on every root shortcut row', () => {
+  const html = renderExtensionView({
+    type: 'list',
+    presentation: 'root',
+    title: 'Keyboard Shortcuts',
+    items: [
+      {
+        id: 'one',
+        title: 'One',
+        shortcut: 'Command+Shift+1',
+        shortcutScope: 'global',
+        primaryAction: { type: 'recordShortcut', title: 'Change shortcut' },
+      },
+      {
+        id: 'two',
+        title: 'Two',
+        shortcut: 'Command+Shift+2',
+        shortcutScope: 'global',
+        primaryAction: { type: 'recordShortcut', title: 'Change shortcut' },
+      },
+    ],
+  });
+
+  assert.match(html, /⌘⇧1/);
+  assert.match(html, /⌘⇧2/);
+  assert.doesNotMatch(html, /keyHints selectedOnlyEnter/);
+});
+
 test('renders a native glyph as a grid tile visual', () => {
   const html = renderExtensionView({
     type: 'grid',
