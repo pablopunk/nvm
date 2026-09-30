@@ -893,6 +893,10 @@
   font-size: var(--fs-xs);
 }
 
+.shortcutRegistrationNotice[data-state="unconfigured"] {
+  color: var(--text-secondary);
+}
+
 .shortcutRegistrationMessage {
   display: flex;
   flex: 1;

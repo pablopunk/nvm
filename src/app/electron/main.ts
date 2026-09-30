@@ -839,9 +839,7 @@ function osCacheRoot() {
 }
 
 function getPaletteHotkey() {
-  return String(
-    getSetting('paletteHotkey') || settingValue(undefined, 'paletteHotkey'),
-  );
+  return String(getSetting('paletteHotkey') ?? '');
 }
 
 function settingIsAvailable(definition: any) {
@@ -11116,7 +11114,9 @@ app.whenReady().then(async () => {
   });
 
   paletteWindow.createWindow();
-  paletteWindow.registerHotkey();
+  const paletteHotkeyStatus = paletteWindow.registerHotkey();
+  if (paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured)
+    paletteWindow.showPaletteWhenReady();
 
   ipcMain.handle('microphone:get-status', () =>
     systemPreferences.getMediaAccessStatus('microphone'),

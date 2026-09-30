@@ -88,6 +88,7 @@ export type SaveResult = {
 
 export type PaletteHotkeyStatus = {
   accelerator: string;
+  configured: boolean;
   registered: boolean;
   recoveryAccelerator?: string;
   platform: ShortcutPlatform;

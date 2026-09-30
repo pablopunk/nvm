@@ -24,6 +24,7 @@ test('a failed Linux shortcut registers a recovery shortcut that reopens the pal
 
   assert.deepEqual(status, {
     accelerator: 'Alt+Space',
+    configured: true,
     registered: false,
     recoveryAccelerator: 'Control+Alt+K',
     platform: 'linux',
@@ -81,6 +82,28 @@ test('reports when all Linux recovery shortcuts are unavailable', () => {
 
   assert.deepEqual(status, {
     accelerator: 'Alt+Space',
+    configured: true,
+    registered: false,
+    platform: 'linux',
+  });
+});
+
+test('an unset palette shortcut registers no global binding', () => {
+  let attemptedRegistration = false;
+  const status = registerPaletteHotkey({
+    accelerator: '',
+    platform: 'linux',
+    register: () => {
+      attemptedRegistration = true;
+      return true;
+    },
+    listener: () => {},
+  });
+
+  assert.equal(attemptedRegistration, false);
+  assert.deepEqual(status, {
+    accelerator: '',
+    configured: false,
     registered: false,
     platform: 'linux',
   });

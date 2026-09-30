@@ -1,9 +1,11 @@
 import { accountRootItem } from './account';
+import { formatShortcut } from '../shared/shortcut-utils';
 import { extensionContext } from './_context';
 
 export interface GettingStartedDependencies {
   getUserState: () => Record<string, unknown>;
   getAccountRootItem: () => any;
+  getPaletteHotkey: () => string;
   scheduleSaveState: () => void;
   invalidateRootItems: () => void;
   matchesSearch: (item: any, query: string) => boolean;
@@ -15,6 +17,7 @@ export function createGettingStartedExtension(
   const dependencies: GettingStartedDependencies = {
     getUserState: () => extensionContext.userState,
     getAccountRootItem: accountRootItem,
+    getPaletteHotkey: () => String(extensionContext.getPaletteHotkey() || ''),
     scheduleSaveState: () => extensionContext.scheduleSaveState(),
     invalidateRootItems: () => extensionContext.invalidateExtensionRootItems(),
     matchesSearch: (item, query) => extensionContext.rankAction(item, query),
@@ -67,13 +70,32 @@ export function createGettingStartedExtension(
     };
   }
 
+  function paletteShortcutItem(ctx: any) {
+    const shortcut = dependencies.getPaletteHotkey().trim();
+    const isConfigured = Boolean(shortcut);
+    return {
+      id: 'getting-started-shortcut',
+      title: isConfigured
+        ? 'Keyboard shortcut set'
+        : 'Open Nevermind from anywhere',
+      subtitle: isConfigured
+        ? `${formatShortcut(shortcut, process.platform)} opens Nevermind from anywhere. You can change it any time.`
+        : 'Optional: set a shortcut for instant access. Launching Nevermind from its app icon also opens the palette.',
+      icon: 'keyboard',
+      primaryAction: ctx.actions.setPaletteShortcut(
+        isConfigured ? 'Change shortcut' : 'Set shortcut',
+      ),
+    };
+  }
+
   function gettingStartedView(ctx: any) {
     const complete = hasCompletedOnboarding();
     return ctx.ui.list({
       type: 'list',
       id: 'nevermind-getting-started',
       title: complete ? 'Help' : 'Getting Started',
-      subtitle: 'Nevermind is a command palette for your desktop.',
+      subtitle:
+        'Launch the app to open the palette, or set an optional shortcut for instant access.',
       searchBarPlaceholder: 'Search tips',
       items: [
         {
@@ -92,6 +114,7 @@ export function createGettingStartedExtension(
           icon: 'keyboard',
           disabled: true,
         },
+        paletteShortcutItem(ctx),
         signInHelpItem(),
         {
           id: 'getting-started-permissions',
@@ -118,7 +141,7 @@ export function createGettingStartedExtension(
       title: complete ? 'Help' : 'Welcome to Nevermind',
       subtitle: complete
         ? 'Quick tips for finding and running commands'
-        : 'Desktop command palette: search apps and files, then press Enter to run.',
+        : 'Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.',
       aliases: ['help', 'getting started', 'welcome', 'how to use', 'commands'],
       icon: 'sparkles',
       score: complete ? 14 : 90,

@@ -295,7 +295,7 @@ const PALETTE_HOTKEY_PSEUDO_ACTION: Action = {
   id: PALETTE_HOTKEY_ACTION_ID,
   kind: 'builtin',
   title: 'Set Nevermind shortcut',
-  subtitle: 'Global shortcut that toggles the palette',
+  subtitle: 'Optional global shortcut to open the palette from anywhere',
   icon: 'keyboard',
   score: 0,
 };
@@ -1755,6 +1755,11 @@ export function App() {
       confirmBuilderPreviewAction ||
       extensionItemOptionsFor ||
       optionsFor,
+  );
+  const showPaletteHotkeyNotice = Boolean(
+    paletteHotkeyStatus &&
+      (paletteHotkeyStatus.configured ||
+        !actions.some((action) => action.title === 'Welcome to Nevermind')),
   );
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 });
   function selectValue(value: string) {
@@ -3793,6 +3798,10 @@ export function App() {
     });
     try {
       if (targetAction.id === PALETTE_HOTKEY_ACTION_ID) {
+        const sourceOnboardingView =
+          extensionView?.id === 'nevermind-getting-started'
+            ? extensionView
+            : null;
         const result = await window.nvm.setPaletteHotkey(accelerator);
         showFeedbackIndicator(result.message, result.ok ? 'default' : 'error');
         if (!(result.ok || result.spotlightConflict)) return;
@@ -3805,6 +3814,27 @@ export function App() {
         setShortcutFor(null);
         setRecordedShortcut('');
         setOptionsFor(null);
+        if (result.ok && sourceOnboardingView) {
+          showExtensionView(
+            {
+              ...sourceOnboardingView,
+              items: (sourceOnboardingView.items || []).map((item) =>
+                item.id === 'getting-started-shortcut'
+                  ? {
+                      ...item,
+                      title: 'Keyboard shortcut set',
+                      subtitle: `${shortcutLabel(accelerator, window.nvm.platform)} opens Nevermind from anywhere. You can change it any time.`,
+                      primaryAction: item.primaryAction
+                        ? { ...item.primaryAction, title: 'Change shortcut' }
+                        : undefined,
+                    }
+                  : item,
+              ),
+            },
+            'replace',
+          );
+          return;
+        }
         const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
         if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
         if (result.spotlightConflict)
@@ -5645,22 +5675,29 @@ export function App() {
           ) : null}
         </div>
 
-        {paletteHotkeyStatus ? (
-          <div className="shortcutRegistrationNotice" role="alert">
+        {showPaletteHotkeyNotice && paletteHotkeyStatus ? (
+          <div
+            className="shortcutRegistrationNotice"
+            role={paletteHotkeyStatus.configured ? 'alert' : 'status'}
+            data-state={
+              paletteHotkeyStatus.configured
+                ? 'registration-failed'
+                : 'unconfigured'
+            }
+          >
             <Keyboard size={16} aria-hidden="true" />
             <div className="shortcutRegistrationMessage">
               <strong>
-                Could not register{' '}
-                {shortcutLabel(
-                  paletteHotkeyStatus.accelerator,
-                  paletteHotkeyStatus.platform,
-                )}
-                .
+                {paletteHotkeyStatus.configured
+                  ? `Could not register ${shortcutLabel(paletteHotkeyStatus.accelerator, paletteHotkeyStatus.platform)}.`
+                  : 'No keyboard shortcut is set.'}
               </strong>
               <span>
-                {paletteHotkeyStatus.recoveryAccelerator
-                  ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
-                  : 'Open Nevermind again from your app launcher; the running app will come forward.'}
+                {!paletteHotkeyStatus.configured
+                  ? 'Set an optional shortcut to open Nevermind from anywhere. Launching the app also opens the palette.'
+                  : paletteHotkeyStatus.recoveryAccelerator
+                    ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
+                    : 'Open Nevermind again from your app launcher; the running app will come forward.'}
               </span>
             </div>
             <button
@@ -5670,7 +5707,9 @@ export function App() {
                 startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
               }
             >
-              Change shortcut
+              {paletteHotkeyStatus.configured
+                ? 'Change shortcut'
+                : 'Set shortcut'}
             </button>
           </div>
         ) : null}

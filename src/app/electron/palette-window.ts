@@ -474,14 +474,19 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     hotkeyStatus = status;
     debugLog('registerHotkey', {
       accelerator: status.accelerator,
+      configured: status.configured,
       ok: status.registered,
-      isRegistered: globalShortcut.isRegistered(status.accelerator),
+      isRegistered: status.configured
+        ? globalShortcut.isRegistered(status.accelerator)
+        : false,
       recoveryAccelerator: status.recoveryAccelerator,
       recoveryIsRegistered: status.recoveryAccelerator
         ? globalShortcut.isRegistered(status.recoveryAccelerator)
         : false,
     });
-    if (status.registered)
+    if (!status.configured)
+      debugLog('registerHotkey.unconfigured', { platform: status.platform });
+    else if (status.registered)
       logger.info(
         'globalShortcut.registered',
         { hotkey: status.accelerator },

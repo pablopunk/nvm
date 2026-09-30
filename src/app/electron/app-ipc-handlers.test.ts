@@ -87,6 +87,7 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
       revealPalette: () => calls.push('reveal'),
       getHotkeyStatus: () => ({
         accelerator: 'Alt+Space',
+        configured: true,
         registered: false,
         recoveryAccelerator: 'Control+Alt+K',
         platform: 'linux',
@@ -203,6 +204,7 @@ test('registerAppIpcHandlers preserves palette, camera, and window behavior', as
 
   assert.deepEqual(await handles.get('palette:hotkey-status')?.({}), {
     accelerator: 'Alt+Space',
+    configured: true,
     registered: false,
     recoveryAccelerator: 'Control+Alt+K',
     platform: 'linux',

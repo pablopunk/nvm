@@ -19,8 +19,11 @@ export function registerPaletteHotkey({
   register,
   listener,
 }: RegisterPaletteHotkeyOptions): PaletteHotkeyStatus {
+  if (!accelerator.trim())
+    return { accelerator: '', configured: false, registered: false, platform };
+
   if (register(accelerator, listener))
-    return { accelerator, registered: true, platform };
+    return { accelerator, configured: true, registered: true, platform };
 
   if (platform === 'linux') {
     for (const recoveryAccelerator of LINUX_PALETTE_RECOVERY_HOTKEYS) {
@@ -28,6 +31,7 @@ export function registerPaletteHotkey({
       if (register(recoveryAccelerator, listener))
         return {
           accelerator,
+          configured: true,
           registered: false,
           recoveryAccelerator,
           platform,
@@ -35,7 +39,7 @@ export function registerPaletteHotkey({
     }
   }
 
-  return { accelerator, registered: false, platform };
+  return { accelerator, configured: true, registered: false, platform };
 }
 
 export function isPaletteHotkeyReserved(
