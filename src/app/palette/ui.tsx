@@ -225,7 +225,7 @@ function shortcutLabelParts(shortcut?: string) {
 
 export function shortcutLabel(
   shortcut?: string,
-  platform: ShortcutPlatform = window.nvm.platform,
+  platform: ShortcutPlatform = globalThis.window?.nvm?.platform ?? 'darwin',
 ) {
   const parts = shortcutLabelParts(shortcut);
   const startsWithHyper = parts[0] === '✦';

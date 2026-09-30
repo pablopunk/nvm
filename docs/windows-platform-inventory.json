@@ -1315,26 +1315,10 @@
       "surface": "palette-hotkey"
     },
     {
-      "key": "settings-injected-platform-settingValue-param",
-      "file": "src/app/electron/settings.ts",
-      "category": "injected-platform",
-      "selector": "function:settingValue::injected-platform::processPlatform: NodeJS.Platform = process.platform::name",
-      "disposition": "presentation-adapter",
-      "surface": "palette-hotkey"
-    },
-    {
-      "key": "settings-direct-platform-settingValue-default",
-      "file": "src/app/electron/settings.ts",
+      "key": "getting-started-direct-platform-palette-shortcut",
+      "file": "src/app/extensions/getting-started.ts",
       "category": "direct-platform",
-      "selector": "function:settingValue::direct-platform::processPlatform: NodeJS.Platform = process.platform::initializer",
-      "disposition": "presentation-adapter",
-      "surface": "palette-hotkey"
-    },
-    {
-      "key": "settings-injected-platform-platformDefault",
-      "file": "src/app/electron/settings.ts",
-      "category": "injected-platform",
-      "selector": "function:settingValue/variable:platformDefault::injected-platform::const platformDefault = definition.type === 'shortcut' ? definition.platformDefaults?.[ processP…#8fb5a5a224fe::declarationList.declarations[0].initializer.whenTrue.argumentExpression.expression",
+      "selector": "function:createGettingStartedExtension/function:paletteShortcutItem/property:subtitle::direct-platform::subtitle: isConfigured ? `${formatShortcut(shortcut, process.platform)} opens Nevermind from any…#76eeb8f42d0a::initializer.whenTrue.templateSpans[0].expression.arguments[1]",
       "disposition": "presentation-adapter",
       "surface": "palette-hotkey"
     },
