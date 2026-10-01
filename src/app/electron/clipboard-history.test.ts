@@ -166,8 +166,10 @@ function createFakes(overrides: Partial<TestDeps> = {}) {
     readDesktopSelection: async () => ({ type: 'empty' }),
     CLIPBOARD_LIMIT: 300,
     CLIPBOARD_POLL_INTERVAL_MS: 1000,
+    CLIPBOARD_LAST_5_MINUTES_MS: 5 * 60_000,
     CLIPBOARD_LAST_HOUR_MS: 60 * 60_000,
     CLIPBOARD_LAST_DAY_MS: 24 * 60 * 60_000,
+    CLIPBOARD_LAST_WEEK_MS: 7 * 24 * 60 * 60_000,
     ...overrides,
   };
 
@@ -490,6 +492,45 @@ test('removeClipboardHistoryByAction removes all', () => {
   assert.equal(getHistory().length, 0);
 });
 
+test('removeClipboardHistoryByAction removes entries in the selected time range', () => {
+  const ranges = [
+    { range: 'last-5-minutes', duration: 5 * 60_000 },
+    { range: 'last-hour', duration: 60 * 60_000 },
+    { range: 'last-day', duration: 24 * 60 * 60_000 },
+    { range: 'last-week', duration: 7 * 24 * 60 * 60_000 },
+  ];
+
+  for (const { range, duration } of ranges) {
+    const { clipboardHistory, getHistory } = createFakes();
+    const now = Date.now();
+    getHistory().push(
+      {
+        id: 'text:inside',
+        type: 'text',
+        text: 'inside',
+        createdAt: now - duration / 2,
+      },
+      {
+        id: 'text:outside',
+        type: 'text',
+        text: 'outside',
+        createdAt: now - duration * 2,
+      },
+    );
+
+    const removed = clipboardHistory.removeClipboardHistoryByAction({
+      clipboardHistoryRange: range,
+    });
+
+    assert.equal(removed, 1, `${range} removes entries within its window`);
+    assert.deepEqual(
+      getHistory().map((entry) => entry.id),
+      ['text:outside'],
+      `${range} preserves older entries`,
+    );
+  }
+});
+
 test('removeClipboardHistoryByAction no-ops on no match', () => {
   const { clipboardHistory, getHistory } = createFakes();
 
@@ -718,11 +759,29 @@ test('clipboardHistoryItem builds text item with paste action', () => {
   const actions = result.actionPanel.sections[0].actions;
   assert.ok(actions.some((a: any) => a.type === 'pasteText'));
   assert.equal(result.primaryAction.type, 'copyText');
+  const historyActions: any[] = result.actionPanel.sections[1].actions;
+  assert.equal(historyActions[0].clipboardHistoryRange, 'item');
+  assert.equal(historyActions[1].type, 'submenu');
+  assert.equal(historyActions[1].title, 'Remove Last...');
   assert.deepEqual(
-    result.actionPanel.sections[1].actions.map(
-      (action: any) => action.clipboardHistoryRange,
+    historyActions[1].submenu.sections[0].actions.map((action: any) => [
+      action.title,
+      action.clipboardHistoryRange,
+    ]),
+    [
+      ['5 Minutes', 'last-5-minutes'],
+      ['Hour', 'last-hour'],
+      ['Day', 'last-day'],
+      ['Week', 'last-week'],
+    ],
+  );
+  assert.ok(
+    historyActions[1].submenu.sections[0].actions.every(
+      (action: any) =>
+        action.type === 'removeClipboardHistory' &&
+        action.requiresConfirmation &&
+        action.confirmLabel === 'Remove',
     ),
-    ['item'],
   );
 });
 
@@ -753,22 +812,68 @@ test('clipboardHistoryView keeps 300 rows within the action token budget', () =>
   );
 
   const view = clipboardHistory.clipboardHistoryView();
-  const rowActionCount = view.items.reduce(
-    (count: number, item: any) =>
-      count +
+  const countedActions = new WeakSet<object>();
+  function countUniqueAction(action: any): number {
+    if (!action || typeof action !== 'object') return 0;
+    if (action.submenu && countedActions.has(action)) return 0;
+    if (action.submenu) countedActions.add(action);
+    return (
       1 +
-      item.actionPanel.sections.reduce(
-        (sectionCount: number, section: any) =>
-          sectionCount + section.actions.length,
+      (action.submenu?.sections || []).reduce(
+        (count: number, section: any) =>
+          count +
+          section.actions.reduce(
+            (actionCount: number, nestedAction: any) =>
+              actionCount + countUniqueAction(nestedAction),
+            0,
+          ),
         0,
-      ),
-    0,
-  );
+      )
+    );
+  }
+  const actionCount =
+    view.actions.reduce(
+      (count: number, action: any) => count + countUniqueAction(action),
+      0,
+    ) +
+    view.actionPanel.sections.reduce(
+      (count: number, section: any) =>
+        count +
+        section.actions.reduce(
+          (actionCount: number, action: any) =>
+            actionCount + countUniqueAction(action),
+          0,
+        ),
+      0,
+    ) +
+    view.items.reduce(
+      (count: number, item: any) =>
+        count +
+        countUniqueAction(item.primaryAction) +
+        item.actionPanel.sections.reduce(
+          (sectionCount: number, section: any) =>
+            sectionCount +
+            section.actions.reduce(
+              (actionCount: number, action: any) =>
+                actionCount + countUniqueAction(action),
+              0,
+            ),
+          0,
+        ),
+      0,
+    );
 
-  assert.ok(rowActionCount < 2000);
+  assert.ok(actionCount < 2000);
   assert.ok(
     view.items.every(
-      (item: any) => item.actionPanel.sections[1].actions.length === 1,
+      (item: any) => item.actionPanel.sections[1].actions.length === 2,
+    ),
+  );
+  assert.ok(
+    view.items.every(
+      (item: any) =>
+        item.actionPanel.sections[1].actions[1] ===
+        view.items[0].actionPanel.sections[1].actions[1],
     ),
   );
 });

@@ -78,8 +78,10 @@ export type ClipboardHistoryDeps = {
   // ── Constants ──────────────────────────────────────────
   CLIPBOARD_LIMIT: number;
   CLIPBOARD_POLL_INTERVAL_MS: number;
+  CLIPBOARD_LAST_5_MINUTES_MS: number;
   CLIPBOARD_LAST_HOUR_MS: number;
   CLIPBOARD_LAST_DAY_MS: number;
+  CLIPBOARD_LAST_WEEK_MS: number;
 };
 
 // ───────────────────────────────────────────────────────────
@@ -280,6 +282,12 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       );
       return history.filter((entry) => ids.has(entry.id) && typeMatches(entry));
     }
+    if (range === 'last-5-minutes')
+      return history.filter(
+        (entry) =>
+          (entry.createdAt || 0) >= now - deps.CLIPBOARD_LAST_5_MINUTES_MS &&
+          typeMatches(entry),
+      );
     if (range === 'last-hour')
       return history.filter(
         (entry) =>
@@ -290,6 +298,12 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       return history.filter(
         (entry) =>
           (entry.createdAt || 0) >= now - deps.CLIPBOARD_LAST_DAY_MS &&
+          typeMatches(entry),
+      );
+    if (range === 'last-week')
+      return history.filter(
+        (entry) =>
+          (entry.createdAt || 0) >= now - deps.CLIPBOARD_LAST_WEEK_MS &&
           typeMatches(entry),
       );
     if (range === 'older-than')
@@ -399,6 +413,55 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     };
   }
 
+  let clipboardHistoryRemovalByTimeActionCache: any;
+
+  function clipboardHistoryRemovalByTimeAction() {
+    if (clipboardHistoryRemovalByTimeActionCache)
+      return clipboardHistoryRemovalByTimeActionCache;
+    const ranges = [
+      {
+        range: 'last-5-minutes',
+        title: '5 Minutes',
+        period: 'the last 5 minutes',
+      },
+      {
+        range: 'last-hour',
+        title: 'Hour',
+        period: 'the last hour',
+      },
+      {
+        range: 'last-day',
+        title: 'Day',
+        period: 'the last day',
+      },
+      {
+        range: 'last-week',
+        title: 'Week',
+        period: 'the last week',
+      },
+    ];
+    clipboardHistoryRemovalByTimeActionCache = {
+      type: 'submenu',
+      title: 'Remove Last...',
+      submenu: {
+        title: 'Remove Last...',
+        sections: [
+          {
+            actions: ranges.map(({ range, title, period }) => ({
+              ...clipboardHistoryRemovalAction(
+                range,
+                title,
+                `Remove clipboard history entries copied in ${period}?`,
+              ),
+              confirmLabel: 'Remove',
+            })),
+          },
+        ],
+      },
+    };
+    return clipboardHistoryRemovalByTimeActionCache;
+  }
+
   function clipboardHistoryRemovalActions(item: any = null) {
     if (deps.getHistory().length === 0) return [];
     if (item?.id)
@@ -409,6 +472,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
           `Remove “${clipboardItemTitle(item)}” from clipboard history?`,
           item.id,
         ),
+        clipboardHistoryRemovalByTimeAction(),
       ];
     return [
       clipboardHistoryRemovalAction(

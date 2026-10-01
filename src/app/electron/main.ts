@@ -470,8 +470,10 @@ const appIconCache = createAppIconCache({
 const CLIPBOARD_LIMIT = 300;
 const FILE_RESULT_LIMIT = 6;
 const CLIPBOARD_POLL_INTERVAL_MS = 1000;
+const CLIPBOARD_LAST_5_MINUTES_MS = 5 * 60_000;
 const CLIPBOARD_LAST_HOUR_MS = 60 * 60_000;
 const CLIPBOARD_LAST_DAY_MS = 24 * CLIPBOARD_LAST_HOUR_MS;
+const CLIPBOARD_LAST_WEEK_MS = 7 * CLIPBOARD_LAST_DAY_MS;
 const APP_REINDEX_DEBOUNCE_MS = 1000;
 const THUMBNAIL_SIZE = 512;
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000;
@@ -793,8 +795,10 @@ clipboardService = createClipboardHistory({
   readDesktopSelection,
   CLIPBOARD_LIMIT,
   CLIPBOARD_POLL_INTERVAL_MS,
+  CLIPBOARD_LAST_5_MINUTES_MS,
   CLIPBOARD_LAST_HOUR_MS,
   CLIPBOARD_LAST_DAY_MS,
+  CLIPBOARD_LAST_WEEK_MS,
 });
 
 const selectedText = createSelectedTextReader({
@@ -4151,7 +4155,8 @@ function prepareViewDraft(draft, view, entry) {
 }
 
 function normalizeView(view, entry) {
-  const actions = normalizeViewActions(view.actions, entry);
+  const actionCache = new WeakMap<object, any>();
+  const actions = normalizeViewActions(view.actions, entry, actionCache);
   const webviewPermissions =
     view.type === 'webview'
       ? filterWebviewPermissionsForExtension(
@@ -4165,11 +4170,15 @@ function normalizeView(view, entry) {
   const loaderHandle = isLoaderHandle(view.items) ? view.items : undefined;
   if (loaderHandle) viewLoaderRegistry.register(viewId, loaderHandle, entry);
 
-  const items = normalizeViewItems(normalizeLoaderItems(view.items), entry);
+  const items = normalizeViewItems(
+    normalizeLoaderItems(view.items),
+    entry,
+    actionCache,
+  );
   const sections = Array.isArray(view.sections)
     ? view.sections.map((section) => ({
         ...section,
-        items: normalizeViewItems(section.items, entry),
+        items: normalizeViewItems(section.items, entry, actionCache),
       }))
     : view.sections;
 
@@ -4193,13 +4202,26 @@ function normalizeView(view, entry) {
         }
       : {}),
     actions,
-    actionPanel: normalizeActionPanel(view.actionPanel, actions, entry),
-    onSelectionChange: normalizeViewAction(view.onSelectionChange, entry),
-    submitAction: normalizeViewAction(view.submitAction, entry),
+    actionPanel: normalizeActionPanel(
+      view.actionPanel,
+      actions,
+      entry,
+      actionCache,
+    ),
+    onSelectionChange: normalizeViewAction(
+      view.onSelectionChange,
+      entry,
+      actionCache,
+    ),
+    submitAction: normalizeViewAction(view.submitAction, entry, actionCache),
     searchAccessory: view.searchAccessory
       ? {
           ...view.searchAccessory,
-          onChange: normalizeViewAction(view.searchAccessory.onChange, entry),
+          onChange: normalizeViewAction(
+            view.searchAccessory.onChange,
+            entry,
+            actionCache,
+          ),
         }
       : view.searchAccessory,
     refresh: registerViewRefreshForRenderer(view.refresh, entry, view),
@@ -4220,17 +4242,30 @@ function persistentActionForRef(action, entry) {
   return registered ? extensionActionFromContribution(registered) : null;
 }
 
-function normalizeViewItems(items, entry) {
+function normalizeViewItems(
+  items,
+  entry,
+  actionCache = new WeakMap<object, any>(),
+) {
   if (isLoaderHandle(items)) return [];
   return Array.isArray(items)
     ? items.map((item) => {
-        const itemActions = normalizeViewActions(item.actions, entry);
+        const itemActions = normalizeViewActions(
+          item.actions,
+          entry,
+          actionCache,
+        );
         const primaryAction = normalizeViewAction(
           item.primaryAction || item.action,
           entry,
+          actionCache,
         );
         const { run, __handler, action, ...safeItem } = item;
-        const detailActions = normalizeViewActions(item.detail?.actions, entry);
+        const detailActions = normalizeViewActions(
+          item.detail?.actions,
+          entry,
+          actionCache,
+        );
         return {
           ...safeItem,
           ...(item.detail
@@ -4241,6 +4276,7 @@ function normalizeViewItems(items, entry) {
             item.actionPanel,
             itemActions,
             entry,
+            actionCache,
           ),
           primaryAction,
           persistentAction:
@@ -4252,7 +4288,12 @@ function normalizeViewItems(items, entry) {
     : items;
 }
 
-function normalizeActionPanel(panel, fallbackActions, entry) {
+function normalizeActionPanel(
+  panel,
+  fallbackActions,
+  entry,
+  actionCache = new WeakMap<object, any>(),
+) {
   if (panel?.sections)
     return {
       ...panel,
@@ -4263,26 +4304,48 @@ function normalizeActionPanel(panel, fallbackActions, entry) {
           actions: normalizeViewActions(
             [...(section.actions || []), ...(lazyActions || [])],
             entry,
+            actionCache,
           ),
         };
       }),
     };
   if (Array.isArray(fallbackActions) && fallbackActions.length)
     return {
-      sections: [{ actions: normalizeViewActions(fallbackActions, entry) }],
+      sections: [
+        {
+          actions: normalizeViewActions(fallbackActions, entry, actionCache),
+        },
+      ],
     };
   return panel;
 }
 
-function normalizeViewActions(actions, entry) {
+function normalizeViewActions(
+  actions,
+  entry,
+  actionCache = new WeakMap<object, any>(),
+) {
   return Array.isArray(actions)
     ? actions
-        .map((action) => normalizeViewAction(action, entry))
+        .map((action) => normalizeViewAction(action, entry, actionCache))
         .filter(Boolean)
     : [];
 }
 
-function normalizeViewAction(action, entry) {
+function normalizeViewAction(
+  action,
+  entry,
+  actionCache = new WeakMap<object, any>(),
+) {
+  if (!action) return null;
+  const canCache = typeof action === 'object' && action.submenu;
+  if (canCache && actionCache.has(action)) return actionCache.get(action);
+  const normalized = normalizeViewActionUncached(action, entry, actionCache);
+  if (canCache) actionCache.set(action, normalized);
+  return normalized;
+}
+
+function normalizeViewActionUncached(action, entry, actionCache) {
   if (!action) return null;
   const handler =
     typeof action.__handler === 'function'
@@ -4306,10 +4369,14 @@ function normalizeViewAction(action, entry) {
     return normalizeViewAction(
       { ...rest, type: 'runExtensionAction', handlerId },
       entry,
+      actionCache,
     );
   }
   const normalized = action.submenu
-    ? { ...action, submenu: normalizeActionPanel(action.submenu, [], entry) }
+    ? {
+        ...action,
+        submenu: normalizeActionPanel(action.submenu, [], entry, actionCache),
+      }
     : action;
   if (
     (normalized.type === 'rootView' ||
@@ -4329,7 +4396,11 @@ function normalizeViewAction(action, entry) {
     return registerViewActionForRenderer(
       {
         ...normalized,
-        targetAction: normalizeViewAction(normalized.targetAction, entry),
+        targetAction: normalizeViewAction(
+          normalized.targetAction,
+          entry,
+          actionCache,
+        ),
       },
       entry,
     );
