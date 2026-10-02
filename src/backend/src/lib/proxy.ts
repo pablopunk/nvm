@@ -1050,7 +1050,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       });
     }
     forwardBody = cfg.rewriteRequestBody
-      ? cfg.rewriteRequestBody(text, routing, maxOutputTokens)
+      ? cfg.rewriteRequestBody(requestBodyText, routing, maxOutputTokens)
       : requestBodyBuffer;
   }
 

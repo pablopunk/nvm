@@ -923,6 +923,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
       },
     });
 
+    installDb(createFakeDb({ selects: proxySelects({ free: 1000000 }) }));
     const noOutputContextResponse = await postChatCompletion(
       routeContext(
         authorizedChatRequest({
