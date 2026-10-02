@@ -21,6 +21,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
@@ -34,6 +35,7 @@ import { isAppIconPath } from './app-icons';
 import {
   applyBuilderPreviewActionResult,
   builderPreviewAutoRunAction,
+  builderPreviewPromptForActiveChat,
   builderPreviewResultIsCurrent,
   builderPreviewRootActions,
   builderPreviewSelectedItemId,
@@ -89,11 +91,11 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
+import { usePaletteForm } from './palette-form';
 import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
-import { usePaletteForm } from './palette-form';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -103,7 +105,6 @@ import type {
   PaletteMode,
   ShortcutRecord,
 } from './preload-api';
-import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -3031,6 +3032,23 @@ export function App() {
   ) {
     if (result.toast)
       showFeedbackIndicator(result.toast.message, result.toast.tone);
+    const patch = result.patch;
+    const activeChatPrompt = builderPreviewPromptForActiveChat(
+      result,
+      extensionView?.aiChat ? extensionView.chatId : undefined,
+    );
+    if (activeChatPrompt) {
+      if (patch)
+        setBuilderPreviews((previews) =>
+          previews.map((preview) =>
+            preview.filename === filename
+              ? patchBuilderPreviewState(preview, patch)
+              : preview,
+          ),
+        );
+      void sendAiPrompt(activeChatPrompt.prompt, activeChatPrompt.chatId);
+      return;
+    }
     setBuilderPreviews((previews) =>
       previews.map((preview) => {
         if (preview.filename !== filename) return preview;

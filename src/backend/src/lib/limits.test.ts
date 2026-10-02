@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { estimateInputTokensFromBody, estimatePromptCredits, estimateRequestCredits, requestedMaxOutputTokens, MAX_INPUT_TOKENS } from './limits';
+import {
+  estimateInputTokensFromBody,
+  estimateInputTokensFromValue,
+  estimatePromptCredits,
+  estimateRequestCredits,
+  requestedMaxOutputTokens,
+  MAX_INPUT_TOKENS,
+} from './limits';
 import type { ModelCost } from './pricing';
 
 const CHARS_PER_TOKEN = 4;
@@ -30,6 +37,14 @@ describe('estimateInputTokensFromBody', () => {
     assert.strictEqual(
       estimateInputTokensFromBody(body),
       Math.ceil((promptLength + systemLength) / CHARS_PER_TOKEN),
+    );
+  });
+
+  test('estimates parsed request bodies without serializing them again', () => {
+    const body = { messages: [{ role: 'user', content: 'hello world' }] };
+    assert.equal(
+      estimateInputTokensFromValue(body),
+      estimateInputTokensFromBody(JSON.stringify(body)),
     );
   });
 

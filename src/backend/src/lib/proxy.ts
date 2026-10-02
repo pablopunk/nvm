@@ -25,7 +25,13 @@ import { lookupModelDescriptor } from './pricing';
 import { getUpstreamConfig, selectApiForModel, providerSupportsFormat, UpstreamConfigError } from './upstream';
 import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
-import { estimateInputTokensFromBody, estimateRequestCredits, MAX_INPUT_TOKENS, requestedMaxOutputTokens } from './limits';
+import {
+  estimateInputTokensFromBody,
+  estimateInputTokensFromValue,
+  estimateRequestCredits,
+  MAX_INPUT_TOKENS,
+  requestedMaxOutputTokens,
+} from './limits';
 import { finalizeReservation, reserveCredits, resizeReservation } from './credit-reservations';
 import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
@@ -385,6 +391,46 @@ function aiRequestShape(value: unknown) {
     tool_bytes: serializedByteLength(tools),
     tool_count: tools.length,
   };
+}
+
+function logPromptTooLargeEvent(
+  request: Request,
+  requestId: string,
+  client: DesktopClient,
+  details: {
+    bodyBytes: number;
+    estimatedInputTokens: number;
+    requestShape: ReturnType<typeof aiRequestShape>;
+    reason: 'input_limit' | 'no_output_context';
+    contextWindowTokens?: number;
+    requestedOutputTokens?: number;
+    maxOutputTokens?: number;
+  },
+) {
+  log.warn('prompt_too_large', {
+    request_id: requestId,
+    route: new URL(request.url).pathname,
+    status: 413,
+    client_version: client.version,
+    client_api_version: client.apiVersion,
+    body_bytes: details.bodyBytes,
+    estimated_input_tokens: details.estimatedInputTokens,
+    max_input_tokens: MAX_INPUT_TOKENS,
+    reason: details.reason,
+    ...details.requestShape,
+    ...(details.contextWindowTokens
+      ? {
+          context_window_tokens: details.contextWindowTokens,
+          output_context_safety_tokens: OUTPUT_CONTEXT_SAFETY_TOKENS,
+        }
+      : {}),
+    ...(details.requestedOutputTokens !== undefined
+      ? { requested_output_tokens: details.requestedOutputTokens }
+      : {}),
+    ...(details.maxOutputTokens !== undefined
+      ? { max_output_tokens: details.maxOutputTokens }
+      : {}),
+  });
 }
 
 export function aiRequestHash(request: Request, body: Uint8Array) {
@@ -881,21 +927,36 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     let estimatedCredits: number | undefined;
     let requestShape = aiRequestShape(null);
     if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
-    const text = requestBodyText;
-    estimatedInputTokens = estimateInputTokensFromBody(text);
+    let parsedBody: unknown = null;
+    let bodyIsJson = false;
+    try {
+      parsedBody = JSON.parse(requestBodyText);
+      bodyIsJson = true;
+    } catch {
+      bodyIsJson = false;
+    }
+    estimatedInputTokens = bodyIsJson
+      ? estimateInputTokensFromValue(parsedBody)
+      : estimateInputTokensFromBody(requestBodyText);
+    requestShape = aiRequestShape(parsedBody);
     if (estimatedInputTokens > MAX_INPUT_TOKENS) {
+      logPromptTooLargeEvent(cfg.request, requestId, client, {
+        bodyBytes: requestBodyBytes.byteLength,
+        estimatedInputTokens,
+        requestShape,
+        reason: 'input_limit',
+      });
       await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
         { error: { type: 'prompt_too_large', message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens` } },
         { status: 413 },
       ), requestId);
     }
-    let parsedBody: unknown = null;
-    try { parsedBody = JSON.parse(text); } catch { /* upstream retains its existing invalid-JSON behavior */ }
-    requestShape = aiRequestShape(parsedBody);
     requestedOutput = requestedMaxOutputTokens(parsedBody);
+    let contextWindowTokens: number | undefined;
     const maxOutputFor = async (candidate: ModelRouting) => {
       const descriptor = await lookupModelDescriptor(candidate.provider, candidate.activeModelId);
+      contextWindowTokens = descriptor?.contextWindow;
       const serverMaximum = descriptor?.maxTokens ?? 32_000;
       const contextMaximum = descriptor
         ? descriptor.contextWindow - estimatedInputTokens - OUTPUT_CONTEXT_SAFETY_TOKENS
@@ -908,6 +969,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     };
     maxOutputTokens = await maxOutputFor(routing);
     if (maxOutputTokens < 1) {
+      logPromptTooLargeEvent(cfg.request, requestId, client, {
+        bodyBytes: requestBodyBytes.byteLength,
+        estimatedInputTokens,
+        requestShape,
+        reason: 'no_output_context',
+        contextWindowTokens,
+        requestedOutputTokens: requestedOutput,
+        maxOutputTokens,
+      });
       await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
         { error: { type: 'prompt_too_large', message: 'Prompt leaves no room for model output' } },

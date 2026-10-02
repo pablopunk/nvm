@@ -1,6 +1,9 @@
 import { computeUsdCost, usdToCredits, type ModelCost } from './cost';
+import { DEFAULT_NEVERMIND_MAX_INPUT_TOKENS } from '../../../app/shared/ai-context-window';
 
-export const MAX_INPUT_TOKENS = Number(process.env.MAX_INPUT_TOKENS ?? 100_000);
+export const MAX_INPUT_TOKENS = Number(
+  process.env.MAX_INPUT_TOKENS ?? DEFAULT_NEVERMIND_MAX_INPUT_TOKENS,
+);
 
 const CHARS_PER_TOKEN = 4;
 const TOKENS_PER_IMAGE = 1_600;
@@ -132,16 +135,22 @@ function collectInputEstimate(node: unknown, estimate: InputEstimate): void {
   }
 }
 
-export function estimateInputTokensFromBody(bodyText: string): number {
-  if (!bodyText) return 0;
-  let parsed: unknown;
-  try { parsed = JSON.parse(bodyText); } catch { return Math.ceil(bodyText.length / CHARS_PER_TOKEN); }
+export function estimateInputTokensFromValue(value: unknown): number {
   const estimate: InputEstimate = { textCharacters: 0, images: 0 };
-  collectInputEstimate(parsed, estimate);
+  collectInputEstimate(value, estimate);
   return (
     Math.ceil(estimate.textCharacters / CHARS_PER_TOKEN) +
     estimate.images * TOKENS_PER_IMAGE
   );
+}
+
+export function estimateInputTokensFromBody(bodyText: string): number {
+  if (!bodyText) return 0;
+  try {
+    return estimateInputTokensFromValue(JSON.parse(bodyText));
+  } catch {
+    return Math.ceil(bodyText.length / CHARS_PER_TOKEN);
+  }
 }
 
 export function estimatePromptCredits(inputTokens: number, cost: ModelCost): number {

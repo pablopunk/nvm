@@ -5,7 +5,7 @@ import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
 import { lookupModelCost, lookupModelDescriptor } from '../../../lib/pricing';
 import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
 import { selectApiForModel } from '../../../lib/upstream';
-import { estimateRequestCredits } from '../../../lib/limits';
+import { estimateRequestCredits, MAX_INPUT_TOKENS } from '../../../lib/limits';
 import { env } from '../../../lib/env';
 import { joinPublicApiUrl, parsePublicOrigin } from '../../../../../app/shared/public-origin';
 import { previewTargetFromEnvironment } from '../../../lib/preview-auth';
@@ -109,6 +109,7 @@ export const GET: APIRoute = async ({ request }) => {
   const requestId = requestIdFromHeaders(request.headers);
   return Response.json({
     ...descriptor,
+    maxInputTokens: MAX_INPUT_TOKENS,
     thinkingLevel,
     api,
     provider: NEVERMIND_PROVIDER_ID,

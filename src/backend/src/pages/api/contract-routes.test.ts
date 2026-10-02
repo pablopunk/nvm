@@ -5,7 +5,10 @@ import type { APIContext } from 'astro';
 import { setDbForTests, resetDbForTests } from '../../db/client';
 import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
 import { resetPricingCacheForTests } from '../../lib/pricing';
-import { estimateInputTokensFromBody } from '../../lib/limits';
+import {
+  estimateInputTokensFromBody,
+  MAX_INPUT_TOKENS,
+} from '../../lib/limits';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
@@ -652,10 +655,13 @@ test('active-model route returns descriptor contract with compatibility headers'
     headers: { authorization: 'Bearer nvm_pat_test', 'x-request-id': 'req_active_model' },
   })));
   const body = await response.json() as any;
+  const expectedDescriptor = fixture('active-model-descriptor');
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-request-id'), 'req_active_model');
   assert.ok(response.headers.get('x-nevermind-backend-version'));
+  assert.deepEqual(body, expectedDescriptor);
+  assert.equal(body.maxInputTokens, MAX_INPUT_TOKENS);
   assert.equal(body.id, 'gemini-3-flash');
   assert.equal(body.name, 'Gemini 3 Flash');
   assert.equal(body.provider, 'nevermind');
@@ -898,11 +904,51 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   installDb(createFakeDb({ selects: proxySelects({ free: 1000000 }) }));
-  const promptTooLarge = await postChatCompletion(routeContext(authorizedChatRequest({ messages: [{ role: 'user', content: 'x'.repeat(400_004) }] })));
-  assert.equal(promptTooLarge.status, 413);
-  assert.deepEqual(await promptTooLarge.json(), {
-    error: { type: 'prompt_too_large', message: 'Prompt exceeds 100000 input tokens' },
-  });
+  const promptSizeLogs: Record<string, unknown>[] = [];
+  const originalWarn = console.warn;
+  console.warn = (line) => promptSizeLogs.push(JSON.parse(String(line)));
+  try {
+    const inputLimitResponse = await postChatCompletion(
+      routeContext(
+        authorizedChatRequest({
+          messages: [{ role: 'user', content: 'x'.repeat(400_004) }],
+        }),
+      ),
+    );
+    assert.equal(inputLimitResponse.status, 413);
+    assert.deepEqual(await inputLimitResponse.json(), {
+      error: {
+        type: 'prompt_too_large',
+        message: 'Prompt exceeds 100000 input tokens',
+      },
+    });
+
+    const noOutputContextResponse = await postChatCompletion(
+      routeContext(
+        authorizedChatRequest({
+          messages: [{ role: 'user', content: 'x'.repeat(384_000) }],
+        }),
+      ),
+    );
+    assert.equal(noOutputContextResponse.status, 413);
+    assert.deepEqual(await noOutputContextResponse.json(), {
+      error: {
+        type: 'prompt_too_large',
+        message: 'Prompt leaves no room for model output',
+      },
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.deepEqual(
+    promptSizeLogs.map((event) => event.reason),
+    ['input_limit', 'no_output_context'],
+  );
+  assert.ok(Number(promptSizeLogs[0]?.estimated_input_tokens) > MAX_INPUT_TOKENS);
+  assert.ok(Number(promptSizeLogs[0]?.body_bytes) > 0);
+  assert.equal(promptSizeLogs[1]?.context_window_tokens, 100000);
+  assert.equal(promptSizeLogs[1]?.output_context_safety_tokens, 4096);
 });
 
 test('proxy route does not reject inline images as oversized text prompts', async () => {

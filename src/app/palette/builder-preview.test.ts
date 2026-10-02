@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   applyBuilderPreviewActionResult,
   builderPreviewAutoRunAction,
+  builderPreviewPromptForActiveChat,
   builderPreviewResultIsCurrent,
   builderPreviewRootActions,
   builderPreviewSelectedItemId,
@@ -52,6 +53,43 @@ test('builder preview defaults to the first command when other contributions exi
 test('builder preview ignores action results from an obsolete preview version', () => {
   assert.equal(builderPreviewResultIsCurrent(2, 2), true);
   assert.equal(builderPreviewResultIsCurrent(1, 2), false);
+});
+
+test('builder preview sends a fix prompt to its active AI chat', () => {
+  const result = {
+    view: {
+      type: 'chat' as const,
+      title: 'Automate',
+      aiChat: true,
+      chatId: 'active-chat',
+      initialPrompt: 'Fix the extension error',
+    },
+  };
+  assert.deepEqual(builderPreviewPromptForActiveChat(result, 'active-chat'), {
+    chatId: 'active-chat',
+    prompt: 'Fix the extension error',
+  });
+});
+
+test('builder preview does not route unrelated or empty chat views', () => {
+  const view = {
+    type: 'chat' as const,
+    title: 'Other chat',
+    aiChat: true,
+    chatId: 'other-chat',
+    initialPrompt: 'Fix the extension error',
+  };
+  assert.equal(
+    builderPreviewPromptForActiveChat({ view }, 'active-chat'),
+    null,
+  );
+  assert.equal(
+    builderPreviewPromptForActiveChat(
+      { view: { ...view, chatId: 'active-chat', initialPrompt: '' } },
+      'active-chat',
+    ),
+    null,
+  );
 });
 
 test('builder preview inserts before auto-run state updates', () => {

@@ -32,6 +32,20 @@ export function builderPreviewResultIsCurrent(
   return actionVersion === currentVersion;
 }
 
+export function builderPreviewPromptForActiveChat(
+  result: { view?: CommandView },
+  activeChatId?: string,
+) {
+  const view = result.view;
+  if (!(activeChatId && view?.aiChat)) {
+    return null;
+  }
+  if (view.chatId !== activeChatId || !view.initialPrompt) {
+    return null;
+  }
+  return { chatId: view.chatId, prompt: view.initialPrompt };
+}
+
 export function upsertBuilderPreview<T extends { filename: string }>(
   previews: T[],
   preview: T,

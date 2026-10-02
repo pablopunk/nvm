@@ -6,6 +6,7 @@ import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
 import type { CommandAction } from '../palette/model';
 import { AUTOMATE_AI_CHAT_MODEL } from '../shared/ai-chat-model';
+import { effectiveNevermindContextWindow } from '../shared/ai-context-window';
 import {
   finalOneShotAssistantText,
   streamedOneShotAssistantText,
@@ -144,6 +145,7 @@ type ThinkingLevel =
   | 'max';
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
 const ACTIVE_MODEL_FETCH_TIMEOUT_MS = 5_000;
+const PI_AI_COMPACTION_RESERVE_TOKENS = 16_384;
 
 function normalizeThinkingLevel(value: unknown): ThinkingLevel {
   return value === 'off' ||
@@ -999,7 +1001,10 @@ function createNevermindAi(options: NevermindAiOptions) {
     onEvent?.({ type: 'debug', label: 'model', data: modelDebug });
 
     const settingsManager = pi.SettingsManager.inMemory({
-      compaction: { enabled: true },
+      compaction: {
+        enabled: true,
+        reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
+      },
       retry: { enabled: true, maxRetries: 2 },
     });
 
@@ -1311,7 +1316,10 @@ async function createGeneralSession(
       ),
     ),
     settingsManager: pi.SettingsManager.inMemory({
-      compaction: { enabled: true },
+      compaction: {
+        enabled: true,
+        reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
+      },
       retry: { enabled: false },
     }),
   })) as { session: AgentSession };
@@ -1355,6 +1363,7 @@ type BackendDescriptor = {
   id: string;
   name: string;
   contextWindow: number;
+  maxInputTokens?: number;
   maxTokens: number;
   reasoning: boolean;
   thinkingLevel?: ThinkingLevel;
@@ -1469,7 +1478,10 @@ function nevermindModelDescriptor(
     reasoning: descriptor.reasoning,
     input: descriptor.input as Array<'text' | 'image'>,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: descriptor.contextWindow,
+    contextWindow: effectiveNevermindContextWindow(
+      descriptor.contextWindow,
+      descriptor.maxInputTokens,
+    ),
     maxTokens: descriptor.maxTokens,
     headers: nevermindDesktopHeaders({
       ...(modelRole ? { 'X-Nevermind-AI-Model': modelRole } : {}),
