@@ -1,11 +1,18 @@
 import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
+import { desktopBuildIdentity } from './scripts/desktop-build-identity.cjs';
+
+const buildDefinitions = {
+  __NEVERMIND_BUILD__: JSON.stringify(desktopBuildIdentity()),
+};
 
 // biome-ignore lint/style/noDefaultExport: Electron-vite requires default export
 export default defineConfig({
   main: {
+    define: buildDefinitions,
     build: {
+      sourcemap: 'hidden',
       outDir: 'dist/main',
       lib: {
         entry: 'src/app/electron/main.ts',
@@ -15,7 +22,9 @@ export default defineConfig({
     },
   },
   preload: {
+    define: buildDefinitions,
     build: {
+      sourcemap: 'hidden',
       outDir: 'dist/preload',
       lib: {
         entry: 'src/app/electron/preload.ts',
@@ -25,6 +34,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    define: buildDefinitions,
     root: 'src/app/palette',
     base: './',
     plugins: [react()],
@@ -37,7 +47,7 @@ export default defineConfig({
       outDir: resolve('dist/renderer'),
       emptyOutDir: true,
       target: 'esnext',
-      sourcemap: false,
+      sourcemap: 'hidden',
       cssCodeSplit: false,
       rollupOptions: {
         input: 'index.html',

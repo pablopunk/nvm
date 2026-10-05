@@ -329,6 +329,11 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+    env:
+      NEVERMIND_RELEASE_BUILD: '1'
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
 
     steps:
       - name: Checkout
@@ -403,6 +408,11 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+    env:
+      NEVERMIND_RELEASE_BUILD: '1'
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
 
     steps:
       - name: Checkout

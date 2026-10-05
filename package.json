@@ -11,7 +11,7 @@
   "scripts": {
     "predev": "node scripts/build-macos-selected-text-helper.cjs && node scripts/build-windows-desktop-text-helper.cjs && node scripts/ensure-electron.cjs && node scripts/ensure-backend.cjs",
     "dev": "node ./scripts/electron-dev.cjs",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node scripts/upload-desktop-source-maps.cjs",
     "typecheck": "tsc -p tsconfig.check.json",
     "postinstall": "node scripts/install-git-hooks.cjs && pnpm -C src/backend install",
     "test": "pnpm -C src/backend exec node --experimental-test-module-mocks --import tsx --test \"../app/**/*.test.ts\" \"../app/**/*.test.tsx\" && pnpm -C src/backend test",
@@ -69,6 +69,7 @@
     "@biomejs/biome": "^2.4.16",
     "@electron/asar": "3.4.1",
     "@playwright/test": "^1.52.0",
+    "@sentry/cli": "2.58.6",
     "@types/node": "^25.8.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
