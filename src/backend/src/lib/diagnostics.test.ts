@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { Event } from '@sentry/astro';
 import { correlateBackendResponse, safeDiagnosticId, safeRequestId, sanitizeBackendEvent } from './diagnostics';
 
 test('backend diagnostics strips prompts, request data and user identity', () => {
-  const event = sanitizeBackendEvent({
+  const event = sanitizeBackendEvent<Event>({
     user: { email: 'PRIVATE_EMAIL', id: 'PRIVATE_ACCOUNT' }, extra: { prompt: 'PRIVATE_PROMPT' },
     tags: { request_id: 'server-request', desktop_action_id: 'a'.repeat(32), private: 'PRIVATE_LABEL' },
     request: { url: 'https://api.nvm.fyi/api?secret=PRIVATE_CODE', data: 'PRIVATE_BODY', headers: { Authorization: 'PRIVATE_TOKEN' } },

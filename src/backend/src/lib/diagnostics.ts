@@ -39,14 +39,17 @@ export function sanitizeBackendEvent<T extends Sentry.Event>(event: T): T {
   if (trace && safeDiagnosticId(trace.trace_id) && typeof trace.span_id === 'string' && /^[a-f0-9]{16}$/.test(trace.span_id)) safe.contexts!.trace = { trace_id: trace.trace_id, span_id: trace.span_id, op: operation };
   if (event.type === 'transaction') {
     safe.type = 'transaction'; safe.transaction = operation; safe.start_timestamp = event.start_timestamp;
-    safe.spans = (event.spans ?? []).slice(0, 100).map(span => ({ trace_id: span.trace_id, span_id: span.span_id, parent_span_id: span.parent_span_id, start_timestamp: span.start_timestamp, timestamp: span.timestamp, op: 'backend.request', description: 'backend.request' }));
+    safe.spans = (event.spans ?? []).slice(0, 100).map(span => ({ trace_id: span.trace_id, span_id: span.span_id, parent_span_id: span.parent_span_id, start_timestamp: span.start_timestamp, timestamp: span.timestamp, op: 'backend.request', description: 'backend.request', data: {} }));
   } else if (event.exception?.values) {
     safe.exception = { values: event.exception.values.slice(-3).map(exception => ({
       type: ['Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError'].includes(exception.type ?? '') ? exception.type : 'Error',
       value: `Unexpected failure in ${operation}`,
       stacktrace: { frames: (exception.stacktrace?.frames ?? []).slice(-40).filter(frame => /^file:\/\/\/var\/task\/|^\/var\/task\//.test(frame.filename ?? '') && !/[?#]/.test(frame.filename ?? '')).map(frame => ({ filename: frame.filename, lineno: frame.lineno, colno: frame.colno, in_app: frame.in_app })) },
     })) };
-    safe.debug_meta = event.debug_meta ? { images: event.debug_meta.images?.filter(image => image.type === 'sourcemap' && /^file:\/\/\/var\/task\/|^\/var\/task\//.test(image.code_file ?? '')).map(image => ({ type: 'sourcemap' as const, code_file: image.code_file, debug_id: image.debug_id })) } : undefined;
+    safe.debug_meta = { images: (event.debug_meta?.images ?? []).slice(0, 100).flatMap(image => {
+      if (image.type !== 'sourcemap' || !/^file:\/\/\/var\/task\/|^\/var\/task\//.test(image.code_file) || /[?#]/.test(image.code_file)) return [];
+      return [{ type: 'sourcemap' as const, code_file: image.code_file, debug_id: image.debug_id }];
+    }) };
   } else {
     safe.message = SAFE_MESSAGES.has(event.message ?? '') ? event.message : 'Unexpected backend failure';
   }
