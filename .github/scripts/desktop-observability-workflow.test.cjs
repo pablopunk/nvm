@@ -18,7 +18,7 @@ test('release packaging uploads the final generated maps before packaging withou
     path.join(root, '.github/workflows/ci.yml'),
     'utf8',
   );
-  for (const job of ['release-mac', 'release-windows']) {
+  for (const job of ['release-mac', 'release-windows', 'release-linux']) {
     const definition = workflow.split(`  ${job}:`)[1].split(/\n  [a-z-]+:/)[0];
     assert.match(definition, /NEVERMIND_RELEASE_BUILD: '1'/);
     assert.match(definition, /SENTRY_PROJECT_DESKTOP:/);

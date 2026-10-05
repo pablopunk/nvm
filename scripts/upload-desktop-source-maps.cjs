@@ -49,6 +49,11 @@ function uploadDesktopSourceMaps() {
 function validateSourceMapPairs(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
+    if (
+      path.basename(directory) === 'assets' &&
+      /^rolldown-runtime-[a-zA-Z0-9_-]+\.js$/.test(entry.name)
+    )
+      continue;
     if (entry.isDirectory()) validateSourceMapPairs(file);
     else if (
       /\.(?:js|cjs|mjs)$/.test(entry.name) &&
