@@ -14,9 +14,12 @@ import {
 import {
   configureObservability,
   currentOperation,
+  diagnosticBreadcrumbs,
   failureRecord,
   recordOperationFailure,
 } from './observability';
+import { diagnosticEnvelope } from './diagnostic-envelope';
+import { auditLegacyDiagnosticCache } from './legacy-diagnostic-cache';
 
 type SentryMain = typeof import('@sentry/electron/main');
 
@@ -25,23 +28,61 @@ let initialized = false;
 let sentry: SentryMain | undefined;
 let didTryLoadSentry = false;
 let store: ReturnType<typeof createDiagnosticStore> | undefined;
+let updateStore: ReturnType<typeof createDiagnosticStore> | undefined;
+let reportingEnabled = false;
 const pendingFailures = new Map<string, DiagnosticRecord>();
+let captureWindowStarted = Date.now();
+let captureWindowCount = 0;
+const pendingBreadcrumbs = new Map<
+  string,
+  ReturnType<typeof diagnosticBreadcrumbs>
+>();
 declare const __NEVERMIND_BUILD__: string;
 
 export function recentDiagnosticRecords() {
-  return store?.recent() ?? [];
+  return [...(store?.recent() ?? []), ...(updateStore?.recent() ?? [])]
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+    .slice(0, 100);
+}
+
+export function setDiagnosticReporting(enabled: boolean) {
+  reportingEnabled = enabled;
+}
+
+export async function flushDiagnosticRecords() {
+  await Promise.all([store?.flush(), updateStore?.flush()]);
+}
+
+export function recordUpdateInstallAttempt(targetVersion?: string) {
+  if (
+    !targetVersion ||
+    !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(targetVersion)
+  )
+    return;
+  updateStore?.put({
+    ...failureRecord('update.install', 'install'),
+    outcome: 'unknown',
+    targetVersion,
+  });
 }
 
 function rememberFailure(record: DiagnosticRecord) {
-  pendingFailures.set(record.reference, record);
+  if (!record.eventId) pendingFailures.set(record.reference, record);
+  if (!pendingBreadcrumbs.has(record.reference))
+    pendingBreadcrumbs.set(
+      record.reference,
+      diagnosticBreadcrumbs(record.windowId),
+    );
   while (pendingFailures.size > 100)
     pendingFailures.delete(pendingFailures.keys().next().value!);
+  while (pendingBreadcrumbs.size > 100)
+    pendingBreadcrumbs.delete(pendingBreadcrumbs.keys().next().value!);
   store?.put(record);
 }
 
 export function rendererFailureHandle(windowId: number) {
   const record = {
-    ...failureRecord('view.render', 'render'),
+    ...failureRecord('view.render', 'render', false),
     process: 'renderer' as const,
     windowId,
   };
@@ -49,7 +90,7 @@ export function rendererFailureHandle(windowId: number) {
   return record.reference;
 }
 
-function prepareEvent(event: import('@sentry/electron/main').Event) {
+function prepareEvent(event: import('@sentry/electron/main').ErrorEvent) {
   const renderer = /^renderer\.(\d+)$/.exec(
     String(event.tags?.['event.process'] ?? ''),
   );
@@ -64,7 +105,11 @@ function prepareEvent(event: import('@sentry/electron/main').Event) {
       : pending.process === 'main')
       ? pending
       : {
-          ...failureRecord(),
+          ...failureRecord(
+            renderer ? 'view.render' : undefined,
+            renderer ? 'unknown' : undefined,
+            !renderer,
+          ),
           ...(renderer
             ? {
                 process: 'renderer' as const,
@@ -73,14 +118,25 @@ function prepareEvent(event: import('@sentry/electron/main').Event) {
               }
             : {}),
         };
+  if (typeof handle === 'string') pendingFailures.delete(handle);
   if (isDiagnosticId(event.event_id)) record.eventId = event.event_id;
-  record.reporting = 'capture_requested';
+  record.reporting = reportingEnabled ? 'capture_requested' : 'local_only';
+  if (Date.now() - captureWindowStarted > 60_000) {
+    captureWindowStarted = Date.now();
+    captureWindowCount = 0;
+  }
+  if (reportingEnabled && ++captureWindowCount > 60)
+    record.reporting = 'dropped';
   record.projectId = sentry?.getClient()?.getDsn()?.projectId;
   rememberFailure(record);
+  if (!reportingEnabled || record.reporting === 'dropped') return null;
   const safe = sanitizeDiagnosticEvent(event, record);
   safe.release = buildIdentity();
   safe.environment = app.isPackaged ? 'production' : 'development';
-  safe.breadcrumbs = (currentOperation()?.breadcrumbs ?? []).map((crumb) => ({
+  safe.breadcrumbs = (
+    pendingBreadcrumbs.get(record.reference) ??
+    diagnosticBreadcrumbs(record.windowId)
+  ).map((crumb) => ({
     timestamp: crumb.timestamp,
     category: crumb.category,
   }));
@@ -113,6 +169,21 @@ export function initSentry() {
     path.join(app.getPath('logs'), DIAGNOSTIC_FILE_NAME),
   );
   void store.load();
+  updateStore ??= createDiagnosticStore(
+    path.join(app.getPath('logs'), 'nevermind-update-diagnostics.json'),
+    10,
+  );
+  void updateStore.load().then(function observeInstalledVersion() {
+    const current = failureRecord();
+    for (const attempt of updateStore?.recent() ?? []) {
+      if (
+        attempt.bootId !== current.bootId &&
+        attempt.targetVersion === app.getVersion() &&
+        !attempt.targetRunning
+      )
+        updateStore?.put({ ...attempt, targetRunning: true });
+    }
+  });
   configureObservability({
     build: buildIdentity(),
     record: rememberFailure,
@@ -120,6 +191,14 @@ export function initSentry() {
     span: traceOperation,
   });
   if (!app.isPackaged) return;
+  void auditLegacyDiagnosticCache(app.getPath('userData')).then(
+    function reportInertLegacyCache(present) {
+      if (present)
+        console.warn(
+          'Legacy Sentry data exists; automatic replay and native-dump collection are disabled.',
+        );
+    },
+  );
   const Sentry = loadSentry();
   if (!Sentry) return;
   const DEFAULT_DSN =
@@ -137,7 +216,6 @@ export function initSentry() {
     sendDefaultPii: false,
     sendClientReports: false,
     enableLogs: false,
-    autoSessionTracking: false,
     maxBreadcrumbs: 50,
     integrations: (defaults) =>
       defaults.filter((integration) =>
@@ -147,6 +225,7 @@ export function initSentry() {
     beforeBreadcrumb: () => null,
     beforeSend: prepareEvent,
     beforeSendTransaction: (event) => {
+      if (!reportingEnabled) return null;
       const safe = sanitizeDiagnosticEvent(event);
       safe.release = buildIdentity();
       safe.environment = 'production';
@@ -160,25 +239,16 @@ export function initSentry() {
       return {
         flush: (timeout) => transport.flush(timeout),
         send: (envelope) => {
-          const items = envelope[1].filter(
-            (item) =>
-              item[0].type === 'event' || item[0].type === 'transaction',
+          if (!reportingEnabled) return Promise.resolve({});
+          const safe = diagnosticEnvelope(
+            envelope,
+            (reference) =>
+              store?.recent().find((record) => record.reference === reference),
+            buildIdentity(),
+            'production',
           );
-          if (
-            !items.length ||
-            Buffer.byteLength(JSON.stringify(items)) > 64 * 1024
-          )
-            return Promise.resolve({});
-          const header = envelope[0];
-          return transport.send([
-            {
-              ...(isDiagnosticId(header.event_id)
-                ? { event_id: header.event_id }
-                : {}),
-              sent_at: new Date().toISOString(),
-            },
-            items,
-          ]);
+          if (!safe) return Promise.resolve({});
+          return transport.send(safe);
         },
       };
     },
@@ -195,7 +265,7 @@ export function captureException(
 }
 
 function captureFailure(error: unknown, record: DiagnosticRecord) {
-  if (!initialized || !sentry) return;
+  if (!initialized || !sentry || !reportingEnabled) return;
   sentry.withScope(function captureDiagnosticFailure(scope) {
     scope.setContext('diagnostic', { failure_handle: record.reference });
     sentry?.captureException(error);
@@ -206,16 +276,32 @@ function traceOperation<T>(
   context: import('./observability').OperationContext,
   task: () => T,
 ): T {
-  if (!initialized || !sentry) return task();
+  if (!initialized || !sentry || !reportingEnabled) return task();
   return sentry.startSpan(
     { name: context.operation, op: context.operation },
     function runDiagnosticSpan(span) {
+      context.traceHeaders = sentry?.getTraceData();
       function finish() {
+        span.setAttribute('diagnostic.outcome', context.outcome);
+        span.setAttribute('diagnostic.stage', context.stage);
+        if (context.component)
+          span.setAttribute('diagnostic.component', context.component);
         span.setStatus({
           code:
-            context.outcome === 'failed' || context.outcome === 'timed_out'
-              ? 2
-              : 1,
+            context.outcome === 'unknown'
+              ? 0
+              : context.outcome === 'success'
+                ? 1
+                : 2,
+          ...(context.outcome === 'failed'
+            ? { message: 'internal_error' }
+            : context.outcome === 'timed_out'
+              ? { message: 'deadline_exceeded' }
+              : context.outcome === 'cancelled'
+                ? { message: 'cancelled' }
+                : context.outcome === 'blocked'
+                  ? { message: 'permission_denied' }
+                  : {}),
         });
       }
       try {
@@ -236,7 +322,7 @@ export function reportDiagnosticProblem() {
   const record = failureRecord('support.report');
   record.outcome = 'unknown';
   rememberFailure(record);
-  if (initialized && sentry)
+  if (initialized && sentry && reportingEnabled)
     sentry.withScope(function captureProblemReport(scope) {
       scope.setContext('diagnostic', { failure_handle: record.reference });
       sentry?.captureMessage('User requested diagnostics', 'info');

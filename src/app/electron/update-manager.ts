@@ -1,6 +1,13 @@
 import { app } from 'electron';
 import * as logger from './logger';
 import { supportsAutoUpdates } from './os';
+import {
+  bindOperation,
+  operationOutcome,
+  operationStage,
+  recordOperationFailure,
+  runOperation,
+} from './observability';
 
 type UpdateInfo = { version?: string };
 type UpdateCheckResult = {
@@ -39,10 +46,14 @@ type UpdateState = {
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
-export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
+export function createUpdateManager(
+  autoUpdater: AutoUpdaterLike,
+  onInstallRequested?: (version?: string) => void,
+) {
   let startupTimer: NodeJS.Timeout | null = null;
   let pollTimer: NodeJS.Timeout | null = null;
   let installStarted = false;
+  let captureActiveFailure: ((error: unknown) => void) | undefined;
   const stateListeners = new Set<() => void>();
   function notifyStateChanged() {
     for (const listener of stateListeners) {
@@ -69,11 +80,19 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     return app.isPackaged && supportsAutoUpdates();
   }
 
-  async function checkForUpdates(
+  function checkForUpdates(
+    trigger = 'manual',
+    options: { download?: boolean } = {},
+  ) {
+    return runOperation('update.check', () => checkUpdate(trigger, options));
+  }
+
+  async function checkUpdate(
     trigger = 'manual',
     options: { download?: boolean } = {},
   ) {
     if (!canUseAutoUpdates()) {
+      operationOutcome('blocked');
       state.status = 'unsupported';
       notifyStateChanged();
       return null;
@@ -85,6 +104,12 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     state.status = 'checking';
     state.errorMessage = '';
     notifyStateChanged();
+    const capture = bindOperation((error: unknown) => {
+      recordOperationFailure(error, 'request');
+    });
+    const previousCapture = captureActiveFailure;
+    captureActiveFailure = capture;
+    operationStage('request');
     try {
       logger.info(
         'updater.checking',
@@ -101,6 +126,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
         await downloadAvailableUpdate(result.updateInfo);
       return result?.updateInfo || null;
     } catch (error) {
+      recordOperationFailure(error, 'request');
       state.status = 'error';
       state.errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -110,6 +136,8 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
       });
       return null;
     } finally {
+      if (captureActiveFailure === capture)
+        captureActiveFailure = previousCapture;
       state.checkInFlight = false;
       if (state.status === 'checking')
         state.status = state.availableInfo ? 'available' : 'idle';
@@ -117,7 +145,11 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     }
   }
 
-  async function downloadAvailableUpdate(info = state.availableInfo) {
+  function downloadAvailableUpdate(info = state.availableInfo) {
+    return runOperation('update.download', () => downloadUpdate(info));
+  }
+
+  async function downloadUpdate(info = state.availableInfo) {
     const availableInfo = info || state.availableInfo;
     if (
       !canUseAutoUpdates() ||
@@ -132,9 +164,16 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     state.status = 'downloading';
     state.errorMessage = '';
     notifyStateChanged();
+    const capture = bindOperation((error: unknown) => {
+      recordOperationFailure(error, 'save');
+    });
+    const previousCapture = captureActiveFailure;
+    captureActiveFailure = capture;
+    operationStage('save');
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
+      recordOperationFailure(error, 'save');
       state.status = 'error';
       state.errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -143,6 +182,8 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
         scope: 'updater',
       });
     } finally {
+      if (captureActiveFailure === capture)
+        captureActiveFailure = previousCapture;
       state.downloadInFlight = false;
       if (state.status === 'downloading')
         state.status = state.downloadedInfo
@@ -228,6 +269,11 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
     });
 
     autoUpdater.on('error', (error: Error) => {
+      if (captureActiveFailure) captureActiveFailure(error);
+      else
+        runOperation('update.check', () => {
+          recordOperationFailure(error, 'request');
+        });
       state.status = 'error';
       state.errorMessage = error?.message || String(error);
       logger.error('updater.error', error, {
@@ -252,6 +298,7 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   function prepareInstall() {
     if (!state.downloadedInfo || state.installInFlight) return false;
     state.installInFlight = true;
+    onInstallRequested?.(state.downloadedInfo.version);
     state.status = 'installing';
     state.errorMessage = '';
     logger.info('updater.install.requested', state.downloadedInfo, {
@@ -263,13 +310,21 @@ export function createUpdateManager(autoUpdater: AutoUpdaterLike) {
   }
 
   function quitAndInstall() {
+    return runOperation('update.install', installUpdate, {
+      defaultOutcome: 'unknown',
+    });
+  }
+
+  function installUpdate() {
     if (!state.downloadedInfo || installStarted) return false;
     if (!state.installInFlight && !prepareInstall()) return false;
     installStarted = true;
+    operationStage('install');
     try {
       autoUpdater.quitAndInstall();
       return true;
     } catch (error) {
+      recordOperationFailure(error, 'install');
       installStarted = false;
       state.installInFlight = false;
       state.status = 'error';

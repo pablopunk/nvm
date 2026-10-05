@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
+import { fetchDiagnosticBackend } from './backend-observability';
 
 export type NevermindCompatibilityManifest = {
   backend?: {
@@ -166,7 +167,7 @@ async function fetchCompatibilityManifestUncached(
   );
   let res: Response;
   try {
-    res = await fetch(`${trimmed}/api/compatibility`, {
+    res = await fetchDiagnosticBackend(`${trimmed}/api/compatibility`, {
       headers: nevermindDesktopHeaders(),
       signal: controller.signal,
     });

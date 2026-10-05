@@ -28,6 +28,19 @@ import * as logger from './logger';
 import { type LogLevel, type LogSource, readRecentLogs } from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import {
+  fetchDiagnosticBackend,
+  observeAgentResponses,
+  observeProviderOptions,
+} from './backend-observability';
+import {
+  bindOperation,
+  currentOperation,
+  operationOutcome,
+  operationStage,
+  recordOperationFailure,
+  runOperation,
+} from './observability';
+import {
   getNevermindAuth,
   getNevermindDashboardUrl,
   NevermindAuthRequiredError,
@@ -45,6 +58,17 @@ type AiEvent = {
   isError?: boolean;
   traceId?: string;
 };
+
+function observeAiEvent(event: AiEvent) {
+  if (event.type === 'aborted') operationOutcome('cancelled');
+  else if (event.type === 'error') {
+    if (aiLimitNoticeFromError(event.message)) operationOutcome('blocked');
+    recordOperationFailure(new Error('AI operation failed'), 'stream');
+  } else if (event.type === 'start') operationStage('request');
+  else if (event.type === 'done') operationStage('complete');
+  else if (event.type === 'delta' && currentOperation()?.stage !== 'stream')
+    operationStage('stream');
+}
 
 type AiLimitNotice = {
   kind:
@@ -189,7 +213,10 @@ type AgentSession = {
   setModel: (model: unknown) => Promise<void>;
   setThinkingLevel: (level: ThinkingLevel) => void;
   subscribe: (callback: (event: AgentSessionEvent) => void) => () => void;
-  agent: { state: { tools: Array<{ name: string }>; messages: unknown[] } };
+  agent: {
+    state: { tools: Array<{ name: string }>; messages: unknown[] };
+    streamFn?: import('@earendil-works/pi-coding-agent').AgentSession['agent']['streamFn'];
+  };
   prepareModelForPrompt?: (prompt: string) => Promise<void>;
 };
 
@@ -291,6 +318,7 @@ function createNevermindAi(options: NevermindAiOptions) {
   >();
   let directAiPromise: Promise<DirectAiApi> | null = null;
   const activeTraceIds = new Map<string, string>();
+  const activeDiagnostics = new Map<string, (event: AiEvent) => void>();
   const firstDeltaTimes = new Map<string, number>();
   const creditInfoRef: {
     current: {
@@ -314,14 +342,16 @@ function createNevermindAi(options: NevermindAiOptions) {
         () =>
           createSession(
             { ...options, chatId },
-            (event) =>
+            (event) => {
+              activeDiagnostics.get(chatId)?.(event);
               options.onEvent?.({
                 ...event,
                 chatId,
                 ...(activeTraceIds.get(chatId)
                   ? { traceId: activeTraceIds.get(chatId) }
                   : {}),
-              }),
+              });
+            },
             initialPromptChars,
           ),
       ),
@@ -333,7 +363,28 @@ function createNevermindAi(options: NevermindAiOptions) {
     return entry.promise;
   }
 
-  async function send(
+  function send(
+    message: string,
+    chatId = 'default',
+    traceId?: string,
+    images?: AiImageContent[],
+  ) {
+    return runOperation(
+      'extension.generate',
+      async function generateExtensionResponse() {
+        const observe = bindOperation(observeAiEvent);
+        activeDiagnostics.set(chatId, observe);
+        try {
+          return await sendBuilderMessage(message, chatId, traceId, images);
+        } finally {
+          if (activeDiagnostics.get(chatId) === observe)
+            activeDiagnostics.delete(chatId);
+        }
+      },
+    );
+  }
+
+  async function sendBuilderMessage(
     message: string,
     chatId = 'default',
     traceId?: string,
@@ -341,6 +392,7 @@ function createNevermindAi(options: NevermindAiOptions) {
   ) {
     const credit = creditInfoRef.current;
     if (credit?.notice === 'blocked') {
+      operationOutcome('blocked');
       creditInfoRef.current = null;
       const limit: AiLimitNotice = {
         kind: 'insufficient_credits',
@@ -415,6 +467,8 @@ function createNevermindAi(options: NevermindAiOptions) {
             scope: 'ai',
           });
           const limit = aiLimitNoticeFromError(error);
+          if (limit) operationOutcome('blocked');
+          recordOperationFailure(error, 'stream');
           options.onEvent?.({
             type: 'error',
             chatId,
@@ -447,7 +501,23 @@ function createNevermindAi(options: NevermindAiOptions) {
     sessions.delete(chatId);
   }
 
-  async function ask(message: string, askOptions: AiPromptOptions = {}) {
+  function ask(message: string, askOptions: AiPromptOptions = {}) {
+    return runOperation('ai.stream', function askWithDiagnostics() {
+      const onEvent = askOptions.onEvent;
+      return askForResponse(message, {
+        ...askOptions,
+        onEvent: bindOperation(function observeResponseEvent(event) {
+          observeAiEvent(event);
+          onEvent?.(event);
+        }),
+      });
+    });
+  }
+
+  async function askForResponse(
+    message: string,
+    askOptions: AiPromptOptions = {},
+  ) {
     const text: string[] = [];
     const startedAt = performance.now();
     let firstDeltaAt: number | undefined;
@@ -755,13 +825,13 @@ function createNevermindAi(options: NevermindAiOptions) {
           'You are a helpful AI assistant inside a Nevermind extension. Answer directly and concisely.',
         messages: [{ role: 'user', content, timestamp: Date.now() }],
       },
-      {
+      observeProviderOptions({
         apiKey: resolved.apiKey,
         reasoning:
           resolved.thinkingLevel === 'off' ? undefined : resolved.thinkingLevel,
         signal: askOptions.signal as AbortSignal,
         maxRetries: 0,
-      },
+      }),
     );
     let finalText: string;
     try {
@@ -1052,6 +1122,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
     })) as { session: AgentSession };
+    observeAgentResponses(result.session.agent);
     let initialPromptPrepared = initialPromptChars > 0;
     result.session.prepareModelForPrompt = async function prepareModelForPrompt(
       prompt,
@@ -1323,6 +1394,7 @@ async function createGeneralSession(
       retry: { enabled: false },
     }),
   })) as { session: AgentSession };
+  observeAgentResponses(result.session.agent);
   if (toolMode === 'conversation') {
     const activeTools = result.session.agent.state.tools.map(
       (tool) => tool.name,
@@ -1399,10 +1471,13 @@ async function fetchActiveModelDescriptor(
   );
   let res: Response;
   try {
-    res = await fetch(`${trimmed}/api/v1/active-model${search}`, {
-      headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
-      signal: controller.signal,
-    });
+    res = await fetchDiagnosticBackend(
+      `${trimmed}/api/v1/active-model${search}`,
+      {
+        headers: nevermindDesktopHeaders({ Authorization: `Bearer ${token}` }),
+        signal: controller.signal,
+      },
+    );
   } finally {
     clearTimeout(timeout);
   }

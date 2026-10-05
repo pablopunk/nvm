@@ -11,7 +11,6 @@ export function initRendererDiagnostics() {
       sendDefaultPii: false,
       sendClientReports: false,
       enableLogs: false,
-      autoSessionTracking: false,
       beforeBreadcrumb: () => null,
       integrations: (defaults) =>
         defaults.filter((integration) =>

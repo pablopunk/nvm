@@ -13,9 +13,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // should be logged and contained, not silently kill the entire process.
 process.on('unhandledRejection', (reason) => {
   console.error('FATAL: unhandled rejection (would crash Electron):', reason);
+  if (!app.isPackaged) recordOperationFailure(reason);
 });
 process.on('uncaughtException', (error) => {
   console.error('FATAL: uncaught exception (would crash Electron):', error);
+  if (!app.isPackaged) recordOperationFailure(error);
 });
 
 import {
@@ -113,13 +115,18 @@ import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
 import {
   initSentry,
+  flushDiagnosticRecords,
+  setDiagnosticReporting,
   recentDiagnosticRecords,
   rendererFailureHandle,
   reportDiagnosticProblem,
+  recordUpdateInstallAttempt,
 } from './sentry';
 import {
   bindOperation,
+  operationOutcome,
   operationStage,
+  operationTarget,
   recordOperationFailure,
   runOperation,
 } from './observability';
@@ -221,7 +228,10 @@ import {
   sortFoundFiles,
 } from './file-index-sorting';
 import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
-import { markInternalExtension } from './internal-extension';
+import {
+  isInternalExtension,
+  markInternalExtension,
+} from './internal-extension';
 import { missingRequiredInternalCommands } from './internal-extension-requirements';
 import { type JobDefinition, JobRegistry, type JobSnapshot } from './jobs';
 import { type LearningKind, LocalLearningStore } from './learning-store';
@@ -364,7 +374,7 @@ const updateManager: any = isNvmTestMode
       quitAndInstall: () => false,
       clearTimers: () => {},
     }
-  : createUpdateManager(autoUpdater as any);
+  : createUpdateManager(autoUpdater as any, recordUpdateInstallAttempt);
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -627,6 +637,7 @@ let extensionRuntimePreparation:
   | Pick<PreparedExtensionRuntime, 'jobs' | 'fileWatchers'>
   | undefined;
 let testExtensionActivationFailurePhase: string | undefined;
+const loggedDiagnosticTargets = new Set<string>();
 let frontmostWatcherLastId = '';
 const jobRegistry = new JobRegistry({
   performanceTrace: (operation, attributes, task) =>
@@ -686,6 +697,10 @@ function warmConversationAiOnPaletteOpen() {
     );
 }
 const viewLoaderRegistry = createViewLoaderRegistry({
+  observe: (task) => runOperation('view.load', task),
+  failed: (error) => {
+    recordOperationFailure(error, 'load');
+  },
   sendHydrate: (viewId, payload) =>
     paletteWindow.win?.webContents.send('view:hydrate', { viewId, ...payload }),
   normalizeItems: (items, entry) => normalizeViewItems(items, entry),
@@ -744,7 +759,10 @@ const userStateSaveScheduler = createUserStateSaveScheduler({
 });
 
 const stateSafeQuit = createStateSafeQuit({
-  flushPendingSave: userStateSaveScheduler.flushPendingSave,
+  flushPendingSave: async () => {
+    await userStateSaveScheduler.flushPendingSave();
+    await flushDiagnosticRecords();
+  },
   quit: () => app.quit(),
   cleanup: runQuitCleanup,
   exit: () => app.exit(0),
@@ -902,6 +920,8 @@ function setSetting(id: any, value: any) {
   }
   if (!userState.settings) userState.settings = {};
   userState.settings[definition.id] = value;
+  if (definition.id === 'errorReporting')
+    setDiagnosticReporting(Boolean(value));
   scheduleSaveState();
   invalidateExtensionRootItems();
   patchSettingsView(definition.id);
@@ -3616,6 +3636,7 @@ async function executeExtensionRootItem(action) {
             };
           }
           try {
+            setDiagnosticExtensionTarget(record.entry.extension);
             const result = await measureDebugPerformance(
               'extension.root-item.handler',
               {
@@ -4049,6 +4070,8 @@ function extensionErrorMessage(error) {
 }
 
 function extensionErrorView(entry, error) {
+  if (entry?.extension) setDiagnosticExtensionTarget(entry.extension);
+  recordOperationFailure(error, 'invoke');
   const message = extensionErrorMessage(error);
   const title =
     (entry?.command?.title || entry?.extension?.title || 'Extension') +
@@ -4614,6 +4637,7 @@ function presentActionResultFeedback(result: any, action: any) {
 }
 
 function presentActionErrorFeedback(error: unknown, action: any) {
+  recordOperationFailure(error, 'invoke');
   return presentActionResultFeedback(
     {
       toast: {
@@ -5611,6 +5635,7 @@ async function executeViewAction(action, launchContext?: any) {
         };
       }
       try {
+        setDiagnosticExtensionTarget(record.entry.extension);
         const result = await measureDebugPerformance(
           'extension.action.handler',
           {
@@ -8613,7 +8638,10 @@ async function sendAiChatMessage(message, chatId, traceId, images) {
           traceId: requestTraceId,
           data: { message: aiChatMessageForRenderer(storedMessage) },
         });
-        if (pending.aborted) return;
+        if (pending.aborted) {
+          operationOutcome('cancelled');
+          return;
+        }
         pending.started = true;
         if (conversation)
           return sendConversationMessage(
@@ -8841,7 +8869,14 @@ function extensionManagerState() {
   });
 }
 
-async function stageExtensionProposal(filename: string, source: string) {
+function stageExtensionProposal(filename: string, source: string) {
+  return runOperation('extension.generate', () =>
+    validateExtensionProposal(filename, source),
+  );
+}
+
+async function validateExtensionProposal(filename: string, source: string) {
+  operationStage('validate');
   const safeName = path.basename(filename);
   const draftFile = path.join(extensionDraftsDir(), safeName);
   await fs.mkdir(extensionDraftsDir(), { recursive: true });
@@ -9104,7 +9139,14 @@ function failTestExtensionActivationAt(phase: string) {
   throw new Error(`Injected extension activation failure at ${phase}`);
 }
 
-async function activateManagedExtension(filename: string) {
+function activateManagedExtension(filename: string) {
+  return runOperation('extension.install', () =>
+    installManagedExtension(filename),
+  );
+}
+
+async function installManagedExtension(filename: string) {
+  operationStage('install');
   const safeName = path.basename(filename);
   const manager = extensionManagerState();
   const proposal = manager.proposals?.[safeName];
@@ -9556,6 +9598,39 @@ function registerInternalExtensions() {
   for (const createExtension of INTERNAL_EXTENSION_FACTORIES)
     registerExtension(markInternalExtension(createExtension()));
   assertInternalExtensionsRegistered();
+}
+
+function setDiagnosticExtensionTarget(extension) {
+  const components = {
+    'nevermind.apps': 'apps',
+    'nevermind.files': 'files',
+    'nevermind.clipboard': 'clipboard',
+    'nevermind.account': 'account',
+    'nevermind.settings': 'settings',
+    'nevermind.extensions': 'extensions',
+    'nevermind.updates': 'updates',
+    'nevermind.diagnostics': 'diagnostics',
+    'nevermind.ai-builder': 'ai',
+    'nevermind.ai-commands': 'ai',
+  } as const;
+  const targetId = operationTarget(
+    extension,
+    isInternalExtension(extension)
+      ? (components[extension.id] ?? 'system')
+      : 'user-extension',
+  );
+  if (targetId && !loggedDiagnosticTargets.has(targetId)) {
+    loggedDiagnosticTargets.add(targetId);
+    if (loggedDiagnosticTargets.size > 100)
+      loggedDiagnosticTargets.delete(
+        loggedDiagnosticTargets.values().next().value,
+      );
+    logInfo(
+      'diagnostic.target',
+      { targetId, extensionId: extension.id, filePath: extension.__filePath },
+      { source: 'host', scope: 'diagnostics' },
+    );
+  }
 }
 
 function durationMs(value: any) {
@@ -10318,6 +10393,9 @@ async function loadUserState() {
     };
   }
 
+  setDiagnosticReporting(
+    settingValue(userState.settings, 'errorReporting') === true,
+  );
   const aiChatsChanged = await migrateAiChats();
   clipboardHistory = await normalizeClipboardHistory(
     userState.clipboardHistory,
@@ -10457,7 +10535,13 @@ function unregisterShortcutForAction(actionId) {
   if (current) globalShortcut.unregister(current);
 }
 
-async function executeShortcutAction(action) {
+function executeShortcutAction(action) {
+  return runOperation('command.execute', () => runShortcutAction(action), {
+    freshJourney: true,
+  });
+}
+
+async function runShortcutAction(action) {
   const traceId = crypto.randomUUID();
   performanceTraces.event(
     'shortcut.invoked',

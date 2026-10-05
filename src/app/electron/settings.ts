@@ -8,7 +8,11 @@ export type SettingDefinition =
       default: string;
     }
   | {
-      id: 'showClipboardInRoot' | 'showClipboardInRootSearch' | 'startAtLogin';
+      id:
+        | 'showClipboardInRoot'
+        | 'showClipboardInRootSearch'
+        | 'startAtLogin'
+        | 'errorReporting';
       title: string;
       description: string;
       icon: string;
@@ -21,6 +25,15 @@ export type SettingId = SettingDefinition['id'];
 export type SettingsState = Partial<Record<SettingId, string | boolean>>;
 
 export const SETTING_DEFINITIONS: SettingDefinition[] = [
+  {
+    id: 'errorReporting',
+    title: 'Send Technical Error Reports',
+    description:
+      'Send safe error locations and action categories, without prompts, clipboard content, or account details',
+    icon: 'shield-check',
+    type: 'boolean',
+    default: true,
+  },
   {
     id: 'paletteHotkey',
     title: 'Open Nevermind Shortcut',

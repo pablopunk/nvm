@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   type DiagnosticRecord,
+  DIAGNOSTIC_COMPONENTS,
   diagnosticOperation,
   isDiagnosticId,
   isRequestId,
@@ -59,6 +60,17 @@ function safeRecord(value: unknown): DiagnosticRecord | undefined {
     stage: STAGES.has(record.stage) ? record.stage : 'unknown',
     outcome: OUTCOMES.has(record.outcome) ? record.outcome : 'unknown',
     process: record.process === 'renderer' ? 'renderer' : 'main',
+    ...(DIAGNOSTIC_COMPONENTS.includes(record.component!)
+      ? { component: record.component }
+      : {}),
+    ...(isDiagnosticId(record.targetId) ? { targetId: record.targetId } : {}),
+    ...(typeof record.targetVersion === 'string' &&
+    /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(record.targetVersion)
+      ? {
+          targetVersion: record.targetVersion,
+          targetRunning: record.targetRunning === true,
+        }
+      : {}),
     reporting:
       record.reporting === 'capture_requested' || record.reporting === 'dropped'
         ? record.reporting
@@ -79,23 +91,31 @@ function safeRecord(value: unknown): DiagnosticRecord | undefined {
   };
 }
 
-export function createDiagnosticStore(filePath: string) {
+export function createDiagnosticStore(
+  filePath: string,
+  maximumRecords = MAX_RECORDS,
+) {
+  const recordLimit = Math.min(MAX_RECORDS, Math.max(1, maximumRecords));
   let records: DiagnosticRecord[] = [];
-  let writes = Promise.resolve();
-  let loaded = false;
+  let writes: Promise<void> | undefined;
+  let loading: Promise<void> | undefined;
+  let dirty = false;
 
   function recent() {
     records = records
       .filter(
         (record) => Date.parse(record.timestamp) >= Date.now() - MAX_AGE_MS,
       )
-      .slice(0, MAX_RECORDS);
+      .slice(0, recordLimit);
     return records.map((record) => ({ ...record }));
   }
 
-  async function load() {
-    if (loaded) return;
-    loaded = true;
+  function load() {
+    loading ??= readStoredDiagnostics();
+    return loading;
+  }
+
+  async function readStoredDiagnostics() {
     try {
       const handle = await fs.open(filePath, 'r');
       try {
@@ -103,7 +123,7 @@ export function createDiagnosticStore(filePath: string) {
         const data = JSON.parse(await handle.readFile('utf8'));
         if (data.version !== 1 || !Array.isArray(data.records)) return;
         const existing = data.records
-          .slice(0, MAX_RECORDS)
+          .slice(0, recordLimit)
           .map(safeRecord)
           .filter(Boolean) as DiagnosticRecord[];
         records = [
@@ -114,7 +134,7 @@ export function createDiagnosticStore(filePath: string) {
                 (current) => current.reference === record.reference,
               ),
           ),
-        ].slice(0, MAX_RECORDS);
+        ].slice(0, recordLimit);
       } finally {
         await handle.close();
       }
@@ -127,18 +147,31 @@ export function createDiagnosticStore(filePath: string) {
     records = [
       safe,
       ...recent().filter((current) => current.reference !== safe.reference),
-    ].slice(0, MAX_RECORDS);
-    writes = writes
-      .then(async function persistDiagnostics() {
-        const data = JSON.stringify({ version: 1, records: recent() });
-        if (Buffer.byteLength(data) > MAX_BYTES) return;
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        const temporaryPath = `${filePath}.pending`;
-        await fs.writeFile(temporaryPath, data, { mode: 0o600 });
-        await fs.rename(temporaryPath, filePath);
-      })
-      .catch(() => {});
+    ].slice(0, recordLimit);
+    dirty = true;
+    scheduleWrite();
   }
 
-  return { load, put, recent, flush: () => writes };
+  function scheduleWrite() {
+    if (writes) return;
+    writes = load()
+      .then(async function persistDiagnostics() {
+        while (dirty) {
+          dirty = false;
+          const data = JSON.stringify({ version: 1, records: recent() });
+          if (Buffer.byteLength(data) > MAX_BYTES) return;
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          const temporaryPath = `${filePath}.pending`;
+          await fs.writeFile(temporaryPath, data, { mode: 0o600 });
+          await fs.rename(temporaryPath, filePath);
+        }
+      })
+      .catch(() => {})
+      .finally(function finishWrite() {
+        writes = undefined;
+        if (dirty) scheduleWrite();
+      });
+  }
+
+  return { load, put, recent, flush: () => writes ?? Promise.resolve() };
 }

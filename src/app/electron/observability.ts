@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import type {
   DiagnosticOperation,
+  DiagnosticComponent,
   DiagnosticOutcome,
   DiagnosticRecord,
   DiagnosticStage,
@@ -15,6 +16,11 @@ export type OperationContext = {
   outcome: DiagnosticOutcome;
   windowId?: number;
   requestId?: string;
+  traceHeaders?: Record<string, string>;
+  serverFailure?: boolean;
+  responseStatus?: number;
+  component?: DiagnosticComponent;
+  targetId?: string;
   failure?: DiagnosticRecord;
   closed: boolean;
   breadcrumbs: { timestamp: number; category: string }[];
@@ -31,6 +37,8 @@ export function diagnosticId() {
 }
 const contextStorage = new AsyncLocalStorage<OperationContext>();
 const bootId = diagnosticId();
+const windowHistory = new Map<number, OperationContext['breadcrumbs']>();
+const extensionTargets = new WeakMap<object, string>();
 let hooks: ObservabilityHooks = {};
 let build = 'development';
 
@@ -45,6 +53,32 @@ export function currentOperation() {
   return contextStorage.getStore();
 }
 
+export function diagnosticBreadcrumbs(windowId?: number) {
+  return (
+    (windowId
+      ? windowHistory.get(windowId)
+      : currentOperation()?.breadcrumbs
+    )?.slice(-50) ?? []
+  );
+}
+
+export function operationTarget(
+  extension: object,
+  component: DiagnosticComponent,
+) {
+  const context = currentOperation();
+  if (!context || context.closed || !extension || typeof extension !== 'object')
+    return;
+  let targetId = extensionTargets.get(extension);
+  if (!targetId) {
+    targetId = diagnosticId();
+    extensionTargets.set(extension, targetId);
+  }
+  context.component = component;
+  context.targetId = targetId;
+  return targetId;
+}
+
 export function operationStage(stage: DiagnosticStage) {
   const context = currentOperation();
   if (!context || context.closed) return;
@@ -54,6 +88,16 @@ export function operationStage(stage: DiagnosticStage) {
     category: `${context.operation}.${stage}`,
   });
   context.breadcrumbs.splice(0, Math.max(0, context.breadcrumbs.length - 50));
+  if (context.windowId) {
+    const history = windowHistory.get(context.windowId) ?? [];
+    history.push({
+      timestamp: Date.now() / 1000,
+      category: `${context.operation}.${stage}`,
+    });
+    windowHistory.set(context.windowId, history.slice(-50));
+    while (windowHistory.size > 64)
+      windowHistory.delete(windowHistory.keys().next().value!);
+  }
 }
 
 export function operationOutcome(outcome: DiagnosticOutcome) {
@@ -65,8 +109,9 @@ export function operationOutcome(outcome: DiagnosticOutcome) {
 export function failureRecord(
   operation?: DiagnosticOperation,
   stage?: DiagnosticStage,
+  includeOperationContext = true,
 ): DiagnosticRecord {
-  const context = currentOperation();
+  const context = includeOperationContext ? currentOperation() : undefined;
   return {
     reference: diagnosticId(),
     timestamp: new Date().toISOString(),
@@ -83,6 +128,8 @@ export function failureRecord(
           actionId: context.actionId,
           windowId: context.windowId,
           requestId: context.requestId,
+          component: context.component,
+          targetId: context.targetId,
         }
       : {}),
   };
@@ -100,7 +147,17 @@ export function recordOperationFailure(
     operationOutcome('cancelled');
     return;
   }
-  if (name === 'TimeoutError' || name === 'PromiseTimeoutError')
+  if (
+    context?.serverFailure &&
+    [401, 402, 403, 410, 429].includes(context.responseStatus ?? 0)
+  )
+    operationOutcome('blocked');
+  else if (
+    name === 'NevermindAuthRequiredError' ||
+    name === 'NevermindCompatibilityError'
+  )
+    operationOutcome('blocked');
+  else if (name === 'TimeoutError' || name === 'PromiseTimeoutError')
     operationOutcome('timed_out');
   else operationOutcome('failed');
   const record = failureRecord(undefined, stage);
@@ -110,9 +167,19 @@ export function recordOperationFailure(
   }
   try {
     hooks.record?.(record);
-    hooks.capture?.(error, record);
+    if (!context?.serverFailure && record.outcome !== 'blocked')
+      hooks.capture?.(error, record);
   } catch {}
   return record;
+}
+
+export function recordServerOutcome(status: number, requestId?: string) {
+  const context = currentOperation();
+  if (!context || context.closed) return;
+  context.requestId = requestId;
+  context.responseStatus = status;
+  context.serverFailure = status >= 400;
+  operationStage(status >= 400 ? 'request' : 'stream');
 }
 
 export function bindOperation<T extends (...args: any[]) => any>(
@@ -129,7 +196,11 @@ export function bindOperation<T extends (...args: any[]) => any>(
 export function runOperation<T>(
   operation: DiagnosticOperation,
   task: () => T,
-  options: { windowId?: number; freshJourney?: boolean } = {},
+  options: {
+    windowId?: number;
+    freshJourney?: boolean;
+    defaultOutcome?: DiagnosticOutcome;
+  } = {},
 ): T {
   const parent = currentOperation();
   const context: OperationContext = {
@@ -141,12 +212,32 @@ export function runOperation<T>(
       !options.freshJourney && parent ? parent.journeyId : diagnosticId(),
     actionId: diagnosticId(),
     windowId: options.windowId ?? parent?.windowId,
-    breadcrumbs: parent ? parent.breadcrumbs.slice(-49) : [],
+    component: parent?.component,
+    targetId: parent?.targetId,
+    breadcrumbs: parent
+      ? parent.breadcrumbs.slice(-49)
+      : diagnosticBreadcrumbs(options.windowId).slice(-20),
   };
   function finish() {
     if (context.closed) return;
-    if (context.outcome === 'unknown') context.outcome = 'success';
+    if (context.outcome === 'unknown')
+      context.outcome = options.defaultOutcome ?? 'success';
     context.closed = true;
+    if (parent && !parent.closed) {
+      if (context.requestId) parent.requestId = context.requestId;
+      if (context.responseStatus !== undefined) {
+        parent.serverFailure = context.serverFailure;
+        parent.responseStatus = context.responseStatus;
+      }
+      if (
+        context.outcome !== 'success' &&
+        context.outcome !== 'unknown' &&
+        parent.outcome === 'unknown'
+      )
+        parent.outcome = context.outcome;
+      parent.breadcrumbs.push(...context.breadcrumbs.slice(-10));
+      parent.breadcrumbs.splice(0, Math.max(0, parent.breadcrumbs.length - 50));
+    }
     if (parent && context.failure && !parent.failure) {
       parent.failure = context.failure;
       if (!parent.closed && parent.outcome === 'unknown')

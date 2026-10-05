@@ -10,6 +10,13 @@ import {
 } from '../shared/public-origin';
 import * as logger from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
+import { fetchDiagnosticBackend } from './backend-observability';
+import {
+  operationOutcome,
+  operationStage,
+  recordOperationFailure,
+  runOperation,
+} from './observability';
 import { checkNevermindCompatibility } from './nevermind-compatibility';
 import { writePrivateFile } from './private-file';
 import { openExternalUrl } from './url-utils';
@@ -217,6 +224,7 @@ export function cancelNevermindDeviceSignIn() {
 }
 
 function cancelledSignInResult(controller: AbortController): SignInResult {
+  operationOutcome('cancelled');
   if (
     activeSignInAbortController === controller &&
     deviceSignInStatus?.state !== 'cancelled'
@@ -431,13 +439,16 @@ export async function signOutFromNevermind(): Promise<{ revoked: boolean }> {
   let revoked = false;
   if (current) {
     try {
-      const res = await fetch(`${current.baseUrl}/api/tokens/current`, {
-        method: 'DELETE',
-        headers: nevermindDesktopHeaders({
-          Authorization: `Bearer ${current.token}`,
-          Origin: current.baseUrl,
-        }),
-      });
+      const res = await fetchDiagnosticBackend(
+        `${current.baseUrl}/api/tokens/current`,
+        {
+          method: 'DELETE',
+          headers: nevermindDesktopHeaders({
+            Authorization: `Bearer ${current.token}`,
+            Origin: current.baseUrl,
+          }),
+        },
+      );
       revoked = res.ok || res.status === 401;
       if (!revoked) logger.warn(`token revoke returned ${res.status}`);
     } catch (err) {
@@ -472,7 +483,7 @@ function defaultDeviceLabel() {
 }
 
 async function postJson(url: string, body: unknown, signal?: AbortSignal) {
-  return fetch(url, {
+  return fetchDiagnosticBackend(url, {
     method: 'POST',
     headers: nevermindDesktopHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
@@ -546,7 +557,13 @@ export async function consumeDeviceCode({
   return activeSignIn;
 }
 
-export async function signInToNevermind({
+export function signInToNevermind(
+  options?: Parameters<typeof performSignIn>[0],
+) {
+  return runOperation('auth.signin', () => performSignIn(options));
+}
+
+async function performSignIn({
   baseUrl = DEFAULT_BASE_URL,
   environment = nevermindEnvironmentForBaseUrl(baseUrl),
   label = defaultDeviceLabel(),
@@ -580,6 +597,10 @@ export async function signInToNevermind({
         controller.signal,
       );
       if (!initRes.ok) {
+        recordOperationFailure(
+          new Error('Sign-in initiation failed'),
+          'request',
+        );
         publishDeviceSignInStatus({
           state: 'failed',
           message: 'The sign-in request could not be started. Try again.',
@@ -616,6 +637,7 @@ export async function signInToNevermind({
         );
         if (controller.signal.aborted) return cancelledSignInResult(controller);
         if (res.status === 410) {
+          operationOutcome('blocked');
           publishDeviceSignInStatus({ state: 'expired' });
           return { ok: false, error: 'code expired or already used' };
         }
@@ -640,13 +662,16 @@ export async function signInToNevermind({
             state: 'approved',
             email: auth.email,
           });
+          operationStage('complete');
           return { ok: true, auth };
         }
       }
       publishDeviceSignInStatus({ state: 'expired' });
+      operationOutcome('timed_out');
       return { ok: false, error: 'timed out waiting for approval' };
     } catch (err) {
       if (controller.signal.aborted) return cancelledSignInResult(controller);
+      recordOperationFailure(err);
       logger.error('signInToNevermind failed');
       publishDeviceSignInStatus({
         state: 'failed',

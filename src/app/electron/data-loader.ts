@@ -89,6 +89,8 @@ export function createViewLoaderRegistry(deps: {
   sendHydrate: (viewId: string, payload: Record<string, unknown>) => void;
   normalizeItems: (items: any[], entry: any) => any[];
   warn?: (viewId: string, message: string) => void;
+  failed?: (error: unknown) => void;
+  observe?: <T>(task: () => Promise<T>) => Promise<T>;
   readCache?: (extension: any) => Promise<Record<string, any>>;
   mutateCache?: (
     extension: any,
@@ -97,7 +99,13 @@ export function createViewLoaderRegistry(deps: {
 }) {
   const registry = new Map<string, ViewLoaderEntry>();
 
-  async function spawn(viewId: string) {
+  function spawn(viewId: string) {
+    return deps.observe
+      ? deps.observe(() => loadView(viewId))
+      : loadView(viewId);
+  }
+
+  async function loadView(viewId: string) {
     const loader = registry.get(viewId);
     if (!loader) return undefined;
 
@@ -175,6 +183,7 @@ export function createViewLoaderRegistry(deps: {
       // Guard: skip mutations if a newer loader was registered while we awaited
       if (registry.get(viewId) !== loader)
         return { ok: false as const, error: message, retry: loader.retry };
+      deps.failed?.(error);
 
       // Graceful fallback for stale-while-revalidate: show stale items on failure
       if (staleHandle && cachedItems && Array.isArray(cachedItems)) {

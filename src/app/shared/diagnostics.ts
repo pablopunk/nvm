@@ -42,6 +42,21 @@ export type DiagnosticStage =
   | 'complete'
   | 'unknown';
 export type DiagnosticProcess = 'main' | 'renderer';
+export const DIAGNOSTIC_COMPONENTS = [
+  'apps',
+  'files',
+  'ai',
+  'clipboard',
+  'settings',
+  'account',
+  'extensions',
+  'updates',
+  'diagnostics',
+  'system',
+  'user-extension',
+  'unknown',
+] as const;
+export type DiagnosticComponent = (typeof DIAGNOSTIC_COMPONENTS)[number];
 export type DiagnosticRecord = {
   reference: string;
   timestamp: string;
@@ -51,6 +66,10 @@ export type DiagnosticRecord = {
   stage: DiagnosticStage;
   outcome: DiagnosticOutcome;
   process: DiagnosticProcess;
+  component?: DiagnosticComponent;
+  targetId?: string;
+  targetVersion?: string;
+  targetRunning?: boolean;
   windowId?: number;
   journeyId?: string;
   actionId?: string;
