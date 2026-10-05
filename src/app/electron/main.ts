@@ -11174,6 +11174,8 @@ app.whenReady().then(async () => {
     processPlatform: process.platform,
     getCameraMediaAccessStatus: () =>
       systemPreferences.getMediaAccessStatus('camera'),
+    askForCameraMediaAccess: () =>
+      systemPreferences.askForMediaAccess('camera'),
     showRendererIndicator,
     extensionWindowManager,
     saveExtensionDraft: saveExtensionDraftForIpc,

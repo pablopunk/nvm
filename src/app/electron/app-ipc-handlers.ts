@@ -104,6 +104,7 @@ export interface AppIpcHandlersDeps {
   hasCapability: (capability: string) => boolean;
   processPlatform: NodeJS.Platform | string;
   getCameraMediaAccessStatus: () => string;
+  askForCameraMediaAccess: () => Promise<boolean>;
   showRendererIndicator(sender: unknown, input: unknown): void;
   extensionWindowManager: {
     getStateForSender(sender: unknown): unknown;
@@ -333,7 +334,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('palette:shortcut-ready', () =>
     deps.paletteWindow.revealPalette(),
   );
-  ipcHandleMeasured('camera:request-access', () => {
+  ipcHandleMeasured('camera:request-access', async () => {
     if (!deps.hasCapability('camera')) {
       return { ok: false, status: 'unsupported' };
     }
@@ -346,6 +347,10 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     }
     if (status === 'denied' || status === 'restricted') {
       return { ok: false, status };
+    }
+    if (status === 'not-determined') {
+      const granted = await deps.askForCameraMediaAccess();
+      return { ok: granted, status: granted ? 'granted' : 'denied' };
     }
     return { ok: true, status };
   });

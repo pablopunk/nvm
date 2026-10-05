@@ -1354,6 +1354,25 @@ function EditorExtensionView({
   );
 }
 
+function useCameraAccessForWebview(webviewPermissions?: readonly string[]) {
+  const needsCamera = Boolean(webviewPermissions?.includes('camera'));
+  const [ready, setReady] = useState(!needsCamera);
+  useEffect(() => {
+    if (!needsCamera) return;
+    let cancelled = false;
+    window.nvm
+      .requestCameraAccess()
+      .catch(() => undefined)
+      .then(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsCamera]);
+  return ready;
+}
+
 function WebExtensionView({
   view,
   renderActionPanel,
@@ -1371,17 +1390,20 @@ function WebExtensionView({
   const webviewActions = webviewActionRows.length
     ? renderActionPanel(webviewActionRows)
     : null;
+  const cameraAccessReady = useCameraAccessForWebview(view.webviewPermissions);
   return (
     <div
       className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}
     >
-      <iframe
-        className="extensionWebview"
-        title={view.title}
-        srcDoc={view.html || view.content || ''}
-        sandbox={EXTENSION_WEBVIEW_SANDBOX}
-        allow={extensionWebviewAllow(view.webviewPermissions)}
-      />
+      {cameraAccessReady && (
+        <iframe
+          className="extensionWebview"
+          title={view.title}
+          srcDoc={view.html || view.content || ''}
+          sandbox={EXTENSION_WEBVIEW_SANDBOX}
+          allow={extensionWebviewAllow(view.webviewPermissions)}
+        />
+      )}
       {webviewActions}
     </div>
   );

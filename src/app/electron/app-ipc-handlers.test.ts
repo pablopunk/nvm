@@ -96,6 +96,7 @@ function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
     hasCapability: () => true,
     processPlatform: 'darwin',
     getCameraMediaAccessStatus: () => 'granted',
+    askForCameraMediaAccess: async () => true,
     showRendererIndicator: (sender, input) =>
       calls.push(`indicator:${String(sender)}:${JSON.stringify(input)}`),
     extensionWindowManager: {
