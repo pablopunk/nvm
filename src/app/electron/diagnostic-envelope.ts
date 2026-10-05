@@ -11,6 +11,10 @@ type Envelope = Parameters<
     typeof import('@sentry/electron/main').makeElectronTransport
   >['send']
 >[0];
+type DiagnosticEventEnvelope = Extract<
+  Envelope,
+  [{ event_id: string; sent_at: string }, unknown]
+>;
 const STAGES = [
   'dispatch',
   'invoke',
@@ -36,8 +40,8 @@ export function diagnosticEnvelope(
   recordForReference: (reference: string) => DiagnosticRecord | undefined,
   release: string,
   environment: string,
-): Envelope | undefined {
-  const items: Envelope[1] = [];
+): DiagnosticEventEnvelope | undefined {
+  const items: DiagnosticEventEnvelope[1] = [];
   for (const [header, payload] of envelope[1]) {
     if (
       (header.type !== 'event' && header.type !== 'transaction') ||
@@ -71,11 +75,11 @@ export function diagnosticEnvelope(
   }
   if (!items.length || Buffer.byteLength(JSON.stringify(items)) > 64 * 1024)
     return;
+  const eventId = envelope[0].event_id ?? (items[0]?.[1] as Event).event_id;
+  if (!isDiagnosticId(eventId)) return;
   return [
     {
-      ...(isDiagnosticId(envelope[0].event_id)
-        ? { event_id: envelope[0].event_id }
-        : {}),
+      event_id: eventId,
       sent_at: new Date().toISOString(),
     },
     items,

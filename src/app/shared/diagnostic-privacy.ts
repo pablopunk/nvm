@@ -171,7 +171,7 @@ export function sanitizeDiagnosticEvent<T extends Event>(
   return safe as T;
 }
 
-function safeSpanData(data: unknown) {
+function safeSpanData(data: unknown): Record<string, string> {
   if (!data || typeof data !== 'object') return {};
   const source = data as Record<string, unknown>;
   const outcomes = [
@@ -199,10 +199,10 @@ function safeSpanData(data: unknown) {
   ];
   return {
     ...(outcomes.includes(String(source['diagnostic.outcome']))
-      ? { 'diagnostic.outcome': source['diagnostic.outcome'] }
+      ? { 'diagnostic.outcome': String(source['diagnostic.outcome']) }
       : {}),
     ...(stages.includes(String(source['diagnostic.stage']))
-      ? { 'diagnostic.stage': source['diagnostic.stage'] }
+      ? { 'diagnostic.stage': String(source['diagnostic.stage']) }
       : {}),
   };
 }

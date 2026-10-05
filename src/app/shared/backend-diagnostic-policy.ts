@@ -21,7 +21,7 @@ export function backendDiagnosticHeaders(
   context?: {
     actionId: string;
     journeyId: string;
-    traceHeaders?: Record<string, string>;
+    traceHeaders?: { 'sentry-trace'?: string; baggage?: string };
   },
 ) {
   const headers: Record<string, string> = {};

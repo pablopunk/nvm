@@ -25,7 +25,10 @@ test('transport rejects attachments, unknown envelopes and raw payload fields', 
             ],
           },
         ],
-        [{ type: 'attachment' }, new TextEncoder().encode('PRIVATE_MEMORY')],
+        [
+          { type: 'attachment', filename: 'private.bin', length: 14 },
+          new TextEncoder().encode('PRIVATE_MEMORY'),
+        ],
         [{ type: 'session' }, { private: 'PRIVATE_SESSION' }],
         [{ type: 'replay_event' }, { private: 'PRIVATE_SCREEN' }],
       ],
@@ -41,7 +44,10 @@ test('transport rejects attachments, unknown envelopes and raw payload fields', 
 test('transport does not accept unregistered support identities', () => {
   assert.equal(
     diagnosticEnvelope(
-      [{}, [[{ type: 'event' }, { tags: { support_ref: 'a'.repeat(32) } }]]],
+      [
+        { event_id: 'b'.repeat(32), sent_at: new Date().toISOString() },
+        [[{ type: 'event' }, { tags: { support_ref: 'a'.repeat(32) } }]],
+      ],
       () => undefined,
       'test',
       'test',

@@ -16,7 +16,7 @@ export type OperationContext = {
   outcome: DiagnosticOutcome;
   windowId?: number;
   requestId?: string;
-  traceHeaders?: Record<string, string>;
+  traceHeaders?: { 'sentry-trace'?: string; baggage?: string };
   serverFailure?: boolean;
   responseStatus?: number;
   component?: DiagnosticComponent;
