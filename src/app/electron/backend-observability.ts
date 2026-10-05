@@ -24,6 +24,13 @@ export function observeProviderResponse(
 }
 
 export function observeProviderOptions(options: SimpleStreamOptions = {}) {
+  const context = currentOperation();
+  if (context && !context.closed) {
+    context.serverFailure = false;
+    context.responseStatus = undefined;
+    context.requestId = undefined;
+    operationStage('request');
+  }
   const original = options.onResponse;
   return {
     ...options,

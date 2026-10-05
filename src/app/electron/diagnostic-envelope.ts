@@ -16,7 +16,7 @@ type DiagnosticEventEnvelope = Extract<
   [{ event_id: string; sent_at: string }, unknown]
 >;
 type DiagnosticEnvelopeInput = [
-  { event_id?: unknown },
+  { event_id?: unknown; sent_at?: unknown },
   Array<[{ type: string; filename?: string; length?: number }, unknown]>,
 ];
 const STAGES = [

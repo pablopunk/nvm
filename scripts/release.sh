@@ -19,7 +19,11 @@ if [[ "$current_version" != "$VERSION" ]]; then
   node -e "const fs=require('fs'); const p=require('./package.json'); p.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\\n');"
   mise exec -- pnpm install --lockfile-only
   git add package.json pnpm-lock.yaml
-  git commit -m "release: $TAG"
+  if [[ -n "${RELEASE_CONTRACT_NOTE:-}" ]]; then
+    git commit -m "release: $TAG" -m "$RELEASE_CONTRACT_NOTE"
+  else
+    git commit -m "release: $TAG"
+  fi
 fi
 
 echo "Before tagging $TAG, confirm backend contract fixtures are current for desktop-used API shapes."

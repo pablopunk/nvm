@@ -8,6 +8,7 @@ import {
   configureObservability,
   currentOperation,
   recordOperationFailure,
+  recordServerOutcome,
   runOperation,
 } from './observability';
 
@@ -83,4 +84,15 @@ test('classified server failures are local outcomes while distinct client failur
     recordOperationFailure(new Error('client processing failed'));
   });
   assert.equal(captures.length, 1);
+});
+
+test('a new provider attempt does not inherit a failed metadata response', () => {
+  configureObservability({ build: 'test' });
+  runOperation('ai.stream', () => {
+    recordServerOutcome(404, 'metadata-request');
+    observeProviderOptions();
+    assert.equal(currentOperation()?.serverFailure, false);
+    assert.equal(currentOperation()?.responseStatus, undefined);
+    assert.equal(currentOperation()?.requestId, undefined);
+  });
 });
