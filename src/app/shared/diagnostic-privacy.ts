@@ -1,8 +1,11 @@
 import type { Event, StackFrame } from '@sentry/electron/main';
 import {
   type DiagnosticRecord,
+  type DiagnosticComponent,
   diagnosticOperation,
+  DIAGNOSTIC_COMPONENTS,
   isDiagnosticId,
+  isRequestId,
 } from './diagnostics';
 
 const ERROR_NAMES = new Set([
@@ -56,7 +59,7 @@ export function sanitizeDiagnosticEvent<T extends Event>(
       ? { timestamp: event.timestamp }
       : {}),
     level:
-      record?.operation === 'support.report'
+      record?.operation === 'support.report' || event.type === 'transaction'
         ? 'info'
         : event.level === 'fatal'
           ? 'fatal'
@@ -72,6 +75,12 @@ export function sanitizeDiagnosticEvent<T extends Event>(
       stage: record.stage,
       outcome: record.outcome,
       process: record.process,
+      ...(isDiagnosticId(record.journeyId)
+        ? { journey_id: record.journeyId }
+        : {}),
+      ...(isDiagnosticId(record.actionId)
+        ? { action_id: record.actionId }
+        : {}),
       ...(record.component ? { component: record.component } : {}),
     };
   }
@@ -99,6 +108,26 @@ export function sanitizeDiagnosticEvent<T extends Event>(
     };
   }
   if (event.type === 'transaction') {
+    const data = safeSpanData(trace?.data);
+    safe.tags = {
+      operation: diagnosticOperation(event.transaction),
+      ...(data['diagnostic.boot_id']
+        ? { boot_id: data['diagnostic.boot_id'] }
+        : {}),
+      ...(data['diagnostic.journey_id']
+        ? { journey_id: data['diagnostic.journey_id'] }
+        : {}),
+      ...(data['diagnostic.action_id']
+        ? { action_id: data['diagnostic.action_id'] }
+        : {}),
+      ...(data['diagnostic.outcome']
+        ? { outcome: data['diagnostic.outcome'] }
+        : {}),
+      ...(data['diagnostic.stage'] ? { stage: data['diagnostic.stage'] } : {}),
+      ...(data['diagnostic.component']
+        ? { component: data['diagnostic.component'] }
+        : {}),
+    };
     safe.type = 'transaction';
     safe.transaction = diagnosticOperation(event.transaction);
     safe.start_timestamp =
@@ -198,6 +227,24 @@ function safeSpanData(data: unknown): Record<string, string> {
     'unknown',
   ];
   return {
+    ...Object.fromEntries(
+      [
+        'diagnostic.boot_id',
+        'diagnostic.journey_id',
+        'diagnostic.action_id',
+        'diagnostic.target_id',
+      ]
+        .filter((key) => isDiagnosticId(source[key]))
+        .map((key) => [key, String(source[key])]),
+    ),
+    ...(isRequestId(source['diagnostic.request_id'])
+      ? { 'diagnostic.request_id': String(source['diagnostic.request_id']) }
+      : {}),
+    ...(DIAGNOSTIC_COMPONENTS.includes(
+      source['diagnostic.component'] as DiagnosticComponent,
+    )
+      ? { 'diagnostic.component': String(source['diagnostic.component']) }
+      : {}),
     ...(outcomes.includes(String(source['diagnostic.outcome']))
       ? { 'diagnostic.outcome': String(source['diagnostic.outcome']) }
       : {}),

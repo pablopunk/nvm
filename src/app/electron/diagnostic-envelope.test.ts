@@ -55,3 +55,41 @@ test('transport does not accept unregistered support identities', () => {
     undefined,
   );
 });
+
+test('successful journey transactions pass transport without an error record', () => {
+  const envelope = diagnosticEnvelope(
+    [
+      { event_id: 'a'.repeat(32) },
+      [
+        [
+          { type: 'transaction' },
+          {
+            event_id: 'a'.repeat(32),
+            type: 'transaction',
+            transaction: 'command.execute',
+            contexts: {
+              trace: {
+                trace_id: 'b'.repeat(32),
+                span_id: 'c'.repeat(16),
+                data: {
+                  'diagnostic.journey_id': 'd'.repeat(32),
+                  'diagnostic.action_id': 'e'.repeat(32),
+                  'diagnostic.outcome': 'success',
+                },
+              },
+            },
+            extra: { prompt: 'PRIVATE_PROMPT' },
+          },
+        ],
+      ],
+    ],
+    () => undefined,
+    'test',
+    'production',
+  );
+  const event = envelope?.[1][0]?.[1] as import('@sentry/electron/main').Event;
+  assert.equal(event.type, 'transaction');
+  assert.equal(event.tags?.journey_id, 'd'.repeat(32));
+  assert.equal(event.tags?.outcome, 'success');
+  assert.ok(!JSON.stringify(envelope).includes('PRIVATE_'));
+});

@@ -33,7 +33,7 @@ export function sanitizeBackendEvent<T extends Sentry.Event>(event: T): T {
     platform: 'node',
     event_id: safeDiagnosticId(event.event_id), timestamp: event.timestamp,
     release: event.release, environment: event.environment, level: event.level,
-    tags: { operation, stage, ...(requestId ? { request_id: requestId } : {}) },
+    tags: { operation, stage, ...(requestId ? { request_id: requestId } : {}), ...(actionId ? { desktop_action_id: actionId } : {}), ...(journeyId ? { desktop_journey_id: journeyId } : {}) },
     contexts: { diagnostic: { ...(requestId ? { request_id: requestId } : {}), ...(actionId ? { desktop_action_id: actionId } : {}), ...(journeyId ? { desktop_journey_id: journeyId } : {}) } },
   };
   if (trace && safeDiagnosticId(trace.trace_id) && typeof trace.span_id === 'string' && /^[a-f0-9]{16}$/.test(trace.span_id)) safe.contexts!.trace = { trace_id: trace.trace_id, span_id: trace.span_id, op: operation };

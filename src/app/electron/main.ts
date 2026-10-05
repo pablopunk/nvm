@@ -142,7 +142,6 @@ import {
 configureNvmTestMode();
 if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
-if (!isNvmTestMode) initSentry();
 
 import {
   INTERNAL_EXTENSION_FACTORIES,
@@ -348,6 +347,7 @@ import {
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 configureLogger(isDev);
+if (!isNvmTestMode) initSentry();
 setDeepLinkLogger({ warn: logWarn });
 
 const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';

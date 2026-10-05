@@ -5,7 +5,7 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   release: process.env.VERCEL_GIT_COMMIT_SHA,
   environment: process.env.VERCEL_ENV ?? 'development',
-  tracesSampleRate: 0.1,
+  tracesSampleRate: 1,
   sendDefaultPii: false,
   sendClientReports: false,
   enableLogs: false,

@@ -27,9 +27,9 @@ export type SettingsState = Partial<Record<SettingId, string | boolean>>;
 export const SETTING_DEFINITIONS: SettingDefinition[] = [
   {
     id: 'errorReporting',
-    title: 'Send Technical Error Reports',
+    title: 'Send Technical Diagnostics',
     description:
-      'Send safe error locations and action categories, without prompts, clipboard content, or account details',
+      'Send safe errors and journey timing, without prompts, clipboard content, or account details',
     icon: 'shield-check',
     type: 'boolean',
     default: true,

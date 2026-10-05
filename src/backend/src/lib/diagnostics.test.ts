@@ -12,8 +12,19 @@ test('backend diagnostics strips prompts, request data and user identity', () =>
   });
   assert.ok(!JSON.stringify(event).includes('PRIVATE_'));
   assert.equal(event.tags?.request_id, 'server-request');
+  assert.equal(event.tags?.desktop_action_id, 'a'.repeat(32));
   assert.equal(event.contexts?.diagnostic?.desktop_action_id, 'a'.repeat(32));
   assert.equal(event.exception?.values?.[0]?.stacktrace?.frames?.length, 1);
+});
+
+test('successful backend traces retain desktop journey correlation without request content', () => {
+  const event = sanitizeBackendEvent<Event>({ type: 'transaction', transaction: 'PRIVATE_ROUTE', tags: {
+    desktop_journey_id: 'a'.repeat(32), desktop_action_id: 'b'.repeat(32), request_id: 'server-request',
+  }, request: { data: 'PRIVATE_BODY' }, extra: { prompt: 'PRIVATE_PROMPT' } });
+  assert.equal(event.type, 'transaction');
+  assert.equal(event.tags?.desktop_journey_id, 'a'.repeat(32));
+  assert.equal(event.tags?.desktop_action_id, 'b'.repeat(32));
+  assert.ok(!JSON.stringify(event).includes('PRIVATE_'));
 });
 
 test('correlation headers are bounded and never authentication', () => {

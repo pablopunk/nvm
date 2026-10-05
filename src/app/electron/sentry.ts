@@ -156,6 +156,10 @@ function loadSentry() {
   try {
     sentry = requireSentryModule('@sentry/electron/main') as SentryMain;
   } catch (error) {
+    rememberFailure({
+      ...failureRecord('process.unhandled', 'load', false),
+      component: 'diagnostics',
+    });
     console.warn(
       'Sentry disabled because @sentry/electron/main could not be loaded.',
       error,
@@ -213,7 +217,8 @@ export function initSentry() {
     dsn,
     release: buildIdentity(),
     environment: app.isPackaged ? 'production' : 'development',
-    tracesSampleRate: 0.1,
+    tracesSampleRate: 1,
+    sampleRate: 1,
     sendDefaultPii: false,
     sendClientReports: false,
     enableLogs: false,
@@ -279,7 +284,15 @@ function traceOperation<T>(
 ): T {
   if (!initialized || !sentry || !reportingEnabled) return task();
   return sentry.startSpan(
-    { name: context.operation, op: context.operation },
+    {
+      name: context.operation,
+      op: context.operation,
+      attributes: {
+        'diagnostic.boot_id': context.bootId,
+        'diagnostic.journey_id': context.journeyId,
+        'diagnostic.action_id': context.actionId,
+      },
+    },
     function runDiagnosticSpan(span) {
       context.traceHeaders = sentry?.getTraceData();
       function finish() {
@@ -287,6 +300,10 @@ function traceOperation<T>(
         span.setAttribute('diagnostic.stage', context.stage);
         if (context.component)
           span.setAttribute('diagnostic.component', context.component);
+        if (context.targetId)
+          span.setAttribute('diagnostic.target_id', context.targetId);
+        if (context.requestId)
+          span.setAttribute('diagnostic.request_id', context.requestId);
         span.setStatus({
           code:
             context.outcome === 'unknown'

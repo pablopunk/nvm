@@ -44,3 +44,23 @@ test('maps are hidden for all processes and upload credentials are not build def
   assert.match(upload, /'--validate',\s*'--strict',\s*'--wait'/);
   assert.match(upload, /'app:\/\/\/dist'/);
 });
+
+test('desktop and backend capture all instrumented journeys and initialize diagnostics after logging', () => {
+  for (const file of [
+    'src/app/electron/sentry.ts',
+    'src/backend/src/sentry.server.config.ts',
+  ]) {
+    assert.match(
+      fs.readFileSync(path.join(root, file), 'utf8'),
+      /tracesSampleRate: 1,/,
+    );
+  }
+  const main = fs.readFileSync(
+    path.join(root, 'src/app/electron/main.ts'),
+    'utf8',
+  );
+  assert.ok(
+    main.indexOf('configureLogger(isDev);') <
+      main.indexOf('if (!isNvmTestMode) initSentry();'),
+  );
+});

@@ -9,6 +9,7 @@ import type {
 } from '../shared/diagnostics';
 
 export type OperationContext = {
+  bootId: string;
   journeyId: string;
   actionId: string;
   operation: DiagnosticOperation;
@@ -212,6 +213,7 @@ export function runOperation<T>(
 ): T {
   const parent = options.freshJourney ? undefined : currentOperation();
   const context: OperationContext = {
+    bootId,
     operation,
     stage: 'dispatch',
     outcome: 'unknown',

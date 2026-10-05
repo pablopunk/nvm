@@ -2,7 +2,9 @@
 
 ## Purpose and boundaries
 
-Use Sentry for safe error locations and sampled operation timing, Axiom for backend request evidence, and a local metadata index for account-free support lookup.
+Use Sentry for safe error locations and all instrumented operation timing while technical reporting is enabled, Axiom for backend request evidence, and a local metadata index for account-free support lookup.
+
+Desktop tracing currently samples 100% of instrumented operations, including successful journeys, at the owner's request. Session-bound journey and action identifiers connect operations without account identity or private content. This is not a recording of every click or keystroke, and transport failures, bounds, or server quotas can still prevent delivery.
 Do not collect full activity histories, screen content, replay, profiling, native dumps, arbitrary log uploads, account identity, or persistent installation identity.
 
 The repository changes are not production validation: collection approval, CI, packaged-app checks, remote event lookup, and alert configuration remain release gates.
@@ -18,7 +20,7 @@ The repository changes are not production validation: collection approval, CI, p
 - Renderer scope synchronization and automatic breadcrumbs are disabled. Small semantic breadcrumbs are window-local and metadata-only.
 - The final desktop transport sanitizes again and allows only error and transaction envelopes. It has a 20-item SDK memory buffer, a 64 KiB sanitized envelope limit, and a 60-error-per-minute capture limit. There is no persistent offline uploader.
 - Known legacy Sentry queue and scope files are checked for presence only. They are not replayed, read as payloads, exported, or deleted. Native crash files remain outside support exports.
-- `Send Technical Error Reports` in Settings controls remote collection. No remote collection starts before stored settings are loaded. Turning it off preserves local support records; reports already in flight can still arrive.
+- `Send Technical Diagnostics` in Settings controls desktop remote collection. No desktop remote collection starts before stored settings are loaded. Turning it off preserves local support records; reports already in flight can still arrive. Backend request diagnostics remain controlled by the backend configuration.
 
 ## Support lookup
 
@@ -73,7 +75,7 @@ After approval:
 2. Confirm a controlled packaged main, preload, renderer, and lazy-chunk failure resolves to original source in Sentry for its exact release.
 3. Confirm offline exit and remote reporting disabled leave truthful local records.
 4. Confirm real auth and AI journeys can pivot from support reference to the correct backend request and terminal stream evidence.
-5. Create dashboard panels for failures by operation/stage/component/release, sampled latency percentiles by operation, and Axiom stream outcomes by request ID.
+5. Create dashboard panels for failures by operation/stage/component/release, operation latency percentiles, and Axiom stream outcomes by request ID.
 6. Alert on new production error groups and sustained backend upstream/stream failures. Exclude `operation:support.report`, cancellations, and permission/credit blocks from error paging.
 
 Do not label sampled error counts as complete failure rates: a separate measurement denominator is required. Do not create user counts or account cohorts from these session-only identifiers.
