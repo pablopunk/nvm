@@ -15,6 +15,7 @@ export default defineConfig({
           dsn: sentryDsn,
           release: process.env.VERCEL_GIT_COMMIT_SHA,
           environment: process.env.VERCEL_ENV ?? 'development',
+          serverInitPath: './src/sentry.server.config.ts',
           sourceMapsUploadOptions: { telemetry: false },
         }),
       ]

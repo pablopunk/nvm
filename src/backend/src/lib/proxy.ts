@@ -36,6 +36,7 @@ import { finalizeReservation, reserveCredits, resizeReservation } from './credit
 import { backendKillSwitchEnabled, backendVersion, desktopClientFromRequest, killSwitchResponse, type DesktopClient } from './compatibility';
 import { log } from './log';
 import * as Sentry from '@sentry/astro';
+import { captureStreamFailure } from './diagnostics';
 import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
@@ -1066,6 +1067,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     requestId,
   );
   if ('failure' in result) {
+    if (result.status >= 500) Sentry.captureMessage('ai_chain_exhausted', 'error');
     await recordUsage({
       user: routing.user,
       provider: result.provider,
@@ -1214,9 +1216,10 @@ function teeStreamAndBill(
   const decoder = new TextDecoder('utf-8', { fatal: false });
   let terminal = false;
   let loggedFirstChunk = false;
-  async function finish(naturalCompletion: boolean) {
+  async function finish(naturalCompletion: boolean, outcome: 'completed' | 'failed' | 'cancelled' = naturalCompletion ? 'completed' : 'failed') {
     if (terminal) return;
     terminal = true;
+    log.info('diagnostic_stream_terminal', { request_id: billCtx.requestId, diagnostic_outcome: outcome });
     if (naturalCompletion) {
       sniffStreamUsage(decoder.decode(), true);
     }
@@ -1262,12 +1265,13 @@ function teeStreamAndBill(
   }
 
   function finishNaturalStreamInBackground() {
-    const finalization = finish(true).catch((error) =>
+    const finalization = finish(true).catch((error) => {
+      captureStreamFailure(error, billCtx.requestId, 'complete');
       log.error('stream_finalize_failed', {
         request_id: billCtx.requestId,
         error,
-      }),
-    );
+      });
+    });
     waitUntil(finalization);
   }
 
@@ -1295,6 +1299,7 @@ function teeStreamAndBill(
           controller.enqueue(value);
         }
       } catch (error) {
+        if (!terminal) captureStreamFailure(error, billCtx.requestId);
         await finish(false).catch((finalizeError) => log.error('stream_finalize_failed', { request_id: billCtx.requestId, error: finalizeError }));
         controller.error(error);
       }
@@ -1303,7 +1308,7 @@ function teeStreamAndBill(
       // Claim the terminal transition before cancelling the upstream reader:
       // reader.cancel() resolves a pending read as done, which must not race
       // cancellation into the natural-completion billing policy.
-      const finalization = finish(false)
+      const finalization = finish(false, 'cancelled')
         .catch((error) => log.error('stream_cancel_finalize_failed', { request_id: billCtx.requestId, error }));
       await reader.cancel(reason).catch(() => undefined);
       await finalization;

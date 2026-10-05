@@ -71,7 +71,8 @@ export function desktopUpdateUrl() {
 }
 
 export function requestIdFromHeaders(headers: Headers) {
-  return headers.get('x-request-id') || headers.get('x-nevermind-request-id') || randomUUID();
+  const incoming = headers.get('x-request-id') || headers.get('x-nevermind-request-id');
+  return incoming && /^[a-zA-Z0-9_-]{1,80}$/.test(incoming) ? incoming : randomUUID();
 }
 
 export function desktopClientFromRequest(request: Request): DesktopClient {
