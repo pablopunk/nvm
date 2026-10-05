@@ -1,7 +1,10 @@
 import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
-import { desktopBuildIdentity } from './scripts/desktop-build-identity.cjs';
+const { desktopBuildIdentity } = createRequire(import.meta.url)(
+  './scripts/desktop-build-identity.cjs',
+);
 
 const buildDefinitions = {
   __NEVERMIND_BUILD__: JSON.stringify(desktopBuildIdentity()),
