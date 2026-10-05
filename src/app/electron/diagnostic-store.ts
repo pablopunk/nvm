@@ -43,6 +43,7 @@ function safeRecord(value: unknown): DiagnosticRecord | undefined {
     return;
   if (
     !Number.isFinite(Date.parse(record.timestamp)) ||
+    Date.parse(record.timestamp) > Date.now() + 60_000 ||
     Date.parse(record.timestamp) < Date.now() - MAX_AGE_MS
   )
     return;
@@ -102,11 +103,16 @@ export function createDiagnosticStore(
   let dirty = false;
 
   function recent() {
+    const previousLength = records.length;
     records = records
       .filter(
         (record) => Date.parse(record.timestamp) >= Date.now() - MAX_AGE_MS,
       )
       .slice(0, recordLimit);
+    if (records.length !== previousLength) {
+      dirty = true;
+      scheduleWrite();
+    }
     return records.map((record) => ({ ...record }));
   }
 
@@ -135,6 +141,8 @@ export function createDiagnosticStore(
               ),
           ),
         ].slice(0, recordLimit);
+        dirty = true;
+        scheduleWrite();
       } finally {
         await handle.close();
       }

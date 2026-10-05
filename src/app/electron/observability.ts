@@ -23,6 +23,7 @@ export type OperationContext = {
   targetId?: string;
   failure?: DiagnosticRecord;
   closed: boolean;
+  completionUnverified?: boolean;
   breadcrumbs: { timestamp: number; category: string }[];
 };
 
@@ -106,6 +107,11 @@ export function operationOutcome(outcome: DiagnosticOutcome) {
     context.outcome = outcome;
 }
 
+export function operationPending() {
+  const context = currentOperation();
+  if (context && !context.closed) context.completionUnverified = true;
+}
+
 export function failureRecord(
   operation?: DiagnosticOperation,
   stage?: DiagnosticStage,
@@ -138,6 +144,7 @@ export function failureRecord(
 export function recordOperationFailure(
   error: unknown,
   stage?: DiagnosticStage,
+  captureOwner: 'client' | 'backend' | 'local' = 'client',
 ) {
   const context = currentOperation();
   if (context?.closed) return context.failure;
@@ -148,6 +155,7 @@ export function recordOperationFailure(
     return;
   }
   if (
+    captureOwner === 'backend' &&
     context?.serverFailure &&
     [401, 402, 403, 410, 429].includes(context.responseStatus ?? 0)
   )
@@ -167,7 +175,7 @@ export function recordOperationFailure(
   }
   try {
     hooks.record?.(record);
-    if (!context?.serverFailure && record.outcome !== 'blocked')
+    if (captureOwner === 'client' && record.outcome !== 'blocked')
       hooks.capture?.(error, record);
   } catch {}
   return record;
@@ -202,7 +210,7 @@ export function runOperation<T>(
     defaultOutcome?: DiagnosticOutcome;
   } = {},
 ): T {
-  const parent = currentOperation();
+  const parent = options.freshJourney ? undefined : currentOperation();
   const context: OperationContext = {
     operation,
     stage: 'dispatch',
@@ -221,7 +229,9 @@ export function runOperation<T>(
   function finish() {
     if (context.closed) return;
     if (context.outcome === 'unknown')
-      context.outcome = options.defaultOutcome ?? 'success';
+      context.outcome = context.completionUnverified
+        ? 'unknown'
+        : (options.defaultOutcome ?? 'success');
     context.closed = true;
     if (parent && !parent.closed) {
       if (context.requestId) parent.requestId = context.requestId;
@@ -238,7 +248,7 @@ export function runOperation<T>(
       parent.breadcrumbs.push(...context.breadcrumbs.slice(-10));
       parent.breadcrumbs.splice(0, Math.max(0, parent.breadcrumbs.length - 50));
     }
-    if (parent && context.failure && !parent.failure) {
+    if (parent && !parent.closed && context.failure && !parent.failure) {
       parent.failure = context.failure;
       if (!parent.closed && parent.outcome === 'unknown')
         parent.outcome = context.outcome;

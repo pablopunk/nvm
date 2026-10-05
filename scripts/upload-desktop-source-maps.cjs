@@ -22,6 +22,7 @@ function uploadDesktopSourceMaps() {
     if (!fs.existsSync(path.join(root, file)))
       throw new Error(`Missing source map: ${file}`);
   }
+  validateSourceMapPairs(path.join(root, 'dist'));
   const cli = require('@sentry/cli');
   execFileSync(
     cli.getPath(),
@@ -43,6 +44,18 @@ function uploadDesktopSourceMaps() {
     ],
     { cwd: root, stdio: 'inherit' },
   );
+}
+
+function validateSourceMapPairs(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) validateSourceMapPairs(file);
+    else if (
+      /\.(?:js|cjs|mjs)$/.test(entry.name) &&
+      !fs.existsSync(`${file}.map`)
+    )
+      throw new Error(`Missing source map for generated JavaScript: ${file}`);
+  }
 }
 
 if (require.main === module) uploadDesktopSourceMaps();

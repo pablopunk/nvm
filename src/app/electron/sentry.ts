@@ -91,29 +91,30 @@ export function rendererFailureHandle(windowId: number) {
 }
 
 function prepareEvent(event: import('@sentry/electron/main').ErrorEvent) {
-  const renderer = /^renderer\.(\d+)$/.exec(
-    String(event.tags?.['event.process'] ?? ''),
-  );
+  const processTag = String(event.tags?.['event.process'] ?? '');
+  const renderer = /^renderer\.(\d+)$/.exec(processTag);
+  const isRenderer = Boolean(renderer) || processTag === 'renderer';
   const handle = event.contexts?.diagnostic?.failure_handle;
   const pending =
     typeof handle === 'string' ? pendingFailures.get(handle) : undefined;
   const record =
     pending &&
-    (renderer
-      ? pending.process === 'renderer' &&
+    (isRenderer
+      ? renderer &&
+        pending.process === 'renderer' &&
         pending.windowId === Number(renderer[1])
       : pending.process === 'main')
       ? pending
       : {
           ...failureRecord(
-            renderer ? 'view.render' : undefined,
-            renderer ? 'unknown' : undefined,
-            !renderer,
+            isRenderer ? 'view.render' : undefined,
+            isRenderer ? 'unknown' : undefined,
+            !isRenderer,
           ),
-          ...(renderer
+          ...(isRenderer
             ? {
                 process: 'renderer' as const,
-                windowId: Number(renderer[1]),
+                ...(renderer ? { windowId: Number(renderer[1]) } : {}),
                 operation: 'view.render' as const,
               }
             : {}),

@@ -64,5 +64,6 @@ test('only required capture and preload integrations are permitted', () => {
     assert.ok(!MAIN_DIAGNOSTIC_INTEGRATIONS.has(name));
   assert.ok(MAIN_DIAGNOSTIC_INTEGRATIONS.has('PreloadInjection'));
   assert.ok(!RENDERER_DIAGNOSTIC_INTEGRATIONS.has('ScopeToMain'));
+  assert.ok(!RENDERER_DIAGNOSTIC_INTEGRATIONS.has('Dedupe'));
   assert.ok(!RENDERER_DIAGNOSTIC_INTEGRATIONS.has('Breadcrumbs'));
 });

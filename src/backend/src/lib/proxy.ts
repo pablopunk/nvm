@@ -882,8 +882,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   if (routing instanceof Response) return withRequestId(routing, requestId);
   const routingFinishedAt = Date.now();
 
-  Sentry.getCurrentScope().setUser({ id: routing.user.id });
-
   const requestBodyBuffer = await cfg.request.clone().arrayBuffer();
   const requestBodyBytes = new Uint8Array(requestBodyBuffer);
   const requestBodyText = new TextDecoder().decode(requestBodyBytes);

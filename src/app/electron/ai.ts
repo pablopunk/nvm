@@ -63,7 +63,11 @@ function observeAiEvent(event: AiEvent) {
   if (event.type === 'aborted') operationOutcome('cancelled');
   else if (event.type === 'error') {
     if (aiLimitNoticeFromError(event.message)) operationOutcome('blocked');
-    recordOperationFailure(new Error('AI operation failed'), 'stream');
+    recordOperationFailure(
+      new Error('AI operation failed'),
+      'stream',
+      currentOperation()?.serverFailure ? 'backend' : 'client',
+    );
   } else if (event.type === 'start') operationStage('request');
   else if (event.type === 'done') operationStage('complete');
   else if (event.type === 'delta' && currentOperation()?.stage !== 'stream')
@@ -468,7 +472,11 @@ function createNevermindAi(options: NevermindAiOptions) {
           });
           const limit = aiLimitNoticeFromError(error);
           if (limit) operationOutcome('blocked');
-          recordOperationFailure(error, 'stream');
+          recordOperationFailure(
+            error,
+            'stream',
+            currentOperation()?.serverFailure ? 'backend' : 'client',
+          );
           options.onEvent?.({
             type: 'error',
             chatId,
@@ -1483,6 +1491,11 @@ async function fetchActiveModelDescriptor(
   }
   if (res.status === 401) throw new NevermindAuthRequiredError();
   if (!res.ok) {
+    recordOperationFailure(
+      new Error('Backend model request failed'),
+      'request',
+      'backend',
+    );
     const body = await res.text().catch(() => '');
     throw new Error(`active-model fetch failed: ${res.status} ${body}`);
   }

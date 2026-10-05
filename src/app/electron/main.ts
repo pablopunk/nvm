@@ -124,7 +124,9 @@ import {
 } from './sentry';
 import {
   bindOperation,
+  currentOperation,
   operationOutcome,
+  operationPending,
   operationStage,
   operationTarget,
   recordOperationFailure,
@@ -3438,18 +3440,22 @@ function invalidateExtensionRootItemsForExtension(extension) {
 }
 
 function runInBackground(task, traceId?: string) {
+  operationPending();
   const queuedAt = performance.now();
   setImmediate(
     bindOperation(() => {
       Promise.resolve()
         .then(() =>
-          runOperation('os.dispatch', () =>
-            performanceTraces.run(
-              'os.dispatch',
-              { queueMs: performance.now() - queuedAt },
-              task,
-              traceId ? { traceId } : undefined,
-            ),
+          runOperation(
+            'os.dispatch',
+            () =>
+              performanceTraces.run(
+                'os.dispatch',
+                { queueMs: performance.now() - queuedAt },
+                task,
+                traceId ? { traceId } : undefined,
+              ),
+            { defaultOutcome: 'unknown' },
           ),
         )
         .catch((error) => {
@@ -4621,6 +4627,8 @@ function presentActionResultFeedback(result: any, action: any) {
   if (!result?.toast) return result;
   const message = String(result.toast.message || '');
   const tone = String(result.toast.tone || 'default');
+  if (tone === 'error' && currentOperation())
+    recordOperationFailure(undefined, 'invoke', 'local');
   if (message)
     extensionWindowManager.showIndicator(
       {
@@ -8815,10 +8823,23 @@ async function ensureExtensionTypeDefinitions() {
 }
 
 async function loadExtensionModule(fullPath) {
-  const url = pathToFileURL(fullPath);
-  url.searchParams.set('reload', String(Date.now()));
-  const imported = await import(url.href);
-  return imported.default || imported;
+  return runOperation('extension.load', async function importExtensionModule() {
+    operationStage('load');
+    const url = pathToFileURL(fullPath);
+    url.searchParams.set('reload', String(Date.now()));
+    try {
+      const imported = await import(url.href);
+      return imported.default || imported;
+    } catch (error) {
+      const record = recordOperationFailure(error, 'load');
+      logInfo(
+        'diagnostic.module',
+        { reference: record?.reference, filePath: fullPath },
+        { source: 'host', scope: 'diagnostics' },
+      );
+      throw error;
+    }
+  });
 }
 
 async function initializeExtensionManager() {

@@ -68,7 +68,11 @@ test('classified server failures are local outcomes while distinct client failur
       { status: 503, headers: { 'x-request-id': 'server-failure' } },
       { baseUrl: 'https://api.nvm.fyi/api/v1' } as never,
     );
-    const record = recordOperationFailure(new Error('server failed'));
+    const record = recordOperationFailure(
+      new Error('server failed'),
+      'stream',
+      'backend',
+    );
     assert.equal(record?.requestId, 'server-failure');
   });
   assert.equal(captures.length, 0);

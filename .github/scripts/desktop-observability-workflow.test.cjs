@@ -41,6 +41,6 @@ test('maps are hidden for all processes and upload credentials are not build def
     path.join(root, 'scripts/upload-desktop-source-maps.cjs'),
     'utf8',
   );
-  assert.match(upload, /'--validate', '--strict', '--wait'/);
+  assert.match(upload, /'--validate',\s*'--strict',\s*'--wait'/);
   assert.match(upload, /'app:\/\/\/dist'/);
 });

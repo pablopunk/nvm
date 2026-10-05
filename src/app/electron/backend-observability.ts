@@ -10,25 +10,26 @@ import {
   recordServerOutcome,
   runOperation,
 } from './observability';
+import type { SimpleStreamOptions } from '@earendil-works/pi-ai/compat';
+type ProviderResponseCallback = NonNullable<SimpleStreamOptions['onResponse']>;
 
 export function observeProviderResponse(
   response: { status: number; headers: Record<string, string> },
   model: { baseUrl: string },
 ) {
+  if (typeof model?.baseUrl !== 'string') return;
   if (!isDiagnosticBackend(`${model.baseUrl.replace(/\/$/, '')}/request`))
     return;
   recordServerOutcome(response.status, responseRequestId(response.headers));
 }
 
-export function observeProviderOptions(
-  options: import('@earendil-works/pi-ai/compat').SimpleStreamOptions = {},
-) {
+export function observeProviderOptions(options: SimpleStreamOptions = {}) {
   const original = options.onResponse;
   return {
     ...options,
     onResponse: bindOperation(async function providerResponded(
-      response: { status: number; headers: Record<string, string> },
-      model: { baseUrl: string },
+      response: Parameters<ProviderResponseCallback>[0],
+      model: Parameters<ProviderResponseCallback>[1],
     ) {
       observeProviderResponse(response, model);
       return original?.(response, model);

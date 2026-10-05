@@ -22,8 +22,8 @@ calling it a DSN misconfiguration:
 2. Whether `@sentry/electron/main` loaded in the packaged build. Loading is
    best-effort, so a load failure can leave the app running with only a local
    warning.
-3. Whether the symptom happened in the Electron main process or renderer. A
-   main-only SDK does not report renderer/UI errors.
+3. Whether the installed release includes renderer diagnostics and matching
+   source maps; older main-only releases do not report renderer/UI errors.
 4. Whether the error was caught and handled locally. `console.error` and a
    caught exception do not create a Sentry event unless code calls
    `captureException`.
@@ -87,6 +87,12 @@ curl -sS -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
 ```
 
 ## Extract and pivot
+
+For desktop “just now” requests, first read `nevermind-diagnostics.json` under the app's logs directory or use **Show Recent Errors**. Match time, boot, build, and support reference before remote search. Search `support_ref:<reference>` only in the project mapped by the configured DSN; map numeric project IDs to trusted project slugs, not guessed names. A record's `eventId` or `capture_requested` is not evidence of delivery: the event GET must succeed in that project. Report local-only, dropped, forbidden, or unavailable outcomes without calling them sent.
+
+Use `requestId` to find Axiom `diagnostic_response` and `diagnostic_stream_terminal` evidence. Server-generated proxy request IDs are billing identity; desktop action IDs are separate. A successful HTTP response does not prove stream completion. For `targetId`, local `diagnostic.target` logs can identify the extension source, but those logs are not sanitized support exports. Missing window/action/extension context must remain unknown.
+
+Release uploads use `SENTRY_PROJECT_DESKTOP`, not the backend upload project by default. Check event-read, artifact-upload, and alert-management scopes separately. Do not change live collection or alerts without approval; see `docs/sentry-desktop-observability.md` for the release gates and outstanding provider trace propagation.
 
 Extract environment, release, timestamp, exception, route/transaction/status, tags/contexts, `request_id`, deployment id/SHA, first/last seen, event count, and affected users. Also inspect `contexts.response.status_code`, `contexts.cloud_resource`, and recent breadcrumbs: for async uncaught exceptions, Sentry `dateCreated` can be minutes after the request breadcrumbs/DB usage row. Then pivot to `axiom.md` with the Sentry timestamp and breadcrumb/request timestamp ±15m plus request id, route, host, release, or error text.
 

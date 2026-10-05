@@ -30,6 +30,7 @@ export function sanitizeBackendEvent<T extends Sentry.Event>(event: T): T {
   const journeyId = safeDiagnosticId(event.tags?.desktop_journey_id);
   const trace = event.contexts?.trace;
   const safe: Sentry.Event = {
+    platform: 'node',
     event_id: safeDiagnosticId(event.event_id), timestamp: event.timestamp,
     release: event.release, environment: event.environment, level: event.level,
     tags: { operation, stage, ...(requestId ? { request_id: requestId } : {}) },

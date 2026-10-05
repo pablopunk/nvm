@@ -27,7 +27,6 @@ export const RENDERER_DIAGNOSTIC_INTEGRATIONS = new Set([
   'FunctionToString',
   'GlobalHandlers',
   'BrowserApiErrors',
-  'Dedupe',
   'DebugIds',
 ]);
 
@@ -51,6 +50,7 @@ export function sanitizeDiagnosticEvent<T extends Event>(
 ): T {
   const trace = event.contexts?.trace;
   const safe: Event = {
+    platform: record?.process === 'renderer' ? 'javascript' : 'node',
     ...(isDiagnosticId(event.event_id) ? { event_id: event.event_id } : {}),
     ...(typeof event.timestamp === 'number' && Number.isFinite(event.timestamp)
       ? { timestamp: event.timestamp }
@@ -155,6 +155,7 @@ export function sanitizeDiagnosticEvent<T extends Event>(
         : 'Unexpected operation failure';
   }
   const images = (event.debug_meta?.images ?? [])
+    .slice(0, 100)
     .filter(
       (image) =>
         image.type === 'sourcemap' &&

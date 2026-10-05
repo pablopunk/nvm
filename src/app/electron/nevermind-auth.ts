@@ -600,6 +600,7 @@ async function performSignIn({
         recordOperationFailure(
           new Error('Sign-in initiation failed'),
           'request',
+          'backend',
         );
         publishDeviceSignInStatus({
           state: 'failed',
