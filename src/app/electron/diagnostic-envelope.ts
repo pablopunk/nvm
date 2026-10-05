@@ -15,6 +15,10 @@ type DiagnosticEventEnvelope = Extract<
   Envelope,
   [{ event_id: string; sent_at: string }, unknown]
 >;
+type DiagnosticEnvelopeInput = [
+  { event_id?: unknown },
+  Array<[{ type: string; filename?: string; length?: number }, unknown]>,
+];
 const STAGES = [
   'dispatch',
   'invoke',
@@ -36,7 +40,7 @@ const CATEGORIES = new Set(
 );
 
 export function diagnosticEnvelope(
-  envelope: Envelope,
+  envelope: DiagnosticEnvelopeInput,
   recordForReference: (reference: string) => DiagnosticRecord | undefined,
   release: string,
   environment: string,
