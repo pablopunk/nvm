@@ -776,6 +776,10 @@ test('extension webview privileged iframe permissions are explicit and allowlist
     extensionWebviewAllow(['autoplay', 'camera', 'camera', 'bad-permission']),
     'autoplay; camera',
   );
+  assert.equal(
+    extensionWebviewAllow(['camera', 'microphone']),
+    'camera; microphone',
+  );
 
   const html = renderExtensionView({
     type: 'webview',
@@ -784,7 +788,15 @@ test('extension webview privileged iframe permissions are explicit and allowlist
     webviewPermissions: ['camera', 'microphone'],
   });
 
-  assert.match(html, /allow="camera; microphone"/);
+  assert.doesNotMatch(html, /<iframe/);
   assert.doesNotMatch(html, /allow-same-origin/);
   assert.doesNotMatch(html, /display-capture|clipboard-read|clipboard-write/);
+  const microphoneHtml = renderExtensionView({
+    type: 'webview',
+    title: 'Microphone HTML',
+    html: '<main>microphone</main>',
+    webviewPermissions: ['microphone'],
+  });
+  assert.match(microphoneHtml, /allow="microphone"/);
+  assert.doesNotMatch(microphoneHtml, /allow-same-origin/);
 });
