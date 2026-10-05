@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { Event } from '@sentry/electron/main';
 import {
   MAIN_DIAGNOSTIC_INTEGRATIONS,
   RENDERER_DIAGNOSTIC_INTEGRATIONS,
@@ -69,7 +70,7 @@ test('only required capture and preload integrations are permitted', () => {
 });
 
 test('successful journeys retain bounded correlation and outcomes without private content', () => {
-  const event = sanitizeDiagnosticEvent({
+  const event = sanitizeDiagnosticEvent<Event>({
     type: 'transaction' as const,
     transaction: 'command.execute',
     contexts: {
