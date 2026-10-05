@@ -7,6 +7,7 @@ import { createBackgroundTasksExtension } from './background-tasks';
 import { createCalculatorExtension } from './calculator';
 import { createClipboardExtension } from './clipboard';
 import { createDictationExtension } from './dictation';
+import { createDiagnosticsExtension } from './diagnostics';
 import { createEmojiSymbolsExtension } from './emoji-symbols';
 import { createExtensionsExtension } from './extensions';
 import { createFilesExtension } from './files';
@@ -40,6 +41,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createQuitAppsExtension,
   createSettingsExtension,
   createBackgroundTasksExtension,
+  createDiagnosticsExtension,
   createAccountExtension,
   createGettingStartedExtension,
 ];
@@ -53,6 +55,7 @@ export const INTERNAL_EXTENSION_SOURCE_FILES = [
   'calculator.ts',
   'clipboard.ts',
   'dictation.ts',
+  'diagnostics.ts',
   'emoji-symbols.ts',
   'extensions.ts',
   'files.ts',

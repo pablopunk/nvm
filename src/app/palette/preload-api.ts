@@ -180,6 +180,7 @@ export type ViewHydratePayload = {
 };
 
 export type NevermindApi = {
+  prepareDiagnosticFailure: () => Promise<string | null>;
   platform: ShortcutPlatform;
   search: (
     query: string,

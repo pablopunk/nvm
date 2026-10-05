@@ -13,11 +13,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // should be logged and contained, not silently kill the entire process.
 process.on('unhandledRejection', (reason) => {
   console.error('FATAL: unhandled rejection (would crash Electron):', reason);
-  captureException(reason, { source: 'unhandledRejection' });
 });
 process.on('uncaughtException', (error) => {
   console.error('FATAL: uncaught exception (would crash Electron):', error);
-  captureException(error, { source: 'uncaughtException' });
 });
 
 import {
@@ -113,7 +111,18 @@ import {
 } from './nevermind-compatibility';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import { resolvesToUnsafeNevermindAddress } from './nevermind-url';
-import { captureException, initSentry } from './sentry';
+import {
+  initSentry,
+  recentDiagnosticRecords,
+  rendererFailureHandle,
+  reportDiagnosticProblem,
+} from './sentry';
+import {
+  bindOperation,
+  operationStage,
+  recordOperationFailure,
+  runOperation,
+} from './observability';
 import {
   configureNvmTestMode,
   installTestNetworkPolicy,
@@ -320,6 +329,7 @@ import {
 import { isNewerVersion as isVersionNewerThan } from './version-utils';
 import {
   installExternalNavigationPolicy,
+  isTrustedAppPage,
   isTrustedExtensionWindowPage,
 } from './window-navigation-policy';
 
@@ -358,6 +368,19 @@ const updateManager: any = isNvmTestMode
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
+ipcMain.handle('diagnostics:renderer-failure', (event) => {
+  if (
+    event.senderFrame !== event.sender.mainFrame ||
+    !isTrustedAppPage(
+      event.sender.getURL(),
+      isDev,
+      rendererUrl,
+      rendererIndexPath,
+    )
+  )
+    return null;
+  return rendererFailureHandle(event.sender.id);
+});
 nativeTheme.themeSource = 'system';
 const paletteWindow = createPaletteWindowController({
   isDev: Boolean(rendererUrl),
@@ -607,7 +630,11 @@ let testExtensionActivationFailurePhase: string | undefined;
 let frontmostWatcherLastId = '';
 const jobRegistry = new JobRegistry({
   performanceTrace: (operation, attributes, task) =>
-    performanceTraces.run(operation, attributes, task),
+    runOperation(
+      'job.run',
+      () => performanceTraces.run(operation, attributes, task),
+      { freshJourney: true },
+    ),
 });
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
@@ -3392,20 +3419,24 @@ function invalidateExtensionRootItemsForExtension(extension) {
 
 function runInBackground(task, traceId?: string) {
   const queuedAt = performance.now();
-  setImmediate(() => {
-    Promise.resolve()
-      .then(() =>
-        performanceTraces.run(
-          'os.dispatch',
-          { queueMs: performance.now() - queuedAt },
-          task,
-          traceId ? { traceId } : undefined,
-        ),
-      )
-      .catch((error) => {
-        logError('backgroundAction.failed', error, { source: 'host' });
-      });
-  });
+  setImmediate(
+    bindOperation(() => {
+      Promise.resolve()
+        .then(() =>
+          runOperation('os.dispatch', () =>
+            performanceTraces.run(
+              'os.dispatch',
+              { queueMs: performance.now() - queuedAt },
+              task,
+              traceId ? { traceId } : undefined,
+            ),
+          ),
+        )
+        .catch((error) => {
+          logError('backgroundAction.failed', error, { source: 'host' });
+        });
+    }),
+  );
 }
 
 async function executeActionWithoutFeedback(action, options: any = {}) {
@@ -3612,6 +3643,7 @@ async function executeExtensionRootItem(action) {
             );
             return executeViewActionResult(result, record.entry);
           } catch (error) {
+            recordOperationFailure(error, 'invoke');
             logError('extension.rootItem.failed', error, {
               source: 'host',
               scope: 'extension',
@@ -3969,6 +4001,7 @@ async function executeActionForIpc(action) {
           let trustedAction: any = null;
           try {
             trustedAction = resolveRootActionForIpc(action);
+            operationStage('invoke');
             const result = presentActionResultFeedback(
               normalizeHostViewResult(
                 await measureDebugPerformance(
@@ -3986,6 +4019,7 @@ async function executeActionForIpc(action) {
             spawnPendingViewLoaders(result, trustedAction?.traceId);
             return result;
           } catch (error) {
+            recordOperationFailure(error);
             if (
               trustedAction?.background ||
               trustedAction?.dismissAfterRun === 'auto'
@@ -4869,6 +4903,7 @@ async function executeViewActionForIpc(action) {
           let trustedAction: any = null;
           try {
             trustedAction = resolveViewActionForIpc(action);
+            operationStage('invoke');
             const result = presentActionResultFeedback(
               normalizeHostViewResult(
                 await measureDebugPerformance(
@@ -4889,6 +4924,7 @@ async function executeViewActionForIpc(action) {
             );
             return result;
           } catch (error) {
+            recordOperationFailure(error);
             const record =
               trustedAction?.type === 'runExtensionAction'
                 ? extensionActionHandlers.get(trustedAction.handlerId)
@@ -9192,6 +9228,10 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
       for (const watcher of extensionFileWatchers) watcher.close();
       extensionFileWatchers = [];
       initExtensionContext({
+        diagnostics: {
+          recent: recentDiagnosticRecords,
+          report: reportDiagnosticProblem,
+        },
         userState,
         fileIndex,
         clipboardService,

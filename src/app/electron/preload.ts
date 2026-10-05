@@ -95,6 +95,8 @@ async function invokeMeasured<T>(
 }
 
 const api: NevermindApi = {
+  prepareDiagnosticFailure: () =>
+    ipcRenderer.invoke('diagnostics:renderer-failure'),
   platform: process.platform,
   search: (query, options) =>
     invokeMeasured('actions:search', { query, ...options }),

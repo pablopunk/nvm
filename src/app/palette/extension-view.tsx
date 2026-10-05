@@ -24,6 +24,7 @@ import type { AiChatModel } from '../shared/ai-chat-model';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import { iconForItem } from './command-icons';
 import { RootCommandList } from './command-list';
+import { captureRendererFailure } from './diagnostics';
 import { titleFromFirstContentLine } from './editor-title';
 import { formApplyRowId } from './form-fields';
 import {
@@ -180,6 +181,7 @@ class ExtensionRenderBoundary extends React.Component<
 
   componentDidCatch(error: unknown) {
     console.error('extension-view.render.failed', error);
+    captureRendererFailure(error);
   }
 
   render() {

@@ -1,7 +1,9 @@
 // biome-ignore-all lint: This legacy context is incrementally typed and exposes heterogeneous extension data.
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
+import type { DiagnosticRecord } from '../shared/diagnostics';
 
 export const extensionContext: {
+  diagnostics: { recent: () => DiagnosticRecord[]; report: () => string };
   userState: Record<string, any>;
   fileIndex: any[];
   clipboardService: { createClipboardExtension: () => any } | null;
