@@ -16,6 +16,7 @@ import {
   formRowId,
   formValueLabel,
 } from './form-fields';
+import { IndicatorMicTrace } from './indicator-mic-trace';
 import { IndicatorOrb, indicatorOrbState } from './indicator-orb';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
@@ -574,6 +575,7 @@ export function ProgressView({
   const orbState = animateSummaryText ? indicatorOrbState(status) : undefined;
   return (
     <div className="extensionView progressView">
+      {orbState === 'listening' ? <IndicatorMicTrace /> : null}
       {showSummary ? (
         <div
           className="progressOverview"
