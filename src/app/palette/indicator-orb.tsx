@@ -1,3 +1,4 @@
+import React from 'react';
 import { ThinkingOrb } from 'thinking-orbs';
 
 type OrbState = 'listening' | 'working' | 'composing';
