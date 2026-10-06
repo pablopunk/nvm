@@ -76,6 +76,7 @@ async function packagedDiagnosticsSmoke(executable, artifacts) {
   await fs.mkdir(artifacts, { recursive: true });
   const collector = await createDiagnosticSmokeCollector();
   let app;
+  let page;
   try {
     await prepareDiagnosticFixture(temporary);
     app = await electron.launch({
@@ -98,7 +99,7 @@ async function packagedDiagnosticsSmoke(executable, artifacts) {
       true,
       'Diagnostics smoke must use the packaged application',
     );
-    const page = await app.firstWindow();
+    page = await app.firstWindow();
     await runPaletteCommand(page, 'Report a Problem');
     const report = await waitForCapture(
       collector,
@@ -164,6 +165,13 @@ async function packagedDiagnosticsSmoke(executable, artifacts) {
     );
     console.log(JSON.stringify(evidence));
   } finally {
+    if (page && !page.isClosed()) {
+      await page.screenshot({ path: path.join(artifacts, 'final-state.png') });
+      await fs.writeFile(
+        path.join(artifacts, 'final-state.txt'),
+        await page.locator('body').innerText(),
+      );
+    }
     await fs.writeFile(
       path.join(artifacts, 'received-events.json'),
       JSON.stringify(

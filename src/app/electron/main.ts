@@ -3376,6 +3376,11 @@ function testModeSafeAction() {
 }
 
 function testModeExtensionIsSafe(extensionId: string) {
+  if (
+    isNvmDiagnosticTestMode &&
+    ['nevermind.diagnostics', 'qa.diagnostic-smoke'].includes(extensionId)
+  )
+    return true;
   return [
     'nevermind.system',
     'nevermind.extensions',
