@@ -399,6 +399,18 @@ html[data-mic-live="true"]
   transform: scale(calc(0.7 + var(--mic-level, 0) * 0.8));
 }
 
+.extensionWindowChromeNone .progressOverview[data-orb="true"]::before {
+  display: none;
+}
+
+.indicatorOrb {
+  display: flex;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  transform: scale(calc(1 + var(--mic-level, 0) * 0.25));
+}
+
 .extensionWindowChromeNone .progressOverview[data-status="done"]::before {
   background: var(--success-text);
   box-shadow: none;

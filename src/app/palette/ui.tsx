@@ -570,14 +570,17 @@ export function ProgressView({
   const showSummary = Boolean(label || status) || hasProgress;
   const summaryLabel = label || status || 'Working…';
   const progressLabel = `${value} of ${total} · ${percent}%`;
+  const orbState = animateSummaryText ? indicatorOrbState(status) : undefined;
   return (
     <div className="extensionView progressView">
       {showSummary ? (
         <div
           className="progressOverview"
           data-status={normalizedStatus}
+          data-orb={orbState ? 'true' : undefined}
           role={normalizedStatus === 'error' ? 'alert' : 'status'}
         >
+          {orbState ? <IndicatorOrb state={orbState} /> : null}
           <div>
             <strong>
               {animateSummaryText ? (

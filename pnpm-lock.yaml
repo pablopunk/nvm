@@ -66,6 +66,9 @@ importers:
       pi-web-access:
         specifier: 0.24.0
         version: 0.24.0(@earendil-works/pi-ai@0.80.10(supports-color@8.1.1)(ws@8.21.0)(zod@4.4.3))(@earendil-works/pi-coding-agent@0.80.10(supports-color@8.1.1)(ws@8.21.0)(zod@4.4.3))(@earendil-works/pi-tui@0.80.10)
+      thinking-orbs:
+        specifier: ^0.3.2
+        version: 0.3.2(react@19.2.6)
       torph:
         specifier: 0.1.3
         version: 0.1.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -3892,6 +3895,11 @@ packages:
   temp@0.9.4:
     resolution: {integrity: sha512-yYrrsWnrXMcdsnu/7YMYAofM1ktpL5By7vZhf15CrXijWWrEYZks5AXBudalfSWJLlnen/QUJUB5aoB0kqZUGA==}
     engines: {node: '>=6.0.0'}
+
+  thinking-orbs@0.3.2:
+    resolution: {integrity: sha512-QZFeBaPEzqhjiZoXy961EvDgaXk2WgXacF3Rbz+Sj5IfzDzBvTC86vdREUHniBffYibJFKSwbfllxLUdI/Xv6g==}
+    peerDependencies:
+      react: '>=18.0.0'
 
   tiny-async-pool@1.3.0:
     resolution: {integrity: sha512-01EAw5EDrcVrdgyCLgoSPvqznC0sVxDSVeiOz09FUpjh71G79VCqneOr+xvt7T1r76CF6ZZfPjHorN2+d+3mqA==}
@@ -8665,6 +8673,10 @@ snapshots:
     dependencies:
       mkdirp: 0.5.6
       rimraf: 2.6.3
+
+  thinking-orbs@0.3.2(react@19.2.6):
+    dependencies:
+      react: 19.2.6
 
   tiny-async-pool@1.3.0:
     dependencies:
