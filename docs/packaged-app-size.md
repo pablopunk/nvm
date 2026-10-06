@@ -28,6 +28,8 @@ Do not add direct AI SDK packages unless Nevermind source imports them directly.
 
 ## Guardrail
 
+Every platform package must contain the full required production dependency graph, including transitive dependencies, before signing or publication. The final ASAR is checked after packaging; optional platform dependencies can be absent. Source-tree installation and successful bundling do not prove that a packaged SDK can start.
+
 `scripts/check-packaged-runtime-imports.cjs` runs in `pnpm test` after `pnpm build`. It scans `dist/main` and `dist/preload` for static imports, dynamic imports, `require(...)`, and string references to packages that must not be used by packaged runtime code.
 
 If main/preload starts depending on a renderer/build/dev-only package, fix the boundary instead of moving that package back to `dependencies`. Renderer code should remain bundled; packaged runtime code should stay explicit about its runtime dependencies.

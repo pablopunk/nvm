@@ -30,6 +30,7 @@ files:
   - '!**/*.map'
   - '!node_modules/**/{test,tests,__tests__,docs,example,examples}/**'
 asar: true
+afterPack: scripts/after-pack.cjs
 publish:
   - provider: github
     owner: pablopunk

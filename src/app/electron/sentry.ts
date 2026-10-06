@@ -20,6 +20,7 @@ import {
 } from './observability';
 import { diagnosticEnvelope } from './diagnostic-envelope';
 import { auditLegacyDiagnosticCache } from './legacy-diagnostic-cache';
+import { error as logError } from './logger';
 
 type SentryMain = typeof import('@sentry/electron/main');
 
@@ -160,10 +161,10 @@ function loadSentry() {
       ...failureRecord('process.unhandled', 'load', false),
       component: 'diagnostics',
     });
-    console.warn(
-      'Sentry disabled because @sentry/electron/main could not be loaded.',
-      error,
-    );
+    logError('diagnostics.sdk.load.failed', error, {
+      source: 'host',
+      scope: 'diagnostics',
+    });
   }
   return sentry;
 }
