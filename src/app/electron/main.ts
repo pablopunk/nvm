@@ -136,6 +136,7 @@ import {
   configureNvmTestMode,
   installTestNetworkPolicy,
   isNvmTestMode,
+  isNvmDiagnosticTestMode,
   recordTestWindowEvent,
 } from './test-mode';
 
@@ -347,7 +348,7 @@ import {
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 configureLogger(isDev);
-if (!isNvmTestMode) initSentry();
+if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();
 setDeepLinkLogger({ warn: logWarn });
 
 const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';

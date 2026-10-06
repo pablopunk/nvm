@@ -61,6 +61,33 @@ test('desktop and backend capture all instrumented journeys and initialize diagn
   );
   assert.ok(
     main.indexOf('configureLogger(isDev);') <
-      main.indexOf('if (!isNvmTestMode) initSentry();'),
+      main.indexOf(
+        'if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();',
+      ),
   );
+});
+
+test('packaging gates publication on the final dependency graph and native SDK capture', () => {
+  const config = fs.readFileSync(
+    path.join(root, 'electron-builder.yml'),
+    'utf8',
+  );
+  assert.match(config, /afterPack: scripts\/after-pack.cjs/);
+  const hook = fs.readFileSync(
+    path.join(root, 'scripts/after-pack.cjs'),
+    'utf8',
+  );
+  const graphCheck = hook.indexOf('const result = verifyPackagedDependencies');
+  assert.ok(
+    graphCheck >= 0 &&
+      graphCheck <
+        hook.indexOf("await require('./packaged-diagnostics-smoke.cjs')"),
+  );
+  assert.match(hook, /process\.env\.CI/);
+  const workflow = fs.readFileSync(
+    path.join(root, '.github/workflows/ci.yml'),
+    'utf8',
+  );
+  assert.match(workflow, /Packaged diagnostic capture/);
+  assert.match(workflow, /xvfb-run -a mise exec -- pnpm run dist:linux:/);
 });

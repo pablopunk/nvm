@@ -68,3 +68,13 @@ test('packaging permits absent optional platform dependencies but not required o
   });
   assert.equal(verifyPackagedDependencies(archive).packagesChecked, 1);
 });
+
+test('present optional packages must still contain their required dependencies', async function presentOptional(t) {
+  const archive = await packagedFixture(t, {
+    '': { name: 'nvm', optionalDependencies: { native: '1' } },
+    'node_modules/native': { name: 'native', dependencies: { missing: '1' } },
+  });
+  assert.throws(function rejectBrokenOptional() {
+    verifyPackagedDependencies(archive);
+  }, /native requires missing/);
+});

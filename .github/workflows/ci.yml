@@ -117,6 +117,37 @@ jobs:
           path: test-results/electron
           if-no-files-found: warn
 
+  packaged-diagnostics:
+    name: Packaged diagnostic capture
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && needs.check.outputs.electron_smoke_changed == 'true')
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+      - name: Build
+        run: mise exec -- pnpm build
+      - name: Package and verify real SDK capture
+        run: xvfb-run -a mise exec -- pnpm exec electron-builder --config electron-builder.yml --linux dir --x64 --publish never
+      - name: Upload packaged diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-diagnostics-linux-x64
+          path: test-results/packaged-diagnostics-*
+          if-no-files-found: warn
+          retention-days: 7
+
   windows-first-run:
     name: Windows first-run Electron
     if: github.event_name == 'pull_request'
@@ -526,13 +557,13 @@ jobs:
         uses: jdx/mise-action@v2
 
       - name: Install Linux packaging dependencies
-        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm xvfb
 
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Build Linux release
-        run: mise exec -- pnpm run dist:linux:${{ matrix.arch }}
+        run: xvfb-run -a mise exec -- pnpm run dist:linux:${{ matrix.arch }}
 
       - name: Generate Linux AppImage blockmap
         run: |

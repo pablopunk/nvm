@@ -13,12 +13,11 @@ function readManifest(archive, directory) {
   }
 }
 
-function requiredDependencies(manifest) {
-  return Object.keys(manifest.dependencies ?? {}).filter(
-    function isRequired(name) {
-      return !Object.hasOwn(manifest.optionalDependencies ?? {}, name);
-    },
-  );
+function declaredDependencies(manifest) {
+  return Object.keys({
+    ...manifest.dependencies,
+    ...manifest.optionalDependencies,
+  });
 }
 
 function resolvePackagedDependency(archive, parent, name) {
@@ -42,11 +41,14 @@ function verifyPackagedDependencies(archive) {
     const { directory, manifest } = pending.pop();
     if (visited.has(directory)) continue;
     visited.add(directory);
-    for (const name of requiredDependencies(manifest)) {
+    for (const name of declaredDependencies(manifest)) {
       const resolved = resolvePackagedDependency(archive, directory, name);
-      if (!resolved)
+      if (
+        !resolved &&
+        !Object.hasOwn(manifest.optionalDependencies ?? {}, name)
+      )
         missing.add(`${manifest.name ?? directory} requires ${name}`);
-      else
+      else if (resolved)
         pending.push({
           directory: resolved,
           manifest: readManifest(archive, resolved),

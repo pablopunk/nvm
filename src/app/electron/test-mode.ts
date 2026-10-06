@@ -3,9 +3,21 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app, session } from 'electron';
-import { isNvmHeadlessTestMode, isNvmTestMode } from './test-mode-flags';
+import {
+  isNvmDiagnosticTestMode,
+  isNvmHeadlessTestMode,
+  isNvmTestMode,
+} from './test-mode-flags';
+import {
+  diagnosticTestCollectorOrigin,
+  isDiagnosticTestCollectorRequest,
+} from './test-diagnostic-collector';
 
-export { isNvmHeadlessTestMode, isNvmTestMode } from './test-mode-flags';
+export {
+  isNvmDiagnosticTestMode,
+  isNvmHeadlessTestMode,
+  isNvmTestMode,
+} from './test-mode-flags';
 
 function testUserDataPath() {
   const value = process.env.NVM_TEST_USER_DATA_DIR;
@@ -23,6 +35,8 @@ function testUserDataPath() {
 export function configureNvmTestMode() {
   if (!isNvmTestMode) return null;
   const userDataDir = testUserDataPath();
+  if (isNvmDiagnosticTestMode)
+    diagnosticTestCollectorOrigin(process.env.SENTRY_DSN_DESKTOP);
   app.setPath('userData', userDataDir);
   return userDataDir;
 }
@@ -34,6 +48,9 @@ export function installTestNetworkPolicy() {
     throw new Error('NVM_TEST_ARTIFACT_DIR is required in test mode');
   fsSync.mkdirSync(artifactDir, { recursive: true });
   const requests: string[] = [];
+  const collectorOrigin = isNvmDiagnosticTestMode
+    ? diagnosticTestCollectorOrigin(process.env.SENTRY_DSN_DESKTOP)
+    : undefined;
   fsSync.writeFileSync(path.join(artifactDir, 'network.json'), '[]\n');
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     if (details.url.startsWith('file:')) return callback({ cancel: false });
@@ -42,7 +59,9 @@ export function installTestNetworkPolicy() {
       path.join(artifactDir, 'network.json'),
       `${JSON.stringify(requests, null, 2)}\n`,
     );
-    callback({ cancel: true });
+    callback({
+      cancel: !isDiagnosticTestCollectorRequest(details.url, collectorOrigin),
+    });
   });
 }
 

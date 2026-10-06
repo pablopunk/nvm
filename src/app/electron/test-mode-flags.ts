@@ -1,4 +1,6 @@
 export const isNvmTestMode = process.env.NVM_TEST_MODE === '1';
+export const isNvmDiagnosticTestMode =
+  isNvmTestMode && process.env.NVM_TEST_DIAGNOSTICS === '1';
 
 /** Keep local Electron smoke windows off the user's desktop unless CI opts in. */
 export const isNvmHeadlessTestMode =
