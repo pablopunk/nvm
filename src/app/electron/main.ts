@@ -175,6 +175,7 @@ import { readAppBundleIconPng } from './app-bundle-icons';
 import { createAppIconCache } from './app-icon-cache';
 import { createAppIndexService, trackFirstSeenApps } from './app-index-service';
 import { registerAppIpcHandlers } from './app-ipc-handlers';
+import { createMeasuredIpcRegistrar } from './ipc-registration';
 import {
   createProductionAppUninstallService,
   NEVERMIND_BUNDLE_ID,
@@ -5069,8 +5070,12 @@ function runQuitCleanup() {
 }
 
 function registerTestModeIpcHandlers() {
-  const handle = (channel: string, handler: (...args: any[]) => unknown) =>
-    ipcMain.handle(channel, handler);
+  const handle = createMeasuredIpcRegistrar({
+    ipcMain,
+    measure: measureDebugPerformance,
+    summarize: summarizeDebugValue,
+    trace: performanceTraces,
+  });
   handle('actions:search', (event, input) =>
     startProgressiveSearch(event.sender, input),
   );

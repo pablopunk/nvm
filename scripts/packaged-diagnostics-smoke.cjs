@@ -65,8 +65,7 @@ async function prepareDiagnosticFixture(temporary) {
 async function runPaletteCommand(page, title) {
   const input = page.getByRole('combobox', { name: 'Nevermind', exact: true });
   await input.fill(title);
-  await page.getByRole('option').filter({ hasText: title }).first().waitFor();
-  await input.press('Enter');
+  await page.getByRole('option').filter({ hasText: title }).first().click();
 }
 
 async function packagedDiagnosticsSmoke(executable, artifacts) {
@@ -137,6 +136,11 @@ async function packagedDiagnosticsSmoke(executable, artifacts) {
         );
       },
     );
+    const existingEventIds = new Set(
+      collector.events.map(function eventId(item) {
+        return item.event.event_id;
+      }),
+    );
     await page.evaluate(function failRenderer() {
       setTimeout(function controlledRendererFailure() {
         throw new Error('PRIVATE_RENDERER_FIXTURE');
@@ -145,7 +149,11 @@ async function packagedDiagnosticsSmoke(executable, artifacts) {
     const rendererError = await waitForCapture(
       collector,
       function controlledRendererError(item) {
-        return item.type === 'event' && item.event.tags?.process === 'renderer';
+        return (
+          item.type === 'event' &&
+          item.event.tags?.process === 'renderer' &&
+          !existingEventIds.has(item.event.event_id)
+        );
       },
     );
     assert.notEqual(mainError.tags.support_ref, rendererError.tags.support_ref);
