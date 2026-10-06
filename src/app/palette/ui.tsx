@@ -18,6 +18,10 @@ import {
 } from './form-fields';
 import { IndicatorMicTrace } from './indicator-mic-trace';
 import { IndicatorOrb, indicatorOrbState } from './indicator-orb';
+import {
+  IndicatorStatusIcon,
+  indicatorStatusIconKind,
+} from './indicator-status-icon';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
 import { MorphingActivityText, MorphingIndicatorText } from './morphing-text';
@@ -580,10 +584,15 @@ export function ProgressView({
         <div
           className="progressOverview"
           data-status={normalizedStatus}
-          data-orb={orbState ? 'true' : undefined}
+          data-mark={animateSummaryText ? 'true' : undefined}
           role={normalizedStatus === 'error' ? 'alert' : 'status'}
         >
           {orbState ? <IndicatorOrb state={orbState} /> : null}
+          {animateSummaryText && !orbState ? (
+            <IndicatorStatusIcon
+              kind={indicatorStatusIconKind(normalizedStatus)}
+            />
+          ) : null}
           <div>
             <strong>
               {animateSummaryText ? (

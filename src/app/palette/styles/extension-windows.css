@@ -399,7 +399,7 @@ html[data-mic-live="true"]
   transform: scale(calc(0.7 + var(--mic-level, 0) * 0.8));
 }
 
-.extensionWindowChromeNone .progressOverview[data-orb="true"]::before {
+.extensionWindowChromeNone .progressOverview[data-mark="true"]::before {
   display: none;
 }
 
@@ -419,6 +419,48 @@ html[data-mic-live="true"]
 
 .extensionWindowChromeNone .progressOverview {
   position: relative;
+}
+
+.indicatorStatusIcon {
+  flex: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  color: var(--text-muted);
+}
+
+.indicatorStatusIcon[data-kind="success"] {
+  color: var(--success-text);
+}
+
+.indicatorStatusIcon[data-kind="error"] {
+  color: var(--danger-text);
+}
+
+.indicatorStatusRing {
+  stroke: currentColor;
+  opacity: 0.35;
+  stroke-width: 1.5;
+}
+
+.indicatorStatusGlyph {
+  stroke: currentColor;
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  animation: indicatorGlyphDraw 320ms var(--ease-out, ease-out) 80ms forwards;
+}
+
+@keyframes indicatorGlyphDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicatorStatusGlyph {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
 }
 
 .indicatorOrb {
