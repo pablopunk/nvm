@@ -50,17 +50,19 @@ export function IndicatorMicTrace() {
     canvas.height = canvas.clientHeight * ratio;
     const color = traceColor(canvas);
     const samples: number[] = new Array(VISIBLE_SAMPLES + 1).fill(0);
+    let latestLevel = 0;
     let lastSampleAt = performance.now();
     let frame = 0;
 
     const unsubscribe = window.nvm.onIndicatorMicLevel((level) => {
-      if (level == null) {
-        return;
-      }
-      samples.push(level);
+      latestLevel = level ?? 0;
+    });
+
+    const sampleTimer = window.setInterval(() => {
+      samples.push(latestLevel);
       samples.shift();
       lastSampleAt = performance.now();
-    });
+    }, SAMPLE_INTERVAL_MS);
 
     const render = () => {
       const fraction = Math.min(
@@ -74,6 +76,7 @@ export function IndicatorMicTrace() {
 
     return () => {
       unsubscribe();
+      window.clearInterval(sampleTimer);
       cancelAnimationFrame(frame);
     };
   }, []);
