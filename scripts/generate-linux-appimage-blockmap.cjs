@@ -21,17 +21,11 @@ async function main() {
   if (!inputStat.isFile() || inputStat.size === 0)
     throw new Error(`Expected a non-empty AppImage at ${input}`);
 
-  const { executeAppBuilderAsJson } = require(
-    electronBuilderDependency('app-builder-lib/out/util/appBuilder'),
+  const { buildBlockMap } = require(
+    electronBuilderDependency('app-builder-lib/out/targets/blockmap/blockmap'),
   );
   await fs.rm(output, { force: true });
-  await executeAppBuilderAsJson([
-    'blockmap',
-    '--input',
-    input,
-    '--output',
-    output,
-  ]);
+  await buildBlockMap(input, 'gzip', output);
 
   const outputStat = await fs.stat(output);
   if (!outputStat.isFile() || outputStat.size === 0)

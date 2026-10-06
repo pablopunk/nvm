@@ -117,6 +117,37 @@ jobs:
           path: test-results/electron
           if-no-files-found: warn
 
+  packaged-dependency-contracts:
+    name: Windows packaged diagnostics
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && needs.check.outputs.electron_smoke_changed == 'true')
+    needs: check
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Verify package dependency and blockmap contracts
+        run: mise exec -- pnpm exec node --test .github/scripts/packaged-dependencies.test.cjs .github/scripts/linux-blockmap.test.cjs
+      - name: Build
+        run: mise exec -- pnpm build
+      - name: Package and verify real SDK capture
+        run: mise exec -- pnpm exec electron-builder --config electron-builder.yml --win dir --x64 --publish never
+      - name: Upload packaged diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-diagnostics-windows-x64
+          path: test-results/packaged-diagnostics-*
+          if-no-files-found: warn
+          retention-days: 7
+
   packaged-diagnostics:
     name: Packaged diagnostic capture
     if: >-

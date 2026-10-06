@@ -5,7 +5,7 @@ function readManifest(archive, directory) {
   try {
     return JSON.parse(
       asar
-        .extractFile(archive, path.posix.join(directory, 'package.json'))
+        .extractFile(archive, path.join(directory, 'package.json'))
         .toString(),
     );
   } catch {
