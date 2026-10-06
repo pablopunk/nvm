@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { finished } = require('node:stream/promises');
 const test = require('node:test');
 const asar = require('@electron/asar');
 const {
@@ -25,7 +26,7 @@ async function packagedFixture(t, manifests) {
     );
   }
   const archive = path.join(temporary, 'app.asar');
-  await asar.createPackage(source, archive);
+  await finished(await asar.createPackage(source, archive));
   return archive;
 }
 
