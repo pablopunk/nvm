@@ -16,6 +16,7 @@ import {
   formRowId,
   formValueLabel,
 } from './form-fields';
+import { IndicatorOrb, indicatorOrbState } from './indicator-orb';
 import { MarkdownEditor } from './markdown-editor';
 import type { CommandImage } from './model';
 import { MorphingActivityText, MorphingIndicatorText } from './morphing-text';
