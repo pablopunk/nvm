@@ -5,6 +5,7 @@ import { requestDedup } from '../db/schema';
 import {
   aiRequestHash,
   completeStreamLines,
+  decideProxyModel,
   handleDedup,
   markDedupFailed,
   resolveBillableTokens,
@@ -73,6 +74,34 @@ const ctx = {
   client: { name: null, version: null, apiVersion: null, platform: null, arch: null },
   estimatedInputTokens: 50,
 };
+
+test('proxy model decision uses authenticated plan and balances, not advertised tier or credit kind', function ignoresClientBillingHints() {
+  const freeClaimingPro = decideProxyModel({
+    plan: 'free',
+    paidCredits: 12,
+    freeCredits: 40,
+    role: 'fast',
+    headers: new Headers({
+      'x-nevermind-ai-model-tier': 'pro',
+      'x-nevermind-ai-credit-kind': 'free',
+    }),
+  });
+  assert.equal(freeClaimingPro.routeSlot, 'free-fast');
+  assert.equal(freeClaimingPro.tier, 'free');
+  assert.equal(freeClaimingPro.creditKind, 'paid');
+
+  const paidHint = decideProxyModel({
+    plan: 'pro', paidCredits: 12, freeCredits: 40, role: 'smart',
+    headers: new Headers({ 'x-nevermind-ai-model-tier': 'pro', 'x-nevermind-ai-credit-kind': 'paid' }),
+  });
+  const freeHint = decideProxyModel({
+    plan: 'pro', paidCredits: 12, freeCredits: 40, role: 'smart',
+    headers: new Headers({ 'x-nevermind-ai-model-tier': 'pro', 'x-nevermind-ai-credit-kind': 'free' }),
+  });
+  assert.deepEqual(freeHint, paidHint);
+  assert.equal(paidHint.routeSlot, 'pro-smart');
+  assert.equal(paidHint.creditKind, 'paid');
+});
 
 test('completeStreamLines buffers split CRLF and finalizes the trailing line once', function buffersCompleteLines() {
   const acc: StreamUsageAccumulator = { inputTokens: 0, outputTokens: 0, finalized: false };

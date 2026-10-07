@@ -307,6 +307,22 @@ type ModelRouting = Pick<
   | 'upstreamApiKey'
 >;
 
+export function decideProxyModel(input: {
+  plan: string;
+  paidCredits: number;
+  freeCredits: number;
+  role: ExtensionAiModelRole;
+  headers: Headers;
+}) {
+  return decideAccountModel({
+    plan: input.plan,
+    paidCredits: input.paidCredits,
+    freeCredits: input.freeCredits,
+    role: input.role,
+    forceFree: input.headers.get('x-nevermind-ai-model-tier') === 'free',
+  });
+}
+
 async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | ModelRouting> {
   let provider: string;
   let activeModelId: string;
@@ -618,9 +634,14 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     );
   }
 
-  const explicitFree = request.headers.get('x-nevermind-ai-model-tier') === 'free';
   const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ?? 'smart';
-  const decision = decideAccountModel({ plan: user.plan, paidCredits: balances.paid, freeCredits: balances.free, role: requestedModel, forceFree: explicitFree });
+  const decision = decideProxyModel({
+    plan: user.plan,
+    paidCredits: balances.paid,
+    freeCredits: balances.free,
+    role: requestedModel,
+    headers: request.headers,
+  });
   const { routeSlot, creditKind: kind } = decision;
   const modelRouting = await resolveModelRouting(routeSlot);
   if (modelRouting instanceof Response) return modelRouting;
