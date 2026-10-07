@@ -1,0 +1,41 @@
+.activeExtensionPane,
+.activePaneBody {
+  display: grid;
+  min-height: 0;
+}
+
+.activeExtensionPane[hidden],
+.siblingPane[hidden] {
+  display: none;
+}
+
+.results[data-pane-stack] {
+  width: 100%;
+  margin-left: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  overflow: auto;
+}
+
+.results[data-pane-stack]::before {
+  display: none;
+}
+
+.results[data-pane-stack] > [cmdk-list-sizer] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--palette-stack-gap);
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.results[data-pane-stack] .activeExtensionPane {
+  flex: 0 1 auto;
+  width: calc(100% - var(--stack-card-right-inset));
+  margin-left: 34px;
+  padding: 8px;
+  min-height: 120px;
+}

@@ -7,6 +7,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { PaneInvocations } from './pane-invocations';
+
+const paneInvocations = new PaneInvocations();
+const paneInvocationWindows = new WeakSet<object>();
 
 // Global safety net: unhandled rejections and uncaught exceptions must never
 // crash the app. An extension action or shell call that throws unexpectedly
@@ -4926,7 +4930,11 @@ async function refreshViewForIpc(input: any = {}) {
   ) as Promise<any>;
 }
 
-async function executeViewActionForIpc(action) {
+async function executeViewActionForIpc(
+  action,
+  context?: unknown,
+  senderId?: number,
+) {
   return performanceTraces.run(
     'action.view',
     {
@@ -4942,6 +4950,8 @@ async function executeViewActionForIpc(action) {
           let trustedAction: any = null;
           try {
             trustedAction = resolveViewActionForIpc(action);
+            if (paneInvocations.owns(context, senderId))
+              trustedAction = { ...trustedAction, keepPaletteOpen: true };
             operationStage('invoke');
             const result = presentActionResultFeedback(
               normalizeHostViewResult(
@@ -5116,8 +5126,8 @@ function registerTestModeIpcHandlers() {
         globalShortcut.isRegistered(normalized),
     };
   });
-  handle('view-action:execute', (_event, action) =>
-    executeViewActionForIpc(action),
+  handle('view-action:execute', (event, action, context) =>
+    executeViewActionForIpc(action, context, event.sender.id),
   );
   handle('extension-window:get-state', (event) =>
     extensionWindowManager.getStateForSender(event.sender),
@@ -10575,6 +10585,7 @@ function executeShortcutAction(action) {
 
 async function runShortcutAction(action) {
   const traceId = crypto.randomUUID();
+  const requestId = crypto.randomUUID();
   performanceTraces.event(
     'shortcut.invoked',
     {
@@ -10608,29 +10619,46 @@ async function runShortcutAction(action) {
     view:
       instantView || extensionLoadingView(currentAction?.title || 'Opening...'),
     revealWhenReady: !wasVisible,
-    asSibling: false,
-    isPrimary: true,
+    asSibling: wasVisible,
+    isPrimary: !wasVisible,
     traceId,
+    requestId,
+    phase: 'start',
   });
+  const sender = paletteWindow.win?.webContents;
+  if (!sender) return;
+  paneInvocations.register(requestId, sender.id);
+  const shortcutWindow = paletteWindow.win;
+  if (shortcutWindow && !paneInvocationWindows.has(shortcutWindow)) {
+    paneInvocationWindows.add(shortcutWindow);
+    shortcutWindow.on('hide', () => paneInvocations.invalidate(sender.id));
+    shortcutWindow.on('closed', () => paneInvocations.invalidate(sender.id));
+  }
   paletteWindow.win?.webContents.send('action:view-open', initialResult);
   if (instantView) return;
-  const result = normalizeHostViewResult(
-    await executeAction(
-      { ...currentAction, traceId },
-      { keepPaletteOpen: true },
-    ),
-  );
-  if (result?.view) {
-    if (wasVisible) paletteWindow.showPalette({ skipShownEvent: true });
-    paletteWindow.win?.webContents.send('action:view-open', {
-      ...result,
-      traceId,
-      revealWhenReady: false,
-      asSibling: false,
-      isPrimary: true,
-    });
-  } else {
-    await paletteWindow.hidePalette();
+  try {
+    const result = normalizeHostViewResult(
+      await executeAction(
+        { ...currentAction, traceId },
+        { keepPaletteOpen: true },
+      ),
+    );
+    if (!sender.isDestroyed())
+      sender.send('action:view-open', {
+        view: result?.view,
+        traceId,
+        requestId,
+        phase: 'resolve',
+      });
+  } catch (error) {
+    logError('shortcut.view.failed', error);
+    if (!sender.isDestroyed())
+      sender.send('action:view-open', {
+        view: actionFailedFeedbackView(),
+        traceId,
+        requestId,
+        phase: 'resolve',
+      });
   }
 }
 

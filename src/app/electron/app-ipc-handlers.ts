@@ -28,7 +28,11 @@ export interface AppIpcHandlersDeps {
   startSearch: (sender: unknown, input: unknown) => unknown;
   cancelSearch: (sender: unknown, input: unknown) => unknown;
   executeActionForIpc: (action: unknown) => unknown;
-  executeViewActionForIpc: (action: unknown) => unknown;
+  executeViewActionForIpc: (
+    action: unknown,
+    context?: unknown,
+    senderId?: number,
+  ) => unknown;
   refreshViewForIpc: (input: unknown) => unknown;
   pickFormFieldPaths: (event: unknown, input?: unknown) => unknown;
   // biome-ignore lint/suspicious/noExplicitAny: deps-object pattern uses any for maximum caller flexibility
@@ -139,8 +143,8 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
   ipcHandleMeasured('actions:execute', (_event, action) =>
     deps.executeActionForIpc(action),
   );
-  ipcHandleMeasured('view-action:execute', (_event, action) =>
-    deps.executeViewActionForIpc(action),
+  ipcHandleMeasured('view-action:execute', (event, action, context) =>
+    deps.executeViewActionForIpc(action, context, event.sender.id),
   );
   ipcHandleMeasured('view:refresh', (_event, input) =>
     deps.refreshViewForIpc(input),

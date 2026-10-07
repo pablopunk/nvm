@@ -73,6 +73,7 @@ type AiChatState = {
 };
 
 export type ExtensionViewRendererProps = {
+  active?: boolean;
   view: CommandView;
   aiChat: AiChatState;
   nevermindAuthed: boolean | null;
@@ -984,6 +985,7 @@ function ListExtensionView({
 }
 
 function ChatInputForm({
+  active = true,
   value,
   onChange,
   onResize,
@@ -1002,6 +1004,7 @@ function ChatInputForm({
   modelChanging = false,
   onModelChange,
 }: {
+  active?: boolean;
   value: string;
   onChange: (value: string) => void;
   onResize: (textarea?: HTMLTextAreaElement | null) => void;
@@ -1056,7 +1059,7 @@ function ChatInputForm({
         ) : null}
         <textarea
           ref={inputRef}
-          autoFocus
+          autoFocus={active}
           rows={1}
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -1152,6 +1155,7 @@ function ChatInputForm({
 }
 
 function ChatExtensionView({
+  active = true,
   view,
   aiChat,
   nevermindAuthed,
@@ -1209,6 +1213,7 @@ function ChatExtensionView({
     streaming: index === streamingAssistantIndex,
   }));
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
   const [chatValue, setChatValue] = useState('');
   function resizeChatInput(textarea?: HTMLTextAreaElement | null) {
     const el = textarea || chatInputRef.current;
@@ -1221,10 +1226,10 @@ function ChatExtensionView({
     resizeChatInput();
   }, []);
   useLayoutEffect(() => {
-    if (view.aiChat || !view.submitAction) return;
+    if (!active || view.aiChat || !view.submitAction) return;
     const frame = requestAnimationFrame(() => chatInputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [view.aiChat, view.id, view.title]);
+  }, [active, view.aiChat, view.id, view.title]);
   function handleNonAiSubmit() {
     const trimmed = chatValue.trim();
     if (!trimmed) return;
@@ -1233,12 +1238,13 @@ function ChatExtensionView({
   }
   const input = view.aiChat ? (
     <ChatInputForm
+      active={active}
       value={aiChat.input}
       onChange={aiChat.setInput}
       onResize={aiChat.resizeInput}
       onSubmit={() => sendAiPrompt(aiChat.input)}
       busy={aiChat.busy}
-      inputRef={aiChat.inputRef}
+      inputRef={active ? aiChat.inputRef : chatInputRef}
       placeholder={
         aiChat.busy && streamingAssistantIndex < 0 ? 'Thinking' : 'Message AI'
       }
@@ -1255,6 +1261,7 @@ function ChatExtensionView({
     />
   ) : view.submitAction ? (
     <ChatInputForm
+      active={active}
       value={chatValue}
       onChange={setChatValue}
       onResize={resizeChatInput}
@@ -1270,7 +1277,13 @@ function ChatExtensionView({
       isBusy={view.aiChat ? aiChat.busy && streamingAssistantIndex < 0 : false}
       activity={view.aiChat ? aiChat.activity : null}
       input={input}
-      messagesRef={view.aiChat ? aiChat.messagesRef : undefined}
+      messagesRef={
+        view.aiChat
+          ? active
+            ? aiChat.messagesRef
+            : chatMessagesRef
+          : undefined
+      }
       banner={limitBanner}
     />
   );

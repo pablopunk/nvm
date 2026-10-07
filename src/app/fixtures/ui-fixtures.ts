@@ -1361,7 +1361,8 @@ async function chatView(ctx: ExtensionContext) {
     title: 'Dev UI · Chat',
     messages,
     submitAction: sendAction,
-    placeholder: 'Type a message…',
+    placeholder:
+      'Draft text, open Clipboard History via its global shortcut, then Escape and paste…',
   });
 }
 
@@ -1589,6 +1590,65 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Chat',
       icon: 'message-circle',
       run: (ctx) => chatView(ctx),
+    },
+    {
+      id: 'nested-ai-chat',
+      title: 'Dev UI: Nested AI Chat Lifecycle',
+      icon: 'message-circle',
+      run: (ctx) =>
+        Object.assign(
+          ctx.ui.chat({
+            id: 'dev-ui-nested-ai-chat',
+            title: 'Dev UI · Nested AI Chat',
+            messages: [
+              {
+                role: 'assistant',
+                content:
+                  'Type a draft and attach an image. Open Clipboard History with its global shortcut. Copy or Escape must restore the same draft, attachment, caret, and live stream. Do not send: this fixture uses deterministic local events.',
+              },
+            ],
+          }),
+          { aiChat: true, chatId: 'dev-ui-nested-ai-chat-session' },
+        ),
+    },
+    {
+      id: 'nested-delayed-tool',
+      title: 'Dev UI: Delayed Nested Tool',
+      icon: 'timer',
+      run: async (ctx) => {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        return ctx.ui.list({
+          id: 'dev-ui-delayed-tool',
+          title: 'Dev UI · Delayed Tool',
+          items: [
+            {
+              id: 'copy',
+              title: 'Copy fixture text',
+              primaryAction: {
+                ...ctx.actions.copyText('Nested clipboard fixture'),
+                dismissAfterRun: 'auto',
+              },
+            },
+          ],
+        });
+      },
+    },
+    {
+      id: 'nested-empty-tool',
+      title: 'Dev UI: Nested Tool Without a View',
+      icon: 'timer',
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      },
+    },
+    {
+      id: 'nested-error-tool',
+      title: 'Dev UI: Nested Tool Failure',
+      icon: 'triangle-alert',
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        throw new Error('Intentional nested tool fixture failure');
+      },
     },
     {
       id: 'progress',

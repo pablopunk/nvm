@@ -29,8 +29,9 @@ import {
   confirmationReturnSurface,
 } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
-import { restoredAiChatView } from './ai-chat-navigation';
 import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
+import { chatSessionKey, useAiChatSessions } from './ai-chat-sessions';
+import { useSessionState } from './use-session-state';
 import { isAppIconPath } from './app-icons';
 import {
   applyBuilderPreviewActionResult,
@@ -1644,7 +1645,6 @@ export function App() {
   const runningAppsRequestIdRef = useRef(0);
   const aiChatOpenRef = useRef(false);
   const aiChatIdRef = useRef<string | undefined>(undefined);
-  const lastVisibleAiChatIdRef = useRef<string | undefined>(undefined);
   const runningViewActionsRef = useRef(new Set<string>());
   const interactionTracesRef = useRef(
     new Map<string, ReturnType<typeof createRendererPerformanceTrace>>(),
@@ -1695,22 +1695,45 @@ export function App() {
     } | null>(null);
   const [aliasFor, setAliasFor] = useState<Action | null>(null);
   const [previewFor, setPreviewFor] = useState<Action | null>(null);
-  const extensionNavigation = useExtensionNavigation();
+  const extensionNavigation = useExtensionNavigation(() =>
+    inputRef.current?.focus(),
+  );
   const extensionView = extensionNavigation.view;
   const extensionViewBackStack = extensionNavigation.backStack;
-  const aiChat = useAiChat(
-    window.nvm.sendAiMessage,
-    window.nvm.setAiChatModel,
-    window.nvm.resetAiChat,
+  const retainedViews = extensionNavigation.frames.flatMap((frame) =>
+    frame.history.map((entry) => entry.view),
   );
-  const [builderPreviews, setBuilderPreviews] = useState<BuilderPreviewState[]>(
-    [],
-  );
+  const aiChatSessions = useAiChatSessions(retainedViews, extensionView);
+  const aiChat = aiChatSessions.controller;
+  const [builderPreviews, setBuilderPreviews, setBuilderPreviewsForSession] =
+    useSessionState<BuilderPreviewState[]>(aiChatSessions.sessionId, []);
   const builderPreviewsRef = useRef<BuilderPreviewState[]>([]);
   const builderPreviewVersionRef = useRef(0);
-  const [selectedBuilderPreviewFilename, setSelectedBuilderPreviewFilename] =
-    useState<string | null>(null);
+  const initializedBuilderSessionsRef = useRef(new Set<string>());
+  const [
+    selectedBuilderPreviewFilename,
+    setSelectedBuilderPreviewFilename,
+    setSelectedBuilderPreviewForSession,
+  ] = useSessionState<string | null>(aiChatSessions.sessionId, null);
   const [builderPreviewFocused, setBuilderPreviewFocused] = useState(false);
+  useEffect(() => {
+    for (const view of retainedViews) {
+      if (!view.aiChat) continue;
+      const key = chatSessionKey(view);
+      if (initializedBuilderSessionsRef.current.has(key)) continue;
+      initializedBuilderSessionsRef.current.add(key);
+      setBuilderPreviewsForSession(
+        key,
+        (view.builderPreviews || [])
+          .map(builderPreviewFrom)
+          .filter(Boolean) as BuilderPreviewState[],
+      );
+      setSelectedBuilderPreviewForSession(
+        key,
+        view.selectedBuilderPreviewFilename || null,
+      );
+    }
+  }, [retainedViews]);
   const [nevermindAuthed, setNevermindAuthed] = useState<boolean | null>(null);
   const [deviceSignInStatus, setDeviceSignInStatus] =
     useState<NevermindDeviceSignInStatus | null>(null);
@@ -1724,8 +1747,11 @@ export function App() {
   const [paletteHotkeyStatus, setPaletteHotkeyStatus] =
     useState<PaletteHotkeyStatus | null>(null);
   const [pendingShortcutReveal, setPendingShortcutReveal] = useState(false);
-  const [isPrimaryExtensionView, setIsPrimaryExtensionView] = useState(false);
-  const [childQuery, setChildQuery] = useState('');
+  const isPrimaryExtensionView = Boolean(
+    extensionNavigation.activeFrame?.primary,
+  );
+  const childQuery = extensionNavigation.activeEntry?.query || '';
+  const setChildQuery = extensionNavigation.setQuery;
   const [actionQuery, setActionQuery] = useState('');
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null);
   const [recordedShortcut, setRecordedShortcut] = useState('');
@@ -1735,7 +1761,8 @@ export function App() {
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([]);
   const [shortcutOptionsFor, setShortcutOptionsFor] =
     useState<ShortcutRecord | null>(null);
-  const [formValues, setFormValues] = useState<Record<string, FormValue>>({});
+  const formValues = extensionNavigation.activeEntry?.formValues || {};
+  const setFormValues = extensionNavigation.setFormValues;
   const palettePrompt = usePalettePrompt(extensionView, runViewAction);
   const paletteForm = usePaletteForm(
     extensionView,
@@ -1747,7 +1774,7 @@ export function App() {
       selectValue(value);
     },
   );
-  const [siblingViews, setSiblingViews] = useState<ExtensionView[]>([]);
+  const siblingViews = extensionNavigation.siblingViews;
   const extensionViewRef = useRef<ExtensionView | null>(null);
   const wasChildOpenRef = useRef(false);
   const isCompactActionMenuOpen = Boolean(
@@ -1766,6 +1793,21 @@ export function App() {
   function selectValue(value: string) {
     selectedValueRef.current = value;
     setSelectedValue(value);
+    if (
+      !(
+        isCompactActionMenuOpen ||
+        shortcutFor ||
+        shortcutManagerOpen ||
+        aliasFor ||
+        confirmRemoveFor ||
+        confirmViewActionFor ||
+        previewFor ||
+        palettePrompt.active ||
+        paletteForm.editor ||
+        paletteForm.choices
+      )
+    )
+      extensionNavigation.setSelection(value);
   }
   function createInteractionTrace(traceId?: string) {
     const existing = traceId
@@ -1790,13 +1832,16 @@ export function App() {
     if (latestInteractionTraceIdRef.current === traceId)
       latestInteractionTraceIdRef.current = undefined;
   }
-  function resetTransientSurfaces() {
+  function resetTransientSurfaces(resetQuery = true) {
+    function resetChildQuery(value: string) {
+      if (resetQuery) setChildQuery(value);
+    }
     resetTransientPaletteState({
       setOptionsFor,
       setExtensionItemOptionsFor,
       setConfirmRemoveFor,
       setPreviewFor,
-      setChildQuery,
+      setChildQuery: resetChildQuery,
       setShortcutFor,
       setRecordedShortcut,
       setShortcutManagerOpen,
@@ -2063,7 +2108,7 @@ export function App() {
       else input.select();
     };
     const focusActiveInput = () => {
-      if (aiChatOpenRef.current) {
+      if (extensionNavigation.currentView()?.aiChat) {
         aiChat.inputRef.current?.focus();
         return;
       }
@@ -2077,12 +2122,11 @@ export function App() {
         extensionNavigation.clearView();
         aiChat.setMessages([]);
       }
-      setIsPrimaryExtensionView(false);
       setRefreshNonce((nonce) => nonce + 1);
       setPlaceholderIndex((index) => (index + 1) % SEARCH_PLACEHOLDERS.length);
       if (!aiChatOpenRef.current) {
         extensionNavigation.setBackStack([]);
-        setSiblingViews([]);
+        extensionNavigation.clearSiblings();
       }
       requestAnimationFrame(focusActiveInput);
       window.setTimeout(focusActiveInput, 50);
@@ -2096,19 +2140,9 @@ export function App() {
       markDebugPerformance('palette.hidden', {
         aiChatOpen: aiChatOpenRef.current,
       });
-      const closedAiChatId = aiChatOpenRef.current
-        ? aiChatIdRef.current
-        : undefined;
       setRootQuery('');
-      resetTransientSurfaces();
-      if (!aiChatOpenRef.current) {
-        extensionNavigation.clearView();
-        aiChat.setMessages([]);
-      }
-      setIsPrimaryExtensionView(false);
-      extensionNavigation.setBackStack([]);
-      setSiblingViews([]);
-      if (closedAiChatId) void window.nvm.aiChatExited(closedAiChatId);
+      resetTransientSurfaces(false);
+      extensionNavigation.hide();
     });
     const stopApps = window.nvm.onAppsIndexed(() =>
       setRefreshNonce((nonce) => nonce + 1),
@@ -2128,29 +2162,29 @@ export function App() {
         viewType: payload?.view?.type,
         viewId: payload?.view?.id,
       });
-      if (!payload?.view) return;
-      resetTransientSurfaces();
-      setIsPrimaryExtensionView(Boolean(payload.isPrimary));
+      if (!payload) return;
+      if (payload.phase === 'resolve' && payload.requestId) {
+        const resolved = extensionNavigation.resolveShortcut(
+          payload.requestId,
+          payload.view,
+        );
+        if (resolved && !extensionNavigation.currentFrame())
+          void window.nvm.hide();
+        return;
+      }
+      if (!payload.view) return;
+      resetTransientSurfaces(false);
       if (payload.traceId) createInteractionTrace(payload.traceId);
       if (payload.isPrimary) {
         setRootQuery('');
         setChildQuery('');
         setActionQuery('');
       }
-      const current = extensionViewRef.current;
-      if (
-        !payload.isPrimary &&
-        payload.asSibling &&
-        current &&
-        current.id !== payload.view.id
-      ) {
-        setSiblingViews((siblings) => [...siblings, current]);
-      } else if (payload.isPrimary || !payload.asSibling) {
-        setSiblingViews([]);
-      }
-      if (payload.view.aiChat) await openAiChat(payload.view, 'root');
-      else if (payload.isPrimary) showPrimaryExtensionView(payload.view);
-      else showExtensionView(payload.view, 'root');
+      extensionNavigation.startShortcut(
+        payload.view,
+        payload.requestId || crypto.randomUUID(),
+        Boolean(payload.isPrimary),
+      );
       markShortcutReady(Boolean(payload?.revealWhenReady));
     });
     const stopViewPatch = window.nvm.onViewPatch((payload) => {
@@ -2171,10 +2205,9 @@ export function App() {
         setBuilderPreviews(previewPatch);
         return;
       }
-      const current = extensionViewRef.current;
-      if (payload.viewId && current?.id !== payload.viewId) return;
-      if (!current) return;
-      applyViewPatch(payload.patch);
+      extensionNavigation.updateViewById(payload.viewId, (view) =>
+        patchCommandView(view, payload.patch, { preserveMissingItems: true }),
+      );
     });
     const stopViewHydrate = window.nvm.onViewHydrate((payload) => {
       markDebugPerformance('view.hydrate-event', {
@@ -2191,9 +2224,6 @@ export function App() {
         setBuilderPreviews(previewHydration);
         return;
       }
-      const current = extensionViewRef.current;
-      if (payload.viewId && current?.id !== payload.viewId) return;
-      if (!current) return;
       if (payload.error) {
         const retryAction: CommandAction | undefined = payload.retry
           ? {
@@ -2209,7 +2239,7 @@ export function App() {
           type: 'popView',
           title: 'Dismiss',
         };
-        showExtensionView(
+        extensionNavigation.updateViewById(payload.viewId, () =>
           feedbackView({
             id: `view-hydrate-error:${payload.viewId || 'current'}`,
             title: 'Could not load items',
@@ -2217,17 +2247,22 @@ export function App() {
             tone: 'error',
             actions: [...(retryAction ? [retryAction] : []), dismissAction],
           }),
-          'replace',
         );
         return;
       }
       if (payload.items) {
-        applyViewPatch({
-          mode: 'replace',
-          items: payload.items as any,
-          isLoading:
-            payload.isLoading === undefined ? false : payload.isLoading,
-        });
+        extensionNavigation.updateViewById(payload.viewId, (view) =>
+          patchCommandView(
+            view,
+            {
+              mode: 'replace',
+              items: payload.items as any,
+              isLoading:
+                payload.isLoading === undefined ? false : payload.isLoading,
+            },
+            { preserveMissingItems: true },
+          ),
+        );
       }
     });
     const stopAi = window.nvm.onAiChatEvent((event) => {
@@ -2242,18 +2277,17 @@ export function App() {
           `Nevermind AI: ${event.label || ''}`,
           event.data,
         );
+      const eventSession = aiChatSessions.sessionForEvent(event);
       aiChat.handleEvent(event);
-      if (
-        event.type === 'extension_activated' &&
-        (!event.chatId || event.chatId === aiChatIdRef.current)
-      ) {
+      if (event.type === 'extension_activated' && eventSession) {
         const preview = builderPreviewFrom(event.data as BuilderPreview);
-        if (!(preview && aiChatIdRef.current)) return;
+        if (!preview) return;
         builderPreviewVersionRef.current += 1;
-        setBuilderPreviews((previews) =>
+        setBuilderPreviewsForSession(eventSession, (previews) =>
           upsertBuilderPreview(previews, preview),
         );
-        setSelectedBuilderPreviewFilename(preview.filename);
+        setSelectedBuilderPreviewForSession(eventSession, preview.filename);
+        if (eventSession !== aiChatIdRef.current) return;
         setBuilderPreviewFocused(false);
         const action = builderPreviewAutoRunAction(
           event.data as BuilderPreview,
@@ -2302,17 +2336,16 @@ export function App() {
   useLayoutEffect(() => {
     function selectExtensionItem(view: ExtensionView) {
       const items = filterExtensionItems(allViewItems(view));
-      const current = selectedValueRef.current;
+      const current = extensionNavigation.activeEntry?.selection || '';
       const declaredSelection =
         view.selectedItemId &&
         items.some((item) => item.id === view.selectedItemId)
           ? view.selectedItemId
           : '';
       selectValue(
-        declaredSelection ||
-          (current && items.some((item) => item.id === current)
-            ? current
-            : items[0]?.id || ''),
+        current && items.some((item) => item.id === current)
+          ? current
+          : declaredSelection || items[0]?.id || '',
       );
     }
 
@@ -2373,11 +2406,8 @@ export function App() {
             .includes(childQuery.toLowerCase()))
       )
         ids.push(FORM_SAVE_ROW_ID);
-      selectValue(
-        ids.includes(selectedValueRef.current)
-          ? selectedValueRef.current
-          : ids[0] || '',
-      );
+      const formSelection = extensionNavigation.activeEntry?.selection || '';
+      selectValue(ids.includes(formSelection) ? formSelection : ids[0] || '');
     } else if (extensionView && isFilterableExtensionView)
       selectExtensionItem(extensionView);
     else if (extensionView?.actions?.length)
@@ -2415,15 +2445,12 @@ export function App() {
     formValues,
     query,
     extensionViewSelectionKey,
+    extensionNavigation.activeEntry?.id,
     shortcutFor,
     shortcutManagerOpen,
     shortcutRecords,
     shortcutOptionsFor,
   ]);
-
-  useEffect(() => {
-    setChildQuery('');
-  }, [extensionView?.title, extensionView?.type, shortcutManagerOpen]);
 
   useEffect(() => {
     setActionQuery('');
@@ -2436,10 +2463,6 @@ export function App() {
     optionsFor?.id,
     shortcutOptionsFor?.action.id,
   ]);
-
-  useEffect(() => {
-    setFormValues(seedFormValuesFromView(extensionView));
-  }, [extensionView]);
 
   useEffect(() => {
     if (!palettePrompt.active) return;
@@ -2472,13 +2495,6 @@ export function App() {
       extensionView?.presentation === 'preview';
     aiChatOpenRef.current = isAiChat;
     aiChatIdRef.current = visibleAiChat?.chatId;
-    const previousAiChatId = lastVisibleAiChatIdRef.current;
-    if (
-      previousAiChatId &&
-      (!visibleAiChat || previousAiChatId !== visibleAiChat.chatId)
-    )
-      void window.nvm.aiChatExited(previousAiChatId);
-    lastVisibleAiChatIdRef.current = visibleAiChat?.chatId;
     const mode: PaletteMode = previewFor
       ? 'preview'
       : extensionView?.presentation === 'side-preview'
@@ -3192,30 +3208,21 @@ export function App() {
   }
 
   function showPrimaryExtensionView(view: ExtensionView) {
-    extensionNavigation.showView(view, 'root');
-    setIsPrimaryExtensionView(true);
-    setSiblingViews([]);
+    extensionNavigation.startShortcut(view, crypto.randomUUID(), true);
   }
 
   function popExtensionView() {
     setExtensionItemOptionsFor(null);
-    const restoredAiChat = restoredAiChatView(
-      extensionViewBackStack,
-      siblingViews,
-    );
-    if (extensionViewBackStack.length === 0 && siblingViews.length > 0) {
-      const next = siblingViews[siblingViews.length - 1];
-      setSiblingViews((siblings) => siblings.slice(0, -1));
-      extensionNavigation.showView(next, 'root');
-      if (restoredAiChat) void activateAiChatView(restoredAiChat);
-      return;
-    }
-    if (isPrimaryExtensionView && extensionViewBackStack.length === 0) {
+    const currentFrame = extensionNavigation.currentFrame();
+    if (
+      currentFrame?.primary &&
+      currentFrame.history.length === 1 &&
+      extensionNavigation.frames.length === 1
+    ) {
       void window.nvm.hide();
       return;
     }
     extensionNavigation.popView();
-    if (restoredAiChat) void activateAiChatView(restoredAiChat);
   }
 
   function selectionAfterPatch(
@@ -3363,6 +3370,7 @@ export function App() {
   }
 
   async function runViewAction(action: ExtensionViewAction, confirmed = false) {
+    let owner = extensionNavigation.capture();
     const trace = createInteractionTrace(action.traceId);
     action = { ...action, traceId: trace.traceId };
     if (action.requiresConfirmation && !confirmed) {
@@ -3400,8 +3408,7 @@ export function App() {
       setActionSubmenuFor(null);
       setPreviewFor(null);
       if (extensionView) extensionNavigation.clearView();
-      setIsPrimaryExtensionView(false);
-      setSiblingViews([]);
+      extensionNavigation.clearSiblings();
       requestAnimationFrame(() => {
         const input = inputRef.current;
         input?.focus();
@@ -3547,9 +3554,14 @@ export function App() {
       return;
     }
     runningViewActionsRef.current.add(actionKey);
+    owner = extensionNavigation.beginOperation();
+    const externalPaste =
+      ['pasteText', 'pasteClipboard', 'typeText'].includes(action.type) ||
+      nativeAction?.kind === 'clipboard';
     const dismissedImmediately =
-      actionCanDismissImmediately(action) ||
-      Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction));
+      (siblingViews.length === 0 || externalPaste) &&
+      (actionCanDismissImmediately(action) ||
+        Boolean(nativeAction && rootActionCanDismissImmediately(nativeAction)));
     const loadingNavigation = nativeAction ? 'root' : 'push';
     const nestedAction =
       nativeAction && 'rootAction' in nativeAction
@@ -3588,11 +3600,33 @@ export function App() {
           showsLoading,
           alwaysLog: true,
         },
-        () => window.nvm.runViewAction(action),
+        () =>
+          window.nvm.runViewAction(
+            action,
+            siblingViews.length > 0 && !externalPaste && owner
+              ? { requestId: owner.frameId }
+              : undefined,
+          ),
       );
-      if (!dismissedImmediately && showsLoading)
+      if (!dismissedImmediately && showsLoading) {
         showActionLoadingView(action.title || 'Running…', loadingNavigation);
+        owner = extensionNavigation.beginOperation();
+      }
       const result = await resultPromise;
+      if (!dismissedImmediately && !extensionNavigation.isCurrent(owner)) {
+        if (owner && extensionNavigation.isRetained(owner))
+          extensionNavigation.updateOwnedView(
+            owner,
+            (view) =>
+              result?.view ||
+              (result?.patch
+                ? patchCommandView(view, result.patch, {
+                    preserveMissingItems: true,
+                  })
+                : view),
+          );
+        return;
+      }
       const resultAfterLoading =
         showsLoading && result?.navigation === 'push' && result.view
           ? { ...result, navigation: 'replace' as const }
@@ -3609,13 +3643,21 @@ export function App() {
         showsLoading ? 'replace' : 'push',
       );
       if (
+        !dismissedImmediately &&
+        !result?.view &&
+        !result?.navigation &&
+        !extensionNavigation.isCurrent(owner)
+      )
+        return;
+      if (
         !(dismissedImmediately || action.keepPaletteOpen) &&
         action.dismissAfterRun === 'auto' &&
         !result?.view &&
         !result?.patch &&
         result?.navigation !== 'pop'
       ) {
-        if (extensionNavigation.backStack.length > 0) popExtensionView();
+        if (extensionNavigation.backStack.length > 0 || siblingViews.length > 0)
+          popExtensionView();
         else window.nvm.hide();
       } else if (showsLoading && !result?.view && !result?.navigation) {
         if (loadingNavigation === 'push') popExtensionView();
@@ -3644,12 +3686,16 @@ export function App() {
     view: ExtensionView,
     runBuilderAutoActions = false,
   ) {
+    const sessionKey = chatSessionKey(view);
+    if (initializedBuilderSessionsRef.current.has(sessionKey)) return;
+    initializedBuilderSessionsRef.current.add(sessionKey);
     const previews = (view.builderPreviews || [])
       .map(builderPreviewFrom)
       .filter(Boolean) as BuilderPreviewState[];
     builderPreviewVersionRef.current += 1;
-    setBuilderPreviews(previews);
-    setSelectedBuilderPreviewFilename(
+    setBuilderPreviewsForSession(sessionKey, previews);
+    setSelectedBuilderPreviewForSession(
+      sessionKey,
       previews.some(
         (preview) => preview.filename === view.selectedBuilderPreviewFilename,
       )
@@ -4152,7 +4198,7 @@ export function App() {
     return valuesMatch(actionQuery, ...values);
   }
 
-  function filterViewSections(view: ExtensionView) {
+  function filterViewSections(view: ExtensionView, filterQuery = childQuery) {
     const minScore = view.id === 'clipboard-history' ? 50 : undefined;
     return measureDebugPerformanceSync(
       'view.filter-sections',
@@ -4163,21 +4209,25 @@ export function App() {
       () =>
         filterCommandSections(
           view,
-          childQuery,
+          filterQuery,
           minScore ? { minScore } : undefined,
         ),
     );
   }
 
-  function filterExtensionItems(items: ExtensionViewItem[] = []) {
+  function filterExtensionItems(
+    items: ExtensionViewItem[] = [],
+    view = extensionView,
+    filterQuery = childQuery,
+  ) {
     // Filterable child views (list/grid) use a minimum score of 50 to
     // require exact, starts-with, or contains-substring matches. This
     // prevents long strings like file paths from causing false-positive
     // sequential-character matches (score 20) that would show every item.
     const minScore =
-      extensionView?.id === 'clipboard-history' ||
-      extensionView?.type === 'list' ||
-      extensionView?.type === 'grid'
+      view?.id === 'clipboard-history' ||
+      view?.type === 'list' ||
+      view?.type === 'grid'
         ? 50
         : undefined;
     return measureDebugPerformanceSync(
@@ -4186,7 +4236,7 @@ export function App() {
       () =>
         filterCommandItems(
           items,
-          childQuery,
+          filterQuery,
           minScore ? { minScore } : undefined,
         ),
     );
@@ -4963,11 +5013,15 @@ export function App() {
     );
   }
 
-  function renderExtensionView(view: ExtensionView) {
+  function renderExtensionView(
+    view: ExtensionView,
+    entry = extensionNavigation.activeEntry,
+  ) {
     return (
       <ExtensionViewRenderer
         view={view}
-        aiChat={aiChat}
+        aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
+        active={entry?.id === extensionNavigation.activeEntry?.id}
         nevermindAuthed={nevermindAuthed}
         deviceSignInStatus={deviceSignInStatus}
         onSignInToNevermind={async () => {
@@ -4983,14 +5037,18 @@ export function App() {
           window.nvm.retryNevermindDeviceSignInBrowser()
         }
         onCancelDeviceSignIn={() => window.nvm.cancelNevermindDeviceSignIn()}
-        formValues={formValues}
-        formController={paletteForm}
-        formQuery={childQuery}
+        formValues={entry?.formValues || formValues}
+        formController={view === extensionView ? paletteForm : undefined}
+        formQuery={entry?.query || ''}
         setFormValues={setFormValues}
         filterItems={(items) =>
-          filterExtensionItems(items).map(hydrateExtensionItemIcon)
+          filterExtensionItems(items || [], view, entry?.query || '').map(
+            hydrateExtensionItemIcon,
+          )
         }
-        filterSections={filterViewSections}
+        filterSections={(currentView) =>
+          filterViewSections(currentView, entry?.query || '')
+        }
         renderMarkdown={renderMarkdown}
         renderActionPanel={renderActionPanel}
         actionPanelRows={actionPanelRows}
@@ -5002,7 +5060,7 @@ export function App() {
         abortAiChat={window.nvm.abortAiChat}
         dragPathForItem={dragPathForItem}
         startItemDrag={startItemDrag}
-        selectedItemId={selectedValue}
+        selectedItemId={entry?.selection || selectedValue}
       />
     );
   }
@@ -5732,21 +5790,67 @@ export function App() {
           </div>
         ) : null}
 
-        {siblingViews.map((sib, index) => (
-          <div
-            key={`sibling-${index}-${sib.id || sib.title}`}
-            className={`siblingPane card inertSibling siblingPane-${sib.type} ${sib.aiChat ? 'interactiveSibling siblingPane-aiChat' : ''}`}
-            aria-hidden={sib.aiChat ? undefined : true}
-          >
-            <div className="siblingHeader">{sib.title}</div>
-            <div className="siblingBody">{renderExtensionView(sib)}</div>
-          </div>
-        ))}
+        {aiChatSessions.providers}
 
         <Command.List
           ref={resultsListRef}
+          data-pane-stack={siblingViews.length > 0 || undefined}
           className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
         >
+          {extensionNavigation.frames.flatMap((frame, frameIndex) =>
+            frame.history.map((entry, historyIndex) => {
+              const isTop = historyIndex === frame.history.length - 1;
+              const active =
+                frameIndex === extensionNavigation.frames.length - 1 && isTop;
+              const obscured =
+                active &&
+                Boolean(
+                  shortcutFor ||
+                    shortcutManagerOpen ||
+                    aliasFor ||
+                    confirmRemoveFor ||
+                    confirmViewActionFor ||
+                    confirmBuilderPreviewAction ||
+                    actionSubmenuFor ||
+                    extensionItemOptionsFor ||
+                    optionsFor ||
+                    previewFor ||
+                    paletteForm.choices ||
+                    palettePrompt.active,
+                );
+              return (
+                <div
+                  key={entry.id}
+                  hidden={!isTop || obscured}
+                  inert={!active || undefined}
+                  className={
+                    active
+                      ? `activeExtensionPane ${siblingViews.length > 0 ? 'card' : ''}`
+                      : `siblingPane card inertSibling siblingPane-${entry.view.aiChat ? 'aiChat' : entry.view.type}`
+                  }
+                  aria-hidden={!isTop || undefined}
+                >
+                  {!active ? (
+                    <div className="siblingHeader">{entry.view.title}</div>
+                  ) : null}
+                  <div
+                    className={
+                      active
+                        ? entry.view.aiChat && selectedBuilderPreview
+                          ? 'builderWorkspace'
+                          : 'activePaneBody'
+                        : 'siblingBody'
+                    }
+                  >
+                    {renderExtensionView(entry.view, entry)}
+                    {active && entry.view.aiChat && selectedBuilderPreview
+                      ? renderBuilderPreview()
+                      : null}
+                  </div>
+                </div>
+              );
+            }),
+          )}
           {shortcutFor ? (
             <div className="shortcutRecorder" aria-busy={savingShortcut}>
               <div className="shortcutKeys">
@@ -5812,21 +5916,7 @@ export function App() {
               rows={paletteForm.rows}
               emptyMessage="No matching choices"
             />
-          ) : extensionView ? (
-            extensionView.aiChat && selectedBuilderPreview ? (
-              <div className="builderWorkspace">
-                <div
-                  className="builderChatPane"
-                  onFocusCapture={() => setBuilderPreviewFocused(false)}
-                >
-                  {renderExtensionView(extensionView)}
-                </div>
-                {renderBuilderPreview()}
-              </div>
-            ) : (
-              renderExtensionView(extensionView)
-            )
-          ) : (
+          ) : extensionView ? null : (
             renderActionResults()
           )}
         </Command.List>

@@ -67,7 +67,13 @@ export type ExtensionPermission = ExtensionCapability;
 /** Action panels can be visible, menu-only, or hidden while still allowing local shortcuts. */
 export type ActionPanelVisibility = 'visible' | 'menu' | 'hidden';
 export type ViewSize = 'default' | 'large';
-/** Controls the palette framing for a host-rendered view; side-preview pairs a selectable list with its selected item's detail pane. */
+/**
+ * Controls palette framing; side-preview pairs a selectable list with its detail pane.
+ * A view-producing global command invoked while another palette view is open is
+ * presented below that view. Dismissing the command restores its parent without
+ * reopening it: chat drafts, attachments, and ongoing streams remain live.
+ * This host-owned nesting applies independently of the view's framing.
+ */
 export type ViewPresentation = 'root' | 'stacked' | 'preview' | 'side-preview';
 export type PatchMode = 'patch' | 'replace' | 'prepend' | 'append';
 /** Independent-window behavior reported by the host OS/session capability layer. */

@@ -173,6 +173,7 @@ export function useAiChat(
   ) => Promise<void>,
   setChatModel: (chatId: string, model: AiChatModel) => Promise<void>,
   resetChat: (chatId?: string) => Promise<void>,
+  mayFocus: () => boolean = () => true,
 ) {
   const messagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -506,6 +507,7 @@ export function useAiChat(
 
   function focusInput() {
     requestAnimationFrame(() => {
+      if (!mayFocus()) return;
       messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight });
       inputRef.current?.focus();
     });

@@ -115,7 +115,8 @@ const api: NevermindApi = {
     return () => ipcRenderer.removeListener('actions:search:update', listener);
   },
   execute: (action) => invokeMeasured('actions:execute', action),
-  runViewAction: (action) => invokeMeasured('view-action:execute', action),
+  runViewAction: (action, context) =>
+    invokeMeasured('view-action:execute', action, context),
   refreshView: (input) => invokeMeasured('view:refresh', input),
   pickFormFieldPaths: (input) =>
     invokeMeasured('dialog:pick-form-field-paths', input),

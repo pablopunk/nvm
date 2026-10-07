@@ -5,6 +5,27 @@ import {
   registerAppIpcHandlers,
 } from './app-ipc-handlers';
 
+test('view execution forwards presentation context with the actual IPC sender identity', () => {
+  const { deps, handles } = createDeps({
+    executeViewActionForIpc: (action, context, senderId) => ({
+      action,
+      context,
+      senderId,
+    }),
+  });
+  registerAppIpcHandlers(deps);
+  const action = { executionId: 'trusted-action-token' };
+  const context = { requestId: 'host-pane-token' };
+  assert.deepEqual(
+    handles.get('view-action:execute')!(
+      { sender: { id: 42 } },
+      action,
+      context,
+    ),
+    { action, context, senderId: 42 },
+  );
+});
+
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: test harness creates many stubs
 function createDeps(overrides: Partial<AppIpcHandlersDeps> = {}) {
   // biome-ignore lint/suspicious/noExplicitAny: test harness uses any for flexibility

@@ -127,6 +127,8 @@ export type IndicatorInput = {
 };
 
 export type OpenActionViewPayload = {
+  requestId?: string;
+  phase?: 'start' | 'resolve';
   view?: CommandView;
   revealWhenReady?: boolean;
   asSibling?: boolean;
@@ -191,7 +193,10 @@ export type NevermindApi = {
     callback: (snapshot: SearchSnapshot<RootAction>) => void,
   ) => () => void;
   execute: (action: RootAction) => Promise<{ view?: CommandView }>;
-  runViewAction: (action: CommandAction) => Promise<ViewActionResult>;
+  runViewAction: (
+    action: CommandAction,
+    context?: { requestId: string },
+  ) => Promise<ViewActionResult>;
   refreshView: (input: {
     id: string;
     viewId?: string;
