@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { auditLog, routeBreakers } from '../db/schema';
+import { routeBreakers } from '../db/schema';
+import { recordAuditStrict } from './audit';
 
 export async function reenableRouteBreaker(input: {
   actorUserId: string;
@@ -9,12 +10,16 @@ export async function reenableRouteBreaker(input: {
   modelId: string;
 }): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx.delete(routeBreakers).where(and(
-      eq(routeBreakers.routeSlot, input.routeSlot),
-      eq(routeBreakers.provider, input.provider),
-      eq(routeBreakers.modelId, input.modelId),
-    ));
-    await tx.insert(auditLog).values({
+    await tx
+      .delete(routeBreakers)
+      .where(
+        and(
+          eq(routeBreakers.routeSlot, input.routeSlot),
+          eq(routeBreakers.provider, input.provider),
+          eq(routeBreakers.modelId, input.modelId),
+        ),
+      );
+    await recordAuditStrict(tx, {
       actorUserId: input.actorUserId,
       action: 'route_breaker.reenabled',
       targetType: 'route',
