@@ -16,7 +16,7 @@ import Layout from '../layouts/Layout.astro';
         <a href="https://github.com/pablopunk/nvm/releases">Releases</a>
       </nav>
       <LandingAccount placement="nav" server:defer>
-        <a class="button" href="/api/auth/signin" slot="fallback">Sign in</a>
+        <a class="button" href="/api/auth/signin" slot="fallback">Sign in or create an account</a>
       </LandingAccount>
     </header>
 
@@ -34,6 +34,7 @@ import Layout from '../layouts/Layout.astro';
           A command palette that extends itself. Really.
         </p>
         <div class="landing-actions">
+          <a class="button button--primary button--lg" href="/api/auth/signin">Get started free</a>
           <a class="button button--primary button--lg" href="https://github.com/pablopunk/nvm/releases">
             <Download size={16} />Download for free
           </a>
@@ -48,26 +49,5 @@ import Layout from '../layouts/Layout.astro';
         </figcaption>
       </figure>
     </section>
-    <section class="landing-waitlist" aria-labelledby="waitlist-title">
-      <form class="waitlist-form" id="waitlist-form">
-        <label id="waitlist-title" for="waitlist-email">Join to build with AI</label>
-        <div class="waitlist-form__row">
-          <input id="waitlist-email" name="email" type="email" class="input waitlist-form__input" autocomplete="email" required placeholder="you@example.com" />
-          <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="waitlist-form__trap" />
-          <button class="button" type="submit">Join waitlist</button>
-        </div>
-        <small id="waitlist-status" class="muted">We’ll email you if access opens up.</small>
-      </form>
-    </section>
   </div>
-  <script is:inline>
-    const form = document.getElementById('waitlist-form');
-    form?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const status = document.getElementById('waitlist-status');
-      const response = await fetch('/api/waitlist', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-      status.textContent = response.ok ? 'If eligible, we’ll email you.' : 'The waitlist is temporarily closed. Please try again later.';
-      if (response.ok) form.querySelector('button')?.setAttribute('disabled', 'true');
-    });
-  </script>
 </Layout>
