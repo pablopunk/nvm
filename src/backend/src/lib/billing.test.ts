@@ -1,8 +1,30 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
-import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
-import { BillingConfigError, BillingEligibilityError, BillingRequestError, billingCatalog, createBillingCheckout, formatBillingPrice, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
+import {
+  billingOrders,
+  billingPriceTerms,
+  billingRetryOperations,
+  billingSubscriptionPriceVersions,
+  creditLedger,
+  stripeCustomerAttempts,
+  stripeEvents,
+  subscriptions,
+  users,
+} from '../db/schema';
+import {
+  BillingConfigError,
+  BillingEligibilityError,
+  BillingRequestError,
+  billingCatalog,
+  cancelPaymentIntentForRetry,
+  classifyCheckoutEvidence,
+  createBillingCheckout,
+  formatBillingPrice,
+  processStripeEvent,
+  rejectCrossOriginBillingPost,
+  setStripeForTests,
+} from './billing';
 import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
@@ -23,7 +45,11 @@ const user = {
   createdAt: new Date(),
 };
 
-type InsertCall = { table: unknown; values: any; conflict?: 'nothing' | 'update' };
+type InsertCall = {
+  table: unknown;
+  values: any;
+  conflict?: 'nothing' | 'update';
+};
 type UpdateCall = { table: unknown; values: any };
 type FakeDb = {
   inserts: InsertCall[];
@@ -31,10 +57,20 @@ type FakeDb = {
   select: () => any;
   insert: (table: unknown) => any;
   update: (table: unknown) => any;
+  execute: () => Promise<unknown>;
   transaction: (callback: (tx: FakeDb) => Promise<unknown>) => Promise<unknown>;
 };
 
-function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: string[]; existingLedgerRefs?: string[]; trackSubscriptions?: boolean } = {}): FakeDb {
+function createFakeBillingDb(
+  input: {
+    selects?: unknown[];
+    existingEvents?: string[];
+    existingLedgerRefs?: string[];
+    trackSubscriptions?: boolean;
+    billingTerms?: unknown[];
+    subscriptionRows?: unknown[];
+  } = {},
+): FakeDb {
   const selects = [...(input.selects ?? [])];
   const eventIds = new Set(input.existingEvents ?? []);
   const ledgerRefs = new Set(input.existingLedgerRefs ?? []);
@@ -92,6 +128,17 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
       if (input.trackSubscriptions && fromTable === subscriptions) {
         return Promise.resolve(subscriptionRow ? [subscriptionRow] : []);
       }
+      if (fromTable === stripeEvents) return Promise.resolve([]);
+      if (fromTable === billingPriceTerms) return Promise.resolve(input.billingTerms ?? []);
+      if (
+        fromTable === billingOrders ||
+        fromTable === billingRetryOperations ||
+        fromTable === billingSubscriptionPriceVersions ||
+        fromTable === stripeCustomerAttempts
+      )
+        return Promise.resolve([]);
+      if (fromTable === subscriptions) return Promise.resolve(input.subscriptionRows ?? []);
+      if (fromTable === users) return Promise.resolve(selects.shift() ?? []);
       return Promise.resolve(selects.shift() ?? []);
     };
     const chain = {
@@ -101,7 +148,8 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
       },
       where: () => chain,
       limit: () => promise(),
-      then: (resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) => promise().then(resolveThen, rejectThen),
+      then: (resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) =>
+        promise().then(resolveThen, rejectThen),
       catch: (rejectThen: Parameters<Promise<unknown>['catch']>[0]) => promise().catch(rejectThen),
     };
     return chain;
@@ -139,6 +187,7 @@ function createFakeBillingDb(input: { selects?: unknown[]; existingEvents?: stri
     select: () => createSelectChain(),
     insert: (table: unknown) => createInsertChain(table),
     update: (table: unknown) => createUpdateChain(table),
+    execute: async () => [],
     transaction: async (callback: (tx: FakeDb) => Promise<unknown>) => {
       const eventSnapshot = new Set(eventIds);
       const ledgerSnapshot = new Set(ledgerRefs);
@@ -167,15 +216,70 @@ function installDb(db: FakeDb) {
   return db;
 }
 
+function approvedTerms(input: Partial<typeof billingPriceTerms.$inferSelect> = {}) {
+  return {
+    id: '00000000-0000-4000-8000-000000000001',
+    priceId: 'price_pro',
+    version: 1,
+    kind: 'subscription',
+    tier: 'pro',
+    credits: 1000,
+    unitAmount: 1000,
+    currency: 'usd',
+    quantity: 1,
+    interval: 'month',
+    intervalCount: 1,
+    source: 'test_fixture',
+    approvedAt: new Date(0),
+    createdAt: new Date(0),
+    ...input,
+  };
+}
+
+const stripeObjects = new Map<string, Record<string, unknown>>();
+
 function installStripe(subscription: Record<string, unknown> = {}) {
   setStripeForTests({
-    subscriptions: {
+    checkout: {
+      sessions: {
+        retrieve: async (id: string) =>
+          stripeObjects.get(id) ?? {
+            id,
+            status: 'open',
+            payment_status: 'unpaid',
+          },
+        listLineItems: async () => ({ data: [], has_more: false }),
+        list: async () => ({ data: [], has_more: false }),
+      },
+    },
+    invoices: {
+      retrieve: async (id: string) => stripeObjects.get(id) ?? { id, lines: { data: [] } },
+    },
+    paymentIntents: {
+      retrieve: async (id: string) => stripeObjects.get(id) ?? { id, status: 'requires_payment_method' },
+      cancel: async (id: string) => ({ id, status: 'canceled' }),
+    },
+    prices: {
       retrieve: async (id: string) => ({
         id,
-        status: subscription.status ?? 'active',
-        current_period_end: 1_800_000_000,
-        ...subscription,
+        active: true,
+        billing_scheme: 'per_unit',
+        unit_amount: id.includes('topup') ? 500 : 1000,
+        currency: 'usd',
+        type: id.includes('topup') ? 'one_time' : 'recurring',
+        recurring: id.includes('topup') ? null : { interval: 'month', interval_count: 1, usage_type: 'licensed' },
+        tiers_mode: null,
+        transform_quantity: null,
       }),
+    },
+    subscriptions: {
+      retrieve: async (id: string) =>
+        stripeObjects.get(id) ?? {
+          id,
+          status: subscription.status ?? 'active',
+          current_period_end: 1_800_000_000,
+          ...subscription,
+        },
     },
     webhooks: {
       constructEvent: () => {
@@ -186,7 +290,7 @@ function installStripe(subscription: Record<string, unknown> = {}) {
 }
 
 function stripeEvent(type: string, object: Record<string, unknown>, id = `evt_${type}`, created = 1) {
-  return {
+  const event = {
     id,
     object: 'event',
     api_version: '2025-01-27.acacia',
@@ -197,6 +301,8 @@ function stripeEvent(type: string, object: Record<string, unknown>, id = `evt_${
     type,
     data: { object },
   } as any;
+  if (object.id) stripeObjects.set(String(object.id), object);
+  return event;
 }
 
 afterEach(() => {
@@ -209,22 +315,43 @@ afterEach(() => {
 });
 
 test('billing catalog exposes validated display metadata from configured prices', () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{
-    priceId: 'price_pro', tier: 'pro', credits: 1000, amount: 2000, currency: 'usd', interval: 'month',
-  }]);
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{
-    priceId: 'price_topup', credits: 500, unit_amount: 500, currency: 'EUR',
-  }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    {
+      priceId: 'price_pro',
+      tier: 'pro',
+      credits: 1000,
+      amount: 2000,
+      currency: 'usd',
+      interval: 'month',
+    },
+  ]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([
+    {
+      priceId: 'price_topup',
+      credits: 500,
+      unit_amount: 500,
+      currency: 'EUR',
+    },
+  ]);
 
   assert.deepEqual(billingCatalog(), {
-    subscriptions: [{
-      kind: 'subscription', priceId: 'price_pro', tier: 'pro', credits: 1000,
-      displayPrice: { amount: 2000, currency: 'USD', interval: 'month' },
-    }],
-    topUps: [{
-      kind: 'top_up', priceId: 'price_topup', credits: 500,
-      displayPrice: { amount: 500, currency: 'EUR' },
-    }],
+    subscriptions: [
+      {
+        kind: 'subscription',
+        priceId: 'price_pro',
+        tier: 'pro',
+        credits: 1000,
+        displayPrice: { amount: 2000, currency: 'USD', interval: 'month' },
+      },
+    ],
+    topUps: [
+      {
+        kind: 'top_up',
+        priceId: 'price_topup',
+        credits: 500,
+        displayPrice: { amount: 500, currency: 'EUR' },
+      },
+    ],
   });
   assert.equal(formatBillingPrice({ amount: 2000, currency: 'USD', interval: 'month' }), '$20.00');
 });
@@ -252,100 +379,261 @@ test('production billing rejects stale dashboard aliases as configuration withou
 });
 
 test('billing catalog keeps billing items while omitting incomplete display metadata', () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{
-    priceId: 'price_pro', tier: 'pro', credits: 1000, amount: 2000, currency: 'usd',
-  }]);
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{
-    priceId: 'price_topup', credits: 500, amount: 500.5, currency: 'US',
-  }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    {
+      priceId: 'price_pro',
+      tier: 'pro',
+      credits: 1000,
+      amount: 2000,
+      currency: 'usd',
+    },
+  ]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([
+    {
+      priceId: 'price_topup',
+      credits: 500,
+      amount: 500.5,
+      currency: 'US',
+    },
+  ]);
 
   const catalog = billingCatalog();
-  assert.deepEqual(catalog.subscriptions[0], { kind: 'subscription', priceId: 'price_pro', tier: 'pro', credits: 1000 });
-  assert.deepEqual(catalog.topUps[0], { kind: 'top_up', priceId: 'price_topup', credits: 500 });
+  assert.deepEqual(catalog.subscriptions[0], {
+    kind: 'subscription',
+    priceId: 'price_pro',
+    tier: 'pro',
+    credits: 1000,
+  });
+  assert.deepEqual(catalog.topUps[0], {
+    kind: 'top_up',
+    priceId: 'price_topup',
+    credits: 500,
+  });
 });
 
 test('checkout fails closed without approved terms before creating a Stripe customer', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{
-    priceId: 'price_unapproved', tier: 'pro', credits: 1000, amount: 2000, currency: 'usd', interval: 'month',
-  }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    {
+      priceId: 'price_unapproved',
+      tier: 'pro',
+      credits: 1000,
+      amount: 2000,
+      currency: 'usd',
+      interval: 'month',
+    },
+  ]);
   let customerCreates = 0;
   setStripeForTests({
-    customers: { create: async () => { customerCreates += 1; throw new Error('unexpected customer creation'); } },
+    customers: {
+      create: async () => {
+        customerCreates += 1;
+        throw new Error('unexpected customer creation');
+      },
+    },
   } as any);
   installDb(createFakeBillingDb());
 
   await assert.rejects(
-    () => createBillingCheckout({ user, kind: 'subscription', priceId: 'price_unapproved' }),
+    () =>
+      createBillingCheckout({
+        user,
+        kind: 'subscription',
+        priceId: 'price_unapproved',
+      }),
     (error) => error instanceof BillingRequestError && error.type === 'unknown_price',
   );
   assert.equal(customerCreates, 0);
 });
 
-test('checkout completion upserts subscription and grants initial paid credits once', async () => {
+test('checkout state classifier keeps retryable and ambiguous payment evidence active', () => {
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'open',
+      paymentStatus: 'unpaid',
+      paymentIntentStatus: 'requires_payment_method',
+    }),
+    'open',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'complete',
+      paymentStatus: 'unpaid',
+      paymentIntentStatus: 'requires_payment_method',
+    }),
+    'retry_required',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'expired',
+      paymentStatus: 'unpaid',
+      paymentIntentStatus: 'requires_payment_method',
+    }),
+    'retry_required',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'complete',
+      paymentStatus: 'unpaid',
+      paymentIntentStatus: 'canceled',
+    }),
+    'failed',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'expired',
+      paymentStatus: 'unpaid',
+      paymentIntentStatus: 'canceled',
+    }),
+    'expired',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'expired',
+      paymentStatus: 'unpaid',
+    }),
+    'expired',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'expired',
+      paymentStatus: 'no_payment_required',
+    }),
+    'processing',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'complete',
+      paymentStatus: 'unpaid',
+      paymentIntentStatus: 'processing',
+    }),
+    'processing',
+  );
+  assert.equal(
+    classifyCheckoutEvidence({
+      sessionStatus: 'complete',
+      paymentStatus: 'paid',
+      paymentIntentStatus: 'succeeded',
+    }),
+    'processing',
+  );
+});
+
+test('explicit retry cancellation uses the durable idempotency key and a bounded request', async () => {
+  const calls: unknown[][] = [];
+  setStripeForTests({
+    paymentIntents: {
+      cancel: async (...args: unknown[]) => {
+        calls.push(['cancel', ...args]);
+        return {};
+      },
+      retrieve: async (...args: unknown[]) => {
+        calls.push(['retrieve', ...args]);
+        return { id: 'pi_retry', status: 'canceled' };
+      },
+    },
+  } as any);
+
+  const intent = await cancelPaymentIntentForRetry('pi_retry', 'billing-cancel-operation-1');
+  assert.equal(intent.status, 'canceled');
+  assert.deepEqual(calls, [
+    ['cancel', 'pi_retry', {}, { idempotencyKey: 'billing-cancel-operation-1', timeout: 20_000 }],
+    ['retrieve', 'pi_retry'],
+  ]);
+});
+
+test('checkout completion without a durable order is retained for reconciliation', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user], []], existingEvents: ['evt_duplicate'] }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user], []],
+      existingEvents: ['evt_duplicate'],
+    }),
+  );
 
-  const event = stripeEvent('checkout.session.completed', {
-    id: 'cs_123',
-    mode: 'subscription',
-    customer: 'cus_123',
-    subscription: 'sub_123',
-    payment_status: 'paid',
-    client_reference_id: user.id,
-    metadata: { price_id: 'price_pro', user_id: user.id },
-  }, 'evt_checkout');
+  const event = stripeEvent(
+    'checkout.session.completed',
+    {
+      id: 'cs_123',
+      mode: 'subscription',
+      customer: 'cus_123',
+      subscription: 'sub_123',
+      payment_status: 'paid',
+      client_reference_id: user.id,
+      metadata: { price_id: 'price_pro', user_id: user.id },
+    },
+    'evt_checkout',
+  );
 
-  assert.deepEqual(await processStripeEvent(event), { processed: true });
+  assert.deepEqual(await processStripeEvent(event), {
+    processed: true,
+    needsReconciliation: true,
+  });
   assert.deepEqual(await processStripeEvent({ ...event, id: 'evt_duplicate' }), { processed: false });
 
   const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
-  assert.equal(creditInserts.length, 1);
-  assert.equal(creditInserts[0].values.delta, 1000);
-  assert.equal(creditInserts[0].values.kind, 'paid');
-  assert.equal(creditInserts[0].values.reason, 'stripe_checkout_subscription');
-  assert.equal(creditInserts[0].values.refId, 'cs_123');
-  assert.equal(db.inserts.some((call) => call.table === subscriptions && call.values.status === 'active' && call.values.tier === 'pro'), true);
-  assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), true);
+  assert.equal(creditInserts.length, 0);
+  assert.equal(
+    db.inserts.some((call) => call.table === subscriptions),
+    false,
+  );
 });
 
-test('checkout completion stores item-level billing periods from current Stripe API versions', async () => {
+test('checkout completion cannot infer purchase terms from the current catalog', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  installStripe({ current_period_end: undefined, items: { data: [{ current_period_end: 1_900_000_000 }] } });
+  installStripe({
+    current_period_end: undefined,
+    items: { data: [{ current_period_end: 1_900_000_000 }] },
+  });
   const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
-  await processStripeEvent(stripeEvent('checkout.session.completed', {
-    id: 'cs_item_period',
-    mode: 'subscription',
-    customer: 'cus_123',
-    subscription: 'sub_123',
-    payment_status: 'paid',
-    client_reference_id: user.id,
-    metadata: { price_id: 'price_pro', user_id: user.id },
-  }, 'evt_item_period'));
+  await processStripeEvent(
+    stripeEvent(
+      'checkout.session.completed',
+      {
+        id: 'cs_item_period',
+        mode: 'subscription',
+        customer: 'cus_123',
+        subscription: 'sub_123',
+        payment_status: 'paid',
+        client_reference_id: user.id,
+        metadata: { price_id: 'price_pro', user_id: user.id },
+      },
+      'evt_item_period',
+    ),
+  );
 
-  const inserted = db.inserts.find((call) => call.table === subscriptions);
-  assert.equal(inserted?.values.currentPeriodEnd.toISOString(), new Date(1_900_000_000 * 1000).toISOString());
+  assert.equal(
+    db.inserts.some((call) => call.table === subscriptions),
+    false,
+  );
+  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
 });
 
-test('invoice.paid grants renewal credits only for subscription cycle invoices', async () => {
+test('invoice.paid without a stored subscription price version requires reconciliation', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
   installStripe();
   const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
-  await processStripeEvent(stripeEvent('invoice.paid', {
-    id: 'in_renewal',
-    customer: 'cus_123',
-    subscription: 'sub_123',
-    billing_reason: 'subscription_cycle',
-    lines: { data: [{ price: { id: 'price_pro' } }] },
-  }, 'evt_invoice'));
+  assert.deepEqual(
+    await processStripeEvent(
+      stripeEvent(
+        'invoice.paid',
+        {
+          id: 'in_renewal',
+          customer: 'cus_123',
+          subscription: 'sub_123',
+          billing_reason: 'subscription_cycle',
+          lines: { data: [{ price: { id: 'price_pro' } }] },
+        },
+        'evt_invoice',
+      ),
+    ),
+    { processed: true, needsReconciliation: true },
+  );
 
   const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
-  assert.equal(creditInserts.length, 1);
-  assert.equal(creditInserts[0].values.reason, 'stripe_subscription_renewal');
-  assert.equal(creditInserts[0].values.refId, 'in_renewal');
-  assert.equal(creditInserts[0].values.delta, 1000);
+  assert.equal(creditInserts.length, 0);
 });
 
 test('subscription deletion updates status and plan without revoking paid credits', async () => {
@@ -353,32 +641,81 @@ test('subscription deletion updates status and plan without revoking paid credit
   installStripe({ status: 'canceled' });
   const db = installDb(createFakeBillingDb({ selects: [[user]] }));
 
-  await processStripeEvent(stripeEvent('customer.subscription.deleted', {
-    id: 'sub_123',
-    customer: 'cus_123',
-    status: 'canceled',
-    current_period_end: 1_800_000_000,
-    items: { data: [{ price: { id: 'price_pro' } }] },
-  }, 'evt_deleted'));
+  await processStripeEvent(
+    stripeEvent(
+      'customer.subscription.deleted',
+      {
+        id: 'sub_123',
+        customer: 'cus_123',
+        status: 'canceled',
+        current_period_end: 1_800_000_000,
+        items: { data: [{ price: { id: 'price_pro' } }] },
+      },
+      'evt_deleted',
+    ),
+  );
 
   assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
-  assert.equal(db.inserts.some((call) => call.table === subscriptions && call.values.status === 'canceled'), true);
-  assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'free'), true);
+  assert.equal(
+    db.inserts.some((call) => call.table === subscriptions && call.values.status === 'canceled'),
+    true,
+  );
+  assert.equal(
+    db.updates.some((call) => call.table === users && call.values.plan === 'free'),
+    true,
+  );
 });
 
 test('subscription checkout rejects already active subscribers', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  installDb(createFakeBillingDb({ selects: [[{ status: 'active' }]] }));
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    {
+      priceId: 'price_pro',
+      tier: 'pro',
+      credits: 1000,
+      amount: 1000,
+      currency: 'usd',
+      interval: 'month',
+    },
+  ]);
+  installStripe();
+  installDb(
+    createFakeBillingDb({
+      subscriptionRows: [{ status: 'active' }],
+      billingTerms: [approvedTerms()],
+    }),
+  );
 
   await assert.rejects(
-    () => createBillingCheckout({ user, kind: 'subscription', priceId: 'price_pro' }),
+    () =>
+      createBillingCheckout({
+        user,
+        kind: 'subscription',
+        priceId: 'price_pro',
+      }),
     (error) => error instanceof BillingEligibilityError && error.type === 'already_subscribed',
   );
 });
 
 test('top-up checkout requires an active subscription', async () => {
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
-  installDb(createFakeBillingDb({ selects: [[]] }));
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500, amount: 500, currency: 'usd' }]);
+  installStripe();
+  installDb(
+    createFakeBillingDb({
+      subscriptionRows: [],
+      billingTerms: [
+        approvedTerms({
+          id: '00000000-0000-4000-8000-000000000002',
+          priceId: 'price_topup',
+          kind: 'top_up',
+          tier: null,
+          credits: 500,
+          unitAmount: 500,
+          interval: null,
+          intervalCount: null,
+        }),
+      ],
+    }),
+  );
 
   await assert.rejects(
     () => createBillingCheckout({ user, kind: 'top_up', priceId: 'price_topup' }),
@@ -386,22 +723,32 @@ test('top-up checkout requires an active subscription', async () => {
   );
 });
 
-test('payment intent succeeded grants one-time top-up credits from metadata for active subscribers', async () => {
+test('payment intent without an order is retained for reconciliation', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installStripe();
   const db = installDb(createFakeBillingDb({ selects: [[user], [{ status: 'active' }], []] }));
 
-  await processStripeEvent(stripeEvent('payment_intent.succeeded', {
-    id: 'pi_123',
-    customer: 'cus_123',
-    metadata: { billing_kind: 'top_up', user_id: user.id, price_id: 'price_topup' },
-  }, 'evt_topup'));
+  assert.deepEqual(
+    await processStripeEvent(
+      stripeEvent(
+        'payment_intent.succeeded',
+        {
+          id: 'pi_123',
+          customer: 'cus_123',
+          metadata: {
+            billing_kind: 'top_up',
+            user_id: user.id,
+            price_id: 'price_topup',
+          },
+        },
+        'evt_topup',
+      ),
+    ),
+    { processed: true, needsReconciliation: true },
+  );
 
   const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
-  assert.equal(creditInserts.length, 1);
-  assert.equal(creditInserts[0].values.reason, 'stripe_top_up');
-  assert.equal(creditInserts[0].values.refId, 'pi_123');
-  assert.equal(creditInserts[0].values.delta, 500);
+  assert.equal(creditInserts.length, 0);
 });
 
 test('top-up webhook does not grant credits without an active subscription', async () => {
@@ -409,11 +756,21 @@ test('top-up webhook does not grant credits without an active subscription', asy
   installStripe();
   const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
-  await processStripeEvent(stripeEvent('payment_intent.succeeded', {
-    id: 'pi_123',
-    customer: 'cus_123',
-    metadata: { billing_kind: 'top_up', user_id: user.id, price_id: 'price_topup' },
-  }, 'evt_topup_without_subscription'));
+  await processStripeEvent(
+    stripeEvent(
+      'payment_intent.succeeded',
+      {
+        id: 'pi_123',
+        customer: 'cus_123',
+        metadata: {
+          billing_kind: 'top_up',
+          user_id: user.id,
+          price_id: 'price_topup',
+        },
+      },
+      'evt_topup_without_subscription',
+    ),
+  );
 
   assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
 });
@@ -421,28 +778,45 @@ test('top-up webhook does not grant credits without an active subscription', asy
 test('distinct Stripe events do not double-grant an already credited payment object', async () => {
   process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
   installStripe();
-  const db = installDb(createFakeBillingDb({
-    selects: [[user], [{ status: 'active' }]],
-    existingLedgerRefs: [`${user.id}:stripe_top_up:pi_123`],
-  }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user], [{ status: 'active' }]],
+      existingLedgerRefs: [`${user.id}:stripe_top_up:pi_123`],
+    }),
+  );
 
-  await processStripeEvent(stripeEvent('payment_intent.succeeded', {
-    id: 'pi_123',
-    customer: 'cus_123',
-    metadata: { billing_kind: 'top_up', user_id: user.id, price_id: 'price_topup' },
-  }, 'evt_topup_retry_shape'));
+  await processStripeEvent(
+    stripeEvent(
+      'payment_intent.succeeded',
+      {
+        id: 'pi_123',
+        customer: 'cus_123',
+        metadata: {
+          billing_kind: 'top_up',
+          user_id: user.id,
+          price_id: 'price_topup',
+        },
+      },
+      'evt_topup_retry_shape',
+    ),
+  );
 
   assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
 });
 
 function subscriptionStatusEvent(type: string, status: string, id: string, created: number) {
-  return stripeEvent(type, {
-    id: 'sub_123',
-    customer: 'cus_123',
-    status,
-    current_period_end: 1_800_000_000,
-    items: { data: [{ price: { id: 'price_pro' } }] },
-  }, id, created);
+  return stripeEvent(
+    type,
+    {
+      id: 'sub_123',
+      customer: 'cus_123',
+      status,
+      current_period_end: 1_800_000_000,
+      items: { data: [{ price: { id: 'price_pro' } }] },
+    },
+    id,
+    created,
+  );
 }
 
 function lastSubscriptionStatus(db: FakeDb): string | undefined {
@@ -450,8 +824,15 @@ function lastSubscriptionStatus(db: FakeDb): string | undefined {
 }
 
 test('newer subscription event applies and reactivation restores paid plan', async () => {
+  installStripe();
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user], [user]],
+      trackSubscriptions: true,
+      billingTerms: [approvedTerms()],
+    }),
+  );
 
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_1', 100));
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_2', 200));
@@ -461,8 +842,15 @@ test('newer subscription event applies and reactivation restores paid plan', asy
 });
 
 test('update then delete ends canceled and free regardless of tier resolution', async () => {
+  installStripe();
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user], [user]],
+      trackSubscriptions: true,
+      billingTerms: [approvedTerms()],
+    }),
+  );
 
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_a', 100));
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_b', 200));
@@ -472,30 +860,55 @@ test('update then delete ends canceled and free regardless of tier resolution', 
 });
 
 test('older update after newer delete is a stale no-op keeping the user free', async () => {
+  installStripe();
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user], [user]],
+      trackSubscriptions: true,
+    }),
+  );
 
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_new', 200));
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_old', 100));
 
   assert.equal(lastSubscriptionStatus(db), 'canceled');
-  assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), false);
+  assert.equal(
+    db.updates.some((call) => call.table === users && call.values.plan === 'pro'),
+    false,
+  );
 });
 
 test('exact timestamp tie does not let update resurrect a terminal deleted subscription', async () => {
+  installStripe();
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  const db = installDb(createFakeBillingDb({ selects: [[user], [user]], trackSubscriptions: true }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user], [user]],
+      trackSubscriptions: true,
+    }),
+  );
 
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_tie', 500));
   await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_tie', 500));
 
   assert.equal(lastSubscriptionStatus(db), 'canceled');
-  assert.equal(db.updates.some((call) => call.table === users && call.values.plan === 'pro'), false);
+  assert.equal(
+    db.updates.some((call) => call.table === users && call.values.plan === 'pro'),
+    false,
+  );
 });
 
 test('duplicate subscription event id is a processed no-op', async () => {
+  installStripe();
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
-  const db = installDb(createFakeBillingDb({ selects: [[user]], trackSubscriptions: true }));
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user]],
+      trackSubscriptions: true,
+      billingTerms: [approvedTerms()],
+    }),
+  );
 
   const event = subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_dup', 100);
   assert.deepEqual(await processStripeEvent(event), { processed: true });
@@ -506,36 +919,62 @@ test('duplicate subscription event id is a processed no-op', async () => {
 test('handler error rolls back so the event id is not permanently recorded', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
   const db = installDb(createFakeBillingDb({ selects: [[user]] }));
-  const event = stripeEvent('invoice.paid', {
-    id: 'in_rollback',
-    customer: 'cus_123',
-    subscription: 'sub_123',
-    billing_reason: 'subscription_cycle',
-    lines: { data: [{ price: { id: 'price_pro' } }] },
-  }, 'evt_rollback');
+  const event = stripeEvent(
+    'invoice.paid',
+    {
+      id: 'in_rollback',
+      customer: 'cus_123',
+      subscription: 'sub_123',
+      billing_reason: 'subscription_cycle',
+      lines: { data: [{ price: { id: 'price_pro' } }] },
+    },
+    'evt_rollback',
+  );
 
   setStripeForTests({
-    subscriptions: { retrieve: async () => { throw new Error('stripe unavailable'); } },
-    webhooks: { constructEvent: () => { throw new Error('bad signature'); } },
+    subscriptions: {
+      retrieve: async () => {
+        throw new Error('stripe unavailable');
+      },
+    },
+    webhooks: {
+      constructEvent: () => {
+        throw new Error('bad signature');
+      },
+    },
   } as any);
   await assert.rejects(() => processStripeEvent(event));
-  assert.equal(db.inserts.some((call) => call.table === creditLedger), false);
+  assert.equal(
+    db.inserts.some((call) => call.table === creditLedger),
+    false,
+  );
 
   installStripe();
-  assert.deepEqual(await processStripeEvent(event), { processed: true });
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 1);
+  assert.deepEqual(await processStripeEvent(event), {
+    processed: true,
+    needsReconciliation: true,
+  });
+  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
 });
 
 test('billing POST guard rejects cross-origin cookie-auth posts', async () => {
-  const response = rejectCrossOriginBillingPost(new Request('https://api.nvm.fyi/api/billing/checkout', {
-    method: 'POST',
-    headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
-    body: '{}',
-  }));
+  const response = rejectCrossOriginBillingPost(
+    new Request('https://api.nvm.fyi/api/billing/checkout', {
+      method: 'POST',
+      headers: {
+        origin: 'https://evil.example',
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    }),
+  );
 
   assert.equal(response?.status, 403);
   assert.deepEqual(await response?.json(), {
-    error: { type: 'forbidden', message: 'Cross-origin billing request rejected' },
+    error: {
+      type: 'forbidden',
+      message: 'Cross-origin billing request rejected',
+    },
   });
 });
 
@@ -553,7 +992,10 @@ test('webhook route rejects malformed or signature-invalid payloads', async () =
 
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
-    error: { type: 'invalid_webhook', message: 'Invalid Stripe webhook signature or payload' },
+    error: {
+      type: 'invalid_webhook',
+      message: 'Invalid Stripe webhook signature or payload',
+    },
   });
 });
 

@@ -127,6 +127,13 @@
       "when": 1791390847603,
       "tag": "0017_redundant_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791391863925,
+      "tag": "0018_powerful_spirit",
+      "breakpoints": true
     }
   ]
 }

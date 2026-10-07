@@ -17,7 +17,11 @@ const balances = user ? await getBalances(user.id) : { free: 0, paid: 0, total: 
 const tokens = user ? await listApiTokens(user.id) : [];
 const [subscription] = user ? await db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)).limit(1) : [];
 const catalog = (() => {
-  try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
+  try {
+    return billingCatalog();
+  } catch {
+    return { subscriptions: [], topUps: [] };
+  }
 })();
 const isAdmin = user?.role === 'admin';
 const hasActiveSubscription = subscription ? isActiveBillingSubscriptionStatus(subscription.status) : false;
@@ -272,7 +276,20 @@ const billingState = Astro.url.searchParams.get('billing');
         addRefreshAction();
         return;
       }
-      const attempt = storedBillingAttempt();
+      let attempt = storedBillingAttempt();
+      if (data.attemptKey && data.kind && data.priceId) {
+        attempt = { ...(attempt || {}), key: data.attemptKey, kind: data.kind, priceId: data.priceId };
+        saveBillingAttempt(attempt);
+      }
+      if (data.status === 'retry_required' && !data.retryOperationId && attempt?.retryKey) {
+        delete attempt.retryKey;
+        delete attempt.retryOperationId;
+        saveBillingAttempt(attempt);
+      }
+      document.querySelectorAll('.billing-checkout').forEach((button) => {
+        button.disabled = Boolean(attempt?.key && !['completed', 'expired', 'failed'].includes(data.status)) ||
+          ['open', 'processing', 'retry_required', 'reconciliation_required'].includes(data.status);
+      });
       if (['completed', 'expired', 'failed'].includes(data.status)) clearBillingAttempt();
       const messages = {
         none: 'No checkout order is currently recorded. Your saved attempt remains available for a safe retry.',
@@ -290,6 +307,7 @@ const billingState = Astro.url.searchParams.get('billing');
       if (data.status === 'retry_required' || (data.status === 'processing' && data.retryOperationId)) {
         addAction(data.status === 'retry_required' ? 'Retry payment' : 'Continue retry', () => retryBilling(data));
       }
+      if (data.status === 'none' && attempt?.key) addAction('Retry saved checkout attempt', () => retrySavedCheckout(attempt));
       if (['open', 'processing', 'retry_required', 'reconciliation_required'].includes(data.status)) addRefreshAction();
       if (attempt && data.retryOperationId && attempt.retryOperationId !== data.retryOperationId) {
         attempt.retryOperationId = data.retryOperationId;
@@ -368,6 +386,24 @@ const billingState = Astro.url.searchParams.get('billing');
         addRefreshAction();
       }
     }
+    async function retrySavedCheckout(attempt) {
+      if (!attempt?.key || !attempt.kind || !attempt.priceId) return;
+      billingStatus.textContent = 'Retrying the saved checkout request…';
+      billingActions.replaceChildren();
+      try {
+        const response = await fetch('/api/billing/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': attempt.key },
+          body: JSON.stringify({ kind: attempt.kind, priceId: attempt.priceId }),
+        });
+        await readBillingResponse(response);
+      } catch {
+        billingStatus.textContent = 'The response is still unclear. Your original attempt key is retained.';
+        billingStatus.className = 'status status--err';
+        addRefreshAction();
+        addAction('Retry saved checkout attempt', () => retrySavedCheckout(attempt));
+      }
+    }
     async function createBillingCheckout(button) {
       const attempt = { key: crypto.randomUUID(), kind: button.dataset.kind, priceId: button.dataset.priceId };
       saveBillingAttempt(attempt);
@@ -384,6 +420,7 @@ const billingState = Astro.url.searchParams.get('billing');
         billingStatus.textContent = 'Checkout response was lost. Your attempt is saved; refresh status before retrying.';
         billingStatus.className = 'status status--err';
         addRefreshAction();
+        addAction('Retry saved checkout attempt', () => retrySavedCheckout(attempt));
       }
     }
     document.querySelectorAll('.billing-checkout').forEach((btn) => {
@@ -404,7 +441,11 @@ const billingState = Astro.url.searchParams.get('billing');
       const query = new URLSearchParams(saved?.key ? { attemptKey: saved.key } : {});
       if (saved?.retryOperationId) query.set('retryOperationId', saved.retryOperationId);
       fetch('/api/billing/checkout-status' + (query.size ? '?' + query.toString() : ''))
-        .then((response) => response.json()).then(showBillingResult).catch(() => {});
+        .then((response) => response.json()).then(showBillingResult).catch(() => {
+          billingStatus.textContent = 'Could not load checkout status. Any saved attempt remains retained.';
+          billingStatus.className = 'status status--err';
+          addRefreshAction();
+        });
     }
 
     document.querySelectorAll('.revoke').forEach((btn) => {

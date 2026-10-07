@@ -35,16 +35,35 @@ export const GET: APIRoute = async ({ request }) => {
     session_id: url.searchParams.get('session_id') ?? undefined,
     retryOperationId: url.searchParams.get('retryOperationId') ?? undefined,
   });
-  if (!parsed.success) return Response.json({ error: { type: 'invalid_request', message: 'Invalid checkout lookup.' } }, { status: 400 });
+  if (!parsed.success)
+    return Response.json(
+      {
+        error: { type: 'invalid_request', message: 'Invalid checkout lookup.' },
+      },
+      { status: 400 },
+    );
   try {
-    return Response.json(await getBillingCheckoutStatus({
-      userId: user.id,
-      attemptKey: parsed.data.attemptKey,
-      sessionId: parsed.data.session_id,
-      retryOperationId: parsed.data.retryOperationId,
-    }));
+    return Response.json(
+      await getBillingCheckoutStatus({
+        userId: user.id,
+        attemptKey: parsed.data.attemptKey,
+        sessionId: parsed.data.session_id,
+        retryOperationId: parsed.data.retryOperationId,
+      }),
+    );
   } catch (error) {
-    return conflictResponse(error) ?? Response.json({ error: { type: 'server_error', message: 'Unable to read checkout status.' } }, { status: 500 });
+    return (
+      conflictResponse(error) ??
+      Response.json(
+        {
+          error: {
+            type: 'server_error',
+            message: 'Unable to read checkout status.',
+          },
+        },
+        { status: 500 },
+      )
+    );
   }
 };
 
@@ -56,13 +75,26 @@ export const POST: APIRoute = async ({ request }) => {
   const parsed = await safeJsonBody(request, lookupSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
   try {
-    return Response.json(await refreshBillingCheckoutStatus({
-      userId: user.id,
-      attemptKey: parsed.data.attemptKey,
-      sessionId: parsed.data.session_id,
-      retryOperationId: parsed.data.retryOperationId,
-    }));
+    return Response.json(
+      await refreshBillingCheckoutStatus({
+        userId: user.id,
+        attemptKey: parsed.data.attemptKey,
+        sessionId: parsed.data.session_id,
+        retryOperationId: parsed.data.retryOperationId,
+      }),
+    );
   } catch (error) {
-    return conflictResponse(error) ?? Response.json({ error: { type: 'server_error', message: 'Unable to refresh checkout status.' } }, { status: 500 });
+    return (
+      conflictResponse(error) ??
+      Response.json(
+        {
+          error: {
+            type: 'server_error',
+            message: 'Unable to refresh checkout status.',
+          },
+        },
+        { status: 500 },
+      )
+    );
   }
 };
