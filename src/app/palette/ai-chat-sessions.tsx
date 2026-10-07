@@ -125,10 +125,7 @@ function ChatSession({
   const activeRef = useRef(active);
   activeRef.current = active;
   const key = chatSessionKey(view);
-  const fixture =
-    import.meta.env.DEV &&
-    view.extensionId === 'dev.ui-fixtures' &&
-    view.id === 'dev-ui-nested-ai-chat';
+  const fixture = import.meta.env.DEV && view.id === 'dev-ui-nested-ai-chat';
   const controllerRef = useRef<Controller | null>(null);
   const initialized = useRef(false);
   const mounted = useRef(false);

@@ -79,7 +79,13 @@ export function ownerIsRetained(state: PaneState, owner: PaneOwner) {
 /** Hiding cancels transient work while retaining the last live chat. */
 export function hidePanes(state: PaneState): PaneState {
   for (const frame of [...state.frames].reverse()) {
-    const index = frame.history.findLastIndex((entry) => entry.view.aiChat);
+    let index = -1;
+    for (let i = frame.history.length - 1; i >= 0; i -= 1) {
+      if (frame.history[i]?.view.aiChat) {
+        index = i;
+        break;
+      }
+    }
     if (index < 0) continue;
     return {
       frames: [

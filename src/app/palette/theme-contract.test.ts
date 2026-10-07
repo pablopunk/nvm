@@ -184,6 +184,7 @@ test('palette style entry imports modules in cascade order', () => {
       '@import "./styles/views.css";',
       '@import "./styles/extension-windows.css";',
       '@import "./styles/motion.css";',
+      '@import "./styles/panes.css";',
       '',
     ].join('\n'),
   );
