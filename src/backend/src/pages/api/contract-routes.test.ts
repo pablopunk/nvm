@@ -774,6 +774,19 @@ test('active-model route selects all four subscription and model-role combinatio
   }
 });
 
+test('active-model ignores a claimed Pro tier for a Free account', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: proxySelects({ plan: 'free', paid: 10, model: 'gemini-3-flash' }) }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model', {
+    headers: { authorization: 'Bearer nvm_pat_test', 'x-nevermind-ai-model-tier': 'pro' },
+  })));
+  const body = await response.json() as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.modelTier, 'free');
+  assert.equal(body.creditKind, 'paid');
+});
+
 test('active-model route gives an exhausted Pro subscriber the matching Free model', async () => {
   installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects({ plan: 'pro', paid: 0, free: 10, model: 'gemini-3-fast' }) }));

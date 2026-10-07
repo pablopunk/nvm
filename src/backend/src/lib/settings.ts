@@ -234,6 +234,36 @@ export function modelRouteSlotForAccount(
   return tieredModelRouteSlot(tier, role);
 }
 
+export type AccountModelDecision = {
+  tier: ModelTier;
+  routeSlot: TieredModelRouteSlot;
+  creditKind: 'free' | 'paid';
+};
+
+/** Derive route entitlement and the legacy single-pool hint from authenticated state. */
+export function decideAccountModel(input: {
+  plan: string;
+  paidCredits: number;
+  freeCredits: number;
+  role: ExtensionAiModelRole;
+  forceFree?: boolean;
+}): AccountModelDecision {
+  const routeSlot = modelRouteSlotForAccount(
+    input.plan,
+    input.paidCredits,
+    input.role,
+    input.forceFree,
+  );
+  const tier = routeSlot.startsWith('pro-') ? 'pro' : 'free';
+  return {
+    tier,
+    routeSlot,
+    // Reservation remains single-pool until Plan 003. This describes the
+    // currently selected pool, not an allocation instruction from the client.
+    creditKind: input.forceFree || input.paidCredits <= 0 ? 'free' : 'paid',
+  };
+}
+
 export async function getActiveModelId(): Promise<string> {
   return (await getModelRoute('paid')).modelId;
 }

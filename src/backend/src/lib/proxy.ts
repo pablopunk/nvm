@@ -6,10 +6,9 @@ import { creditReservations, requestDedup } from '../db/schema';
 import {
   getModelRoute,
   getModelProviderRoutes,
-  modelRouteSlotForAccount,
+  decideAccountModel,
   ModelNotConfiguredError,
   parseExtensionAiModelRole,
-  tieredModelRouteSlot,
   type ExtensionAiModelRole,
   type ModelRouteSlot,
   type ThinkingLevel,
@@ -285,7 +284,7 @@ export async function markDedupFailed(claim?: DedupClaim) {
 }
 
 type ResolvedRouting = {
-  user: { id: string };
+  user: { id: string; plan: string };
   routeSlot: ModelRouteSlot;
   provider: string;
   activeModelId: string;
@@ -619,15 +618,10 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     );
   }
 
-  const advertisedCreditKind = request.headers.get('x-nevermind-ai-credit-kind');
-  const kind: 'free' | 'paid' = advertisedCreditKind === 'free' || advertisedCreditKind !== 'paid' && balances.paid <= 0 ? 'free' : 'paid';
+  const explicitFree = request.headers.get('x-nevermind-ai-model-tier') === 'free';
   const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ?? 'smart';
-  const advertisedModelTier = request.headers.get('x-nevermind-ai-model-tier');
-  const routeSlot = advertisedModelTier === 'pro' && user.plan === 'pro'
-    ? tieredModelRouteSlot('pro', requestedModel)
-    : advertisedModelTier === 'free'
-      ? tieredModelRouteSlot('free', requestedModel)
-      : modelRouteSlotForAccount(user.plan, balances.paid, requestedModel, kind === 'free');
+  const decision = decideAccountModel({ plan: user.plan, paidCredits: balances.paid, freeCredits: balances.free, role: requestedModel, forceFree: explicitFree });
+  const { routeSlot, creditKind: kind } = decision;
   const modelRouting = await resolveModelRouting(routeSlot);
   if (modelRouting instanceof Response) return modelRouting;
 
@@ -992,7 +986,8 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     });
     if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.kind === 'paid') {
       const requestedModel: ExtensionAiModelRole = parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'smart';
-      const freeRouting = await resolveModelRouting(tieredModelRouteSlot('free', requestedModel));
+      const freeDecision = decideAccountModel({ plan: routing.user.plan, paidCredits: 0, freeCredits: routing.freeBalanceAvailable, role: requestedModel, forceFree: true });
+      const freeRouting = await resolveModelRouting(freeDecision.routeSlot);
       if (freeRouting instanceof Response) {
         await markDedupFailed(dedupClaim);
         return withRequestId(freeRouting, requestId);
@@ -1004,7 +999,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
           if (freeReservation.ok) {
             maxOutputTokens = freeMaxOutputTokens;
-            routing = { user: routing.user, routeSlot: tieredModelRouteSlot('free', requestedModel), ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
+            routing = { user: routing.user, routeSlot: freeDecision.routeSlot, ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
             estimatedCredits = freeEstimatedCredits;
             reservation = freeReservation;
           }

@@ -10,7 +10,7 @@ import {
 import { computeUsdCost, usdToCredits, usdToMicrocents, type ModelCost } from './cost';
 import { log } from './log';
 
-const CREDIT_GRACE_THRESHOLD = Math.max(0, Number(process.env.CREDIT_GRACE_THRESHOLD ?? 100));
+export const CREDIT_GRACE_THRESHOLD = Math.max(0, Number(process.env.CREDIT_GRACE_THRESHOLD ?? 100));
 const RESERVATION_TTL_MS = Math.max(60_000, Number(process.env.CREDIT_RESERVATION_TTL_MS ?? 6 * 60_000));
 
 export type CreditKind = 'free' | 'paid';
