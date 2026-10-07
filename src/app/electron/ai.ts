@@ -1096,6 +1096,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     });
     const customTools = createTools(pi, ai.Type, {
       extensionsDir,
+      extensionDraftsDir,
       internalExtensionsDir,
       internalExtensionFiles,
       extensionApiPath,
@@ -1734,6 +1735,7 @@ function createTools(
   Type: TypeApi,
   {
     extensionsDir,
+    extensionDraftsDir,
     internalExtensionsDir,
     internalExtensionFiles,
     extensionApiPath,
@@ -1753,6 +1755,7 @@ function createTools(
   }: Pick<
     NevermindAiOptions,
     | 'extensionsDir'
+    | 'extensionDraftsDir'
     | 'internalExtensionsDir'
     | 'internalExtensionFiles'
     | 'extensionApiPath'
