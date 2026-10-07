@@ -423,8 +423,6 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
   text-align: center;
   font-style: italic;
 }
-.landing-waitlist { display: flex; justify-content: center; padding: 0 0 48px; }
-
 @media (max-width: 860px) {
   .landing-shell { gap: 0; }
   .landing-nav { flex-wrap: wrap; }
@@ -434,8 +432,6 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
   .landing-hero__copy { align-items: center; text-align: center; order: 2; }
   .landing-screenshot { order: 1; }
   .landing-actions { justify-content: center; }
-  .waitlist-form { text-align: center; }
-  .waitlist-form__row { justify-content: center; }
 }
 @media (max-width: 520px) {
   .landing-nav__links { order: 3; width: 100%; margin-left: 0; }
@@ -687,31 +683,3 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
 .dropdown__item--danger { color: var(--danger); }
 .dropdown__separator { height: 1px; background: var(--border); margin: 4px 0; }
 .dropdown__icon { width: 14px; height: 14px; flex: 0 0 auto; }
-.waitlist-form { width: min(100%, 560px); margin-top: 24px; text-align: center; }
-.waitlist-form label { display: block; font-weight: 600; margin-bottom: 8px; }
-.waitlist-form__row { display: grid; grid-template-columns: 140px minmax(0, 280px) 140px; align-items: center; justify-content: center; }
-.waitlist-form input[type='email'] { grid-column: 2; width: 100%; min-width: 0; }
-.waitlist-form__row > .button {
-  grid-column: 3;
-  justify-self: start;
-  margin-left: 8px;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-8px);
-  white-space: nowrap;
-  transition: opacity 140ms ease, transform 180ms ease, visibility 0s linear 180ms;
-}
-.waitlist-form:focus-within .waitlist-form__row > .button {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(0);
-  transition-delay: 0s;
-}
-.waitlist-form__trap { position: absolute; left: -10000px; width: 1px; height: 1px; }
-@media (max-width: 600px) {
-  .waitlist-form__row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .waitlist-form input[type='email'], .waitlist-form__row > .button { grid-column: 1; justify-self: center; margin-left: 0; }
-  .waitlist-form input[type='email'] { width: min(100%, 280px); }
-  .waitlist-form__row > .button { transform: translateY(-8px); }
-  .waitlist-form:focus-within .waitlist-form__row > .button { transform: translateY(0); }
-}
