@@ -1679,6 +1679,25 @@ function subscriptionPriceId(subscription: Stripe.Subscription): string | null {
   return item?.price?.id ?? item?.pricing?.price_details?.price ?? null;
 }
 
+function subscriptionMatchesApprovedTerms(subscription: Stripe.Subscription, terms: typeof billingPriceTerms.$inferSelect): boolean {
+  const items = (subscription as any).items?.data as any[] | undefined;
+  if (items?.length !== 1) return false;
+  const item = items[0];
+  const price = item.price;
+  return Boolean(
+    item.quantity === terms.quantity &&
+      price &&
+      typeof price === 'object' &&
+      price.id === terms.priceId &&
+      price.unit_amount === terms.unitAmount &&
+      String(price.currency ?? '').toLowerCase() === terms.currency &&
+      price.billing_scheme === 'per_unit' &&
+      price.recurring?.interval === terms.interval &&
+      price.recurring?.interval_count === terms.intervalCount &&
+      price.recurring?.usage_type !== 'metered',
+  );
+}
+
 function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): Date {
   const item = (subscription as any).items?.data?.[0] as any;
   return unixSecondsToDate(item?.current_period_end ?? (subscription as any).current_period_end);
@@ -1958,7 +1977,13 @@ async function ensureSubscriptionPriceVersion(
     effectiveFrom: Date;
   },
 ) {
-  if (!input.terms.tier || !input.terms.interval || !input.terms.intervalCount) return false;
+  if (
+    !input.terms.tier ||
+    !input.terms.interval ||
+    !input.terms.intervalCount ||
+    !subscriptionMatchesApprovedTerms(input.subscription, input.terms)
+  )
+    return false;
   const [existing] = await database
     .select()
     .from(billingSubscriptionPriceVersions)
@@ -2073,6 +2098,9 @@ async function handleCheckoutCompleted(database: BillingDb, prepared: PreparedSt
     return reconcileBillingOrder(database, currentOrder, 'checkout_subscription_mismatch');
   }
   const [terms] = await database.select().from(billingPriceTerms).where(eq(billingPriceTerms.id, currentOrder.priceTermsId)).limit(1);
+  if (terms && !subscriptionMatchesApprovedTerms(subscription, terms)) {
+    return reconcileBillingOrder(database, currentOrder, 'checkout_subscription_price_facts_mismatch');
+  }
   if (
     !terms ||
     !(await ensureSubscriptionPriceVersion(database, {
@@ -2432,20 +2460,7 @@ async function handleSubscriptionStatus(
     const terms = termsRows
       .filter((row) => row.kind === 'subscription' && row.approvedAt < incomingCreatedAt)
       .sort((left, right) => right.approvedAt.getTime() - left.approvedAt.getTime() || right.version - left.version)[0];
-    const observedItem = (subscription as any).items?.data?.[0] as any;
-    const observedPrice = observedItem?.price;
-    const factsMatch =
-      terms &&
-      (subscription as any).items?.data?.length === 1 &&
-      observedItem?.quantity === terms.quantity &&
-      (observedPrice?.id ?? observedItem?.pricing?.price_details?.price) === terms.priceId &&
-      observedPrice?.unit_amount === terms.unitAmount &&
-      String(observedPrice?.currency ?? '').toLowerCase() === terms.currency &&
-      observedPrice?.billing_scheme === 'per_unit' &&
-      observedPrice?.recurring?.interval === terms.interval &&
-      observedPrice?.recurring?.interval_count === terms.intervalCount &&
-      observedPrice?.recurring?.usage_type !== 'metered';
-    if (!terms?.tier || !terms.interval || !terms.intervalCount || !factsMatch)
+    if (!terms?.tier || !terms.interval || !terms.intervalCount || !subscriptionMatchesApprovedTerms(subscription, terms))
       return {
         state: 'needs_reconciliation',
         reason: 'subscription_price_facts_unapproved',

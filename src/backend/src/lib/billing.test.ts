@@ -174,6 +174,9 @@ function createFakeBillingDb(
         return chain;
       },
       returning() {
+        if (table === billingOrders && input.orders?.length) {
+          return Promise.resolve([{ ...(input.orders[0] as Record<string, unknown>), ...values }]);
+        }
         return Promise.resolve([{ stripeCustomerId: values?.stripeCustomerId }]);
       },
       then(resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) {
@@ -244,7 +247,7 @@ function approvedTerms(input: Partial<typeof billingPriceTerms.$inferSelect> = {
 
 const stripeObjects = new Map<string, Record<string, unknown>>();
 
-function installStripe(subscription: Record<string, unknown> = {}) {
+function installStripe(subscription: Record<string, unknown> = {}, lineItems: unknown[] = []) {
   setStripeForTests({
     checkout: {
       sessions: {
@@ -254,7 +257,7 @@ function installStripe(subscription: Record<string, unknown> = {}) {
             status: 'open',
             payment_status: 'unpaid',
           },
-        listLineItems: async () => ({ data: [], has_more: false }),
+        listLineItems: async () => ({ data: lineItems, has_more: false }),
         list: async () => ({ data: [], has_more: false }),
       },
     },
@@ -315,6 +318,7 @@ afterEach(() => {
   resetDbForTests();
   setStripeForTests(null);
   setCheckoutLockForTests(null);
+  stripeObjects.clear();
   delete process.env.STRIPE_SUBSCRIPTION_TIERS;
   delete process.env.STRIPE_TOP_UP_PACKS;
   delete process.env.STRIPE_WEBHOOK_SECRET;
@@ -895,6 +899,131 @@ test('checkout completion cannot infer purchase terms from the current catalog',
     false,
   );
   assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+});
+
+test('subscription checkout records and grants only when observed subscription facts exactly match approved terms', async () => {
+  const terms = approvedTerms();
+  const order = {
+    id: 'order_sub_checkout',
+    userId: user.id,
+    attemptKey: '22222222-2222-4222-8222-222222222222',
+    intentHash: 'checkout-hash',
+    kind: 'subscription',
+    priceTermsId: terms.id,
+    priceId: terms.priceId,
+    tier: terms.tier,
+    credits: terms.credits,
+    expectedUnitAmount: terms.unitAmount,
+    expectedTotalAmount: terms.unitAmount,
+    currency: terms.currency,
+    quantity: terms.quantity,
+    interval: terms.interval,
+    intervalCount: terms.intervalCount,
+    stripeCustomerId: 'cus_123',
+    state: 'creating',
+    version: 1,
+    leaseGeneration: 1,
+    sessionId: null,
+    paymentIntentId: null,
+  };
+  const session = {
+    id: 'cs_sub_checkout',
+    mode: 'subscription',
+    status: 'complete',
+    payment_status: 'paid',
+    customer: 'cus_123',
+    subscription: 'sub_123',
+    client_reference_id: user.id,
+    amount_subtotal: terms.unitAmount,
+    amount_total: terms.unitAmount,
+    currency: terms.currency,
+    created: 100,
+    metadata: {
+      order_id: order.id,
+      user_id: user.id,
+      price_id: terms.priceId,
+      billing_kind: 'subscription',
+      credits: String(terms.credits),
+      tier: terms.tier,
+    },
+  };
+  const subscriptionPrice = {
+    id: terms.priceId,
+    unit_amount: terms.unitAmount,
+    currency: terms.currency,
+    billing_scheme: 'per_unit',
+    recurring: { interval: terms.interval, interval_count: terms.intervalCount, usage_type: 'licensed' },
+  };
+  const subscription = {
+    id: 'sub_123',
+    customer: 'cus_123',
+    status: 'active',
+    metadata: { order_id: order.id, user_id: user.id },
+    items: {
+      data: [{ quantity: terms.quantity, current_period_start: 100, current_period_end: 1_800_000_000, price: subscriptionPrice }],
+    },
+  };
+  const lineItem = {
+    id: 'li_checkout',
+    quantity: 1,
+    price: { id: terms.priceId, unit_amount: terms.unitAmount, unit_amount_decimal: String(terms.unitAmount), billing_scheme: 'per_unit' },
+    currency: terms.currency,
+    amount_total: terms.unitAmount,
+  };
+
+  async function runCase(
+    subscriptionItem: Record<string, unknown>,
+    eventId: string,
+    subscriptionItems: Record<string, unknown>[] = [subscriptionItem],
+  ) {
+    const db = installDb(createFakeBillingDb({ orders: [order], billingTerms: [terms] }));
+    installStripe({ ...subscription, items: { data: subscriptionItems } }, [lineItem]);
+    stripeObjects.set(session.id, session);
+    stripeObjects.set(subscription.id, { ...subscription, items: { data: subscriptionItems } });
+    const outcome = await processStripeEvent(stripeEvent('checkout.session.completed', session, eventId));
+    return { db, outcome };
+  }
+
+  const valid = await runCase(subscription.items.data[0], 'evt_sub_checkout_valid');
+  assert.deepEqual(valid.outcome, { processed: true });
+  assert.equal(valid.db.inserts.filter((call) => call.table === creditLedger).length, 1);
+  assert.equal(valid.db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 1);
+
+  const mismatches = [
+    { ...subscription.items.data[0], quantity: 2 },
+    { ...subscription.items.data[0], price: { ...subscriptionPrice, id: 'price_other' } },
+    { ...subscription.items.data[0], price: { ...subscriptionPrice, unit_amount: 2000 } },
+    { ...subscription.items.data[0], price: { ...subscriptionPrice, currency: 'eur' } },
+    { ...subscription.items.data[0], price: { ...subscriptionPrice, billing_scheme: 'tiered' } },
+    { ...subscription.items.data[0], price: { ...subscriptionPrice, recurring: { ...subscriptionPrice.recurring, interval: 'year' } } },
+    { ...subscription.items.data[0], price: { ...subscriptionPrice, recurring: { ...subscriptionPrice.recurring, interval_count: 2 } } },
+    {
+      ...subscription.items.data[0],
+      price: { ...subscriptionPrice, recurring: { ...subscriptionPrice.recurring, usage_type: 'metered' } },
+    },
+  ];
+  for (const [index, subscriptionItem] of mismatches.entries()) {
+    const result = await runCase(subscriptionItem, `evt_sub_checkout_mismatch_${index}`);
+    assert.deepEqual(result.outcome, { processed: true, needsReconciliation: true });
+    assert.equal(result.db.inserts.filter((call) => call.table === creditLedger).length, 0);
+    assert.equal(result.db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
+    assert.equal(
+      result.db.updates.some((call) => call.table === billingOrders && call.values.state === 'needs_reconciliation'),
+      true,
+    );
+  }
+
+  const extraItemCase = await runCase(subscription.items.data[0], 'evt_sub_checkout_extra_item', [
+    subscription.items.data[0],
+    subscription.items.data[0],
+  ]);
+  assert.deepEqual(extraItemCase.outcome, { processed: true, needsReconciliation: true });
+  assert.equal(extraItemCase.db.inserts.filter((call) => call.table === creditLedger).length, 0);
+  assert.equal(extraItemCase.db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
+  assert.equal(
+    extraItemCase.db.updates.some((call) => call.table === billingOrders && call.values.state === 'needs_reconciliation'),
+    true,
+  );
 });
 
 test('invoice.paid without a stored subscription price version requires reconciliation', async () => {
