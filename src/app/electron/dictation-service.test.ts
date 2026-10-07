@@ -203,7 +203,7 @@ test('sends captured audio to cloud transcription and releases the operation', a
   assert.equal(commands.at(-1)?.type, 'release');
 });
 
-test('keeps failed segmented recordings for retry and removes them after transcription', async () => {
+test('keeps failed segmented recordings and retries them under a fresh operation id', async () => {
   const commands: DictationRendererCommand[] = [];
   const saved = new Map<string, Uint8Array[]>();
   const calls: string[] = [];
@@ -243,7 +243,14 @@ test('keeps failed segmented recordings for retry and removes them after transcr
   assert.equal((await service.recordings()).length, 1);
   shouldFail = false;
   assert.equal(await service.retry(operationId), 'hello world');
-  assert.deepEqual(calls, [operationId, operationId, `${operationId}-1`]);
+  assert.equal(calls[0], operationId);
+  const retryCalls = calls.slice(1);
+  assert.equal(retryCalls.length, 2);
+  assert.ok(
+    !retryCalls.includes(operationId) &&
+      !retryCalls.includes(`${operationId}-1`),
+  );
+  assert.equal(retryCalls[1], `${retryCalls[0]}-1`);
   assert.equal((await service.recordings()).length, 1);
   await service.deleteRecording(operationId);
   assert.deepEqual(await service.recordings(), []);

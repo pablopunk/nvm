@@ -7,6 +7,14 @@ interface DictationTiming {
   stopRequestedAt?: number;
 }
 
+// A history retry is a new billable request, not a resend. Reusing the failed
+// attempt's operation id would replay its Idempotency-Key and request id, which
+// the backend already settled: the dedup row answers409 and the request id is
+// still taken in credit reservations.
+function freshRetryOperationId() {
+  return `dictation-retry-${randomUUID()}`;
+}
+
 export type DictationRendererCommand =
   | {
       type: 'start';
@@ -443,7 +451,7 @@ export function createDictationService(
     try {
       const segments = await dependencies.recordings.load(id);
       const text = await transcribeSegments(
-        id,
+        freshRetryOperationId(),
         segments,
         'audio/webm',
         controller.signal,
