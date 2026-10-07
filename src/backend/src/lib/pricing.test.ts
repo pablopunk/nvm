@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
-import { listModelsForProvider, lookupModelCost, lookupModelDescriptor, lookupModelPricing, resetPricingCacheForTests } from './pricing';
+import { expirePricingCacheForTests, listModelsForProvider, lookupModelCost, lookupModelDescriptor, lookupModelPricing, resetPricingCacheForTests } from './pricing';
 
 let originalFetch: typeof globalThis.fetch;
 
@@ -73,6 +73,19 @@ test('lookupModelCost returns null when cost fields are missing', async () => {
 
   const result = await lookupModelCost('opencode_zen', 'no-cost-model');
   assert.strictEqual(result, null);
+});
+
+test('lookupModelCost fails closed on invalid base and tier rates', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: {
+      models: {
+        'negative-base': { id: 'negative-base', cost: { input: -1, output: 1 } },
+        'negative-tier': { id: 'negative-tier', cost: { input: 1, output: 1, tiers: [{ input: -2, tier: { size: 100 } }] } },
+      },
+    },
+  });
+  assert.equal(await lookupModelCost('openrouter', 'negative-base'), null);
+  assert.equal(await lookupModelCost('openrouter', 'negative-tier'), null);
 });
 
 test('lookupModelCost returns null for unmapped provider', async () => {
@@ -178,6 +191,28 @@ test('active runtime models do not wait for the remote catalog', async () => {
     inputUsdPerMtok: 1.188,
     outputUsdPerMtok: 3.564,
   });
+});
+
+test('bundled pricing is usable only for the exact bundled provider/model entry', async () => {
+  globalThis.fetch = mockFetch({ opencode: { models: {} } });
+  const bundled = await lookupModelPricing('opencode_zen', 'gpt-5.6-luna');
+  assert.equal(bundled?.source, 'bundled');
+  assert.equal(await lookupModelCost('opencode_zen', 'not-bundled'), null);
+});
+
+test('failed refresh does not make stale models.dev pricing admissible again', async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 1) return { ok: true, json: async () => ({ openrouter: { models: { 'stale-model': { id: 'stale-model', cost: { input: 1, output: 2 } } } } }) };
+    return { ok: false, status: 503 };
+  }) as unknown as typeof globalThis.fetch;
+
+  assert.ok(await lookupModelCost('openrouter', 'stale-model'));
+  expirePricingCacheForTests();
+  assert.equal(await lookupModelCost('openrouter', 'stale-model'), null);
+  assert.equal(await lookupModelCost('openrouter', 'stale-model'), null);
+  assert.equal(calls, 3, 'each stale lookup should retry instead of resetting successful-fetch age');
 });
 
 test('resetPricingCacheForTests clears the internal cache', async () => {

@@ -5,6 +5,7 @@ import type { APIContext } from 'astro';
 import { setDbForTests, resetDbForTests } from '../../db/client';
 import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
 import { resetPricingCacheForTests } from '../../lib/pricing';
+import { chooseFundedAccountRoute } from '../../lib/active-model-funding';
 import {
   estimateInputTokensFromBody,
   MAX_INPUT_TOKENS,
@@ -151,6 +152,7 @@ function proxySelects(options: { free?: number; paid?: number; plan?: string; mo
       { length: options.providerChainDepth ?? (options.model === 'gemini-3-fast' ? 3 : 2) },
       () => [],
     ),
+    [], // no tripped route breakers by default
     [{ id: 'user_1' }],
     [{ requestId: 'test-reservation', userId: 'user_1', kind: (options.paid ?? 0) > 0 ? 'paid' : 'free', reservedCredits: 1, status: 'pending' }],
   ];
@@ -787,7 +789,7 @@ test('active-model ignores a claimed Pro tier for a Free account', async () => {
   assert.equal(body.creditKind, 'paid');
 });
 
-test('active-model route gives an exhausted Pro subscriber the matching Free model', async () => {
+test('active-model keeps a Pro route when Free plus Paid credits fund it', async () => {
   installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects({ plan: 'pro', paid: 0, free: 10, model: 'gemini-3-fast' }) }));
   const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?model=fast', {
@@ -795,28 +797,98 @@ test('active-model route gives an exhausted Pro subscriber the matching Free mod
   })));
 
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).id, 'gemini-3-fast');
+  const body = await response.json() as any;
+  assert.equal(body.id, 'gemini-3-fast');
+  assert.equal(body.modelTier, 'pro');
+  assert.equal(body.creditKind, 'free');
+  assert.equal(body.notice, 'ok');
 });
 
-test('active-model preflight switches a Pro request to the matching Free route before execution', async () => {
+test('active-model funding decision table keeps tier separate from combined-pool funding', () => {
+  const cases = [
+    {
+      name: 'split-only Pro funding',
+      input: { tier: 'pro' as const, freeCredits: 90, paidCredits: 10, routeCredits: 80, freeRouteCredits: 20, freeFallbackAllowed: true },
+      expected: { tier: 'pro', funded: true, freeFallback: false },
+    },
+    {
+      name: 'cheaper Free fallback',
+      input: { tier: 'pro' as const, freeCredits: 60, paidCredits: 40, routeCredits: 120, freeRouteCredits: 70, freeFallbackAllowed: true },
+      expected: { tier: 'free', funded: true, freeFallback: true },
+    },
+    {
+      name: 'combined insufficiency',
+      input: { tier: 'pro' as const, freeCredits: 30, paidCredits: 20, routeCredits: 100, freeRouteCredits: 60, freeFallbackAllowed: true },
+      expected: { tier: 'pro', funded: false, freeFallback: false },
+    },
+    {
+      name: 'different API format forbids Free fallback',
+      input: { tier: 'pro' as const, freeCredits: 60, paidCredits: 40, routeCredits: 120, freeRouteCredits: 70, freeFallbackAllowed: false },
+      expected: { tier: 'pro', funded: false, freeFallback: false },
+    },
+  ];
+  for (const decision of cases) {
+    assert.deepEqual(chooseFundedAccountRoute(decision.input), decision.expected, decision.name);
+  }
+});
+
+test('active-model preflight keeps Pro when the combined pools cover the request', async () => {
   installModelsDevFetch();
   installDb(createFakeDb({ selects: [
     [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
     [{ id: 1 }],
     [{ free: 1000, paid: 1 }],
+    [],
     [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
     [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
   ] }));
-  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?model=fast&chars=400000', {
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?model=fast&inputTokens=10000', {
     headers: { authorization: 'Bearer nvm_pat_test' },
   })));
   const body = await response.json() as any;
 
   assert.equal(response.status, 200);
-  assert.equal(body.id, 'gemini-3-fast');
-  assert.equal(body.thinkingLevel, 'minimal');
+  assert.equal(body.id, 'gemini-3-flash');
+  assert.equal(body.thinkingLevel, 'high');
+  assert.equal(body.modelTier, 'pro');
+  assert.equal(body.creditKind, 'paid');
+});
+
+test('active-model uses an affordable same-format Free fallback when Pro cost exceeds combined funds', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: [
+    [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
+    [{ id: 1 }],
+    [{ free: 9, paid: 1 }],
+    [],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
+  ] }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?inputTokens=100000', {
+    headers: { authorization: 'Bearer nvm_pat_test' },
+  })));
+  const body = await response.json() as any;
   assert.equal(body.modelTier, 'free');
-  assert.equal(body.creditKind, 'free');
+  assert.equal(body.id, 'gemini-3-fast');
+  assert.equal(body.notice, 'ok');
+});
+
+test('active-model notice accounts for pending split allocations like proxy admission', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: [
+    [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
+    [{ id: 1 }],
+    [{ free: 9, paid: 1 }],
+    [{ free: 9, paid: 1 }],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
+  ] }));
+  const response = await getActiveModel(routeContext(new Request('https://api.nvm.fyi/api/v1/active-model?inputTokens=100', {
+    headers: { authorization: 'Bearer nvm_pat_test' },
+  })));
+  const body = await response.json() as any;
+  assert.equal(body.modelTier, 'pro');
+  assert.equal(body.notice, 'blocked');
 });
 
 test('Preview active-model advertises the exact deployment origin', async () => {
@@ -1344,6 +1416,30 @@ test('proxy route returns the rate-limit contract', async () => {
   });
 });
 
+test('proxy rejects remote and extended image payloads before any provider dispatch', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+  let upstreamCalls = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+    }
+    upstreamCalls += 1;
+    return Response.json({ choices: [] });
+  };
+  const response = await postChatCompletion(routeContext(authorizedChatRequest({
+    model: 'placeholder',
+    messages: [{ role: 'user', content: [
+      { type: 'image_url', image_url: { url: 'https://images.example/picture.png' }, detail: 'high', metadata: 'extra' },
+    ] }],
+  })));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), fixture('unsupported-request-shape-error'));
+  assert.equal(upstreamCalls, 0);
+});
+
 test('proxy route preserves streaming responses and records stream usage', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
@@ -1678,6 +1774,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
       [{ free: 500, paid: 1000 }],
       [{ reserved: 0 }],
       providerChain,
+      [],
       [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
     ],
@@ -1739,6 +1836,7 @@ test('proxy failover: when all providers fail, last error passes through', async
       [{ free: 1000, paid: 0 }],
       [{ reserved: 0 }],
       providerChain,
+      [],
       [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
@@ -1779,6 +1877,7 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
       [{ free: 1000, paid: 0 }],
       [{ reserved: 0 }],
       providerChain,
+      [],
       [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],
@@ -1864,6 +1963,7 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
       [{ free: 1000, paid: 0 }],
       [{ reserved: 0 }],
       providerChain,
+      [],
       [{ id: 'user_1' }],
       [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
     ],

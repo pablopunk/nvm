@@ -222,35 +222,23 @@ describe('estimateInputTokensFromBody', () => {
     );
   });
 
-  test('does not exempt malformed image-like wrappers', () => {
+  test('fails closed on remote, malformed, and extended image-shaped inputs', () => {
     const data = 'a'.repeat(600_000);
-    const malformed = [
-      {
-        type: 'image_url',
-        image_url: { url: `data:image/png;base64,${data}` },
-        hiddenText: data,
-      },
-      {
-        type: 'image',
-        source: { type: 'base64', media_type: 'text/plain', data },
-      },
-      {
-        inlineData: { mimeType: 'image/png', data: `${data}!` },
-      },
-      {
-        type: 'input_image',
-        detail: data,
-        image_url: `data:image/png;base64,${data}`,
-      },
-      {
-        type: 'image',
-        source: { type: 'base64', media_type: 'image/png', data },
-        cache_control: { type: 'ephemeral', ttl: data },
-      },
+    const imageShapes = [
+      { type: 'image_url', image_url: 'https://images.example/picture.png' },
+      { type: 'image_url', image_url: `data:image/png;base64,${data}`, detail: 'high', extra: data },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data, extra: true } },
+      { inlineData: { mimeType: 'image/png', data, extra: true } },
+      { type: 'input_image', image_url: { url: 'https://images.example/picture.png' }, detail: 'high' },
+      { type: 'image_url', image_url: null, detail: 'auto' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'malformed' } },
     ];
 
-    for (const payload of malformed)
-      assert.ok(estimateInputTokensFromBody(JSON.stringify(payload)) > 100_000);
+    for (const payload of imageShapes) {
+      assert.equal(containsImagePayload(payload), true);
+      assert.ok(estimateInputTokensFromValue(payload) < 100_000, 'image bytes and URLs must not become text-token estimates');
+    }
+    assert.equal(containsImagePayload('{"type":"image_url","image_url":'), true, 'malformed raw JSON with image intent is detected');
   });
 });
 
@@ -292,5 +280,12 @@ test('reads output caps for OpenAI, Anthropic, and Google requests', () => {
 describe('MAX_INPUT_TOKENS', () => {
   test('defaults to 100_000', () => {
     assert.strictEqual(MAX_INPUT_TOKENS, 100_000);
+  });
+
+  test('maximum text input boundary is measurable without image byte estimates', () => {
+    const atLimit = 'a'.repeat(MAX_INPUT_TOKENS * CHARS_PER_TOKEN);
+    const overLimit = `${atLimit}aaaa`;
+    assert.equal(estimateInputTokensFromValue({ prompt: atLimit }), MAX_INPUT_TOKENS);
+    assert.equal(estimateInputTokensFromValue({ prompt: overLimit }), MAX_INPUT_TOKENS + 1);
   });
 });

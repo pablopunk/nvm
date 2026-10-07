@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { Pool } from 'pg';
 import type { Database } from '../src/db/client';
 import { createPostgresDb } from '../src/db/postgres';
@@ -26,6 +26,9 @@ import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
 import { createApiToken } from '../src/lib/tokens';
 import { finalizeReservation, reconcileStaleReservations, reserveCredits, resizeReservation } from '../src/lib/credit-reservations';
+import { isRouteTripped } from '../src/lib/route-breakers';
+import { reenableRouteBreaker } from '../src/lib/route-breaker-admin';
+import { CREDIT_USD, MARKUP } from '../src/lib/cost';
 import { aiRequestHash, handleDedup } from '../src/lib/proxy';
 import { runPostgresMigrations } from './migrate-postgres';
 
@@ -104,15 +107,68 @@ async function runAssertions() {
         .returning();
       assert.ok(user);
 
-      // Admission is serialized on the user row: with 10 credits plus the
-      // configured 100-credit grace, two 80-credit requests cannot both win.
+      // Admission is serialized on the user row with no overdraft grace.
       await db.insert(creditLedger).values({
         userId: user.id,
-        delta: 10,
+        delta: 100,
         kind: 'paid',
         reason: 'integration.reservation_grant',
         refId: databaseName,
       });
+
+      const [splitUser] = await db.insert(users).values({
+        workosUserId: `split-${databaseName}`,
+        email: `split-${databaseName}@example.test`,
+      }).returning();
+      assert.ok(splitUser);
+      await db.insert(creditLedger).values([
+        { userId: splitUser.id, delta: 30, kind: 'free', reason: 'integration.split_grant', refId: `${databaseName}:free` },
+        { userId: splitUser.id, delta: 50, kind: 'paid', reason: 'integration.split_grant', refId: `${databaseName}:paid` },
+      ]);
+      const splitAdmissions = await Promise.all([
+        reserveCredits({ requestId: `split-a-${databaseName}`, userId: splitUser.id, credits: 60 }),
+        reserveCredits({ requestId: `split-b-${databaseName}`, userId: splitUser.id, credits: 60 }),
+      ]);
+      assert.equal(splitAdmissions.filter((result) => result.ok).length, 1, 'concurrent split-pool reservations serialize against the combined balance');
+      const splitAdmission = splitAdmissions.find((result) => result.ok);
+      assert.ok(splitAdmission?.ok);
+      assert.equal(splitAdmission.reservation.reservedFreeCredits, 30);
+      assert.equal(splitAdmission.reservation.reservedPaidCredits, 30);
+
+      const [legacyUser] = await db.insert(users).values({
+        workosUserId: `legacy-${databaseName}`,
+        email: `legacy-${databaseName}@example.test`,
+      }).returning();
+      assert.ok(legacyUser);
+      await db.insert(creditLedger).values([
+        { userId: legacyUser.id, delta: 20, kind: 'free', reason: 'integration.legacy_grant', refId: `${databaseName}:legacy-free` },
+        { userId: legacyUser.id, delta: 50, kind: 'paid', reason: 'integration.legacy_grant', refId: `${databaseName}:legacy-paid` },
+      ]);
+      const legacyRequestId = `legacy-pending-${databaseName}`;
+      await db.insert(creditReservations).values({
+        requestId: legacyRequestId,
+        userId: legacyUser.id,
+        kind: 'paid',
+        reservedCredits: 40,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      const afterLegacy = await reserveCredits({ requestId: `legacy-next-${databaseName}`, userId: legacyUser.id, credits: 30 });
+      assert.ok(afterLegacy.ok);
+      assert.equal(afterLegacy.reservation.reservedFreeCredits, 20);
+      assert.equal(afterLegacy.reservation.reservedPaidCredits, 10, 'legacy pending paid reservation reduces paid availability before split allocation');
+
+      const [negativeUser] = await db.insert(users).values({
+        workosUserId: `negative-${databaseName}`,
+        email: `negative-${databaseName}@example.test`,
+      }).returning();
+      assert.ok(negativeUser);
+      await db.insert(creditLedger).values([
+        { userId: negativeUser.id, delta: -1, kind: 'free', reason: 'integration.legacy_deficit', refId: `${databaseName}:negative-free` },
+        { userId: negativeUser.id, delta: 100, kind: 'paid', reason: 'integration.legacy_deficit', refId: `${databaseName}:negative-paid` },
+      ]);
+      const negativeAdmission = await reserveCredits({ requestId: `negative-${databaseName}`, userId: negativeUser.id, credits: 1 });
+      assert.deepEqual(negativeAdmission, { ok: false, reason: 'insufficient_credits', balance: 99, reserved: 0 }, 'legacy negative pool blocks new admission instead of being silently offset');
       const admissions = await Promise.all([
         reserveCredits({ requestId: `reserve-a-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
         reserveCredits({ requestId: `reserve-b-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
@@ -125,13 +181,123 @@ async function runAssertions() {
       await finalizeReservation({ requestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 });
       assert.equal(await finalizeReservation({ requestId, outcome: 'settle', model: cost.modelId, provider: cost.provider, tokens: { inputTokens: 10, outputTokens: 10 }, costRow: cost, status: 200, latencyMs: 1 }), 'already_terminal');
       assert.equal((await db.select().from(creditReservations).where(eq(creditReservations.requestId, requestId))).length, 1);
-      assert.equal((await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, requestId)))).length, 1, 'settlement retries must create one ledger charge');
-      assert.equal((await db.select().from(usage).where(eq(usage.requestId, requestId))).length, 1, 'settlement retries must create one usage row');
+       assert.equal((await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, `${requestId}:paid`)))).length, 1, 'settlement retries must create one ledger charge');
+       const [underReservationDebit] = await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, `${requestId}:paid`)));
+       assert.ok(underReservationDebit);
+       assert.equal(underReservationDebit.delta, -1, 'settlement charges measured cost below the reserved amount');
+       assert.equal((await db.select().from(usage).where(eq(usage.requestId, requestId))).length, 1, 'settlement retries must create one usage row');
       assert.deepEqual(
         await reserveCredits({ requestId, userId: user.id, kind: 'paid', credits: 80 }),
         { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 80 },
         'a settled execution identity must never authorize more upstream work',
       );
+
+      const [billingUser] = await db.insert(users).values({
+        workosUserId: `billing-${databaseName}`,
+        email: `billing-${databaseName}@example.test`,
+      }).returning();
+      assert.ok(billingUser);
+      await db.insert(creditLedger).values({
+        userId: billingUser.id,
+        delta: 10,
+        kind: 'paid',
+        reason: 'integration.billing_grant',
+        refId: databaseName,
+      });
+      const exactRequestId = `exact-cost-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: exactRequestId, userId: billingUser.id, credits: 1 })).ok, true);
+      await finalizeReservation({
+        requestId: exactRequestId,
+        outcome: 'settle',
+        model: 'reported-cost-model',
+        provider: 'integration',
+        routeSlot: 'reported-cost',
+        tokens: { inputTokens: 1, outputTokens: 1 },
+        providerCostUsd: (CREDIT_USD / MARKUP) / 2,
+        status: 200,
+        latencyMs: 1,
+      });
+      const [exactUsage] = await db.select().from(usage).where(eq(usage.requestId, exactRequestId));
+      assert.ok(exactUsage);
+      assert.equal(exactUsage.costCredits, 1);
+      assert.equal(exactUsage.upstreamCostSource, 'provider_reported');
+      assert.equal(exactUsage.costOverrun, false);
+
+      const providerOverrunId = `provider-overrun-${databaseName}`;
+      const dispatchedBeforeTripId = `in-flight-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: providerOverrunId, userId: billingUser.id, credits: 1 })).ok, true);
+      assert.equal((await reserveCredits({ requestId: dispatchedBeforeTripId, userId: billingUser.id, credits: 1 })).ok, true);
+      await finalizeReservation({
+        requestId: providerOverrunId,
+        outcome: 'settle',
+        model: 'provider-overrun-model',
+        provider: 'integration',
+        routeSlot: 'provider-overrun',
+        tokens: { inputTokens: 10, outputTokens: 10 },
+        providerCostUsd: 1,
+        status: 200,
+        latencyMs: 1,
+      });
+      assert.equal(await isRouteTripped('provider-overrun', 'integration', 'provider-overrun-model'), true);
+      const [providerOverrunUsage] = await db.select().from(usage).where(eq(usage.requestId, providerOverrunId));
+      assert.ok(providerOverrunUsage);
+      assert.equal(providerOverrunUsage.costOverrun, true);
+      assert.equal(providerOverrunUsage.upstreamCostSource, 'provider_reported');
+      assert.equal(providerOverrunUsage.upstreamCostMicrocents, 100_000_000, 'full provider cost remains recorded despite the capped user debit');
+      await finalizeReservation({
+        requestId: dispatchedBeforeTripId,
+        outcome: 'settle',
+        model: 'provider-overrun-model',
+        provider: 'integration',
+        routeSlot: 'provider-overrun',
+        tokens: { inputTokens: 1, outputTokens: 1 },
+        providerCostUsd: (CREDIT_USD / MARKUP) / 2,
+        status: 200,
+        latencyMs: 1,
+      });
+      const [inFlightUsage] = await db.select().from(usage).where(eq(usage.requestId, dispatchedBeforeTripId));
+      assert.ok(inFlightUsage);
+      assert.equal(inFlightUsage.costCredits, 1, 'already-dispatched work may still settle after the breaker trips');
+
+      const catalogOverrunId = `catalog-overrun-${databaseName}`;
+      assert.equal((await reserveCredits({ requestId: catalogOverrunId, userId: billingUser.id, credits: 1 })).ok, true);
+      await finalizeReservation({
+        requestId: catalogOverrunId,
+        outcome: 'settle',
+        model: 'catalog-overrun-model',
+        provider: 'integration',
+        routeSlot: 'catalog-overrun',
+        tokens: { inputTokens: 1_000_000, outputTokens: 0 },
+        costRow: { provider: 'integration', modelId: 'catalog-overrun-model', inputUsdPerMtok: 1_000_000, outputUsdPerMtok: 0 },
+        status: 200,
+        latencyMs: 1,
+      });
+      const [catalogUsage] = await db.select().from(usage).where(eq(usage.requestId, catalogOverrunId));
+      assert.ok(catalogUsage);
+      assert.equal(catalogUsage.costOverrun, true);
+      assert.equal(catalogUsage.upstreamCostSource, 'catalog_estimate');
+      assert.equal(catalogUsage.upstreamCostMicrocents, 100_000_000);
+      assert.equal(catalogUsage.costCredits, 1, 'customer debit remains capped at the reserved allocation');
+      assert.equal(await isRouteTripped('catalog-overrun', 'integration', 'catalog-overrun-model'), true);
+
+      await assert.rejects(reenableRouteBreaker({
+        actorUserId: '22222222-2222-2222-2222-222222222222',
+        routeSlot: 'provider-overrun',
+        provider: 'integration',
+        modelId: 'provider-overrun-model',
+      }), 'invalid audit actor must abort breaker re-enable');
+      assert.equal(await isRouteTripped('provider-overrun', 'integration', 'provider-overrun-model'), true, 'failed audit rolls back breaker deletion');
+      await reenableRouteBreaker({
+        actorUserId: billingUser.id,
+        routeSlot: 'provider-overrun',
+        provider: 'integration',
+        modelId: 'provider-overrun-model',
+      });
+      assert.equal(await isRouteTripped('provider-overrun', 'integration', 'provider-overrun-model'), false);
+      const billingBalances = await db.select({ kind: creditLedger.kind, delta: creditLedger.delta }).from(creditLedger).where(eq(creditLedger.userId, billingUser.id));
+      for (const kind of ['free', 'paid']) {
+        assert.ok(billingBalances.filter((entry) => entry.kind === kind).reduce((sum, entry) => sum + entry.delta, 0) >= 0, `${kind} ledger must never go negative`);
+      }
 
       const releasedRequestId = `released-${databaseName}`;
       assert.equal((await reserveCredits({ requestId: releasedRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
@@ -147,17 +313,17 @@ async function runAssertions() {
 
       const resizeRequestId = `resize-${databaseName}`;
       assert.equal((await reserveCredits({ requestId: resizeRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
-      const resized = await resizeReservation(resizeRequestId, 100);
+      const resized = await resizeReservation(resizeRequestId, 90);
       assert.ok(resized.ok);
-      assert.equal(resized.reservation.reservedCredits, 100);
+      assert.equal(resized.reservation.reservedCredits, 90);
       assert.deepEqual(
         await resizeReservation(resizeRequestId, 110),
-        { ok: false, reason: 'insufficient_credits', balance: 9, reserved: 0 },
+        { ok: false, reason: 'insufficient_credits', balance: 99, reserved: 0 },
       );
       assert.equal(await finalizeReservation({ requestId: resizeRequestId, outcome: 'release' }), 'released');
       assert.deepEqual(
         await resizeReservation(resizeRequestId, 20),
-        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 100 },
+        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 90 },
       );
 
       const terminalRaceRequestId = `terminal-race-${databaseName}`;
@@ -168,7 +334,11 @@ async function runAssertions() {
       ]);
       assert.equal(terminalRace.filter((result) => result === 'already_terminal').length, 1, 'settle/release race must have one terminal winner');
       const [terminalRaceReservation] = await db.select().from(creditReservations).where(eq(creditReservations.requestId, terminalRaceRequestId));
-      const terminalRaceCharges = await db.select().from(creditLedger).where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, terminalRaceRequestId)));
+      assert.ok(terminalRaceReservation);
+      const terminalRaceCharges = await db.select().from(creditLedger).where(and(
+        eq(creditLedger.reason, 'ai_usage'),
+        or(eq(creditLedger.refId, `${terminalRaceRequestId}:free`), eq(creditLedger.refId, `${terminalRaceRequestId}:paid`)),
+      ));
       const terminalRaceUsage = await db.select().from(usage).where(eq(usage.requestId, terminalRaceRequestId));
       assert.ok(terminalRaceReservation.status === 'settled' || terminalRaceReservation.status === 'released');
       assert.equal(terminalRaceCharges.length, terminalRaceReservation.status === 'settled' ? 1 : 0);

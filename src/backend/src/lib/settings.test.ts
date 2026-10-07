@@ -191,8 +191,8 @@ test('selects model routes from subscription entitlement, credits, and requested
   assert.strictEqual(modelRouteSlotForAccount('pro', 100, 'fast'), 'pro-fast');
   assert.strictEqual(modelRouteSlotForAccount('free', 100, 'smart'), 'free-smart');
   assert.strictEqual(modelRouteSlotForAccount('free', 100, 'fast'), 'free-fast');
-  assert.strictEqual(modelRouteSlotForAccount('pro', 0, 'smart'), 'free-smart');
-  assert.strictEqual(modelRouteSlotForAccount('pro', 0, 'fast'), 'free-fast');
+  assert.strictEqual(modelRouteSlotForAccount('pro', 0, 'smart'), 'pro-smart');
+  assert.strictEqual(modelRouteSlotForAccount('pro', 0, 'fast'), 'pro-fast');
   assert.strictEqual(modelRouteSlotForAccount('pro', 100, 'smart', true), 'free-smart');
 });
 
@@ -206,7 +206,7 @@ test('shared model decision ignores pool balance for entitlement and honors expl
         tier: 'free', routeSlot: `free-${role}`, creditKind: 'paid',
       });
       assert.deepEqual(decideAccountModel({ plan: 'pro', paidCredits: 0, freeCredits, role }), {
-        tier: 'free', routeSlot: `free-${role}`, creditKind: 'free',
+        tier: 'pro', routeSlot: `pro-${role}`, creditKind: 'free',
       });
       assert.deepEqual(decideAccountModel({ plan: 'pro', paidCredits: 10, freeCredits, role, forceFree: true }), {
         tier: 'free', routeSlot: `free-${role}`, creditKind: 'free',
