@@ -230,7 +230,10 @@ export function modelRouteSlotForAccount(
   role: ExtensionAiModelRole,
   forceFree = false,
 ): TieredModelRouteSlot {
-  const tier = !forceFree && modelTierForPlan(plan) === 'pro' ? 'pro' : 'free';
+  const tier =
+    !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0
+      ? 'pro'
+      : 'free';
   return tieredModelRouteSlot(tier, role);
 }
 

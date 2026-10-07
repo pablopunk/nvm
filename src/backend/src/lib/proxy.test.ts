@@ -76,6 +76,17 @@ const ctx = {
 };
 
 test('proxy model decision uses authenticated plan and balances, not advertised tier or credit kind', function ignoresClientBillingHints() {
+  const zeroPaidPro = decideProxyModel({
+    plan: 'pro',
+    paidCredits: 0,
+    freeCredits: 40,
+    role: 'fast',
+    headers: new Headers(),
+  });
+  assert.equal(zeroPaidPro.routeSlot, 'free-fast');
+  assert.equal(zeroPaidPro.tier, 'free');
+  assert.equal(zeroPaidPro.creditKind, 'free');
+
   const freeClaimingPro = decideProxyModel({
     plan: 'free',
     paidCredits: 12,

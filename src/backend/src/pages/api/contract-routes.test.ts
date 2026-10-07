@@ -942,7 +942,7 @@ test('active-model ignores a claimed Pro tier for a Free account', async () => {
   assert.equal(body.creditKind, 'paid');
 });
 
-test('active-model keeps a Pro route when Free plus Paid credits fund it', async () => {
+test('active-model keeps the Plan 002 Free route for Pro accounts with zero paid credits', async () => {
   installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects({ plan: 'pro', paid: 0, free: 10, model: 'gemini-3-fast' }) }));
   const response = await getActiveModel(
@@ -956,7 +956,7 @@ test('active-model keeps a Pro route when Free plus Paid credits fund it', async
   assert.equal(response.status, 200);
   const body = (await response.json()) as any;
   assert.equal(body.id, 'gemini-3-fast');
-  assert.equal(body.modelTier, 'pro');
+  assert.equal(body.modelTier, 'free');
   assert.equal(body.creditKind, 'free');
   assert.equal(body.notice, 'ok');
 });
