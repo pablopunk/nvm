@@ -341,6 +341,85 @@ export const stripeEvents = pgTable(
   (t) => [index('stripe_events_type_idx').on(t.type)],
 );
 
+export const stripeBalanceTransactions = pgTable(
+  'stripe_balance_transactions',
+  {
+    id: text('id').primaryKey(),
+    sourceObjectId: text('source_object_id'),
+    orderId: uuid('order_id').references(() => billingOrders.id, { onDelete: 'set null' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    currency: text('currency'),
+    amount: bigint('amount', { mode: 'number' }),
+    fee: bigint('fee', { mode: 'number' }),
+    net: bigint('net', { mode: 'number' }),
+    type: text('type'),
+    reportingCategory: text('reporting_category'),
+    classifiedAs: text('classified_as').notNull().default('unclassified'),
+    classifierVersion: integer('classifier_version').notNull().default(1),
+    createdAtStripe: timestamp('created_at_stripe', { withTimezone: true }),
+    availableOn: timestamp('available_on', { withTimezone: true }),
+    status: text('status'),
+    feeKnown: boolean('fee_known').notNull().default(false),
+    missingFields: jsonb('missing_fields').notNull().default([]),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('stripe_balance_transactions_created_idx').on(t.createdAtStripe),
+    index('stripe_balance_transactions_category_currency_idx').on(t.reportingCategory, t.currency),
+    index('stripe_balance_transactions_order_idx').on(t.orderId),
+  ],
+);
+
+export const financialReconciliationJobs = pgTable(
+  'financial_reconciliation_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    rangeFrom: timestamp('range_from', { withTimezone: true }).notNull(),
+    rangeTo: timestamp('range_to', { withTimezone: true }).notNull(),
+    cursor: text('cursor'),
+    state: text('state').notNull().default('pending'),
+    leaseVersion: integer('lease_version').notNull().default(0),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    importedCount: integer('imported_count').notNull().default(0),
+    updatedCount: integer('updated_count').notNull().default(0),
+    unknownCount: integer('unknown_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('financial_reconciliation_jobs_state_updated_idx').on(t.state, t.updatedAt),
+    uniqueIndex('financial_reconciliation_jobs_one_active_range_idx')
+      .on(t.rangeFrom, t.rangeTo)
+      .where(sql`${t.state} in ('pending', 'processing')`),
+  ],
+);
+
+export const financialReconciliationPages = pgTable(
+  'financial_reconciliation_pages',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    jobId: uuid('job_id')
+      .notNull()
+      .references(() => financialReconciliationJobs.id, { onDelete: 'cascade' }),
+    leaseVersion: integer('lease_version').notNull(),
+    cursorBefore: text('cursor_before'),
+    cursorAfter: text('cursor_after'),
+    hasMore: boolean('has_more').notNull(),
+    importedCount: integer('imported_count').notNull(),
+    updatedCount: integer('updated_count').notNull(),
+    unknownCount: integer('unknown_count').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('financial_reconciliation_pages_job_lease_idx').on(t.jobId, t.leaseVersion),
+    index('financial_reconciliation_pages_job_created_idx').on(t.jobId, t.createdAt),
+  ],
+);
+
 export const providers = pgTable('providers', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull(),

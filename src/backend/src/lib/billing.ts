@@ -50,9 +50,9 @@ type BillingCatalog = {
   topUps: TopUpPack[];
 };
 
-type StripeLike = Pick<
+export type StripeLike = Pick<
   Stripe,
-  'checkout' | 'billingPortal' | 'customers' | 'subscriptions' | 'prices' | 'paymentIntents' | 'invoices' | 'webhooks'
+  'checkout' | 'billingPortal' | 'customers' | 'subscriptions' | 'prices' | 'paymentIntents' | 'invoices' | 'webhooks' | 'balanceTransactions'
 >;
 
 let stripeOverride: StripeLike | null = null;
@@ -99,7 +99,7 @@ export function setStripeForTests(next: StripeLike | null) {
   stripeOverride = next;
 }
 
-function stripeClient(): StripeLike {
+export function stripeClient(): StripeLike {
   if (stripeOverride) return stripeOverride;
   const secretKey = env('STRIPE_SECRET_KEY');
   if (!secretKey) throw new BillingConfigError('STRIPE_SECRET_KEY is not configured');

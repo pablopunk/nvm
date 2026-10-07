@@ -3,7 +3,14 @@ import { auditLog } from '../db/schema';
 
 export type AuditExecutor = Pick<typeof db, 'insert'>;
 
-export type AuditAction = 'model.changed' | 'provider.changed' | 'role.changed' | 'credits.granted' | 'route_breaker.reenabled';
+export type AuditAction =
+  | 'model.changed'
+  | 'provider.changed'
+  | 'role.changed'
+  | 'credits.granted'
+  | 'route_breaker.reenabled'
+  | 'financials.reconciliation_started'
+  | 'financials.reconciliation_page_imported';
 
 type AuditInput = {
   actorUserId: string | null;
