@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
-import { BillingConfigError, BillingEligibilityError, BillingRequestError, createBillingCheckout, rejectCrossOriginBillingPost, type BillingKind } from '../../../lib/billing';
+import { BillingConfigError, BillingEligibilityError, BillingPendingError, BillingRequestError, createBillingCheckout, rejectCrossOriginBillingPost } from '../../../lib/billing';
 import { acquireCheckoutLock, releaseCheckoutLock } from '../../../lib/ratelimit';
 import { getSessionFromCookies } from '../../../lib/workos';
 import { safeJsonBody } from '../../../lib/validation';
@@ -13,6 +13,8 @@ const checkoutSchema = z.object({
   priceId: z.string().optional(),
   tier: z.string().optional(),
 });
+
+const attemptKeySchema = z.string().uuid();
 
 export const POST: APIRoute = async ({ request }) => {
   const crossOriginResponse = rejectCrossOriginBillingPost(request);
@@ -28,8 +30,13 @@ export const POST: APIRoute = async ({ request }) => {
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
   const body = parsed.data;
   const kind = body.kind;
+  const suppliedAttemptKey = request.headers.get('idempotency-key');
+  const attemptKey = suppliedAttemptKey ? attemptKeySchema.safeParse(suppliedAttemptKey) : null;
+  if (attemptKey && !attemptKey.success) {
+    return Response.json({ error: { type: 'invalid_idempotency_key', message: 'Idempotency-Key must be a UUID.' } }, { status: 400 });
+  }
 
-  if (kind === 'subscription') {
+  if (!suppliedAttemptKey && kind === 'subscription') {
     const lock = await acquireCheckoutLock(user.id);
     if (!lock.ok) {
       return Response.json(
@@ -40,14 +47,20 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const checkout = await createBillingCheckout({ user, kind, priceId: body.priceId, tier: body.tier });
-    return Response.json({ url: checkout.url });
+    const checkout = await createBillingCheckout({ user, kind, priceId: body.priceId, tier: body.tier, attemptKey: attemptKey?.data });
+    return checkout.status === 'url'
+      ? Response.json({ url: checkout.url })
+      : Response.json({ status: checkout.status }, { status: 202 });
   } catch (error) {
+    if (error instanceof BillingPendingError) {
+      return Response.json({ status: error.status }, { status: error.status === 'reconciliation_required' ? 409 : 202 });
+    }
     if (error instanceof BillingConfigError) {
       return Response.json({ status: 'not_created', error: { type: 'billing_not_configured', message: error.message } }, { status: 503 });
     }
     if (error instanceof BillingRequestError) {
-      return Response.json({ status: 'not_created', error: { type: error.type, message: error.message } }, { status: 400 });
+      const status = error.type === 'idempotency_conflict' ? 409 : 400;
+      return Response.json({ ...(error.type === 'idempotency_conflict' ? {} : { status: 'not_created' }), error: { type: error.type, message: error.message } }, { status });
     }
     if (error instanceof BillingEligibilityError) {
       return Response.json(
@@ -57,7 +70,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
     throw error;
   } finally {
-    if (kind === 'subscription') {
+    if (!suppliedAttemptKey && kind === 'subscription') {
       await releaseCheckoutLock(user.id);
     }
   }
