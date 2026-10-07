@@ -14,6 +14,10 @@ const creditsSchema = z.object({
   reason: z.string().trim().min(1).optional(),
 });
 
+export function isCreditDeltaAllowedUntilPlan006(delta: number): boolean {
+  return delta >= 0;
+}
+
 export const POST: APIRoute = async ({ request }) => {
   const originCheck = requireSameOrigin(request);
   if (originCheck) return originCheck;
@@ -23,7 +27,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const parsed = await safeJsonBody(request, creditsSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
-  if (parsed.data.delta < 0)
+  if (!isCreditDeltaAllowedUntilPlan006(parsed.data.delta))
     return Response.json(
       {
         error: {

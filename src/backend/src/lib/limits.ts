@@ -7,113 +7,37 @@ export const MAX_INPUT_TOKENS = Number(
 
 const CHARS_PER_TOKEN = 4;
 const TOKENS_PER_IMAGE = 1_600;
-const IMAGE_MIME_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-]);
-
+const IMAGE_TYPE_PATTERN = /image/i;
+const IMAGE_DATA_URL_PATTERN = /^data:image\//i;
+const IMAGE_FIELD_PATTERN = /(?:image_url|imageUrl|input_image|inlineData)["']?\s*:/i;
 type InputEstimate = { textCharacters: number; images: number };
 
-function isBase64(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length % 4 === 0 &&
-    /^[A-Za-z0-9+/]*={0,2}$/.test(value)
-  );
-}
-
-function isImageDataUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  const separator = value.indexOf(',');
-  if (separator < 0) return false;
-  const mimeType = value.slice(5, separator - ';base64'.length).toLowerCase();
-  return (
-    value.slice(0, 5) === 'data:' &&
-    value.slice(separator - ';base64'.length, separator) === ';base64' &&
-    IMAGE_MIME_TYPES.has(mimeType) &&
-    isBase64(value.slice(separator + 1))
-  );
-}
-
-function hasOnlyKeys(node: Record<string, unknown>, keys: readonly string[]) {
-  return Object.keys(node).every((key) => keys.includes(key));
-}
-
-function isAnthropicCacheControl(value: unknown) {
-  if (value === undefined) return true;
-  if (!(value && typeof value === 'object')) return false;
-  const cacheControl = value as Record<string, unknown>;
-  return (
-    hasOnlyKeys(cacheControl, ['type', 'ttl']) &&
-    cacheControl.type === 'ephemeral' &&
-    (cacheControl.ttl === undefined ||
-      cacheControl.ttl === '5m' ||
-      cacheControl.ttl === '1h')
-  );
-}
-
 function imagePayloadCount(node: Record<string, unknown>): number {
-  const imageUrl = node.image_url as Record<string, unknown> | undefined;
-  if (
-    node.type === 'image_url' &&
-    hasOnlyKeys(node, ['type', 'image_url']) &&
-    isImageDataUrl(node.image_url)
-  )
-    return 1;
+  const type = typeof node.type === 'string' ? node.type.toLowerCase() : '';
+  const hasImageKey = ['image', 'image_url', 'imageUrl', 'input_image', 'inlineData']
+    .some((key) => Object.hasOwn(node, key));
+  const source = node.source;
+  const inlineData = node.inlineData;
+  const hasImageMime = (candidate: unknown) =>
+    typeof candidate === 'string' && candidate.toLowerCase().startsWith('image/');
+  const hasImageSource = source !== null && typeof source === 'object'
+    && hasImageMime((source as Record<string, unknown>).media_type);
+  const hasImageInlineData = inlineData !== null && typeof inlineData === 'object'
+    && hasImageMime((inlineData as Record<string, unknown>).mimeType);
 
-  if (
-    node.type === 'image_url' &&
-    hasOnlyKeys(node, ['type', 'image_url']) &&
-    imageUrl &&
-    typeof imageUrl === 'object' &&
-    hasOnlyKeys(imageUrl, ['url']) &&
-    isImageDataUrl(imageUrl.url)
-  )
-    return 1;
-
-  if (
-    node.type === 'input_image' &&
-    hasOnlyKeys(node, ['type', 'detail', 'image_url']) &&
-    node.detail === 'auto' &&
-    isImageDataUrl(node.image_url)
-  )
-    return 1;
-
-  const source = node.source as Record<string, unknown> | undefined;
-  if (
-    node.type === 'image' &&
-    hasOnlyKeys(node, ['type', 'source', 'cache_control']) &&
-    isAnthropicCacheControl(node.cache_control) &&
-    source &&
-    typeof source === 'object' &&
-    hasOnlyKeys(source, ['type', 'media_type', 'data']) &&
-    source?.type === 'base64' &&
-    typeof source.media_type === 'string' &&
-    IMAGE_MIME_TYPES.has(source.media_type.toLowerCase()) &&
-    isBase64(source.data)
-  )
-    return 1;
-
-  const inlineData = node.inlineData as Record<string, unknown> | undefined;
-  if (
-    hasOnlyKeys(node, ['inlineData']) &&
-    inlineData &&
-    typeof inlineData === 'object' &&
-    hasOnlyKeys(inlineData, ['mimeType', 'data']) &&
-    typeof inlineData?.mimeType === 'string' &&
-    IMAGE_MIME_TYPES.has(inlineData.mimeType.toLowerCase()) &&
-    isBase64(inlineData.data)
-  )
-    return 1;
-
-  return 0;
+  // Admission rejects image modalities instead of trusting estimated pixels or
+  // counting remote URLs/base64 as ordinary text. Detect intent, not validity.
+  return IMAGE_TYPE_PATTERN.test(type) || hasImageKey || hasImageSource || hasImageInlineData
+    ? 1
+    : 0;
 }
 
 function collectInputEstimate(node: unknown, estimate: InputEstimate): void {
   if (typeof node === 'string') {
+    if (IMAGE_DATA_URL_PATTERN.test(node)) {
+      estimate.images += 1;
+      return;
+    }
     estimate.textCharacters += node.length;
     return;
   }
@@ -133,6 +57,7 @@ function collectInputEstimate(node: unknown, estimate: InputEstimate): void {
 }
 
 export function containsImagePayload(value: unknown): boolean {
+  if (typeof value === 'string') return IMAGE_DATA_URL_PATTERN.test(value) || IMAGE_FIELD_PATTERN.test(value);
   if (Array.isArray(value)) return value.some(containsImagePayload);
   if (!value || typeof value !== 'object') return false;
   const node = value as Record<string, unknown>;

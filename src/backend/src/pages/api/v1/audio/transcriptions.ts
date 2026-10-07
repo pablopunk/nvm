@@ -24,6 +24,7 @@ import {
   tooManyRequests,
 } from '../../../../lib/ratelimit';
 import { isRouteTripped } from '../../../../lib/route-breakers';
+import { handleTrippedAudioRoute } from '../../../../lib/audio-breaker';
 import {
   getAudioModelRoute,
   isProviderEnabled,
@@ -332,11 +333,18 @@ export const POST: APIRoute = async ({ request }) => {
   }
   const route = routeResult.route;
   if (await isRouteTripped('audio', route.provider, route.modelId)) {
-    await markDedupFailed({
-      userId: user.id,
-      idempotencyKey,
-      requestId,
-      requestHash,
+    await handleTrippedAudioRoute({
+      prepared,
+      releasePreparedReservation: async () => {
+        await finalizeReservation({
+          requestId: idempotencyKey,
+          expectedUserId: user.id,
+          outcome: 'release',
+        });
+      },
+      failDedup: async () => {
+        await markDedupFailed({ userId: user.id, idempotencyKey, requestId, requestHash });
+      },
     });
     return responseWithRequestId(
       {

@@ -1,11 +1,11 @@
 import type { APIRoute } from 'astro';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../../db/client';
-import { auditLog, routeBreakers } from '../../../db/schema';
+import { routeBreakers } from '../../../db/schema';
 import { requireAdmin } from '../../../lib/admin';
 import { requireSameOrigin } from '../../../lib/csrf';
 import { safeJsonBody } from '../../../lib/validation';
+import { reenableRouteBreaker } from '../../../lib/route-breaker-admin';
 
 const breakerSchema = z
   .object({
@@ -28,24 +28,9 @@ export const POST: APIRoute = async ({ request }) => {
   if (!actor) return new Response('Forbidden', { status: 403 });
   const parsed = await safeJsonBody(request, breakerSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
-  const target = parsed.data;
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(routeBreakers)
-      .where(
-        and(
-          eq(routeBreakers.routeSlot, target.routeSlot),
-          eq(routeBreakers.provider, target.provider),
-          eq(routeBreakers.modelId, target.modelId),
-        ),
-      );
-    await tx.insert(auditLog).values({
-      actorUserId: actor.id,
-      action: 'route_breaker.reenabled',
-      targetType: 'route',
-      targetId: `${target.routeSlot}:${target.provider}:${target.modelId}`,
-      meta: target,
-    });
+  await reenableRouteBreaker({
+    actorUserId: actor.id,
+    ...parsed.data,
   });
   return Response.json({ ok: true });
 };

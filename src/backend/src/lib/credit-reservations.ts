@@ -183,6 +183,17 @@ export async function preparedReservationExists(input: {
   return Boolean(reservation);
 }
 
+export async function getPendingCreditReservations(userId: string): Promise<{ free: number; paid: number }> {
+  const [reserved] = await db.select({
+    free: sql<number>`coalesce(sum(coalesce(${creditReservations.reservedFreeCredits}, case when ${creditReservations.kind} = 'free' then ${creditReservations.reservedCredits} else 0 end)), 0)::int`,
+    paid: sql<number>`coalesce(sum(coalesce(${creditReservations.reservedPaidCredits}, case when ${creditReservations.kind} = 'paid' then ${creditReservations.reservedCredits} else 0 end)), 0)::int`,
+  }).from(creditReservations).where(and(
+    eq(creditReservations.userId, userId),
+    eq(creditReservations.status, 'pending'),
+  ));
+  return { free: reserved?.free ?? 0, paid: reserved?.paid ?? 0 };
+}
+
 export type ReservationFinalization = {
   requestId: string;
   expectedUserId?: string;

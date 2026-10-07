@@ -67,6 +67,20 @@ type ModelsDevModel = {
 type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
 type ModelsDevApi = Record<string, ModelsDevProvider>;
 
+type ValidModelPricing = NonNullable<ModelsDevModel['cost']> & { input: number; output: number };
+
+function hasValidPricing(cost: ModelsDevModel['cost']): cost is ValidModelPricing {
+  if (!cost || cost.input == null || cost.output == null) return false;
+  const validRate = (rate: number | undefined) =>
+    rate === undefined || (Number.isFinite(rate) && rate >= 0);
+  if (![cost.input, cost.output, cost.cache_read, cost.cache_write].every(validRate)) return false;
+  return (cost.tiers ?? []).every((tier) => {
+    if (tier.tier?.size == null) return true;
+    return Number.isFinite(tier.tier.size) && tier.tier.size >= 0
+      && [tier.input, tier.output, tier.cache_read, tier.cache_write].every(validRate);
+  });
+}
+
 const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
   opencode: {
     models: {
@@ -235,16 +249,7 @@ export async function lookupModelCost(
   const resolved = await runtimeModel(provider, modelId);
   if (resolved?.source === 'fallback') return null;
   const cost = resolved?.model.cost;
-  if (
-    !cost ||
-    cost.input == null ||
-    cost.output == null ||
-    !Number.isFinite(cost.input) ||
-    !Number.isFinite(cost.output) ||
-    cost.input < 0 ||
-    cost.output < 0
-  )
-    return null;
+  if (!hasValidPricing(cost)) return null;
   const tiers = (cost.tiers ?? []).flatMap((tier) =>
     tier.tier?.size == null
       ? []
@@ -300,17 +305,7 @@ export async function lookupModelPricing(
   const resolved = await runtimeModel(provider, modelId);
   if (resolved?.source === 'fallback') return null;
   const cost = resolved?.model.cost;
-  if (
-    !resolved ||
-    resolved.source === 'fallback' ||
-    !cost ||
-    cost.input == null ||
-    cost.output == null ||
-    !Number.isFinite(cost.input) ||
-    !Number.isFinite(cost.output) ||
-    cost.input < 0 ||
-    cost.output < 0
-  )
+  if (!resolved || resolved.source === 'fallback' || !hasValidPricing(cost))
     return null;
   return {
     provider,
@@ -382,4 +377,10 @@ export async function listModelsForProvider(
 export function resetPricingCacheForTests() {
   cache = null;
   inflight = null;
+}
+
+export function expirePricingCacheForTests() {
+  if (!cache) return;
+  cache.at = Date.now() - CACHE_TTL_MS - 1;
+  cache.lastSuccessfulAt = Date.now() - CACHE_TTL_MS - 1;
 }

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getUserFromBearer } from '../../../lib/tokens';
 import { decideAccountModel, getModelRoute, ModelNotConfiguredError, parseExtensionAiModelRole } from '../../../lib/settings';
 import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
+import { getPendingCreditReservations } from '../../../lib/credit-reservations';
 import { lookupModelCost, lookupModelDescriptor } from '../../../lib/pricing';
 import { compatibilityHeaders, requestIdFromHeaders } from '../../../lib/compatibility';
 import { selectApiForModel } from '../../../lib/upstream';
@@ -10,7 +11,7 @@ import { env } from '../../../lib/env';
 import { joinPublicApiUrl, parsePublicOrigin } from '../../../../../app/shared/public-origin';
 import { previewTargetFromEnvironment } from '../../../lib/preview-auth';
 import { localDevelopmentOrigin } from '../../../lib/local-development-origin';
-import { CREDIT_GRACE_THRESHOLD } from '../../../lib/credit-reservations';
+import { chooseFundedAccountRoute } from '../../../lib/active-model-funding';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
 
@@ -34,6 +35,19 @@ export const GET: APIRoute = async ({ request }) => {
 
   const balances = await getBalances(user.id);
   const url = new URL(request.url);
+  const inputTokensQ = url.searchParams.get('inputTokens');
+  const charsQ = url.searchParams.get('chars');
+  const tokens = inputTokensQ
+    ? Math.max(0, Number(inputTokensQ) || 0)
+    : charsQ ? Math.ceil(Math.max(0, Number(charsQ) || 0) / 4) : 0;
+  const pending = tokens > 0
+    ? await getPendingCreditReservations(user.id)
+    : { free: 0, paid: 0 };
+  const availableBalances = {
+    free: balances.free - pending.free,
+    paid: balances.paid - pending.paid,
+    total: balances.total - pending.free - pending.paid,
+  };
   const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model') || url.searchParams.get('model'));
   const role = requestedModel ?? 'smart';
   const forceFree = request.headers.get('x-nevermind-ai-model-tier') === 'free' || url.searchParams.get('tier') === 'free';
@@ -47,16 +61,11 @@ export const GET: APIRoute = async ({ request }) => {
   try {
     let route = await getModelRoute(decision.routeSlot);
     descriptor = await lookupModelDescriptor(route.provider, route.modelId);
-    const inputTokensQ = url.searchParams.get('inputTokens');
-    const charsQ = url.searchParams.get('chars');
-    const tokens = inputTokensQ
-      ? Math.max(0, Number(inputTokensQ) || 0)
-      : charsQ ? Math.ceil(Math.max(0, Number(charsQ) || 0) / 4) : 0;
     if (tokens > 0 && descriptor) {
       const costRow = await lookupModelCost(route.provider, route.modelId);
       if (costRow) {
         costEstimate = estimateRequestCredits(tokens, descriptor.maxTokens ?? 32_000, costRow);
-        if (creditKind === 'paid' && costEstimate > balances.paid) {
+        if (decision.tier === 'pro' && costEstimate > availableBalances.total) {
           const freeDecision = decideAccountModel({ plan: user.plan, paidCredits: balances.paid, freeCredits: balances.free, role, forceFree: true });
           const freeRoute = await getModelRoute(freeDecision.routeSlot);
           const freeDescriptor = await lookupModelDescriptor(freeRoute.provider, freeRoute.modelId);
@@ -64,11 +73,15 @@ export const GET: APIRoute = async ({ request }) => {
           const freeEstimate = freeDescriptor && freeCostRow
             ? estimateRequestCredits(tokens, freeDescriptor.maxTokens ?? 32_000, freeCostRow)
             : undefined;
-          if (
-            selectApiForModel(freeRoute.provider, freeRoute.modelId) === selectApiForModel(route.provider, route.modelId)
-            && freeEstimate !== undefined
-            && freeEstimate <= balances.free + CREDIT_GRACE_THRESHOLD
-          ) {
+          const fundingChoice = chooseFundedAccountRoute({
+            tier: decision.tier,
+            freeCredits: availableBalances.free,
+            paidCredits: availableBalances.paid,
+            routeCredits: costEstimate,
+            freeRouteCredits: freeEstimate,
+            freeFallbackAllowed: selectApiForModel(freeRoute.provider, freeRoute.modelId) === selectApiForModel(route.provider, route.modelId),
+          });
+          if (fundingChoice.freeFallback) {
             decision = freeDecision;
             modelTier = decision.tier;
             creditKind = decision.creditKind;
@@ -107,11 +120,8 @@ export const GET: APIRoute = async ({ request }) => {
     : requestScopedOrigin ? `${configuredApiOrigin}/api/v1` : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
 
   let notice: 'ok' | 'low' | 'blocked';
-  const selectedBalance = creditKind === 'paid' ? balances.paid : balances.free;
-  if (balances.total <= 0 || selectedBalance + CREDIT_GRACE_THRESHOLD < (costEstimate ?? 1)) {
+  if (availableBalances.free < 0 || availableBalances.paid < 0 || availableBalances.total < (costEstimate ?? 1)) {
     notice = 'blocked';
-  } else if (costEstimate !== undefined && selectedBalance < costEstimate) {
-    notice = 'low';
   } else {
     notice = 'ok';
   }

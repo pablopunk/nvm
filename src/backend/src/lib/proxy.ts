@@ -38,7 +38,7 @@ import { log } from './log';
 import * as Sentry from '@sentry/astro';
 import { captureStreamFailure } from './diagnostics';
 import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
-import { isRouteTripped } from './route-breakers';
+import { healthyRouteCandidates } from './route-breakers';
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
@@ -289,6 +289,7 @@ export async function markDedupFailed(claim?: DedupClaim) {
 
 type ResolvedRouting = {
   user: { id: string; plan: string };
+  tier: 'free' | 'pro';
   routeSlot: ModelRouteSlot;
   provider: string;
   activeModelId: string;
@@ -646,12 +647,13 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
     role: requestedModel,
     headers: request.headers,
   });
-  const { routeSlot, creditKind: kind } = decision;
+  const { routeSlot, creditKind: kind, tier } = decision;
   const modelRouting = await resolveModelRouting(routeSlot);
   if (modelRouting instanceof Response) return modelRouting;
 
   return {
     user,
+    tier,
     routeSlot,
     ...modelRouting,
     kind,
@@ -744,10 +746,11 @@ async function tryUpstreamProviders(
     }
   }
 
-  const providerChain = [
+  const configuredProviderChain = [
     { providerId: routing.provider, modelId: routing.activeModelId },
     ...chainProviders.filter((route) => route.providerId !== routing.provider || route.modelId !== routing.activeModelId),
   ];
+  const providerChain = await healthyRouteCandidates(routing.routeSlot, configuredProviderChain);
   let lastFailure: { provider: string; modelId: string; costRow: ModelCost } = {
     provider: routing.provider,
     modelId: routing.activeModelId,
@@ -758,10 +761,6 @@ async function tryUpstreamProviders(
 
   for (const [attemptIndex, candidate] of providerChain.entries()) {
     const { providerId, modelId } = candidate;
-    if (await isRouteTripped(routing.routeSlot, providerId, modelId)) {
-      log.error('route_breaker_blocked_dispatch', { request_id: requestId, route_slot: routing.routeSlot, provider: providerId, model: modelId });
-      continue;
-    }
     if (!providerSupportsFormat(providerId, apiFormat) || selectApiForModel(providerId, modelId) !== apiFormat) {
       log.info('upstream_format_skip', { request_id: requestId, provider: providerId, model: modelId, format: apiFormat });
       continue;
@@ -957,10 +956,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     } catch {
       bodyIsJson = false;
     }
-    if (bodyIsJson && containsImagePayload(parsedBody)) {
+    if (
+      (bodyIsJson && containsImagePayload(parsedBody)) ||
+      (!bodyIsJson && containsImagePayload(requestBodyText))
+    ) {
       await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
-        { error: { type: 'unsupported_request_shape', message: 'Image requests are unavailable because this route has no conservative image-cost bound.' } },
+        { error: { type: 'unsupported_request_shape', message: 'Image and inline-data requests are unavailable because this route has no conservative modality-cost bound.' } },
         { status: 400 },
       ), requestId);
     }
@@ -1020,7 +1022,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       kind: routing.kind,
       credits: estimatedCredits,
     });
-    if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.kind === 'paid') {
+    if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.tier === 'pro') {
       const requestedModel: ExtensionAiModelRole = parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'smart';
       const freeDecision = decideAccountModel({ plan: routing.user.plan, paidCredits: 0, freeCredits: routing.freeBalanceAvailable, role: requestedModel, forceFree: true });
       const freeRouting = await resolveModelRouting(freeDecision.routeSlot);
@@ -1035,7 +1037,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           const freeReservation = await reserveCredits({ requestId, userId: routing.user.id, kind: 'free', credits: freeEstimatedCredits });
           if (freeReservation.ok) {
             maxOutputTokens = freeMaxOutputTokens;
-            routing = { user: routing.user, routeSlot: freeDecision.routeSlot, ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
+            routing = { user: routing.user, tier: 'free', routeSlot: freeDecision.routeSlot, ...freeRouting, kind: 'free', balanceAvailable: freeReservation.balance - freeReservation.reserved, freeBalanceAvailable: freeReservation.balance - freeReservation.reserved };
             estimatedCredits = freeEstimatedCredits;
             reservation = freeReservation;
           }

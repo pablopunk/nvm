@@ -230,7 +230,7 @@ export function modelRouteSlotForAccount(
   role: ExtensionAiModelRole,
   forceFree = false,
 ): TieredModelRouteSlot {
-  const tier = !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0 ? 'pro' : 'free';
+  const tier = !forceFree && modelTierForPlan(plan) === 'pro' ? 'pro' : 'free';
   return tieredModelRouteSlot(tier, role);
 }
 
@@ -258,8 +258,8 @@ export function decideAccountModel(input: {
   return {
     tier,
     routeSlot,
-    // Reservation remains single-pool until Plan 003. This describes the
-    // currently selected pool, not an allocation instruction from the client.
+    // This is a route/rate-limit hint only; reservations allocate free-first
+    // across both pools regardless of the selected model tier.
     creditKind: input.forceFree || input.paidCredits <= 0 ? 'free' : 'paid',
   };
 }
