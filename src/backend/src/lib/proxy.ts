@@ -27,7 +27,7 @@ import { rateLimitChat, tooManyRequests } from './ratelimit';
 import {
   estimateInputTokensFromBody,
   estimateInputTokensFromValue,
-  containsImagePayload,
+  containsUnsupportedMultimodalPayload,
   estimateRequestCredits,
   MAX_INPUT_TOKENS,
   requestedMaxOutputTokens,
@@ -957,12 +957,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       bodyIsJson = false;
     }
     if (
-      (bodyIsJson && containsImagePayload(parsedBody)) ||
-      (!bodyIsJson && containsImagePayload(requestBodyText))
+      (bodyIsJson && containsUnsupportedMultimodalPayload(parsedBody)) ||
+      (!bodyIsJson && containsUnsupportedMultimodalPayload(requestBodyText))
     ) {
       await markDedupFailed(dedupClaim);
       return withRequestId(Response.json(
-        { error: { type: 'unsupported_request_shape', message: 'Image and inline-data requests are unavailable because this route has no conservative modality-cost bound.' } },
+        { error: { type: 'unsupported_request_shape', message: 'Multimodal requests are unavailable because this route has no conservative modality-cost bound.' } },
         { status: 400 },
       ), requestId);
     }

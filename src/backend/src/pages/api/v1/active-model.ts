@@ -25,7 +25,8 @@ export const GET: APIRoute = async ({ request }) => {
 
   let configuredApiOrigin: string;
   try {
-    configuredApiOrigin = previewTarget?.origin ?? localOrigin ?? parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
+    configuredApiOrigin =
+      previewTarget?.origin ?? localOrigin ?? parsePublicOrigin(env('PUBLIC_API_ORIGIN') ?? 'https://api.nvm.fyi', 'production_api');
   } catch {
     return Response.json({ error: { type: 'configuration_error', message: 'Public API origin is unavailable.' } }, { status: 503 });
   }
@@ -37,12 +38,8 @@ export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
   const inputTokensQ = url.searchParams.get('inputTokens');
   const charsQ = url.searchParams.get('chars');
-  const tokens = inputTokensQ
-    ? Math.max(0, Number(inputTokensQ) || 0)
-    : charsQ ? Math.ceil(Math.max(0, Number(charsQ) || 0) / 4) : 0;
-  const pending = tokens > 0
-    ? await getPendingCreditReservations(user.id)
-    : { free: 0, paid: 0 };
+  const tokens = inputTokensQ ? Math.max(0, Number(inputTokensQ) || 0) : charsQ ? Math.ceil(Math.max(0, Number(charsQ) || 0) / 4) : 0;
+  const pending = tokens > 0 ? await getPendingCreditReservations(user.id) : { free: 0, paid: 0 };
   const availableBalances = {
     free: balances.free - pending.free,
     paid: balances.paid - pending.paid,
@@ -66,20 +63,26 @@ export const GET: APIRoute = async ({ request }) => {
       if (costRow) {
         costEstimate = estimateRequestCredits(tokens, descriptor.maxTokens ?? 32_000, costRow);
         if (decision.tier === 'pro' && costEstimate > availableBalances.total) {
-          const freeDecision = decideAccountModel({ plan: user.plan, paidCredits: balances.paid, freeCredits: balances.free, role, forceFree: true });
+          const freeDecision = decideAccountModel({
+            plan: user.plan,
+            paidCredits: balances.paid,
+            freeCredits: balances.free,
+            role,
+            forceFree: true,
+          });
           const freeRoute = await getModelRoute(freeDecision.routeSlot);
           const freeDescriptor = await lookupModelDescriptor(freeRoute.provider, freeRoute.modelId);
           const freeCostRow = await lookupModelCost(freeRoute.provider, freeRoute.modelId);
-          const freeEstimate = freeDescriptor && freeCostRow
-            ? estimateRequestCredits(tokens, freeDescriptor.maxTokens ?? 32_000, freeCostRow)
-            : undefined;
+          const freeEstimate =
+            freeDescriptor && freeCostRow ? estimateRequestCredits(tokens, freeDescriptor.maxTokens ?? 32_000, freeCostRow) : undefined;
           const fundingChoice = chooseFundedAccountRoute({
             tier: decision.tier,
             freeCredits: availableBalances.free,
             paidCredits: availableBalances.paid,
             routeCredits: costEstimate,
             freeRouteCredits: freeEstimate,
-            freeFallbackAllowed: selectApiForModel(freeRoute.provider, freeRoute.modelId) === selectApiForModel(route.provider, route.modelId),
+            freeFallbackAllowed:
+              selectApiForModel(freeRoute.provider, freeRoute.modelId) === selectApiForModel(route.provider, route.modelId),
           });
           if (fundingChoice.freeFallback) {
             decision = freeDecision;
@@ -97,10 +100,7 @@ export const GET: APIRoute = async ({ request }) => {
     thinkingLevel = route.thinkingLevel;
   } catch (err) {
     if (err instanceof ModelNotConfiguredError) {
-      return Response.json(
-        { error: { type: 'model_not_configured', message: 'No active model configured.' } },
-        { status: 503 },
-      );
+      return Response.json({ error: { type: 'model_not_configured', message: 'No active model configured.' } }, { status: 503 });
     }
     throw err;
   }
@@ -115,31 +115,45 @@ export const GET: APIRoute = async ({ request }) => {
 
   const api = selectApiForModel(provider, modelId);
   const requestScopedOrigin = previewTarget || localOrigin;
-  const baseUrl = api === 'anthropic-messages'
-    ? requestScopedOrigin ? `${configuredApiOrigin}/api` : joinPublicApiUrl(configuredApiOrigin, '/api')
-    : requestScopedOrigin ? `${configuredApiOrigin}/api/v1` : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
+  const baseUrl =
+    api === 'anthropic-messages'
+      ? requestScopedOrigin
+        ? `${configuredApiOrigin}/api`
+        : joinPublicApiUrl(configuredApiOrigin, '/api')
+      : requestScopedOrigin
+        ? `${configuredApiOrigin}/api/v1`
+        : joinPublicApiUrl(configuredApiOrigin, '/api/v1');
 
   let notice: 'ok' | 'low' | 'blocked';
-  if (availableBalances.free < 0 || availableBalances.paid < 0 || availableBalances.total < (costEstimate ?? 1)) {
+  const requestedEstimateUnavailable = tokens > 0 && costEstimate === undefined;
+  if (
+    requestedEstimateUnavailable ||
+    availableBalances.free < 0 ||
+    availableBalances.paid < 0 ||
+    availableBalances.total < (costEstimate ?? 1)
+  ) {
     notice = 'blocked';
   } else {
     notice = 'ok';
   }
 
   const requestId = requestIdFromHeaders(request.headers);
-  return Response.json({
-    ...descriptor,
-    maxInputTokens: MAX_INPUT_TOKENS,
-    thinkingLevel,
-    api,
-    provider: NEVERMIND_PROVIDER_ID,
-    baseUrl,
-    modelTier,
-    creditKind,
-    credits: { paid: balances.paid, free: balances.free, total: balances.total },
-    notice,
-    ...(costEstimate !== undefined ? { costEstimate } : {}),
-  }, { headers: compatibilityHeaders(requestId) });
+  return Response.json(
+    {
+      ...descriptor,
+      maxInputTokens: MAX_INPUT_TOKENS,
+      thinkingLevel,
+      api,
+      provider: NEVERMIND_PROVIDER_ID,
+      baseUrl,
+      modelTier,
+      creditKind,
+      credits: { paid: balances.paid, free: balances.free, total: balances.total },
+      notice,
+      ...(costEstimate !== undefined ? { costEstimate } : {}),
+    },
+    { headers: compatibilityHeaders(requestId) },
+  );
 };
 
 export const OPTIONS: APIRoute = async () => new Response(null, { status: 404 });

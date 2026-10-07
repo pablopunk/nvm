@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   containsImagePayload,
+  containsUnsupportedMultimodalPayload,
   estimateInputTokensFromBody,
   estimateInputTokensFromValue,
   estimatePromptCredits,
@@ -199,6 +200,20 @@ describe('estimateInputTokensFromBody', () => {
       assert.ok(estimateInputTokensFromValue(payload) < 100_000, 'image bytes and URLs must not become text-token estimates');
     }
     assert.equal(containsImagePayload('{"type":"image_url","image_url":'), true, 'malformed raw JSON with image intent is detected');
+  });
+
+  test('detects non-image multimodal structures and modality data URIs', () => {
+    const payloads = [
+      { messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: 'AAAA', format: 'wav' } }] }] },
+      { messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'AAAA' } }] }] },
+      { contents: [{ parts: [{ inlineData: { mimeType: 'audio/wav', data: 'AAAA' } }] }] },
+      { contents: [{ parts: [{ inlineData: { mimeType: 'video/mp4', data: 'AAAA' } }] }] },
+      { messages: [{ role: 'user', content: [{ type: 'video_url', video_url: { url: 'https://example.test/clip.mp4' } }] }] },
+      { messages: [{ role: 'user', content: 'data:audio/wav;base64,AAAA' }] },
+      { prompt: 'data:application/pdf;base64,AAAA' },
+    ];
+    for (const payload of payloads) assert.equal(containsUnsupportedMultimodalPayload(payload), true);
+    assert.equal(containsImagePayload({ input_audio: { data: 'AAAA' } }), true, 'legacy broad detector alias remains compatible');
   });
 });
 

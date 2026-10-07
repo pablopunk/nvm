@@ -1,6 +1,6 @@
 {
   "error": {
     "type": "unsupported_request_shape",
-    "message": "Image and inline-data requests are unavailable because this route has no conservative modality-cost bound."
+    "message": "Multimodal requests are unavailable because this route has no conservative modality-cost bound."
   }
 }
