@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import {
@@ -23,7 +24,9 @@ import {
   formatBillingPrice,
   processStripeEvent,
   rejectCrossOriginBillingPost,
+  retryBillingCheckout,
   setStripeForTests,
+  updateBillingOrderCAS,
 } from './billing';
 import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
@@ -69,6 +72,9 @@ function createFakeBillingDb(
     trackSubscriptions?: boolean;
     billingTerms?: unknown[];
     subscriptionRows?: unknown[];
+    orders?: unknown[];
+    orderResults?: unknown[][];
+    retryOperationResults?: unknown[][];
   } = {},
 ): FakeDb {
   const selects = [...(input.selects ?? [])];
@@ -77,6 +83,8 @@ function createFakeBillingDb(
   const inserts: InsertCall[] = [];
   const updates: UpdateCall[] = [];
   let subscriptionRow: any = null;
+  let orderSelectCount = 0;
+  let retryOperationSelectCount = 0;
 
   function createInsertChain(table: unknown) {
     let values: any;
@@ -130,13 +138,9 @@ function createFakeBillingDb(
       }
       if (fromTable === stripeEvents) return Promise.resolve([]);
       if (fromTable === billingPriceTerms) return Promise.resolve(input.billingTerms ?? []);
-      if (
-        fromTable === billingOrders ||
-        fromTable === billingRetryOperations ||
-        fromTable === billingSubscriptionPriceVersions ||
-        fromTable === stripeCustomerAttempts
-      )
-        return Promise.resolve([]);
+      if (fromTable === billingOrders) return Promise.resolve(input.orderResults?.[orderSelectCount++] ?? input.orders ?? []);
+      if (fromTable === billingRetryOperations) return Promise.resolve(input.retryOperationResults?.[retryOperationSelectCount++] ?? []);
+      if (fromTable === billingSubscriptionPriceVersions || fromTable === stripeCustomerAttempts) return Promise.resolve([]);
       if (fromTable === subscriptions) return Promise.resolve(input.subscriptionRows ?? []);
       if (fromTable === users) return Promise.resolve(selects.shift() ?? []);
       return Promise.resolve(selects.shift() ?? []);
@@ -445,6 +449,91 @@ test('checkout fails closed without approved terms before creating a Stripe cust
   assert.equal(customerCreates, 0);
 });
 
+test('same-key checkout recovers a stored session when catalog entry disappears and Stripe Price is inactive', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = '[]';
+  process.env.STRIPE_TOP_UP_PACKS = '[]';
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const intentHash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: 'subscription',
+        priceId: 'price_removed',
+        selectedPriceId: 'price_removed',
+        selectedTier: 'pro',
+      }),
+    )
+    .digest('hex');
+  let priceReads = 0;
+  let sessionCreates = 0;
+  const order = {
+    id: '33333333-3333-4333-8333-333333333333',
+    userId: user.id,
+    attemptKey,
+    intentHash,
+    priceId: 'price_removed',
+    state: 'open',
+    sessionId: 'cs_already_created',
+    sessionUrl: 'https://checkout.stripe.test/cs_already_created',
+  };
+  installDb(createFakeBillingDb({ orders: [order] }));
+  setStripeForTests({
+    prices: {
+      retrieve: async () => {
+        priceReads += 1;
+        throw new Error('inactive price must not be read for recovery');
+      },
+    },
+    checkout: {
+      sessions: {
+        create: async () => {
+          sessionCreates += 1;
+          throw new Error('existing session should be reused');
+        },
+      },
+    },
+  } as any);
+
+  assert.deepEqual(await createBillingCheckout({ user, kind: 'subscription', priceId: 'price_removed', tier: 'pro', attemptKey }), {
+    status: 'url',
+    url: order.sessionUrl,
+  });
+  assert.equal(priceReads, 0);
+  assert.equal(sessionCreates, 0);
+});
+
+test('same retry key resumes the linked replacement after a lost response and failed prior order', async () => {
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const retryKey = '44444444-4444-4444-8444-444444444444';
+  const priorOrder = { id: 'order_prior', userId: user.id, attemptKey, state: 'failed' };
+  const replacementOrder = {
+    id: 'order_replacement',
+    userId: user.id,
+    attemptKey: '33333333-3333-4333-8333-333333333333',
+    state: 'open',
+    sessionUrl: 'https://checkout.stripe.test/cs_replacement',
+  };
+  const operation = {
+    id: 'retry_operation',
+    userId: user.id,
+    priorOrderId: priorOrder.id,
+    replacementOrderId: replacementOrder.id,
+    retryKey,
+    state: 'checkout_open',
+  };
+  installDb(
+    createFakeBillingDb({
+      orderResults: [[priorOrder], [priorOrder], [replacementOrder]],
+      retryOperationResults: [[operation]],
+    }),
+  );
+
+  assert.deepEqual(await retryBillingCheckout({ userId: user.id, attemptKey, retryKey }), {
+    status: 'url',
+    url: replacementOrder.sessionUrl,
+    retryOperationId: operation.id,
+  });
+});
+
 test('checkout state classifier keeps retryable and ambiguous payment evidence active', () => {
   assert.equal(
     classifyCheckoutEvidence({
@@ -539,6 +628,73 @@ test('explicit retry cancellation uses the durable idempotency key and a bounded
     ['cancel', 'pi_retry', {}, { idempotencyKey: 'billing-cancel-operation-1', timeout: 20_000 }],
     ['retrieve', 'pi_retry'],
   ]);
+});
+
+function orderTransitionDb(currentOrder: Record<string, unknown>) {
+  const changes: Record<string, unknown>[] = [];
+  let predicate: unknown;
+  const database = {
+    execute: async () => [],
+    select() {
+      const query = {
+        from: () => query,
+        where: () => query,
+        limit: async () => [currentOrder],
+      };
+      return query;
+    },
+    update() {
+      const query = {
+        set(value: Record<string, unknown>) {
+          changes.push(value);
+          return query;
+        },
+        where(value: unknown) {
+          predicate = value;
+          return query;
+        },
+        returning: async () => [{ ...currentOrder, ...changes.at(-1) }],
+      };
+      return query;
+    },
+  };
+  return {
+    database,
+    changes,
+    get predicate() {
+      return predicate;
+    },
+  };
+}
+
+test('late reconciliation evidence cannot downgrade an order completed by a winning webhook', async () => {
+  const db = orderTransitionDb({ id: 'order_race', userId: user.id, state: 'completed', version: 8 });
+  const transitioned = await updateBillingOrderCAS(db.database as any, {
+    userId: user.id,
+    orderId: 'order_race',
+    changes: { state: 'needs_reconciliation' },
+  });
+
+  assert.equal(transitioned, null);
+  assert.equal(db.changes.length, 0);
+});
+
+test('webhook completion persists Stripe identifiers when it wins the create-response race', async () => {
+  const db = orderTransitionDb({ id: 'order_race', userId: user.id, state: 'creating', version: 4 });
+  const transitioned = await updateBillingOrderCAS(db.database as any, {
+    userId: user.id,
+    orderId: 'order_race',
+    changes: {
+      state: 'completed',
+      sessionId: 'cs_webhook_first',
+      sessionUrl: 'https://checkout.stripe.test/cs_webhook_first',
+      paymentIntentId: 'pi_webhook_first',
+    },
+  });
+
+  assert.equal(transitioned?.sessionId, 'cs_webhook_first');
+  assert.equal(transitioned?.paymentIntentId, 'pi_webhook_first');
+  assert.ok(db.predicate);
 });
 
 test('checkout completion without a durable order is retained for reconciliation', async () => {

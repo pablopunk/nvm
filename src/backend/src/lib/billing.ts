@@ -404,6 +404,113 @@ async function userHasActiveSubscription(database: BillingDb, userId: string): P
   return subscription ? isActiveBillingSubscriptionStatus(subscription.status) : false;
 }
 
+function checkoutIntentHash(input: { kind: BillingKind; priceId?: string; tier?: string }, resolvedPriceId: string) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: input.kind,
+        priceId: resolvedPriceId,
+        selectedPriceId: input.priceId ?? null,
+        selectedTier: input.tier ?? null,
+      }),
+    )
+    .digest('hex');
+}
+
+async function resumeStoredBillingCheckout(input: {
+  userId: string;
+  attemptKey: string;
+  intentHash: (priceId: string) => string;
+}): Promise<{ status: 'url'; url: string } | { status: 'processing' } | null> {
+  const [found] = await db
+    .select()
+    .from(billingOrders)
+    .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.attemptKey, input.attemptKey)))
+    .limit(1);
+  if (!found) return null;
+  if (found.intentHash !== input.intentHash(found.priceId)) {
+    throw new BillingRequestError('idempotency_conflict', 'This idempotency key was already used for a different purchase.');
+  }
+  const claim = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM users WHERE id = ${input.userId} FOR UPDATE`);
+    const [order] = await tx
+      .select()
+      .from(billingOrders)
+      .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.id, found.id)))
+      .limit(1);
+    if (!order) return { kind: 'processing' as const };
+    if (order.intentHash !== input.intentHash(order.priceId)) {
+      throw new BillingRequestError('idempotency_conflict', 'This idempotency key was already used for a different purchase.');
+    }
+    if (order.state === 'open' && order.sessionUrl) return { kind: 'url' as const, url: order.sessionUrl };
+    if (['completed', 'expired', 'failed', 'retry_required', 'needs_reconciliation'].includes(order.state)) {
+      return {
+        kind: 'status' as const,
+        status: (order.state === 'needs_reconciliation' ? 'reconciliation_required' : order.state) as BillingPendingError['status'],
+      };
+    }
+    if (order.state !== 'creating' || (order.leaseExpiresAt && order.leaseExpiresAt > new Date())) {
+      return { kind: 'processing' as const };
+    }
+    if (Date.now() - order.firstAttemptAt.getTime() > 23 * 60 * 60 * 1000) {
+      await tx
+        .update(billingOrders)
+        .set({ leaseExpiresAt: new Date(Date.now() + BILLING_LEASE_MS), updatedAt: new Date() })
+        .where(and(eq(billingOrders.id, order.id), eq(billingOrders.version, order.version), eq(billingOrders.state, 'creating')));
+      return { kind: 'lookup' as const, order };
+    }
+    const generation = order.leaseGeneration + 1;
+    await tx
+      .update(billingOrders)
+      .set({ leaseGeneration: generation, leaseExpiresAt: new Date(Date.now() + BILLING_LEASE_MS), updatedAt: new Date() })
+      .where(and(eq(billingOrders.id, order.id), eq(billingOrders.version, order.version), eq(billingOrders.state, 'creating')));
+    return { kind: 'create' as const, order, generation };
+  });
+  if (claim.kind === 'url') return { status: 'url', url: claim.url };
+  if (claim.kind === 'status') throw new BillingPendingError(claim.status);
+  if (claim.kind === 'processing') return { status: 'processing' };
+  if (claim.kind === 'lookup') return recoverAmbiguousCheckoutCreate(claim.order);
+
+  const stripe = stripeClient();
+  try {
+    const session = await stripe.checkout.sessions.create(claim.order.requestSnapshot as Stripe.Checkout.SessionCreateParams, {
+      idempotencyKey: `billing-checkout-${claim.order.id}`,
+      timeout: STRIPE_REQUEST_TIMEOUT_MS,
+    });
+    const persisted = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM users WHERE id = ${input.userId} FOR UPDATE`);
+      const [current] = await tx.select().from(billingOrders).where(eq(billingOrders.id, claim.order.id)).limit(1);
+      if (!current || current.state !== 'creating' || current.leaseGeneration !== claim.generation) return false;
+      await tx
+        .update(billingOrders)
+        .set({
+          sessionId: session.id,
+          sessionUrl: session.url,
+          paymentMethodTypes: session.payment_method_types ?? [],
+          paymentIntentId: objectId(session.payment_intent),
+          state: session.status === 'open' && session.url ? 'open' : 'processing',
+          leaseExpiresAt: null,
+          version: current.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(billingOrders.id, current.id),
+            eq(billingOrders.version, current.version),
+            eq(billingOrders.leaseGeneration, claim.generation),
+            eq(billingOrders.state, 'creating'),
+          ),
+        );
+      return true;
+    });
+    if (session.status === 'open' && session.url && persisted) return { status: 'url', url: session.url };
+    return { status: 'processing' };
+  } catch (error) {
+    log.warn('stripe_checkout_recovery_ambiguous', { order_id: claim.order.id, error });
+    return { status: 'processing' };
+  }
+}
+
 export async function createBillingCheckout(input: {
   user: typeof users.$inferSelect;
   kind: BillingKind;
@@ -412,6 +519,15 @@ export async function createBillingCheckout(input: {
   attemptKey?: string;
   legacyCaller?: boolean;
 }) {
+  const attemptKey = input.attemptKey ?? randomUUID();
+  if (input.attemptKey) {
+    const recovered = await resumeStoredBillingCheckout({
+      userId: input.user.id,
+      attemptKey,
+      intentHash: (priceId) => checkoutIntentHash(input, priceId),
+    });
+    if (recovered) return recovered;
+  }
   const item = findCatalogItem(input);
   if (!item) {
     if (input.priceId || input.tier) throw new BillingRequestError('unknown_price', 'Unknown Stripe billing price.');
@@ -481,17 +597,7 @@ export async function createBillingCheckout(input: {
   }
   const customer = await getOrCreateStripeCustomer(input.user);
   const stripe = stripeClient();
-  const attemptKey = input.attemptKey ?? randomUUID();
-  const intentHash = createHash('sha256')
-    .update(
-      JSON.stringify({
-        kind: item.kind,
-        priceId: item.priceId,
-        selectedPriceId: input.priceId ?? null,
-        selectedTier: input.tier ?? null,
-      }),
-    )
-    .digest('hex');
+  const intentHash = checkoutIntentHash(input, item.priceId);
   const claimed = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM users WHERE id = ${input.user.id} FOR UPDATE`);
     const [existing] = await tx
@@ -846,6 +952,8 @@ async function resolveOwnedBillingOrder(input: { userId: string; attemptKey?: st
       .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.attemptKey, input.attemptKey)))
       .limit(1);
     if (order) found.push(order);
+    else if (input.sessionId || input.retryOperationId)
+      throw new BillingRequestError('idempotency_conflict', 'The supplied billing identifiers do not identify the same purchase.');
     else return null;
   }
   if (input.sessionId) {
@@ -855,32 +963,50 @@ async function resolveOwnedBillingOrder(input: { userId: string; attemptKey?: st
       .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.sessionId, input.sessionId)))
       .limit(1);
     if (order) found.push(order);
+    else if (input.attemptKey || input.retryOperationId)
+      throw new BillingRequestError('idempotency_conflict', 'The supplied billing identifiers do not identify the same purchase.');
     else return null;
   }
+  let operation: typeof billingRetryOperations.$inferSelect | undefined;
+  const userOperations = await db.select().from(billingRetryOperations).where(eq(billingRetryOperations.userId, input.userId));
   if (input.retryOperationId) {
-    const [operation] = await db
-      .select()
-      .from(billingRetryOperations)
-      .where(and(eq(billingRetryOperations.userId, input.userId), eq(billingRetryOperations.id, input.retryOperationId)))
-      .limit(1);
+    operation = userOperations.find((candidate) => candidate.id === input.retryOperationId);
     if (!operation) return null;
-    const relatedOrderIds = [operation.priorOrderId, operation.replacementOrderId].filter((id): id is string => Boolean(id));
-    if (found.some((order) => !relatedOrderIds.includes(order.id)))
-      throw new BillingRequestError('idempotency_conflict', 'The supplied billing identifiers refer to different purchases.');
-    if (!found.length) {
-      const orderId = operation.replacementOrderId ?? operation.priorOrderId;
-      const [order] = await db
-        .select()
-        .from(billingOrders)
-        .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.id, orderId)))
-        .limit(1);
-      if (!order) return null;
-      found.push(order);
-    }
   }
-  if (found.length && found.some((order) => order.id !== found[0].id))
-    throw new BillingRequestError('idempotency_conflict', 'The supplied billing identifiers refer to different purchases.');
+  if (found.length > 1 && found.some((order) => order.id !== found[0].id)) {
+    const linked = userOperations.filter((candidate) =>
+      found.every((order) => order.id === candidate.priorOrderId || order.id === candidate.replacementOrderId),
+    );
+    if (linked.length !== 1 || (operation && linked[0].id !== operation.id)) {
+      throw new BillingRequestError('idempotency_conflict', 'The supplied billing identifiers refer to different purchases.');
+    }
+    operation = linked[0];
+  } else if (!operation && found.length) {
+    operation = userOperations.find((candidate) => candidate.priorOrderId === found[0].id || candidate.replacementOrderId === found[0].id);
+  }
+  if (operation) {
+    const relatedIds = [operation.priorOrderId, operation.replacementOrderId].filter((id): id is string => Boolean(id));
+    if (found.some((order) => !relatedIds.includes(order.id))) {
+      throw new BillingRequestError('idempotency_conflict', 'The supplied billing identifiers refer to different purchases.');
+    }
+    const preferredId = operation.replacementOrderId ?? operation.priorOrderId;
+    const [preferred] = await db
+      .select()
+      .from(billingOrders)
+      .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.id, preferredId)))
+      .limit(1);
+    if (preferred) return preferred;
+  }
   if (found.length) return found[0];
+  if (input.retryOperationId && operation) {
+    const preferredId = operation.replacementOrderId ?? operation.priorOrderId;
+    const [related] = await db
+      .select()
+      .from(billingOrders)
+      .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.id, preferredId)))
+      .limit(1);
+    return related ?? null;
+  }
   const [active] = await db
     .select()
     .from(billingOrders)
@@ -1017,13 +1143,24 @@ export async function retryBillingCheckout(input: { userId: string; attemptKey?:
   const claim = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM users WHERE id = ${input.userId} FOR UPDATE`);
     let operation: typeof billingRetryOperations.$inferSelect | undefined;
-    if (input.retryOperationId) {
+    const [sameKeyOperation] = await tx
+      .select()
+      .from(billingRetryOperations)
+      .where(and(eq(billingRetryOperations.userId, input.userId), eq(billingRetryOperations.retryKey, input.retryKey)))
+      .limit(1);
+    if (sameKeyOperation) {
+      if (input.retryOperationId && input.retryOperationId !== sameKeyOperation.id) {
+        throw new BillingRequestError('idempotency_conflict', 'This retry key is already associated with another retry operation.');
+      }
+      operation = sameKeyOperation;
+    } else if (input.retryOperationId) {
       [operation] = await tx
         .select()
         .from(billingRetryOperations)
         .where(and(eq(billingRetryOperations.userId, input.userId), eq(billingRetryOperations.id, input.retryOperationId)))
         .limit(1);
       if (!operation) return { kind: 'status' as const, status: 'none' as const };
+      throw new BillingRequestError('idempotency_conflict', 'This retry operation was created with a different retry key.');
     }
     let priorOrder: typeof billingOrders.$inferSelect | undefined;
     if (operation) {
@@ -1032,6 +1169,16 @@ export async function retryBillingCheckout(input: { userId: string; attemptKey?:
         .from(billingOrders)
         .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.id, operation.priorOrderId)))
         .limit(1);
+      if (input.attemptKey) {
+        const [attemptOrder] = await tx
+          .select()
+          .from(billingOrders)
+          .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.attemptKey, input.attemptKey)))
+          .limit(1);
+        if (!attemptOrder || ![operation.priorOrderId, operation.replacementOrderId].includes(attemptOrder.id)) {
+          throw new BillingRequestError('idempotency_conflict', 'The retry key and checkout attempt refer to different purchases.');
+        }
+      }
     } else if (input.attemptKey) {
       [priorOrder] = await tx
         .select()
@@ -1063,20 +1210,6 @@ export async function retryBillingCheckout(input: { userId: string; attemptKey?:
           status: 'processing' as const,
           operationId: activeOperation.id,
         };
-      const [sameKey] = await tx
-        .select()
-        .from(billingRetryOperations)
-        .where(and(eq(billingRetryOperations.userId, input.userId), eq(billingRetryOperations.retryKey, input.retryKey)))
-        .limit(1);
-      if (sameKey) {
-        if (sameKey.priorOrderId !== priorOrder.id)
-          throw new BillingRequestError('idempotency_conflict', 'This retry key is already associated with a different purchase.');
-        return {
-          kind: 'status' as const,
-          status: 'processing' as const,
-          operationId: sameKey.id,
-        };
-      }
       const operationId = randomUUID();
       createdOperationId = operationId;
       await tx.insert(billingRetryOperations).values({
@@ -1656,6 +1789,34 @@ async function lockBillingUser(database: BillingDb, userId: string) {
   await database.execute(sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`);
 }
 
+export async function updateBillingOrderCAS(
+  database: BillingDb,
+  input: {
+    userId: string;
+    orderId: string;
+    changes: Partial<typeof billingOrders.$inferInsert>;
+  },
+) {
+  await lockBillingUser(database, input.userId);
+  const [current] = await database.select().from(billingOrders).where(eq(billingOrders.id, input.orderId)).limit(1);
+  if (!current || current.state === 'completed') return null;
+  const [updated] = await database
+    .update(billingOrders)
+    .set({ ...input.changes, version: current.version + 1, updatedAt: new Date() })
+    .where(and(eq(billingOrders.id, current.id), eq(billingOrders.version, current.version), eq(billingOrders.state, current.state)))
+    .returning();
+  return updated ?? null;
+}
+
+async function reconcileBillingOrder(database: BillingDb, order: typeof billingOrders.$inferSelect, reason: string): Promise<EventOutcome> {
+  const updated = await updateBillingOrderCAS(database, {
+    userId: order.userId,
+    orderId: order.id,
+    changes: { state: 'needs_reconciliation' },
+  });
+  return updated ? { state: 'needs_reconciliation', reason } : { state: 'processed' };
+}
+
 function checkoutTermsMatch(
   order: typeof billingOrders.$inferSelect,
   session: Stripe.Checkout.Session,
@@ -1692,10 +1853,12 @@ async function completeBillingOrder(
   order: typeof billingOrders.$inferSelect,
   grantRef: string,
   stripeEventId: string,
+  stripeEvidence: { sessionId?: string; sessionUrl?: string | null; paymentIntentId?: string | null } = {},
 ) {
   await lockBillingUser(database, order.userId);
-  const [currentOrder] = await database.select().from(billingOrders).where(eq(billingOrders.id, order.id)).limit(1);
-  if (!currentOrder || currentOrder.state === 'completed') return { state: 'processed' as const };
+  const [storedOrder] = await database.select().from(billingOrders).where(eq(billingOrders.id, order.id)).limit(1);
+  if (!storedOrder || storedOrder.state === 'completed') return { state: 'processed' as const };
+  const currentOrder = { ...storedOrder, ...stripeEvidence };
   const [terms] = await database.select().from(billingPriceTerms).where(eq(billingPriceTerms.id, order.priceTermsId)).limit(1);
   if (
     !terms ||
@@ -1710,14 +1873,11 @@ async function completeBillingOrder(
     terms.intervalCount !== currentOrder.intervalCount ||
     currentOrder.expectedTotalAmount !== currentOrder.expectedUnitAmount * currentOrder.quantity
   ) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, currentOrder.id));
+    await updateBillingOrderCAS(database, {
+      userId: currentOrder.userId,
+      orderId: currentOrder.id,
+      changes: { state: 'needs_reconciliation', ...stripeEvidence },
+    });
     return {
       state: 'needs_reconciliation' as const,
       reason: 'order_terms_mismatch',
@@ -1751,15 +1911,12 @@ async function completeBillingOrder(
   if (currentOrder.kind === 'subscription') {
     await updateUserPlan(database, currentOrder.userId, currentOrder.tier ?? terms.tier ?? 'pro');
   }
-  await database
-    .update(billingOrders)
-    .set({
-      state: 'completed',
-      leaseExpiresAt: null,
-      version: sql`${billingOrders.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(billingOrders.id, currentOrder.id));
+  const completed = await updateBillingOrderCAS(database, {
+    userId: currentOrder.userId,
+    orderId: currentOrder.id,
+    changes: { ...stripeEvidence, state: 'completed', leaseExpiresAt: null },
+  });
+  if (!completed) return { state: 'processed' as const };
   await database
     .update(billingRetryOperations)
     .set({ state: 'superseded', leaseExpiresAt: null, updatedAt: new Date() })
@@ -1830,17 +1987,24 @@ async function handleCheckoutCompleted(database: BillingDb, prepared: PreparedSt
       reason: 'paid_checkout_without_order',
     };
   await lockBillingUser(database, order.userId);
-  if (order.state === 'completed') return { state: 'processed' };
-  if (!checkoutTermsMatch(order, session, prepared.lineItems)) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return { state: 'needs_reconciliation', reason: 'checkout_order_mismatch' };
+  const [storedOrder] = await database.select().from(billingOrders).where(eq(billingOrders.id, order.id)).limit(1);
+  if (!storedOrder || storedOrder.state === 'completed') return { state: 'processed' };
+  const paymentIntentId = objectId(session.payment_intent);
+  if (
+    (storedOrder.sessionId && storedOrder.sessionId !== session.id) ||
+    (storedOrder.paymentIntentId && storedOrder.paymentIntentId !== paymentIntentId)
+  ) {
+    return reconcileBillingOrder(database, storedOrder, 'checkout_stripe_id_mismatch');
+  }
+  const stripeEvidence = { sessionId: session.id, sessionUrl: session.url, paymentIntentId };
+  const currentOrder = await updateBillingOrderCAS(database, {
+    userId: storedOrder.userId,
+    orderId: storedOrder.id,
+    changes: stripeEvidence,
+  });
+  if (!currentOrder) return { state: 'processed' };
+  if (!checkoutTermsMatch(currentOrder, session, prepared.lineItems)) {
+    return reconcileBillingOrder(database, currentOrder, 'checkout_order_mismatch');
   }
   if (session.payment_status !== 'paid') {
     const intent = prepared.paymentIntent;
@@ -1854,72 +2018,46 @@ async function handleCheckoutCompleted(database: BillingDb, prepared: PreparedSt
             : session.status === 'expired' && !intent
               ? 'expired'
               : 'processing';
-    await database
-      .update(billingOrders)
-      .set({
-        state,
-        paymentIntentId: intent?.id ?? order.paymentIntentId,
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
+    await updateBillingOrderCAS(database, {
+      userId: currentOrder.userId,
+      orderId: currentOrder.id,
+      changes: { state, paymentIntentId: intent?.id ?? currentOrder.paymentIntentId },
+    });
     return { state: 'processed' };
   }
-  if (order.kind === 'top_up') {
+  if (currentOrder.kind === 'top_up') {
     const intent = prepared.paymentIntent;
     if (
       !intent ||
       intent.status !== 'succeeded' ||
-      intent.amount_received !== order.expectedTotalAmount ||
-      intent.currency.toLowerCase() !== order.currency ||
-      objectId(intent.customer) !== order.stripeCustomerId ||
-      metadataOf(intent).order_id !== order.id ||
-      metadataOf(intent).user_id !== order.userId ||
-      metadataOf(intent).price_id !== order.priceId ||
-      metadataOf(intent).billing_kind !== order.kind ||
-      metadataOf(intent).credits !== String(order.credits)
+      intent.amount_received !== currentOrder.expectedTotalAmount ||
+      intent.currency.toLowerCase() !== currentOrder.currency ||
+      objectId(intent.customer) !== currentOrder.stripeCustomerId ||
+      metadataOf(intent).order_id !== currentOrder.id ||
+      metadataOf(intent).user_id !== currentOrder.userId ||
+      metadataOf(intent).price_id !== currentOrder.priceId ||
+      metadataOf(intent).billing_kind !== currentOrder.kind ||
+      metadataOf(intent).credits !== String(currentOrder.credits)
     ) {
-      await database
-        .update(billingOrders)
-        .set({
-          state: 'needs_reconciliation',
-          version: sql`${billingOrders.version} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(billingOrders.id, order.id));
-      return {
-        state: 'needs_reconciliation',
-        reason: 'checkout_payment_intent_mismatch',
-      };
+      return reconcileBillingOrder(database, currentOrder, 'checkout_payment_intent_mismatch');
     }
-    return completeBillingOrder(database, order, intent.id, prepared.event.id);
+    return completeBillingOrder(database, currentOrder, intent.id, prepared.event.id, stripeEvidence);
   }
   const subscription = prepared.subscription;
   if (
     !subscription ||
     subscription.id !== objectId(session.subscription) ||
-    subscriptionPriceId(subscription) !== order.priceId ||
-    metadataOf(subscription).order_id !== order.id ||
-    metadataOf(subscription).user_id !== order.userId
+    subscriptionPriceId(subscription) !== currentOrder.priceId ||
+    metadataOf(subscription).order_id !== currentOrder.id ||
+    metadataOf(subscription).user_id !== currentOrder.userId
   ) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'checkout_subscription_mismatch',
-    };
+    return reconcileBillingOrder(database, currentOrder, 'checkout_subscription_mismatch');
   }
-  const [terms] = await database.select().from(billingPriceTerms).where(eq(billingPriceTerms.id, order.priceTermsId)).limit(1);
+  const [terms] = await database.select().from(billingPriceTerms).where(eq(billingPriceTerms.id, currentOrder.priceTermsId)).limit(1);
   if (
     !terms ||
     !(await ensureSubscriptionPriceVersion(database, {
-      order,
+      order: currentOrder,
       terms,
       subscription,
       eventId: prepared.event.id,
@@ -1928,18 +2066,15 @@ async function handleCheckoutCompleted(database: BillingDb, prepared: PreparedSt
       ),
     }))
   )
-    return {
-      state: 'needs_reconciliation',
-      reason: 'subscription_terms_unavailable',
-    };
+    return reconcileBillingOrder(database, currentOrder, 'subscription_terms_unavailable');
   await upsertSubscription(database, {
-    userId: order.userId,
+    userId: currentOrder.userId,
     stripeSubId: subscription.id,
-    tier: terms.tier ?? order.tier ?? 'pro',
+    tier: terms.tier ?? currentOrder.tier ?? 'pro',
     status: subscription.status,
     currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
   });
-  return completeBillingOrder(database, order, session.id, prepared.event.id);
+  return completeBillingOrder(database, currentOrder, session.id, prepared.event.id, stripeEvidence);
 }
 
 function intervalEnd(start: Date, interval: string, count: number): Date {
@@ -2064,50 +2199,45 @@ async function handlePaymentIntentSucceeded(database: BillingDb, prepared: Prepa
       reason: 'succeeded_payment_without_order',
     };
   await lockBillingUser(database, order.userId);
-  if (order.state === 'completed') return { state: 'processed' };
+  const [storedOrder] = await database.select().from(billingOrders).where(eq(billingOrders.id, order.id)).limit(1);
+  if (!storedOrder || storedOrder.state === 'completed') return { state: 'processed' };
+  if (storedOrder.paymentIntentId && storedOrder.paymentIntentId !== intent.id) {
+    return reconcileBillingOrder(database, storedOrder, 'payment_intent_id_mismatch');
+  }
+  if (prepared.session && storedOrder.sessionId && storedOrder.sessionId !== prepared.session.id) {
+    return reconcileBillingOrder(database, storedOrder, 'payment_intent_session_id_mismatch');
+  }
+  const stripeEvidence = {
+    ...(prepared.session ? { sessionId: prepared.session.id, sessionUrl: prepared.session.url } : {}),
+    paymentIntentId: intent.id,
+  };
+  const currentOrder = await updateBillingOrderCAS(database, {
+    userId: storedOrder.userId,
+    orderId: storedOrder.id,
+    changes: stripeEvidence,
+  });
+  if (!currentOrder) return { state: 'processed' };
   if (
-    order.kind !== 'top_up' ||
+    currentOrder.kind !== 'top_up' ||
     intent.status !== 'succeeded' ||
-    intent.amount_received !== order.expectedTotalAmount ||
-    intent.currency.toLowerCase() !== order.currency ||
-    objectId(intent.customer) !== order.stripeCustomerId ||
-    metadata.price_id !== order.priceId ||
-    metadata.credits !== String(order.credits)
+    intent.amount_received !== currentOrder.expectedTotalAmount ||
+    intent.currency.toLowerCase() !== currentOrder.currency ||
+    objectId(intent.customer) !== currentOrder.stripeCustomerId ||
+    metadata.price_id !== currentOrder.priceId ||
+    metadata.credits !== String(currentOrder.credits)
   ) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'succeeded_payment_order_mismatch',
-    };
+    return reconcileBillingOrder(database, currentOrder, 'succeeded_payment_order_mismatch');
   }
   if (
     !prepared.session ||
     !prepared.lineItems ||
     objectId(prepared.session.payment_intent) !== intent.id ||
     prepared.session.payment_status !== 'paid' ||
-    !checkoutTermsMatch(order, prepared.session, prepared.lineItems)
+    !checkoutTermsMatch(currentOrder, prepared.session, prepared.lineItems)
   ) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'succeeded_payment_session_unverified',
-    };
+    return reconcileBillingOrder(database, currentOrder, 'succeeded_payment_session_unverified');
   }
-  return completeBillingOrder(database, { ...order, paymentIntentId: intent.id }, intent.id, prepared.event.id);
+  return completeBillingOrder(database, currentOrder, intent.id, prepared.event.id, stripeEvidence);
 }
 
 async function handleCheckoutFailure(database: BillingDb, prepared: PreparedStripeEvent): Promise<EventOutcome> {
@@ -2124,65 +2254,32 @@ async function handleCheckoutFailure(database: BillingDb, prepared: PreparedStri
       reason: 'failed_checkout_without_order',
     };
   await lockBillingUser(database, order.userId);
-  const [currentOrder] = await database.select().from(billingOrders).where(eq(billingOrders.id, order.id)).limit(1);
-  if (!currentOrder || currentOrder.state === 'completed') return { state: 'processed' };
-  if (session.id !== order.sessionId || session.metadata?.order_id !== order.id || objectId(session.customer) !== order.stripeCustomerId) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'failed_checkout_order_mismatch',
-    };
-  }
-  if (session.payment_status === 'paid') {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'checkout_failure_event_conflicts_with_paid_session',
-    };
+  const [storedOrder] = await database.select().from(billingOrders).where(eq(billingOrders.id, order.id)).limit(1);
+  if (!storedOrder || storedOrder.state === 'completed') return { state: 'processed' };
+  if (
+    (storedOrder.sessionId && session.id !== storedOrder.sessionId) ||
+    (storedOrder.paymentIntentId && objectId(session.payment_intent) !== storedOrder.paymentIntentId) ||
+    session.metadata?.order_id !== storedOrder.id ||
+    objectId(session.customer) !== storedOrder.stripeCustomerId
+  ) {
+    return reconcileBillingOrder(database, storedOrder, 'failed_checkout_order_mismatch');
   }
   const intent = prepared.paymentIntent;
+  const currentOrder = await updateBillingOrderCAS(database, {
+    userId: storedOrder.userId,
+    orderId: storedOrder.id,
+    changes: { sessionId: session.id, sessionUrl: session.url, paymentIntentId: intent?.id ?? storedOrder.paymentIntentId },
+  });
+  if (!currentOrder) return { state: 'processed' };
+  if (session.payment_status === 'paid') {
+    return reconcileBillingOrder(database, currentOrder, 'checkout_failure_event_conflicts_with_paid_session');
+  }
   let nextState: string;
   if (prepared.event.type === 'checkout.session.expired' && session.status !== 'expired') {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'expired_event_conflicts_with_session',
-    };
+    return reconcileBillingOrder(database, currentOrder, 'expired_event_conflicts_with_session');
   }
-  if (intent && (objectId(intent.customer) !== order.stripeCustomerId || metadataOf(intent).order_id !== order.id)) {
-    await database
-      .update(billingOrders)
-      .set({
-        state: 'needs_reconciliation',
-        version: sql`${billingOrders.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingOrders.id, order.id));
-    return {
-      state: 'needs_reconciliation',
-      reason: 'failure_payment_intent_mismatch',
-    };
+  if (intent && (objectId(intent.customer) !== currentOrder.stripeCustomerId || metadataOf(intent).order_id !== currentOrder.id)) {
+    return reconcileBillingOrder(database, currentOrder, 'failure_payment_intent_mismatch');
   }
   if (session.status === 'open') nextState = 'open';
   else if (session.status === 'complete' && intent?.status === 'requires_payment_method') nextState = 'retry_required';
@@ -2191,21 +2288,9 @@ async function handleCheckoutFailure(database: BillingDb, prepared: PreparedStri
   else if (session.status === 'expired' && intent?.status === 'requires_payment_method') nextState = 'retry_required';
   else if (session.status === 'complete' || session.status === 'expired') nextState = 'processing';
   else nextState = 'needs_reconciliation';
-  await database
-    .update(billingOrders)
-    .set({
-      state: nextState,
-      paymentIntentId: intent?.id ?? order.paymentIntentId,
-      version: sql`${billingOrders.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(billingOrders.id, order.id));
-  return nextState === 'needs_reconciliation'
-    ? {
-        state: 'needs_reconciliation',
-        reason: 'checkout_failure_evidence_incomplete',
-      }
-    : { state: 'processed' };
+  if (nextState === 'needs_reconciliation') return reconcileBillingOrder(database, currentOrder, 'checkout_failure_evidence_incomplete');
+  await updateBillingOrderCAS(database, { userId: currentOrder.userId, orderId: currentOrder.id, changes: { state: nextState } });
+  return { state: 'processed' };
 }
 
 type StoredSubscriptionVersion = {
@@ -2376,8 +2461,31 @@ async function prepareStripeEvent(event: Stripe.Event): Promise<PreparedStripeEv
     const orderId = metadataOf(paymentIntent).order_id;
     if (!orderId) return { event, paymentIntent, subscription: null };
     const [order] = await db.select().from(billingOrders).where(eq(billingOrders.id, orderId)).limit(1);
-    if (!order?.sessionId) return { event, paymentIntent, subscription: null };
-    const session = await stripe.checkout.sessions.retrieve(order.sessionId);
+    if (!order) return { event, paymentIntent, subscription: null };
+    let sessionId = order.sessionId;
+    if (!sessionId) {
+      let startingAfter: string | undefined;
+      let terminal = false;
+      const matches: Stripe.Checkout.Session[] = [];
+      for (let pageNumber = 0; pageNumber < 3; pageNumber += 1) {
+        const page = await stripe.checkout.sessions.list({
+          customer: order.stripeCustomerId,
+          created: { gte: Math.floor(order.firstAttemptAt.getTime() / 1000) },
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        });
+        matches.push(...page.data.filter((candidate) => candidate.metadata?.order_id === order.id));
+        if (!page.has_more) {
+          terminal = true;
+          break;
+        }
+        startingAfter = page.data.at(-1)?.id;
+        if (!startingAfter) break;
+      }
+      if (!terminal || matches.length !== 1) return { event, paymentIntent, subscription: null };
+      sessionId = matches[0].id;
+    }
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
       limit: 100,
     });
