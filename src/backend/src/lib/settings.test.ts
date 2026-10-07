@@ -107,13 +107,10 @@ describe('parseModelRouteRef', () => {
   });
 
   test('preserves slash-qualified OpenRouter model ids', () => {
-    assert.deepEqual(
-      parseModelRouteRef('openrouter/google/gemini-2.5-flash'),
-      {
-        provider: 'openrouter',
-        modelId: 'google/gemini-2.5-flash',
-      },
-    );
+    assert.deepEqual(parseModelRouteRef('openrouter/google/gemini-2.5-flash'), {
+      provider: 'openrouter',
+      modelId: 'google/gemini-2.5-flash',
+    });
   });
 
   test('returns null for missing slash', () => {
@@ -135,10 +132,7 @@ describe('parseModelRouteRef', () => {
 
 describe('modelRouteToRef', () => {
   test('encodes route as provider/modelId string', () => {
-    assert.strictEqual(
-      modelRouteToRef({ provider: 'anthropic', modelId: 'claude-sonnet-4-6' }),
-      'anthropic/claude-sonnet-4-6',
-    );
+    assert.strictEqual(modelRouteToRef({ provider: 'anthropic', modelId: 'claude-sonnet-4-6' }), 'anthropic/claude-sonnet-4-6');
   });
 
   test('round-trips with parseModelRouteRef', () => {
@@ -200,16 +194,24 @@ test('shared model decision preserves paid-credit route eligibility and honors e
   for (const role of ['smart', 'fast'] as const) {
     for (const freeCredits of [0, 10]) {
       assert.deepEqual(decideAccountModel({ plan: 'pro', paidCredits: 10, freeCredits, role }), {
-        tier: 'pro', routeSlot: `pro-${role}`, creditKind: 'paid',
+        tier: 'pro',
+        routeSlot: `pro-${role}`,
+        creditKind: 'paid',
       });
       assert.deepEqual(decideAccountModel({ plan: 'free', paidCredits: 10, freeCredits, role }), {
-        tier: 'free', routeSlot: `free-${role}`, creditKind: 'paid',
+        tier: 'free',
+        routeSlot: `free-${role}`,
+        creditKind: 'paid',
       });
       assert.deepEqual(decideAccountModel({ plan: 'pro', paidCredits: 0, freeCredits, role }), {
-        tier: 'free', routeSlot: `free-${role}`, creditKind: 'free',
+        tier: 'free',
+        routeSlot: `free-${role}`,
+        creditKind: 'free',
       });
       assert.deepEqual(decideAccountModel({ plan: 'pro', paidCredits: 10, freeCredits, role, forceFree: true }), {
-        tier: 'free', routeSlot: `free-${role}`, creditKind: 'free',
+        tier: 'free',
+        routeSlot: `free-${role}`,
+        creditKind: 'free',
       });
     }
   }
@@ -228,9 +230,7 @@ describe('listKnownProviders', () => {
 
 describe('getModelRoute', () => {
   test('returns stored JSON route for paid slot', async () => {
-    const db = fakeDb([
-      [{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6"}' }],
-    ]);
+    const db = fakeDb([[{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6"}' }]]);
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
@@ -238,9 +238,7 @@ describe('getModelRoute', () => {
   });
 
   test('returns stored ref-string route', async () => {
-    const db = fakeDb([
-      [{ value: 'openai/gpt-4o' }],
-    ]);
+    const db = fakeDb([[{ value: 'openai/gpt-4o' }]]);
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
@@ -248,9 +246,7 @@ describe('getModelRoute', () => {
   });
 
   test('returns the stored thinking level', async () => {
-    const db = fakeDb([
-      [{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6","thinkingLevel":"high"}' }],
-    ]);
+    const db = fakeDb([[{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6","thinkingLevel":"high"}' }]]);
     setDbForTests(db);
 
     const route = await getModelRoute('paid');
@@ -259,9 +255,9 @@ describe('getModelRoute', () => {
 
   test('falls back to legacy modelId + active provider when no route stored', async () => {
     const db = fakeDb([
-      [],                                   // active_model_route: none
-      [{ value: 'anthropic' }],             // active_provider
-      [{ value: 'claude-sonnet-4-6' }],     // active_model
+      [], // active_model_route: none
+      [{ value: 'anthropic' }], // active_provider
+      [{ value: 'claude-sonnet-4-6' }], // active_model
     ]);
     setDbForTests(db);
 
@@ -271,9 +267,9 @@ describe('getModelRoute', () => {
 
   test('falls back to default provider when active_provider is unset', async () => {
     const db = fakeDb([
-      [],                         // active_model_route: none
-      [],                         // active_provider: none → default
-      [{ value: 'some-model' }],  // active_model
+      [], // active_model_route: none
+      [], // active_provider: none → default
+      [{ value: 'some-model' }], // active_model
     ]);
     setDbForTests(db);
 
@@ -283,10 +279,10 @@ describe('getModelRoute', () => {
 
   test('smart slot falls back to paid chain', async () => {
     const db = fakeDb([
-      [],                                 // smart_model_route: none
-      [],                                 // (paid) active_model_route: none
-      [{ value: 'openai' }],              // active_provider
-      [{ value: 'gpt-4o' }],             // active_model
+      [], // smart_model_route: none
+      [], // (paid) active_model_route: none
+      [{ value: 'openai' }], // active_provider
+      [{ value: 'gpt-4o' }], // active_model
     ]);
     setDbForTests(db);
 
@@ -296,10 +292,10 @@ describe('getModelRoute', () => {
 
   test('fast slot falls back to free chain', async () => {
     const db = fakeDb([
-      [],                                // fast_model_route: none
-      [],                                // (free) free_model_route: none
-      [],                                // active_provider: none → default
-      [{ value: 'gemini-flash' }],       // free_model
+      [], // fast_model_route: none
+      [], // (free) free_model_route: none
+      [], // active_provider: none → default
+      [{ value: 'gemini-flash' }], // free_model
     ]);
     setDbForTests(db);
 
@@ -308,41 +304,28 @@ describe('getModelRoute', () => {
   });
 
   test('tiered slot returns its independently stored route', async () => {
-    setDbForTests(fakeDb([
-      [{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6","thinkingLevel":"high"}' }],
-    ]));
+    setDbForTests(fakeDb([[{ value: '{"provider":"anthropic","modelId":"claude-sonnet-4-6","thinkingLevel":"high"}' }]]));
 
     const route = await getModelRoute('free-smart');
     assert.deepEqual(route, { provider: 'anthropic', modelId: 'claude-sonnet-4-6', thinkingLevel: 'high' });
   });
 
   test('Pro Fast falls back to the legacy paid route', async () => {
-    setDbForTests(fakeDb([
-      [],
-      [{ value: '{"provider":"openai","modelId":"gpt-4o","thinkingLevel":"medium"}' }],
-    ]));
+    setDbForTests(fakeDb([[], [{ value: '{"provider":"openai","modelId":"gpt-4o","thinkingLevel":"medium"}' }]]));
 
     const route = await getModelRoute('pro-fast');
     assert.deepEqual(route, { provider: 'openai', modelId: 'gpt-4o', thinkingLevel: 'medium' });
   });
 
   test('Free Smart never falls back through the legacy paid Smart route', async () => {
-    setDbForTests(fakeDb([
-      [],
-      [{ value: '{"provider":"google","modelId":"gemini-flash","thinkingLevel":"low"}' }],
-    ]));
+    setDbForTests(fakeDb([[], [{ value: '{"provider":"google","modelId":"gemini-flash","thinkingLevel":"low"}' }]]));
 
     const route = await getModelRoute('free-smart');
     assert.deepEqual(route, { provider: 'google', modelId: 'gemini-flash', thinkingLevel: 'low' });
   });
 
   test('Free Smart falls back to the legacy free route', async () => {
-    setDbForTests(fakeDb([
-      [],
-      [],
-      [{ value: 'google' }],
-      [{ value: 'gemini-pro' }],
-    ]));
+    setDbForTests(fakeDb([[], [], [{ value: 'google' }], [{ value: 'gemini-pro' }]]));
 
     const route = await getModelRoute('free-smart');
     assert.deepEqual(route, { provider: 'google', modelId: 'gemini-pro', thinkingLevel: 'low' });
@@ -350,36 +333,30 @@ describe('getModelRoute', () => {
 
   test('throws ModelNotConfiguredError when legacy modelId is missing', async () => {
     const db = fakeDb([
-      [],  // active_model_route: none
-      [],  // active_provider: none
-      [],  // active_model: none
+      [], // active_model_route: none
+      [], // active_provider: none
+      [], // active_model: none
     ]);
     setDbForTests(db);
 
-    await assert.rejects(
-      () => getModelRoute('paid'),
-      ModelNotConfiguredError,
-    );
+    await assert.rejects(() => getModelRoute('paid'), ModelNotConfiguredError);
   });
 
   test('JSON stored route with unknown provider falls through to legacy which then fails', async () => {
-    const db = fakeDb([
-      [{ value: '{"provider":"made-up","modelId":"gpt-4o"}' }],
-      [],
-      [],
-    ]);
+    const db = fakeDb([[{ value: '{"provider":"made-up","modelId":"gpt-4o"}' }], [], []]);
     setDbForTests(db);
 
-    await assert.rejects(
-      () => getModelRoute('paid'),
-      ModelNotConfiguredError,
-    );
+    await assert.rejects(() => getModelRoute('paid'), ModelNotConfiguredError);
   });
 });
 
 test('persists the thinking level with a model route', async () => {
   let inserted: any;
-  setDbForTests(fakeDb([], (values) => { inserted = values; }));
+  setDbForTests(
+    fakeDb([], (values) => {
+      inserted = values;
+    }),
+  );
 
   await setModelRoute('smart', {
     provider: 'anthropic',
@@ -397,7 +374,11 @@ test('persists the thinking level with a model route', async () => {
 
 test('persists all four tiered model routes independently', async () => {
   const inserted: any[] = [];
-  setDbForTests(fakeDb([], (values) => { inserted.push(values); }));
+  setDbForTests(
+    fakeDb([], (values) => {
+      inserted.push(values);
+    }),
+  );
 
   for (const slot of ['pro-smart', 'pro-fast', 'free-smart', 'free-fast'] as const) {
     await setModelRoute(slot, {
@@ -407,19 +388,15 @@ test('persists all four tiered model routes independently', async () => {
     });
   }
 
-  assert.deepEqual(inserted.map((value) => value.key), [
-    'pro_smart_model_route',
-    'pro_fast_model_route',
-    'free_smart_model_route',
-    'free_fast_model_route',
-  ]);
+  assert.deepEqual(
+    inserted.map((value) => value.key),
+    ['pro_smart_model_route', 'pro_fast_model_route', 'free_smart_model_route', 'free_fast_model_route'],
+  );
 });
 
 describe('getModelProviderChain', () => {
   test('returns provider ids ordered by priority', async () => {
-    const db = fakeDb([
-      [{ providerId: 'opencode_zen' }, { providerId: 'openrouter' }, { providerId: 'anthropic' }],
-    ]);
+    const db = fakeDb([[{ providerId: 'opencode_zen' }, { providerId: 'openrouter' }, { providerId: 'anthropic' }]]);
     setDbForTests(db);
 
     const chain = await getModelProviderChain('paid', 'some-model');
@@ -443,10 +420,7 @@ describe('getModelProviderChain', () => {
   });
 
   test('tiered route falls back to its legacy provider chain', async () => {
-    const db = fakeDb([
-      [],
-      [{ providerId: 'openrouter' }],
-    ]);
+    const db = fakeDb([[], [{ providerId: 'openrouter' }]]);
     setDbForTests(db);
 
     const chain = await getModelProviderChain('pro-smart', 'some-model');
@@ -510,15 +484,16 @@ describe('setModelProviderChain', () => {
   test('stores provider-specific model ids for failover', async () => {
     let inserted: any[] = [];
     const db: any = {
-      insert: () => promiseChain([], (values) => { inserted = values as any[]; }),
+      insert: () =>
+        promiseChain([], (values) => {
+          inserted = values as any[];
+        }),
       delete: () => ({ where: () => promiseChain([]) }),
       transaction: async (cb: (tx: any) => Promise<void>) => cb(db),
     };
     setDbForTests(db);
 
-    await setModelProviderChain('pro-smart', 'openai/gpt-5.6-sol', [
-      { providerId: 'opencode_zen', modelId: 'gpt-5.6-sol' },
-    ]);
+    await setModelProviderChain('pro-smart', 'openai/gpt-5.6-sol', [{ providerId: 'opencode_zen', modelId: 'gpt-5.6-sol' }]);
 
     assert.equal(inserted[0].modelId, 'openai/gpt-5.6-sol');
     assert.equal(inserted[0].providerId, 'opencode_zen');

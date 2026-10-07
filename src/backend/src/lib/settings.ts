@@ -69,11 +69,7 @@ async function getSetting(key: string): Promise<string | null> {
 export async function getSignupsEnabled(): Promise<boolean> {
   let row: { value: string } | undefined;
   try {
-    [row] = await db
-      .select({ value: appSettings.value })
-      .from(appSettings)
-      .where(eq(appSettings.key, SIGNUPS_ENABLED_KEY))
-      .limit(1);
+    [row] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, SIGNUPS_ENABLED_KEY)).limit(1);
   } catch (error) {
     throw new SignupsPolicyError('Sign-up policy is unavailable', { cause: error });
   }
@@ -105,9 +101,7 @@ export function parseModelRouteRef(ref: string): ModelRoute | null {
 }
 
 function parseThinkingLevel(value: unknown): ThinkingLevel {
-  return typeof value === 'string' && THINKING_LEVELS.includes(value as ThinkingLevel)
-    ? (value as ThinkingLevel)
-    : DEFAULT_THINKING_LEVEL;
+  return typeof value === 'string' && THINKING_LEVELS.includes(value as ThinkingLevel) ? (value as ThinkingLevel) : DEFAULT_THINKING_LEVEL;
 }
 
 function parseStoredModelRoute(value: string | null): ModelRouteConfig | null {
@@ -145,12 +139,8 @@ export async function getAudioModelRoute(): Promise<AudioModelRoute> {
 }
 
 export async function setAudioModelRoute(route: AudioModelRoute) {
-  if (!KNOWN_PROVIDERS.has(route.provider))
-    throw new Error(`Unknown provider: ${route.provider}`);
-  await setSetting(
-    AUDIO_MODEL_ROUTE_KEY,
-    JSON.stringify({ ...route, thinkingLevel: 'off' }),
-  );
+  if (!KNOWN_PROVIDERS.has(route.provider)) throw new Error(`Unknown provider: ${route.provider}`);
+  await setSetting(AUDIO_MODEL_ROUTE_KEY, JSON.stringify({ ...route, thinkingLevel: 'off' }));
 }
 
 function legacyFallbackRouteSlots(slot: ModelRouteSlot): ModelRouteSlot[] {
@@ -204,14 +194,14 @@ export function parseExtensionAiModelRole(value: string | null | undefined): Ext
 }
 
 export function parseModelRouteSlot(value: unknown): ModelRouteSlot | null {
-  return value === 'paid'
-    || value === 'free'
-    || value === 'smart'
-    || value === 'fast'
-    || value === 'pro-smart'
-    || value === 'pro-fast'
-    || value === 'free-smart'
-    || value === 'free-fast'
+  return value === 'paid' ||
+    value === 'free' ||
+    value === 'smart' ||
+    value === 'fast' ||
+    value === 'pro-smart' ||
+    value === 'pro-fast' ||
+    value === 'free-smart' ||
+    value === 'free-fast'
     ? value
     : null;
 }
@@ -230,10 +220,7 @@ export function modelRouteSlotForAccount(
   role: ExtensionAiModelRole,
   forceFree = false,
 ): TieredModelRouteSlot {
-  const tier =
-    !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0
-      ? 'pro'
-      : 'free';
+  const tier = !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0 ? 'pro' : 'free';
   return tieredModelRouteSlot(tier, role);
 }
 
@@ -251,12 +238,7 @@ export function decideAccountModel(input: {
   role: ExtensionAiModelRole;
   forceFree?: boolean;
 }): AccountModelDecision {
-  const routeSlot = modelRouteSlotForAccount(
-    input.plan,
-    input.paidCredits,
-    input.role,
-    input.forceFree,
-  );
+  const routeSlot = modelRouteSlotForAccount(input.plan, input.paidCredits, input.role, input.forceFree);
   const tier = routeSlot.startsWith('pro-') ? 'pro' : 'free';
   return {
     tier,
@@ -307,13 +289,7 @@ export async function getModelProviderRoutes(slot: ModelRouteSlot, modelId: stri
       .select({ providerId: modelProviders.providerId, modelId: modelProviders.providerModelId })
       .from(modelProviders)
       .innerJoin(providers, eq(modelProviders.providerId, providers.id))
-      .where(
-        and(
-          eq(modelProviders.routeSlot, candidateSlot),
-          eq(modelProviders.modelId, modelId),
-          eq(providers.enabled, 'true'),
-        ),
-      )
+      .where(and(eq(modelProviders.routeSlot, candidateSlot), eq(modelProviders.modelId, modelId), eq(providers.enabled, 'true')))
       .orderBy(modelProviders.priority);
     if (rows.length > 0) return rows.map((row) => ({ providerId: row.providerId, modelId: row.modelId ?? modelId }));
   }
@@ -333,20 +309,9 @@ export async function getConfiguredModelProviderRoutes(slot: ModelRouteSlot, mod
   return rows.map((row) => ({ providerId: row.providerId, modelId: row.modelId ?? modelId }));
 }
 
-export async function setModelProviderChain(
-  slot: ModelRouteSlot,
-  modelId: string,
-  providerRoutes: Array<string | ModelProviderRoute>,
-) {
+export async function setModelProviderChain(slot: ModelRouteSlot, modelId: string, providerRoutes: Array<string | ModelProviderRoute>) {
   await db.transaction(async (tx) => {
-    await tx
-      .delete(modelProviders)
-      .where(
-        and(
-          eq(modelProviders.routeSlot, slot),
-          eq(modelProviders.modelId, modelId),
-        ),
-      );
+    await tx.delete(modelProviders).where(and(eq(modelProviders.routeSlot, slot), eq(modelProviders.modelId, modelId)));
 
     if (providerRoutes.length === 0) return;
 
@@ -363,18 +328,11 @@ export async function setModelProviderChain(
 }
 
 export async function listEnabledProviders() {
-  return db
-    .select()
-    .from(providers)
-    .where(eq(providers.enabled, 'true'))
-    .orderBy(providers.priority);
+  return db.select().from(providers).where(eq(providers.enabled, 'true')).orderBy(providers.priority);
 }
 
 export async function isProviderEnabled(providerId: string): Promise<boolean> {
-  const [provider] = await db.select({ enabled: providers.enabled })
-    .from(providers)
-    .where(eq(providers.id, providerId))
-    .limit(1);
+  const [provider] = await db.select({ enabled: providers.enabled }).from(providers).where(eq(providers.id, providerId)).limit(1);
   return provider?.enabled === 'true';
 }
 
@@ -382,10 +340,7 @@ export async function listAllProviders() {
   return db.select().from(providers).orderBy(providers.priority);
 }
 
-export async function updateProvider(
-  providerId: string,
-  updates: { enabled?: boolean; priority?: number },
-) {
+export async function updateProvider(providerId: string, updates: { enabled?: boolean; priority?: number }) {
   const set: Record<string, unknown> = { updatedAt: sql`now()` };
   if (updates.enabled !== undefined) set.enabled = updates.enabled ? 'true' : 'false';
   if (updates.priority !== undefined) set.priority = updates.priority;

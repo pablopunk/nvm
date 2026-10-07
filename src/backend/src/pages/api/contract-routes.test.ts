@@ -1085,28 +1085,37 @@ test('active-model blocks requested-size estimates without validated pricing but
     globalThis.fetch = async (input: string | URL | Request) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url === 'https://models.dev/api.json') {
-        return Response.json({ opencode: { models: {
-          'gemini-3-flash': {
-            id: 'gemini-3-flash',
-            name: 'Gemini 3 Flash',
-            limit: { context: 100_000, output: 8_192 },
-            modalities: { input: ['text'] },
+        return Response.json({
+          opencode: {
+            models: {
+              'gemini-3-flash': {
+                id: 'gemini-3-flash',
+                name: 'Gemini 3 Flash',
+                limit: { context: 100_000, output: 8_192 },
+                modalities: { input: ['text'] },
+              },
+            },
           },
-        } } });
+        });
       }
       throw new Error(`Unexpected fetch: ${url}`);
     };
-    installDb(createFakeDb({ selects: [
-      [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' }, tokenId: 'token_1' }],
-      [{ id: 1 }],
-      [{ free: 100, paid: 0 }],
-      ...(sizeQuery ? [[]] : []),
-      [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'low' }) }],
-    ] }));
-    const response = await getActiveModel(routeContext(new Request(
-      `https://api.nvm.fyi/api/v1/active-model${sizeQuery}`,
-      { headers: { authorization: 'Bearer nvm_pat_test' } },
-    )));
+    installDb(
+      createFakeDb({
+        selects: [
+          [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' }, tokenId: 'token_1' }],
+          [{ id: 1 }],
+          [{ free: 100, paid: 0 }],
+          ...(sizeQuery ? [[]] : []),
+          [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'low' }) }],
+        ],
+      }),
+    );
+    const response = await getActiveModel(
+      routeContext(
+        new Request(`https://api.nvm.fyi/api/v1/active-model${sizeQuery}`, { headers: { authorization: 'Bearer nvm_pat_test' } }),
+      ),
+    );
     return response.json() as Promise<any>;
   }
 
@@ -1680,10 +1689,19 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
   };
   const unsupportedBodies = [
     {
-      messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'https://images.example/picture.png' }, detail: 'high', metadata: 'extra' }] }],
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'image_url', image_url: { url: 'https://images.example/picture.png' }, detail: 'high', metadata: 'extra' }],
+        },
+      ],
     },
     { messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: 'AAAA', format: 'wav' } }] }] },
-    { messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'AAAA' } }] }] },
+    {
+      messages: [
+        { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'AAAA' } }] },
+      ],
+    },
     { contents: [{ parts: [{ inlineData: { mimeType: 'audio/wav', data: 'AAAA' } }] }] },
     { contents: [{ parts: [{ inlineData: { mimeType: 'video/mp4', data: 'AAAA' } }] }] },
     { messages: [{ role: 'user', content: 'data:audio/wav;base64,AAAA' }] },
@@ -1693,7 +1711,7 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
     const response = await postChatCompletion(
       routeContext(
         authorizedChatRequest({
-        model: 'placeholder',
+          model: 'placeholder',
           ...body,
         }),
       ),
