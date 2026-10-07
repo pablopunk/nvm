@@ -131,6 +131,7 @@
   overflow: hidden;
   outline: none;
   background: var(--surface-sunken);
+  border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
 }
 
 .builderPreviewPane[data-focused="true"] {
