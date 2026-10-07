@@ -1817,6 +1817,56 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 10);
 });
 
+test('proxy breaker skips a tripped primary and dispatches only to its configured healthy fallback', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENCODE_API_KEY = 'primary-key';
+  process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
+  process.env.GOOGLE_API_KEY = 'fallback-key';
+  process.env.GOOGLE_BASE_URL = 'https://fallback.example';
+  const providerChain = [{ providerId: 'google', modelId: 'gemini-3-fast' }];
+  installDb(createFakeDb({ selects: [
+    [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+    [{ id: 1 }],
+    [{ paid: 1000, free: 500 }],
+    [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }],
+    [{ id: 'user_1' }],
+    [],
+    [{ free: 500, paid: 1000 }],
+    [{ reserved: 0 }],
+    providerChain,
+    [{ provider: 'opencode_zen', modelId: 'gemini-3-flash' }],
+    [{ id: 'user_1' }],
+    [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
+  ] }));
+
+  let primaryCalled = false;
+  let fallbackCalled = false;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
+        google: { models: { 'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 }, limit: { context: 64_000, output: 4_096 } } } },
+      });
+    }
+    if (url.startsWith('https://primary.example')) {
+      primaryCalled = true;
+      return Response.json({ error: { message: 'A tripped route must not dispatch' } }, { status: 503 });
+    }
+    if (url.startsWith('https://fallback.example')) {
+      fallbackCalled = true;
+      assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'fallback-key');
+      return Response.json({ usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, thoughtsTokenCount: 0 } });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  const response = await postGoogleModel({ ...routeContext(authorizedGoogleRequest()), params: { path: 'placeholder:streamGenerateContent' } } as any);
+  assert.equal(response.status, 200);
+  assert.equal(primaryCalled, false);
+  assert.equal(fallbackCalled, true);
+});
+
 test('proxy failover: when all providers fail, last error passes through', async () => {
   resetPricingCacheForTests();
   process.env.OPENCODE_API_KEY = 'primary-key';

@@ -200,6 +200,11 @@ test('bundled pricing is usable only for the exact bundled provider/model entry'
   assert.equal(await lookupModelCost('opencode_zen', 'not-bundled'), null);
 });
 
+test('estimated fallback catalog rates are not accepted for admission', async () => {
+  globalThis.fetch = (async () => ({ ok: false, status: 503 })) as unknown as typeof globalThis.fetch;
+  assert.equal(await lookupModelCost('opencode_zen', 'claude-haiku-4-5'), null);
+});
+
 test('failed refresh does not make stale models.dev pricing admissible again', async () => {
   let calls = 0;
   globalThis.fetch = (async () => {
