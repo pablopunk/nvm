@@ -150,6 +150,27 @@ export const subscriptions = pgTable('subscriptions', {
   lastEventId: text('last_event_id'),
 });
 
+// Approved Stripe purchase terms are immutable facts. New offers require a
+// new row; checkout must never infer historical terms from environment config.
+export const billingPriceTerms = pgTable('billing_price_terms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  priceId: text('price_id').notNull(),
+  version: integer('version').notNull(),
+  kind: text('kind').notNull(),
+  tier: text('tier'),
+  credits: integer('credits').notNull(),
+  unitAmount: integer('unit_amount').notNull(),
+  currency: text('currency').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  interval: text('interval'),
+  intervalCount: integer('interval_count'),
+  source: text('source').notNull(),
+  approvedAt: timestamp('approved_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('billing_price_terms_price_version_idx').on(t.priceId, t.version),
+]);
+
 export const stripeEvents = pgTable(
   'stripe_events',
   {

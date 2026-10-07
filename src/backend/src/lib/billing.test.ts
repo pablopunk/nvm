@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { setDbForTests, resetDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
-import { BillingConfigError, BillingEligibilityError, billingCatalog, createBillingCheckout, formatBillingPrice, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
+import { BillingConfigError, BillingEligibilityError, BillingRequestError, billingCatalog, createBillingCheckout, formatBillingPrice, processStripeEvent, rejectCrossOriginBillingPost, setStripeForTests } from './billing';
 import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
 import { POST as postWebhook } from '../pages/api/billing/webhook';
 
@@ -262,6 +262,23 @@ test('billing catalog keeps billing items while omitting incomplete display meta
   const catalog = billingCatalog();
   assert.deepEqual(catalog.subscriptions[0], { kind: 'subscription', priceId: 'price_pro', tier: 'pro', credits: 1000 });
   assert.deepEqual(catalog.topUps[0], { kind: 'top_up', priceId: 'price_topup', credits: 500 });
+});
+
+test('checkout fails closed without approved terms before creating a Stripe customer', async () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{
+    priceId: 'price_unapproved', tier: 'pro', credits: 1000, amount: 2000, currency: 'usd', interval: 'month',
+  }]);
+  let customerCreates = 0;
+  setStripeForTests({
+    customers: { create: async () => { customerCreates += 1; throw new Error('unexpected customer creation'); } },
+  } as any);
+  installDb(createFakeBillingDb());
+
+  await assert.rejects(
+    () => createBillingCheckout({ user, kind: 'subscription', priceId: 'price_unapproved' }),
+    (error) => error instanceof BillingRequestError && error.type === 'unknown_price',
+  );
+  assert.equal(customerCreates, 0);
 });
 
 test('checkout completion upserts subscription and grants initial paid credits once', async () => {

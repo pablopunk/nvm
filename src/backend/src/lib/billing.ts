@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
+import { billingPriceTerms, creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { env } from './env';
 import { log } from './log';
 import { parsePublicOrigin } from '../../../app/shared/public-origin';
@@ -38,7 +38,7 @@ type BillingCatalog = {
   topUps: TopUpPack[];
 };
 
-type StripeLike = Pick<Stripe, 'checkout' | 'billingPortal' | 'customers' | 'subscriptions' | 'webhooks'>;
+type StripeLike = Pick<Stripe, 'checkout' | 'billingPortal' | 'customers' | 'subscriptions' | 'prices' | 'webhooks'>;
 
 let stripeOverride: StripeLike | null = null;
 
@@ -236,6 +236,27 @@ export async function createBillingCheckout(input: { user: typeof users.$inferSe
   if (!item) {
     if (input.priceId || input.tier) throw new BillingRequestError('unknown_price', 'Unknown Stripe billing price.');
     throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
+  }
+  // Fail closed until an owner-approved, versioned price snapshot exists.
+  // Retrieve Stripe facts before creating a Customer or entering any DB tx.
+  const [terms] = await db.select().from(billingPriceTerms).where(eq(billingPriceTerms.priceId, item.priceId)).limit(1);
+  if (!terms || terms.kind !== item.kind || terms.credits !== item.credits ||
+      terms.tier !== (item.kind === 'subscription' ? item.tier : null) || terms.quantity !== 1 ||
+      !item.displayPrice || terms.unitAmount !== item.displayPrice.amount ||
+      terms.currency !== item.displayPrice.currency.toLowerCase() ||
+      terms.interval !== (item.kind === 'subscription' ? item.displayPrice.interval : null) ||
+      terms.intervalCount !== (item.kind === 'subscription' ? 1 : null)) {
+    throw new BillingRequestError('unknown_price', 'This Stripe price has no matching approved purchase terms. Checkout is unavailable until the price is reviewed.');
+  }
+  const verifiedPrice = await stripeClient().prices.retrieve(item.priceId);
+  const recurringInterval = verifiedPrice.recurring?.interval ?? null;
+  if (!verifiedPrice.active || verifiedPrice.billing_scheme !== 'per_unit' || verifiedPrice.unit_amount === null ||
+      verifiedPrice.unit_amount !== terms.unitAmount || verifiedPrice.currency.toLowerCase() !== terms.currency ||
+      (verifiedPrice.type === 'recurring') !== (terms.kind === 'subscription') ||
+      verifiedPrice.recurring?.interval !== terms.interval ||
+      (verifiedPrice.recurring?.interval_count ?? null) !== terms.intervalCount ||
+      recurringInterval !== terms.interval) {
+    throw new BillingRequestError('unknown_price', 'The Stripe price no longer matches its approved purchase terms.');
   }
   const hasActiveSubscription = await userHasActiveSubscription(db, input.user.id);
   if (item.kind === 'subscription' && hasActiveSubscription) {

@@ -44,14 +44,14 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ url: checkout.url });
   } catch (error) {
     if (error instanceof BillingConfigError) {
-      return Response.json({ error: { type: 'billing_not_configured', message: error.message } }, { status: 503 });
+      return Response.json({ status: 'not_created', error: { type: 'billing_not_configured', message: error.message } }, { status: 503 });
     }
     if (error instanceof BillingRequestError) {
-      return Response.json({ error: { type: error.type, message: error.message } }, { status: 400 });
+      return Response.json({ status: 'not_created', error: { type: error.type, message: error.message } }, { status: 400 });
     }
     if (error instanceof BillingEligibilityError) {
       return Response.json(
-        { error: { type: error.type, message: error.message } },
+        { status: 'not_created', error: { type: error.type, message: error.message } },
         { status: error.type === 'already_subscribed' ? 409 : 403 },
       );
     }
