@@ -324,6 +324,78 @@ test('checkout POST distinguishes missing, valid, invalid keys and persisted pro
   assert.deepEqual(await processing.json(), { status: 'processing' });
 });
 
+test('checkout idempotency conflict for a persisted order is not reported as not_created', async (t) => {
+  mockSession(t);
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const order = {
+    id: 'order_existing',
+    userId: user.id,
+    attemptKey,
+    priceId: 'price_existing',
+    state: 'open',
+    intentHash: createHash('sha256')
+      .update(
+        JSON.stringify({
+          kind: 'top_up',
+          priceId: 'price_existing',
+          selectedPriceId: 'price_existing',
+          selectedTier: null,
+        }),
+      )
+      .digest('hex'),
+  };
+  installDb(new Map([[billingOrders, [[order]]]]));
+  const response = await checkoutPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout', {
+        method: 'POST',
+        headers: {
+          cookie: 'nvm_session=sealed',
+          'content-type': 'application/json',
+          'idempotency-key': attemptKey,
+        },
+        body: JSON.stringify({ kind: 'top_up', priceId: 'price_different' }),
+      }),
+    ),
+  );
+  assert.equal(response.status, 409);
+  const payload = await response.json();
+  assert.deepEqual(payload.error, {
+    type: 'idempotency_conflict',
+    message: 'This idempotency key was already used for a different purchase.',
+  });
+  assert.equal(Object.hasOwn(payload, 'status'), false);
+});
+
+test('GET status retains the active-order fallback when no attempt key is supplied', async (t) => {
+  mockSession(t);
+  const activeOrder = {
+    id: 'order_active_fallback',
+    userId: user.id,
+    attemptKey: '22222222-2222-4222-8222-222222222222',
+    kind: 'top_up',
+    priceId: 'price_pack',
+    state: 'open',
+    sessionUrl: 'https://checkout.stripe.test/cs_active',
+  };
+  installDb(new Map([[billingOrders, [[activeOrder]]]]));
+  const response = await GET(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout-status', {
+        headers: { cookie: 'nvm_session=sealed' },
+      }),
+    ),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    status: 'open',
+    kind: 'top_up',
+    priceId: 'price_pack',
+    resumeUrl: activeOrder.sessionUrl,
+    attemptKey: activeOrder.attemptKey,
+  });
+});
+
 test('Stripe return resolves the replacement order after browser attempt storage is lost', async (t) => {
   const prior = { id: 'order_prior', userId: user.id, attemptKey: '22222222-2222-4222-8222-222222222222' };
   const replacement = {
@@ -356,7 +428,7 @@ test('Stripe return resolves the replacement order after browser attempt storage
     headers: { cookie: 'nvm_session=sealed', 'content-type': 'application/json' },
     body: JSON.stringify({ session_id: 'cs_replacement' }),
   });
-  const response = await GET(context(request));
+  const response = await POST(context(request));
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     status: 'open',

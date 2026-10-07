@@ -101,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
       const status = error.type === 'idempotency_conflict' || error.type === 'checkout_in_flight' ? 409 : 400;
       return Response.json(
         {
-          status: 'not_created',
+          ...(error.type === 'idempotency_conflict' ? {} : { status: 'not_created' }),
           error: { type: error.type, message: error.message },
         },
         { status },
