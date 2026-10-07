@@ -79,6 +79,15 @@ export const POST: APIRoute = async ({ request }) => {
     return checkout.status === 'url' ? Response.json({ url: checkout.url }) : Response.json({ status: checkout.status }, { status: 202 });
   } catch (error) {
     if (error instanceof BillingPendingError) {
+      if (error.preCreation?.notCreated) {
+        return Response.json(
+          {
+            status: 'not_created',
+            error: { type: error.preCreation.type, message: error.preCreation.message },
+          },
+          { status: 502 },
+        );
+      }
       const statusCode = error.status === 'processing' ? 202 : error.status === 'reconciliation_required' ? 409 : 200;
       return Response.json(
         {
@@ -101,7 +110,7 @@ export const POST: APIRoute = async ({ request }) => {
       const status = error.type === 'idempotency_conflict' || error.type === 'checkout_in_flight' ? 409 : 400;
       return Response.json(
         {
-          ...(error.type === 'idempotency_conflict' ? {} : { status: 'not_created' }),
+          ...(['idempotency_conflict', 'checkout_in_flight'].includes(error.type) ? {} : { status: 'not_created' }),
           error: { type: error.type, message: error.message },
         },
         { status },

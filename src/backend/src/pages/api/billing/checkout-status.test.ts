@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { afterEach, test, type TestContext } from 'node:test';
+import Stripe from 'stripe';
 
 process.env.WORKOS_API_KEY = 'sk_test_billing_status';
 process.env.WORKOS_CLIENT_ID = 'client_test_billing_status';
@@ -12,7 +13,7 @@ const [
   { POST: retryPost },
   { setDbForTests, resetDbForTests },
   { workosClient },
-  { users, billingOrders, billingRetryOperations },
+  { users, billingOrders, billingRetryOperations, billingPriceTerms, subscriptions, stripeCustomerAttempts },
   { setStripeForTests, getBillingCheckoutStatus, refreshBillingCheckoutStatus },
 ] = await Promise.all([
   import('./checkout-status'),
@@ -43,6 +44,7 @@ function installDb(fixtures: Map<unknown, unknown[][]> = new Map()) {
       const rows = () => {
         const queue = fixtures.get(table);
         if (queue?.length) return queue.shift() ?? [];
+        if (table === billingPriceTerms || table === subscriptions || table === stripeCustomerAttempts) return [];
         return table === users ? [user] : [];
       };
       const query = {
@@ -62,6 +64,28 @@ function installDb(fixtures: Map<unknown, unknown[][]> = new Map()) {
       };
       return query;
     },
+    insert() {
+      const query = {
+        values() {
+          return query;
+        },
+        then(resolve: (value: unknown[]) => unknown, reject: (error: unknown) => unknown) {
+          return Promise.resolve([]).then(resolve, reject);
+        },
+      };
+      return query;
+    },
+    update() {
+      const query = {
+        set() {
+          return query;
+        },
+        where() {
+          return Promise.resolve([]);
+        },
+      };
+      return query;
+    },
   };
   setDbForTests(database as any);
 }
@@ -70,6 +94,47 @@ function mockSession(t: TestContext) {
   t.mock.method(workos.userManagement as any, 'loadSealedSession', () => ({
     authenticate: async () => ({ authenticated: true, user: { id: user.workosUserId } }),
   }));
+}
+
+function approvedSubscriptionPriceTerm() {
+  return {
+    id: '66666666-6666-4666-8666-666666666666',
+    priceId: 'price_pro',
+    version: 1,
+    kind: 'subscription',
+    tier: 'pro',
+    credits: 1000,
+    unitAmount: 1000,
+    currency: 'usd',
+    quantity: 1,
+    interval: 'month',
+    intervalCount: 1,
+    approvedAt: new Date(0),
+    createdAt: new Date(0),
+  };
+}
+
+function subscriptionCheckoutRequest(attemptKey: string) {
+  return context(
+    new Request('https://www.nvm.fyi/api/billing/checkout', {
+      method: 'POST',
+      headers: {
+        cookie: 'nvm_session=sealed',
+        'content-type': 'application/json',
+        'idempotency-key': attemptKey,
+      },
+      body: JSON.stringify({ kind: 'subscription', priceId: 'price_pro', tier: 'pro' }),
+    }),
+  );
+}
+
+function installApprovedPriceStripe(priceRetrieve: () => Promise<unknown>, customerCreate?: () => Promise<unknown>) {
+  setStripeForTests({
+    prices: { retrieve: priceRetrieve },
+    customers: {
+      create: customerCreate ?? (async () => ({ id: 'cus_new' })),
+    },
+  } as any);
 }
 
 afterEach(() => {
@@ -364,6 +429,154 @@ test('checkout idempotency conflict for a persisted order is not reported as not
     type: 'idempotency_conflict',
     message: 'This idempotency key was already used for a different purchase.',
   });
+  assert.equal(Object.hasOwn(payload, 'status'), false);
+});
+
+test('definitive customer creation failure is not_created, while a durably failed order stays failed', async (t) => {
+  mockSession(t);
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000, amount: 1000, currency: 'usd', interval: 'month' },
+  ]);
+  installDb(new Map([[billingPriceTerms, [[approvedSubscriptionPriceTerm()]]]]));
+  installApprovedPriceStripe(
+    async () => ({
+      id: 'price_pro',
+      active: true,
+      billing_scheme: 'per_unit',
+      unit_amount: 1000,
+      currency: 'usd',
+      type: 'recurring',
+      recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' },
+      tiers_mode: null,
+      transform_quantity: null,
+    }),
+    async () => {
+      throw new Stripe.errors.StripeInvalidRequestError({
+        message: 'invalid customer request',
+        type: 'invalid_request_error',
+        code: 'invalid_request',
+      });
+    },
+  );
+  const customerFailure = await checkoutPost(subscriptionCheckoutRequest(attemptKey));
+  assert.equal(customerFailure.status, 502);
+  assert.deepEqual(await customerFailure.json(), {
+    status: 'not_created',
+    error: {
+      type: 'customer_creation_failed',
+      message: 'Stripe rejected customer creation before a checkout order was created.',
+    },
+  });
+
+  const intentHash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: 'subscription',
+        priceId: 'price_pro',
+        selectedPriceId: 'price_pro',
+        selectedTier: 'pro',
+      }),
+    )
+    .digest('hex');
+  const failedOrder = {
+    id: 'order_failed',
+    userId: user.id,
+    attemptKey,
+    intentHash,
+    priceId: 'price_pro',
+    state: 'failed',
+  };
+  installDb(new Map([[billingOrders, [[failedOrder]]]]));
+  const durableFailure = await checkoutPost(subscriptionCheckoutRequest(attemptKey));
+  assert.equal(durableFailure.status, 200);
+  assert.deepEqual(await durableFailure.json(), { status: 'failed' });
+});
+
+test('deleted Stripe Price is not_created but transient Price retrieval retains the attempt as processing', async (t) => {
+  mockSession(t);
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000, amount: 1000, currency: 'usd', interval: 'month' },
+  ]);
+  const terms = approvedSubscriptionPriceTerm();
+  installDb(new Map([[billingPriceTerms, [[terms]]]]));
+  installApprovedPriceStripe(async () => {
+    throw new Stripe.errors.StripeInvalidRequestError({
+      message: 'No such price',
+      type: 'invalid_request_error',
+      code: 'resource_missing',
+    });
+  });
+  const deletedPrice = await checkoutPost(subscriptionCheckoutRequest(attemptKey));
+  assert.equal(deletedPrice.status, 400);
+  assert.equal((await deletedPrice.json()).status, 'not_created');
+
+  installDb(new Map([[billingPriceTerms, [[terms]]]]));
+  installApprovedPriceStripe(async () => {
+    throw new Error('network timeout');
+  });
+  const transientPriceFailure = await checkoutPost(subscriptionCheckoutRequest(attemptKey));
+  assert.equal(transientPriceFailure.status, 202);
+  assert.deepEqual(await transientPriceFailure.json(), { status: 'processing', attemptKey });
+});
+
+test('legacy checkout_in_flight error does not claim a persisted active order was not created', async (t) => {
+  mockSession(t);
+  const userWithCustomer = { ...user, stripeCustomerId: 'cus_existing' };
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_pack', credits: 500, amount: 500, currency: 'usd' }]);
+  const activeOrder = { id: 'order_active', userId: user.id, state: 'open' };
+  const approvedTopUpTerm = {
+    id: '77777777-7777-4777-8777-777777777777',
+    priceId: 'price_pack',
+    version: 1,
+    kind: 'top_up',
+    tier: null,
+    credits: 500,
+    unitAmount: 500,
+    currency: 'usd',
+    quantity: 1,
+    interval: null,
+    intervalCount: null,
+    approvedAt: new Date(0),
+    createdAt: new Date(0),
+  };
+  installDb(
+    new Map([
+      [users, [[userWithCustomer], [userWithCustomer]]],
+      [billingPriceTerms, [[approvedTopUpTerm]]],
+      [subscriptions, [[{ status: 'active' }], [{ status: 'active' }]]],
+      [billingOrders, [[], [activeOrder]]],
+    ]),
+  );
+  setStripeForTests({
+    prices: {
+      retrieve: async () => ({
+        id: 'price_pack',
+        active: true,
+        billing_scheme: 'per_unit',
+        unit_amount: 500,
+        currency: 'usd',
+        type: 'one_time',
+        recurring: null,
+        tiers_mode: null,
+        transform_quantity: null,
+      }),
+    },
+  } as any);
+
+  const response = await checkoutPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout', {
+        method: 'POST',
+        headers: { cookie: 'nvm_session=sealed', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'top_up', priceId: 'price_pack' }),
+      }),
+    ),
+  );
+  assert.equal(response.status, 409);
+  const payload = await response.json();
+  assert.deepEqual(payload.error.type, 'checkout_in_flight');
   assert.equal(Object.hasOwn(payload, 'status'), false);
 });
 

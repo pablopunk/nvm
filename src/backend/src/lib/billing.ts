@@ -88,8 +88,9 @@ export class BillingPendingError extends Error {
   constructor(
     public status: 'processing' | 'retry_required' | 'completed' | 'expired' | 'failed' | 'reconciliation_required',
     public attemptKey?: string,
+    public preCreation: { notCreated: boolean; type: string; message: string } | null = null,
   ) {
-    super(status);
+    super(preCreation?.message ?? status);
     this.name = 'BillingPendingError';
   }
 }
@@ -389,7 +390,11 @@ export async function getOrCreateStripeCustomer(user: typeof users.$inferSelect)
       })
       .where(eq(stripeCustomerAttempts.userId, user.id));
     if (definitiveFailure) {
-      throw new BillingPendingError('failed');
+      throw new BillingPendingError('failed', undefined, {
+        notCreated: true,
+        type: 'customer_creation_failed',
+        message: 'Stripe rejected customer creation before a checkout order was created.',
+      });
     }
     throw new BillingPendingError('processing');
   }
@@ -567,7 +572,16 @@ export async function createBillingCheckout(input: {
       'This Stripe price has no matching approved purchase terms. Checkout is unavailable until the price is reviewed.',
     );
   }
-  const verifiedPrice = await stripeClient().prices.retrieve(item.priceId);
+  let verifiedPrice: Stripe.Price;
+  try {
+    verifiedPrice = await stripeClient().prices.retrieve(item.priceId);
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeInvalidRequestError && error.code === 'resource_missing') {
+      throw new BillingRequestError('unknown_price', 'The Stripe price no longer exists or is unavailable.');
+    }
+    log.warn('stripe_price_verification_ambiguous', { price_id: item.priceId, error });
+    throw new BillingPendingError('processing', attemptKey);
+  }
   const recurringInterval = verifiedPrice.recurring?.interval ?? null;
   if (
     !verifiedPrice.active ||
