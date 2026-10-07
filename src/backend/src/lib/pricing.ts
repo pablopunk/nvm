@@ -27,10 +27,7 @@ const PROVIDER_TO_MODELS_DEV: Record<string, string> = {
   openai: 'openai',
 };
 
-const FALLBACK: Record<
-  string,
-  Record<string, { input: number; output: number }>
-> = {
+const FALLBACK: Record<string, Record<string, { input: number; output: number }>> = {
   opencode: {
     'claude-haiku-4-5': { input: 1, output: 5 },
     'claude-sonnet-4-6': { input: 3, output: 15 },
@@ -71,13 +68,15 @@ type ValidModelPricing = NonNullable<ModelsDevModel['cost']> & { input: number; 
 
 function hasValidPricing(cost: ModelsDevModel['cost']): cost is ValidModelPricing {
   if (!cost || cost.input == null || cost.output == null) return false;
-  const validRate = (rate: number | undefined) =>
-    rate === undefined || (Number.isFinite(rate) && rate >= 0);
+  const validRate = (rate: number | undefined) => rate === undefined || (Number.isFinite(rate) && rate >= 0);
   if (![cost.input, cost.output, cost.cache_read, cost.cache_write].every(validRate)) return false;
   return (cost.tiers ?? []).every((tier) => {
     if (tier.tier?.size == null) return true;
-    return Number.isFinite(tier.tier.size) && tier.tier.size >= 0
-      && [tier.input, tier.output, tier.cache_read, tier.cache_write].every(validRate);
+    return (
+      Number.isFinite(tier.tier.size) &&
+      tier.tier.size >= 0 &&
+      [tier.input, tier.output, tier.cache_read, tier.cache_write].every(validRate)
+    );
   });
 }
 
@@ -147,8 +146,7 @@ let cache: {
 let inflight: Promise<ModelsDevApi> | null = null;
 
 async function fetchCatalog(): Promise<ModelsDevApi> {
-  const cacheTtl =
-    cache?.source === 'fallback' ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS;
+  const cacheTtl = cache?.source === 'fallback' ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS;
   if (cache && Date.now() - cache.at < cacheTtl) return cache.data;
   if (inflight) return inflight;
   inflight = (async () => {
@@ -168,10 +166,7 @@ async function fetchCatalog(): Promise<ModelsDevApi> {
       return data;
     } catch (err) {
       if (cache && cache.source === 'models.dev') {
-        console.warn(
-          '[pricing] models.dev refresh failed, using stale catalog',
-          err,
-        );
+        console.warn('[pricing] models.dev refresh failed, using stale catalog', err);
         return cache.data;
       }
       console.warn('[pricing] models.dev fetch failed, using fallback', err);
@@ -179,12 +174,7 @@ async function fetchCatalog(): Promise<ModelsDevApi> {
         Object.entries(FALLBACK).map(([id, models]) => [
           id,
           {
-            models: Object.fromEntries(
-              Object.entries(models).map(([mid, cost]) => [
-                mid,
-                { id: mid, cost },
-              ]),
-            ),
+            models: Object.fromEntries(Object.entries(models).map(([mid, cost]) => [mid, { id: mid, cost }])),
           },
         ]),
       );
@@ -210,18 +200,11 @@ function bundledRuntimeModel(provider: string, modelId: string) {
   return BUNDLED_RUNTIME_MODELS[modelsDevKey(provider)]?.models?.[modelId];
 }
 
-async function runtimeModel(
-  provider: string,
-  modelId: string,
-): Promise<{ model: ModelsDevModel; source: PricingSource } | null> {
+async function runtimeModel(provider: string, modelId: string): Promise<{ model: ModelsDevModel; source: PricingSource } | null> {
   const key = modelsDevKey(provider);
   const currentCache = cache;
   const cached = currentCache?.data[key]?.models?.[modelId];
-  if (
-    cached &&
-    currentCache?.lastSuccessfulAt != null &&
-    Date.now() - currentCache.lastSuccessfulAt < CACHE_TTL_MS
-  ) {
+  if (cached && currentCache?.lastSuccessfulAt != null && Date.now() - currentCache.lastSuccessfulAt < CACHE_TTL_MS) {
     return { model: cached, source: currentCache.source };
   }
   const bundled = bundledRuntimeModel(provider, modelId);
@@ -242,10 +225,7 @@ async function runtimeModel(
   return { model, source: cache.source };
 }
 
-export async function lookupModelCost(
-  provider: string,
-  modelId: string,
-): Promise<ModelCost | null> {
+export async function lookupModelCost(provider: string, modelId: string): Promise<ModelCost | null> {
   const resolved = await runtimeModel(provider, modelId);
   if (resolved?.source === 'fallback') return null;
   const cost = resolved?.model.cost;
@@ -258,12 +238,8 @@ export async function lookupModelCost(
             thresholdTokens: tier.tier.size,
             ...(tier.input == null ? {} : { inputUsdPerMtok: tier.input }),
             ...(tier.output == null ? {} : { outputUsdPerMtok: tier.output }),
-            ...(tier.cache_read == null
-              ? {}
-              : { cacheReadUsdPerMtok: tier.cache_read }),
-            ...(tier.cache_write == null
-              ? {}
-              : { cacheWriteUsdPerMtok: tier.cache_write }),
+            ...(tier.cache_read == null ? {} : { cacheReadUsdPerMtok: tier.cache_read }),
+            ...(tier.cache_write == null ? {} : { cacheWriteUsdPerMtok: tier.cache_write }),
           },
         ],
   );
@@ -272,20 +248,13 @@ export async function lookupModelCost(
     modelId,
     inputUsdPerMtok: cost.input,
     outputUsdPerMtok: cost.output,
-    ...(cost.cache_read == null
-      ? {}
-      : { cacheReadUsdPerMtok: cost.cache_read }),
-    ...(cost.cache_write == null
-      ? {}
-      : { cacheWriteUsdPerMtok: cost.cache_write }),
+    ...(cost.cache_read == null ? {} : { cacheReadUsdPerMtok: cost.cache_read }),
+    ...(cost.cache_write == null ? {} : { cacheWriteUsdPerMtok: cost.cache_write }),
     ...(tiers.length ? { tiers } : {}),
   };
 }
 
-export type ModelPricing = Omit<
-  ModelCost,
-  'cacheReadUsdPerMtok' | 'cacheWriteUsdPerMtok' | 'tiers'
-> & {
+export type ModelPricing = Omit<ModelCost, 'cacheReadUsdPerMtok' | 'cacheWriteUsdPerMtok' | 'tiers'> & {
   cacheReadUsdPerMtok: number | null;
   cacheWriteUsdPerMtok: number | null;
   tiers: Array<{
@@ -298,15 +267,11 @@ export type ModelPricing = Omit<
   source: PricingSource;
 };
 
-export async function lookupModelPricing(
-  provider: string,
-  modelId: string,
-): Promise<ModelPricing | null> {
+export async function lookupModelPricing(provider: string, modelId: string): Promise<ModelPricing | null> {
   const resolved = await runtimeModel(provider, modelId);
   if (resolved?.source === 'fallback') return null;
   const cost = resolved?.model.cost;
-  if (!resolved || resolved.source === 'fallback' || !hasValidPricing(cost))
-    return null;
+  if (!resolved || resolved.source === 'fallback' || !hasValidPricing(cost)) return null;
   return {
     provider,
     modelId,
@@ -347,10 +312,7 @@ const DEFAULT_DESCRIPTOR = {
   input: ['text'],
 };
 
-export async function lookupModelDescriptor(
-  provider: string,
-  modelId: string,
-): Promise<ModelDescriptor | null> {
+export async function lookupModelDescriptor(provider: string, modelId: string): Promise<ModelDescriptor | null> {
   const resolved = await runtimeModel(provider, modelId);
   if (!resolved) return null;
   const m = resolved.model;
@@ -364,9 +326,7 @@ export async function lookupModelDescriptor(
   };
 }
 
-export async function listModelsForProvider(
-  provider: string,
-): Promise<string[]> {
+export async function listModelsForProvider(provider: string): Promise<string[]> {
   const catalog = await fetchCatalog();
   const key = modelsDevKey(provider);
   const models = catalog[key]?.models ?? {};

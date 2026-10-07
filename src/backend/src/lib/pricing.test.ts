@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
-import { expirePricingCacheForTests, listModelsForProvider, lookupModelCost, lookupModelDescriptor, lookupModelPricing, resetPricingCacheForTests } from './pricing';
+import {
+  expirePricingCacheForTests,
+  listModelsForProvider,
+  lookupModelCost,
+  lookupModelDescriptor,
+  lookupModelPricing,
+  resetPricingCacheForTests,
+} from './pricing';
 
 let originalFetch: typeof globalThis.fetch;
 
@@ -120,13 +127,15 @@ test('lookupModelPricing preserves source cache and tier prices', async () => {
     outputUsdPerMtok: 10,
     cacheReadUsdPerMtok: 0.2,
     cacheWriteUsdPerMtok: 2.5,
-    tiers: [{
-      thresholdTokens: 272_000,
-      inputUsdPerMtok: 4,
-      outputUsdPerMtok: 15,
-      cacheReadUsdPerMtok: null,
-      cacheWriteUsdPerMtok: null,
-    }],
+    tiers: [
+      {
+        thresholdTokens: 272_000,
+        inputUsdPerMtok: 4,
+        outputUsdPerMtok: 15,
+        cacheReadUsdPerMtok: null,
+        cacheWriteUsdPerMtok: null,
+      },
+    ],
     source: 'models.dev',
   });
 });
@@ -142,22 +151,10 @@ test('active runtime models do not wait for the remote catalog', async () => {
 
   const cost = await lookupModelCost('opencode_zen', 'gpt-5.6-luna');
   const descriptor = await lookupModelDescriptor('opencode_zen', 'deepseek-v4-flash');
-  const openRouterCost = await lookupModelCost(
-    'openrouter',
-    'google/gemini-2.5-flash',
-  );
-  const openRouterDescriptor = await lookupModelDescriptor(
-    'openrouter',
-    'google/gemini-2.5-flash',
-  );
-  const deepSeekFlashDescriptor = await lookupModelDescriptor(
-    'openrouter',
-    'deepseek/deepseek-v4-flash-0731',
-  );
-  const deepSeekProCost = await lookupModelCost(
-    'openrouter',
-    'deepseek/deepseek-v4-pro-0813',
-  );
+  const openRouterCost = await lookupModelCost('openrouter', 'google/gemini-2.5-flash');
+  const openRouterDescriptor = await lookupModelDescriptor('openrouter', 'google/gemini-2.5-flash');
+  const deepSeekFlashDescriptor = await lookupModelDescriptor('openrouter', 'deepseek/deepseek-v4-flash-0731');
+  const deepSeekProCost = await lookupModelCost('openrouter', 'deepseek/deepseek-v4-pro-0813');
 
   assert.deepEqual(cost, {
     provider: 'opencode_zen',
@@ -175,13 +172,7 @@ test('active runtime models do not wait for the remote catalog', async () => {
   });
   assert.equal(openRouterDescriptor?.name, 'Gemini 2.5 Flash');
   assert.equal(openRouterDescriptor?.contextWindow, 1_048_576);
-  assert.deepEqual(openRouterDescriptor?.input, [
-    'text',
-    'image',
-    'audio',
-    'video',
-    'pdf',
-  ]);
+  assert.deepEqual(openRouterDescriptor?.input, ['text', 'image', 'audio', 'video', 'pdf']);
   assert.equal(deepSeekFlashDescriptor?.name, 'DeepSeek V4 Flash 0731');
   assert.equal(deepSeekFlashDescriptor?.contextWindow, 1_310_720);
   assert.equal(deepSeekFlashDescriptor?.maxTokens, 393_216);
@@ -209,7 +200,11 @@ test('failed refresh does not make stale models.dev pricing admissible again', a
   let calls = 0;
   globalThis.fetch = (async () => {
     calls += 1;
-    if (calls === 1) return { ok: true, json: async () => ({ openrouter: { models: { 'stale-model': { id: 'stale-model', cost: { input: 1, output: 2 } } } } }) };
+    if (calls === 1)
+      return {
+        ok: true,
+        json: async () => ({ openrouter: { models: { 'stale-model': { id: 'stale-model', cost: { input: 1, output: 2 } } } } }),
+      };
     return { ok: false, status: 503 };
   }) as unknown as typeof globalThis.fetch;
 

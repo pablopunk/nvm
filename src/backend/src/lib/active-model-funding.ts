@@ -15,18 +15,12 @@ export function chooseFundedAccountRoute(input: {
 }): AccountFundingChoice {
   const healthyBalances = input.freeCredits >= 0 && input.paidCredits >= 0;
   const available = input.freeCredits + input.paidCredits;
-  const funded =
-    healthyBalances &&
-    input.routeCredits !== undefined &&
-    available >= input.routeCredits;
+  const funded = healthyBalances && input.routeCredits !== undefined && available >= input.routeCredits;
   if (funded || input.tier !== 'pro' || !input.freeFallbackAllowed) {
     return { tier: input.tier, funded, freeFallback: false };
   }
 
-  const freeFallback =
-    healthyBalances &&
-    input.freeRouteCredits !== undefined &&
-    available >= input.freeRouteCredits;
+  const freeFallback = healthyBalances && input.freeRouteCredits !== undefined && available >= input.freeRouteCredits;
   return {
     tier: freeFallback ? 'free' : 'pro',
     funded: freeFallback,

@@ -1,16 +1,4 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  integer,
-  bigint,
-  bigserial,
-  uuid,
-  index,
-  uniqueIndex,
-  jsonb,
-  boolean,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, integer, bigint, bigserial, uuid, index, uniqueIndex, jsonb, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -33,24 +21,25 @@ export const creditLedger = pgTable(
   'credit_ledger',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     delta: integer('delta').notNull(),
     kind: text('kind').notNull().default('paid'),
     reason: text('reason').notNull(),
     refId: text('ref_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index('credit_ledger_user_idx').on(t.userId),
-    uniqueIndex('credit_ledger_user_reason_ref_idx').on(t.userId, t.reason, t.refId),
-  ],
+  (t) => [index('credit_ledger_user_idx').on(t.userId), uniqueIndex('credit_ledger_user_reason_ref_idx').on(t.userId, t.reason, t.refId)],
 );
 
 export const usage = pgTable(
   'usage',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     model: text('model').notNull(),
     inputTokens: integer('input_tokens').notNull(),
     outputTokens: integer('output_tokens').notNull(),
@@ -70,10 +59,7 @@ export const usage = pgTable(
     latencyMs: integer('latency_ms'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index('usage_user_idx').on(t.userId),
-    index('usage_created_idx').on(t.createdAt),
-  ],
+  (t) => [index('usage_user_idx').on(t.userId), index('usage_created_idx').on(t.createdAt)],
 );
 
 // Reservations are deliberately separate from the append-only ledger. A
@@ -83,7 +69,9 @@ export const creditReservations = pgTable(
   'credit_reservations',
   {
     requestId: text('request_id').primaryKey(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     kind: text('kind').notNull(),
     reservedCredits: integer('reserved_credits').notNull(),
     status: text('status').notNull().default('pending'),
@@ -104,19 +92,25 @@ export const creditReservations = pgTable(
   ],
 );
 
-export const routeBreakers = pgTable('route_breakers', {
-  routeSlot: text('route_slot').notNull(),
-  provider: text('provider').notNull(),
-  modelId: text('model_id').notNull(),
-  trippedAt: timestamp('tripped_at', { withTimezone: true }).notNull().defaultNow(),
-  reason: text('reason').notNull(),
-}, (t) => [uniqueIndex('route_breakers_route_provider_model_idx').on(t.routeSlot, t.provider, t.modelId)]);
+export const routeBreakers = pgTable(
+  'route_breakers',
+  {
+    routeSlot: text('route_slot').notNull(),
+    provider: text('provider').notNull(),
+    modelId: text('model_id').notNull(),
+    trippedAt: timestamp('tripped_at', { withTimezone: true }).notNull().defaultNow(),
+    reason: text('reason').notNull(),
+  },
+  (t) => [uniqueIndex('route_breakers_route_provider_model_idx').on(t.routeSlot, t.provider, t.modelId)],
+);
 
 export const apiTokens = pgTable(
   'api_tokens',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     prefix: text('prefix').notNull(),
     name: text('name').notNull(),
@@ -124,9 +118,7 @@ export const apiTokens = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
-  (t) => [
-    index('api_tokens_user_idx').on(t.userId),
-  ],
+  (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
 export const deviceCodes = pgTable('device_codes', {
@@ -150,13 +142,13 @@ export const auditLog = pgTable(
     meta: jsonb('meta'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index('audit_log_created_idx').on(t.createdAt),
-  ],
+  (t) => [index('audit_log_created_idx').on(t.createdAt)],
 );
 
 export const subscriptions = pgTable('subscriptions', {
-  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
   stripeSubId: text('stripe_sub_id').notNull().unique(),
   tier: text('tier').notNull(),
   status: text('status').notNull(),
@@ -175,9 +167,7 @@ export const stripeEvents = pgTable(
     processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index('stripe_events_type_idx').on(t.type),
-  ],
+  (t) => [index('stripe_events_type_idx').on(t.type)],
 );
 
 export const providers = pgTable('providers', {
@@ -193,7 +183,9 @@ export const requestDedup = pgTable(
   'request_dedup',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     idempotencyKey: text('idempotency_key').notNull(),
     requestHash: text('request_hash'),
     status: text('status').notNull().default('in_flight'),
@@ -204,9 +196,7 @@ export const requestDedup = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
-  (t) => [
-    uniqueIndex('request_dedup_user_key_idx').on(t.userId, t.idempotencyKey),
-  ],
+  (t) => [uniqueIndex('request_dedup_user_key_idx').on(t.userId, t.idempotencyKey)],
 );
 
 export const modelProviders = pgTable(
@@ -215,7 +205,9 @@ export const modelProviders = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     routeSlot: text('route_slot').notNull(),
     modelId: text('model_id').notNull(),
-    providerId: text('provider_id').notNull().references(() => providers.id, { onDelete: 'cascade' }),
+    providerId: text('provider_id')
+      .notNull()
+      .references(() => providers.id, { onDelete: 'cascade' }),
     providerModelId: text('provider_model_id'),
     priority: integer('priority').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -238,24 +230,28 @@ export const waitlistEntries = pgTable('waitlist_entries', {
   ipHash: text('ip_hash'),
 });
 
-export const invites = pgTable('invites', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  waitlistEntryId: uuid('waitlist_entry_id').references(() => waitlistEntries.id, { onDelete: 'set null' }),
-  email: text('email').notNull(),
-  tokenHash: text('token_hash').notNull().unique(),
-  status: text('status').notNull().default('queued'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  sentAt: timestamp('sent_at', { withTimezone: true }),
-  redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
-}, (t) => [
-  uniqueIndex('invites_one_active_recipient').on(t.email).where(sql`${t.status} in ('queued', 'sending', 'sent')`),
-]);
+export const invites = pgTable(
+  'invites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    waitlistEntryId: uuid('waitlist_entry_id').references(() => waitlistEntries.id, { onDelete: 'set null' }),
+    email: text('email').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    status: text('status').notNull().default('queued'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('invites_one_active_recipient').on(t.email).where(sql`${t.status} in ('queued', 'sending', 'sent')`)],
+);
 
 export const emailOutbox = pgTable('email_outbox', {
   id: uuid('id').primaryKey().defaultRandom(),
-  inviteId: uuid('invite_id').notNull().references(() => invites.id, { onDelete: 'cascade' }),
+  inviteId: uuid('invite_id')
+    .notNull()
+    .references(() => invites.id, { onDelete: 'cascade' }),
   recipient: text('recipient').notNull(),
   templateVersion: text('template_version').notNull().default('invite-v1'),
   idempotencyKey: text('idempotency_key').notNull().unique(),
@@ -270,15 +266,19 @@ export const emailOutbox = pgTable('email_outbox', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const providerEvents = pgTable('provider_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  provider: text('provider').notNull(),
-  eventId: text('event_id').notNull(),
-  eventType: text('event_type').notNull(),
-  payloadHash: text('payload_hash').notNull(),
-  processedAt: timestamp('processed_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('provider_events_provider_event_idx').on(t.provider, t.eventId)]);
+export const providerEvents = pgTable(
+  'provider_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    provider: text('provider').notNull(),
+    eventId: text('event_id').notNull(),
+    eventType: text('event_type').notNull(),
+    payloadHash: text('payload_hash').notNull(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('provider_events_provider_event_idx').on(t.provider, t.eventId)],
+);
 
 export const emailSuppressions = pgTable('email_suppressions', {
   email: text('email').primaryKey(),
@@ -288,7 +288,9 @@ export const emailSuppressions = pgTable('email_suppressions', {
 
 export const authIntents = pgTable('auth_intents', {
   id: uuid('id').primaryKey().defaultRandom(),
-  inviteId: uuid('invite_id').notNull().references(() => invites.id, { onDelete: 'cascade' }),
+  inviteId: uuid('invite_id')
+    .notNull()
+    .references(() => invites.id, { onDelete: 'cascade' }),
   nonceHash: text('nonce_hash').notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   consumedAt: timestamp('consumed_at', { withTimezone: true }),

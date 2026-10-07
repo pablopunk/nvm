@@ -16,8 +16,7 @@ const breakerSchema = z
   .strict();
 
 export const GET: APIRoute = async ({ request }) => {
-  if (!(await requireAdmin(request)))
-    return new Response('Forbidden', { status: 403 });
+  if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
   return Response.json({ breakers: await db.select().from(routeBreakers) });
 };
 

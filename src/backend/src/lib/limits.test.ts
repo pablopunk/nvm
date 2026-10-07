@@ -205,7 +205,11 @@ describe('estimateInputTokensFromBody', () => {
   test('detects non-image multimodal structures and modality data URIs', () => {
     const payloads = [
       { messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: 'AAAA', format: 'wav' } }] }] },
-      { messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'AAAA' } }] }] },
+      {
+        messages: [
+          { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'AAAA' } }] },
+        ],
+      },
       { contents: [{ parts: [{ inlineData: { mimeType: 'audio/wav', data: 'AAAA' } }] }] },
       { contents: [{ parts: [{ inlineData: { mimeType: 'video/mp4', data: 'AAAA' } }] }] },
       { messages: [{ role: 'user', content: [{ type: 'video_url', video_url: { url: 'https://example.test/clip.mp4' } }] }] },
