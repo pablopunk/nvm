@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { afterEach, test, type TestContext } from 'node:test';
 
 process.env.WORKOS_API_KEY = 'sk_test_billing_status';
@@ -12,6 +13,7 @@ const [
   { setDbForTests, resetDbForTests },
   { workosClient },
   { users, billingOrders, billingRetryOperations },
+  { setStripeForTests, getBillingCheckoutStatus, refreshBillingCheckoutStatus },
 ] = await Promise.all([
   import('./checkout-status'),
   import('./checkout'),
@@ -19,6 +21,7 @@ const [
   import('../../../../db/client'),
   import('../../../../lib/workos'),
   import('../../../../db/schema'),
+  import('../../../lib/billing'),
 ]);
 const workos = workosClient();
 
@@ -33,6 +36,8 @@ function context(request: Request) {
 
 function installDb(fixtures: Map<unknown, unknown[][]> = new Map()) {
   const database = {
+    execute: async () => [],
+    transaction: async (callback: (tx: any) => Promise<unknown>) => callback(database),
     select() {
       let table: unknown;
       const rows = () => {
@@ -67,7 +72,12 @@ function mockSession(t: TestContext) {
   }));
 }
 
-afterEach(() => resetDbForTests());
+afterEach(() => {
+  resetDbForTests();
+  setStripeForTests(null);
+  delete process.env.STRIPE_SUBSCRIPTION_TIERS;
+  delete process.env.STRIPE_TOP_UP_PACKS;
+});
 
 test('status and retry refresh reject cross-origin requests before authentication or database access', async () => {
   const request = (url: string) =>
@@ -81,6 +91,87 @@ test('status and retry refresh reject cross-origin requests before authenticatio
   assert.equal((await retryPost(context(request('https://www.nvm.fyi/api/billing/checkout-retry')))).status, 403);
 });
 
+test('retry POST keeps ownership scoped and rejects cross-origin mutation', async (t) => {
+  installDb();
+  mockSession(t);
+  const foreignOrigin = await retryPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout-retry', {
+        method: 'POST',
+        headers: {
+          origin: 'https://attacker.invalid',
+          cookie: 'nvm_session=sealed',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          attemptKey: '22222222-2222-4222-8222-222222222222',
+          retryKey: '44444444-4444-4444-8444-444444444444',
+        }),
+      }),
+    ),
+  );
+  assert.equal(foreignOrigin.status, 403);
+
+  installDb();
+  const foreignOrder = await retryPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout-retry', {
+        method: 'POST',
+        headers: { cookie: 'nvm_session=sealed', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          retryOperationId: '55555555-5555-4555-8555-555555555555',
+          retryKey: '44444444-4444-4444-8444-444444444444',
+        }),
+      }),
+    ),
+  );
+  assert.equal(foreignOrder.status, 200);
+  assert.deepEqual(await foreignOrder.json(), { status: 'none' });
+});
+
+test('retry POST replays the durable same-key operation after its original response was lost', async (t) => {
+  mockSession(t);
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const retryKey = '44444444-4444-4444-8444-444444444444';
+  const prior = { id: 'order_prior', userId: user.id, attemptKey, state: 'failed' };
+  const replacement = {
+    id: 'order_replacement',
+    userId: user.id,
+    attemptKey: '33333333-3333-4333-8333-333333333333',
+    state: 'open',
+    sessionUrl: 'https://checkout.stripe.test/cs_replacement',
+  };
+  const operation = {
+    id: '55555555-5555-4555-8555-555555555555',
+    userId: user.id,
+    priorOrderId: prior.id,
+    replacementOrderId: replacement.id,
+    retryKey,
+    state: 'checkout_open',
+  };
+  installDb(
+    new Map([
+      [billingRetryOperations, [[operation]]],
+      [billingOrders, [[prior], [prior], [replacement]]],
+    ]),
+  );
+  const response = await retryPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout-retry', {
+        method: 'POST',
+        headers: { cookie: 'nvm_session=sealed', 'content-type': 'application/json' },
+        body: JSON.stringify({ attemptKey, retryOperationId: operation.id, retryKey }),
+      }),
+    ),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    status: 'url',
+    url: replacement.sessionUrl,
+    retryOperationId: operation.id,
+  });
+});
+
 test('status lookup for an unknown or foreign attempt is user-scoped and returns none', async (t) => {
   installDb();
   mockSession(t);
@@ -91,6 +182,55 @@ test('status lookup for an unknown or foreign attempt is user-scoped and returns
   const response = await GET(context(request));
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'none' });
+});
+
+test('status page-load and refresh paths never cancel a PaymentIntent', async () => {
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const order = {
+    id: 'order_retry_pending',
+    userId: user.id,
+    attemptKey,
+    state: 'retry_cancel_pending',
+    sessionId: 'cs_retry_pending',
+    paymentIntentId: 'pi_retry_pending',
+    stripeCustomerId: 'cus_retry_pending',
+    kind: 'top_up',
+    priceId: 'price_pack',
+    version: 3,
+  };
+  installDb(new Map([[billingOrders, [[order], [order]]]]));
+  let cancelCalls = 0;
+  setStripeForTests({
+    checkout: {
+      sessions: {
+        retrieve: async () => ({
+          id: order.sessionId,
+          status: 'complete',
+          payment_status: 'unpaid',
+          customer: order.stripeCustomerId,
+          metadata: { order_id: order.id },
+          payment_intent: order.paymentIntentId,
+        }),
+      },
+    },
+    paymentIntents: {
+      retrieve: async () => ({
+        id: order.paymentIntentId,
+        customer: order.stripeCustomerId,
+        metadata: { order_id: order.id },
+        status: 'requires_payment_method',
+      }),
+      cancel: async () => {
+        cancelCalls += 1;
+        throw new Error('status inspection must never cancel');
+      },
+    },
+  } as any);
+
+  assert.equal((await getBillingCheckoutStatus({ userId: user.id, attemptKey })).status, 'processing');
+  assert.equal((await refreshBillingCheckoutStatus({ userId: user.id, attemptKey })).status, 'processing');
+  assert.equal(cancelCalls, 0);
+  setStripeForTests(null);
 });
 
 test('checkout validation failures are definitive not_created responses', async (t) => {
@@ -122,6 +262,66 @@ test('checkout validation failures are definitive not_created responses', async 
     status: 'not_created',
     error: { type: 'invalid_idempotency_key', message: 'Idempotency-Key must be a UUID.' },
   });
+});
+
+test('checkout POST distinguishes missing, valid, invalid keys and persisted processing recovery', async (t) => {
+  mockSession(t);
+  delete process.env.STRIPE_SUBSCRIPTION_TIERS;
+  delete process.env.STRIPE_TOP_UP_PACKS;
+  const postCheckout = (key?: string) =>
+    checkoutPost(
+      context(
+        new Request('https://www.nvm.fyi/api/billing/checkout', {
+          method: 'POST',
+          headers: {
+            cookie: 'nvm_session=sealed',
+            'content-type': 'application/json',
+            ...(key === undefined ? {} : { 'idempotency-key': key }),
+          },
+          body: JSON.stringify({ kind: 'top_up' }),
+        }),
+      ),
+    );
+
+  installDb();
+  const missingKey = await postCheckout();
+  assert.equal(missingKey.status, 503);
+  assert.equal((await missingKey.json()).status, 'not_created');
+
+  installDb();
+  const validKey = await postCheckout('22222222-2222-4222-8222-222222222222');
+  assert.equal(validKey.status, 503);
+  assert.equal((await validKey.json()).status, 'not_created');
+
+  installDb();
+  const invalidKey = await postCheckout('invalid');
+  assert.equal(invalidKey.status, 400);
+  assert.equal((await invalidKey.json()).status, 'not_created');
+
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const intentHash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: 'top_up',
+        priceId: 'price_unconfigured',
+        selectedPriceId: null,
+        selectedTier: null,
+      }),
+    )
+    .digest('hex');
+  const creatingOrder = {
+    id: 'order_creating',
+    userId: user.id,
+    attemptKey,
+    intentHash,
+    priceId: 'price_unconfigured',
+    state: 'creating',
+    leaseExpiresAt: new Date(Date.now() + 60_000),
+  };
+  installDb(new Map([[billingOrders, [[creatingOrder], [creatingOrder]]]]));
+  const processing = await postCheckout(attemptKey);
+  assert.equal(processing.status, 202);
+  assert.deepEqual(await processing.json(), { status: 'processing' });
 });
 
 test('Stripe return resolves the replacement order after browser attempt storage is lost', async (t) => {

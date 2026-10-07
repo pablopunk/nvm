@@ -19,6 +19,7 @@ import {
   BillingRequestError,
   billingCatalog,
   cancelPaymentIntentForRetry,
+  canCreateRetryReplacement,
   classifyAsyncPaymentFailure,
   classifyCheckoutEvidence,
   createBillingCheckout,
@@ -608,7 +609,7 @@ test('checkout state classifier keeps retryable and ambiguous payment evidence a
   );
 });
 
-test('explicit retry cancellation uses the durable idempotency key and a bounded request', async () => {
+test('retry creates a replacement only after a durable cancel request is verified as canceled', async () => {
   const calls: unknown[][] = [];
   setStripeForTests({
     paymentIntents: {
@@ -629,6 +630,23 @@ test('explicit retry cancellation uses the durable idempotency key and a bounded
     ['cancel', 'pi_retry', {}, { idempotencyKey: 'billing-cancel-operation-1', timeout: 20_000 }],
     ['retrieve', 'pi_retry'],
   ]);
+  assert.equal(canCreateRetryReplacement(intent.status), true);
+  assert.equal(canCreateRetryReplacement('requires_payment_method'), false);
+  assert.equal(canCreateRetryReplacement('processing'), false);
+  assert.equal(canCreateRetryReplacement('succeeded'), false);
+});
+
+test('retry replacement gate remains closed when cancellation retrieval is ambiguous or succeeded', async () => {
+  for (const retrievedStatus of ['requires_payment_method', 'processing', 'succeeded']) {
+    setStripeForTests({
+      paymentIntents: {
+        cancel: async () => ({ status: 'canceled' }),
+        retrieve: async () => ({ id: 'pi_retry', status: retrievedStatus }),
+      },
+    } as any);
+    const retrieved = await cancelPaymentIntentForRetry('pi_retry', `cancel-${retrievedStatus}`);
+    assert.equal(canCreateRetryReplacement(retrieved.status), false, `${retrievedStatus} must block replacement`);
+  }
 });
 
 function orderTransitionDb(currentOrder: Record<string, unknown>) {

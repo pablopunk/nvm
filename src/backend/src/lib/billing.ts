@@ -899,6 +899,10 @@ export async function cancelPaymentIntentForRetry(paymentIntentId: string, idemp
   return stripe.paymentIntents.retrieve(paymentIntentId);
 }
 
+export function canCreateRetryReplacement(paymentIntentStatus: string): boolean {
+  return paymentIntentStatus === 'canceled';
+}
+
 export type PublicCheckoutStatus =
   | 'none'
   | 'open'
@@ -1540,7 +1544,7 @@ export async function retryBillingCheckout(input: { userId: string; attemptKey?:
       }
     }
   }
-  if (intent.status !== 'canceled') {
+  if (!canCreateRetryReplacement(intent.status)) {
     if (cancelRejected && intent.status === 'requires_payment_method') {
       await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT id FROM users WHERE id = ${claim.order.userId} FOR UPDATE`);
