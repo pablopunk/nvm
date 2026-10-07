@@ -536,6 +536,118 @@ test('same retry key resumes the linked replacement after a lost response and fa
   });
 });
 
+test('retry persists a replacement only after Stripe confirms cancellation; succeeded or ambiguous intents stay blocked', async () => {
+  const retryKey = '44444444-4444-4444-8444-444444444444';
+  const operation = {
+    id: '55555555-5555-4555-8555-555555555555',
+    userId: user.id,
+    priorOrderId: 'order_retry_prior',
+    retryKey,
+    state: 'cancel_pending',
+    cancelGeneration: 1,
+    cancelIdempotencyKey: 'billing-cancel-op-1',
+    leaseExpiresAt: new Date(0),
+  };
+  const priorOrder = {
+    id: operation.priorOrderId,
+    userId: user.id,
+    attemptKey: '22222222-2222-4222-8222-222222222222',
+    state: 'retry_cancel_pending',
+    version: 4,
+    leaseGeneration: 0,
+    sessionId: 'cs_retry_prior',
+    paymentIntentId: 'pi_retry_prior',
+    stripeCustomerId: 'cus_123',
+    intentHash: 'request-hash',
+    kind: 'top_up',
+    priceTermsId: 'term-1',
+    priceId: 'price_pack',
+    tier: null,
+    credits: 500,
+    expectedUnitAmount: 500,
+    expectedTotalAmount: 500,
+    currency: 'usd',
+    quantity: 1,
+    interval: null,
+    intervalCount: null,
+    requestSnapshot: { mode: 'payment', metadata: { order_id: operation.priorOrderId } },
+  };
+  const currentSession = {
+    id: priorOrder.sessionId,
+    status: 'complete',
+    payment_status: 'unpaid',
+    customer: priorOrder.stripeCustomerId,
+    metadata: { order_id: priorOrder.id },
+    payment_intent: priorOrder.paymentIntentId,
+  };
+
+  async function runRetry(initialIntentStatus: string, postCancelStatus?: string) {
+    const db = installDb(
+      createFakeBillingDb({
+        orderResults: [[priorOrder], [priorOrder]],
+        retryOperationResults: [[operation], [operation]],
+      }),
+    );
+    let retrieves = 0;
+    let cancelCalls = 0;
+    let checkoutCreates = 0;
+    setStripeForTests({
+      checkout: {
+        sessions: {
+          retrieve: async () => currentSession,
+          create: async () => {
+            checkoutCreates += 1;
+            return { id: 'cs_replacement', status: 'open', url: 'https://checkout.stripe.test/new' };
+          },
+        },
+      },
+      paymentIntents: {
+        retrieve: async () => ({
+          id: priorOrder.paymentIntentId,
+          status: retrieves++ === 0 ? initialIntentStatus : (postCancelStatus ?? initialIntentStatus),
+          customer: priorOrder.stripeCustomerId,
+          metadata: { order_id: priorOrder.id },
+        }),
+        cancel: async () => {
+          cancelCalls += 1;
+          return { id: priorOrder.paymentIntentId, status: 'canceled' };
+        },
+      },
+    } as any);
+    const result = await retryBillingCheckout({ userId: user.id, retryOperationId: operation.id, retryKey });
+    return {
+      result,
+      cancelCalls,
+      checkoutCreates,
+      replacements: db.inserts.filter((call) => call.table === billingOrders && (call.values as any)?.id !== priorOrder.id),
+    };
+  }
+
+  const verifiedCanceled = await runRetry('requires_payment_method', 'canceled');
+  assert.equal(verifiedCanceled.result.status, 'processing');
+  assert.equal(verifiedCanceled.cancelCalls, 1);
+  assert.equal(verifiedCanceled.replacements.length, 1);
+  assert.equal(verifiedCanceled.checkoutCreates, 0);
+
+  for (const status of ['requires_payment_method', 'processing']) {
+    const ambiguous = await runRetry('requires_payment_method', status);
+    assert.equal(ambiguous.result.status, 'processing');
+    assert.equal(ambiguous.cancelCalls, 1);
+    assert.equal(ambiguous.replacements.length, 0);
+    assert.equal(ambiguous.checkoutCreates, 0);
+  }
+
+  const initiallyProcessing = await runRetry('processing');
+  assert.equal(initiallyProcessing.cancelCalls, 0);
+  assert.equal(initiallyProcessing.replacements.length, 0);
+
+  const succeeded = await runRetry('succeeded');
+  assert.equal(succeeded.result.status, 'processing');
+  assert.equal(succeeded.cancelCalls, 0);
+  assert.equal(succeeded.replacements.length, 0);
+  assert.equal(succeeded.checkoutCreates, 0);
+});
+
 test('checkout state classifier keeps retryable and ambiguous payment evidence active', () => {
   assert.equal(
     classifyCheckoutEvidence({
