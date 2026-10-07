@@ -1,5 +1,5 @@
 {
-  "id": "5c0fda98-723d-430a-848c-4d7e4c6a4d52",
+  "id": "269b5363-5803-43ee-8e6b-9b60cc5fc4b9",
   "prevId": "223f4f52-aeae-4295-9ef0-4811d9c67e48",
   "version": "7",
   "dialect": "postgresql",
@@ -81,8 +81,12 @@
           "name": "api_tokens_user_id_users_id_fk",
           "tableFrom": "api_tokens",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -92,7 +96,9 @@
         "api_tokens_token_hash_unique": {
           "name": "api_tokens_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": ["token_hash"]
+          "columns": [
+            "token_hash"
+          ]
         }
       },
       "policies": {},
@@ -201,8 +207,12 @@
           "name": "audit_log_actor_user_id_users_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "users",
-          "columnsFrom": ["actor_user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -262,8 +272,12 @@
           "name": "auth_intents_invite_id_invites_id_fk",
           "tableFrom": "auth_intents",
           "tableTo": "invites",
-          "columnsFrom": ["invite_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "invite_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -273,9 +287,133 @@
         "auth_intents_nonce_hash_unique": {
           "name": "auth_intents_nonce_hash_unique",
           "nullsNotDistinct": false,
-          "columns": ["nonce_hash"]
+          "columns": [
+            "nonce_hash"
+          ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.billing_price_terms": {
+      "name": "billing_price_terms",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "price_id": {
+          "name": "price_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tier": {
+          "name": "tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credits": {
+          "name": "credits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_amount": {
+          "name": "unit_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "interval": {
+          "name": "interval",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "interval_count": {
+          "name": "interval_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "billing_price_terms_price_version_idx": {
+          "name": "billing_price_terms_price_version_idx",
+          "columns": [
+            {
+              "expression": "price_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -378,8 +516,12 @@
           "name": "credit_ledger_user_id_users_id_fk",
           "tableFrom": "credit_ledger",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -462,30 +604,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "reserved_free_credits": {
-          "name": "reserved_free_credits",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reserved_paid_credits": {
-          "name": "reserved_paid_credits",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "actual_free_credits": {
-          "name": "actual_free_credits",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "actual_paid_credits": {
-          "name": "actual_paid_credits",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -537,8 +655,12 @@
           "name": "credit_reservations_user_id_users_id_fk",
           "tableFrom": "credit_reservations",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -603,8 +725,12 @@
           "name": "device_codes_user_id_users_id_fk",
           "tableFrom": "device_codes",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -716,8 +842,12 @@
           "name": "email_outbox_invite_id_invites_id_fk",
           "tableFrom": "email_outbox",
           "tableTo": "invites",
-          "columnsFrom": ["invite_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "invite_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -727,7 +857,9 @@
         "email_outbox_idempotency_key_unique": {
           "name": "email_outbox_idempotency_key_unique",
           "nullsNotDistinct": false,
-          "columns": ["idempotency_key"]
+          "columns": [
+            "idempotency_key"
+          ]
         }
       },
       "policies": {},
@@ -857,8 +989,12 @@
           "name": "invites_waitlist_entry_id_waitlist_entries_id_fk",
           "tableFrom": "invites",
           "tableTo": "waitlist_entries",
-          "columnsFrom": ["waitlist_entry_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "waitlist_entry_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -866,8 +1002,12 @@
           "name": "invites_created_by_users_id_fk",
           "tableFrom": "invites",
           "tableTo": "users",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -877,7 +1017,9 @@
         "invites_token_hash_unique": {
           "name": "invites_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": ["token_hash"]
+          "columns": [
+            "token_hash"
+          ]
         }
       },
       "policies": {},
@@ -988,8 +1130,12 @@
           "name": "model_providers_provider_id_providers_id_fk",
           "tableFrom": "model_providers",
           "tableTo": "providers",
-          "columnsFrom": ["provider_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1233,8 +1379,12 @@
           "name": "request_dedup_user_id_users_id_fk",
           "tableFrom": "request_dedup",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1365,8 +1515,12 @@
           "name": "subscriptions_user_id_users_id_fk",
           "tableFrom": "subscriptions",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1376,7 +1530,9 @@
         "subscriptions_stripe_sub_id_unique": {
           "name": "subscriptions_stripe_sub_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["stripe_sub_id"]
+          "columns": [
+            "stripe_sub_id"
+          ]
         }
       },
       "policies": {},
@@ -1502,19 +1658,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "cost_overrun": {
-          "name": "cost_overrun",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "route_slot": {
-          "name": "route_slot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -1554,8 +1697,12 @@
           "name": "usage_user_id_users_id_fk",
           "tableFrom": "usage",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1624,12 +1771,16 @@
         "users_workos_user_id_unique": {
           "name": "users_workos_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["workos_user_id"]
+          "columns": [
+            "workos_user_id"
+          ]
         },
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},
@@ -1705,8 +1856,12 @@
           "name": "waitlist_entries_reviewer_id_users_id_fk",
           "tableFrom": "waitlist_entries",
           "tableTo": "users",
-          "columnsFrom": ["reviewer_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "reviewer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1716,81 +1871,11 @@
         "waitlist_entries_email_unique": {
           "name": "waitlist_entries_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.route_breakers": {
-      "name": "route_breakers",
-      "schema": "",
-      "columns": {
-        "route_slot": {
-          "name": "route_slot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "model_id": {
-          "name": "model_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tripped_at": {
-          "name": "tripped_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "route_breakers_route_provider_model_idx": {
-          "name": "route_breakers_route_provider_model_idx",
           "columns": [
-            {
-              "expression": "route_slot",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "provider",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "model_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
+            "email"
+          ]
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
