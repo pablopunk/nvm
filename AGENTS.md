@@ -20,7 +20,7 @@
 * In extension API host-layer routing (`extension-ui-api.ts`), discriminate on properties unique to one input shape before checking optional shared fields — the `kind` field is semantically overloaded across `ExtensionFileKind` and preview-item descriptors, and routing by it first causes misroutes when both shapes overlap.
 * Keep desktop/backend API changes backward-compatible for supported released clients; see `docs/backend-api-compatibility.md`.
 * Ship features directly; do not add feature flags or staged rollouts. Use kill switches only for emergency shutdowns.
-* Installed user extensions live in `app.getPath('userData')/extensions` (macOS: `~/Library/Application Support/nvm/extensions/`); read that directory directly to inspect an extension's source instead of searching the filesystem.
+* User and AI-generated extensions live in `~/.config/nevermind/extensions` on all platforms; existing extensions are not migrated automatically. Read that directory directly to inspect an extension's source instead of searching the filesystem.
 * When fixing bugs, evaluate how the system would look if built from scratch and propose improvements.
 
 ## Product and UX

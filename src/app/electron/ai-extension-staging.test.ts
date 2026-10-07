@@ -36,7 +36,8 @@ export default {
 
 function options(root: string) {
   return {
-    extensionsDir: path.join(root, 'extensions'),
+    extensionsDir: path.join(root, '.config', 'nevermind', 'extensions'),
+    extensionDraftsDir: path.join(root, 'app-data', 'extension-drafts'),
     extensionTypesPath: path.join(
       repoRoot,
       'src/app/resources/nevermind-extension-api.d.ts',
@@ -79,7 +80,7 @@ test('write_extension validates then activates the staged source', async () => {
       actions: [],
     });
     await assert.rejects(
-      fs.access(path.join(root, 'extension-drafts', 'ai-live.ts')),
+      fs.access(path.join(root, 'app-data', 'extension-drafts', 'ai-live.ts')),
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -105,7 +106,7 @@ test('write_extension removes invalid staging and does not activate', async () =
     );
     assert.equal(activated, false);
     await assert.rejects(
-      fs.access(path.join(root, 'extension-drafts', 'invalid.ts')),
+      fs.access(path.join(root, 'app-data', 'extension-drafts', 'invalid.ts')),
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -127,7 +128,7 @@ test('write_extension removes staging when live activation fails', async () => {
       ACTIVATION_FAILURE,
     );
     await assert.rejects(
-      fs.access(path.join(root, 'extension-drafts', 'failed.ts')),
+      fs.access(path.join(root, 'app-data', 'extension-drafts', 'failed.ts')),
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });

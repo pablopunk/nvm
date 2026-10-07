@@ -8,11 +8,9 @@ Users expect shortcut-launched extension grids to feel instant even if the newes
 
 ## Context
 
-Generated extensions live under the Electron `userData/extensions` directory. In this app that path is derived in main from:
+Generated extensions live under `~/.config/nevermind/extensions` on all platforms. In test mode, extensions use the isolated Electron `userData/extensions` directory so tests never touch the real home directory.
 
-```ts
-path.join(app.getPath('userData'), 'extensions')
-```
+Existing extensions are not migrated automatically; move files from the previous `app.getPath('userData')/extensions` directory by hand (on macOS: `~/Library/Application Support/nvm/extensions`). AI chat writes directly to the active extension directory after validating a temporary draft kept in app data.
 
 For debugging generated extensions, inspect that directory directly instead of searching broad home directories.
 

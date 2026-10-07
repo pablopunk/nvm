@@ -60,6 +60,7 @@ import {
 } from '../shared/ai-chat-model';
 import { withoutAiToolCallHistory } from '../shared/ai-chat-tool-history';
 import { createNevermindAi } from './ai';
+import { resolveExtensionPaths } from './extension-paths';
 import {
   type NormalizedAiChatImage,
   normalizeAiChatImages,
@@ -8031,6 +8032,7 @@ async function initNevermindAi() {
     agentDir: path.join(app.getPath('userData'), 'pi-agent'),
     workspaceDir: path.join(app.getPath('userData'), 'ai-workspace'),
     extensionsDir,
+    extensionDraftsDir: extensionDraftsDir(),
     internalExtensionsDir: path.join(
       app.getAppPath(),
       'src',
@@ -8900,7 +8902,7 @@ function extensionFileIsEnabled(filename: string) {
 }
 
 function extensionDraftsDir() {
-  return path.join(path.dirname(extensionsDir), 'extension-drafts');
+  return path.join(app.getPath('userData'), 'extension-drafts');
 }
 
 function extensionManagerState() {
@@ -10367,7 +10369,11 @@ async function loadUserState() {
   iconCacheDir = path.join(cacheRoot, 'icons');
   clipboardImagesDir = path.join(app.getPath('userData'), 'clipboard-images');
   aiChatImagesDir = path.join(app.getPath('userData'), 'ai-chat-images');
-  extensionsDir = path.join(app.getPath('userData'), 'extensions');
+  extensionsDir = resolveExtensionPaths({
+    homeDirectory: os.homedir(),
+    userDataDirectory: app.getPath('userData'),
+    useUserDataForExtensions: isNvmTestMode,
+  }).extensionsDir;
   extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage');
   extensionCacheDir = path.join(cacheRoot, 'extension-storage');
   learningStore = new LocalLearningStore({

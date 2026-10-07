@@ -100,6 +100,7 @@ type NevermindAiOptions = {
   agentDir: string;
   workspaceDir: string;
   extensionsDir: string;
+  extensionDraftsDir: string;
   internalExtensionsDir?: string;
   internalExtensionFiles?: readonly string[];
   extensionApiPath: string;
@@ -1014,6 +1015,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       agentDir,
       workspaceDir,
       extensionsDir,
+      extensionDraftsDir,
       internalExtensionsDir,
       internalExtensionFiles,
       extensionApiPath,
@@ -2093,6 +2095,7 @@ function createTools(
             await stageAiGeneratedExtension(
               {
                 extensionsDir,
+                extensionDraftsDir,
                 extensionTypesPath,
                 activateGeneratedExtension,
                 withLiveExtensionWriteLock,
@@ -2207,6 +2210,7 @@ function createTools(
 export async function stageAiGeneratedExtension(
   options: {
     extensionsDir: string;
+    extensionDraftsDir: string;
     extensionTypesPath: string;
     activateGeneratedExtension?: NevermindAiOptions['activateGeneratedExtension'];
     withLiveExtensionWriteLock?: NevermindAiOptions['withLiveExtensionWriteLock'];
@@ -2233,12 +2237,8 @@ export async function stageAiGeneratedExtension(
       throw new Error(
         `Refusing to overwrite ${filename} before reading it in this chat. Call read_extension first.`,
       );
-    const draftsDir = path.join(
-      path.dirname(options.extensionsDir),
-      'extension-drafts',
-    );
-    const draftPath = safeExtensionPath(draftsDir, filename);
-    await fs.mkdir(draftsDir, { recursive: true });
+    const draftPath = safeExtensionPath(options.extensionDraftsDir, filename);
+    await fs.mkdir(options.extensionDraftsDir, { recursive: true });
     await fs.writeFile(draftPath, params.code);
     try {
       await validateTypeScriptExtension(
