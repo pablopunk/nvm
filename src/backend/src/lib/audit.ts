@@ -5,7 +5,8 @@ export type AuditAction =
   | 'model.changed'
   | 'provider.changed'
   | 'role.changed'
-  | 'credits.granted';
+  | 'credits.granted'
+  | 'route_breaker.reenabled';
 
 export async function recordAudit(input: {
   actorUserId: string | null;

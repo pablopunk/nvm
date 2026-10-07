@@ -1,5 +1,5 @@
-import { computeUsdCost, usdToCredits, type ModelCost } from './cost';
 import { DEFAULT_NEVERMIND_MAX_INPUT_TOKENS } from '../../../app/shared/ai-context-window';
+import { computeUsdCost, type ModelCost, usdToCredits } from './cost';
 
 export const MAX_INPUT_TOKENS = Number(
   process.env.MAX_INPUT_TOKENS ?? DEFAULT_NEVERMIND_MAX_INPUT_TOKENS,
@@ -38,10 +38,7 @@ function isImageDataUrl(value: unknown): value is string {
   );
 }
 
-function hasOnlyKeys(
-  node: Record<string, unknown>,
-  keys: readonly string[],
-) {
+function hasOnlyKeys(node: Record<string, unknown>, keys: readonly string[]) {
   return Object.keys(node).every((key) => keys.includes(key));
 }
 
@@ -135,6 +132,14 @@ function collectInputEstimate(node: unknown, estimate: InputEstimate): void {
   }
 }
 
+export function containsImagePayload(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsImagePayload);
+  if (!value || typeof value !== 'object') return false;
+  const node = value as Record<string, unknown>;
+  if (imagePayloadCount(node) > 0) return true;
+  return Object.values(node).some(containsImagePayload);
+}
+
 export function estimateInputTokensFromValue(value: unknown): number {
   const estimate: InputEstimate = { textCharacters: 0, images: 0 };
   collectInputEstimate(value, estimate);
@@ -153,11 +158,18 @@ export function estimateInputTokensFromBody(bodyText: string): number {
   }
 }
 
-export function estimatePromptCredits(inputTokens: number, cost: ModelCost): number {
+export function estimatePromptCredits(
+  inputTokens: number,
+  cost: ModelCost,
+): number {
   return usdToCredits(computeUsdCost(cost, inputTokens, 0));
 }
 
-export function estimateRequestCredits(inputTokens: number, maxOutputTokens: number, cost: ModelCost): number {
+export function estimateRequestCredits(
+  inputTokens: number,
+  maxOutputTokens: number,
+  cost: ModelCost,
+): number {
   return usdToCredits(computeUsdCost(cost, inputTokens, maxOutputTokens));
 }
 
@@ -169,11 +181,16 @@ function positiveInteger(value: unknown): number | undefined {
 
 /** Extract the provider-specific output cap from a parsed request body. */
 export function requestedMaxOutputTokens(body: unknown): number | undefined {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return undefined;
   const request = body as Record<string, unknown>;
-  return positiveInteger(request.max_tokens)
-    ?? positiveInteger(request.max_completion_tokens)
-    ?? (request.generationConfig && typeof request.generationConfig === 'object'
-      ? positiveInteger((request.generationConfig as Record<string, unknown>).maxOutputTokens)
-      : undefined);
+  return (
+    positiveInteger(request.max_tokens) ??
+    positiveInteger(request.max_completion_tokens) ??
+    (request.generationConfig && typeof request.generationConfig === 'object'
+      ? positiveInteger(
+          (request.generationConfig as Record<string, unknown>).maxOutputTokens,
+        )
+      : undefined)
+  );
 }

@@ -27,6 +27,7 @@ import { rateLimitChat, tooManyRequests } from './ratelimit';
 import {
   estimateInputTokensFromBody,
   estimateInputTokensFromValue,
+  containsImagePayload,
   estimateRequestCredits,
   MAX_INPUT_TOKENS,
   requestedMaxOutputTokens,
@@ -37,6 +38,7 @@ import { log } from './log';
 import * as Sentry from '@sentry/astro';
 import { captureStreamFailure } from './diagnostics';
 import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
+import { isRouteTripped } from './route-breakers';
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
@@ -103,6 +105,7 @@ export function parseStreamUsageJson(payload: string, acc: StreamUsageAccumulato
 type BillContext = {
   user: { id: string };
   provider: string;
+  routeSlot: ModelRouteSlot;
   activeModelId: string;
   costRow: ModelCost;
   kind: 'free' | 'paid';
@@ -208,6 +211,7 @@ async function recordUsage(
         outcome: 'settle',
         model: ctx.activeModelId,
         provider: ctx.provider,
+        routeSlot: ctx.routeSlot,
         tokens,
         costRow: ctx.costRow,
         providerCostUsd,
@@ -754,6 +758,10 @@ async function tryUpstreamProviders(
 
   for (const [attemptIndex, candidate] of providerChain.entries()) {
     const { providerId, modelId } = candidate;
+    if (await isRouteTripped(routing.routeSlot, providerId, modelId)) {
+      log.error('route_breaker_blocked_dispatch', { request_id: requestId, route_slot: routing.routeSlot, provider: providerId, model: modelId });
+      continue;
+    }
     if (!providerSupportsFormat(providerId, apiFormat) || selectApiForModel(providerId, modelId) !== apiFormat) {
       log.info('upstream_format_skip', { request_id: requestId, provider: providerId, model: modelId, format: apiFormat });
       continue;
@@ -949,6 +957,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     } catch {
       bodyIsJson = false;
     }
+    if (bodyIsJson && containsImagePayload(parsedBody)) {
+      await markDedupFailed(dedupClaim);
+      return withRequestId(Response.json(
+        { error: { type: 'unsupported_request_shape', message: 'Image requests are unavailable because this route has no conservative image-cost bound.' } },
+        { status: 400 },
+      ), requestId);
+    }
     estimatedInputTokens = bodyIsJson
       ? estimateInputTokensFromValue(parsedBody)
       : estimateInputTokensFromBody(requestBodyText);
@@ -1105,6 +1120,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const billCtx: BillContext = {
     user: routing.user,
     provider: winningProvider,
+    routeSlot: routing.routeSlot,
     activeModelId: winningModelId,
     costRow: winningCostRow,
     kind: routing.kind,

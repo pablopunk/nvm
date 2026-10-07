@@ -4,11 +4,6 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { PRODUCTION_WEB_ORIGIN } from '../../../../../../app/shared/public-origin';
 import {
-  finalizeReservation,
-  preparedReservationExists,
-  reserveCredits,
-} from '../../../../lib/credit-reservations';
-import {
   backendKillSwitchEnabled,
   compatibilityError,
   compatibilityHeaders,
@@ -17,19 +12,28 @@ import {
   requestIdFromHeaders,
   unsupportedClientReason,
 } from '../../../../lib/compatibility';
+import {
+  finalizeReservation,
+  preparedReservationExists,
+  reserveCredits,
+} from '../../../../lib/credit-reservations';
 import { log } from '../../../../lib/log';
-import { markDedupFailed, handleDedup } from '../../../../lib/proxy';
+import { handleDedup, markDedupFailed } from '../../../../lib/proxy';
 import {
   rateLimitTranscription,
   tooManyRequests,
 } from '../../../../lib/ratelimit';
+import { isRouteTripped } from '../../../../lib/route-breakers';
 import {
   getAudioModelRoute,
   isProviderEnabled,
   ModelNotConfiguredError,
 } from '../../../../lib/settings';
 import { getUserFromBearer } from '../../../../lib/tokens';
-import { getUpstreamConfig, UpstreamConfigError } from '../../../../lib/upstream';
+import {
+  getUpstreamConfig,
+  UpstreamConfigError,
+} from '../../../../lib/upstream';
 import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 
 export const config = { maxDuration: 60 };
@@ -42,10 +46,6 @@ const MAX_REQUEST_BYTES = Math.ceil((MAX_AUDIO_BYTES * 4) / 3) + 8 * 1024;
 const RESERVATION_CREDITS = Math.max(
   1,
   Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
-);
-const MAX_PROVIDER_COST_USD = Math.max(
-  0.001,
-  Number(process.env.AUDIO_TRANSCRIPTION_MAX_COST_USD ?? 0.1),
 );
 const UPSTREAM_TIMEOUT_MS = Math.max(
   1_000,
@@ -101,12 +101,18 @@ function decodeBase64Audio(data: string) {
 async function readTranscriptionAudio(request: Request) {
   const contentLength = Number(request.headers.get('content-length') ?? 0);
   if (contentLength > MAX_REQUEST_BYTES) return { error: 'too_large' as const };
-  if (request.headers.get('content-type')?.split(';')[0].trim() === 'audio/webm') {
+  if (
+    request.headers.get('content-type')?.split(';')[0].trim() === 'audio/webm'
+  ) {
     const bytes = Buffer.from(await request.arrayBuffer());
     if (bytes.length > MAX_AUDIO_BYTES) return { error: 'too_large' as const };
     if (bytes.subarray(0, 4).toString('hex') !== '1a45dfa3')
       return { error: 'invalid_audio' as const };
-    return { audio: bytes, inputAudio: { data: bytes.toString('base64'), format: 'webm' } as const, requestHash: bytes };
+    return {
+      audio: bytes,
+      inputAudio: { data: bytes.toString('base64'), format: 'webm' } as const,
+      requestHash: bytes,
+    };
   }
   const rawBody = await request.text();
   if (Buffer.byteLength(rawBody) > MAX_REQUEST_BYTES)
@@ -184,7 +190,12 @@ export const POST: APIRoute = async ({ request }) => {
   );
   if (!user)
     return responseWithRequestId(
-      { error: { type: 'unauthorized', message: 'Sign in to use API dictation.' } },
+      {
+        error: {
+          type: 'unauthorized',
+          message: 'Sign in to use API dictation.',
+        },
+      },
       401,
       requestId,
     );
@@ -198,7 +209,12 @@ export const POST: APIRoute = async ({ request }) => {
   const parsedAudio = await readTranscriptionAudio(request);
   if (parsedAudio.error === 'too_large')
     return responseWithRequestId(
-      { error: { type: 'payload_too_large', message: 'Dictation audio is too large.' } },
+      {
+        error: {
+          type: 'payload_too_large',
+          message: 'Dictation audio is too large.',
+        },
+      },
       413,
       requestId,
     );
@@ -210,13 +226,23 @@ export const POST: APIRoute = async ({ request }) => {
     );
   if (parsedAudio.error === 'invalid_request')
     return responseWithRequestId(
-      { error: { type: 'invalid_request', message: 'Invalid transcription request.' } },
+      {
+        error: {
+          type: 'invalid_request',
+          message: 'Invalid transcription request.',
+        },
+      },
       400,
       requestId,
     );
   if (parsedAudio.error === 'invalid_audio')
     return responseWithRequestId(
-      { error: { type: 'invalid_audio', message: 'Invalid or oversized WebM audio.' } },
+      {
+        error: {
+          type: 'invalid_audio',
+          message: 'Invalid or oversized WebM audio.',
+        },
+      },
       400,
       requestId,
     );
@@ -225,7 +251,12 @@ export const POST: APIRoute = async ({ request }) => {
   const idempotencyKey = request.headers.get('idempotency-key')?.trim();
   if (!idempotencyKey)
     return responseWithRequestId(
-      { error: { type: 'invalid_request', message: 'Idempotency-Key is required.' } },
+      {
+        error: {
+          type: 'invalid_request',
+          message: 'Idempotency-Key is required.',
+        },
+      },
       400,
       requestId,
     );
@@ -300,6 +331,24 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
   const route = routeResult.route;
+  if (await isRouteTripped('audio', route.provider, route.modelId)) {
+    await markDedupFailed({
+      userId: user.id,
+      idempotencyKey,
+      requestId,
+      requestHash,
+    });
+    return responseWithRequestId(
+      {
+        error: {
+          type: 'model_not_configured',
+          message: 'Audio transcription is temporarily unavailable.',
+        },
+      },
+      503,
+      requestId,
+    );
+  }
   if (preparationRequested && !prepared)
     await timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
   const reservation = prepared
@@ -349,9 +398,9 @@ export const POST: APIRoute = async ({ request }) => {
           signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         },
       );
-      const body = (await upstreamResponse.json().catch(() => null)) as
-        | OpenRouterTranscription
-        | null;
+      const body = (await upstreamResponse
+        .json()
+        .catch(() => null)) as OpenRouterTranscription | null;
       return { upstreamResponse, body };
     });
     if (!upstreamResponse.ok || typeof body?.text !== 'string') {
@@ -376,7 +425,10 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     const providerCostUsd = finiteNonnegative(body.usage?.cost);
-    if (providerCostUsd == null || providerCostUsd > MAX_PROVIDER_COST_USD) {
+    if (
+      providerCostUsd == null ||
+      providerCostUsd > Number.MAX_SAFE_INTEGER / 1e8
+    ) {
       log.error('audio_transcription_invalid_provider_cost', {
         request_id: requestId,
         provider: route.provider,
@@ -396,7 +448,8 @@ export const POST: APIRoute = async ({ request }) => {
         {
           error: {
             type: 'upstream_contract_error',
-            message: 'The transcription provider returned invalid billing data.',
+            message:
+              'The transcription provider returned billing data that cannot be stored safely.',
           },
         },
         502,
@@ -410,6 +463,7 @@ export const POST: APIRoute = async ({ request }) => {
       outcome: 'settle',
       model: route.modelId,
       provider: route.provider,
+      routeSlot: 'audio',
       modality: 'audio',
       audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1_000),
       tokens: {
@@ -450,7 +504,8 @@ export const POST: APIRoute = async ({ request }) => {
       status: upstreamResponse.status,
       latency_ms: Math.round(performance.now() - startedAt),
       audio_bytes: parsedAudio.audio.length,
-      audio_duration_ms: seconds == null ? undefined : Math.round(seconds * 1_000),
+      audio_duration_ms:
+        seconds == null ? undefined : Math.round(seconds * 1_000),
       timings_ms: timings,
       settlement_deferred: true,
     });

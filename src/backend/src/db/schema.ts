@@ -9,6 +9,7 @@ import {
   index,
   uniqueIndex,
   jsonb,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -61,6 +62,8 @@ export const usage = pgTable(
     costCredits: integer('cost_credits').notNull(),
     upstreamCostMicrocents: bigint('upstream_cost_microcents', { mode: 'number' }).notNull().default(0),
     upstreamCostSource: text('upstream_cost_source').notNull().default('catalog_estimate'),
+    costOverrun: boolean('cost_overrun').notNull().default(false),
+    routeSlot: text('route_slot'),
     provider: text('provider'),
     requestId: text('request_id'),
     status: integer('status'),
@@ -85,6 +88,10 @@ export const creditReservations = pgTable(
     reservedCredits: integer('reserved_credits').notNull(),
     status: text('status').notNull().default('pending'),
     actualCredits: integer('actual_credits'),
+    reservedFreeCredits: integer('reserved_free_credits'),
+    reservedPaidCredits: integer('reserved_paid_credits'),
+    actualFreeCredits: integer('actual_free_credits'),
+    actualPaidCredits: integer('actual_paid_credits'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     settledAt: timestamp('settled_at', { withTimezone: true }),
     releasedAt: timestamp('released_at', { withTimezone: true }),
@@ -96,6 +103,14 @@ export const creditReservations = pgTable(
     index('credit_reservations_pending_expiry_idx').on(t.status, t.expiresAt),
   ],
 );
+
+export const routeBreakers = pgTable('route_breakers', {
+  routeSlot: text('route_slot').notNull(),
+  provider: text('provider').notNull(),
+  modelId: text('model_id').notNull(),
+  trippedAt: timestamp('tripped_at', { withTimezone: true }).notNull().defaultNow(),
+  reason: text('reason').notNull(),
+}, (t) => [uniqueIndex('route_breakers_route_provider_model_idx').on(t.routeSlot, t.provider, t.modelId)]);
 
 export const apiTokens = pgTable(
   'api_tokens',

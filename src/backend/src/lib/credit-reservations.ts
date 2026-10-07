@@ -4,19 +4,38 @@ import {
   creditLedger,
   creditReservations,
   requestDedup,
+  routeBreakers,
   usage,
   users,
 } from '../db/schema';
-import { computeUsdCost, usdToCredits, usdToMicrocents, type ModelCost } from './cost';
+import {
+  computeUsdCost,
+  type ModelCost,
+  usdToCredits,
+  usdToMicrocents,
+} from './cost';
 import { log } from './log';
 
-export const CREDIT_GRACE_THRESHOLD = Math.max(0, Number(process.env.CREDIT_GRACE_THRESHOLD ?? 100));
-const RESERVATION_TTL_MS = Math.max(60_000, Number(process.env.CREDIT_RESERVATION_TTL_MS ?? 6 * 60_000));
+export const CREDIT_GRACE_THRESHOLD = 0;
+const RESERVATION_TTL_MS = Math.max(
+  60_000,
+  Number(process.env.CREDIT_RESERVATION_TTL_MS ?? 6 * 60_000),
+);
 
 export type CreditKind = 'free' | 'paid';
 export type ReservationResult =
-  | { ok: true; reservation: typeof creditReservations.$inferSelect; balance: number; reserved: number }
-  | { ok: false; reason: 'insufficient_credits' | 'request_already_reserved'; balance: number; reserved: number };
+  | {
+      ok: true;
+      reservation: typeof creditReservations.$inferSelect;
+      balance: number;
+      reserved: number;
+    }
+  | {
+      ok: false;
+      reason: 'insufficient_credits' | 'request_already_reserved';
+      balance: number;
+      reserved: number;
+    };
 
 export async function reserveCredits(input: {
   requestId: string;
@@ -31,48 +50,112 @@ export async function reserveCredits(input: {
   return db.transaction(async (tx) => {
     // Locking the parent user serializes all admission decisions for that user
     // without blocking unrelated users.
-    const [user] = await tx.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1).for('update');
+    const [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, input.userId))
+      .limit(1)
+      .for('update');
     if (!user) throw new Error('Cannot reserve credits for unknown user');
 
-    const [existing] = await tx.select().from(creditReservations)
-      .where(eq(creditReservations.requestId, input.requestId)).limit(1).for('update');
+    const [existing] = await tx
+      .select()
+      .from(creditReservations)
+      .where(eq(creditReservations.requestId, input.requestId))
+      .limit(1)
+      .for('update');
     if (existing) {
-      if (existing.userId !== input.userId || (input.kind && existing.kind !== input.kind) || existing.reservedCredits !== credits) {
-        throw new Error('Reservation request ID was reused with different billing parameters');
+      if (
+        existing.userId !== input.userId ||
+        existing.reservedCredits !== credits
+      ) {
+        throw new Error(
+          'Reservation request ID was reused with different billing parameters',
+        );
       }
       if (input.allowExistingPending && existing.status === 'pending') {
-        return { ok: true, reservation: existing, balance: 0, reserved: existing.reservedCredits };
+        return {
+          ok: true,
+          reservation: existing,
+          balance: 0,
+          reserved: existing.reservedCredits,
+        };
       }
-      return { ok: false, reason: 'request_already_reserved', balance: 0, reserved: existing.reservedCredits };
+      return {
+        ok: false,
+        reason: 'request_already_reserved',
+        balance: 0,
+        reserved: existing.reservedCredits,
+      };
     }
 
-    const [ledger] = await tx.select({
-      free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
-      paid: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'paid' then ${creditLedger.delta} else 0 end), 0)::int`,
-    }).from(creditLedger).where(eq(creditLedger.userId, input.userId));
-    const kind = input.kind ?? ((ledger?.paid ?? 0) > 0 ? 'paid' : 'free');
-    const [active] = await tx.select({
-      reserved: sql<number>`coalesce(sum(${creditReservations.reservedCredits}), 0)::int`,
-    }).from(creditReservations).where(and(
-      eq(creditReservations.userId, input.userId),
-      eq(creditReservations.kind, kind),
-      eq(creditReservations.status, 'pending'),
-    ));
-    const balance = ledger?.[kind] ?? 0;
-    const reserved = active?.reserved ?? 0;
-    if (credits + reserved > balance + CREDIT_GRACE_THRESHOLD) {
-      log.warn('credit_reservation_rejected', { request_id: input.requestId, user_id: input.userId, kind, credits, balance, reserved });
+    const [ledger] = await tx
+      .select({
+        free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
+        paid: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'paid' then ${creditLedger.delta} else 0 end), 0)::int`,
+      })
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, input.userId));
+    const [active] = await tx
+      .select({
+        free: sql<number>`coalesce(sum(coalesce(${creditReservations.reservedFreeCredits}, case when ${creditReservations.kind} = 'free' then ${creditReservations.reservedCredits} else 0 end)), 0)::int`,
+        paid: sql<number>`coalesce(sum(coalesce(${creditReservations.reservedPaidCredits}, case when ${creditReservations.kind} = 'paid' then ${creditReservations.reservedCredits} else 0 end)), 0)::int`,
+      })
+      .from(creditReservations)
+      .where(
+        and(
+          eq(creditReservations.userId, input.userId),
+          eq(creditReservations.status, 'pending'),
+        ),
+      );
+    const freeBalance = ledger?.free ?? 0;
+    const paidBalance = ledger?.paid ?? 0;
+    const freeAvailable = freeBalance - (active?.free ?? 0);
+    const paidAvailable = paidBalance - (active?.paid ?? 0);
+    const reservedFree = Math.min(credits, Math.max(0, freeAvailable));
+    const reservedPaid = credits - reservedFree;
+    const kind = reservedFree > 0 ? 'free' : 'paid';
+    if (
+      freeBalance < 0 ||
+      paidBalance < 0 ||
+      reservedPaid > Math.max(0, paidAvailable)
+    ) {
+      const balance = freeBalance + paidBalance;
+      const reserved = (active?.free ?? 0) + (active?.paid ?? 0);
+      log.warn('credit_reservation_rejected', {
+        request_id: input.requestId,
+        user_id: input.userId,
+        credits,
+        balance,
+        reserved,
+      });
       return { ok: false, reason: 'insufficient_credits', balance, reserved };
     }
 
-    const [reservation] = await tx.insert(creditReservations).values({
-      requestId: input.requestId,
-      userId: input.userId,
+    const [reservation] = await tx
+      .insert(creditReservations)
+      .values({
+        requestId: input.requestId,
+        userId: input.userId,
+        kind,
+        reservedCredits: credits,
+        reservedFreeCredits: reservedFree,
+        reservedPaidCredits: reservedPaid,
+        expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
+      })
+      .returning();
+    const balance = freeBalance + paidBalance;
+    const reserved = (active?.free ?? 0) + (active?.paid ?? 0);
+    log.info('credit_reserved', {
+      request_id: input.requestId,
+      user_id: input.userId,
       kind,
-      reservedCredits: credits,
-      expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
-    }).returning();
-    log.info('credit_reserved', { request_id: input.requestId, user_id: input.userId, kind, credits, balance, reserved });
+      credits,
+      balance,
+      reserved,
+      reserved_free: reservedFree,
+      reserved_paid: reservedPaid,
+    });
     return { ok: true, reservation, balance, reserved };
   });
 }
@@ -89,7 +172,10 @@ export async function preparedReservationExists(input: {
       and(
         eq(creditReservations.requestId, input.requestId),
         eq(creditReservations.userId, input.userId),
-        eq(creditReservations.reservedCredits, Math.max(1, Math.ceil(input.credits))),
+        eq(
+          creditReservations.reservedCredits,
+          Math.max(1, Math.ceil(input.credits)),
+        ),
         eq(creditReservations.status, 'pending'),
       ),
     )
@@ -115,6 +201,7 @@ export type ReservationFinalization = {
   modality?: 'text' | 'audio';
   audioDurationMs?: number;
   costSource?: 'provider_reported' | 'catalog_estimate';
+  routeSlot?: string;
   status?: number;
   latencyMs?: number;
   dedup?: {
@@ -136,30 +223,93 @@ export async function resizeReservation(
   return db.transaction(async (tx) => {
     const reservation = await lockReservationAfterUser(tx, requestId);
     if (reservation.status !== 'pending') {
-      return { ok: false, reason: 'request_already_reserved', balance: 0, reserved: reservation.reservedCredits };
+      return {
+        ok: false,
+        reason: 'request_already_reserved',
+        balance: 0,
+        reserved: reservation.reservedCredits,
+      };
     }
-    const [ledger] = await tx.select({
-      balance: sql<number>`coalesce(sum(case when ${creditLedger.kind} = ${reservation.kind} then ${creditLedger.delta} else 0 end), 0)::int`,
-    }).from(creditLedger).where(eq(creditLedger.userId, reservation.userId));
-    const [active] = await tx.select({
-      reserved: sql<number>`coalesce(sum(${creditReservations.reservedCredits}), 0)::int`,
-    }).from(creditReservations).where(and(
-      eq(creditReservations.userId, reservation.userId),
-      eq(creditReservations.kind, reservation.kind),
-      eq(creditReservations.status, 'pending'),
-    ));
-    const balance = ledger?.balance ?? 0;
-    const reservedByOthers = Math.max(0, (active?.reserved ?? 0) - reservation.reservedCredits);
-    if (credits + reservedByOthers > balance + CREDIT_GRACE_THRESHOLD) {
-      log.warn('credit_reservation_resize_rejected', { request_id: requestId, user_id: reservation.userId, kind: reservation.kind as CreditKind, credits, balance, reserved: reservedByOthers });
-      return { ok: false, reason: 'insufficient_credits', balance, reserved: reservedByOthers };
+    const [ledger] = await tx
+      .select({
+        free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
+        paid: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'paid' then ${creditLedger.delta} else 0 end), 0)::int`,
+      })
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, reservation.userId));
+    const [active] = await tx
+      .select({
+        free: sql<number>`coalesce(sum(coalesce(${creditReservations.reservedFreeCredits}, case when ${creditReservations.kind} = 'free' then ${creditReservations.reservedCredits} else 0 end)), 0)::int`,
+        paid: sql<number>`coalesce(sum(coalesce(${creditReservations.reservedPaidCredits}, case when ${creditReservations.kind} = 'paid' then ${creditReservations.reservedCredits} else 0 end)), 0)::int`,
+      })
+      .from(creditReservations)
+      .where(
+        and(
+          eq(creditReservations.userId, reservation.userId),
+          eq(creditReservations.status, 'pending'),
+        ),
+      );
+    const oldFree =
+      reservation.reservedFreeCredits ??
+      (reservation.kind === 'free' ? reservation.reservedCredits : 0);
+    const oldPaid =
+      reservation.reservedPaidCredits ??
+      (reservation.kind === 'paid' ? reservation.reservedCredits : 0);
+    const freeReserved = Math.max(0, (active?.free ?? 0) - oldFree);
+    const paidReserved = Math.max(0, (active?.paid ?? 0) - oldPaid);
+    const freeBalance = ledger?.free ?? 0;
+    const paidBalance = ledger?.paid ?? 0;
+    const freeAvailable = freeBalance - freeReserved;
+    const paidAvailable = paidBalance - paidReserved;
+    const reservedFree = Math.min(credits, Math.max(0, freeAvailable));
+    const reservedPaid = credits - reservedFree;
+    const balance = freeBalance + paidBalance;
+    const reservedByOthers = freeReserved + paidReserved;
+    if (
+      freeBalance < 0 ||
+      paidBalance < 0 ||
+      reservedPaid > Math.max(0, paidAvailable)
+    ) {
+      log.warn('credit_reservation_resize_rejected', {
+        request_id: requestId,
+        user_id: reservation.userId,
+        credits,
+        balance,
+        reserved: reservedByOthers,
+      });
+      return {
+        ok: false,
+        reason: 'insufficient_credits',
+        balance,
+        reserved: reservedByOthers,
+      };
     }
-    const [updated] = await tx.update(creditReservations)
-      .set({ reservedCredits: credits, updatedAt: new Date() })
+    const [updated] = await tx
+      .update(creditReservations)
+      .set({
+        kind: reservedFree > 0 ? 'free' : 'paid',
+        reservedCredits: credits,
+        reservedFreeCredits: reservedFree,
+        reservedPaidCredits: reservedPaid,
+        updatedAt: new Date(),
+      })
       .where(eq(creditReservations.requestId, requestId))
       .returning();
-    log.info('credit_reservation_resized', { request_id: requestId, user_id: reservation.userId, kind: reservation.kind as CreditKind, credits, balance, reserved: reservedByOthers });
-    return { ok: true, reservation: updated, balance, reserved: reservedByOthers };
+    log.info('credit_reservation_resized', {
+      request_id: requestId,
+      user_id: reservation.userId,
+      credits,
+      balance,
+      reserved: reservedByOthers,
+      reserved_free: reservedFree,
+      reserved_paid: reservedPaid,
+    });
+    return {
+      ok: true,
+      reservation: updated,
+      balance,
+      reserved: reservedByOthers,
+    };
   });
 }
 
@@ -197,23 +347,34 @@ async function lockReservationAfterUser(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   requestId: string,
 ): Promise<typeof creditReservations.$inferSelect> {
-  const [user] = await tx.select({ id: users.id }).from(users)
+  const [user] = await tx
+    .select({ id: users.id })
+    .from(users)
     .where(sql`${users.id} = (
       select ${creditReservations.userId}
       from ${creditReservations}
       where ${creditReservations.requestId} = ${requestId}
       limit 1
-    )`).limit(1).for('update');
-  if (!user) throw new Error(`Missing user for credit reservation ${requestId}`);
+    )`)
+    .limit(1)
+    .for('update');
+  if (!user)
+    throw new Error(`Missing user for credit reservation ${requestId}`);
 
-  const [reservation] = await tx.select().from(creditReservations)
-    .where(eq(creditReservations.requestId, requestId)).limit(1).for('update');
+  const [reservation] = await tx
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, requestId))
+    .limit(1)
+    .for('update');
   if (!reservation) throw new Error(`Missing credit reservation ${requestId}`);
   return reservation;
 }
 
 /** Finalize exactly once. Terminal rows are intentionally no-ops on retries. */
-export async function finalizeReservation(input: ReservationFinalization): Promise<'settled' | 'released' | 'already_terminal'> {
+export async function finalizeReservation(
+  input: ReservationFinalization,
+): Promise<'settled' | 'released' | 'already_terminal'> {
   return db.transaction(async (tx) => {
     // Every reservation transition takes row locks in the same order: parent
     // user first, reservation second. This matches admission and prevents a
@@ -223,12 +384,19 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
       throw new Error(`User does not own reservation ${input.requestId}`);
     }
     if (input.dedup && input.dedup.userId !== reservation.userId) {
-      throw new Error(`Idempotency claim user does not own reservation ${input.requestId}`);
+      throw new Error(
+        `Idempotency claim user does not own reservation ${input.requestId}`,
+      );
     }
     if (reservation.status !== 'pending') return 'already_terminal';
     const now = new Date();
     if (input.outcome === 'release') {
-      if (input.model && input.provider && input.status != null && input.latencyMs != null) {
+      if (
+        input.model &&
+        input.provider &&
+        input.status != null &&
+        input.latencyMs != null
+      ) {
         await tx.insert(usage).values({
           userId: reservation.userId,
           model: input.model,
@@ -243,15 +411,28 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
           costCredits: 0,
           upstreamCostMicrocents: 0,
           upstreamCostSource: 'not_billed',
+          costOverrun: false,
+          routeSlot: input.routeSlot ?? null,
           requestId: reservation.requestId,
           status: input.status,
           latencyMs: input.latencyMs,
         });
       }
-      await tx.update(creditReservations).set({ status: 'released', actualCredits: 0, releasedAt: now, updatedAt: now })
+      await tx
+        .update(creditReservations)
+        .set({
+          status: 'released',
+          actualCredits: 0,
+          releasedAt: now,
+          updatedAt: now,
+        })
         .where(eq(creditReservations.requestId, input.requestId));
       await finalizeRequestDedup(tx, input, now);
-      log.info('credit_reservation_released', { request_id: input.requestId, user_id: reservation.userId, reserved_credits: reservation.reservedCredits });
+      log.info('credit_reservation_released', {
+        request_id: input.requestId,
+        user_id: reservation.userId,
+        reserved_credits: reservation.reservedCredits,
+      });
       return 'released';
     }
     if (
@@ -265,17 +446,46 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
       throw new Error('Settlement requires usage details');
     }
     const providerCostUsd = input.providerCostUsd;
-    const hasProviderCost = providerCostUsd != null && Number.isFinite(providerCostUsd) && providerCostUsd >= 0;
+    const hasProviderCost =
+      providerCostUsd != null &&
+      Number.isFinite(providerCostUsd) &&
+      providerCostUsd >= 0;
+    const costRow = input.costRow;
+    if (!hasProviderCost && !costRow)
+      throw new Error('Settlement requires a valid cost source');
     const costUsd = hasProviderCost
       ? providerCostUsd
       : computeUsdCost(
-          input.costRow!,
+          costRow,
           input.tokens.inputTokens,
           input.tokens.outputTokens,
           input.tokens,
         );
     const calculatedCredits = usdToCredits(costUsd);
     const credits = Math.min(calculatedCredits, reservation.reservedCredits);
+    const reservedFree =
+      reservation.reservedFreeCredits ??
+      (reservation.kind === 'free' ? reservation.reservedCredits : 0);
+    const reservedPaid =
+      reservation.reservedPaidCredits ??
+      (reservation.kind === 'paid' ? reservation.reservedCredits : 0);
+    const [balances] = await tx
+      .select({
+        free: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'free' then ${creditLedger.delta} else 0 end), 0)::int`,
+        paid: sql<number>`coalesce(sum(case when ${creditLedger.kind} = 'paid' then ${creditLedger.delta} else 0 end), 0)::int`,
+      })
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, reservation.userId));
+    const actualFree = Math.min(
+      credits,
+      reservedFree,
+      Math.max(0, balances?.free ?? 0),
+    );
+    const actualPaid = Math.min(
+      credits - actualFree,
+      reservedPaid,
+      Math.max(0, balances?.paid ?? 0),
+    );
     if (calculatedCredits > reservation.reservedCredits) {
       log.error('provider_cost_exceeded_reservation', {
         request_id: input.requestId,
@@ -284,15 +494,40 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
         calculated_credits: calculatedCredits,
         provider_cost_usd: costUsd,
       });
+      if (input.routeSlot && input.provider && input.model)
+        await tx
+          .insert(routeBreakers)
+          .values({
+            routeSlot: input.routeSlot,
+            provider: input.provider,
+            modelId: input.model,
+            reason: `settlement_overrun:${hasProviderCost ? 'provider_reported' : 'catalog_estimate'}`,
+          })
+          .onConflictDoNothing();
     }
     const microcents = usdToMicrocents(costUsd);
-    await tx.insert(creditLedger).values({
-      userId: reservation.userId,
-      delta: -credits,
-      kind: reservation.kind,
-      reason: 'ai_usage',
-      refId: reservation.requestId,
-    }).onConflictDoNothing();
+    if (actualFree > 0)
+      await tx
+        .insert(creditLedger)
+        .values({
+          userId: reservation.userId,
+          delta: -actualFree,
+          kind: 'free',
+          reason: 'ai_usage',
+          refId: `${reservation.requestId}:free`,
+        })
+        .onConflictDoNothing();
+    if (actualPaid > 0)
+      await tx
+        .insert(creditLedger)
+        .values({
+          userId: reservation.userId,
+          delta: -actualPaid,
+          kind: 'paid',
+          reason: 'ai_usage',
+          refId: `${reservation.requestId}:paid`,
+        })
+        .onConflictDoNothing();
     await tx.insert(usage).values({
       userId: reservation.userId,
       model: input.model,
@@ -306,51 +541,89 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
       audioDurationMs: input.audioDurationMs ?? 0,
       costCredits: credits,
       upstreamCostMicrocents: microcents,
-      upstreamCostSource: hasProviderCost ? 'provider_reported' : (input.costSource ?? 'catalog_estimate'),
+      upstreamCostSource: hasProviderCost
+        ? 'provider_reported'
+        : (input.costSource ?? 'catalog_estimate'),
+      costOverrun: calculatedCredits > reservation.reservedCredits,
+      routeSlot: input.routeSlot ?? null,
       requestId: reservation.requestId,
       status: input.status,
       latencyMs: input.latencyMs,
     });
-    await tx.update(creditReservations).set({ status: 'settled', actualCredits: credits, settledAt: now, updatedAt: now })
+    await tx
+      .update(creditReservations)
+      .set({
+        status: 'settled',
+        actualCredits: actualFree + actualPaid,
+        actualFreeCredits: actualFree,
+        actualPaidCredits: actualPaid,
+        settledAt: now,
+        updatedAt: now,
+      })
       .where(eq(creditReservations.requestId, input.requestId));
     await finalizeRequestDedup(tx, input, now);
-    log.info('credit_reservation_settled', { request_id: input.requestId, user_id: reservation.userId, reserved_credits: reservation.reservedCredits, actual_credits: credits });
+    log.info('credit_reservation_settled', {
+      request_id: input.requestId,
+      user_id: reservation.userId,
+      reserved_credits: reservation.reservedCredits,
+      actual_credits: credits,
+    });
     return 'settled';
   });
 }
 
 /** Pending rows have no verified usage after their proxy lease expires, so the
  * conservative recovery policy releases them instead of charging unknown work. */
-export async function reconcileStaleReservations(limit = 100, now = new Date()): Promise<{ released: number }> {
-  const rows = await db.select({
-    requestId: creditReservations.requestId,
-    userId: creditReservations.userId,
-  }).from(creditReservations)
-    .where(and(eq(creditReservations.status, 'pending'), lte(creditReservations.expiresAt, now)))
+export async function reconcileStaleReservations(
+  limit = 100,
+  now = new Date(),
+): Promise<{ released: number }> {
+  const rows = await db
+    .select({
+      requestId: creditReservations.requestId,
+      userId: creditReservations.userId,
+    })
+    .from(creditReservations)
+    .where(
+      and(
+        eq(creditReservations.status, 'pending'),
+        lte(creditReservations.expiresAt, now),
+      ),
+    )
     .limit(Math.max(1, Math.min(limit, 500)));
   let released = 0;
   for (const row of rows) {
-    const [dedup] = await db.select({
-      idempotencyKey: requestDedup.idempotencyKey,
-      requestHash: requestDedup.requestHash,
-    }).from(requestDedup).where(and(
-      eq(requestDedup.userId, row.userId),
-      eq(requestDedup.requestId, row.requestId),
-      eq(requestDedup.status, 'in_flight'),
-    )).limit(1);
-    if (await finalizeReservation({
-      requestId: row.requestId,
-      outcome: 'release',
-      dedup: dedup?.requestHash
-        ? {
-            userId: row.userId,
-            idempotencyKey: dedup.idempotencyKey,
-            requestHash: dedup.requestHash,
-            status: 'failed',
-          }
-        : undefined,
-    }) === 'released') released += 1;
+    const [dedup] = await db
+      .select({
+        idempotencyKey: requestDedup.idempotencyKey,
+        requestHash: requestDedup.requestHash,
+      })
+      .from(requestDedup)
+      .where(
+        and(
+          eq(requestDedup.userId, row.userId),
+          eq(requestDedup.requestId, row.requestId),
+          eq(requestDedup.status, 'in_flight'),
+        ),
+      )
+      .limit(1);
+    if (
+      (await finalizeReservation({
+        requestId: row.requestId,
+        outcome: 'release',
+        dedup: dedup?.requestHash
+          ? {
+              userId: row.userId,
+              idempotencyKey: dedup.idempotencyKey,
+              requestHash: dedup.requestHash,
+              status: 'failed',
+            }
+          : undefined,
+      })) === 'released'
+    )
+      released += 1;
   }
-  if (released > 0) log.info('credit_reservations_stale_reconciled', { released });
+  if (released > 0)
+    log.info('credit_reservations_stale_reconciled', { released });
   return { released };
 }

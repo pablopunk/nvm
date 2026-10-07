@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  containsImagePayload,
   estimateInputTokensFromBody,
   estimateInputTokensFromValue,
   estimatePromptCredits,
   estimateRequestCredits,
-  requestedMaxOutputTokens,
   MAX_INPUT_TOKENS,
+  requestedMaxOutputTokens,
 } from './limits';
 import type { ModelCost } from './pricing';
 
@@ -20,18 +21,46 @@ const makeCost = (input: number): ModelCost => ({
 });
 
 describe('estimateInputTokensFromBody', () => {
+  test('image payloads are identified independently of the fixed token estimate', () => {
+    const payload = {
+      messages: [
+        {
+          content: [
+            { type: 'image_url', image_url: 'data:image/png;base64,YWJj' },
+          ],
+        },
+      ],
+    };
+    assert.equal(containsImagePayload(payload), true);
+    assert.equal(
+      containsImagePayload({ messages: [{ content: 'text only' }] }),
+      false,
+    );
+  });
   test('empty string returns 0', () => {
     assert.strictEqual(estimateInputTokensFromBody(''), 0);
   });
 
   test('invalid JSON falls back to ceil(length/4)', () => {
-    assert.strictEqual(estimateInputTokensFromBody('not json'), Math.ceil('not json'.length / CHARS_PER_TOKEN));
-    assert.strictEqual(estimateInputTokensFromBody('abcd'), Math.ceil(4 / CHARS_PER_TOKEN));
-    assert.strictEqual(estimateInputTokensFromBody('abcde'), Math.ceil(5 / CHARS_PER_TOKEN));
+    assert.strictEqual(
+      estimateInputTokensFromBody('not json'),
+      Math.ceil('not json'.length / CHARS_PER_TOKEN),
+    );
+    assert.strictEqual(
+      estimateInputTokensFromBody('abcd'),
+      Math.ceil(4 / CHARS_PER_TOKEN),
+    );
+    assert.strictEqual(
+      estimateInputTokensFromBody('abcde'),
+      Math.ceil(5 / CHARS_PER_TOKEN),
+    );
   });
 
   test('valid flat JSON sums string-field chars divided by 4', () => {
-    const body = JSON.stringify({ prompt: 'hello world', system: 'be helpful' });
+    const body = JSON.stringify({
+      prompt: 'hello world',
+      system: 'be helpful',
+    });
     const promptLength = 'hello world'.length;
     const systemLength = 'be helpful'.length;
     assert.strictEqual(
@@ -49,7 +78,12 @@ describe('estimateInputTokensFromBody', () => {
   });
 
   test('ignores non-string values', () => {
-    const body = JSON.stringify({ prompt: 'hi', count: 42, flag: true, arr: [1, 2] });
+    const body = JSON.stringify({
+      prompt: 'hi',
+      count: 42,
+      flag: true,
+      arr: [1, 2],
+    });
     assert.strictEqual(
       estimateInputTokensFromBody(body),
       Math.ceil('hi'.length / CHARS_PER_TOKEN),
@@ -75,7 +109,8 @@ describe('estimateInputTokensFromBody', () => {
         { role: 'assistant', content: 'world' },
       ],
     });
-    const totalChars = 'user'.length + 'hello'.length + 'assistant'.length + 'world'.length;
+    const totalChars =
+      'user'.length + 'hello'.length + 'assistant'.length + 'world'.length;
     assert.strictEqual(
       estimateInputTokensFromBody(body),
       Math.ceil(totalChars / CHARS_PER_TOKEN),
@@ -85,7 +120,12 @@ describe('estimateInputTokensFromBody', () => {
   test('deeply nested arrays and objects', () => {
     const body = JSON.stringify({
       messages: [
-        { content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'bc' }] },
+        {
+          content: [
+            { type: 'text', text: 'a' },
+            { type: 'text', text: 'bc' },
+          ],
+        },
       ],
     });
     const totalChars = 'text'.length + 'a'.length + 'text'.length + 'bc'.length;
@@ -168,7 +208,10 @@ describe('estimateInputTokensFromBody', () => {
     ];
 
     for (const payload of payloads)
-      assert.equal(estimateInputTokensFromBody(JSON.stringify(payload)), expected);
+      assert.equal(
+        estimateInputTokensFromBody(JSON.stringify(payload)),
+        expected,
+      );
   });
 
   test('continues counting unrelated data fields as text', () => {
@@ -238,7 +281,10 @@ test('reservation estimate includes bounded output cost', () => {
 test('reads output caps for OpenAI, Anthropic, and Google requests', () => {
   assert.equal(requestedMaxOutputTokens({ max_tokens: 12 }), 12);
   assert.equal(requestedMaxOutputTokens({ max_completion_tokens: 13 }), 13);
-  assert.equal(requestedMaxOutputTokens({ generationConfig: { maxOutputTokens: 14 } }), 14);
+  assert.equal(
+    requestedMaxOutputTokens({ generationConfig: { maxOutputTokens: 14 } }),
+    14,
+  );
   assert.equal(requestedMaxOutputTokens({ max_tokens: -1 }), undefined);
   assert.equal(requestedMaxOutputTokens({}), undefined);
 });
