@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (!user) return new Response('Unknown user', { status: 404 });
 
   const parsed = await safeJsonBody(request, checkoutSchema);
-  if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
+  if (!parsed.ok) return Response.json({ status: 'not_created', error: parsed.error.error }, { status: 400 });
   const body = parsed.data;
   const kind = body.kind;
   const suppliedAttemptKey = request.headers.get('idempotency-key');
@@ -42,6 +42,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (attemptKey && !attemptKey.success) {
     return Response.json(
       {
+        status: 'not_created',
         error: {
           type: 'invalid_idempotency_key',
           message: 'Idempotency-Key must be a UUID.',
@@ -100,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
       const status = error.type === 'idempotency_conflict' || error.type === 'checkout_in_flight' ? 409 : 400;
       return Response.json(
         {
-          ...(error.type !== 'unknown_price' ? {} : { status: 'not_created' }),
+          status: 'not_created',
           error: { type: error.type, message: error.message },
         },
         { status },

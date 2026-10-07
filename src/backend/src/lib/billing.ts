@@ -1769,6 +1769,7 @@ type EventOutcome = {
 type PreparedStripeEvent = {
   event: Stripe.Event;
   session?: Stripe.Checkout.Session;
+  signedSession?: Stripe.Checkout.Session;
   lineItems?: Stripe.ApiList<Stripe.LineItem>;
   paymentIntent?: Stripe.PaymentIntent;
   invoice?: Stripe.Invoice;
@@ -2108,6 +2109,32 @@ async function handleInvoicePaid(database: BillingDb, prepared: PreparedStripeEv
       reason: 'unsupported_invoice_lines',
     };
   const line = lines[0] as any;
+  const invoiceRecord = invoice as any;
+  const lineDetails = line.parent?.subscription_item_details ?? line.subscription_item_details ?? {};
+  const noAdjustments =
+    !lineDetails.proration &&
+    !line.proration &&
+    !invoiceRecord.total_discount_amounts?.length &&
+    !invoiceRecord.total_taxes?.length &&
+    !invoiceRecord.default_tax_rates?.length &&
+    !invoiceRecord.discounts?.length &&
+    !invoiceRecord.customer_tax_ids?.length &&
+    !invoiceRecord.amount_shipping &&
+    !invoiceRecord.shipping_cost?.amount &&
+    invoiceRecord.automatic_tax?.enabled !== true &&
+    !invoiceRecord.total_pretax_credit_amounts?.length &&
+    !invoiceRecord.pre_payment_credit_notes_amount &&
+    !invoiceRecord.post_payment_credit_notes_amount &&
+    !invoiceRecord.starting_balance &&
+    !invoiceRecord.ending_balance &&
+    !line.discount_amounts?.length &&
+    !line.discounts?.length &&
+    !line.taxes?.length &&
+    !line.tax_rates?.length &&
+    !line.pretax_credit_amounts?.length &&
+    !line.tax_amounts?.length &&
+    !line.discount_amount;
+  if (!noAdjustments) return { state: 'needs_reconciliation', reason: 'renewal_adjustments_unsupported' };
   if (!Number.isSafeInteger(line.period?.start) || !Number.isSafeInteger(line.period?.end)) {
     return { state: 'needs_reconciliation', reason: 'renewal_period_missing' };
   }
@@ -2152,6 +2179,8 @@ async function handleInvoicePaid(database: BillingDb, prepared: PreparedStripeEv
     linePriceId === version.priceId &&
     line.quantity === version.quantity &&
     line.amount === version.unitAmount &&
+    line.subtotal === version.unitAmount &&
+    line.quantity_decimal == null &&
     expandedPrice?.unit_amount === version.unitAmount &&
     expandedPrice.billing_scheme === 'per_unit' &&
     expandedPrice.recurring?.interval === version.interval &&
@@ -2265,6 +2294,11 @@ async function handleCheckoutFailure(database: BillingDb, prepared: PreparedStri
     return reconcileBillingOrder(database, storedOrder, 'failed_checkout_order_mismatch');
   }
   const intent = prepared.paymentIntent;
+  const signed = prepared.signedSession;
+  const nextState = classifyAsyncPaymentFailure({ signed, current: session, intent, eventType: prepared.event.type });
+  if (nextState === 'needs_reconciliation') {
+    return reconcileBillingOrder(database, storedOrder, 'async_payment_failure_snapshot_conflict');
+  }
   const currentOrder = await updateBillingOrderCAS(database, {
     userId: storedOrder.userId,
     orderId: storedOrder.id,
@@ -2274,23 +2308,44 @@ async function handleCheckoutFailure(database: BillingDb, prepared: PreparedStri
   if (session.payment_status === 'paid') {
     return reconcileBillingOrder(database, currentOrder, 'checkout_failure_event_conflicts_with_paid_session');
   }
-  let nextState: string;
   if (prepared.event.type === 'checkout.session.expired' && session.status !== 'expired') {
     return reconcileBillingOrder(database, currentOrder, 'expired_event_conflicts_with_session');
   }
   if (intent && (objectId(intent.customer) !== currentOrder.stripeCustomerId || metadataOf(intent).order_id !== currentOrder.id)) {
     return reconcileBillingOrder(database, currentOrder, 'failure_payment_intent_mismatch');
   }
-  if (session.status === 'open') nextState = 'open';
-  else if (session.status === 'complete' && intent?.status === 'requires_payment_method') nextState = 'retry_required';
-  else if (session.status === 'complete' && intent?.status === 'canceled') nextState = 'failed';
-  else if (session.status === 'expired' && (!intent || intent.status === 'canceled')) nextState = 'expired';
-  else if (session.status === 'expired' && intent?.status === 'requires_payment_method') nextState = 'retry_required';
-  else if (session.status === 'complete' || session.status === 'expired') nextState = 'processing';
-  else nextState = 'needs_reconciliation';
-  if (nextState === 'needs_reconciliation') return reconcileBillingOrder(database, currentOrder, 'checkout_failure_evidence_incomplete');
   await updateBillingOrderCAS(database, { userId: currentOrder.userId, orderId: currentOrder.id, changes: { state: nextState } });
   return { state: 'processed' };
+}
+
+export function classifyAsyncPaymentFailure(input: {
+  signed?: Stripe.Checkout.Session;
+  current: Stripe.Checkout.Session;
+  intent?: Stripe.PaymentIntent;
+  eventType?: Stripe.Event['type'];
+}): 'open' | 'retry_required' | 'failed' | 'expired' | 'processing' | 'needs_reconciliation' {
+  const { signed, current, intent } = input;
+  if (
+    signed &&
+    ((signed.status != null && signed.status !== current.status) ||
+      (signed.payment_status != null && signed.payment_status !== current.payment_status) ||
+      (objectId(signed.payment_intent) && objectId(signed.payment_intent) !== objectId(current.payment_intent)) ||
+      (typeof signed.payment_intent === 'object' &&
+        intent &&
+        ((signed.payment_intent as Stripe.PaymentIntent).status !== intent.status ||
+          (signed.payment_intent as Stripe.PaymentIntent).amount_received !== intent.amount_received ||
+          (signed.payment_intent as Stripe.PaymentIntent).currency !== intent.currency)))
+  )
+    return 'needs_reconciliation';
+  if (input.eventType === 'checkout.session.async_payment_failed' && intent?.status === 'succeeded') return 'needs_reconciliation';
+  if (current.payment_status === 'paid') return 'needs_reconciliation';
+  if (current.status === 'open') return 'open';
+  if (current.status === 'complete' && intent?.status === 'requires_payment_method') return 'retry_required';
+  if (current.status === 'complete' && intent?.status === 'canceled') return 'failed';
+  if (current.status === 'expired' && (!intent || intent.status === 'canceled')) return 'expired';
+  if (current.status === 'expired' && intent?.status === 'requires_payment_method') return 'retry_required';
+  if (current.status === 'complete' || current.status === 'expired') return 'processing';
+  return 'needs_reconciliation';
 }
 
 type StoredSubscriptionVersion = {
@@ -2357,12 +2412,25 @@ async function handleSubscriptionStatus(
   if (event.type === 'customer.subscription.updated') {
     const termsRows = priceId ? await database.select().from(billingPriceTerms).where(eq(billingPriceTerms.priceId, priceId)) : [];
     const terms = termsRows
-      .filter((row) => row.kind === 'subscription' && row.createdAt < incomingCreatedAt)
-      .sort((left, right) => right.version - left.version)[0];
-    if (!terms?.tier || !terms.interval || !terms.intervalCount)
+      .filter((row) => row.kind === 'subscription' && row.approvedAt < incomingCreatedAt)
+      .sort((left, right) => right.approvedAt.getTime() - left.approvedAt.getTime() || right.version - left.version)[0];
+    const observedItem = (subscription as any).items?.data?.[0] as any;
+    const observedPrice = observedItem?.price;
+    const factsMatch =
+      terms &&
+      (subscription as any).items?.data?.length === 1 &&
+      observedItem?.quantity === terms.quantity &&
+      (observedPrice?.id ?? observedItem?.pricing?.price_details?.price) === terms.priceId &&
+      observedPrice?.unit_amount === terms.unitAmount &&
+      String(observedPrice?.currency ?? '').toLowerCase() === terms.currency &&
+      observedPrice?.billing_scheme === 'per_unit' &&
+      observedPrice?.recurring?.interval === terms.interval &&
+      observedPrice?.recurring?.interval_count === terms.intervalCount &&
+      observedPrice?.recurring?.usage_type !== 'metered';
+    if (!terms?.tier || !terms.interval || !terms.intervalCount || !factsMatch)
       return {
         state: 'needs_reconciliation',
-        reason: 'subscription_price_unapproved',
+        reason: 'subscription_price_facts_unapproved',
       };
     tier = terms.tier;
     const existingVersions = await database
@@ -2438,6 +2506,7 @@ async function prepareStripeEvent(event: Stripe.Event): Promise<PreparedStripeEv
     return {
       event,
       session,
+      signedSession: eventSession,
       paymentIntent,
       lineItems,
       subscription: subscriptionId ? await retrieveSubscription(subscriptionId) : null,

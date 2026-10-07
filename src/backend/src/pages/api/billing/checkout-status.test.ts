@@ -7,12 +7,14 @@ process.env.WORKOS_COOKIE_PASSWORD = 'billing-status-cookie-password-with-32-cha
 
 const [
   { GET, POST },
+  { POST: checkoutPost },
   { POST: retryPost },
   { setDbForTests, resetDbForTests },
   { workosClient },
   { users, billingOrders, billingRetryOperations },
 ] = await Promise.all([
   import('./checkout-status'),
+  import('./checkout'),
   import('./checkout-retry'),
   import('../../../../db/client'),
   import('../../../../lib/workos'),
@@ -89,6 +91,37 @@ test('status lookup for an unknown or foreign attempt is user-scoped and returns
   const response = await GET(context(request));
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'none' });
+});
+
+test('checkout validation failures are definitive not_created responses', async (t) => {
+  installDb();
+  mockSession(t);
+  const invalidBody = await checkoutPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout', {
+        method: 'POST',
+        headers: { cookie: 'nvm_session=sealed', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'invalid' }),
+      }),
+    ),
+  );
+  assert.equal(invalidBody.status, 400);
+  assert.equal((await invalidBody.json()).status, 'not_created');
+
+  const invalidKey = await checkoutPost(
+    context(
+      new Request('https://www.nvm.fyi/api/billing/checkout', {
+        method: 'POST',
+        headers: { cookie: 'nvm_session=sealed', 'content-type': 'application/json', 'idempotency-key': 'not-a-uuid' },
+        body: JSON.stringify({ kind: 'subscription' }),
+      }),
+    ),
+  );
+  assert.equal(invalidKey.status, 400);
+  assert.deepEqual(await invalidKey.json(), {
+    status: 'not_created',
+    error: { type: 'invalid_idempotency_key', message: 'Idempotency-Key must be a UUID.' },
+  });
 });
 
 test('Stripe return resolves the replacement order after browser attempt storage is lost', async (t) => {

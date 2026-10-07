@@ -19,6 +19,7 @@ import {
   BillingRequestError,
   billingCatalog,
   cancelPaymentIntentForRetry,
+  classifyAsyncPaymentFailure,
   classifyCheckoutEvidence,
   createBillingCheckout,
   formatBillingPrice,
@@ -792,6 +793,74 @@ test('invoice.paid without a stored subscription price version requires reconcil
   assert.equal(creditInserts.length, 0);
 });
 
+test('invoice renewal rejects proration and tax or credit adjustments before granting credits', async () => {
+  installStripe();
+  const db = installDb(createFakeBillingDb());
+  const unsupportedInvoices = [
+    { id: 'in_prorated', lines: { data: [{ proration: true }] } },
+    { id: 'in_taxed', total_taxes: [{ amount: 100 }], lines: { data: [{}] } },
+    { id: 'in_discounted', total_discount_amounts: [{ amount: 100 }], lines: { data: [{}] } },
+    { id: 'in_credited', pre_payment_credit_notes_amount: 100, lines: { data: [{}] } },
+  ];
+
+  for (const invoice of unsupportedInvoices) {
+    Object.assign(invoice, {
+      customer: 'cus_123',
+      subscription: 'sub_123',
+      billing_reason: 'subscription_cycle',
+    });
+    stripeObjects.set(invoice.id, invoice);
+    assert.deepEqual(await processStripeEvent(stripeEvent('invoice.paid', invoice, `evt_${invoice.id}`)), {
+      processed: true,
+      needsReconciliation: true,
+    });
+  }
+  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+});
+
+test('async payment failure compares signed and retrieved evidence and classifies matching recovery states', () => {
+  const base = {
+    id: 'cs_async',
+    status: 'complete',
+    payment_status: 'unpaid',
+    payment_intent: 'pi_async',
+  } as any;
+  assert.equal(
+    classifyAsyncPaymentFailure({
+      signed: { ...base, payment_status: 'paid' },
+      current: base,
+      intent: { id: 'pi_async', status: 'requires_payment_method' } as any,
+      eventType: 'checkout.session.async_payment_failed',
+    }),
+    'needs_reconciliation',
+  );
+  assert.equal(
+    classifyAsyncPaymentFailure({
+      signed: base,
+      current: base,
+      intent: { id: 'pi_async', status: 'succeeded' } as any,
+      eventType: 'checkout.session.async_payment_failed',
+    }),
+    'needs_reconciliation',
+  );
+  assert.equal(
+    classifyAsyncPaymentFailure({
+      signed: base,
+      current: base,
+      intent: { id: 'pi_async', status: 'requires_payment_method' } as any,
+      eventType: 'checkout.session.async_payment_failed',
+    }),
+    'retry_required',
+  );
+  assert.equal(
+    classifyAsyncPaymentFailure({
+      signed: { ...base, status: 'open' },
+      current: { ...base, status: 'open' },
+    }),
+    'open',
+  );
+});
+
 test('subscription deletion updates status and plan without revoking paid credits', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
   installStripe({ status: 'canceled' });
@@ -968,7 +1037,22 @@ function subscriptionStatusEvent(type: string, status: string, id: string, creat
       customer: 'cus_123',
       status,
       current_period_end: 1_800_000_000,
-      items: { data: [{ price: { id: 'price_pro' } }] },
+      items: {
+        data: [
+          {
+            quantity: 1,
+            current_period_start: 100,
+            current_period_end: 1_800_000_000,
+            price: {
+              id: 'price_pro',
+              unit_amount: 1000,
+              currency: 'usd',
+              billing_scheme: 'per_unit',
+              recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' },
+            },
+          },
+        ],
+      },
     },
     id,
     created,
@@ -995,6 +1079,38 @@ test('newer subscription event applies and reactivation restores paid plan', asy
 
   assert.equal(lastSubscriptionStatus(db), 'active');
   assert.equal(db.updates.filter((call) => call.table === users).at(-1)?.values.plan, 'pro');
+});
+
+test('subscription update reconciles changed item quantity and never records an unapproved version', async () => {
+  installStripe();
+  const event = subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_quantity_mismatch', 200);
+  (event.data.object as any).items.data[0].quantity = 2;
+  stripeObjects.set('sub_123', event.data.object);
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user]],
+      billingTerms: [approvedTerms()],
+    }),
+  );
+
+  assert.deepEqual(await processStripeEvent(event), { processed: true, needsReconciliation: true });
+  assert.equal(db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
+  assert.equal(db.inserts.filter((call) => call.table === subscriptions).length, 0);
+});
+
+test('subscription update orders approval by approvedAt rather than row creation time', async () => {
+  installStripe();
+  const db = installDb(
+    createFakeBillingDb({
+      selects: [[user]],
+      billingTerms: [approvedTerms({ createdAt: new Date(0), approvedAt: new Date(300_000) })],
+    }),
+  );
+  assert.deepEqual(
+    await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_not_yet_approved', 200)),
+    { processed: true, needsReconciliation: true },
+  );
+  assert.equal(db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
 });
 
 test('update then delete ends canceled and free regardless of tier resolution', async () => {
