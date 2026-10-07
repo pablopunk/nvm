@@ -432,6 +432,7 @@
 .editorTextarea {
   flex: 1;
   min-height: 0;
+  padding: 12px;
   resize: none;
   border: 0;
   border-radius: 0;

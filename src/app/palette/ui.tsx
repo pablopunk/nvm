@@ -781,6 +781,16 @@ export function EditorView({
             autoFocus={autoFocus}
             spellCheck={true}
             onKeyDown={(event) => {
+              if (
+                (event.metaKey || event.ctrlKey) &&
+                event.key === 'Enter' &&
+                onSubmit
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                onSubmit();
+                return;
+              }
               if (event.key === 'Escape') return;
               if (event.metaKey || event.ctrlKey || event.altKey) return;
               event.stopPropagation();
