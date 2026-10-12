@@ -4,6 +4,8 @@ import test from 'node:test';
 import type { ChildProcess, spawn } from 'node:child_process';
 import { createLinuxX11Clipboard } from './linux-x11-clipboard';
 
+const linuxOnly = { skip: process.platform !== 'linux' };
+
 test('writes only the X11 Clipboard, not the Primary selection', async () => {
   const calls: string[][] = [];
   const clipboard = createLinuxX11Clipboard({
@@ -36,13 +38,17 @@ test('reports a missing X11 Clipboard writer as unavailable', async () => {
   await assert.rejects(clipboard.writeText('probe'), /Install xclip/);
 });
 
-test('rejects rich X11 clipboard data before it can clear the source selection', () => {
-  const clipboard = createLinuxX11Clipboard({
-    environment: { DISPLAY: ':99' },
-  });
-  assert.doesNotThrow(() => clipboard.validateSnapshot({}));
-  assert.throws(
-    () => clipboard.validateSnapshot({ html: '<p>hello</p>' }),
-    /Cannot preserve a formatted X11 clipboard/,
-  );
-});
+test(
+  'rejects rich X11 clipboard data before it can clear the source selection',
+  linuxOnly,
+  () => {
+    const clipboard = createLinuxX11Clipboard({
+      environment: { DISPLAY: ':99' },
+    });
+    assert.doesNotThrow(() => clipboard.validateSnapshot({}));
+    assert.throws(
+      () => clipboard.validateSnapshot({ html: '<p>hello</p>' }),
+      /Cannot preserve a formatted X11 clipboard/,
+    );
+  },
+);

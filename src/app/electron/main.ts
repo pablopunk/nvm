@@ -3390,6 +3390,7 @@ function testModeExtensionIsSafe(extensionId: string) {
   return [
     'nevermind.system',
     'nevermind.extensions',
+    'nevermind.permissions',
     'nevermind.floating-notes',
     'pab53.lifecycle',
     'pab53.legacy',

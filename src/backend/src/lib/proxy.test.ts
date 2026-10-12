@@ -5,6 +5,7 @@ import { requestDedup } from '../db/schema';
 import {
   aiRequestHash,
   completeStreamLines,
+  decideProxyModel,
   handleDedup,
   markDedupFailed,
   resolveBillableTokens,
@@ -23,49 +24,31 @@ function makeRequest(headers: Record<string, string> = {}): Request {
   });
 }
 
-function makeSemanticRequest(input: {
-  url?: string;
-  method?: string;
-  headers?: Record<string, string>;
-  body?: string;
-}) {
-  return new Request(
-    input.url ?? 'https://api.nvm.fyi/v1/chat/completions',
-    {
-      method: input.method ?? 'POST',
-      headers: { 'content-type': 'application/json', ...input.headers },
-      body:
-        input.body ??
-        JSON.stringify({
-          model: 'test',
-          messages: [{ role: 'user', content: 'hi' }],
-        }),
-    },
-  );
+function makeSemanticRequest(input: { url?: string; method?: string; headers?: Record<string, string>; body?: string }) {
+  return new Request(input.url ?? 'https://api.nvm.fyi/v1/chat/completions', {
+    method: input.method ?? 'POST',
+    headers: { 'content-type': 'application/json', ...input.headers },
+    body:
+      input.body ??
+      JSON.stringify({
+        model: 'test',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+  });
 }
 
 async function requestHash(request = makeRequest()) {
-  return aiRequestHash(
-    request,
-    new Uint8Array(await request.clone().arrayBuffer()),
-  );
+  return aiRequestHash(request, new Uint8Array(await request.clone().arrayBuffer()));
 }
 
-async function handleRequestDedup(
-  requestId: string,
-  request = makeRequest(),
-) {
-  return handleDedup(
-    DUMMY_KEY,
-    DUMMY_USER_ID,
-    await requestHash(request),
-    requestId,
-  );
+async function handleRequestDedup(requestId: string, request = makeRequest()) {
+  return handleDedup(DUMMY_KEY, DUMMY_USER_ID, await requestHash(request), requestId);
 }
 
 const ctx = {
   user: { id: 'test-user' },
   provider: 'opencode_zen',
+  routeSlot: 'free-smart' as const,
   activeModelId: 'gemini-3-flash',
   costRow: { provider: 'opencode_zen', modelId: 'gemini-3-flash', inputUsdPerMtok: 0, outputUsdPerMtok: 0 },
   kind: 'free' as const,
@@ -73,6 +56,51 @@ const ctx = {
   client: { name: null, version: null, apiVersion: null, platform: null, arch: null },
   estimatedInputTokens: 50,
 };
+
+test('proxy model decision uses authenticated plan and balances, not advertised tier or credit kind', function ignoresClientBillingHints() {
+  const zeroPaidPro = decideProxyModel({
+    plan: 'pro',
+    paidCredits: 0,
+    freeCredits: 40,
+    role: 'fast',
+    headers: new Headers(),
+  });
+  assert.equal(zeroPaidPro.routeSlot, 'free-fast');
+  assert.equal(zeroPaidPro.tier, 'free');
+  assert.equal(zeroPaidPro.creditKind, 'free');
+
+  const freeClaimingPro = decideProxyModel({
+    plan: 'free',
+    paidCredits: 12,
+    freeCredits: 40,
+    role: 'fast',
+    headers: new Headers({
+      'x-nevermind-ai-model-tier': 'pro',
+      'x-nevermind-ai-credit-kind': 'free',
+    }),
+  });
+  assert.equal(freeClaimingPro.routeSlot, 'free-fast');
+  assert.equal(freeClaimingPro.tier, 'free');
+  assert.equal(freeClaimingPro.creditKind, 'paid');
+
+  const paidHint = decideProxyModel({
+    plan: 'pro',
+    paidCredits: 12,
+    freeCredits: 40,
+    role: 'smart',
+    headers: new Headers({ 'x-nevermind-ai-model-tier': 'pro', 'x-nevermind-ai-credit-kind': 'paid' }),
+  });
+  const freeHint = decideProxyModel({
+    plan: 'pro',
+    paidCredits: 12,
+    freeCredits: 40,
+    role: 'smart',
+    headers: new Headers({ 'x-nevermind-ai-model-tier': 'pro', 'x-nevermind-ai-credit-kind': 'free' }),
+  });
+  assert.deepEqual(freeHint, paidHint);
+  assert.equal(paidHint.routeSlot, 'pro-smart');
+  assert.equal(paidHint.creditKind, 'paid');
+});
 
 test('completeStreamLines buffers split CRLF and finalizes the trailing line once', function buffersCompleteLines() {
   const acc: StreamUsageAccumulator = { inputTokens: 0, outputTokens: 0, finalized: false };
@@ -165,8 +193,7 @@ function createFakeDedupDb(existingRows: DedupRow[] = []): {
           const match = rows.filter(whereFilter)[0];
           return Promise.resolve(match ? [match] : []);
         },
-        then: (fn: Parameters<Promise<unknown>['then']>[0], rj: Parameters<Promise<unknown>['then']>[1]) =>
-          chain.limit().then(fn, rj),
+        then: (fn: Parameters<Promise<unknown>['then']>[0], rj: Parameters<Promise<unknown>['then']>[1]) => chain.limit().then(fn, rj),
         catch: (fn: Parameters<Promise<unknown>['catch']>[0]) => chain.limit().catch(fn),
       };
       return chain;
@@ -185,9 +212,7 @@ function createFakeDedupDb(existingRows: DedupRow[] = []): {
           return chain;
         },
         returning: () => {
-          const keyConflict = rows.some(
-            (r) => r.userId === values.userId && r.idempotencyKey === values.idempotencyKey,
-          );
+          const keyConflict = rows.some((r) => r.userId === values.userId && r.idempotencyKey === values.idempotencyKey);
           if (onConflictNothing && keyConflict) {
             return Promise.resolve([]);
           }
@@ -208,8 +233,7 @@ function createFakeDedupDb(existingRows: DedupRow[] = []): {
           inserts.push({ table, values: { ...values } });
           return Promise.resolve([row]);
         },
-        then: (fn: Parameters<Promise<unknown>['then']>[0], rj: Parameters<Promise<unknown>['then']>[1]) =>
-          chain.returning().then(fn, rj),
+        then: (fn: Parameters<Promise<unknown>['then']>[0], rj: Parameters<Promise<unknown>['then']>[1]) => chain.returning().then(fn, rj),
         catch: (fn: Parameters<Promise<unknown>['catch']>[0]) => chain.returning().catch(fn),
       };
       return chain;
@@ -403,10 +427,7 @@ test('same key with changed request semantics always conflicts', async function 
     const response = await handleRequestDedup(`changed-${index}`, request);
     assert.ok(response instanceof Response);
     assert.equal(response.status, 409);
-    assert.equal(
-      (await response.json() as any).error.type,
-      'idempotency_conflict',
-    );
+    assert.equal(((await response.json()) as any).error.type, 'idempotency_conflict');
     assert.equal(updates.length, 0);
   }
 });
@@ -529,10 +550,7 @@ test('legacy rows without a request hash never replay', async function legacyRow
   const response = await handleRequestDedup(STABLE_REQUEST_ID);
   assert.ok(response instanceof Response);
   assert.equal(response.status, 409);
-  assert.equal(
-    (await response.json() as any).error.type,
-    'idempotency_conflict',
-  );
+  assert.equal(((await response.json()) as any).error.type, 'idempotency_conflict');
 });
 
 test('handleDedup returns 409 for completed streaming response (no responseJson)', async function completedStreamingReturns409() {

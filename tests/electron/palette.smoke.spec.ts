@@ -361,7 +361,9 @@ test('keeps OS permission guidance readable at desktop and narrow sizes', async 
     await expect(
       launched.page.getByText('Nevermind OS Permissions', { exact: true }),
     ).toBeVisible();
-    await launched.page.keyboard.press('Enter');
+    await launched.page
+      .getByText('Nevermind OS Permissions', { exact: true })
+      .click();
 
     const selectedTextRow = launched.page.locator(
       '[data-value="os-permission:selected-text"]',
@@ -709,16 +711,16 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     launched = await launchTestApplication(floatingNotesUserDataDir);
     await expect
       .poll(() => searchTitles(launched!.page, 'notes'))
-      .toContain('Floating Notes');
+      .toContain('Toggle Floating Notes');
     await launched.page.evaluate(async () => {
       const generation = Date.now();
       const { results } = await window.nvm.search('notes', {
         generation,
       });
       const action = results.find(
-        (candidate) => candidate.title === 'Floating Notes',
+        (candidate) => candidate.title === 'Toggle Floating Notes',
       );
-      if (!action) throw new Error('Floating Notes action not found');
+      if (!action) throw new Error('Toggle Floating Notes action not found');
       await window.nvm.execute(action);
     });
     await expect.poll(() => launched!.app.windows().length).toBeGreaterThan(1);
@@ -749,7 +751,15 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     });
     await expect
       .poll(() =>
-        launched!.page.evaluate(
+        launched!.app.evaluate(
+          ({ nativeTheme }) => nativeTheme.shouldUseDarkColors,
+        ),
+      )
+      .toBe(false);
+    await noteWindow.emulateMedia({ colorScheme: 'light' });
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(
           () => window.matchMedia('(prefers-color-scheme: dark)').matches,
         ),
       )
@@ -769,7 +779,15 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     });
     await expect
       .poll(() =>
-        launched!.page.evaluate(
+        launched!.app.evaluate(
+          ({ nativeTheme }) => nativeTheme.shouldUseDarkColors,
+        ),
+      )
+      .toBe(true);
+    await noteWindow.emulateMedia({ colorScheme: 'dark' });
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(
           () => window.matchMedia('(prefers-color-scheme: dark)').matches,
         ),
       )
@@ -794,7 +812,11 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     await expect(
       noteWindow.getByText('All notes', { exact: true }),
     ).toBeVisible();
-    await expect(noteWindow.getByText('⌘O', { exact: true })).toBeVisible();
+    const allNotesShortcutLabel =
+      process.platform === 'darwin' ? '⌘O' : 'Command+O';
+    await expect(
+      noteWindow.getByText(allNotesShortcutLabel, { exact: true }),
+    ).toBeVisible();
     await noteWindow.keyboard.press('Meta+O');
     await expect(
       noteWindow.locator('input[placeholder="Find a note"]'),
@@ -834,7 +856,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
 
 test('dismisses transient alias UI and flushes scheduled state before quit', async () => {
   const stateSafetyUserDataDir = path.join(userDataDir, 'pab4-state-safety');
-  const aliasTargetTitle = 'Floating Notes';
+  const aliasTargetTitle = 'Toggle Floating Notes';
   const settingsTitle =
     process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings';
   let firstLaunch:

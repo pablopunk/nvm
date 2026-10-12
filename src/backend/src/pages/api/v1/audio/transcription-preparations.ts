@@ -1,10 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import {
-  finalizeReservation,
-  reserveCredits,
-} from '../../../../lib/credit-reservations';
-import {
   backendKillSwitchEnabled,
   compatibilityError,
   compatibilityHeaders,
@@ -13,21 +9,14 @@ import {
   requestIdFromHeaders,
   unsupportedClientReason,
 } from '../../../../lib/compatibility';
-import {
-  getAudioModelRoute,
-  isProviderEnabled,
-  ModelNotConfiguredError,
-} from '../../../../lib/settings';
+import { finalizeReservation, reserveCredits } from '../../../../lib/credit-reservations';
+import { isRouteTripped } from '../../../../lib/route-breakers';
+import { getAudioModelRoute, isProviderEnabled, ModelNotConfiguredError } from '../../../../lib/settings';
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 
-const RESERVATION_CREDITS = Math.max(
-  1,
-  Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
-);
-const requestSchema = z
-  .object({ operationId: z.string().min(1).max(200) })
-  .strict();
+const RESERVATION_CREDITS = Math.max(1, Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5));
+const requestSchema = z.object({ operationId: z.string().min(1).max(200) }).strict();
 
 function response(body: unknown, status: number, requestId: string) {
   return Response.json(body, {
@@ -39,24 +28,24 @@ function response(body: unknown, status: number, requestId: string) {
 async function authenticatedRequest(request: Request, checkKillSwitch = true) {
   const requestId = requestIdFromHeaders(request.headers);
   const client = desktopClientFromRequest(request);
-  if (unsupportedClientReason(client))
-    return { error: compatibilityError(request) };
+  if (unsupportedClientReason(client)) return { error: compatibilityError(request) };
   const user = await getUserFromBearer(request.headers.get('authorization'));
   if (!user)
     return {
       error: response(
-        { error: { type: 'unauthorized', message: 'Sign in to use API dictation.' } },
+        {
+          error: {
+            type: 'unauthorized',
+            message: 'Sign in to use API dictation.',
+          },
+        },
         401,
         requestId,
       ),
     };
   if (checkKillSwitch && backendKillSwitchEnabled('audio_transcription'))
     return {
-      error: killSwitchResponse(
-        'audio_transcription',
-        'API dictation is temporarily unavailable.',
-        requestId,
-      ),
+      error: killSwitchResponse('audio_transcription', 'API dictation is temporarily unavailable.', requestId),
     };
   return { requestId, user };
 }
@@ -72,7 +61,12 @@ export const POST: APIRoute = async ({ request }) => {
   const operationId = await operationIdFromRequest(request);
   if (!operationId)
     return response(
-      { error: { type: 'invalid_request', message: 'A valid operationId is required.' } },
+      {
+        error: {
+          type: 'invalid_request',
+          message: 'A valid operationId is required.',
+        },
+      },
       400,
       auth.requestId,
     );
@@ -82,8 +76,18 @@ export const POST: APIRoute = async ({ request }) => {
       getAudioModelRoute(),
       isProviderEnabled('openrouter'),
     ]);
-    if (route.provider !== 'openrouter' || !providerEnabled)
-      throw new Error('Audio transcription model is unavailable');
+    if (route.provider !== 'openrouter' || !providerEnabled) throw new Error('Audio transcription model is unavailable');
+    if (await isRouteTripped('audio', route.provider, route.modelId))
+      return response(
+        {
+          error: {
+            type: 'model_not_configured',
+            message: 'Audio transcription is temporarily unavailable.',
+          },
+        },
+        503,
+        auth.requestId,
+      );
     const reservation = await reserveCredits({
       requestId: operationId,
       userId: auth.user.id,
@@ -92,7 +96,12 @@ export const POST: APIRoute = async ({ request }) => {
     });
     if (!reservation.ok)
       return response(
-        { error: { type: 'insufficient_credits', message: 'Not enough credits for API dictation.' } },
+        {
+          error: {
+            type: 'insufficient_credits',
+            message: 'Not enough credits for API dictation.',
+          },
+        },
         402,
         auth.requestId,
       );
@@ -103,9 +112,7 @@ export const POST: APIRoute = async ({ request }) => {
         error: {
           type: 'preparation_failed',
           message:
-            error instanceof ModelNotConfiguredError
-              ? 'No audio transcription model is configured.'
-              : 'API dictation preparation failed.',
+            error instanceof ModelNotConfiguredError ? 'No audio transcription model is configured.' : 'API dictation preparation failed.',
         },
       },
       503,
@@ -120,7 +127,12 @@ export const DELETE: APIRoute = async ({ request }) => {
   const operationId = await operationIdFromRequest(request);
   if (!operationId)
     return response(
-      { error: { type: 'invalid_request', message: 'A valid operationId is required.' } },
+      {
+        error: {
+          type: 'invalid_request',
+          message: 'A valid operationId is required.',
+        },
+      },
       400,
       auth.requestId,
     );

@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
-import { listModelsForProvider, lookupModelCost, lookupModelDescriptor, lookupModelPricing, resetPricingCacheForTests } from './pricing';
+import {
+  expirePricingCacheForTests,
+  listModelsForProvider,
+  lookupModelCost,
+  lookupModelDescriptor,
+  lookupModelPricing,
+  resetPricingCacheForTests,
+} from './pricing';
 
 let originalFetch: typeof globalThis.fetch;
 
@@ -75,6 +82,19 @@ test('lookupModelCost returns null when cost fields are missing', async () => {
   assert.strictEqual(result, null);
 });
 
+test('lookupModelCost fails closed on invalid base and tier rates', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: {
+      models: {
+        'negative-base': { id: 'negative-base', cost: { input: -1, output: 1 } },
+        'negative-tier': { id: 'negative-tier', cost: { input: 1, output: 1, tiers: [{ input: -2, tier: { size: 100 } }] } },
+      },
+    },
+  });
+  assert.equal(await lookupModelCost('openrouter', 'negative-base'), null);
+  assert.equal(await lookupModelCost('openrouter', 'negative-tier'), null);
+});
+
 test('lookupModelCost returns null for unmapped provider', async () => {
   globalThis.fetch = mockFetch({});
 
@@ -107,13 +127,15 @@ test('lookupModelPricing preserves source cache and tier prices', async () => {
     outputUsdPerMtok: 10,
     cacheReadUsdPerMtok: 0.2,
     cacheWriteUsdPerMtok: 2.5,
-    tiers: [{
-      thresholdTokens: 272_000,
-      inputUsdPerMtok: 4,
-      outputUsdPerMtok: 15,
-      cacheReadUsdPerMtok: null,
-      cacheWriteUsdPerMtok: null,
-    }],
+    tiers: [
+      {
+        thresholdTokens: 272_000,
+        inputUsdPerMtok: 4,
+        outputUsdPerMtok: 15,
+        cacheReadUsdPerMtok: null,
+        cacheWriteUsdPerMtok: null,
+      },
+    ],
     source: 'models.dev',
   });
 });
@@ -129,22 +151,10 @@ test('active runtime models do not wait for the remote catalog', async () => {
 
   const cost = await lookupModelCost('opencode_zen', 'gpt-5.6-luna');
   const descriptor = await lookupModelDescriptor('opencode_zen', 'deepseek-v4-flash');
-  const openRouterCost = await lookupModelCost(
-    'openrouter',
-    'google/gemini-2.5-flash',
-  );
-  const openRouterDescriptor = await lookupModelDescriptor(
-    'openrouter',
-    'google/gemini-2.5-flash',
-  );
-  const deepSeekFlashDescriptor = await lookupModelDescriptor(
-    'openrouter',
-    'deepseek/deepseek-v4-flash-0731',
-  );
-  const deepSeekProCost = await lookupModelCost(
-    'openrouter',
-    'deepseek/deepseek-v4-pro-0813',
-  );
+  const openRouterCost = await lookupModelCost('openrouter', 'google/gemini-2.5-flash');
+  const openRouterDescriptor = await lookupModelDescriptor('openrouter', 'google/gemini-2.5-flash');
+  const deepSeekFlashDescriptor = await lookupModelDescriptor('openrouter', 'deepseek/deepseek-v4-flash-0731');
+  const deepSeekProCost = await lookupModelCost('openrouter', 'deepseek/deepseek-v4-pro-0813');
 
   assert.deepEqual(cost, {
     provider: 'opencode_zen',
@@ -162,13 +172,7 @@ test('active runtime models do not wait for the remote catalog', async () => {
   });
   assert.equal(openRouterDescriptor?.name, 'Gemini 2.5 Flash');
   assert.equal(openRouterDescriptor?.contextWindow, 1_048_576);
-  assert.deepEqual(openRouterDescriptor?.input, [
-    'text',
-    'image',
-    'audio',
-    'video',
-    'pdf',
-  ]);
+  assert.deepEqual(openRouterDescriptor?.input, ['text', 'image', 'audio', 'video', 'pdf']);
   assert.equal(deepSeekFlashDescriptor?.name, 'DeepSeek V4 Flash 0731');
   assert.equal(deepSeekFlashDescriptor?.contextWindow, 1_310_720);
   assert.equal(deepSeekFlashDescriptor?.maxTokens, 393_216);
@@ -178,6 +182,37 @@ test('active runtime models do not wait for the remote catalog', async () => {
     inputUsdPerMtok: 1.188,
     outputUsdPerMtok: 3.564,
   });
+});
+
+test('bundled pricing is usable only for the exact bundled provider/model entry', async () => {
+  globalThis.fetch = mockFetch({ opencode: { models: {} } });
+  const bundled = await lookupModelPricing('opencode_zen', 'gpt-5.6-luna');
+  assert.equal(bundled?.source, 'bundled');
+  assert.equal(await lookupModelCost('opencode_zen', 'not-bundled'), null);
+});
+
+test('estimated fallback catalog rates are not accepted for admission', async () => {
+  globalThis.fetch = (async () => ({ ok: false, status: 503 })) as unknown as typeof globalThis.fetch;
+  assert.equal(await lookupModelCost('opencode_zen', 'claude-haiku-4-5'), null);
+});
+
+test('failed refresh does not make stale models.dev pricing admissible again', async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 1)
+      return {
+        ok: true,
+        json: async () => ({ openrouter: { models: { 'stale-model': { id: 'stale-model', cost: { input: 1, output: 2 } } } } }),
+      };
+    return { ok: false, status: 503 };
+  }) as unknown as typeof globalThis.fetch;
+
+  assert.ok(await lookupModelCost('openrouter', 'stale-model'));
+  expirePricingCacheForTests();
+  assert.equal(await lookupModelCost('openrouter', 'stale-model'), null);
+  assert.equal(await lookupModelCost('openrouter', 'stale-model'), null);
+  assert.equal(calls, 3, 'each stale lookup should retry instead of resetting successful-fetch age');
 });
 
 test('resetPricingCacheForTests clears the internal cache', async () => {
