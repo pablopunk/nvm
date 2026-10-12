@@ -709,16 +709,16 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     launched = await launchTestApplication(floatingNotesUserDataDir);
     await expect
       .poll(() => searchTitles(launched!.page, 'notes'))
-      .toContain('Floating Notes');
+      .toContain('Toggle Floating Notes');
     await launched.page.evaluate(async () => {
       const generation = Date.now();
       const { results } = await window.nvm.search('notes', {
         generation,
       });
       const action = results.find(
-        (candidate) => candidate.title === 'Floating Notes',
+        (candidate) => candidate.title === 'Toggle Floating Notes',
       );
-      if (!action) throw new Error('Floating Notes action not found');
+      if (!action) throw new Error('Toggle Floating Notes action not found');
       await window.nvm.execute(action);
     });
     await expect.poll(() => launched!.app.windows().length).toBeGreaterThan(1);
@@ -834,7 +834,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
 
 test('dismisses transient alias UI and flushes scheduled state before quit', async () => {
   const stateSafetyUserDataDir = path.join(userDataDir, 'pab4-state-safety');
-  const aliasTargetTitle = 'Floating Notes';
+  const aliasTargetTitle = 'Toggle Floating Notes';
   const settingsTitle =
     process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings';
   let firstLaunch:
