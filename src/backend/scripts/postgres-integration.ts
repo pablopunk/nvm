@@ -699,7 +699,12 @@ async function runAssertions() {
       const staleRaceCharges = await db
         .select()
         .from(creditLedger)
-        .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, staleRaceRequestId)));
+        .where(
+          and(
+            eq(creditLedger.reason, 'ai_usage'),
+            eq(creditLedger.refId, `${staleRaceRequestId}:paid`),
+          ),
+        );
       const staleRaceUsage = await db.select().from(usage).where(eq(usage.requestId, staleRaceRequestId));
       if (staleRaceReservation?.status === 'settled') {
         assert.equal(staleSettlementResult, 'settled');
