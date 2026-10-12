@@ -3,12 +3,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import type { APIContext } from 'astro';
 import { resetDbForTests, setDbForTests } from '../../db/client';
-import {
-  apiTokens,
-  creditReservations,
-  freeSpendCapConfig,
-  freeSpendMonthlyBudgets,
-} from '../../db/schema';
+import { apiTokens, creditReservations } from '../../db/schema';
 import { chooseFundedAccountRoute } from '../../lib/active-model-funding';
 import {
   estimateInputTokensFromBody,
@@ -87,14 +82,6 @@ function createFakeDb(
     inserts?: unknown[];
     updates?: unknown[];
     failInsertAt?: number;
-    freeSpendCapReached?: boolean;
-    freeSpendBudget?: Partial<{
-      capMicrocents: number | null;
-      actualFreeCostMicrocents: number;
-      reservedFreeCostMicrocents: number;
-      halted: boolean;
-      baselineComplete: boolean;
-    }>;
   } = {},
 ): FakeDb {
   const selects = [...(input.selects ?? [])];
@@ -108,35 +95,7 @@ function createFakeDb(
   db = {
     insertedValues,
     updatedValues,
-    select: () =>
-      createChain((table: unknown) => {
-        if (table === freeSpendCapConfig)
-          return [
-            {
-              id: 'global',
-              capMicrocents: null,
-              updatedBy: null,
-              updatedAt: new Date(),
-            },
-          ];
-        if (table === freeSpendMonthlyBudgets) {
-          const now = new Date();
-          const capReached = input.freeSpendCapReached ?? false;
-          return [
-            {
-              monthKey: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
-              capMicrocents: capReached ? 0 : null,
-              actualFreeCostMicrocents: 0,
-              reservedFreeCostMicrocents: 0,
-              halted: capReached,
-              baselineComplete: !capReached,
-              updatedAt: now,
-              ...input.freeSpendBudget,
-            },
-          ];
-        }
-        return selects.shift() ?? [];
-      }),
+    select: () => createChain(selects.shift() ?? []),
     insert: () => {
       insertCalls += 1;
       const valuesError = insertCalls === input.failInsertAt ? new Error('forced settlement insert failure') : undefined;
@@ -146,20 +105,14 @@ function createFakeDb(
       createChain(
         table === creditReservations
           ? () => [lastReservationUpdate]
-          : table === apiTokens ||
-          table === freeSpendCapConfig ||
-          table === freeSpendMonthlyBudgets
-          ? []
-          : (updates.shift() ?? []),
+          : table === apiTokens
+            ? []
+            : (updates.shift() ?? []),
         undefined,
         (values) => {
           if (table === creditReservations)
             lastReservationUpdate = values as Record<string, unknown>;
-          if (
-            table !== apiTokens &&
-            table !== freeSpendCapConfig &&
-            table !== freeSpendMonthlyBudgets
-          ) {
+          if (table !== apiTokens) {
             updatedValues.push(values);
           }
         },

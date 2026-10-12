@@ -1207,26 +1207,7 @@ export async function retryBillingCheckout(input: { userId: string; attemptKey?:
         .where(and(eq(billingOrders.userId, input.userId), eq(billingOrders.attemptKey, input.attemptKey)))
         .limit(1);
     }
-    if (!priorOrder)
-      return { kind: 'status' as const, status: 'none' as const };
-    if (!priorOrder.priceTermsId) {
-      return {
-        kind: 'status' as const,
-        status: 'reconciliation_required' as const,
-      };
-    }
-    const [priorTerms] = await tx
-      .select({ source: billingPriceTerms.source })
-      .from(billingPriceTerms)
-      .where(eq(billingPriceTerms.id, priorOrder.priceTermsId))
-      .limit(1);
-    if (priorTerms?.source !== OWNER_APPROVED_PRICE_TERMS_SOURCE) {
-      return {
-        kind: 'status' as const,
-        status: 'reconciliation_required' as const,
-        ...(operation ? { operationId: operation.id } : {}),
-      };
-    }
+    if (!priorOrder) return { kind: 'status' as const, status: 'none' as const };
     if (!operation) {
       if (priorOrder.state !== 'retry_required' || !priorOrder.sessionId || !priorOrder.paymentIntentId) {
         return {
