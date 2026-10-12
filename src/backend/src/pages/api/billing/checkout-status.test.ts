@@ -7,6 +7,10 @@ process.env.WORKOS_API_KEY = 'sk_test_billing_status';
 process.env.WORKOS_CLIENT_ID = 'client_test_billing_status';
 process.env.WORKOS_COOKIE_PASSWORD =
   'billing-status-cookie-password-with-32-characters';
+process.env.VERCEL_ENV = 'production';
+process.env.PRODUCTION_ORIGIN = 'https://www.nvm.fyi';
+process.env.PUBLIC_DASHBOARD_URL = 'https://www.nvm.fyi';
+process.env.PREVIEW_GATEWAY_ORIGIN = 'https://www.nvm.fyi';
 
 const [
   { GET, POST },

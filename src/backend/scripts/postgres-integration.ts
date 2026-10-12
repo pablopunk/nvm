@@ -1814,7 +1814,15 @@ async function runAssertions() {
                 return { body: { ok: true } };
               },
             }),
-          /forced admin audit insert failure/,
+          (error: unknown) => {
+            let current = error;
+            while (current instanceof Error) {
+              if (current.message.includes('forced admin audit insert failure'))
+                return true;
+              current = current.cause;
+            }
+            return false;
+          },
         );
       } finally {
         await pool.query(`

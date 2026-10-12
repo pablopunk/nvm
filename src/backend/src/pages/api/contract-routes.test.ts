@@ -2603,7 +2603,7 @@ test('proxy releases a committed reservation when request rewriting throws', asy
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const selects = proxySelects({ free: 1000 });
-  selects.splice(8, 2); // Rewriting fails before provider-chain lookup.
+  selects.splice(8, 3); // Rewriting fails before provider and breaker lookups.
   const db = installDb(createFakeDb({ selects }));
 
   await assert.rejects(
