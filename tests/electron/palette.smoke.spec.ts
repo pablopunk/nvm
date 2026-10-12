@@ -361,7 +361,9 @@ test('keeps OS permission guidance readable at desktop and narrow sizes', async 
     await expect(
       launched.page.getByText('Nevermind OS Permissions', { exact: true }),
     ).toBeVisible();
-    await launched.page.keyboard.press('Enter');
+    await launched.page
+      .getByText('Nevermind OS Permissions', { exact: true })
+      .click();
 
     const selectedTextRow = launched.page.locator(
       '[data-value="os-permission:selected-text"]',
@@ -749,7 +751,14 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     });
     await expect
       .poll(() =>
-        launched!.page.evaluate(
+        launched!.app.evaluate(
+          ({ nativeTheme }) => nativeTheme.shouldUseDarkColors,
+        ),
+      )
+      .toBe(false);
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(
           () => window.matchMedia('(prefers-color-scheme: dark)').matches,
         ),
       )
@@ -769,7 +778,14 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     });
     await expect
       .poll(() =>
-        launched!.page.evaluate(
+        launched!.app.evaluate(
+          ({ nativeTheme }) => nativeTheme.shouldUseDarkColors,
+        ),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        noteWindow.evaluate(
           () => window.matchMedia('(prefers-color-scheme: dark)').matches,
         ),
       )
