@@ -1,0 +1,1 @@
+ALTER TABLE "billing_retry_operations" ADD COLUMN "reconciliation_evidence" jsonb;

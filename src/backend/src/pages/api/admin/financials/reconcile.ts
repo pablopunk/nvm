@@ -1,16 +1,19 @@
 import type { APIRoute } from 'astro';
+import { desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '../../../../db/client';
+import { financialReconciliationJobs } from '../../../../db/schema';
 import { requireAdmin } from '../../../../lib/admin';
 import { BillingConfigError, stripeClient } from '../../../../lib/billing';
+import { requireSameOrigin } from '../../../../lib/csrf';
 import {
   beginFinancialReconciliation,
   normalizeStripeBalanceTransaction,
   persistFinancialReconciliationPage,
+  type ReconciliationRange,
   readStripeBalanceTransactionPage,
   resolveUtcReconciliationRange,
-  type ReconciliationRange,
 } from '../../../../lib/financial-reconciliation';
-import { requireSameOrigin } from '../../../../lib/csrf';
 import { safeJsonBody } from '../../../../lib/validation';
 
 const boundSchema = z.string().min(1).max(40);
@@ -53,6 +56,31 @@ function jobResponse(job: {
     retryAfter: job.leaseExpiresAt?.toISOString() ?? null,
   };
 }
+
+export const GET: APIRoute = async ({ request }) => {
+  if (!(await requireAdmin(request)))
+    return new Response('Forbidden', { status: 403 });
+  const jobs = await db
+    .select({
+      id: financialReconciliationJobs.id,
+      rangeFrom: financialReconciliationJobs.rangeFrom,
+      rangeTo: financialReconciliationJobs.rangeTo,
+      state: financialReconciliationJobs.state,
+      importedCount: financialReconciliationJobs.importedCount,
+      updatedCount: financialReconciliationJobs.updatedCount,
+      unknownCount: financialReconciliationJobs.unknownCount,
+      cursor: financialReconciliationJobs.cursor,
+      leaseExpiresAt: financialReconciliationJobs.leaseExpiresAt,
+      updatedAt: financialReconciliationJobs.updatedAt,
+    })
+    .from(financialReconciliationJobs)
+    .orderBy(desc(financialReconciliationJobs.updatedAt))
+    .limit(100);
+  return Response.json({
+    jobs,
+    source: 'Durable local reconciliation state; no Stripe reads were made.',
+  });
+};
 
 export const POST: APIRoute = async ({ request }) => {
   const deadlineAt = Date.now() + 8000;

@@ -2,13 +2,20 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import type { APIContext } from 'astro';
-import { setDbForTests, resetDbForTests } from '../../db/client';
-import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
-import { resetPricingCacheForTests } from '../../lib/pricing';
+import { resetDbForTests, setDbForTests } from '../../db/client';
+import { freeSpendCapConfig, freeSpendMonthlyBudgets } from '../../db/schema';
 import { chooseFundedAccountRoute } from '../../lib/active-model-funding';
-import { estimateInputTokensFromBody, MAX_INPUT_TOKENS } from '../../lib/limits';
-import { POST as initiateDeviceAuth } from './auth/device/initiate';
+import {
+  estimateInputTokensFromBody,
+  MAX_INPUT_TOKENS,
+} from '../../lib/limits';
+import { resetPricingCacheForTests } from '../../lib/pricing';
+import {
+  resetRateLimitOverridesForTests,
+  setRateLimitOverridesForTests,
+} from '../../lib/ratelimit';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
+import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { GET as getActiveModel } from './v1/active-model';
 import { POST as prepareAudioTranscription } from './v1/audio/transcription-preparations';
 import { POST as postAudioTranscription } from './v1/audio/transcriptions';
@@ -20,20 +27,38 @@ type FakeDb = {
   updatedValues: unknown[];
   select: () => ReturnType<typeof createChain>;
   insert: () => ReturnType<typeof createChain>;
-  update: () => ReturnType<typeof createChain>;
+  update: (table?: unknown) => ReturnType<typeof createChain>;
   transaction: (callback: (tx: FakeDb) => Promise<void>) => Promise<void>;
 };
 
 const originalFetch = globalThis.fetch;
 
 function fixture(name: string) {
-  return JSON.parse(readFileSync(new URL(`../../fixtures/contracts/desktop-v1/${name}.json`, import.meta.url), 'utf8'));
+  return JSON.parse(
+    readFileSync(
+      new URL(
+        `../../fixtures/contracts/desktop-v1/${name}.json`,
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  );
 }
 
-function createChain(result: unknown, onValues?: (values: unknown) => void, onSet?: (values: unknown) => void, valuesError?: Error) {
-  const promise = () => Promise.resolve(result);
+function createChain(
+  result: unknown | ((table: unknown) => unknown),
+  onValues?: (values: unknown) => void,
+  onSet?: (values: unknown) => void,
+  valuesError?: Error,
+) {
+  let table: unknown;
+  const promise = () =>
+    Promise.resolve(typeof result === 'function' ? result(table) : result);
   const chain = {
-    from: () => chain,
+    from: (value: unknown) => {
+      table = value;
+      return chain;
+    },
     innerJoin: () => chain,
     where: () => chain,
     limit: () => chain,
@@ -50,14 +75,32 @@ function createChain(result: unknown, onValues?: (values: unknown) => void, onSe
     },
     onConflictDoNothing: () => chain,
     returning: () => promise(),
-    then: (resolve: Parameters<Promise<unknown>['then']>[0], reject: Parameters<Promise<unknown>['then']>[1]) =>
-      promise().then(resolve, reject),
-    catch: (reject: Parameters<Promise<unknown>['catch']>[0]) => promise().catch(reject),
+    then: (
+      resolve: Parameters<Promise<unknown>['then']>[0],
+      reject: Parameters<Promise<unknown>['then']>[1],
+    ) => promise().then(resolve, reject),
+    catch: (reject: Parameters<Promise<unknown>['catch']>[0]) =>
+      promise().catch(reject),
   };
   return chain;
 }
 
-function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates?: unknown[]; failInsertAt?: number } = {}): FakeDb {
+function createFakeDb(
+  input: {
+    selects?: unknown[];
+    inserts?: unknown[];
+    updates?: unknown[];
+    failInsertAt?: number;
+    freeSpendCapReached?: boolean;
+    freeSpendBudget?: Partial<{
+      capMicrocents: number | null;
+      actualFreeCostMicrocents: number;
+      reservedFreeCostMicrocents: number;
+      halted: boolean;
+      baselineComplete: boolean;
+    }>;
+  } = {},
+): FakeDb {
   const selects = [...(input.selects ?? [])];
   const inserts = [...(input.inserts ?? [])];
   const updates = [...(input.updates ?? [])];
@@ -68,19 +111,63 @@ function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates
   db = {
     insertedValues,
     updatedValues,
-    select: () => createChain(selects.shift() ?? []),
+    select: () =>
+      createChain((table) => {
+        if (table === freeSpendCapConfig)
+          return [
+            {
+              id: 'global',
+              capMicrocents: null,
+              updatedBy: null,
+              updatedAt: new Date(),
+            },
+          ];
+        if (table === freeSpendMonthlyBudgets) {
+          const now = new Date();
+          const capReached = input.freeSpendCapReached ?? false;
+          return [
+            {
+              monthKey: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
+              capMicrocents: capReached ? 0 : null,
+              actualFreeCostMicrocents: 0,
+              reservedFreeCostMicrocents: 0,
+              halted: capReached,
+              baselineComplete: !capReached,
+              updatedAt: now,
+              ...input.freeSpendBudget,
+            },
+          ];
+        }
+        return selects.shift() ?? [];
+      }),
     insert: () => {
       insertCalls += 1;
-      const valuesError = insertCalls === input.failInsertAt ? new Error('forced settlement insert failure') : undefined;
-      return createChain(inserts.shift() ?? [], (values) => insertedValues.push(values), undefined, valuesError);
+      const valuesError =
+        insertCalls === input.failInsertAt
+          ? new Error('forced settlement insert failure')
+          : undefined;
+      return createChain(
+        inserts.shift() ?? [],
+        (values) => insertedValues.push(values),
+        undefined,
+        valuesError,
+      );
     },
-    update: () => createChain(updates.shift() ?? [], undefined, (values) => updatedValues.push(values)),
-    transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db),
+    update: (table?: unknown) =>
+      createChain(updates.shift() ?? [], undefined, (values) => {
+        if (table !== freeSpendCapConfig && table !== freeSpendMonthlyBudgets)
+          updatedValues.push(values);
+      }),
+    transaction: async (callback: (tx: FakeDb) => Promise<void>) =>
+      callback(db),
   };
   return db;
 }
 
-function routeContext(request: Request, url = new URL(request.url)): APIContext {
+function routeContext(
+  request: Request,
+  url = new URL(request.url),
+): APIContext {
   return { request, url } as APIContext;
 }
 
@@ -154,7 +241,17 @@ function proxySelects(
           },
         ];
   return [
-    [{ user: { id: 'user_1', email: 'pablo@example.com', plan: options.plan ?? 'free', role: 'user' }, tokenId: 'token_1' }],
+    [
+      {
+        user: {
+          id: 'user_1',
+          email: 'pablo@example.com',
+          plan: options.plan ?? 'free',
+          role: 'user',
+        },
+        tokenId: 'token_1',
+      },
+    ],
     [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     modelRoute,
@@ -162,7 +259,14 @@ function proxySelects(
     [],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     [{ reserved: 0 }],
-    ...Array.from({ length: options.providerChainDepth ?? (options.model === 'gemini-3-fast' ? 3 : 2) }, () => []),
+    ...Array.from(
+      {
+        length:
+          options.providerChainDepth ??
+          (options.model === 'gemini-3-fast' ? 3 : 2),
+      },
+      () => [],
+    ),
     [], // no tripped route breakers by default
     [{ id: 'user_1' }],
     [
@@ -178,7 +282,10 @@ function proxySelects(
 }
 
 function authorizedChatRequest(
-  body: unknown = { model: 'placeholder', messages: [{ role: 'user', content: 'hello' }] },
+  body: unknown = {
+    model: 'placeholder',
+    messages: [{ role: 'user', content: 'hello' }],
+  },
   extraHeaders: Record<string, string> = {},
 ) {
   return new Request('https://api.nvm.fyi/api/v1/chat/completions', {
@@ -195,7 +302,10 @@ function authorizedChatRequest(
   });
 }
 
-function authorizedRawChatRequest(body: string, extraHeaders: Record<string, string> = {}) {
+function authorizedRawChatRequest(
+  body: string,
+  extraHeaders: Record<string, string> = {},
+) {
   return new Request('https://api.nvm.fyi/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -210,18 +320,23 @@ function authorizedRawChatRequest(body: string, extraHeaders: Record<string, str
   });
 }
 
-function authorizedGoogleRequest(body: unknown = { contents: [{ parts: [{ text: 'hello' }] }] }) {
-  return new Request('https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent?alt=sse', {
-    method: 'POST',
-    headers: {
-      'x-goog-api-key': 'nvm_pat_test',
-      'content-type': 'application/json',
-      'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.7.0',
-      'x-nevermind-api-version': '1',
+function authorizedGoogleRequest(
+  body: unknown = { contents: [{ parts: [{ text: 'hello' }] }] },
+) {
+  return new Request(
+    'https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent?alt=sse',
+    {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': 'nvm_pat_test',
+        'content-type': 'application/json',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.7.0',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
 }
 
 function streamFromTextChunks(chunks: string[]): ReadableStream<Uint8Array> {
@@ -229,7 +344,9 @@ function streamFromTextChunks(chunks: string[]): ReadableStream<Uint8Array> {
   return streamFromByteChunks(chunks.map((chunk) => encoder.encode(chunk)));
 }
 
-function streamFromByteChunks(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
+function streamFromByteChunks(
+  chunks: Uint8Array[],
+): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
       for (const chunk of chunks) controller.enqueue(chunk);
@@ -247,7 +364,15 @@ function installOpenAiFetch(upstreamResponse: () => Response) {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 }, limit: { output: 8192 } } } },
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+              limit: { output: 8192 },
+            },
+          },
+        },
       });
     }
     assert.equal(url, 'https://upstream.example/v1/chat/completions');
@@ -256,7 +381,9 @@ function installOpenAiFetch(upstreamResponse: () => Response) {
 }
 
 function countTerminalUpdates(db: FakeDb, status: 'settled' | 'released') {
-  return db.updatedValues.filter((values) => (values as { status?: unknown }).status === status).length;
+  return db.updatedValues.filter(
+    (values) => (values as { status?: unknown }).status === status,
+  ).length;
 }
 
 afterEach(() => {
@@ -272,9 +399,13 @@ afterEach(() => {
 });
 
 test('credit reservation reconciliation has an automatic daily schedule', () => {
-  const vercelConfig = JSON.parse(readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'));
+  const vercelConfig = JSON.parse(
+    readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'),
+  );
   assert.deepEqual(
-    vercelConfig.crons.find((cron: { path: string }) => cron.path === '/api/cron/credit-reservations'),
+    vercelConfig.crons.find(
+      (cron: { path: string }) => cron.path === '/api/cron/credit-reservations',
+    ),
     { path: '/api/cron/credit-reservations', schedule: '15 6 * * *' },
   );
 });
@@ -298,22 +429,28 @@ test('audio transcription supports an emergency kill switch for desktop v1', asy
       ],
     }),
   );
-  const request = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer nvm_pat_test',
-      'content-type': 'application/json',
-      'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.17.5',
-      'x-nevermind-api-version': '1',
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcriptions',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'application/json',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify({
+        input_audio: { data: 'unused', format: 'webm' },
+      }),
     },
-    body: JSON.stringify({
-      input_audio: { data: 'unused', format: 'webm' },
-    }),
-  });
+  );
   const response = await postAudioTranscription(routeContext(request));
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), fixture('audio-transcription-disabled-error'));
+  assert.deepEqual(
+    await response.json(),
+    fixture('audio-transcription-disabled-error'),
+  );
 });
 
 test('audio transcription accepts raw WebM without changing the legacy JSON contract', async () => {
@@ -322,58 +459,86 @@ test('audio transcription accepts raw WebM without changing the legacy JSON cont
       selects: [
         [
           {
-            user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' },
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'free',
+              role: 'user',
+            },
             tokenId: 'token_1',
           },
         ],
       ],
     }),
   );
-  const request = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer nvm_pat_test',
-      'content-type': 'audio/webm',
-      'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.17.5',
-      'x-nevermind-api-version': '1',
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcriptions',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'audio/webm',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: new Uint8Array([0, 1, 2, 3]),
     },
-    body: new Uint8Array([0, 1, 2, 3]),
-  });
+  );
   const response = await postAudioTranscription(routeContext(request));
   assert.equal(response.status, 400);
-  assert.equal(((await response.json()) as { error: { type: string } }).error.type, 'invalid_audio');
+  assert.equal(
+    ((await response.json()) as { error: { type: string } }).error.type,
+    'invalid_audio',
+  );
 
   for (const [contentType, body] of [
     ['audio/webm', new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])],
-    ['application/json', JSON.stringify({ input_audio: { data: 'GkXfow==', format: 'webm' } })],
+    [
+      'application/json',
+      JSON.stringify({ input_audio: { data: 'GkXfow==', format: 'webm' } }),
+    ],
   ] as const) {
     installDb(
       createFakeDb({
         selects: [
           [
             {
-              user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' },
+              user: {
+                id: 'user_1',
+                email: 'pablo@example.com',
+                plan: 'free',
+                role: 'user',
+              },
               tokenId: 'token_1',
             },
           ],
         ],
       }),
     );
-    const validRequest = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer nvm_pat_test',
-        'content-type': contentType,
-        'x-nevermind-client': 'desktop',
-        'x-nevermind-client-version': '0.17.5',
-        'x-nevermind-api-version': '1',
+    const validRequest = new Request(
+      'https://api.nvm.fyi/api/v1/audio/transcriptions',
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer nvm_pat_test',
+          'content-type': contentType,
+          'x-nevermind-client': 'desktop',
+          'x-nevermind-client-version': '0.17.5',
+          'x-nevermind-api-version': '1',
+        },
+        body,
       },
-      body,
-    });
-    const validResponse = await postAudioTranscription(routeContext(validRequest));
+    );
+    const validResponse = await postAudioTranscription(
+      routeContext(validRequest),
+    );
     assert.equal(validResponse.status, 400);
-    assert.equal(((await validResponse.json()) as { error: { message: string } }).error.message, 'Idempotency-Key is required.');
+    assert.equal(
+      ((await validResponse.json()) as { error: { message: string } }).error
+        .message,
+      'Idempotency-Key is required.',
+    );
   }
 });
 
@@ -381,9 +546,26 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
   const db = installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'free',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
         [{ requestId: 'audio-prepared-key' }],
-        [{ value: JSON.stringify({ provider: 'openrouter', modelId: 'audio-model' }) }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'openrouter',
+              modelId: 'audio-model',
+            }),
+          },
+        ],
         [{ enabled: 'true' }],
         [{ requestId: 'audio-prepared-key' }],
         [{ provider: 'openrouter' }],
@@ -404,35 +586,65 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
       updates: [[{ requestId: 'audio-prepared-key' }], [{ id: 'dedup-claim' }]],
     }),
   );
-  const request = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer nvm_pat_test',
-      'content-type': 'application/json',
-      'idempotency-key': 'audio-prepared-key',
-      'x-nevermind-dictation-preparation': 'audio-prepared-key',
-      'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.17.5',
-      'x-nevermind-api-version': '1',
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcriptions',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'application/json',
+        'idempotency-key': 'audio-prepared-key',
+        'x-nevermind-dictation-preparation': 'audio-prepared-key',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify({
+        input_audio: { data: 'GkXfow==', format: 'webm' },
+      }),
     },
-    body: JSON.stringify({ input_audio: { data: 'GkXfow==', format: 'webm' } }),
-  });
+  );
   const response = await postAudioTranscription(routeContext(request));
   assert.equal(response.status, 503);
-  assert.equal(db.updatedValues.length, 2, 'one update releases the reservation and one marks dedup failed');
+  assert.equal(
+    db.updatedValues.length,
+    2,
+    'one update releases the reservation and one marks dedup failed',
+  );
   assert.equal((db.updatedValues[0] as any).status, 'released');
   assert.equal((db.updatedValues[1] as any).status, 'failed');
-  assert.equal(db.insertedValues.length, 1, 'breaker rejection must not dispatch or settle usage');
+  assert.equal(
+    db.insertedValues.length,
+    1,
+    'breaker rejection must not dispatch or settle usage',
+  );
 });
 
 test('tripped unprepared audio POST fails dedup without creating a reservation', async () => {
   const db = installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_2', email: 'audio@example.com', plan: 'free', role: 'user' }, tokenId: 'token_2' }],
+        [
+          {
+            user: {
+              id: 'user_2',
+              email: 'audio@example.com',
+              plan: 'free',
+              role: 'user',
+            },
+            tokenId: 'token_2',
+          },
+        ],
         [], // monthly grant lookup
         [{ free: 500 }], // current free balance
-        [{ value: JSON.stringify({ provider: 'openrouter', modelId: 'audio-model' }) }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'openrouter',
+              modelId: 'audio-model',
+            }),
+          },
+        ],
         [{ enabled: 'true' }],
         [{ provider: 'openrouter' }], // tripped breaker
       ],
@@ -440,21 +652,30 @@ test('tripped unprepared audio POST fails dedup without creating a reservation',
       updates: [[{ id: 'dedup-claim' }]],
     }),
   );
-  const request = new Request('https://api.nvm.fyi/api/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer nvm_pat_test',
-      'content-type': 'application/json',
-      'idempotency-key': 'audio-unprepared-key',
-      'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.17.5',
-      'x-nevermind-api-version': '1',
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcriptions',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'application/json',
+        'idempotency-key': 'audio-unprepared-key',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify({
+        input_audio: { data: 'GkXfow==', format: 'webm' },
+      }),
     },
-    body: JSON.stringify({ input_audio: { data: 'GkXfow==', format: 'webm' } }),
-  });
+  );
   const response = await postAudioTranscription(routeContext(request));
   assert.equal(response.status, 503);
-  assert.equal(db.insertedValues.length, 2, 'only monthly grant and dedup inserts occur; no credit reservation is created');
+  assert.equal(
+    db.insertedValues.length,
+    2,
+    'only monthly grant and dedup inserts occur; no credit reservation is created',
+  );
   assert.equal(db.updatedValues.length, 1, 'dedup claim is failed');
   assert.equal((db.updatedValues[0] as any).status, 'failed');
 });
@@ -478,20 +699,26 @@ test('audio transcription preparation uses the transcription kill switch', async
       ],
     }),
   );
-  const request = new Request('https://api.nvm.fyi/api/v1/audio/transcription-preparations', {
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer nvm_pat_test',
-      'content-type': 'application/json',
-      'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.17.5',
-      'x-nevermind-api-version': '1',
+  const request = new Request(
+    'https://api.nvm.fyi/api/v1/audio/transcription-preparations',
+    {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nvm_pat_test',
+        'content-type': 'application/json',
+        'x-nevermind-client': 'desktop',
+        'x-nevermind-client-version': '0.17.5',
+        'x-nevermind-api-version': '1',
+      },
+      body: JSON.stringify({ operationId: 'dictation-test-1' }),
     },
-    body: JSON.stringify({ operationId: 'dictation-test-1' }),
-  });
+  );
   const response = await prepareAudioTranscription(routeContext(request));
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), fixture('audio-transcription-disabled-error'));
+  assert.deepEqual(
+    await response.json(),
+    fixture('audio-transcription-disabled-error'),
+  );
 });
 
 test('device auth initiate returns the desktop-v1 initiation contract', async () => {
@@ -506,7 +733,10 @@ test('device auth initiate returns the desktop-v1 initiation contract', async ()
 
   assert.equal(response.status, 200);
   assert.equal(typeof body.code, 'string');
-  assert.equal(body.verifyUrl, `https://www.nvm.fyi/auth/device?code=${body.code}`);
+  assert.equal(
+    body.verifyUrl,
+    `https://www.nvm.fyi/auth/device?code=${body.code}`,
+  );
   assert.match(body.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(body.pollIntervalMs, 2000);
   assert.equal((db.insertedValues[0] as any).deviceLabel, 'Pablo Mac');
@@ -517,16 +747,22 @@ test('Local device auth uses the backend origin for verification', async () => {
   process.env.VERCEL_ENV = 'development';
   try {
     installDb(createFakeDb());
-    const request = new Request('http://localhost:4321/api/auth/device/initiate', {
-      method: 'POST',
-      body: '{}',
-    });
+    const request = new Request(
+      'http://localhost:4321/api/auth/device/initiate',
+      {
+        method: 'POST',
+        body: '{}',
+      },
+    );
 
     const response = await initiateDeviceAuth(routeContext(request));
     const body = (await response.json()) as any;
 
     assert.equal(response.status, 200);
-    assert.equal(body.verifyUrl, `http://localhost:4321/auth/device?code=${body.code}`);
+    assert.equal(
+      body.verifyUrl,
+      `http://localhost:4321/auth/device?code=${body.code}`,
+    );
   } finally {
     if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV = previousEnvironment;
@@ -540,16 +776,22 @@ test('Production device auth rejects a loopback verification origin', async () =
   process.env.NODE_ENV = 'production';
   try {
     installDb(createFakeDb());
-    const request = new Request('http://localhost:4321/api/auth/device/initiate', {
-      method: 'POST',
-      body: '{}',
-    });
+    const request = new Request(
+      'http://localhost:4321/api/auth/device/initiate',
+      {
+        method: 'POST',
+        body: '{}',
+      },
+    );
 
     const response = await initiateDeviceAuth(routeContext(request));
     const body = (await response.json()) as any;
 
     assert.equal(response.status, 200);
-    assert.equal(body.verifyUrl, `https://www.nvm.fyi/auth/device?code=${body.code}`);
+    assert.equal(
+      body.verifyUrl,
+      `https://www.nvm.fyi/auth/device?code=${body.code}`,
+    );
   } finally {
     if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV = previousEnvironment;
@@ -562,7 +804,8 @@ test('Preview device auth rejects a mismatched request origin before creating a 
   const previousEnvironment = process.env.VERCEL_ENV;
   const previousUrl = process.env.VERCEL_URL;
   process.env.VERCEL_ENV = 'preview';
-  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  process.env.VERCEL_URL =
+    'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
   const db = installDb(createFakeDb());
   try {
     const response = await initiateDeviceAuth(
@@ -600,7 +843,10 @@ test('device auth kill switch returns service-unavailable contract', async () =>
 
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('x-request-id'), 'req_auth_disabled');
-  assert.deepEqual(await response.json(), fixture('device-auth-service-unavailable-error'));
+  assert.deepEqual(
+    await response.json(),
+    fixture('device-auth-service-unavailable-error'),
+  );
 });
 
 test('device auth keeps legacy long labels compatible by truncating storage', async () => {
@@ -620,7 +866,12 @@ test('device auth keeps legacy long labels compatible by truncating storage', as
 
 test('device auth exchange returns pending and missing-code contracts', async () => {
   const missingCode = await exchangeDeviceAuth(
-    routeContext(new Request('https://api.nvm.fyi/api/auth/device/exchange', { method: 'POST', body: '{}' })),
+    routeContext(
+      new Request('https://api.nvm.fyi/api/auth/device/exchange', {
+        method: 'POST',
+        body: '{}',
+      }),
+    ),
   );
   assert.equal(missingCode.status, 400);
   const missingCodeBody = (await missingCode.json()) as any;
@@ -789,7 +1040,10 @@ test('active-model route returns descriptor contract with compatibility headers'
   const response = await getActiveModel(
     routeContext(
       new Request('https://api.nvm.fyi/api/v1/active-model', {
-        headers: { authorization: 'Bearer nvm_pat_test', 'x-request-id': 'req_active_model' },
+        headers: {
+          authorization: 'Bearer nvm_pat_test',
+          'x-request-id': 'req_active_model',
+        },
       }),
     ),
   );
@@ -809,6 +1063,129 @@ test('active-model route returns descriptor contract with compatibility headers'
   assert.equal(body.thinkingLevel, 'low');
   assert.equal(body.modelTier, 'free');
   assert.equal(body.creditKind, 'free');
+});
+
+test('active-model does not block paid-funded requests when free spend is capped', async () => {
+  installModelsDevFetch();
+  installDb(
+    createFakeDb({
+      selects: [
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'free',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
+        [{ id: 1 }],
+        [{ free: 500, paid: 100 }],
+        [{ free: 0, paid: 0 }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-flash',
+              thinkingLevel: 'low',
+            }),
+          },
+        ],
+      ],
+      freeSpendCapReached: true,
+    }),
+  );
+  const response = await getActiveModel(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/v1/active-model?inputTokens=1000', {
+        headers: { authorization: 'Bearer nvm_pat_test' },
+      }),
+    ),
+  );
+  const body = (await response.json()) as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.notice, 'ok');
+  assert.equal(body.noticeReason, undefined);
+  assert.ok(body.costEstimate > 0);
+  assert.ok(body.credits.paid >= body.costEstimate);
+});
+
+test('active-model blocks when remaining free-spend capacity cannot fund the request', async () => {
+  installModelsDevFetch();
+  installDb(
+    createFakeDb({
+      selects: [
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'free',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
+        [{ id: 1 }],
+        [{ free: 500, paid: 1 }],
+        [{ free: 0, paid: 0 }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-flash',
+              thinkingLevel: 'low',
+            }),
+          },
+        ],
+      ],
+      freeSpendBudget: {
+        capMicrocents: 1,
+        actualFreeCostMicrocents: 0,
+        reservedFreeCostMicrocents: 0,
+        halted: false,
+        baselineComplete: true,
+      },
+    }),
+  );
+  const response = await getActiveModel(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/v1/active-model?inputTokens=1000', {
+        headers: { authorization: 'Bearer nvm_pat_test' },
+      }),
+    ),
+  );
+  const body = (await response.json()) as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.notice, 'blocked');
+  assert.equal(body.noticeReason, 'free_spend_cap_reached');
+  assert.ok(body.credits.total >= body.costEstimate);
+  assert.ok(body.credits.paid < body.costEstimate);
+});
+
+test('active-model blocks unsafe token estimates without throwing', async () => {
+  installModelsDevFetch();
+  installDb(
+    createFakeDb({
+      selects: proxySelects({ free: 500, paid: 1 }),
+    }),
+  );
+  const response = await getActiveModel(
+    routeContext(
+      new Request('https://api.nvm.fyi/api/v1/active-model?inputTokens=1e15', {
+        headers: { authorization: 'Bearer nvm_pat_test' },
+      }),
+    ),
+  );
+  const body = (await response.json()) as any;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.notice, 'blocked');
+  assert.equal(body.costEstimate, undefined);
 });
 
 test('Local active-model routes completions through the local backend', async () => {
@@ -882,11 +1259,16 @@ test('active-model preserves OpenRouter model ids and proxy format', async () =>
 
 test('active-model route resolves admin-defined extension model roles', async () => {
   installModelsDevFetch();
-  installDb(createFakeDb({ selects: proxySelects({ model: 'gemini-3-fast' }) }));
+  installDb(
+    createFakeDb({ selects: proxySelects({ model: 'gemini-3-fast' }) }),
+  );
   const response = await getActiveModel(
     routeContext(
       new Request('https://api.nvm.fyi/api/v1/active-model?model=fast', {
-        headers: { authorization: 'Bearer nvm_pat_test', 'x-request-id': 'req_fast_model' },
+        headers: {
+          authorization: 'Bearer nvm_pat_test',
+          'x-request-id': 'req_fast_model',
+        },
       }),
     ),
   );
@@ -902,19 +1284,50 @@ test('active-model route resolves admin-defined extension model roles', async ()
 test('active-model route selects all four subscription and model-role combinations', async () => {
   installModelsDevFetch();
   const cases = [
-    { plan: 'pro', paid: 10, role: 'smart', model: 'gemini-3-flash', modelTier: 'pro', creditKind: 'paid' },
-    { plan: 'pro', paid: 10, role: 'fast', model: 'gemini-3-fast', modelTier: 'pro', creditKind: 'paid' },
-    { plan: 'free', paid: 10, role: 'smart', model: 'gemini-3-flash', modelTier: 'free', creditKind: 'paid' },
-    { plan: 'free', paid: 10, role: 'fast', model: 'gemini-3-fast', modelTier: 'free', creditKind: 'paid' },
+    {
+      plan: 'pro',
+      paid: 10,
+      role: 'smart',
+      model: 'gemini-3-flash',
+      modelTier: 'pro',
+      creditKind: 'paid',
+    },
+    {
+      plan: 'pro',
+      paid: 10,
+      role: 'fast',
+      model: 'gemini-3-fast',
+      modelTier: 'pro',
+      creditKind: 'paid',
+    },
+    {
+      plan: 'free',
+      paid: 10,
+      role: 'smart',
+      model: 'gemini-3-flash',
+      modelTier: 'free',
+      creditKind: 'paid',
+    },
+    {
+      plan: 'free',
+      paid: 10,
+      role: 'fast',
+      model: 'gemini-3-fast',
+      modelTier: 'free',
+      creditKind: 'paid',
+    },
   ];
 
   for (const modelCase of cases) {
     installDb(createFakeDb({ selects: proxySelects(modelCase) }));
     const response = await getActiveModel(
       routeContext(
-        new Request(`https://api.nvm.fyi/api/v1/active-model?model=${modelCase.role}`, {
-          headers: { authorization: 'Bearer nvm_pat_test' },
-        }),
+        new Request(
+          `https://api.nvm.fyi/api/v1/active-model?model=${modelCase.role}`,
+          {
+            headers: { authorization: 'Bearer nvm_pat_test' },
+          },
+        ),
       ),
     );
     assert.equal(response.status, 200);
@@ -927,11 +1340,22 @@ test('active-model route selects all four subscription and model-role combinatio
 
 test('active-model ignores a claimed Pro tier for a Free account', async () => {
   installModelsDevFetch();
-  installDb(createFakeDb({ selects: proxySelects({ plan: 'free', paid: 10, model: 'gemini-3-flash' }) }));
+  installDb(
+    createFakeDb({
+      selects: proxySelects({
+        plan: 'free',
+        paid: 10,
+        model: 'gemini-3-flash',
+      }),
+    }),
+  );
   const response = await getActiveModel(
     routeContext(
       new Request('https://api.nvm.fyi/api/v1/active-model', {
-        headers: { authorization: 'Bearer nvm_pat_test', 'x-nevermind-ai-model-tier': 'pro' },
+        headers: {
+          authorization: 'Bearer nvm_pat_test',
+          'x-nevermind-ai-model-tier': 'pro',
+        },
       }),
     ),
   );
@@ -944,7 +1368,16 @@ test('active-model ignores a claimed Pro tier for a Free account', async () => {
 
 test('active-model keeps the Plan 002 Free route for Pro accounts with zero paid credits', async () => {
   installModelsDevFetch();
-  installDb(createFakeDb({ selects: proxySelects({ plan: 'pro', paid: 0, free: 10, model: 'gemini-3-fast' }) }));
+  installDb(
+    createFakeDb({
+      selects: proxySelects({
+        plan: 'pro',
+        paid: 0,
+        free: 10,
+        model: 'gemini-3-fast',
+      }),
+    }),
+  );
   const response = await getActiveModel(
     routeContext(
       new Request('https://api.nvm.fyi/api/v1/active-model?model=fast', {
@@ -965,17 +1398,38 @@ test('active-model funding decision table keeps tier separate from combined-pool
   const cases = [
     {
       name: 'split-only Pro funding',
-      input: { tier: 'pro' as const, freeCredits: 90, paidCredits: 10, routeCredits: 80, freeRouteCredits: 20, freeFallbackAllowed: true },
+      input: {
+        tier: 'pro' as const,
+        freeCredits: 90,
+        paidCredits: 10,
+        routeCredits: 80,
+        freeRouteCredits: 20,
+        freeFallbackAllowed: true,
+      },
       expected: { tier: 'pro', funded: true, freeFallback: false },
     },
     {
       name: 'cheaper Free fallback',
-      input: { tier: 'pro' as const, freeCredits: 60, paidCredits: 40, routeCredits: 120, freeRouteCredits: 70, freeFallbackAllowed: true },
+      input: {
+        tier: 'pro' as const,
+        freeCredits: 60,
+        paidCredits: 40,
+        routeCredits: 120,
+        freeRouteCredits: 70,
+        freeFallbackAllowed: true,
+      },
       expected: { tier: 'free', funded: true, freeFallback: true },
     },
     {
       name: 'combined insufficiency',
-      input: { tier: 'pro' as const, freeCredits: 30, paidCredits: 20, routeCredits: 100, freeRouteCredits: 60, freeFallbackAllowed: true },
+      input: {
+        tier: 'pro' as const,
+        freeCredits: 30,
+        paidCredits: 20,
+        routeCredits: 100,
+        freeRouteCredits: 60,
+        freeFallbackAllowed: true,
+      },
       expected: { tier: 'pro', funded: false, freeFallback: false },
     },
     {
@@ -992,7 +1446,11 @@ test('active-model funding decision table keeps tier separate from combined-pool
     },
   ];
   for (const decision of cases) {
-    assert.deepEqual(chooseFundedAccountRoute(decision.input), decision.expected, decision.name);
+    assert.deepEqual(
+      chooseFundedAccountRoute(decision.input),
+      decision.expected,
+      decision.name,
+    );
   }
 });
 
@@ -1001,20 +1459,49 @@ test('active-model preflight keeps Pro when the combined pools cover the request
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'pro',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 1000, paid: 1 }],
         [],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-flash',
+              thinkingLevel: 'high',
+            }),
+          },
+        ],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-fast',
+              thinkingLevel: 'minimal',
+            }),
+          },
+        ],
       ],
     }),
   );
   const response = await getActiveModel(
     routeContext(
-      new Request('https://api.nvm.fyi/api/v1/active-model?model=fast&inputTokens=10000', {
-        headers: { authorization: 'Bearer nvm_pat_test' },
-      }),
+      new Request(
+        'https://api.nvm.fyi/api/v1/active-model?model=fast&inputTokens=10000',
+        {
+          headers: { authorization: 'Bearer nvm_pat_test' },
+        },
+      ),
     ),
   );
   const body = (await response.json()) as any;
@@ -1031,20 +1518,49 @@ test('active-model uses an affordable same-format Free fallback when Pro cost ex
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'pro',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 9, paid: 1 }],
         [],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-flash',
+              thinkingLevel: 'high',
+            }),
+          },
+        ],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-fast',
+              thinkingLevel: 'minimal',
+            }),
+          },
+        ],
       ],
     }),
   );
   const response = await getActiveModel(
     routeContext(
-      new Request('https://api.nvm.fyi/api/v1/active-model?inputTokens=100000', {
-        headers: { authorization: 'Bearer nvm_pat_test' },
-      }),
+      new Request(
+        'https://api.nvm.fyi/api/v1/active-model?inputTokens=100000',
+        {
+          headers: { authorization: 'Bearer nvm_pat_test' },
+        },
+      ),
     ),
   );
   const body = (await response.json()) as any;
@@ -1058,12 +1574,38 @@ test('active-model notice accounts for pending split allocations like proxy admi
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'pro', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: {
+              id: 'user_1',
+              email: 'pablo@example.com',
+              plan: 'pro',
+              role: 'user',
+            },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 9, paid: 1 }],
         [{ free: 9, paid: 1 }],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'high' }) }],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-fast', thinkingLevel: 'minimal' }) }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-flash',
+              thinkingLevel: 'high',
+            }),
+          },
+        ],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-fast',
+              thinkingLevel: 'minimal',
+            }),
+          },
+        ],
       ],
     }),
   );
@@ -1103,24 +1645,48 @@ test('active-model blocks requested-size estimates without validated pricing but
     installDb(
       createFakeDb({
         selects: [
-          [{ user: { id: 'user_1', email: 'pablo@example.com', plan: 'free', role: 'user' }, tokenId: 'token_1' }],
+          [
+            {
+              user: {
+                id: 'user_1',
+                email: 'pablo@example.com',
+                plan: 'free',
+                role: 'user',
+              },
+              tokenId: 'token_1',
+            },
+          ],
           [{ id: 1 }],
           [{ free: 100, paid: 0 }],
           ...(sizeQuery ? [[]] : []),
-          [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash', thinkingLevel: 'low' }) }],
+          [
+            {
+              value: JSON.stringify({
+                provider: 'opencode_zen',
+                modelId: 'gemini-3-flash',
+                thinkingLevel: 'low',
+              }),
+            },
+          ],
         ],
       }),
     );
     const response = await getActiveModel(
       routeContext(
-        new Request(`https://api.nvm.fyi/api/v1/active-model${sizeQuery}`, { headers: { authorization: 'Bearer nvm_pat_test' } }),
+        new Request(`https://api.nvm.fyi/api/v1/active-model${sizeQuery}`, {
+          headers: { authorization: 'Bearer nvm_pat_test' },
+        }),
       ),
     );
     return response.json() as Promise<any>;
   }
 
   assert.equal((await requestWithSize('?inputTokens=100')).notice, 'blocked');
-  assert.equal((await requestWithSize('')).notice, 'ok', 'legacy descriptor-only requests do not claim a size-based funding estimate');
+  assert.equal(
+    (await requestWithSize('')).notice,
+    'ok',
+    'legacy descriptor-only requests do not claim a size-based funding estimate',
+  );
   resetPricingCacheForTests();
 });
 
@@ -1128,19 +1694,26 @@ test('Preview active-model advertises the exact deployment origin', async () => 
   const previousEnv = process.env.VERCEL_ENV;
   const previousUrl = process.env.VERCEL_URL;
   process.env.VERCEL_ENV = 'preview';
-  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  process.env.VERCEL_URL =
+    'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
   try {
     installModelsDevFetch();
     installDb(createFakeDb({ selects: proxySelects() }));
     const response = await getActiveModel(
       routeContext(
-        new Request('https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1/active-model', {
-          headers: { authorization: 'Bearer nvm_pat_test' },
-        }),
+        new Request(
+          'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1/active-model',
+          {
+            headers: { authorization: 'Bearer nvm_pat_test' },
+          },
+        ),
       ),
     );
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).baseUrl, 'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1');
+    assert.equal(
+      (await response.json()).baseUrl,
+      'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1',
+    );
   } finally {
     if (previousEnv === undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV = previousEnv;
@@ -1153,14 +1726,17 @@ test('Preview active-model rejects a mismatched origin before auth or DB work', 
   const previousEnv = process.env.VERCEL_ENV;
   const previousUrl = process.env.VERCEL_URL;
   process.env.VERCEL_ENV = 'preview';
-  process.env.VERCEL_URL = 'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
+  process.env.VERCEL_URL =
+    'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
   try {
     installDb({
       select: () => {
         throw new Error('DB touched');
       },
     } as any);
-    const response = await getActiveModel(routeContext(new Request('https://attacker.invalid/api/v1/active-model')));
+    const response = await getActiveModel(
+      routeContext(new Request('https://attacker.invalid/api/v1/active-model')),
+    );
     assert.equal(response.status, 503);
     assert.equal(response.headers.has('location'), false);
     assert.equal(response.headers.has('set-cookie'), false);
@@ -1184,7 +1760,11 @@ test('Preview active-model fails closed when Vercel deployment state is missing'
       },
     } as any);
     const response = await getActiveModel(
-      routeContext(new Request('https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1/active-model')),
+      routeContext(
+        new Request(
+          'https://nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app/api/v1/active-model',
+        ),
+      ),
     );
     assert.equal(response.status, 503);
   } finally {
@@ -1220,7 +1800,10 @@ test('API and webhook unrelated-origin OPTIONS requests are denied without CORS 
     assert.equal(response.status, 404);
     assert.equal(response.headers.has('location'), false);
     assert.equal(response.headers.has('access-control-allow-origin'), false);
-    assert.equal(response.headers.has('access-control-allow-credentials'), false);
+    assert.equal(
+      response.headers.has('access-control-allow-credentials'),
+      false,
+    );
     assert.equal(response.headers.has('access-control-allow-methods'), false);
     assert.equal(response.headers.has('access-control-allow-headers'), false);
   }
@@ -1228,35 +1811,55 @@ test('API and webhook unrelated-origin OPTIONS requests are denied without CORS 
 
 test('proxy route kill switch returns service-unavailable contract', async () => {
   process.env.NEVERMIND_KILL_SWITCHES = 'ai_proxy';
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
 
   assert.equal(response.status, 503);
   assert.ok(response.headers.get('x-request-id'));
   assert.deepEqual(await response.json(), {
-    error: { type: 'service_unavailable', message: 'AI proxy is temporarily disabled.' },
+    error: {
+      type: 'service_unavailable',
+      message: 'AI proxy is temporarily disabled.',
+    },
   });
 });
 
 test('proxy route returns stable auth, credits, model config, and prompt-size errors', async () => {
   const unauthorized = await postChatCompletion(
-    routeContext(new Request('https://api.nvm.fyi/api/v1/chat/completions', { method: 'POST' })),
+    routeContext(
+      new Request('https://api.nvm.fyi/api/v1/chat/completions', {
+        method: 'POST',
+      }),
+    ),
   );
   assert.equal(unauthorized.status, 401);
   assert.equal(await unauthorized.text(), 'Unauthorized');
   assert.ok(unauthorized.headers.get('x-request-id'));
 
   installDb(createFakeDb({ selects: proxySelects({ free: 0, paid: 0 }) }));
-  const noCredits = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const noCredits = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   assert.equal(noCredits.status, 402);
   assert.deepEqual(await noCredits.json(), {
-    error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: 'https://www.nvm.fyi/dashboard' },
+    error: {
+      type: 'insufficient_credits',
+      message: 'No credits remaining',
+      dashboard_url: 'https://www.nvm.fyi/dashboard',
+    },
   });
 
   installDb(createFakeDb({ selects: proxySelects({ model: null }) }));
-  const noModel = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const noModel = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   assert.equal(noModel.status, 503);
   assert.deepEqual(await noModel.json(), {
-    error: { type: 'model_not_configured', message: 'No active model configured. Admin must set one.' },
+    error: {
+      type: 'model_not_configured',
+      message: 'No active model configured. Admin must set one.',
+    },
   });
 
   installModelsDevFetch();
@@ -1304,7 +1907,9 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
     promptSizeLogs.map((event) => event.reason),
     ['input_limit', 'no_output_context'],
   );
-  assert.ok(Number(promptSizeLogs[0]?.estimated_input_tokens) > MAX_INPUT_TOKENS);
+  assert.ok(
+    Number(promptSizeLogs[0]?.estimated_input_tokens) > MAX_INPUT_TOKENS,
+  );
   assert.ok(Number(promptSizeLogs[0]?.body_bytes) > 0);
   assert.equal(promptSizeLogs[1]?.context_window_tokens, 100000);
   assert.equal(promptSizeLogs[1]?.output_context_safety_tokens, 4096);
@@ -1314,7 +1919,9 @@ test('proxy route does not reject inline images as oversized text prompts', asyn
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }));
-  installOpenAiFetch(() => Response.json({ usage: { prompt_tokens: 1_600, completion_tokens: 3 } }));
+  installOpenAiFetch(() =>
+    Response.json({ usage: { prompt_tokens: 1_600, completion_tokens: 3 } }),
+  );
 
   const response = await postChatCompletion(
     routeContext(
@@ -1345,12 +1952,28 @@ test('proxy route honors extension smart/fast model selection headers', async ()
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000, model: 'gemini-3-fast' }) }));
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({ free: 1000, model: 'gemini-3-fast' }),
+    }),
+  );
   let forwardedBody = '';
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-fast': {
+              id: 'gemini-3-fast',
+              cost: { input: 0.1, output: 0.5 },
+            },
+          },
+        },
+      });
     }
     assert.equal(url, 'https://upstream.example/v1/chat/completions');
     forwardedBody = String(init?.body);
@@ -1358,7 +1981,11 @@ test('proxy route honors extension smart/fast model selection headers', async ()
     return Response.json({ usage: { prompt_tokens: 2, completion_tokens: 3 } });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' })));
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' }),
+    ),
+  );
 
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
@@ -1381,7 +2008,10 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
     }),
   );
   let forwardedBody: any;
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
@@ -1397,7 +2027,10 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
       });
     }
     assert.equal(url, 'https://openrouter.example/api/v1/chat/completions');
-    assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer openrouter-key');
+    assert.equal(
+      new Headers(init?.headers).get('authorization'),
+      'Bearer openrouter-key',
+    );
     forwardedBody = JSON.parse(String(init?.body));
     return Response.json({
       choices: [{ message: { role: 'assistant', content: 'Hello.' } }],
@@ -1453,10 +2086,23 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
   assert.equal(forwardedBody.web_search_options, undefined);
   assert.equal(forwardedBody.messages[0].content[1].type, 'image_url');
   assert.equal((db.insertedValues.at(-1) as any).provider, 'openrouter');
-  assert.equal((db.insertedValues.at(-1) as any).model, 'google/gemini-2.5-flash');
-  assert.equal((db.insertedValues.at(-1) as any).upstreamCostMicrocents, 100_000_000);
-  assert.equal((db.insertedValues.at(-1) as any).upstreamCostSource, 'provider_reported');
-  assert.equal((db.insertedValues.at(-1) as any).costCredits, 1, 'provider cost cannot charge beyond the reservation');
+  assert.equal(
+    (db.insertedValues.at(-1) as any).model,
+    'google/gemini-2.5-flash',
+  );
+  assert.equal(
+    (db.insertedValues.at(-1) as any).upstreamCostMicrocents,
+    100_000_000,
+  );
+  assert.equal(
+    (db.insertedValues.at(-1) as any).upstreamCostSource,
+    'provider_reported',
+  );
+  assert.equal(
+    (db.insertedValues.at(-1) as any).costCredits,
+    1,
+    'provider cost cannot charge beyond the reservation',
+  );
   assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 1);
   assert.equal((db.insertedValues.at(-1) as any).reasoningTokens, 2);
 });
@@ -1479,7 +2125,10 @@ test('OpenRouter proxy reserves prompt context from the requested output limit',
     messages: [{ role: 'user', content: 'Fix this sentence.' }],
   };
   let forwardedBody: any;
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
@@ -1502,10 +2151,15 @@ test('OpenRouter proxy reserves prompt context from the requested output limit',
     });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest(body)));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest(body)),
+  );
 
   assert.equal(response.status, 200);
-  assert.equal(forwardedBody.max_tokens, 1_048_576 - estimateInputTokensFromBody(JSON.stringify(body)) - 4_096);
+  assert.equal(
+    forwardedBody.max_tokens,
+    1_048_576 - estimateInputTokensFromBody(JSON.stringify(body)) - 4_096,
+  );
   assert.equal(forwardedBody.max_completion_tokens, undefined);
 });
 
@@ -1523,11 +2177,21 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
     }),
   );
   let forwardedBody: any;
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        openrouter: { models: { 'google/gemini-2.5-flash': { id: 'google/gemini-2.5-flash', cost: { input: 0.3, output: 2.5 } } } },
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
       });
     }
     forwardedBody = JSON.parse(String(init?.body));
@@ -1542,15 +2206,24 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
 
   const response = await postChatCompletion(
     routeContext(
-      authorizedChatRequest({ stream: true, messages: [{ role: 'user', content: 'hello' }] }, { 'x-nevermind-ai-model': 'fast' }),
+      authorizedChatRequest(
+        { stream: true, messages: [{ role: 'user', content: 'hello' }] },
+        { 'x-nevermind-ai-model': 'fast' },
+      ),
     ),
   );
   await response.text();
   await waitForBackgroundTasks();
 
   assert.deepEqual(forwardedBody.stream_options, { include_usage: true });
-  assert.equal((db.insertedValues.at(-1) as any).upstreamCostMicrocents, 200_000);
-  assert.equal((db.insertedValues.at(-1) as any).upstreamCostSource, 'provider_reported');
+  assert.equal(
+    (db.insertedValues.at(-1) as any).upstreamCostMicrocents,
+    200_000,
+  );
+  assert.equal(
+    (db.insertedValues.at(-1) as any).upstreamCostSource,
+    'provider_reported',
+  );
   assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 10);
 });
 
@@ -1558,18 +2231,43 @@ test('proxy bills paid credits without granting a Free user Pro model entitlemen
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  const db = installDb(createFakeDb({ selects: proxySelects({ plan: 'free', paid: 1000, free: 500, model: 'gemini-3-fast' }) }));
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        plan: 'free',
+        paid: 1000,
+        free: 500,
+        model: 'gemini-3-fast',
+      }),
+    }),
+  );
   let forwardedBody = '';
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-fast': {
+              id: 'gemini-3-fast',
+              cost: { input: 0.1, output: 0.5 },
+            },
+          },
+        },
+      });
     }
     forwardedBody = String(init?.body);
     return Response.json({ usage: { prompt_tokens: 2, completion_tokens: 3 } });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' })));
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' }),
+    ),
+  );
 
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
@@ -1580,7 +2278,9 @@ test('proxy preserves structured tool calls and debits the successful request', 
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  const db = installDb(
+    createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }),
+  );
   const tool = {
     type: 'function',
     function: {
@@ -1599,7 +2299,10 @@ test('proxy preserves structured tool calls and debits the successful request', 
     function: { name: 'lookup_weather', arguments: '{"city":"Madrid"}' },
   };
   let forwardedBody = '';
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
@@ -1659,10 +2362,18 @@ test('proxy preserves structured tool calls and debits the successful request', 
 test('proxy route returns the rate-limit contract', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
-  setRateLimitOverridesForTests({ chat: async () => ({ ok: false, scope: 'chat:free:minute', retryAfterSec: 7 }) });
+  setRateLimitOverridesForTests({
+    chat: async () => ({
+      ok: false,
+      scope: 'chat:free:minute',
+      retryAfterSec: 7,
+    }),
+  });
   installDb(createFakeDb({ selects: proxySelects() }));
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   assert.equal(response.status, 429);
   assert.equal(response.headers.get('Retry-After'), '7');
   assert.deepEqual(await response.json(), {
@@ -1682,7 +2393,16 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
     upstreamCalls += 1;
     return Response.json({ choices: [] });
@@ -1692,22 +2412,63 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
       messages: [
         {
           role: 'user',
-          content: [{ type: 'image_url', image_url: { url: 'https://images.example/picture.png' }, detail: 'high', metadata: 'extra' }],
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'https://images.example/picture.png' },
+              detail: 'high',
+              metadata: 'extra',
+            },
+          ],
         },
       ],
     },
-    { messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: 'AAAA', format: 'wav' } }] }] },
     {
       messages: [
-        { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'AAAA' } }] },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_audio',
+              input_audio: { data: 'AAAA', format: 'wav' },
+            },
+          ],
+        },
       ],
     },
-    { contents: [{ parts: [{ inlineData: { mimeType: 'audio/wav', data: 'AAAA' } }] }] },
-    { contents: [{ parts: [{ inlineData: { mimeType: 'video/mp4', data: 'AAAA' } }] }] },
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: 'AAAA',
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      contents: [
+        { parts: [{ inlineData: { mimeType: 'audio/wav', data: 'AAAA' } }] },
+      ],
+    },
+    {
+      contents: [
+        { parts: [{ inlineData: { mimeType: 'video/mp4', data: 'AAAA' } }] },
+      ],
+    },
     { messages: [{ role: 'user', content: 'data:audio/wav;base64,AAAA' }] },
   ];
   for (const body of unsupportedBodies) {
-    const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
+    const db = installDb(
+      createFakeDb({ selects: proxySelects({ free: 1000 }) }),
+    );
     const response = await postChatCompletion(
       routeContext(
         authorizedChatRequest({
@@ -1717,8 +2478,15 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
       ),
     );
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), fixture('unsupported-request-shape-error'));
-    assert.deepEqual(db.insertedValues, [], 'unsupported modalities must be rejected before reservation');
+    assert.deepEqual(
+      await response.json(),
+      fixture('unsupported-request-shape-error'),
+    );
+    assert.deepEqual(
+      db.insertedValues,
+      [],
+      'unsupported modalities must be rejected before reservation',
+    );
   }
   assert.equal(upstreamCalls, 0);
 });
@@ -1729,28 +2497,51 @@ test('proxy route preserves streaming responses and records stream usage', async
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
   let forwardedBody = '';
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
     assert.equal(url, 'https://upstream.example/v1/chat/completions');
-    assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer upstream-key');
+    assert.equal(
+      new Headers(init?.headers).get('authorization'),
+      'Bearer upstream-key',
+    );
     forwardedBody = String(init?.body);
-    return new Response('data: {"usage":{"prompt_tokens":2,"completion_tokens":3}}\n\ndata: [DONE]\n\n', {
-      status: 200,
-      headers: { 'content-type': 'text/event-stream' },
-    });
+    return new Response(
+      'data: {"usage":{"prompt_tokens":2,"completion_tokens":3}}\n\ndata: [DONE]\n\n',
+      {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      },
+    );
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   const text = await response.text();
   await waitForBackgroundTasks();
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-type'), 'text/event-stream');
   assert.match(response.headers.get('x-request-id') || '', /^[0-9a-f-]{36}$/);
-  assert.equal(text, 'data: {"usage":{"prompt_tokens":2,"completion_tokens":3}}\n\ndata: [DONE]\n\n');
+  assert.equal(
+    text,
+    'data: {"usage":{"prompt_tokens":2,"completion_tokens":3}}\n\ndata: [DONE]\n\n',
+  );
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-flash');
   assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 2);
@@ -1765,7 +2556,11 @@ test('proxy releases a committed reservation when request rewriting throws', asy
   selects.splice(8, 2); // Rewriting fails before provider-chain lookup.
   const db = installDb(createFakeDb({ selects }));
 
-  await assert.rejects(async () => postChatCompletion(routeContext(authorizedRawChatRequest('{"model":'))), SyntaxError);
+  await assert.rejects(
+    async () =>
+      postChatCompletion(routeContext(authorizedRawChatRequest('{"model":'))),
+    SyntaxError,
+  );
 
   assert.equal(countTerminalUpdates(db, 'released'), 1);
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
@@ -1789,7 +2584,10 @@ test('proxy releases a committed reservation when buffered upstream reading fail
   );
 
   await assert.rejects(
-    async () => (await postChatCompletion(routeContext(authorizedChatRequest()))).arrayBuffer(),
+    async () =>
+      (
+        await postChatCompletion(routeContext(authorizedChatRequest()))
+      ).arrayBuffer(),
     /forced buffered body failure/,
   );
 
@@ -1803,7 +2601,15 @@ test('proxy retries release when settlement throws after reservation', async () 
   const selects = proxySelects({ free: 1000 });
   selects.push(
     [{ id: 'user_1' }],
-    [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+    [
+      {
+        requestId: 'test-reservation',
+        userId: 'user_1',
+        kind: 'free',
+        reservedCredits: 1,
+        status: 'pending',
+      },
+    ],
   );
   const db = installDb(createFakeDb({ selects, failInsertAt: 2 }));
   installOpenAiFetch(() =>
@@ -1813,7 +2619,10 @@ test('proxy retries release when settlement throws after reservation', async () 
     }),
   );
 
-  await assert.rejects(async () => postChatCompletion(routeContext(authorizedChatRequest())), /forced settlement insert failure/);
+  await assert.rejects(
+    async () => postChatCompletion(routeContext(authorizedChatRequest())),
+    /forced settlement insert failure/,
+  );
 
   assert.equal(countTerminalUpdates(db, 'released'), 1);
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
@@ -1837,13 +2646,19 @@ test('stream cancellation before output releases exactly once and records a fail
       ),
   );
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   await response.body!.cancel('client disconnected before output');
 
   assert.equal(upstreamCancelCount, 1);
   assert.equal(countTerminalUpdates(db, 'released'), 1);
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
-  assert.equal(db.insertedValues.length, 2, 'cancellation before output records the reservation and failed usage');
+  assert.equal(
+    db.insertedValues.length,
+    2,
+    'cancellation before output records the reservation and failed usage',
+  );
   assert.equal((db.insertedValues.at(-1) as any).costCredits, 0);
   assert.equal((db.insertedValues.at(-1) as any).status, 499);
 });
@@ -1852,7 +2667,9 @@ test('stream cancellation after a delivered chunk settles conservative usage exa
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  const encodedChunk = new TextEncoder().encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n');
+  const encodedChunk = new TextEncoder().encode(
+    'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n',
+  );
   let emitted = false;
   installOpenAiFetch(
     () =>
@@ -1869,14 +2686,20 @@ test('stream cancellation after a delivered chunk settles conservative usage exa
       ),
   );
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   const reader = response.body!.getReader();
   assert.deepEqual((await reader.read()).value, encodedChunk);
   await reader.cancel('client disconnected after content');
 
   assert.equal(countTerminalUpdates(db, 'settled'), 1);
   assert.equal(countTerminalUpdates(db, 'released'), 0);
-  assert.equal(db.insertedValues.length, 3, 'delivered output records one conservative charge and usage row');
+  assert.equal(
+    db.insertedValues.length,
+    3,
+    'delivered output records one conservative charge and usage row',
+  );
   assert.ok((db.insertedValues.at(-1) as any).inputTokens > 0);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 2);
 });
@@ -1885,7 +2708,9 @@ test('stream cancellation after observed usage settles exactly one charge and us
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  const encodedUsage = new TextEncoder().encode('data: {"usage":{"prompt_tokens":7,"completion_tokens":3}}\n\n');
+  const encodedUsage = new TextEncoder().encode(
+    'data: {"usage":{"prompt_tokens":7,"completion_tokens":3}}\n\n',
+  );
   let emitted = false;
   installOpenAiFetch(
     () =>
@@ -1902,14 +2727,20 @@ test('stream cancellation after observed usage settles exactly one charge and us
       ),
   );
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   const reader = response.body!.getReader();
   assert.deepEqual((await reader.read()).value, encodedUsage);
   await reader.cancel('client disconnected after output');
 
   assert.equal(countTerminalUpdates(db, 'settled'), 1);
   assert.equal(countTerminalUpdates(db, 'released'), 0);
-  assert.equal(db.insertedValues.length, 3, 'reservation, one ledger charge, and one usage row are inserted');
+  assert.equal(
+    db.insertedValues.length,
+    3,
+    'reservation, one ledger charge, and one usage row are inserted',
+  );
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 7);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
 });
@@ -1930,8 +2761,13 @@ test('stream reader failure releases exactly once when no output was observed', 
       ),
   );
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
-  await assert.rejects(response.arrayBuffer(), /forced upstream reader failure/);
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
+  await assert.rejects(
+    response.arrayBuffer(),
+    /forced upstream reader failure/,
+  );
 
   assert.equal(countTerminalUpdates(db, 'released'), 1);
   assert.equal(countTerminalUpdates(db, 'settled'), 0);
@@ -1951,13 +2787,19 @@ test('malformed stream usage reaches one conservative settlement on natural comp
       }),
   );
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   await response.text();
   await waitForBackgroundTasks();
 
   assert.equal(countTerminalUpdates(db, 'settled'), 1);
   assert.equal(countTerminalUpdates(db, 'released'), 0);
-  assert.equal(db.insertedValues.length, 3, 'parser failure still produces exactly one conservative charge and usage row');
+  assert.equal(
+    db.insertedValues.length,
+    3,
+    'parser failure still produces exactly one conservative charge and usage row',
+  );
   assert.ok((db.insertedValues.at(-1) as any).inputTokens > 0);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 1);
 });
@@ -1967,10 +2809,15 @@ test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', as
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  const frame = 'data: {"usage":{"prompt_tokens":12,"completion_tokens":4},"note":"é"}\r\n';
+  const frame =
+    'data: {"usage":{"prompt_tokens":12,"completion_tokens":4},"note":"é"}\r\n';
   const encodedFrame = new TextEncoder().encode(frame);
-  const promptTokenSplit = new TextEncoder().encode(frame.slice(0, frame.indexOf('prompt_tokens') + 7)).byteLength;
-  const multibyteCharacterStart = new TextEncoder().encode(frame.slice(0, frame.indexOf('é'))).byteLength;
+  const promptTokenSplit = new TextEncoder().encode(
+    frame.slice(0, frame.indexOf('prompt_tokens') + 7),
+  ).byteLength;
+  const multibyteCharacterStart = new TextEncoder().encode(
+    frame.slice(0, frame.indexOf('é')),
+  ).byteLength;
   const chunks = [
     encodedFrame.slice(0, 2),
     encodedFrame.slice(2, promptTokenSplit),
@@ -1981,7 +2828,16 @@ test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', as
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
     assert.equal(url, 'https://upstream.example/v1/chat/completions');
     return new Response(streamFromByteChunks(chunks), {
@@ -1990,7 +2846,9 @@ test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', as
     });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
 
   assert.equal(response.status, 200);
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), encodedFrame);
@@ -2004,11 +2862,24 @@ test('anthropic proxy records usage from a split final frame without a newline',
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  const chunks = ['da', 'ta: {"type":"message_delta","usage":{"input_to', 'kens":11,"output_tokens":5}}'];
+  const chunks = [
+    'da',
+    'ta: {"type":"message_delta","usage":{"input_to',
+    'kens":11,"output_tokens":5}}',
+  ];
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
     assert.equal(url, 'https://upstream.example/v1/messages');
     return new Response(streamFromTextChunks(chunks), {
@@ -2017,7 +2888,9 @@ test('anthropic proxy records usage from a split final frame without a newline',
     });
   };
 
-  const response = await postMessages(routeContext(authorizedMessagesRequest()));
+  const response = await postMessages(
+    routeContext(authorizedMessagesRequest()),
+  );
 
   assert.equal(response.status, 200);
   assert.equal(await response.text(), chunks.join(''));
@@ -2035,14 +2908,34 @@ test('google proxy records split streaming usage metadata', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  const db = installDb(
+    createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }),
+  );
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
-    assert.equal(url, 'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse');
-    assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'upstream-key');
+    assert.equal(
+      url,
+      'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse',
+    );
+    assert.equal(
+      new Headers(init?.headers).get('x-goog-api-key'),
+      'upstream-key',
+    );
     return new Response(streamFromTextChunks(splitGoogleUsageStream), {
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
@@ -2050,7 +2943,10 @@ test('google proxy records split streaming usage metadata', async () => {
   };
 
   const request = authorizedGoogleRequest();
-  const response = await postGoogleModel({ ...routeContext(request), params: { path: 'placeholder:streamGenerateContent' } } as any);
+  const response = await postGoogleModel({
+    ...routeContext(request),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
   const text = await response.text();
   await waitForBackgroundTasks();
 
@@ -2075,12 +2971,24 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   process.env.GOOGLE_API_KEY = 'fallback-key';
   process.env.GOOGLE_BASE_URL = 'https://fallback.example';
-  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const modelRoute = [
+    {
+      value: JSON.stringify({
+        provider: 'opencode_zen',
+        modelId: 'gemini-3-flash',
+      }),
+    },
+  ];
   const providerChain = [{ providerId: 'google', modelId: 'gemini-3-fast' }];
   const db = installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ paid: 1000, free: 500 }],
         modelRoute,
@@ -2091,21 +2999,43 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
         providerChain,
         [],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'paid',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
       ],
     }),
   );
 
   let primaryCalled = false;
   let fallbackCalled = false;
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
         google: {
           models: {
-            'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 }, limit: { context: 64_000, output: 4_096 } },
+            'gemini-3-fast': {
+              id: 'gemini-3-fast',
+              cost: { input: 0.1, output: 0.5 },
+              limit: { context: 64_000, output: 4_096 },
+            },
           },
         },
       });
@@ -2116,15 +3046,30 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
     }
     if (url.startsWith('https://fallback.example')) {
       fallbackCalled = true;
-      assert.equal(url, 'https://fallback.example/models/gemini-3-fast:streamGenerateContent?alt=sse');
-      assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'fallback-key');
-      return Response.json({ usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, thoughtsTokenCount: 0 } });
+      assert.equal(
+        url,
+        'https://fallback.example/models/gemini-3-fast:streamGenerateContent?alt=sse',
+      );
+      assert.equal(
+        new Headers(init?.headers).get('x-goog-api-key'),
+        'fallback-key',
+      );
+      return Response.json({
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 10,
+          thoughtsTokenCount: 0,
+        },
+      });
     }
     throw new Error(`Unexpected fetch: ${url}`);
   };
 
   const request = authorizedGoogleRequest();
-  const response = await postGoogleModel({ ...routeContext(request), params: { path: 'placeholder:streamGenerateContent' } } as any);
+  const response = await postGoogleModel({
+    ...routeContext(request),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
 
   assert.equal(response.status, 200);
   assert.ok(primaryCalled, 'primary provider should have been tried');
@@ -2147,10 +3092,22 @@ test('proxy breaker skips a tripped primary and dispatches only to its configure
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ paid: 1000, free: 500 }],
-        [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }],
+        [
+          {
+            value: JSON.stringify({
+              provider: 'opencode_zen',
+              modelId: 'gemini-3-flash',
+            }),
+          },
+        ],
         [{ id: 'user_1' }],
         [],
         [{ free: 500, paid: 1000 }],
@@ -2158,33 +3115,67 @@ test('proxy breaker skips a tripped primary and dispatches only to its configure
         providerChain,
         [{ provider: 'opencode_zen', modelId: 'gemini-3-flash' }],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'paid',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
       ],
     }),
   );
 
   let primaryCalled = false;
   let fallbackCalled = false;
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
         google: {
           models: {
-            'gemini-3-fast': { id: 'gemini-3-fast', cost: { input: 0.1, output: 0.5 }, limit: { context: 64_000, output: 4_096 } },
+            'gemini-3-fast': {
+              id: 'gemini-3-fast',
+              cost: { input: 0.1, output: 0.5 },
+              limit: { context: 64_000, output: 4_096 },
+            },
           },
         },
       });
     }
     if (url.startsWith('https://primary.example')) {
       primaryCalled = true;
-      return Response.json({ error: { message: 'A tripped route must not dispatch' } }, { status: 503 });
+      return Response.json(
+        { error: { message: 'A tripped route must not dispatch' } },
+        { status: 503 },
+      );
     }
     if (url.startsWith('https://fallback.example')) {
       fallbackCalled = true;
-      assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'fallback-key');
-      return Response.json({ usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, thoughtsTokenCount: 0 } });
+      assert.equal(
+        new Headers(init?.headers).get('x-goog-api-key'),
+        'fallback-key',
+      );
+      return Response.json({
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 10,
+          thoughtsTokenCount: 0,
+        },
+      });
     }
     throw new Error(`Unexpected fetch: ${url}`);
   };
@@ -2204,12 +3195,24 @@ test('proxy failover: when all providers fail, last error passes through', async
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   process.env.GOOGLE_API_KEY = 'fallback-key';
   process.env.GOOGLE_BASE_URL = 'https://fallback.example';
-  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const modelRoute = [
+    {
+      value: JSON.stringify({
+        provider: 'opencode_zen',
+        modelId: 'gemini-3-flash',
+      }),
+    },
+  ];
   const providerChain = [{ providerId: 'google' }];
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 1000, paid: 0 }],
         modelRoute,
@@ -2220,7 +3223,15 @@ test('proxy failover: when all providers fail, last error passes through', async
         providerChain,
         [],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'free',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
       ],
     }),
   );
@@ -2229,14 +3240,33 @@ test('proxy failover: when all providers fail, last error passes through', async
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
-        google: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+        google: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
       });
     }
-    return Response.json({ error: { type: 'server_error', message: 'Down' } }, { status: 503 });
+    return Response.json(
+      { error: { type: 'server_error', message: 'Down' } },
+      { status: 503 },
+    );
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
 
   // Both providers 5xx, last provider's error passes through with compatibility headers
   assert.equal(response.status, 503);
@@ -2250,12 +3280,24 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
   process.env.OPENCODE_API_KEY = 'primary-key';
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   process.env.GOOGLE_API_KEY = 'fallback-key';
-  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const modelRoute = [
+    {
+      value: JSON.stringify({
+        provider: 'opencode_zen',
+        modelId: 'gemini-3-flash',
+      }),
+    },
+  ];
   const providerChain = [{ providerId: 'google' }];
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 1000, paid: 0 }],
         modelRoute,
@@ -2266,7 +3308,15 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
         providerChain,
         [],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'free',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
       ],
     }),
   );
@@ -2276,18 +3326,37 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
-        google: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } },
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+        google: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
       });
     }
     if (url.startsWith('https://primary.example')) {
-      return Response.json({ error: { message: 'Bad request' } }, { status: 400 });
+      return Response.json(
+        { error: { message: 'Bad request' } },
+        { status: 400 },
+      );
     }
     fallbackCalled = true;
     return Response.json({}, { status: 200 });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
 
   assert.equal(response.status, 400);
   assert.ok(!fallbackCalled, 'fallback should NOT be called on 4xx');
@@ -2299,11 +3368,23 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'primary-key';
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
-  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'gemini-3-flash' }) }];
+  const modelRoute = [
+    {
+      value: JSON.stringify({
+        provider: 'opencode_zen',
+        modelId: 'gemini-3-flash',
+      }),
+    },
+  ];
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 1000, paid: 0 }],
         modelRoute,
@@ -2312,7 +3393,15 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
         [{ free: 1000, paid: 0 }],
         [{ reserved: 0 }],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'free',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
         [],
       ],
     }),
@@ -2322,13 +3411,24 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ opencode: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
     primaryCalled = true;
     return new Response('Service Unavailable', { status: 503 });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
 
   assert.equal(response.status, 503);
   assert.ok(primaryCalled);
@@ -2343,12 +3443,24 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   process.env.OPENAI_API_KEY = 'openai-key';
   process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
-  const modelRoute = [{ value: JSON.stringify({ provider: 'opencode_zen', modelId: 'claude-sonnet-4-6' }) }];
+  const modelRoute = [
+    {
+      value: JSON.stringify({
+        provider: 'opencode_zen',
+        modelId: 'claude-sonnet-4-6',
+      }),
+    },
+  ];
   const providerChain = [{ providerId: 'openai' }];
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 1000, paid: 0 }],
         modelRoute,
@@ -2359,7 +3471,15 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
         providerChain,
         [],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'free',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
       ],
     }),
   );
@@ -2371,8 +3491,22 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
       return Response.json({
-        opencode: { models: { 'claude-sonnet-4-6': { id: 'claude-sonnet-4-6', cost: { input: 3, output: 15 } } } },
-        openai: { models: { 'claude-sonnet-4-6': { id: 'claude-sonnet-4-6', cost: { input: 3, output: 15 } } } },
+        opencode: {
+          models: {
+            'claude-sonnet-4-6': {
+              id: 'claude-sonnet-4-6',
+              cost: { input: 3, output: 15 },
+            },
+          },
+        },
+        openai: {
+          models: {
+            'claude-sonnet-4-6': {
+              id: 'claude-sonnet-4-6',
+              cost: { input: 3, output: 15 },
+            },
+          },
+        },
       });
     }
     if (url.startsWith('https://primary.example')) {
@@ -2383,15 +3517,25 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
     return Response.json({}, { status: 200 });
   };
 
-  const response = await postMessages(routeContext(authorizedMessagesRequest()));
+  const response = await postMessages(
+    routeContext(authorizedMessagesRequest()),
+  );
 
   assert.equal(response.status, 503);
   assert.ok(primaryCalled);
-  assert.ok(!openaiCalled, 'openai should be skipped because it does not support anthropic-messages format');
+  assert.ok(
+    !openaiCalled,
+    'openai should be skipped because it does not support anthropic-messages format',
+  );
   globalThis.fetch = originalFetch;
 });
 
-function authorizedMessagesRequest(body: unknown = { model: 'placeholder', messages: [{ role: 'user', content: 'hello' }] }) {
+function authorizedMessagesRequest(
+  body: unknown = {
+    model: 'placeholder',
+    messages: [{ role: 'user', content: 'hello' }],
+  },
+) {
   return new Request('https://api.nvm.fyi/api/v1/messages', {
     method: 'POST',
     headers: {
@@ -2417,11 +3561,20 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
   process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
   // Primary: openai with gemini model → google-generative-ai format.
   // openai only supports openai-completions → format-skipped → chain exhausted.
-  const modelRoute = [{ value: JSON.stringify({ provider: 'openai', modelId: 'gemini-3-flash' }) }];
+  const modelRoute = [
+    {
+      value: JSON.stringify({ provider: 'openai', modelId: 'gemini-3-flash' }),
+    },
+  ];
   installDb(
     createFakeDb({
       selects: [
-        [{ user: { id: 'user_1', email: 'pablo@example.com', role: 'user' }, tokenId: 'token_1' }],
+        [
+          {
+            user: { id: 'user_1', email: 'pablo@example.com', role: 'user' },
+            tokenId: 'token_1',
+          },
+        ],
         [{ id: 1 }],
         [{ free: 1000, paid: 0 }],
         modelRoute,
@@ -2432,7 +3585,15 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
         [],
         [],
         [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [
+          {
+            requestId: 'test-reservation',
+            userId: 'user_1',
+            kind: 'free',
+            reservedCredits: 1,
+            status: 'pending',
+          },
+        ],
       ],
     }),
   );
@@ -2440,16 +3601,30 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
-      return Response.json({ openai: { models: { 'gemini-3-flash': { id: 'gemini-3-flash', cost: { input: 0.3, output: 2.5 } } } } });
+      return Response.json({
+        openai: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
     }
     return Response.json({}, { status: 200 });
   };
 
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest()),
+  );
   const body = (await response.json()) as any;
 
   assert.equal(response.status, 503);
   assert.equal(body.error.type, 'upstream_unavailable');
-  assert.equal(body.error.message, 'All configured upstream providers are unavailable');
+  assert.equal(
+    body.error.message,
+    'All configured upstream providers are unavailable',
+  );
   assert.ok(response.headers.get('x-request-id'));
 });

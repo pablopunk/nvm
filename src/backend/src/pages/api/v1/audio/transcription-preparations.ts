@@ -9,14 +9,35 @@ import {
   requestIdFromHeaders,
   unsupportedClientReason,
 } from '../../../../lib/compatibility';
-import { finalizeReservation, reserveCredits } from '../../../../lib/credit-reservations';
+import {
+  estimateAudioProviderCostUsd,
+  lookupModelCost,
+} from '../../../../lib/cost';
+import {
+  finalizeReservation,
+  reserveCredits,
+} from '../../../../lib/credit-reservations';
+import { freeSpendCapErrorBody } from '../../../../lib/free-spend-cap';
 import { isRouteTripped } from '../../../../lib/route-breakers';
-import { getAudioModelRoute, isProviderEnabled, ModelNotConfiguredError } from '../../../../lib/settings';
+import {
+  getAudioModelRoute,
+  isProviderEnabled,
+  ModelNotConfiguredError,
+} from '../../../../lib/settings';
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 
-const RESERVATION_CREDITS = Math.max(1, Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5));
-const requestSchema = z.object({ operationId: z.string().min(1).max(200) }).strict();
+const RESERVATION_CREDITS = Math.max(
+  1,
+  Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
+);
+const MAX_AUDIO_BYTES = Math.max(
+  64 * 1024,
+  Number(process.env.AUDIO_TRANSCRIPTION_MAX_BYTES ?? 4 * 1024 * 1024),
+);
+const requestSchema = z
+  .object({ operationId: z.string().min(1).max(200) })
+  .strict();
 
 function response(body: unknown, status: number, requestId: string) {
   return Response.json(body, {
@@ -28,7 +49,8 @@ function response(body: unknown, status: number, requestId: string) {
 async function authenticatedRequest(request: Request, checkKillSwitch = true) {
   const requestId = requestIdFromHeaders(request.headers);
   const client = desktopClientFromRequest(request);
-  if (unsupportedClientReason(client)) return { error: compatibilityError(request) };
+  if (unsupportedClientReason(client))
+    return { error: compatibilityError(request) };
   const user = await getUserFromBearer(request.headers.get('authorization'));
   if (!user)
     return {
@@ -45,13 +67,19 @@ async function authenticatedRequest(request: Request, checkKillSwitch = true) {
     };
   if (checkKillSwitch && backendKillSwitchEnabled('audio_transcription'))
     return {
-      error: killSwitchResponse('audio_transcription', 'API dictation is temporarily unavailable.', requestId),
+      error: killSwitchResponse(
+        'audio_transcription',
+        'API dictation is temporarily unavailable.',
+        requestId,
+      ),
     };
   return { requestId, user };
 }
 
 async function operationIdFromRequest(request: Request) {
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = requestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   return parsed.success ? parsed.data.operationId : null;
 }
 
@@ -76,7 +104,8 @@ export const POST: APIRoute = async ({ request }) => {
       getAudioModelRoute(),
       isProviderEnabled('openrouter'),
     ]);
-    if (route.provider !== 'openrouter' || !providerEnabled) throw new Error('Audio transcription model is unavailable');
+    if (route.provider !== 'openrouter' || !providerEnabled)
+      throw new Error('Audio transcription model is unavailable');
     if (await isRouteTripped('audio', route.provider, route.modelId))
       return response(
         {
@@ -88,12 +117,22 @@ export const POST: APIRoute = async ({ request }) => {
         503,
         auth.requestId,
       );
+    const costRow = await lookupModelCost(route.provider, route.modelId);
+    if (!costRow)
+      throw new Error('Audio transcription provider pricing is unavailable');
     const reservation = await reserveCredits({
       requestId: operationId,
       userId: auth.user.id,
       credits: RESERVATION_CREDITS,
+      estimatedProviderCostUsd: estimateAudioProviderCostUsd(costRow, {
+        audioBytes: MAX_AUDIO_BYTES,
+        maxInputBytes: MAX_AUDIO_BYTES,
+      }),
+      estimateCostSource: 'catalog_estimate',
       allowExistingPending: true,
     });
+    if (!reservation.ok && reservation.reason === 'free_spend_cap_reached')
+      return response(freeSpendCapErrorBody(), 503, auth.requestId);
     if (!reservation.ok)
       return response(
         {
@@ -112,7 +151,9 @@ export const POST: APIRoute = async ({ request }) => {
         error: {
           type: 'preparation_failed',
           message:
-            error instanceof ModelNotConfiguredError ? 'No audio transcription model is configured.' : 'API dictation preparation failed.',
+            error instanceof ModelNotConfiguredError
+              ? 'No audio transcription model is configured.'
+              : 'API dictation preparation failed.',
         },
       },
       503,

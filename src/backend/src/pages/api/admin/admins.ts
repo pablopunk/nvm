@@ -1,48 +1,83 @@
 import type { APIRoute } from 'astro';
-import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { requireAdmin } from '../../../lib/admin';
-import { requireSameOrigin } from '../../../lib/csrf';
+import { z } from 'zod';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
-import { recordAudit } from '../../../lib/audit';
+import { requireAdmin } from '../../../lib/admin';
+import {
+  adminMutationKeyFromRequest,
+  adminMutationResponse,
+  executeAdminMutation,
+} from '../../../lib/admin-mutations';
+import { recordAuditStrict } from '../../../lib/audit';
+import { requireSameOrigin } from '../../../lib/csrf';
 import { safeJsonBody } from '../../../lib/validation';
 
-const adminsSchema = z.object({
-  email: z.string().optional(),
-  userId: z.string().optional(),
-  role: z.enum(['admin', 'user']).optional(),
-});
+const adminsSchema = z
+  .object({
+    email: z.string().email().max(320).optional(),
+    userId: z.string().uuid().optional(),
+    role: z.enum(['admin', 'user']).default('admin'),
+  })
+  .strict()
+  .refine((value) => Boolean(value.userId) !== Boolean(value.email), {
+    message: 'Provide exactly one of userId or email.',
+  });
 
 export const POST: APIRoute = async ({ request }) => {
   const originCheck = requireSameOrigin(request);
   if (originCheck) return originCheck;
-
   const actor = await requireAdmin(request);
   if (!actor) return new Response('Forbidden', { status: 403 });
-
   const parsed = await safeJsonBody(request, adminsSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
-  const body = parsed.data;
-
-  const role = body.role === 'user' ? 'user' : 'admin';
-  let targetId: string | null = null;
-  if (body.userId) {
-    await db.update(users).set({ role }).where(eq(users.id, body.userId));
-    targetId = body.userId;
-  } else if (body.email) {
-    const result = await db.update(users).set({ role }).where(eq(users.email, body.email)).returning({ id: users.id });
-    if (!result.length) return new Response('User not found', { status: 404 });
-    targetId = result[0]!.id;
-  } else {
-    return new Response('Missing email or userId', { status: 400 });
+  const idempotencyKey = adminMutationKeyFromRequest(request);
+  if (!idempotencyKey) {
+    return Response.json(
+      {
+        error: {
+          type: 'idempotency_key_required',
+          message: 'Provide a UUID Idempotency-Key.',
+        },
+      },
+      { status: 400 },
+    );
   }
-  await recordAudit({
+
+  const result = await executeAdminMutation({
     actorUserId: actor.id,
-    action: 'role.changed',
-    targetType: 'user',
-    targetId: targetId ?? undefined,
-    meta: { role, email: body.email ?? null },
+    idempotencyKey,
+    payload: parsed.data,
+    execute: async (tx) => {
+      const targetQuery = tx.update(users).set({ role: parsed.data.role });
+      const matched = parsed.data.userId
+        ? await targetQuery
+            .where(eq(users.id, parsed.data.userId))
+            .returning({ id: users.id })
+        : await targetQuery
+            .where(eq(users.email, parsed.data.email!))
+            .returning({ id: users.id });
+      const target = matched[0];
+      if (!target)
+        return {
+          status: 404,
+          body: {
+            error: { type: 'user_not_found', message: 'User not found.' },
+          },
+        };
+      await recordAuditStrict(tx, {
+        actorUserId: actor.id,
+        action: 'role.changed',
+        targetType: 'user',
+        targetId: target.id,
+        meta: {
+          role: parsed.data.role,
+          email: parsed.data.email ?? null,
+          idempotencyKey,
+        },
+      });
+      return { body: { ok: true, userId: target.id, role: parsed.data.role } };
+    },
   });
-  return Response.json({ ok: true });
+  return adminMutationResponse(result);
 };

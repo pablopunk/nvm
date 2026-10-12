@@ -3,9 +3,14 @@ import { z } from 'zod';
 import { db } from '../../../db/client';
 import { routeBreakers } from '../../../db/schema';
 import { requireAdmin } from '../../../lib/admin';
+import {
+  adminMutationKeyFromRequest,
+  adminMutationResponse,
+  executeAdminMutation,
+} from '../../../lib/admin-mutations';
 import { requireSameOrigin } from '../../../lib/csrf';
-import { safeJsonBody } from '../../../lib/validation';
 import { reenableRouteBreaker } from '../../../lib/route-breaker-admin';
+import { safeJsonBody } from '../../../lib/validation';
 
 const breakerSchema = z
   .object({
@@ -16,7 +21,8 @@ const breakerSchema = z
   .strict();
 
 export const GET: APIRoute = async ({ request }) => {
-  if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
+  if (!(await requireAdmin(request)))
+    return new Response('Forbidden', { status: 403 });
   return Response.json({ breakers: await db.select().from(routeBreakers) });
 };
 
@@ -27,9 +33,26 @@ export const POST: APIRoute = async ({ request }) => {
   if (!actor) return new Response('Forbidden', { status: 403 });
   const parsed = await safeJsonBody(request, breakerSchema);
   if (!parsed.ok) return Response.json(parsed.error, { status: 400 });
-  await reenableRouteBreaker({
+  const idempotencyKey = adminMutationKeyFromRequest(request);
+  if (!idempotencyKey) {
+    return Response.json(
+      {
+        error: {
+          type: 'idempotency_key_required',
+          message: 'Provide a UUID Idempotency-Key.',
+        },
+      },
+      { status: 400 },
+    );
+  }
+  const result = await executeAdminMutation({
     actorUserId: actor.id,
-    ...parsed.data,
+    idempotencyKey,
+    payload: parsed.data,
+    execute: async (tx) => {
+      await reenableRouteBreaker({ actorUserId: actor.id, ...parsed.data }, tx);
+      return { body: { ok: true } };
+    },
   });
-  return Response.json({ ok: true });
+  return adminMutationResponse(result);
 };

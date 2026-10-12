@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { afterEach, test } from 'node:test';
-import { setDbForTests, resetDbForTests } from '../db/client';
+import { resetDbForTests, setDbForTests } from '../db/client';
 import {
   billingOrders,
   billingPriceTerms,
@@ -13,25 +13,32 @@ import {
   subscriptions,
   users,
 } from '../db/schema';
+import { POST as postWebhook } from '../pages/api/billing/webhook';
 import {
   BillingConfigError,
   BillingEligibilityError,
+  BillingPendingError,
   BillingRequestError,
   billingCatalog,
-  cancelPaymentIntentForRetry,
   canCreateRetryReplacement,
+  cancelPaymentIntentForRetry,
   classifyAsyncPaymentFailure,
   classifyCheckoutEvidence,
   createBillingCheckout,
   formatBillingPrice,
+  OWNER_APPROVED_PRICE_TERMS_SOURCE,
+  applyAdminRetryReconciliation,
   processStripeEvent,
   rejectCrossOriginBillingPost,
   retryBillingCheckout,
   setStripeForTests,
   updateBillingOrderCAS,
 } from './billing';
-import { acquireCheckoutLock, releaseCheckoutLock, setCheckoutLockForTests } from './ratelimit';
-import { POST as postWebhook } from '../pages/api/billing/webhook';
+import {
+  acquireCheckoutLock,
+  releaseCheckoutLock,
+  setCheckoutLockForTests,
+} from './ratelimit';
 
 Object.assign(process.env, {
   VERCEL_ENV: 'production',
@@ -103,7 +110,8 @@ function createFakeBillingDb(
       },
       onConflictDoUpdate() {
         conflict = 'update' as const;
-        if (input.trackSubscriptions && table === subscriptions) subscriptionRow = { ...values };
+        if (input.trackSubscriptions && table === subscriptions)
+          subscriptionRow = { ...values };
         inserts.push({ table, values, conflict });
         return chain;
       },
@@ -115,9 +123,15 @@ function createFakeBillingDb(
         inserts.push({ table, values, conflict });
         return Promise.resolve([{ eventId: values.eventId }]);
       },
-      then(resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) {
+      then(
+        resolveThen: Parameters<Promise<unknown>['then']>[0],
+        rejectThen: Parameters<Promise<unknown>['then']>[1],
+      ) {
         if (table !== stripeEvents && conflict !== 'update') {
-          const ledgerRef = table === creditLedger && values?.refId ? `${values.userId}:${values.reason}:${values.refId}` : null;
+          const ledgerRef =
+            table === creditLedger && values?.refId
+              ? `${values.userId}:${values.reason}:${values.refId}`
+              : null;
           if (!ledgerRef || !ledgerRefs.has(ledgerRef)) {
             if (ledgerRef) ledgerRefs.add(ledgerRef);
             inserts.push({ table, values, conflict });
@@ -139,11 +153,23 @@ function createFakeBillingDb(
         return Promise.resolve(subscriptionRow ? [subscriptionRow] : []);
       }
       if (fromTable === stripeEvents) return Promise.resolve([]);
-      if (fromTable === billingPriceTerms) return Promise.resolve(input.billingTerms ?? []);
-      if (fromTable === billingOrders) return Promise.resolve(input.orderResults?.[orderSelectCount++] ?? input.orders ?? []);
-      if (fromTable === billingRetryOperations) return Promise.resolve(input.retryOperationResults?.[retryOperationSelectCount++] ?? []);
-      if (fromTable === billingSubscriptionPriceVersions || fromTable === stripeCustomerAttempts) return Promise.resolve([]);
-      if (fromTable === subscriptions) return Promise.resolve(input.subscriptionRows ?? []);
+      if (fromTable === billingPriceTerms)
+        return Promise.resolve(input.billingTerms ?? []);
+      if (fromTable === billingOrders)
+        return Promise.resolve(
+          input.orderResults?.[orderSelectCount++] ?? input.orders ?? [],
+        );
+      if (fromTable === billingRetryOperations)
+        return Promise.resolve(
+          input.retryOperationResults?.[retryOperationSelectCount++] ?? [],
+        );
+      if (
+        fromTable === billingSubscriptionPriceVersions ||
+        fromTable === stripeCustomerAttempts
+      )
+        return Promise.resolve([]);
+      if (fromTable === subscriptions)
+        return Promise.resolve(input.subscriptionRows ?? []);
       if (fromTable === users) return Promise.resolve(selects.shift() ?? []);
       return Promise.resolve(selects.shift() ?? []);
     };
@@ -153,10 +179,14 @@ function createFakeBillingDb(
         return chain;
       },
       where: () => chain,
+      for: () => chain,
       limit: () => promise(),
-      then: (resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) =>
-        promise().then(resolveThen, rejectThen),
-      catch: (rejectThen: Parameters<Promise<unknown>['catch']>[0]) => promise().catch(rejectThen),
+      then: (
+        resolveThen: Parameters<Promise<unknown>['then']>[0],
+        rejectThen: Parameters<Promise<unknown>['then']>[1],
+      ) => promise().then(resolveThen, rejectThen),
+      catch: (rejectThen: Parameters<Promise<unknown>['catch']>[0]) =>
+        promise().catch(rejectThen),
     };
     return chain;
   }
@@ -175,11 +205,18 @@ function createFakeBillingDb(
       },
       returning() {
         if (table === billingOrders && input.orders?.length) {
-          return Promise.resolve([{ ...(input.orders[0] as Record<string, unknown>), ...values }]);
+          return Promise.resolve([
+            { ...(input.orders[0] as Record<string, unknown>), ...values },
+          ]);
         }
-        return Promise.resolve([{ stripeCustomerId: values?.stripeCustomerId }]);
+        return Promise.resolve([
+          { stripeCustomerId: values?.stripeCustomerId },
+        ]);
       },
-      then(resolveThen: Parameters<Promise<unknown>['then']>[0], rejectThen: Parameters<Promise<unknown>['then']>[1]) {
+      then(
+        resolveThen: Parameters<Promise<unknown>['then']>[0],
+        rejectThen: Parameters<Promise<unknown>['then']>[1],
+      ) {
         return promise().then(resolveThen, rejectThen);
       },
       catch(rejectThen: Parameters<Promise<unknown>['catch']>[0]) {
@@ -200,7 +237,9 @@ function createFakeBillingDb(
     transaction: async (callback: (tx: FakeDb) => Promise<unknown>) => {
       const eventSnapshot = new Set(eventIds);
       const ledgerSnapshot = new Set(ledgerRefs);
-      const subscriptionSnapshot = subscriptionRow ? { ...subscriptionRow } : null;
+      const subscriptionSnapshot = subscriptionRow
+        ? { ...subscriptionRow }
+        : null;
       const insertsLength = inserts.length;
       const updatesLength = updates.length;
       try {
@@ -225,7 +264,9 @@ function installDb(db: FakeDb) {
   return db;
 }
 
-function approvedTerms(input: Partial<typeof billingPriceTerms.$inferSelect> = {}) {
+function approvedTerms(
+  input: Partial<typeof billingPriceTerms.$inferSelect> = {},
+) {
   return {
     id: '00000000-0000-4000-8000-000000000001',
     priceId: 'price_pro',
@@ -238,7 +279,7 @@ function approvedTerms(input: Partial<typeof billingPriceTerms.$inferSelect> = {
     quantity: 1,
     interval: 'month',
     intervalCount: 1,
-    source: 'test_fixture',
+    source: OWNER_APPROVED_PRICE_TERMS_SOURCE,
     approvedAt: new Date(0),
     createdAt: new Date(0),
     ...input,
@@ -247,7 +288,10 @@ function approvedTerms(input: Partial<typeof billingPriceTerms.$inferSelect> = {
 
 const stripeObjects = new Map<string, Record<string, unknown>>();
 
-function installStripe(subscription: Record<string, unknown> = {}, lineItems: unknown[] = []) {
+function installStripe(
+  subscription: Record<string, unknown> = {},
+  lineItems: unknown[] = [],
+) {
   setStripeForTests({
     checkout: {
       sessions: {
@@ -262,10 +306,12 @@ function installStripe(subscription: Record<string, unknown> = {}, lineItems: un
       },
     },
     invoices: {
-      retrieve: async (id: string) => stripeObjects.get(id) ?? { id, lines: { data: [] } },
+      retrieve: async (id: string) =>
+        stripeObjects.get(id) ?? { id, lines: { data: [] } },
     },
     paymentIntents: {
-      retrieve: async (id: string) => stripeObjects.get(id) ?? { id, status: 'requires_payment_method' },
+      retrieve: async (id: string) =>
+        stripeObjects.get(id) ?? { id, status: 'requires_payment_method' },
       cancel: async (id: string) => ({ id, status: 'canceled' }),
     },
     prices: {
@@ -276,7 +322,9 @@ function installStripe(subscription: Record<string, unknown> = {}, lineItems: un
         unit_amount: id.includes('topup') ? 500 : 1000,
         currency: 'usd',
         type: id.includes('topup') ? 'one_time' : 'recurring',
-        recurring: id.includes('topup') ? null : { interval: 'month', interval_count: 1, usage_type: 'licensed' },
+        recurring: id.includes('topup')
+          ? null
+          : { interval: 'month', interval_count: 1, usage_type: 'licensed' },
         tiers_mode: null,
         transform_quantity: null,
       }),
@@ -298,7 +346,12 @@ function installStripe(subscription: Record<string, unknown> = {}, lineItems: un
   } as any);
 }
 
-function stripeEvent(type: string, object: Record<string, unknown>, id = `evt_${type}`, created = 1) {
+function stripeEvent(
+  type: string,
+  object: Record<string, unknown>,
+  id = `evt_${type}`,
+  created = 1,
+) {
   const event = {
     id,
     object: 'event',
@@ -363,7 +416,10 @@ test('billing catalog exposes validated display metadata from configured prices'
       },
     ],
   });
-  assert.equal(formatBillingPrice({ amount: 2000, currency: 'USD', interval: 'month' }), '$20.00');
+  assert.equal(
+    formatBillingPrice({ amount: 2000, currency: 'USD', interval: 'month' }),
+    '$20.00',
+  );
 });
 
 test('production billing rejects stale dashboard aliases as configuration without calling Stripe', async () => {
@@ -376,14 +432,17 @@ test('production billing rejects stale dashboard aliases as configuration withou
   try {
     await assert.rejects(
       () => createBillingCheckout({ user, kind: 'subscription' }),
-      (error: unknown) => error instanceof BillingConfigError && /origin configuration is invalid/.test(error.message),
+      (error: unknown) =>
+        error instanceof BillingConfigError &&
+        /origin configuration is invalid/.test(error.message),
     );
   } finally {
     if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV = previousEnvironment;
     if (previousProduction === undefined) delete process.env.PRODUCTION_ORIGIN;
     else process.env.PRODUCTION_ORIGIN = previousProduction;
-    if (previousDashboard === undefined) delete process.env.PUBLIC_DASHBOARD_URL;
+    if (previousDashboard === undefined)
+      delete process.env.PUBLIC_DASHBOARD_URL;
     else process.env.PUBLIC_DASHBOARD_URL = previousDashboard;
   }
 });
@@ -421,7 +480,7 @@ test('billing catalog keeps billing items while omitting incomplete display meta
   });
 });
 
-test('checkout fails closed without approved terms before creating a Stripe customer', async () => {
+test('checkout fails closed without owner-approved terms before creating a Stripe customer', async () => {
   process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
     {
       priceId: 'price_unapproved',
@@ -441,7 +500,13 @@ test('checkout fails closed without approved terms before creating a Stripe cust
       },
     },
   } as any);
-  installDb(createFakeBillingDb());
+  installDb(
+    createFakeBillingDb({
+      billingTerms: [
+        approvedTerms({ source: 'admin_approved_verified_stripe_price' }),
+      ],
+    }),
+  );
 
   await assert.rejects(
     () =>
@@ -450,7 +515,8 @@ test('checkout fails closed without approved terms before creating a Stripe cust
         kind: 'subscription',
         priceId: 'price_unapproved',
       }),
-    (error) => error instanceof BillingRequestError && error.type === 'unknown_price',
+    (error) =>
+      error instanceof BillingRequestError && error.type === 'unknown_price',
   );
   assert.equal(customerCreates, 0);
 });
@@ -476,12 +542,20 @@ test('same-key checkout recovers a stored session when catalog entry disappears 
     userId: user.id,
     attemptKey,
     intentHash,
+    priceTermsId: 'term-owner-approved',
     priceId: 'price_removed',
     state: 'open',
     sessionId: 'cs_already_created',
     sessionUrl: 'https://checkout.stripe.test/cs_already_created',
   };
-  installDb(createFakeBillingDb({ orders: [order] }));
+  installDb(
+    createFakeBillingDb({
+      orders: [order],
+      billingTerms: [
+        approvedTerms({ id: 'term-owner-approved', priceId: 'price_removed' }),
+      ],
+    }),
+  );
   setStripeForTests({
     prices: {
       retrieve: async () => {
@@ -499,18 +573,84 @@ test('same-key checkout recovers a stored session when catalog entry disappears 
     },
   } as any);
 
-  assert.deepEqual(await createBillingCheckout({ user, kind: 'subscription', priceId: 'price_removed', tier: 'pro', attemptKey }), {
-    status: 'url',
-    url: order.sessionUrl,
-  });
+  assert.deepEqual(
+    await createBillingCheckout({
+      user,
+      kind: 'subscription',
+      priceId: 'price_removed',
+      tier: 'pro',
+      attemptKey,
+    }),
+    {
+      status: 'url',
+      url: order.sessionUrl,
+    },
+  );
   assert.equal(priceReads, 0);
   assert.equal(sessionCreates, 0);
+});
+
+test('same-key checkout does not resume a session with non-owner-approved terms', async () => {
+  const attemptKey = '22222222-2222-4222-8222-222222222222';
+  const intentHash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: 'subscription',
+        priceId: 'price_legacy',
+        selectedPriceId: 'price_legacy',
+        selectedTier: 'pro',
+      }),
+    )
+    .digest('hex');
+  const order = {
+    id: '33333333-3333-4333-8333-333333333333',
+    userId: user.id,
+    attemptKey,
+    intentHash,
+    priceTermsId: 'term-legacy',
+    priceId: 'price_legacy',
+    state: 'open',
+    sessionId: 'cs_legacy',
+    sessionUrl: 'https://checkout.stripe.test/cs_legacy',
+  };
+  installDb(
+    createFakeBillingDb({
+      orders: [order],
+      billingTerms: [
+        approvedTerms({
+          id: 'term-legacy',
+          priceId: 'price_legacy',
+          source: 'admin_approved_verified_stripe_price',
+        }),
+      ],
+    }),
+  );
+
+  await assert.rejects(
+    () =>
+      createBillingCheckout({
+        user,
+        kind: 'subscription',
+        priceId: 'price_legacy',
+        tier: 'pro',
+        attemptKey,
+      }),
+    (error) =>
+      error instanceof BillingPendingError &&
+      error.status === 'reconciliation_required',
+  );
 });
 
 test('same retry key resumes the linked replacement after a lost response and failed prior order', async () => {
   const attemptKey = '22222222-2222-4222-8222-222222222222';
   const retryKey = '44444444-4444-4444-8444-444444444444';
-  const priorOrder = { id: 'order_prior', userId: user.id, attemptKey, state: 'failed' };
+  const priorOrder = {
+    id: 'order_prior',
+    userId: user.id,
+    attemptKey,
+    state: 'failed',
+    priceTermsId: 'term-owner-approved',
+  };
   const replacementOrder = {
     id: 'order_replacement',
     userId: user.id,
@@ -530,14 +670,144 @@ test('same retry key resumes the linked replacement after a lost response and fa
     createFakeBillingDb({
       orderResults: [[priorOrder], [priorOrder], [replacementOrder]],
       retryOperationResults: [[operation]],
+      billingTerms: [approvedTerms({ id: 'term-owner-approved' })],
     }),
   );
 
-  assert.deepEqual(await retryBillingCheckout({ userId: user.id, attemptKey, retryKey }), {
-    status: 'url',
-    url: replacementOrder.sessionUrl,
-    retryOperationId: operation.id,
+  assert.deepEqual(
+    await retryBillingCheckout({ userId: user.id, attemptKey, retryKey }),
+    {
+      status: 'url',
+      url: replacementOrder.sessionUrl,
+      retryOperationId: operation.id,
+    },
+  );
+});
+
+test('billing retry refuses to issue a replacement for non-owner-approved terms', async () => {
+  const retryKey = '44444444-4444-4444-8444-444444444444';
+  const priorOrder = {
+    id: 'order_legacy_retry',
+    userId: user.id,
+    state: 'retry_required',
+    priceTermsId: 'term-legacy',
+  };
+  const operation = {
+    id: 'retry_legacy_operation',
+    userId: user.id,
+    priorOrderId: priorOrder.id,
+    retryKey,
+    state: 'cancel_pending',
+  };
+  installDb(
+    createFakeBillingDb({
+      orderResults: [[priorOrder]],
+      retryOperationResults: [[operation]],
+      billingTerms: [
+        approvedTerms({
+          id: 'term-legacy',
+          source: 'admin_approved_verified_stripe_price',
+        }),
+      ],
+    }),
+  );
+
+  assert.deepEqual(
+    await retryBillingCheckout({
+      userId: user.id,
+      retryOperationId: operation.id,
+      retryKey,
+    }),
+    { status: 'reconciliation_required', retryOperationId: operation.id },
+  );
+});
+
+test('admin retry reconciliation closes canceled legacy terms without making a replacement', async () => {
+  const operation = {
+    id: 'retry_legacy_operation',
+    userId: user.id,
+    priorOrderId: 'order_legacy_retry',
+    retryKey: '44444444-4444-4444-8444-444444444444',
+    state: 'cancel_pending',
+    replacementOrderId: null,
+  };
+  const order = {
+    id: operation.priorOrderId,
+    userId: user.id,
+    state: 'retry_cancel_pending',
+    version: 3,
+    paymentIntentId: 'pi_legacy_retry',
+    sessionId: 'cs_legacy_retry',
+    stripeCustomerId: 'cus_legacy_retry',
+    priceTermsId: 'term-legacy',
+    priceId: 'price_legacy',
+    kind: 'subscription',
+    credits: 1000,
+  };
+  const db = installDb(
+    createFakeBillingDb({
+      orderResults: [[order]],
+      retryOperationResults: [[operation]],
+      billingTerms: [
+        approvedTerms({
+          id: 'term-legacy',
+          priceId: 'price_legacy',
+          source: 'admin_approved_verified_stripe_price',
+        }),
+      ],
+    }),
+  );
+
+  const result = await applyAdminRetryReconciliation(db as any, {
+    actorUserId: 'admin_1',
+    evidence: {
+      operation: operation as any,
+      order: order as any,
+      paymentIntent: {
+        id: order.paymentIntentId,
+        status: 'canceled',
+        customer: order.stripeCustomerId,
+        metadata: {
+          order_id: order.id,
+          user_id: order.userId,
+          price_id: order.priceId,
+          billing_kind: order.kind,
+          credits: String(order.credits),
+        },
+      } as any,
+      session: {
+        id: order.sessionId,
+        status: 'complete',
+        payment_status: 'unpaid',
+        customer: order.stripeCustomerId,
+        metadata: { order_id: order.id },
+        payment_intent: order.paymentIntentId,
+      } as any,
+      lineItems: null,
+      subscription: null,
+      observedAt: new Date(0).toISOString(),
+    },
   });
+
+  assert.equal((result.body as any).status, 'failed');
+  assert.equal((result.body as any).reason, 'price_terms_not_owner_approved');
+  assert.equal(
+    db.inserts.some((insert) => insert.table === billingOrders),
+    false,
+  );
+  assert.ok(
+    db.updates.some(
+      (update) =>
+        update.table === billingRetryOperations &&
+        update.values.state === 'failed',
+    ),
+  );
+  assert.ok(
+    db.updates.some(
+      (update) =>
+        update.table === billingOrders && update.values.state === 'failed',
+    ),
+  );
 });
 
 test('retry persists a replacement only after Stripe confirms cancellation; succeeded or ambiguous intents stay blocked', async () => {
@@ -561,6 +831,7 @@ test('retry persists a replacement only after Stripe confirms cancellation; succ
     leaseGeneration: 0,
     sessionId: 'cs_retry_prior',
     paymentIntentId: 'pi_retry_prior',
+    priceTermsId: 'term-owner-approved',
     stripeCustomerId: 'cus_123',
     intentHash: 'request-hash',
     kind: 'top_up',
@@ -574,7 +845,10 @@ test('retry persists a replacement only after Stripe confirms cancellation; succ
     quantity: 1,
     interval: null,
     intervalCount: null,
-    requestSnapshot: { mode: 'payment', metadata: { order_id: operation.priorOrderId } },
+    requestSnapshot: {
+      mode: 'payment',
+      metadata: { order_id: operation.priorOrderId },
+    },
   };
   const currentSession = {
     id: priorOrder.sessionId,
@@ -585,11 +859,26 @@ test('retry persists a replacement only after Stripe confirms cancellation; succ
     payment_intent: priorOrder.paymentIntentId,
   };
 
-  async function runRetry(initialIntentStatus: string, postCancelStatus?: string) {
+  async function runRetry(
+    initialIntentStatus: string,
+    postCancelStatus?: string,
+  ) {
     const db = installDb(
       createFakeBillingDb({
         orderResults: [[priorOrder], [priorOrder]],
         retryOperationResults: [[operation], [operation]],
+        billingTerms: [
+          approvedTerms({
+            id: 'term-owner-approved',
+            priceId: 'price_pack',
+            kind: 'top_up',
+            tier: null,
+            credits: 500,
+            unitAmount: 500,
+            interval: null,
+            intervalCount: null,
+          }),
+        ],
       }),
     );
     let retrieves = 0;
@@ -601,14 +890,21 @@ test('retry persists a replacement only after Stripe confirms cancellation; succ
           retrieve: async () => currentSession,
           create: async () => {
             checkoutCreates += 1;
-            return { id: 'cs_replacement', status: 'open', url: 'https://checkout.stripe.test/new' };
+            return {
+              id: 'cs_replacement',
+              status: 'open',
+              url: 'https://checkout.stripe.test/new',
+            };
           },
         },
       },
       paymentIntents: {
         retrieve: async () => ({
           id: priorOrder.paymentIntentId,
-          status: retrieves++ === 0 ? initialIntentStatus : (postCancelStatus ?? initialIntentStatus),
+          status:
+            retrieves++ === 0
+              ? initialIntentStatus
+              : (postCancelStatus ?? initialIntentStatus),
           customer: priorOrder.stripeCustomerId,
           metadata: { order_id: priorOrder.id },
         }),
@@ -618,16 +914,27 @@ test('retry persists a replacement only after Stripe confirms cancellation; succ
         },
       },
     } as any);
-    const result = await retryBillingCheckout({ userId: user.id, retryOperationId: operation.id, retryKey });
+    const result = await retryBillingCheckout({
+      userId: user.id,
+      retryOperationId: operation.id,
+      retryKey,
+    });
     return {
       result,
       cancelCalls,
       checkoutCreates,
-      replacements: db.inserts.filter((call) => call.table === billingOrders && (call.values as any)?.id !== priorOrder.id),
+      replacements: db.inserts.filter(
+        (call) =>
+          call.table === billingOrders &&
+          (call.values as any)?.id !== priorOrder.id,
+      ),
     };
   }
 
-  const verifiedCanceled = await runRetry('requires_payment_method', 'canceled');
+  const verifiedCanceled = await runRetry(
+    'requires_payment_method',
+    'canceled',
+  );
   assert.equal(verifiedCanceled.result.status, 'processing');
   assert.equal(verifiedCanceled.cancelCalls, 1);
   assert.equal(verifiedCanceled.replacements.length, 1);
@@ -740,10 +1047,18 @@ test('retry creates a replacement only after a durable cancel request is verifie
     },
   } as any);
 
-  const intent = await cancelPaymentIntentForRetry('pi_retry', 'billing-cancel-operation-1');
+  const intent = await cancelPaymentIntentForRetry(
+    'pi_retry',
+    'billing-cancel-operation-1',
+  );
   assert.equal(intent.status, 'canceled');
   assert.deepEqual(calls, [
-    ['cancel', 'pi_retry', {}, { idempotencyKey: 'billing-cancel-operation-1', timeout: 20_000 }],
+    [
+      'cancel',
+      'pi_retry',
+      {},
+      { idempotencyKey: 'billing-cancel-operation-1', timeout: 20_000 },
+    ],
     ['retrieve', 'pi_retry'],
   ]);
   assert.equal(canCreateRetryReplacement(intent.status), true);
@@ -753,15 +1068,26 @@ test('retry creates a replacement only after a durable cancel request is verifie
 });
 
 test('retry replacement gate remains closed when cancellation retrieval is ambiguous or succeeded', async () => {
-  for (const retrievedStatus of ['requires_payment_method', 'processing', 'succeeded']) {
+  for (const retrievedStatus of [
+    'requires_payment_method',
+    'processing',
+    'succeeded',
+  ]) {
     setStripeForTests({
       paymentIntents: {
         cancel: async () => ({ status: 'canceled' }),
         retrieve: async () => ({ id: 'pi_retry', status: retrievedStatus }),
       },
     } as any);
-    const retrieved = await cancelPaymentIntentForRetry('pi_retry', `cancel-${retrievedStatus}`);
-    assert.equal(canCreateRetryReplacement(retrieved.status), false, `${retrievedStatus} must block replacement`);
+    const retrieved = await cancelPaymentIntentForRetry(
+      'pi_retry',
+      `cancel-${retrievedStatus}`,
+    );
+    assert.equal(
+      canCreateRetryReplacement(retrieved.status),
+      false,
+      `${retrievedStatus} must block replacement`,
+    );
   }
 });
 
@@ -803,7 +1129,12 @@ function orderTransitionDb(currentOrder: Record<string, unknown>) {
 }
 
 test('late reconciliation evidence cannot downgrade an order completed by a winning webhook', async () => {
-  const db = orderTransitionDb({ id: 'order_race', userId: user.id, state: 'completed', version: 8 });
+  const db = orderTransitionDb({
+    id: 'order_race',
+    userId: user.id,
+    state: 'completed',
+    version: 8,
+  });
   const transitioned = await updateBillingOrderCAS(db.database as any, {
     userId: user.id,
     orderId: 'order_race',
@@ -815,7 +1146,12 @@ test('late reconciliation evidence cannot downgrade an order completed by a winn
 });
 
 test('webhook completion persists Stripe identifiers when it wins the create-response race', async () => {
-  const db = orderTransitionDb({ id: 'order_race', userId: user.id, state: 'creating', version: 4 });
+  const db = orderTransitionDb({
+    id: 'order_race',
+    userId: user.id,
+    state: 'creating',
+    version: 4,
+  });
   const transitioned = await updateBillingOrderCAS(db.database as any, {
     userId: user.id,
     orderId: 'order_race',
@@ -833,7 +1169,9 @@ test('webhook completion persists Stripe identifiers when it wins the create-res
 });
 
 test('checkout completion without a durable order is retained for reconciliation', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   installStripe();
   const db = installDb(
     createFakeBillingDb({
@@ -860,9 +1198,14 @@ test('checkout completion without a durable order is retained for reconciliation
     processed: true,
     needsReconciliation: true,
   });
-  assert.deepEqual(await processStripeEvent({ ...event, id: 'evt_duplicate' }), { processed: false });
+  assert.deepEqual(
+    await processStripeEvent({ ...event, id: 'evt_duplicate' }),
+    { processed: false },
+  );
 
-  const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
+  const creditInserts = db.inserts.filter(
+    (call) => call.table === creditLedger,
+  );
   assert.equal(creditInserts.length, 0);
   assert.equal(
     db.inserts.some((call) => call.table === subscriptions),
@@ -871,7 +1214,9 @@ test('checkout completion without a durable order is retained for reconciliation
 });
 
 test('checkout completion cannot infer purchase terms from the current catalog', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   installStripe({
     current_period_end: undefined,
     items: { data: [{ current_period_end: 1_900_000_000 }] },
@@ -898,7 +1243,10 @@ test('checkout completion cannot infer purchase terms from the current catalog',
     db.inserts.some((call) => call.table === subscriptions),
     false,
   );
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+  assert.equal(
+    db.inserts.filter((call) => call.table === creditLedger).length,
+    0,
+  );
 });
 
 test('subscription checkout records and grants only when observed subscription facts exactly match approved terms', async () => {
@@ -952,7 +1300,11 @@ test('subscription checkout records and grants only when observed subscription f
     unit_amount: terms.unitAmount,
     currency: terms.currency,
     billing_scheme: 'per_unit',
-    recurring: { interval: terms.interval, interval_count: terms.intervalCount, usage_type: 'licensed' },
+    recurring: {
+      interval: terms.interval,
+      interval_count: terms.intervalCount,
+      usage_type: 'licensed',
+    },
   };
   const subscription = {
     id: 'sub_123',
@@ -960,13 +1312,25 @@ test('subscription checkout records and grants only when observed subscription f
     status: 'active',
     metadata: { order_id: order.id, user_id: user.id },
     items: {
-      data: [{ quantity: terms.quantity, current_period_start: 100, current_period_end: 1_800_000_000, price: subscriptionPrice }],
+      data: [
+        {
+          quantity: terms.quantity,
+          current_period_start: 100,
+          current_period_end: 1_800_000_000,
+          price: subscriptionPrice,
+        },
+      ],
     },
   };
   const lineItem = {
     id: 'li_checkout',
     quantity: 1,
-    price: { id: terms.priceId, unit_amount: terms.unitAmount, unit_amount_decimal: String(terms.unitAmount), billing_scheme: 'per_unit' },
+    price: {
+      id: terms.priceId,
+      unit_amount: terms.unitAmount,
+      unit_amount_decimal: String(terms.unitAmount),
+      billing_scheme: 'per_unit',
+    },
     currency: terms.currency,
     amount_total: terms.unitAmount,
   };
@@ -976,58 +1340,142 @@ test('subscription checkout records and grants only when observed subscription f
     eventId: string,
     subscriptionItems: Record<string, unknown>[] = [subscriptionItem],
   ) {
-    const db = installDb(createFakeBillingDb({ orders: [order], billingTerms: [terms] }));
-    installStripe({ ...subscription, items: { data: subscriptionItems } }, [lineItem]);
+    const db = installDb(
+      createFakeBillingDb({ orders: [order], billingTerms: [terms] }),
+    );
+    installStripe({ ...subscription, items: { data: subscriptionItems } }, [
+      lineItem,
+    ]);
     stripeObjects.set(session.id, session);
-    stripeObjects.set(subscription.id, { ...subscription, items: { data: subscriptionItems } });
-    const outcome = await processStripeEvent(stripeEvent('checkout.session.completed', session, eventId));
+    stripeObjects.set(subscription.id, {
+      ...subscription,
+      items: { data: subscriptionItems },
+    });
+    const outcome = await processStripeEvent(
+      stripeEvent('checkout.session.completed', session, eventId),
+    );
     return { db, outcome };
   }
 
-  const valid = await runCase(subscription.items.data[0], 'evt_sub_checkout_valid');
+  const valid = await runCase(
+    subscription.items.data[0],
+    'evt_sub_checkout_valid',
+  );
   assert.deepEqual(valid.outcome, { processed: true });
-  assert.equal(valid.db.inserts.filter((call) => call.table === creditLedger).length, 1);
-  assert.equal(valid.db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 1);
+  assert.equal(
+    valid.db.inserts.filter((call) => call.table === creditLedger).length,
+    1,
+  );
+  assert.equal(
+    valid.db.inserts.filter(
+      (call) => call.table === billingSubscriptionPriceVersions,
+    ).length,
+    1,
+  );
 
   const mismatches = [
     { ...subscription.items.data[0], quantity: 2 },
-    { ...subscription.items.data[0], price: { ...subscriptionPrice, id: 'price_other' } },
-    { ...subscription.items.data[0], price: { ...subscriptionPrice, unit_amount: 2000 } },
-    { ...subscription.items.data[0], price: { ...subscriptionPrice, currency: 'eur' } },
-    { ...subscription.items.data[0], price: { ...subscriptionPrice, billing_scheme: 'tiered' } },
-    { ...subscription.items.data[0], price: { ...subscriptionPrice, recurring: { ...subscriptionPrice.recurring, interval: 'year' } } },
-    { ...subscription.items.data[0], price: { ...subscriptionPrice, recurring: { ...subscriptionPrice.recurring, interval_count: 2 } } },
     {
       ...subscription.items.data[0],
-      price: { ...subscriptionPrice, recurring: { ...subscriptionPrice.recurring, usage_type: 'metered' } },
+      price: { ...subscriptionPrice, id: 'price_other' },
+    },
+    {
+      ...subscription.items.data[0],
+      price: { ...subscriptionPrice, unit_amount: 2000 },
+    },
+    {
+      ...subscription.items.data[0],
+      price: { ...subscriptionPrice, currency: 'eur' },
+    },
+    {
+      ...subscription.items.data[0],
+      price: { ...subscriptionPrice, billing_scheme: 'tiered' },
+    },
+    {
+      ...subscription.items.data[0],
+      price: {
+        ...subscriptionPrice,
+        recurring: { ...subscriptionPrice.recurring, interval: 'year' },
+      },
+    },
+    {
+      ...subscription.items.data[0],
+      price: {
+        ...subscriptionPrice,
+        recurring: { ...subscriptionPrice.recurring, interval_count: 2 },
+      },
+    },
+    {
+      ...subscription.items.data[0],
+      price: {
+        ...subscriptionPrice,
+        recurring: { ...subscriptionPrice.recurring, usage_type: 'metered' },
+      },
     },
   ];
   for (const [index, subscriptionItem] of mismatches.entries()) {
-    const result = await runCase(subscriptionItem, `evt_sub_checkout_mismatch_${index}`);
-    assert.deepEqual(result.outcome, { processed: true, needsReconciliation: true });
-    assert.equal(result.db.inserts.filter((call) => call.table === creditLedger).length, 0);
-    assert.equal(result.db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
+    const result = await runCase(
+      subscriptionItem,
+      `evt_sub_checkout_mismatch_${index}`,
+    );
+    assert.deepEqual(result.outcome, {
+      processed: true,
+      needsReconciliation: true,
+    });
     assert.equal(
-      result.db.updates.some((call) => call.table === billingOrders && call.values.state === 'needs_reconciliation'),
+      result.db.inserts.filter((call) => call.table === creditLedger).length,
+      0,
+    );
+    assert.equal(
+      result.db.inserts.filter(
+        (call) => call.table === billingSubscriptionPriceVersions,
+      ).length,
+      0,
+    );
+    assert.equal(
+      result.db.updates.some(
+        (call) =>
+          call.table === billingOrders &&
+          call.values.state === 'needs_reconciliation',
+      ),
       true,
     );
   }
 
-  const extraItemCase = await runCase(subscription.items.data[0], 'evt_sub_checkout_extra_item', [
+  const extraItemCase = await runCase(
     subscription.items.data[0],
-    subscription.items.data[0],
-  ]);
-  assert.deepEqual(extraItemCase.outcome, { processed: true, needsReconciliation: true });
-  assert.equal(extraItemCase.db.inserts.filter((call) => call.table === creditLedger).length, 0);
-  assert.equal(extraItemCase.db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
+    'evt_sub_checkout_extra_item',
+    [subscription.items.data[0], subscription.items.data[0]],
+  );
+  assert.deepEqual(extraItemCase.outcome, {
+    processed: true,
+    needsReconciliation: true,
+  });
   assert.equal(
-    extraItemCase.db.updates.some((call) => call.table === billingOrders && call.values.state === 'needs_reconciliation'),
+    extraItemCase.db.inserts.filter((call) => call.table === creditLedger)
+      .length,
+    0,
+  );
+  assert.equal(
+    extraItemCase.db.inserts.filter(
+      (call) => call.table === billingSubscriptionPriceVersions,
+    ).length,
+    0,
+  );
+  assert.equal(
+    extraItemCase.db.updates.some(
+      (call) =>
+        call.table === billingOrders &&
+        call.values.state === 'needs_reconciliation',
+    ),
     true,
   );
 });
 
 test('invoice.paid without a stored subscription price version requires reconciliation', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   installStripe();
   const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
@@ -1048,7 +1496,9 @@ test('invoice.paid without a stored subscription price version requires reconcil
     { processed: true, needsReconciliation: true },
   );
 
-  const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
+  const creditInserts = db.inserts.filter(
+    (call) => call.table === creditLedger,
+  );
   assert.equal(creditInserts.length, 0);
 });
 
@@ -1058,8 +1508,16 @@ test('invoice renewal rejects proration and tax or credit adjustments before gra
   const unsupportedInvoices = [
     { id: 'in_prorated', lines: { data: [{ proration: true }] } },
     { id: 'in_taxed', total_taxes: [{ amount: 100 }], lines: { data: [{}] } },
-    { id: 'in_discounted', total_discount_amounts: [{ amount: 100 }], lines: { data: [{}] } },
-    { id: 'in_credited', pre_payment_credit_notes_amount: 100, lines: { data: [{}] } },
+    {
+      id: 'in_discounted',
+      total_discount_amounts: [{ amount: 100 }],
+      lines: { data: [{}] },
+    },
+    {
+      id: 'in_credited',
+      pre_payment_credit_notes_amount: 100,
+      lines: { data: [{}] },
+    },
   ];
 
   for (const invoice of unsupportedInvoices) {
@@ -1069,12 +1527,20 @@ test('invoice renewal rejects proration and tax or credit adjustments before gra
       billing_reason: 'subscription_cycle',
     });
     stripeObjects.set(invoice.id, invoice);
-    assert.deepEqual(await processStripeEvent(stripeEvent('invoice.paid', invoice, `evt_${invoice.id}`)), {
-      processed: true,
-      needsReconciliation: true,
-    });
+    assert.deepEqual(
+      await processStripeEvent(
+        stripeEvent('invoice.paid', invoice, `evt_${invoice.id}`),
+      ),
+      {
+        processed: true,
+        needsReconciliation: true,
+      },
+    );
   }
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+  assert.equal(
+    db.inserts.filter((call) => call.table === creditLedger).length,
+    0,
+  );
 });
 
 test('async payment failure compares signed and retrieved evidence and classifies matching recovery states', () => {
@@ -1121,7 +1587,9 @@ test('async payment failure compares signed and retrieved evidence and classifie
 });
 
 test('subscription deletion updates status and plan without revoking paid credits', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   installStripe({ status: 'canceled' });
   const db = installDb(createFakeBillingDb({ selects: [[user]] }));
 
@@ -1139,13 +1607,21 @@ test('subscription deletion updates status and plan without revoking paid credit
     ),
   );
 
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
   assert.equal(
-    db.inserts.some((call) => call.table === subscriptions && call.values.status === 'canceled'),
+    db.inserts.filter((call) => call.table === creditLedger).length,
+    0,
+  );
+  assert.equal(
+    db.inserts.some(
+      (call) =>
+        call.table === subscriptions && call.values.status === 'canceled',
+    ),
     true,
   );
   assert.equal(
-    db.updates.some((call) => call.table === users && call.values.plan === 'free'),
+    db.updates.some(
+      (call) => call.table === users && call.values.plan === 'free',
+    ),
     true,
   );
 });
@@ -1176,12 +1652,16 @@ test('subscription checkout rejects already active subscribers', async () => {
         kind: 'subscription',
         priceId: 'price_pro',
       }),
-    (error) => error instanceof BillingEligibilityError && error.type === 'already_subscribed',
+    (error) =>
+      error instanceof BillingEligibilityError &&
+      error.type === 'already_subscribed',
   );
 });
 
 test('top-up checkout requires an active subscription', async () => {
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500, amount: 500, currency: 'usd' }]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([
+    { priceId: 'price_topup', credits: 500, amount: 500, currency: 'usd' },
+  ]);
   installStripe();
   installDb(
     createFakeBillingDb({
@@ -1202,15 +1682,22 @@ test('top-up checkout requires an active subscription', async () => {
   );
 
   await assert.rejects(
-    () => createBillingCheckout({ user, kind: 'top_up', priceId: 'price_topup' }),
-    (error) => error instanceof BillingEligibilityError && error.type === 'top_up_requires_subscription',
+    () =>
+      createBillingCheckout({ user, kind: 'top_up', priceId: 'price_topup' }),
+    (error) =>
+      error instanceof BillingEligibilityError &&
+      error.type === 'top_up_requires_subscription',
   );
 });
 
 test('payment intent without an order is retained for reconciliation', async () => {
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([
+    { priceId: 'price_topup', credits: 500 },
+  ]);
   installStripe();
-  const db = installDb(createFakeBillingDb({ selects: [[user], [{ status: 'active' }], []] }));
+  const db = installDb(
+    createFakeBillingDb({ selects: [[user], [{ status: 'active' }], []] }),
+  );
 
   assert.deepEqual(
     await processStripeEvent(
@@ -1231,12 +1718,16 @@ test('payment intent without an order is retained for reconciliation', async () 
     { processed: true, needsReconciliation: true },
   );
 
-  const creditInserts = db.inserts.filter((call) => call.table === creditLedger);
+  const creditInserts = db.inserts.filter(
+    (call) => call.table === creditLedger,
+  );
   assert.equal(creditInserts.length, 0);
 });
 
 test('top-up webhook does not grant credits without an active subscription', async () => {
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([
+    { priceId: 'price_topup', credits: 500 },
+  ]);
   installStripe();
   const db = installDb(createFakeBillingDb({ selects: [[user], []] }));
 
@@ -1256,11 +1747,16 @@ test('top-up webhook does not grant credits without an active subscription', asy
     ),
   );
 
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+  assert.equal(
+    db.inserts.filter((call) => call.table === creditLedger).length,
+    0,
+  );
 });
 
 test('distinct Stripe events do not double-grant an already credited payment object', async () => {
-  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([{ priceId: 'price_topup', credits: 500 }]);
+  process.env.STRIPE_TOP_UP_PACKS = JSON.stringify([
+    { priceId: 'price_topup', credits: 500 },
+  ]);
   installStripe();
   const db = installDb(
     createFakeBillingDb({
@@ -1285,10 +1781,18 @@ test('distinct Stripe events do not double-grant an already credited payment obj
     ),
   );
 
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+  assert.equal(
+    db.inserts.filter((call) => call.table === creditLedger).length,
+    0,
+  );
 });
 
-function subscriptionStatusEvent(type: string, status: string, id: string, created: number) {
+function subscriptionStatusEvent(
+  type: string,
+  status: string,
+  id: string,
+  created: number,
+) {
   return stripeEvent(
     type,
     {
@@ -1307,7 +1811,11 @@ function subscriptionStatusEvent(type: string, status: string, id: string, creat
               unit_amount: 1000,
               currency: 'usd',
               billing_scheme: 'per_unit',
-              recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' },
+              recurring: {
+                interval: 'month',
+                interval_count: 1,
+                usage_type: 'licensed',
+              },
             },
           },
         ],
@@ -1319,12 +1827,15 @@ function subscriptionStatusEvent(type: string, status: string, id: string, creat
 }
 
 function lastSubscriptionStatus(db: FakeDb): string | undefined {
-  return db.inserts.filter((call) => call.table === subscriptions).at(-1)?.values.status;
+  return db.inserts.filter((call) => call.table === subscriptions).at(-1)
+    ?.values.status;
 }
 
 test('newer subscription event applies and reactivation restores paid plan', async () => {
   installStripe();
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   const db = installDb(
     createFakeBillingDb({
       selects: [[user], [user]],
@@ -1333,16 +1844,38 @@ test('newer subscription event applies and reactivation restores paid plan', asy
     }),
   );
 
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_1', 100));
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_2', 200));
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.deleted',
+      'canceled',
+      'evt_del_1',
+      100,
+    ),
+  );
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.updated',
+      'active',
+      'evt_upd_2',
+      200,
+    ),
+  );
 
   assert.equal(lastSubscriptionStatus(db), 'active');
-  assert.equal(db.updates.filter((call) => call.table === users).at(-1)?.values.plan, 'pro');
+  assert.equal(
+    db.updates.filter((call) => call.table === users).at(-1)?.values.plan,
+    'pro',
+  );
 });
 
 test('subscription update reconciles changed item quantity and never records an unapproved version', async () => {
   installStripe();
-  const event = subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_quantity_mismatch', 200);
+  const event = subscriptionStatusEvent(
+    'customer.subscription.updated',
+    'active',
+    'evt_quantity_mismatch',
+    200,
+  );
   (event.data.object as any).items.data[0].quantity = 2;
   stripeObjects.set('sub_123', event.data.object);
   const db = installDb(
@@ -1352,9 +1885,19 @@ test('subscription update reconciles changed item quantity and never records an 
     }),
   );
 
-  assert.deepEqual(await processStripeEvent(event), { processed: true, needsReconciliation: true });
-  assert.equal(db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
-  assert.equal(db.inserts.filter((call) => call.table === subscriptions).length, 0);
+  assert.deepEqual(await processStripeEvent(event), {
+    processed: true,
+    needsReconciliation: true,
+  });
+  assert.equal(
+    db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions)
+      .length,
+    0,
+  );
+  assert.equal(
+    db.inserts.filter((call) => call.table === subscriptions).length,
+    0,
+  );
 });
 
 test('subscription update orders approval by approvedAt rather than row creation time', async () => {
@@ -1362,19 +1905,37 @@ test('subscription update orders approval by approvedAt rather than row creation
   const db = installDb(
     createFakeBillingDb({
       selects: [[user]],
-      billingTerms: [approvedTerms({ createdAt: new Date(0), approvedAt: new Date(300_000) })],
+      billingTerms: [
+        approvedTerms({
+          createdAt: new Date(0),
+          approvedAt: new Date(300_000),
+        }),
+      ],
     }),
   );
   assert.deepEqual(
-    await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_not_yet_approved', 200)),
+    await processStripeEvent(
+      subscriptionStatusEvent(
+        'customer.subscription.updated',
+        'active',
+        'evt_not_yet_approved',
+        200,
+      ),
+    ),
     { processed: true, needsReconciliation: true },
   );
-  assert.equal(db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions).length, 0);
+  assert.equal(
+    db.inserts.filter((call) => call.table === billingSubscriptionPriceVersions)
+      .length,
+    0,
+  );
 });
 
 test('update then delete ends canceled and free regardless of tier resolution', async () => {
   installStripe();
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   const db = installDb(
     createFakeBillingDb({
       selects: [[user], [user]],
@@ -1383,16 +1944,35 @@ test('update then delete ends canceled and free regardless of tier resolution', 
     }),
   );
 
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_a', 100));
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_b', 200));
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.updated',
+      'active',
+      'evt_upd_a',
+      100,
+    ),
+  );
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.deleted',
+      'canceled',
+      'evt_del_b',
+      200,
+    ),
+  );
 
   assert.equal(lastSubscriptionStatus(db), 'canceled');
-  assert.equal(db.updates.filter((call) => call.table === users).at(-1)?.values.plan, 'free');
+  assert.equal(
+    db.updates.filter((call) => call.table === users).at(-1)?.values.plan,
+    'free',
+  );
 });
 
 test('older update after newer delete is a stale no-op keeping the user free', async () => {
   installStripe();
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   const db = installDb(
     createFakeBillingDb({
       selects: [[user], [user]],
@@ -1400,19 +1980,37 @@ test('older update after newer delete is a stale no-op keeping the user free', a
     }),
   );
 
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_new', 200));
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_old', 100));
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.deleted',
+      'canceled',
+      'evt_del_new',
+      200,
+    ),
+  );
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.updated',
+      'active',
+      'evt_upd_old',
+      100,
+    ),
+  );
 
   assert.equal(lastSubscriptionStatus(db), 'canceled');
   assert.equal(
-    db.updates.some((call) => call.table === users && call.values.plan === 'pro'),
+    db.updates.some(
+      (call) => call.table === users && call.values.plan === 'pro',
+    ),
     false,
   );
 });
 
 test('exact timestamp tie does not let update resurrect a terminal deleted subscription', async () => {
   installStripe();
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   const db = installDb(
     createFakeBillingDb({
       selects: [[user], [user]],
@@ -1420,19 +2018,37 @@ test('exact timestamp tie does not let update resurrect a terminal deleted subsc
     }),
   );
 
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.deleted', 'canceled', 'evt_del_tie', 500));
-  await processStripeEvent(subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_upd_tie', 500));
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.deleted',
+      'canceled',
+      'evt_del_tie',
+      500,
+    ),
+  );
+  await processStripeEvent(
+    subscriptionStatusEvent(
+      'customer.subscription.updated',
+      'active',
+      'evt_upd_tie',
+      500,
+    ),
+  );
 
   assert.equal(lastSubscriptionStatus(db), 'canceled');
   assert.equal(
-    db.updates.some((call) => call.table === users && call.values.plan === 'pro'),
+    db.updates.some(
+      (call) => call.table === users && call.values.plan === 'pro',
+    ),
     false,
   );
 });
 
 test('duplicate subscription event id is a processed no-op', async () => {
   installStripe();
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   const db = installDb(
     createFakeBillingDb({
       selects: [[user]],
@@ -1441,14 +2057,24 @@ test('duplicate subscription event id is a processed no-op', async () => {
     }),
   );
 
-  const event = subscriptionStatusEvent('customer.subscription.updated', 'active', 'evt_dup', 100);
+  const event = subscriptionStatusEvent(
+    'customer.subscription.updated',
+    'active',
+    'evt_dup',
+    100,
+  );
   assert.deepEqual(await processStripeEvent(event), { processed: true });
   assert.deepEqual(await processStripeEvent(event), { processed: false });
-  assert.equal(db.inserts.filter((call) => call.table === subscriptions).length, 1);
+  assert.equal(
+    db.inserts.filter((call) => call.table === subscriptions).length,
+    1,
+  );
 });
 
 test('handler error rolls back so the event id is not permanently recorded', async () => {
-  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([{ priceId: 'price_pro', tier: 'pro', credits: 1000 }]);
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_pro', tier: 'pro', credits: 1000 },
+  ]);
   const db = installDb(createFakeBillingDb({ selects: [[user]] }));
   const event = stripeEvent(
     'invoice.paid',
@@ -1485,7 +2111,10 @@ test('handler error rolls back so the event id is not permanently recorded', asy
     processed: true,
     needsReconciliation: true,
   });
-  assert.equal(db.inserts.filter((call) => call.table === creditLedger).length, 0);
+  assert.equal(
+    db.inserts.filter((call) => call.table === creditLedger).length,
+    0,
+  );
 });
 
 test('billing POST guard rejects cross-origin cookie-auth posts', async () => {

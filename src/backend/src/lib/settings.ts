@@ -1,5 +1,5 @@
-import { eq, sql, and } from 'drizzle-orm';
-import { db } from '../db/client';
+import { and, eq, sql } from 'drizzle-orm';
+import { type Database, db } from '../db/client';
 import { appSettings, modelProviders, providers } from '../db/schema';
 import { env } from './env';
 
@@ -25,16 +25,33 @@ const FREE_FAST_MODEL_ROUTE_KEY = 'free_fast_model_route';
 const AUDIO_MODEL_ROUTE_KEY = 'audio_model_route';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
-const KNOWN_PROVIDERS = new Set(['opencode_zen', 'openrouter', 'anthropic', 'openai', 'google']);
+const KNOWN_PROVIDERS = new Set([
+  'opencode_zen',
+  'openrouter',
+  'anthropic',
+  'openai',
+  'google',
+]);
 
 export type ModelTier = 'free' | 'pro';
 export type ExtensionAiModelRole = 'smart' | 'fast';
 export type TieredModelRouteSlot = `${ModelTier}-${ExtensionAiModelRole}`;
 type LegacyModelTier = 'free' | 'paid';
-export type ModelRouteSlot = LegacyModelTier | ExtensionAiModelRole | TieredModelRouteSlot;
+export type ModelRouteSlot =
+  | LegacyModelTier
+  | ExtensionAiModelRole
+  | TieredModelRouteSlot;
 export type ModelRoute = { provider: string; modelId: string };
 export type AudioModelRoute = ModelRoute;
-export const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export const THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
 export type ModelRouteConfig = ModelRoute & { thinkingLevel: ThinkingLevel };
@@ -58,7 +75,11 @@ export class ModelNotConfiguredError extends Error {
 }
 
 async function getSetting(key: string): Promise<string | null> {
-  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key)).limit(1);
+  const [row] = await db
+    .select()
+    .from(appSettings)
+    .where(eq(appSettings.key, key))
+    .limit(1);
   return row?.value ?? null;
 }
 
@@ -69,9 +90,15 @@ async function getSetting(key: string): Promise<string | null> {
 export async function getSignupsEnabled(): Promise<boolean> {
   let row: { value: string } | undefined;
   try {
-    [row] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, SIGNUPS_ENABLED_KEY)).limit(1);
+    [row] = await db
+      .select({ value: appSettings.value })
+      .from(appSettings)
+      .where(eq(appSettings.key, SIGNUPS_ENABLED_KEY))
+      .limit(1);
   } catch (error) {
-    throw new SignupsPolicyError('Sign-up policy is unavailable', { cause: error });
+    throw new SignupsPolicyError('Sign-up policy is unavailable', {
+      cause: error,
+    });
   }
 
   if (!row) return env('INVITE_GATE_ENABLED') !== 'true';
@@ -80,11 +107,20 @@ export async function getSignupsEnabled(): Promise<boolean> {
   throw new SignupsPolicyError('Sign-up policy is malformed');
 }
 
-async function setSetting(key: string, value: string) {
-  await db
+type SettingsExecutor = Pick<Database, 'insert' | 'update' | 'delete'>;
+
+async function setSetting(
+  key: string,
+  value: string,
+  executor: SettingsExecutor = db,
+) {
+  await executor
     .insert(appSettings)
     .values({ key, value })
-    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: sql`now()` } });
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value, updatedAt: sql`now()` },
+    });
 }
 
 export function modelRouteToRef(route: ModelRoute): string {
@@ -101,14 +137,23 @@ export function parseModelRouteRef(ref: string): ModelRoute | null {
 }
 
 function parseThinkingLevel(value: unknown): ThinkingLevel {
-  return typeof value === 'string' && THINKING_LEVELS.includes(value as ThinkingLevel) ? (value as ThinkingLevel) : DEFAULT_THINKING_LEVEL;
+  return typeof value === 'string' &&
+    THINKING_LEVELS.includes(value as ThinkingLevel)
+    ? (value as ThinkingLevel)
+    : DEFAULT_THINKING_LEVEL;
 }
 
 function parseStoredModelRoute(value: string | null): ModelRouteConfig | null {
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as Partial<ModelRoute> & { thinkingLevel?: unknown };
-    if (parsed.provider && parsed.modelId && KNOWN_PROVIDERS.has(parsed.provider)) {
+    const parsed = JSON.parse(value) as Partial<ModelRoute> & {
+      thinkingLevel?: unknown;
+    };
+    if (
+      parsed.provider &&
+      parsed.modelId &&
+      KNOWN_PROVIDERS.has(parsed.provider)
+    ) {
       return {
         provider: parsed.provider,
         modelId: parsed.modelId,
@@ -138,9 +183,17 @@ export async function getAudioModelRoute(): Promise<AudioModelRoute> {
   return { provider: stored.provider, modelId: stored.modelId };
 }
 
-export async function setAudioModelRoute(route: AudioModelRoute) {
-  if (!KNOWN_PROVIDERS.has(route.provider)) throw new Error(`Unknown provider: ${route.provider}`);
-  await setSetting(AUDIO_MODEL_ROUTE_KEY, JSON.stringify({ ...route, thinkingLevel: 'off' }));
+export async function setAudioModelRoute(
+  route: AudioModelRoute,
+  executor: SettingsExecutor = db,
+) {
+  if (!KNOWN_PROVIDERS.has(route.provider))
+    throw new Error(`Unknown provider: ${route.provider}`);
+  await setSetting(
+    AUDIO_MODEL_ROUTE_KEY,
+    JSON.stringify({ ...route, thinkingLevel: 'off' }),
+    executor,
+  );
 }
 
 function legacyFallbackRouteSlots(slot: ModelRouteSlot): ModelRouteSlot[] {
@@ -156,16 +209,23 @@ function legacyFallbackRouteSlots(slot: ModelRouteSlot): ModelRouteSlot[] {
 async function getLegacyModelId(tier: LegacyModelTier): Promise<string> {
   const key = tier === 'free' ? FREE_MODEL_KEY : ACTIVE_MODEL_KEY;
   const v = await getSetting(key);
-  if (!v) throw new ModelNotConfiguredError(tier === 'free' ? 'free_model_route' : 'active_model_route');
+  if (!v)
+    throw new ModelNotConfiguredError(
+      tier === 'free' ? 'free_model_route' : 'active_model_route',
+    );
   return v;
 }
 
-export async function getModelRoute(slot: ModelRouteSlot): Promise<ModelRouteConfig> {
+export async function getModelRoute(
+  slot: ModelRouteSlot,
+): Promise<ModelRouteConfig> {
   const stored = parseStoredModelRoute(await getSetting(modelRouteKey(slot)));
   if (stored) return stored;
   const fallbacks = legacyFallbackRouteSlots(slot);
   for (const fallback of fallbacks) {
-    const fallbackStored = parseStoredModelRoute(await getSetting(modelRouteKey(fallback)));
+    const fallbackStored = parseStoredModelRoute(
+      await getSetting(modelRouteKey(fallback)),
+    );
     if (fallbackStored) return fallbackStored;
   }
   const tierFallback = fallbacks.at(-1);
@@ -183,13 +243,21 @@ export async function getModelRoute(slot: ModelRouteSlot): Promise<ModelRouteCon
   };
 }
 
-export async function setModelRoute(slot: ModelRouteSlot, route: ModelRouteConfig) {
-  if (!KNOWN_PROVIDERS.has(route.provider)) throw new Error(`Unknown provider: ${route.provider}`);
-  if (!THINKING_LEVELS.includes(route.thinkingLevel)) throw new Error(`Unknown thinking level: ${route.thinkingLevel}`);
-  await setSetting(modelRouteKey(slot), JSON.stringify(route));
+export async function setModelRoute(
+  slot: ModelRouteSlot,
+  route: ModelRouteConfig,
+  executor: SettingsExecutor = db,
+) {
+  if (!KNOWN_PROVIDERS.has(route.provider))
+    throw new Error(`Unknown provider: ${route.provider}`);
+  if (!THINKING_LEVELS.includes(route.thinkingLevel))
+    throw new Error(`Unknown thinking level: ${route.thinkingLevel}`);
+  await setSetting(modelRouteKey(slot), JSON.stringify(route), executor);
 }
 
-export function parseExtensionAiModelRole(value: string | null | undefined): ExtensionAiModelRole | null {
+export function parseExtensionAiModelRole(
+  value: string | null | undefined,
+): ExtensionAiModelRole | null {
   return value === 'smart' || value === 'fast' ? value : null;
 }
 
@@ -206,7 +274,10 @@ export function parseModelRouteSlot(value: unknown): ModelRouteSlot | null {
     : null;
 }
 
-export function tieredModelRouteSlot(tier: ModelTier, role: ExtensionAiModelRole): TieredModelRouteSlot {
+export function tieredModelRouteSlot(
+  tier: ModelTier,
+  role: ExtensionAiModelRole,
+): TieredModelRouteSlot {
   return `${tier}-${role}`;
 }
 
@@ -220,7 +291,10 @@ export function modelRouteSlotForAccount(
   role: ExtensionAiModelRole,
   forceFree = false,
 ): TieredModelRouteSlot {
-  const tier = !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0 ? 'pro' : 'free';
+  const tier =
+    !forceFree && modelTierForPlan(plan) === 'pro' && paidCredits > 0
+      ? 'pro'
+      : 'free';
   return tieredModelRouteSlot(tier, role);
 }
 
@@ -238,7 +312,12 @@ export function decideAccountModel(input: {
   role: ExtensionAiModelRole;
   forceFree?: boolean;
 }): AccountModelDecision {
-  const routeSlot = modelRouteSlotForAccount(input.plan, input.paidCredits, input.role, input.forceFree);
+  const routeSlot = modelRouteSlotForAccount(
+    input.plan,
+    input.paidCredits,
+    input.role,
+    input.forceFree,
+  );
   const tier = routeSlot.startsWith('pro-') ? 'pro' : 'free';
   return {
     tier,
@@ -271,7 +350,8 @@ export async function getActiveProvider(): Promise<string> {
 }
 
 export async function setActiveProvider(provider: string) {
-  if (!KNOWN_PROVIDERS.has(provider)) throw new Error(`Unknown provider: ${provider}`);
+  if (!KNOWN_PROVIDERS.has(provider))
+    throw new Error(`Unknown provider: ${provider}`);
   await setSetting(ACTIVE_PROVIDER_KEY, provider);
 }
 
@@ -283,56 +363,114 @@ export function listKnownProviders(): string[] {
 
 export type ModelProviderRoute = { providerId: string; modelId: string };
 
-export async function getModelProviderRoutes(slot: ModelRouteSlot, modelId: string): Promise<ModelProviderRoute[]> {
+export async function getModelProviderRoutes(
+  slot: ModelRouteSlot,
+  modelId: string,
+): Promise<ModelProviderRoute[]> {
   for (const candidateSlot of [slot, ...legacyFallbackRouteSlots(slot)]) {
     const rows = await db
-      .select({ providerId: modelProviders.providerId, modelId: modelProviders.providerModelId })
+      .select({
+        providerId: modelProviders.providerId,
+        modelId: modelProviders.providerModelId,
+      })
       .from(modelProviders)
       .innerJoin(providers, eq(modelProviders.providerId, providers.id))
-      .where(and(eq(modelProviders.routeSlot, candidateSlot), eq(modelProviders.modelId, modelId), eq(providers.enabled, 'true')))
+      .where(
+        and(
+          eq(modelProviders.routeSlot, candidateSlot),
+          eq(modelProviders.modelId, modelId),
+          eq(providers.enabled, 'true'),
+        ),
+      )
       .orderBy(modelProviders.priority);
-    if (rows.length > 0) return rows.map((row) => ({ providerId: row.providerId, modelId: row.modelId ?? modelId }));
+    if (rows.length > 0)
+      return rows.map((row) => ({
+        providerId: row.providerId,
+        modelId: row.modelId ?? modelId,
+      }));
   }
   return [];
 }
 
-export async function getModelProviderChain(slot: ModelRouteSlot, modelId: string): Promise<string[]> {
-  return (await getModelProviderRoutes(slot, modelId)).map((route) => route.providerId);
+export async function getModelProviderChain(
+  slot: ModelRouteSlot,
+  modelId: string,
+): Promise<string[]> {
+  return (await getModelProviderRoutes(slot, modelId)).map(
+    (route) => route.providerId,
+  );
 }
 
-export async function getConfiguredModelProviderRoutes(slot: ModelRouteSlot, modelId: string): Promise<ModelProviderRoute[]> {
+export async function getConfiguredModelProviderRoutes(
+  slot: ModelRouteSlot,
+  modelId: string,
+): Promise<ModelProviderRoute[]> {
   const rows = await db
-    .select({ providerId: modelProviders.providerId, modelId: modelProviders.providerModelId })
+    .select({
+      providerId: modelProviders.providerId,
+      modelId: modelProviders.providerModelId,
+    })
     .from(modelProviders)
-    .where(and(eq(modelProviders.routeSlot, slot), eq(modelProviders.modelId, modelId)))
+    .where(
+      and(
+        eq(modelProviders.routeSlot, slot),
+        eq(modelProviders.modelId, modelId),
+      ),
+    )
     .orderBy(modelProviders.priority);
-  return rows.map((row) => ({ providerId: row.providerId, modelId: row.modelId ?? modelId }));
+  return rows.map((row) => ({
+    providerId: row.providerId,
+    modelId: row.modelId ?? modelId,
+  }));
 }
 
-export async function setModelProviderChain(slot: ModelRouteSlot, modelId: string, providerRoutes: Array<string | ModelProviderRoute>) {
-  await db.transaction(async (tx) => {
-    await tx.delete(modelProviders).where(and(eq(modelProviders.routeSlot, slot), eq(modelProviders.modelId, modelId)));
+export async function setModelProviderChain(
+  slot: ModelRouteSlot,
+  modelId: string,
+  providerRoutes: Array<string | ModelProviderRoute>,
+  executor?: SettingsExecutor,
+) {
+  if (!executor) {
+    await db.transaction((tx) =>
+      setModelProviderChain(slot, modelId, providerRoutes, tx),
+    );
+    return;
+  }
+  await executor
+    .delete(modelProviders)
+    .where(
+      and(
+        eq(modelProviders.routeSlot, slot),
+        eq(modelProviders.modelId, modelId),
+      ),
+    );
+  if (providerRoutes.length === 0) return;
 
-    if (providerRoutes.length === 0) return;
+  const values = providerRoutes.map((route, i) => ({
+    routeSlot: slot,
+    modelId,
+    providerId: typeof route === 'string' ? route : route.providerId,
+    providerModelId: typeof route === 'string' ? modelId : route.modelId,
+    priority: i,
+  }));
 
-    const values = providerRoutes.map((route, i) => ({
-      routeSlot: slot,
-      modelId,
-      providerId: typeof route === 'string' ? route : route.providerId,
-      providerModelId: typeof route === 'string' ? modelId : route.modelId,
-      priority: i,
-    }));
-
-    await tx.insert(modelProviders).values(values);
-  });
+  await executor.insert(modelProviders).values(values);
 }
 
 export async function listEnabledProviders() {
-  return db.select().from(providers).where(eq(providers.enabled, 'true')).orderBy(providers.priority);
+  return db
+    .select()
+    .from(providers)
+    .where(eq(providers.enabled, 'true'))
+    .orderBy(providers.priority);
 }
 
 export async function isProviderEnabled(providerId: string): Promise<boolean> {
-  const [provider] = await db.select({ enabled: providers.enabled }).from(providers).where(eq(providers.id, providerId)).limit(1);
+  const [provider] = await db
+    .select({ enabled: providers.enabled })
+    .from(providers)
+    .where(eq(providers.id, providerId))
+    .limit(1);
   return provider?.enabled === 'true';
 }
 
@@ -340,9 +478,14 @@ export async function listAllProviders() {
   return db.select().from(providers).orderBy(providers.priority);
 }
 
-export async function updateProvider(providerId: string, updates: { enabled?: boolean; priority?: number }) {
+export async function updateProvider(
+  providerId: string,
+  updates: { enabled?: boolean; priority?: number },
+  executor: SettingsExecutor = db,
+) {
   const set: Record<string, unknown> = { updatedAt: sql`now()` };
-  if (updates.enabled !== undefined) set.enabled = updates.enabled ? 'true' : 'false';
+  if (updates.enabled !== undefined)
+    set.enabled = updates.enabled ? 'true' : 'false';
   if (updates.priority !== undefined) set.priority = updates.priority;
-  await db.update(providers).set(set).where(eq(providers.id, providerId));
+  await executor.update(providers).set(set).where(eq(providers.id, providerId));
 }
