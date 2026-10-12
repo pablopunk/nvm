@@ -341,7 +341,7 @@ async function runAssertions() {
         provider: 'integration',
         routeSlot: 'catalog-overrun',
         tokens: { inputTokens: 1_000_000, outputTokens: 0 },
-        costRow: { provider: 'integration', modelId: 'catalog-overrun-model', inputUsdPerMtok: 1_000_000, outputUsdPerMtok: 0 },
+        costRow: { provider: 'integration', modelId: 'catalog-overrun-model', inputUsdPerMtok: 1, outputUsdPerMtok: 0 },
         status: 200,
         latencyMs: 1,
       });

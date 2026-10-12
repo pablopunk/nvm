@@ -48,6 +48,7 @@ async function handleRequestDedup(requestId: string, request = makeRequest()) {
 const ctx = {
   user: { id: 'test-user' },
   provider: 'opencode_zen',
+  routeSlot: 'free-smart' as const,
   activeModelId: 'gemini-3-flash',
   costRow: { provider: 'opencode_zen', modelId: 'gemini-3-flash', inputUsdPerMtok: 0, outputUsdPerMtok: 0 },
   kind: 'free' as const,

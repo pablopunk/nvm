@@ -388,10 +388,14 @@ export async function finalizeReservation(input: ReservationFinalization): Promi
     const providerCostUsd = input.providerCostUsd;
     const hasProviderCost = providerCostUsd != null && Number.isFinite(providerCostUsd) && providerCostUsd >= 0;
     const costRow = input.costRow;
-    if (!hasProviderCost && !costRow) throw new Error('Settlement requires a valid cost source');
-    const costUsd = hasProviderCost
-      ? providerCostUsd
-      : computeUsdCost(costRow, input.tokens.inputTokens, input.tokens.outputTokens, input.tokens);
+    let costUsd: number;
+    if (hasProviderCost) {
+      costUsd = providerCostUsd;
+    } else if (costRow) {
+      costUsd = computeUsdCost(costRow, input.tokens.inputTokens, input.tokens.outputTokens, input.tokens);
+    } else {
+      throw new Error('Settlement requires a valid cost source');
+    }
     const calculatedCredits = usdToCredits(costUsd);
     const credits = Math.min(calculatedCredits, reservation.reservedCredits);
     const reservedFree = reservation.reservedFreeCredits ?? (reservation.kind === 'free' ? reservation.reservedCredits : 0);

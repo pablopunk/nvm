@@ -1136,6 +1136,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         {
           user: routing.user,
           provider: result.provider,
+          routeSlot: routing.routeSlot,
           activeModelId: result.modelId,
           costRow: result.costRow,
           kind: routing.kind,

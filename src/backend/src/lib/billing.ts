@@ -792,9 +792,9 @@ export async function createBillingCheckout(input: {
         changes: {
           state: 'failed',
           leaseExpiresAt: null,
-          version: sql`${billingOrders.version} + 1`,
           updatedAt: new Date(),
         },
+        incrementVersion: true,
       });
       throw new BillingPendingError('failed');
     }
@@ -1711,6 +1711,7 @@ async function updateBillingOrderWithUserLock(input: {
   changes: Partial<typeof billingOrders.$inferInsert>;
   expectedVersion?: number;
   expectedGeneration?: number;
+  incrementVersion?: boolean;
 }) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM users WHERE id = ${input.userId} FOR UPDATE`);
@@ -1722,9 +1723,12 @@ async function updateBillingOrderWithUserLock(input: {
       (input.expectedGeneration !== undefined && current.leaseGeneration !== input.expectedGeneration)
     )
       return false;
+    const changes = input.incrementVersion
+      ? { ...input.changes, version: current.version + 1 }
+      : input.changes;
     await tx
       .update(billingOrders)
-      .set(input.changes)
+      .set(changes)
       .where(and(eq(billingOrders.id, input.orderId), eq(billingOrders.version, current.version)));
     return true;
   });
