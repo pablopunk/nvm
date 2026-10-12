@@ -812,7 +812,11 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
     await expect(
       noteWindow.getByText('All notes', { exact: true }),
     ).toBeVisible();
-    await expect(noteWindow.getByText('⌘O', { exact: true })).toBeVisible();
+    const allNotesShortcutLabel =
+      process.platform === 'darwin' ? '⌘O' : 'Command+O';
+    await expect(
+      noteWindow.getByText(allNotesShortcutLabel, { exact: true }),
+    ).toBeVisible();
     await noteWindow.keyboard.press('Meta+O');
     await expect(
       noteWindow.locator('input[placeholder="Find a note"]'),
