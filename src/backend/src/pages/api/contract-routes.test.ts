@@ -221,14 +221,9 @@ function reservationFinalizationSelects(input: {
   free: number;
   paid: number;
 }) {
-  const now = new Date();
-  const admissionMonth = `${now.getUTCFullYear()}-${String(
-    now.getUTCMonth() + 1,
-  ).padStart(2, '0')}`;
   const reservedFreeCredits = input.free > 0 ? 1 : 0;
   const reservedPaidCredits = reservedFreeCredits > 0 ? 0 : 1;
   return [
-    [{ userId: 'user_1', admissionMonth }],
     [{ id: 'user_1' }],
     [
       {
@@ -239,8 +234,6 @@ function reservationFinalizationSelects(input: {
         reservedFreeCredits,
         reservedPaidCredits,
         status: 'pending',
-        admissionMonth,
-        reservedFreeCostMicrocents: 0,
       },
     ],
     [{ free: input.free, paid: input.paid }],
@@ -248,9 +241,8 @@ function reservationFinalizationSelects(input: {
 }
 
 function reservationResizeSelects(input: { free: number; paid: number }) {
-  const [snapshot, user, reservation, ledger] =
-    reservationFinalizationSelects(input);
-  return [snapshot, user, reservation, ledger, [{ free: 0, paid: 0 }]];
+  const [user, reservation, ledger] = reservationFinalizationSelects(input);
+  return [user, reservation, ledger, [{ free: 0, paid: 0 }]];
 }
 
 function authorizedChatRequest(
@@ -462,12 +454,6 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
         [{ value: JSON.stringify({ provider: 'openrouter', modelId: 'audio-model' }) }],
         [{ enabled: 'true' }],
         [{ requestId: 'audio-prepared-key' }],
-        [
-          {
-            userId: 'user_1',
-            admissionMonth: null,
-          },
-        ],
         [{ id: 'user_1' }],
         [
           {
@@ -478,7 +464,6 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
             reservedCredits: 5,
             reservedFreeCredits: 5,
             reservedPaidCredits: 0,
-            admissionMonth: null,
           },
         ],
       ],
@@ -518,7 +503,7 @@ test('tripped unprepared audio POST fails dedup without creating a reservation',
         [{ enabled: 'true' }],
         [{ provider: 'openrouter' }], // tripped breaker
       ],
-      inserts: [[], [{ id: 'dedup-claim' }]],
+      inserts: [[{ id: 'dedup-claim' }], []],
       updates: [[{ id: 'dedup-claim' }]],
     }),
   );
@@ -1841,7 +1826,7 @@ test('proxy releases a committed reservation when request rewriting throws', asy
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const selects = proxySelects({ free: 1000 });
-  selects.splice(8, 2); // Rewriting fails before provider-chain lookup.
+  selects.splice(8, 3); // Rewriting fails before provider and breaker lookups.
   const db = installDb(createFakeDb({ selects }));
 
   await assert.rejects(async () => postChatCompletion(routeContext(authorizedRawChatRequest('{"model":'))), SyntaxError);
