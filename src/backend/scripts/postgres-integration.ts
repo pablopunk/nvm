@@ -570,7 +570,7 @@ async function runAssertions() {
         costRow: {
           provider: 'integration',
           modelId: 'catalog-overrun-model',
-          inputUsdPerMtok: 1_000_000,
+          inputUsdPerMtok: 1,
           outputUsdPerMtok: 0,
         },
         status: 200,

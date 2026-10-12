@@ -271,7 +271,7 @@ export async function lookupModelPricing(provider: string, modelId: string): Pro
   const resolved = await runtimeModel(provider, modelId);
   if (resolved?.source === 'fallback') return null;
   const cost = resolved?.model.cost;
-  if (!resolved || resolved.source === 'fallback' || !hasValidPricing(cost)) return null;
+  if (!resolved || !hasValidPricing(cost)) return null;
   return {
     provider,
     modelId,

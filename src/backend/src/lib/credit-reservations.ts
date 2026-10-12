@@ -811,16 +811,19 @@ export async function finalizeReservation(
       Number.isFinite(providerCostUsd) &&
       providerCostUsd >= 0;
     const costRow = input.costRow;
-    if (!hasProviderCost && !costRow)
+    let costUsd: number;
+    if (hasProviderCost && providerCostUsd != null) {
+      costUsd = providerCostUsd;
+    } else if (costRow) {
+      costUsd = computeUsdCost(
+        costRow,
+        input.tokens.inputTokens,
+        input.tokens.outputTokens,
+        input.tokens,
+      );
+    } else {
       throw new Error('Settlement requires a valid cost source');
-    const costUsd = hasProviderCost
-      ? providerCostUsd
-      : computeUsdCost(
-          costRow,
-          input.tokens.inputTokens,
-          input.tokens.outputTokens,
-          input.tokens,
-        );
+    }
     const calculatedCredits = usdToCredits(costUsd);
     const credits = Math.min(calculatedCredits, reservation.reservedCredits);
     const reservedFree =

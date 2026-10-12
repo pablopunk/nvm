@@ -27,9 +27,9 @@ const [
   import('./checkout-status'),
   import('./checkout'),
   import('./checkout-retry'),
-  import('../../../../db/client'),
-  import('../../../../lib/workos'),
-  import('../../../../db/schema'),
+  import('../../../db/client'),
+  import('../../../lib/workos'),
+  import('../../../db/schema'),
   import('../../../lib/billing'),
 ]);
 const workos = workosClient();
