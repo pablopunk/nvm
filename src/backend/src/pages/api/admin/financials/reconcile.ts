@@ -148,8 +148,9 @@ export const POST: APIRoute = async ({ request }) => {
       { status: parsed.data.jobId ? 404 : 409 },
     );
   }
-  if (begun.status === 'complete') return Response.json(jobResponse(begun.job));
-  if (begun.status === 'processing' || begun.status === 'deferred') {
+  if (begun.status !== 'claimed') {
+    if (begun.status === 'complete')
+      return Response.json(jobResponse(begun.job));
     return Response.json(
       {
         ...jobResponse(begun.job),

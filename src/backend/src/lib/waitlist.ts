@@ -50,10 +50,16 @@ export async function listWaitlist(status?: string) {
 
 type WaitlistExecutor = Pick<Database, 'select' | 'insert' | 'update'>;
 
+type CreateInviteResult = {
+  invite: typeof invites.$inferSelect;
+  token: string | null;
+  existing: boolean;
+};
+
 export async function createInvite(
   input: { email: string; waitlistEntryId?: string; createdBy?: string },
   executor?: WaitlistExecutor,
-) {
+): Promise<CreateInviteResult> {
   if (!executor) return db.transaction((tx) => createInvite(input, tx));
   const email = canonicalEmail(input.email);
   const existing = await executor

@@ -835,7 +835,6 @@ test('retry persists a replacement only after Stripe confirms cancellation; succ
     stripeCustomerId: 'cus_123',
     intentHash: 'request-hash',
     kind: 'top_up',
-    priceTermsId: 'term-1',
     priceId: 'price_pack',
     tier: null,
     credits: 500,

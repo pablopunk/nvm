@@ -722,7 +722,7 @@ test('GET status retains the active-order fallback when no attempt key is suppli
     sessionUrl: 'https://checkout.stripe.test/cs_active',
   };
   installDb(
-    new Map([
+    new Map<unknown, unknown[][]>([
       [billingOrders, [[activeOrder]]],
       [
         billingPriceTerms,
@@ -760,7 +760,7 @@ test('GET status withholds the resume URL for terms lacking owner approval', asy
     sessionUrl: 'https://checkout.stripe.test/cs_legacy',
   };
   installDb(
-    new Map([
+    new Map<unknown, unknown[][]>([
       [billingOrders, [[activeOrder]]],
       [
         billingPriceTerms,

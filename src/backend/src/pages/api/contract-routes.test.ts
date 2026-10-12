@@ -112,7 +112,7 @@ function createFakeDb(
     insertedValues,
     updatedValues,
     select: () =>
-      createChain((table) => {
+      createChain((table: unknown) => {
         if (table === freeSpendCapConfig)
           return [
             {
