@@ -756,6 +756,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
         ),
       )
       .toBe(false);
+    await noteWindow.emulateMedia({ colorScheme: 'light' });
     await expect
       .poll(() =>
         noteWindow.evaluate(
@@ -783,6 +784,7 @@ test('Floating Notes runs Cmd+O from and after dismissing its action panel', asy
         ),
       )
       .toBe(true);
+    await noteWindow.emulateMedia({ colorScheme: 'dark' });
     await expect
       .poll(() =>
         noteWindow.evaluate(
