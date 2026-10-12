@@ -1,7 +1,12 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
-import { recordAudit } from '../../../lib/audit';
 import { requireAdmin } from '../../../lib/admin';
+import {
+  adminMutationKeyFromRequest,
+  adminMutationResponse,
+  executeAdminMutation,
+} from '../../../lib/admin-mutations';
+import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
   getAudioModelRoute,
@@ -57,13 +62,33 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response('Model does not support audio transcription', {
       status: 400,
     });
-  await setAudioModelRoute(route);
-  await recordAudit({
+  const idempotencyKey = adminMutationKeyFromRequest(request);
+  if (!idempotencyKey) {
+    return Response.json(
+      {
+        error: {
+          type: 'idempotency_key_required',
+          message: 'Provide a UUID Idempotency-Key.',
+        },
+      },
+      { status: 400 },
+    );
+  }
+  const result = await executeAdminMutation({
     actorUserId: actor.id,
-    action: 'model.changed',
-    targetType: 'audio_model',
-    targetId: `${route.provider}/${route.modelId}`,
-    meta: { slot: 'audio', provider: route.provider },
+    idempotencyKey,
+    payload: route,
+    execute: async (tx) => {
+      await setAudioModelRoute(route, tx);
+      await recordAuditStrict(tx, {
+        actorUserId: actor.id,
+        action: 'model.changed',
+        targetType: 'audio_model',
+        targetId: `${route.provider}/${route.modelId}`,
+        meta: { slot: 'audio', provider: route.provider, idempotencyKey },
+      });
+      return { body: { ok: true, route } };
+    },
   });
-  return Response.json({ ok: true });
+  return adminMutationResponse(result);
 };

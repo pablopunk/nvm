@@ -1,45 +1,64 @@
 import { createHash, randomUUID } from 'node:crypto';
+import * as Sentry from '@sentry/astro';
 import { waitUntil } from '@vercel/functions';
 import { and, eq, sql } from 'drizzle-orm';
+import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
 import { db } from '../db/client';
 import { creditReservations, requestDedup } from '../db/schema';
 import {
-  getModelRoute,
-  getModelProviderRoutes,
-  decideAccountModel,
-  ModelNotConfiguredError,
-  parseExtensionAiModelRole,
-  type ExtensionAiModelRole,
-  type ModelRouteSlot,
-  type ThinkingLevel,
-} from './settings';
-import { ensureMonthlyFreeCredits, getBalances } from './users';
-import { lookupModelCost, computeUsdCost, usdToCredits, type ModelCost } from './cost';
-import { lookupModelDescriptor } from './pricing';
-import { getUpstreamConfig, selectApiForModel, providerSupportsFormat, UpstreamConfigError } from './upstream';
-import { extractPatFromHeaders, getUserFromHeaders, type PatHeaderName } from './tokens';
-import { rateLimitChat, tooManyRequests } from './ratelimit';
+  backendKillSwitchEnabled,
+  backendVersion,
+  type DesktopClient,
+  desktopClientFromRequest,
+  killSwitchResponse,
+} from './compatibility';
 import {
+  computeUsdCost,
+  lookupModelCost,
+  type ModelCost,
+  usdToCredits,
+} from './cost';
+import {
+  finalizeReservation,
+  reserveCredits,
+  resizeReservation,
+} from './credit-reservations';
+import { captureStreamFailure } from './diagnostics';
+import { freeSpendCapErrorBody } from './free-spend-cap';
+import {
+  containsUnsupportedMultimodalPayload,
   estimateInputTokensFromBody,
   estimateInputTokensFromValue,
-  containsUnsupportedMultimodalPayload,
   estimateRequestCredits,
   MAX_INPUT_TOKENS,
   requestedMaxOutputTokens,
 } from './limits';
-import { finalizeReservation, reserveCredits, resizeReservation } from './credit-reservations';
-import {
-  backendKillSwitchEnabled,
-  backendVersion,
-  desktopClientFromRequest,
-  killSwitchResponse,
-  type DesktopClient,
-} from './compatibility';
 import { log } from './log';
-import * as Sentry from '@sentry/astro';
-import { captureStreamFailure } from './diagnostics';
-import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
+import { lookupModelDescriptor } from './pricing';
+import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { healthyRouteCandidates } from './route-breakers';
+import {
+  decideAccountModel,
+  type ExtensionAiModelRole,
+  getModelProviderRoutes,
+  getModelRoute,
+  ModelNotConfiguredError,
+  type ModelRouteSlot,
+  parseExtensionAiModelRole,
+  type ThinkingLevel,
+} from './settings';
+import {
+  extractPatFromHeaders,
+  getUserFromHeaders,
+  type PatHeaderName,
+} from './tokens';
+import {
+  getUpstreamConfig,
+  providerSupportsFormat,
+  selectApiForModel,
+  UpstreamConfigError,
+} from './upstream';
+import { ensureMonthlyFreeCredits, getBalances } from './users';
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
@@ -57,14 +76,21 @@ export type ProxyConfig = {
   authHeaderName: PatHeaderName;
   upstreamAuthHeaderName: 'authorization' | 'x-api-key' | 'x-goog-api-key';
   formatUpstreamAuthValue: (apiKey: string) => string;
-  buildUpstreamUrl: (cfg: { upstreamBaseUrl: string; activeModelId: string }) => string;
+  buildUpstreamUrl: (cfg: {
+    upstreamBaseUrl: string;
+    activeModelId: string;
+  }) => string;
   rewriteRequestBody?: (
     bodyText: string,
     routing: Pick<ModelRouting, 'activeModelId' | 'provider' | 'thinkingLevel'>,
     maxOutputTokens: number,
   ) => string;
   parseUsageFromJson: (json: any) => UsageTokens | null;
-  parseUsageFromStreamChunk: (chunk: string, acc: StreamUsageAccumulator, finalize?: boolean) => void;
+  parseUsageFromStreamChunk: (
+    chunk: string,
+    acc: StreamUsageAccumulator,
+    finalize?: boolean,
+  ) => void;
   idempotencyKey?: string;
 };
 
@@ -83,7 +109,11 @@ export type StreamUsageAccumulator = {
 
 const OUTPUT_CONTEXT_SAFETY_TOKENS = 4_096;
 
-export function completeStreamLines(chunkText: string, acc: StreamUsageAccumulator, finalize = false): string[] {
+export function completeStreamLines(
+  chunkText: string,
+  acc: StreamUsageAccumulator,
+  finalize = false,
+): string[] {
   const text = `${acc.pendingText ?? ''}${chunkText}`;
   if (finalize) {
     acc.pendingText = '';
@@ -94,7 +124,10 @@ export function completeStreamLines(chunkText: string, acc: StreamUsageAccumulat
   return lines;
 }
 
-export function parseStreamUsageJson(payload: string, acc: StreamUsageAccumulator): any | null {
+export function parseStreamUsageJson(
+  payload: string,
+  acc: StreamUsageAccumulator,
+): any | null {
   try {
     return JSON.parse(payload);
   } catch (error) {
@@ -125,8 +158,17 @@ export type DedupClaim = {
   requestHash: string;
 };
 
-export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, status: number): UsageTokens {
-  if (status >= 200 && status < 300 && ctx.estimatedInputTokens > 0 && (tokens.inputTokens === 0 || tokens.outputTokens === 0)) {
+export function resolveBillableTokens(
+  ctx: BillContext,
+  tokens: UsageTokens,
+  status: number,
+): UsageTokens {
+  if (
+    status >= 200 &&
+    status < 300 &&
+    ctx.estimatedInputTokens > 0 &&
+    (tokens.inputTokens === 0 || tokens.outputTokens === 0)
+  ) {
     log.error('usage_missing_on_success', {
       request_id: ctx.requestId,
       provider: ctx.provider,
@@ -135,7 +177,8 @@ export function resolveBillableTokens(ctx: BillContext, tokens: UsageTokens, sta
     });
     return {
       ...tokens,
-      inputTokens: tokens.inputTokens > 0 ? tokens.inputTokens : ctx.estimatedInputTokens,
+      inputTokens:
+        tokens.inputTokens > 0 ? tokens.inputTokens : ctx.estimatedInputTokens,
       outputTokens: tokens.outputTokens > 0 ? tokens.outputTokens : 1,
     };
   }
@@ -149,7 +192,10 @@ type DedupTerminal = {
   upstreamStatus?: number;
 };
 
-function reservationDedupFinalization(ctx: BillContext, terminal?: DedupTerminal) {
+function reservationDedupFinalization(
+  ctx: BillContext,
+  terminal?: DedupTerminal,
+) {
   if (!(terminal && ctx.dedupIdempotencyKey && ctx.dedupRequestHash)) {
     return undefined;
   }
@@ -161,7 +207,10 @@ function reservationDedupFinalization(ctx: BillContext, terminal?: DedupTerminal
   };
 }
 
-function claimDedupFinalization(claim: DedupClaim | undefined, terminal: DedupTerminal) {
+function claimDedupFinalization(
+  claim: DedupClaim | undefined,
+  terminal: DedupTerminal,
+) {
   if (!claim) return undefined;
   return {
     userId: claim.userId,
@@ -181,7 +230,13 @@ function billContextDedupClaim(ctx: BillContext): DedupClaim | undefined {
   };
 }
 
-async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number, latencyMs: number, dedupTerminal?: DedupTerminal) {
+async function recordUsage(
+  ctx: BillContext,
+  tokens: UsageTokens,
+  status: number,
+  latencyMs: number,
+  dedupTerminal?: DedupTerminal,
+) {
   const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
   const providerCostUsd =
     ctx.provider === 'openrouter' &&
@@ -190,9 +245,19 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
     tokens.providerCostUsd >= 0
       ? tokens.providerCostUsd
       : undefined;
-  const costUsd = providerCostUsd ?? computeUsdCost(ctx.costRow, tokens.inputTokens, tokens.outputTokens, tokens);
+  const costUsd =
+    providerCostUsd ??
+    computeUsdCost(
+      ctx.costRow,
+      tokens.inputTokens,
+      tokens.outputTokens,
+      tokens,
+    );
   const calculatedCredits = billable ? usdToCredits(costUsd) : 0;
-  const credits = ctx.reservationCredits == null ? calculatedCredits : Math.min(calculatedCredits, ctx.reservationCredits);
+  const credits =
+    ctx.reservationCredits == null
+      ? calculatedCredits
+      : Math.min(calculatedCredits, ctx.reservationCredits);
   await finalizeReservation(
     billable
       ? {
@@ -204,7 +269,8 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
           tokens,
           costRow: ctx.costRow,
           providerCostUsd,
-          costSource: providerCostUsd == null ? 'catalog_estimate' : 'provider_reported',
+          costSource:
+            providerCostUsd == null ? 'catalog_estimate' : 'provider_reported',
           status,
           latencyMs,
           dedup: reservationDedupFinalization(ctx, dedupTerminal),
@@ -241,7 +307,11 @@ async function recordUsage(ctx: BillContext, tokens: UsageTokens, status: number
   });
 }
 
-async function releaseReservationAfterError(requestId: string, dedupClaim: DedupClaim | undefined, error: unknown) {
+async function releaseReservationAfterError(
+  requestId: string,
+  dedupClaim: DedupClaim | undefined,
+  error: unknown,
+) {
   try {
     await finalizeReservation({
       requestId,
@@ -249,7 +319,11 @@ async function releaseReservationAfterError(requestId: string, dedupClaim: Dedup
       dedup: claimDedupFinalization(dedupClaim, { status: 'failed' }),
     });
   } catch (releaseError) {
-    log.error('reservation_error_release_failed', { request_id: requestId, error, release_error: releaseError });
+    log.error('reservation_error_release_failed', {
+      request_id: requestId,
+      error,
+      release_error: releaseError,
+    });
   }
 }
 
@@ -290,7 +364,12 @@ type ResolvedRouting = {
 
 type ModelRouting = Pick<
   ResolvedRouting,
-  'provider' | 'activeModelId' | 'thinkingLevel' | 'costRow' | 'upstreamBaseUrl' | 'upstreamApiKey'
+  | 'provider'
+  | 'activeModelId'
+  | 'thinkingLevel'
+  | 'costRow'
+  | 'upstreamBaseUrl'
+  | 'upstreamApiKey'
 >;
 
 export function decideProxyModel(input: {
@@ -309,7 +388,9 @@ export function decideProxyModel(input: {
   });
 }
 
-async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | ModelRouting> {
+async function resolveModelRouting(
+  slot: ModelRouteSlot,
+): Promise<Response | ModelRouting> {
   let provider: string;
   let activeModelId: string;
   let thinkingLevel: ThinkingLevel;
@@ -321,7 +402,12 @@ async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | Mod
   } catch (err) {
     if (err instanceof ModelNotConfiguredError) {
       return Response.json(
-        { error: { type: 'model_not_configured', message: 'No active model configured. Admin must set one.' } },
+        {
+          error: {
+            type: 'model_not_configured',
+            message: 'No active model configured. Admin must set one.',
+          },
+        },
         { status: 503 },
       );
     }
@@ -331,7 +417,15 @@ async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | Mod
   const costRow = await lookupModelCost(provider, activeModelId);
   if (!costRow) {
     log.error('pricing_unavailable', { provider, model: activeModelId });
-    return Response.json({ error: { type: 'pricing_unavailable', message: 'No pricing configured for active model' } }, { status: 503 });
+    return Response.json(
+      {
+        error: {
+          type: 'pricing_unavailable',
+          message: 'No pricing configured for active model',
+        },
+      },
+      { status: 503 },
+    );
   }
 
   try {
@@ -346,7 +440,10 @@ async function resolveModelRouting(slot: ModelRouteSlot): Promise<Response | Mod
     };
   } catch (err) {
     if (err instanceof UpstreamConfigError) {
-      return Response.json({ error: { type: 'model_not_configured', message: err.message } }, { status: 503 });
+      return Response.json(
+        { error: { type: 'model_not_configured', message: err.message } },
+        { status: 503 },
+      );
     }
     throw err;
   }
@@ -379,7 +476,10 @@ function serializedByteLength(value: unknown) {
 }
 
 function aiRequestShape(value: unknown) {
-  const body = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const body =
+    value && typeof value === 'object'
+      ? (value as Record<string, unknown>)
+      : {};
   const tools = Array.isArray(body.tools) ? body.tools : [];
   return {
     message_bytes: serializedByteLength(body.messages ?? body.contents),
@@ -420,13 +520,19 @@ function logPromptTooLargeEvent(
           output_context_safety_tokens: OUTPUT_CONTEXT_SAFETY_TOKENS,
         }
       : {}),
-    ...(details.requestedOutputTokens !== undefined ? { requested_output_tokens: details.requestedOutputTokens } : {}),
-    ...(details.maxOutputTokens !== undefined ? { max_output_tokens: details.maxOutputTokens } : {}),
+    ...(details.requestedOutputTokens !== undefined
+      ? { requested_output_tokens: details.requestedOutputTokens }
+      : {}),
+    ...(details.maxOutputTokens !== undefined
+      ? { max_output_tokens: details.maxOutputTokens }
+      : {}),
   });
 }
 
 export function aiRequestHash(request: Request, body: Uint8Array) {
-  const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ?? 'smart';
+  const requestedModel =
+    parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ??
+    'smart';
   const modelTier = semanticHeaderValue(request, 'x-nevermind-ai-model-tier');
   const creditKind = semanticHeaderValue(request, 'x-nevermind-ai-credit-kind');
   const identity = {
@@ -434,10 +540,18 @@ export function aiRequestHash(request: Request, body: Uint8Array) {
     route: normalizedRequestRoute(request),
     requestedModel,
     modelTier: modelTier === 'free' || modelTier === 'pro' ? modelTier : '',
-    creditKind: creditKind === 'free' || creditKind === 'paid' ? creditKind : '',
-    headers: REQUEST_IDENTITY_HEADERS.map((name) => [name, semanticHeaderValue(request, name)]),
+    creditKind:
+      creditKind === 'free' || creditKind === 'paid' ? creditKind : '',
+    headers: REQUEST_IDENTITY_HEADERS.map((name) => [
+      name,
+      semanticHeaderValue(request, name),
+    ]),
   };
-  return createHash('sha256').update(JSON.stringify(identity)).update('\0').update(body).digest('hex');
+  return createHash('sha256')
+    .update(JSON.stringify(identity))
+    .update('\0')
+    .update(body)
+    .digest('hex');
 }
 
 export async function handleDedup(
@@ -463,12 +577,25 @@ export async function handleDedup(
   const [existing] = await db
     .select()
     .from(requestDedup)
-    .where(and(eq(requestDedup.userId, userId), eq(requestDedup.idempotencyKey, idempotencyKey)))
+    .where(
+      and(
+        eq(requestDedup.userId, userId),
+        eq(requestDedup.idempotencyKey, idempotencyKey),
+      ),
+    )
     .limit(1);
 
   if (!existing) {
     return withRequestId(
-      Response.json({ error: { type: 'idempotency_conflict', message: 'Idempotency claim is unavailable' } }, { status: 409 }),
+      Response.json(
+        {
+          error: {
+            type: 'idempotency_conflict',
+            message: 'Idempotency claim is unavailable',
+          },
+        },
+        { status: 409 },
+      ),
       requestId,
     );
   }
@@ -476,7 +603,12 @@ export async function handleDedup(
   if (existing.requestHash !== requestHash) {
     return withRequestId(
       Response.json(
-        { error: { type: 'idempotency_conflict', message: 'Idempotency key was used for a different request' } },
+        {
+          error: {
+            type: 'idempotency_conflict',
+            message: 'Idempotency key was used for a different request',
+          },
+        },
         { status: 409 },
       ),
       requestId,
@@ -488,7 +620,15 @@ export async function handleDedup(
       return replayDedupResponse(existing, requestId);
     }
     return withRequestId(
-      Response.json({ error: { type: 'idempotency_conflict', message: 'Request already processed' } }, { status: 409 }),
+      Response.json(
+        {
+          error: {
+            type: 'idempotency_conflict',
+            message: 'Request already processed',
+          },
+        },
+        { status: 409 },
+      ),
       requestId,
     );
   }
@@ -509,7 +649,15 @@ export async function handleDedup(
       if (reservation?.status === 'pending') {
         if (new Date(reservation.expiresAt).getTime() > Date.now()) {
           return withRequestId(
-            Response.json({ error: { type: 'idempotency_conflict', message: 'Request reservation is still active' } }, { status: 409 }),
+            Response.json(
+              {
+                error: {
+                  type: 'idempotency_conflict',
+                  message: 'Request reservation is still active',
+                },
+              },
+              { status: 409 },
+            ),
             requestId,
           );
         }
@@ -553,14 +701,30 @@ export async function handleDedup(
         .returning();
       if (!reclaimed) {
         return withRequestId(
-          Response.json({ error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } }, { status: 409 }),
+          Response.json(
+            {
+              error: {
+                type: 'idempotency_conflict',
+                message: 'Request already reclaimed',
+              },
+            },
+            { status: 409 },
+          ),
           requestId,
         );
       }
       return undefined;
     }
     return withRequestId(
-      Response.json({ error: { type: 'idempotency_conflict', message: 'Request already in progress' } }, { status: 409 }),
+      Response.json(
+        {
+          error: {
+            type: 'idempotency_conflict',
+            message: 'Request already in progress',
+          },
+        },
+        { status: 409 },
+      ),
       requestId,
     );
   }
@@ -587,15 +751,31 @@ export async function handleDedup(
     .returning({ id: requestDedup.id });
   if (reclaimed) return undefined;
   return withRequestId(
-    Response.json({ error: { type: 'idempotency_conflict', message: 'Request already reclaimed' } }, { status: 409 }),
+    Response.json(
+      {
+        error: {
+          type: 'idempotency_conflict',
+          message: 'Request already reclaimed',
+        },
+      },
+      { status: 409 },
+    ),
     requestId,
   );
 }
 
-function replayDedupResponse(existing: typeof requestDedup.$inferSelect, requestId: string): Response {
+function replayDedupResponse(
+  existing: typeof requestDedup.$inferSelect,
+  requestId: string,
+): Response {
   const headers = new Headers();
-  if (existing.responseHeaders && typeof existing.responseHeaders === 'object') {
-    for (const [key, value] of Object.entries(existing.responseHeaders as Record<string, unknown>)) {
+  if (
+    existing.responseHeaders &&
+    typeof existing.responseHeaders === 'object'
+  ) {
+    for (const [key, value] of Object.entries(
+      existing.responseHeaders as Record<string, unknown>,
+    )) {
       headers.set(key, String(value));
     }
   }
@@ -607,7 +787,10 @@ function replayDedupResponse(existing: typeof requestDedup.$inferSelect, request
   });
 }
 
-async function resolveRouting(request: Request, headerName: PatHeaderName): Promise<Response | ResolvedRouting> {
+async function resolveRouting(
+  request: Request,
+  headerName: PatHeaderName,
+): Promise<Response | ResolvedRouting> {
   if (!extractPatFromHeaders(request, headerName)) {
     return new Response('Unauthorized', { status: 401 });
   }
@@ -618,12 +801,20 @@ async function resolveRouting(request: Request, headerName: PatHeaderName): Prom
   const balances = await getBalances(user.id);
   if (balances.total <= 0) {
     return Response.json(
-      { error: { type: 'insufficient_credits', message: 'No credits remaining', dashboard_url: DASHBOARD_URL } },
+      {
+        error: {
+          type: 'insufficient_credits',
+          message: 'No credits remaining',
+          dashboard_url: DASHBOARD_URL,
+        },
+      },
       { status: 402 },
     );
   }
 
-  const requestedModel = parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ?? 'smart';
+  const requestedModel =
+    parseExtensionAiModelRole(request.headers.get('x-nevermind-ai-model')) ??
+    'smart';
   const decision = decideProxyModel({
     plan: user.plan,
     paidCredits: balances.paid,
@@ -688,7 +879,9 @@ function buildForwardHeaders(
 
 function isStreamingContentType(contentType: string | null): boolean {
   if (!contentType) return false;
-  return contentType.includes('text/event-stream') || contentType.includes('stream');
+  return (
+    contentType.includes('text/event-stream') || contentType.includes('stream')
+  );
 }
 
 function withRequestId(res: Response, requestId: string): Response {
@@ -700,7 +893,12 @@ function withRequestId(res: Response, requestId: string): Response {
 function chainExhaustedResponse(requestId: string): Response {
   return withRequestId(
     Response.json(
-      { error: { type: 'upstream_unavailable', message: 'All configured upstream providers are unavailable' } },
+      {
+        error: {
+          type: 'upstream_unavailable',
+          message: 'All configured upstream providers are unavailable',
+        },
+      },
       { status: 503 },
     ),
     requestId,
@@ -718,8 +916,20 @@ async function tryUpstreamProviders(
   requestedOutputTokens: number | undefined,
   requestId: string,
 ): Promise<
-  | { response: Response; provider: string; modelId: string; costRow: ModelCost; reservedCredits: number | undefined }
-  | { failure: Response; provider: string; modelId: string; costRow: ModelCost; status: number }
+  | {
+      response: Response;
+      provider: string;
+      modelId: string;
+      costRow: ModelCost;
+      reservedCredits: number | undefined;
+    }
+  | {
+      failure: Response;
+      provider: string;
+      modelId: string;
+      costRow: ModelCost;
+      status: number;
+    }
 > {
   const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
   const failoverEnabled = !backendKillSwitchEnabled('ai_failover');
@@ -727,29 +937,55 @@ async function tryUpstreamProviders(
   let chainProviders: Array<{ providerId: string; modelId: string }> = [];
   if (failoverEnabled) {
     try {
-      chainProviders = await getModelProviderRoutes(routing.routeSlot, routing.activeModelId);
+      chainProviders = await getModelProviderRoutes(
+        routing.routeSlot,
+        routing.activeModelId,
+      );
     } catch (err) {
-      log.warn('provider_chain_fetch_failed', { request_id: requestId, error: err instanceof Error ? err.message : String(err) });
+      log.warn('provider_chain_fetch_failed', {
+        request_id: requestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
   const configuredProviderChain = [
     { providerId: routing.provider, modelId: routing.activeModelId },
-    ...chainProviders.filter((route) => route.providerId !== routing.provider || route.modelId !== routing.activeModelId),
+    ...chainProviders.filter(
+      (route) =>
+        route.providerId !== routing.provider ||
+        route.modelId !== routing.activeModelId,
+    ),
   ];
-  const providerChain = await healthyRouteCandidates(routing.routeSlot, configuredProviderChain);
+  const providerChain = await healthyRouteCandidates(
+    routing.routeSlot,
+    configuredProviderChain,
+  );
   let lastFailure: { provider: string; modelId: string; costRow: ModelCost } = {
     provider: routing.provider,
     modelId: routing.activeModelId,
     costRow: routing.costRow,
   };
-  let creditFailure: { response: Response; provider: string; modelId: string; costRow: ModelCost } | null = null;
+  let creditFailure: {
+    response: Response;
+    provider: string;
+    modelId: string;
+    costRow: ModelCost;
+  } | null = null;
   let currentReservedCredits = reservedCredits;
 
   for (const [attemptIndex, candidate] of providerChain.entries()) {
     const { providerId, modelId } = candidate;
-    if (!providerSupportsFormat(providerId, apiFormat) || selectApiForModel(providerId, modelId) !== apiFormat) {
-      log.info('upstream_format_skip', { request_id: requestId, provider: providerId, model: modelId, format: apiFormat });
+    if (
+      !providerSupportsFormat(providerId, apiFormat) ||
+      selectApiForModel(providerId, modelId) !== apiFormat
+    ) {
+      log.info('upstream_format_skip', {
+        request_id: requestId,
+        provider: providerId,
+        model: modelId,
+        format: apiFormat,
+      });
       continue;
     }
 
@@ -766,32 +1002,98 @@ async function tryUpstreamProviders(
     }
 
     const costRow =
-      providerId === routing.provider && modelId === routing.activeModelId ? routing.costRow : await lookupModelCost(providerId, modelId);
+      providerId === routing.provider && modelId === routing.activeModelId
+        ? routing.costRow
+        : await lookupModelCost(providerId, modelId);
     if (!costRow) {
-      log.warn('upstream_cost_skip', { request_id: requestId, provider: providerId, model: modelId });
+      log.warn('upstream_cost_skip', {
+        request_id: requestId,
+        provider: providerId,
+        model: modelId,
+      });
       continue;
     }
     lastFailure = { provider: providerId, modelId, costRow };
 
     const descriptor =
-      providerId === routing.provider && modelId === routing.activeModelId ? null : await lookupModelDescriptor(providerId, modelId);
+      providerId === routing.provider && modelId === routing.activeModelId
+        ? null
+        : await lookupModelDescriptor(providerId, modelId);
     const candidateMaxOutputTokens = descriptor
       ? Math.min(
           requestedOutputTokens ?? descriptor.maxTokens,
           descriptor.maxTokens,
-          Math.max(0, descriptor.contextWindow - estimatedInputTokens - OUTPUT_CONTEXT_SAFETY_TOKENS),
+          Math.max(
+            0,
+            descriptor.contextWindow -
+              estimatedInputTokens -
+              OUTPUT_CONTEXT_SAFETY_TOKENS,
+          ),
         )
       : maxOutputTokens;
     if (candidateMaxOutputTokens != null && candidateMaxOutputTokens < 1) {
-      log.warn('upstream_context_skip', { request_id: requestId, provider: providerId, model: modelId });
+      log.warn('upstream_context_skip', {
+        request_id: requestId,
+        provider: providerId,
+        model: modelId,
+      });
       continue;
     }
     const candidateCredits =
-      candidateMaxOutputTokens == null ? undefined : estimateRequestCredits(estimatedInputTokens, candidateMaxOutputTokens, costRow);
-    if (candidateCredits != null && reservedCredits != null && candidateCredits > reservedCredits) {
-      const resized = await resizeReservation(requestId, candidateCredits);
+      candidateMaxOutputTokens == null
+        ? undefined
+        : estimateRequestCredits(
+            estimatedInputTokens,
+            candidateMaxOutputTokens,
+            costRow,
+          );
+    const candidateCostUsd =
+      candidateMaxOutputTokens == null
+        ? undefined
+        : computeUsdCost(
+            costRow,
+            estimatedInputTokens,
+            candidateMaxOutputTokens,
+          );
+    const candidateIsPrimary =
+      providerId === routing.provider && modelId === routing.activeModelId;
+    if (
+      candidateCredits != null &&
+      candidateCostUsd != null &&
+      currentReservedCredits != null &&
+      !candidateIsPrimary
+    ) {
+      const resized = await resizeReservation(
+        requestId,
+        candidateCredits,
+        candidateCostUsd,
+        'catalog_estimate',
+      );
+      if (!resized.ok && resized.reason === 'free_spend_cap_reached') {
+        creditFailure = {
+          response: withRequestId(
+            Response.json(freeSpendCapErrorBody(), { status: 503 }),
+            requestId,
+          ),
+          ...lastFailure,
+        };
+        if (attemptIndex === providerChain.length - 1) {
+          return {
+            failure: creditFailure.response,
+            provider: creditFailure.provider,
+            modelId: creditFailure.modelId,
+            costRow: creditFailure.costRow,
+            status: 503,
+          };
+        }
+        continue;
+      }
       if (!resized.ok && resized.reason === 'insufficient_credits') {
-        log.warn('upstream_credit_skip', { request_id: requestId, provider: providerId, model: modelId });
+        log.warn('upstream_credit_skip', {
+          request_id: requestId,
+          provider: providerId,
+          model: modelId,
+        });
         creditFailure = {
           response: withRequestId(
             Response.json(
@@ -820,7 +1122,8 @@ async function tryUpstreamProviders(
         }
         continue;
       }
-      if (resized.ok) currentReservedCredits = resized.reservation.reservedCredits;
+      if (resized.ok)
+        currentReservedCredits = resized.reservation.reservedCredits;
     }
 
     const candidateRouting: ModelRouting = {
@@ -833,7 +1136,11 @@ async function tryUpstreamProviders(
     };
     const forwardBody =
       cfg.rewriteRequestBody && candidateMaxOutputTokens != null
-        ? cfg.rewriteRequestBody(requestBodyText, candidateRouting, candidateMaxOutputTokens)
+        ? cfg.rewriteRequestBody(
+            requestBodyText,
+            candidateRouting,
+            candidateMaxOutputTokens,
+          )
         : requestBody;
 
     const upstreamUrl = cfg.buildUpstreamUrl({
@@ -868,12 +1175,26 @@ async function tryUpstreamProviders(
     const isLast = attemptIndex === providerChain.length - 1;
 
     if (resp.status >= 500) {
-      log.warn('upstream_5xx', { request_id: requestId, provider: providerId, status: resp.status });
+      log.warn('upstream_5xx', {
+        request_id: requestId,
+        provider: providerId,
+        status: resp.status,
+      });
       if (!isLast) continue;
     }
 
-    log.info('upstream_selected', { request_id: requestId, provider: providerId, status: resp.status });
-    return { response: resp, provider: providerId, modelId, costRow, reservedCredits: currentReservedCredits };
+    log.info('upstream_selected', {
+      request_id: requestId,
+      provider: providerId,
+      status: resp.status,
+    });
+    return {
+      response: resp,
+      provider: providerId,
+      modelId,
+      costRow,
+      reservedCredits: currentReservedCredits,
+    };
   }
 
   if (creditFailure) {
@@ -885,17 +1206,31 @@ async function tryUpstreamProviders(
       status: 402,
     };
   }
-  return { failure: chainExhaustedResponse(requestId), ...lastFailure, status: 503 };
+  return {
+    failure: chainExhaustedResponse(requestId),
+    ...lastFailure,
+    status: 503,
+  };
 }
 
 export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   let requestId: string = randomUUID();
-  if (backendKillSwitchEnabled('ai_proxy')) return killSwitchResponse('ai_proxy', 'AI proxy is temporarily disabled.', requestId);
+  if (backendKillSwitchEnabled('ai_proxy'))
+    return killSwitchResponse(
+      'ai_proxy',
+      'AI proxy is temporarily disabled.',
+      requestId,
+    );
   const startedAt = Date.now();
   const client = desktopClientFromRequest(cfg.request);
   Sentry.getCurrentScope().setTag('request_id', requestId);
-  if (client.version) Sentry.getCurrentScope().setTag('client_version', client.version);
-  if (client.apiVersion) Sentry.getCurrentScope().setTag('client_api_version', String(client.apiVersion));
+  if (client.version)
+    Sentry.getCurrentScope().setTag('client_version', client.version);
+  if (client.apiVersion)
+    Sentry.getCurrentScope().setTag(
+      'client_api_version',
+      String(client.apiVersion),
+    );
   let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
   const routingFinishedAt = Date.now();
@@ -907,7 +1242,8 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   const requestPreparedAt = Date.now();
 
   const idempotencyKey = cfg.idempotencyKey;
-  const dedupEnabled = idempotencyKey && !backendKillSwitchEnabled('idempotency_dedup');
+  const dedupEnabled =
+    idempotencyKey && !backendKillSwitchEnabled('idempotency_dedup');
   const dedupClaim: DedupClaim | undefined = dedupEnabled
     ? {
         userId: routing.user.id,
@@ -917,7 +1253,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       }
     : undefined;
   if (dedupEnabled) {
-    const dedupResult = await handleDedup(idempotencyKey, routing.user.id, requestHash, requestId);
+    const dedupResult = await handleDedup(
+      idempotencyKey,
+      routing.user.id,
+      requestHash,
+      requestId,
+    );
     if (dedupResult instanceof Response) return dedupResult;
   }
   const dedupFinishedAt = Date.now();
@@ -963,7 +1304,8 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
             {
               error: {
                 type: 'unsupported_request_shape',
-                message: 'Multimodal requests are unavailable because this route has no conservative modality-cost bound.',
+                message:
+                  'Multimodal requests are unavailable because this route has no conservative modality-cost bound.',
               },
             },
             { status: 400 },
@@ -971,7 +1313,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           requestId,
         );
       }
-      estimatedInputTokens = bodyIsJson ? estimateInputTokensFromValue(parsedBody) : estimateInputTokensFromBody(requestBodyText);
+      estimatedInputTokens = bodyIsJson
+        ? estimateInputTokensFromValue(parsedBody)
+        : estimateInputTokensFromBody(requestBodyText);
       requestShape = aiRequestShape(parsedBody);
       if (estimatedInputTokens > MAX_INPUT_TOKENS) {
         logPromptTooLargeEvent(cfg.request, requestId, client, {
@@ -983,7 +1327,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         await markDedupFailed(dedupClaim);
         return withRequestId(
           Response.json(
-            { error: { type: 'prompt_too_large', message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens` } },
+            {
+              error: {
+                type: 'prompt_too_large',
+                message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens`,
+              },
+            },
             { status: 413 },
           ),
           requestId,
@@ -992,11 +1341,22 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       requestedOutput = requestedMaxOutputTokens(parsedBody);
       let contextWindowTokens: number | undefined;
       const maxOutputFor = async (candidate: ModelRouting) => {
-        const descriptor = await lookupModelDescriptor(candidate.provider, candidate.activeModelId);
+        const descriptor = await lookupModelDescriptor(
+          candidate.provider,
+          candidate.activeModelId,
+        );
         contextWindowTokens = descriptor?.contextWindow;
         const serverMaximum = descriptor?.maxTokens ?? 32_000;
-        const contextMaximum = descriptor ? descriptor.contextWindow - estimatedInputTokens - OUTPUT_CONTEXT_SAFETY_TOKENS : serverMaximum;
-        return Math.min(requestedOutput ?? serverMaximum, serverMaximum, Math.max(0, contextMaximum));
+        const contextMaximum = descriptor
+          ? descriptor.contextWindow -
+            estimatedInputTokens -
+            OUTPUT_CONTEXT_SAFETY_TOKENS
+          : serverMaximum;
+        return Math.min(
+          requestedOutput ?? serverMaximum,
+          serverMaximum,
+          Math.max(0, contextMaximum),
+        );
       };
       maxOutputTokens = await maxOutputFor(routing);
       if (maxOutputTokens < 1) {
@@ -1011,19 +1371,45 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         });
         await markDedupFailed(dedupClaim);
         return withRequestId(
-          Response.json({ error: { type: 'prompt_too_large', message: 'Prompt leaves no room for model output' } }, { status: 413 }),
+          Response.json(
+            {
+              error: {
+                type: 'prompt_too_large',
+                message: 'Prompt leaves no room for model output',
+              },
+            },
+            { status: 413 },
+          ),
           requestId,
         );
       }
-      estimatedCredits = estimateRequestCredits(estimatedInputTokens, maxOutputTokens, routing.costRow);
+      estimatedCredits = estimateRequestCredits(
+        estimatedInputTokens,
+        maxOutputTokens,
+        routing.costRow,
+      );
+      const estimatedProviderCostUsd = computeUsdCost(
+        routing.costRow,
+        estimatedInputTokens,
+        maxOutputTokens,
+      );
       let reservation = await reserveCredits({
         requestId,
         userId: routing.user.id,
         kind: routing.kind,
         credits: estimatedCredits,
+        estimatedProviderCostUsd,
+        estimateCostSource: 'catalog_estimate',
       });
-      if (!reservation.ok && reservation.reason === 'insufficient_credits' && routing.tier === 'pro') {
-        const requestedModel: ExtensionAiModelRole = parseExtensionAiModelRole(cfg.request.headers.get('x-nevermind-ai-model')) ?? 'smart';
+      if (
+        !reservation.ok &&
+        reservation.reason === 'insufficient_credits' &&
+        routing.tier === 'pro'
+      ) {
+        const requestedModel: ExtensionAiModelRole =
+          parseExtensionAiModelRole(
+            cfg.request.headers.get('x-nevermind-ai-model'),
+          ) ?? 'smart';
         const freeDecision = decideAccountModel({
           plan: routing.user.plan,
           paidCredits: 0,
@@ -1037,16 +1423,27 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           return withRequestId(freeRouting, requestId);
         }
         if (
-          selectApiForModel(freeRouting.provider, freeRouting.activeModelId) === selectApiForModel(routing.provider, routing.activeModelId)
+          selectApiForModel(freeRouting.provider, freeRouting.activeModelId) ===
+          selectApiForModel(routing.provider, routing.activeModelId)
         ) {
           const freeMaxOutputTokens = await maxOutputFor(freeRouting);
           if (freeMaxOutputTokens > 0) {
-            const freeEstimatedCredits = estimateRequestCredits(estimatedInputTokens, freeMaxOutputTokens, freeRouting.costRow);
+            const freeEstimatedCredits = estimateRequestCredits(
+              estimatedInputTokens,
+              freeMaxOutputTokens,
+              freeRouting.costRow,
+            );
             const freeReservation = await reserveCredits({
               requestId,
               userId: routing.user.id,
               kind: 'free',
               credits: freeEstimatedCredits,
+              estimatedProviderCostUsd: computeUsdCost(
+                freeRouting.costRow,
+                estimatedInputTokens,
+                freeMaxOutputTokens,
+              ),
+              estimateCostSource: 'catalog_estimate',
             });
             if (freeReservation.ok) {
               maxOutputTokens = freeMaxOutputTokens;
@@ -1056,22 +1453,42 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                 routeSlot: freeDecision.routeSlot,
                 ...freeRouting,
                 kind: 'free',
-                balanceAvailable: freeReservation.balance - freeReservation.reserved,
-                freeBalanceAvailable: freeReservation.balance - freeReservation.reserved,
+                balanceAvailable:
+                  freeReservation.balance - freeReservation.reserved,
+                freeBalanceAvailable:
+                  freeReservation.balance - freeReservation.reserved,
               };
               estimatedCredits = freeEstimatedCredits;
+              reservation = freeReservation;
+            } else if (freeReservation.reason === 'free_spend_cap_reached') {
               reservation = freeReservation;
             }
           }
         }
       }
-      if (!reservation.ok && reservation.reason === 'request_already_reserved') {
+      if (
+        !reservation.ok &&
+        reservation.reason === 'request_already_reserved'
+      ) {
         await markDedupFailed(dedupClaim);
         return withRequestId(
           Response.json(
-            { error: { type: 'idempotency_conflict', message: 'Request execution was already finalized or is still in progress' } },
+            {
+              error: {
+                type: 'idempotency_conflict',
+                message:
+                  'Request execution was already finalized or is still in progress',
+              },
+            },
             { status: 409 },
           ),
+          requestId,
+        );
+      }
+      if (!reservation.ok && reservation.reason === 'free_spend_cap_reached') {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(
+          Response.json(freeSpendCapErrorBody(), { status: 503 }),
           requestId,
         );
       }
@@ -1116,7 +1533,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           kind: routing.kind,
         });
       }
-      forwardBody = cfg.rewriteRequestBody ? cfg.rewriteRequestBody(requestBodyText, routing, maxOutputTokens) : requestBodyBuffer;
+      forwardBody = cfg.rewriteRequestBody
+        ? cfg.rewriteRequestBody(requestBodyText, routing, maxOutputTokens)
+        : requestBodyBuffer;
     }
 
     const result = await tryUpstreamProviders(
@@ -1131,7 +1550,8 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       requestId,
     );
     if ('failure' in result) {
-      if (result.status >= 500) Sentry.captureMessage('ai_chain_exhausted', 'error');
+      if (result.status >= 500)
+        Sentry.captureMessage('ai_chain_exhausted', 'error');
       await recordUsage(
         {
           user: routing.user,
@@ -1180,10 +1600,16 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
     if (!upstreamResponse.ok) {
       const latencyMs = Date.now() - startedAt;
-      await recordUsage(billCtx, { inputTokens: 0, outputTokens: 0 }, upstreamResponse.status, latencyMs, {
-        status: 'failed',
-        upstreamStatus: upstreamResponse.status,
-      });
+      await recordUsage(
+        billCtx,
+        { inputTokens: 0, outputTokens: 0 },
+        upstreamResponse.status,
+        latencyMs,
+        {
+          status: 'failed',
+          upstreamStatus: upstreamResponse.status,
+        },
+      );
       return new Response(upstreamResponse.body, {
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
@@ -1198,9 +1624,19 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           outcome: 'release',
           dedup: claimDedupFinalization(dedupClaim, { status: 'failed' }),
         });
-        return killSwitchResponse('ai_streaming', 'AI streaming is temporarily disabled.', requestId);
+        return killSwitchResponse(
+          'ai_streaming',
+          'AI streaming is temporarily disabled.',
+          requestId,
+        );
       }
-      const transformed = teeStreamAndBill(upstreamResponse, cfg, billCtx, upstreamResponse.status, startedAt);
+      const transformed = teeStreamAndBill(
+        upstreamResponse,
+        cfg,
+        billCtx,
+        upstreamResponse.status,
+        startedAt,
+      );
       return new Response(transformed, {
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
@@ -1240,7 +1676,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       await releaseReservationAfterError(requestId, dedupClaim, error);
     } else if (dedupEnabled) {
       await markDedupFailed(dedupClaim).catch((dedupError) =>
-        log.error('dedup_failed_update_failed', { request_id: requestId, error: dedupError }),
+        log.error('dedup_failed_update_failed', {
+          request_id: requestId,
+          error: dedupError,
+        }),
       );
     }
     throw error;
@@ -1264,14 +1703,20 @@ function teeStreamAndBill(
   startedAt: number,
 ): ReadableStream<Uint8Array> {
   function reportMalformedStreamUsageFrame(error: unknown) {
-    log.warn('stream_usage_frame_parse_failed', { request_id: billCtx.requestId, error });
+    log.warn('stream_usage_frame_parse_failed', {
+      request_id: billCtx.requestId,
+      error,
+    });
   }
 
   function sniffStreamUsage(text: string, finalize = false) {
     try {
       cfg.parseUsageFromStreamChunk(text, acc, finalize);
     } catch (error) {
-      log.warn('usage_sniffer_failed', { request_id: billCtx.requestId, error });
+      log.warn('usage_sniffer_failed', {
+        request_id: billCtx.requestId,
+        error,
+      });
     }
   }
 
@@ -1290,16 +1735,25 @@ function teeStreamAndBill(
   let loggedFirstChunk = false;
   async function finish(
     naturalCompletion: boolean,
-    outcome: 'completed' | 'failed' | 'cancelled' = naturalCompletion ? 'completed' : 'failed',
+    outcome: 'completed' | 'failed' | 'cancelled' = naturalCompletion
+      ? 'completed'
+      : 'failed',
   ) {
     if (terminal) return;
     terminal = true;
-    log.info('diagnostic_stream_terminal', { request_id: billCtx.requestId, diagnostic_outcome: outcome });
+    log.info('diagnostic_stream_terminal', {
+      request_id: billCtx.requestId,
+      diagnostic_outcome: outcome,
+    });
     if (naturalCompletion) {
       sniffStreamUsage(decoder.decode(), true);
     }
-    const observedOutput = acc.outputTokens > 0 || (acc.observedOutputCharacters ?? 0) > 0;
-    const observedOutputTokens = acc.outputTokens > 0 ? acc.outputTokens : Math.max(0, Math.ceil((acc.observedOutputCharacters ?? 0) / 4));
+    const observedOutput =
+      acc.outputTokens > 0 || (acc.observedOutputCharacters ?? 0) > 0;
+    const observedOutputTokens =
+      acc.outputTokens > 0
+        ? acc.outputTokens
+        : Math.max(0, Math.ceil((acc.observedOutputCharacters ?? 0) / 4));
     const streamTokens =
       naturalCompletion || observedOutput
         ? resolveBillableTokens(
@@ -1328,10 +1782,16 @@ function teeStreamAndBill(
         streamTokens,
         observedOutput || naturalCompletion ? status : 499,
         Date.now() - startedAt,
-        naturalCompletion ? { status: 'completed', upstreamStatus: status } : { status: 'failed', upstreamStatus: status },
+        naturalCompletion
+          ? { status: 'completed', upstreamStatus: status }
+          : { status: 'failed', upstreamStatus: status },
       );
     } catch (error) {
-      await releaseReservationAfterError(billCtx.requestId, billContextDedupClaim(billCtx), error);
+      await releaseReservationAfterError(
+        billCtx.requestId,
+        billContextDedupClaim(billCtx),
+        error,
+      );
       throw error;
     }
   }
@@ -1373,7 +1833,10 @@ function teeStreamAndBill(
       } catch (error) {
         if (!terminal) captureStreamFailure(error, billCtx.requestId);
         await finish(false).catch((finalizeError) =>
-          log.error('stream_finalize_failed', { request_id: billCtx.requestId, error: finalizeError }),
+          log.error('stream_finalize_failed', {
+            request_id: billCtx.requestId,
+            error: finalizeError,
+          }),
         );
         controller.error(error);
       }
@@ -1383,7 +1846,10 @@ function teeStreamAndBill(
       // reader.cancel() resolves a pending read as done, which must not race
       // cancellation into the natural-completion billing policy.
       const finalization = finish(false, 'cancelled').catch((error) =>
-        log.error('stream_cancel_finalize_failed', { request_id: billCtx.requestId, error }),
+        log.error('stream_cancel_finalize_failed', {
+          request_id: billCtx.requestId,
+          error,
+        }),
       );
       await reader.cancel(reason).catch(() => undefined);
       await finalization;

@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import type { Database } from '../src/db/client';
 import { createPostgresDb } from '../src/db/postgres';
 import {
+  adminMutationResults,
   apiTokens,
   appSettings,
   authIntents,
@@ -13,14 +14,23 @@ import {
   deviceCodes,
   emailOutbox,
   emailSuppressions,
+  freeSpendCapConfig,
+  freeSpendMonthlyBudgets,
   invites,
   requestDedup,
   stripeEvents,
   usage,
   users,
 } from '../src/db/schema';
+import { executeAdminMutation } from '../src/lib/admin-mutations';
+import { recordAuditStrict } from '../src/lib/audit';
 import { CREDIT_USD, MARKUP } from '../src/lib/cost';
-import { finalizeReservation, reconcileStaleReservations, reserveCredits, resizeReservation } from '../src/lib/credit-reservations';
+import {
+  finalizeReservation,
+  reconcileStaleReservations,
+  reserveCredits as reserveCreditsWithEstimate,
+  resizeReservation,
+} from '../src/lib/credit-reservations';
 import { exchangeApprovedDeviceCode } from '../src/lib/device-auth';
 import { leaseOutbox, processProviderEvent } from '../src/lib/email';
 import { aiRequestHash, handleDedup } from '../src/lib/proxy';
@@ -28,11 +38,19 @@ import { reenableRouteBreaker } from '../src/lib/route-breaker-admin';
 import { isRouteTripped } from '../src/lib/route-breakers';
 import { getSignupsEnabled, SignupsPolicyError } from '../src/lib/settings';
 import { createApiToken } from '../src/lib/tokens';
-import { createUserFromInviteIntent, InviteRequiredError } from '../src/lib/users';
-import { createInvite, createInviteIntent, readInviteIntentCookie } from '../src/lib/waitlist';
+import {
+  createUserFromInviteIntent,
+  InviteRequiredError,
+} from '../src/lib/users';
+import {
+  createInvite,
+  createInviteIntent,
+  readInviteIntentCookie,
+} from '../src/lib/waitlist';
 import { runPostgresMigrations } from './migrate-postgres';
 
-if (process.env.NVM_DB_DRIVER !== 'postgres') throw new Error('Postgres integration requires NVM_DB_DRIVER=postgres');
+if (process.env.NVM_DB_DRIVER !== 'postgres')
+  throw new Error('Postgres integration requires NVM_DB_DRIVER=postgres');
 
 const adminUrl =
   process.env.NVM_TEST_ADMIN_DATABASE_URL ||
@@ -42,12 +60,38 @@ const adminUrl =
 const productionUrl = process.env.DATABASE_URL;
 const admin = new URL(adminUrl);
 if (!['localhost', '127.0.0.1', '::1', 'postgres'].includes(admin.hostname))
-  throw new Error(`Test admin host is not local/service-scoped: ${admin.hostname}`);
-if (productionUrl && new URL(productionUrl).toString() === admin.toString()) throw new Error('Test admin URL must not equal DATABASE_URL');
+  throw new Error(
+    `Test admin host is not local/service-scoped: ${admin.hostname}`,
+  );
+if (productionUrl && new URL(productionUrl).toString() === admin.toString())
+  throw new Error('Test admin URL must not equal DATABASE_URL');
 
-const worker = (process.env.TEST_WORKER_INDEX || '0').replace(/[^a-zA-Z0-9_]/g, '_');
+const worker = (process.env.TEST_WORKER_INDEX || '0').replace(
+  /[^a-zA-Z0-9_]/g,
+  '_',
+);
 const databaseName = `nvm_test_${worker}_${crypto.randomBytes(6).toString('hex')}`;
-if (!/^nvm_test_[a-zA-Z0-9_]+$/.test(databaseName)) throw new Error('Unsafe test database name');
+if (!/^nvm_test_[a-zA-Z0-9_]+$/.test(databaseName))
+  throw new Error('Unsafe test database name');
+
+type IntegrationReservationInput = Omit<
+  Parameters<typeof reserveCreditsWithEstimate>[0],
+  'estimatedProviderCostUsd' | 'estimateCostSource'
+> &
+  Partial<
+    Pick<
+      Parameters<typeof reserveCreditsWithEstimate>[0],
+      'estimatedProviderCostUsd' | 'estimateCostSource'
+    >
+  >;
+
+function reserveCredits(input: IntegrationReservationInput) {
+  return reserveCreditsWithEstimate({
+    ...input,
+    estimatedProviderCostUsd: input.estimatedProviderCostUsd ?? 0,
+    estimateCostSource: input.estimateCostSource ?? 'catalog_estimate',
+  });
+}
 
 function quotedIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
@@ -70,7 +114,9 @@ async function fingerprint(pool: Pool) {
 }
 
 async function migrationMetadata(pool: Pool) {
-  const { rows } = await pool.query('SELECT hash, created_at FROM "drizzle"."__drizzle_migrations" ORDER BY id');
+  const { rows } = await pool.query(
+    'SELECT hash, created_at FROM "drizzle"."__drizzle_migrations" ORDER BY id',
+  );
   return rows;
 }
 
@@ -115,12 +161,32 @@ async function runAssertions() {
         .returning();
       assert.ok(splitUser);
       await db.insert(creditLedger).values([
-        { userId: splitUser.id, delta: 30, kind: 'free', reason: 'integration.split_grant', refId: `${databaseName}:free` },
-        { userId: splitUser.id, delta: 50, kind: 'paid', reason: 'integration.split_grant', refId: `${databaseName}:paid` },
+        {
+          userId: splitUser.id,
+          delta: 30,
+          kind: 'free',
+          reason: 'integration.split_grant',
+          refId: `${databaseName}:free`,
+        },
+        {
+          userId: splitUser.id,
+          delta: 50,
+          kind: 'paid',
+          reason: 'integration.split_grant',
+          refId: `${databaseName}:paid`,
+        },
       ]);
       const splitAdmissions = await Promise.all([
-        reserveCredits({ requestId: `split-a-${databaseName}`, userId: splitUser.id, credits: 60 }),
-        reserveCredits({ requestId: `split-b-${databaseName}`, userId: splitUser.id, credits: 60 }),
+        reserveCredits({
+          requestId: `split-a-${databaseName}`,
+          userId: splitUser.id,
+          credits: 60,
+        }),
+        reserveCredits({
+          requestId: `split-b-${databaseName}`,
+          userId: splitUser.id,
+          credits: 60,
+        }),
       ]);
       assert.equal(
         splitAdmissions.filter((result) => result.ok).length,
@@ -141,8 +207,20 @@ async function runAssertions() {
         .returning();
       assert.ok(legacyUser);
       await db.insert(creditLedger).values([
-        { userId: legacyUser.id, delta: 20, kind: 'free', reason: 'integration.legacy_grant', refId: `${databaseName}:legacy-free` },
-        { userId: legacyUser.id, delta: 50, kind: 'paid', reason: 'integration.legacy_grant', refId: `${databaseName}:legacy-paid` },
+        {
+          userId: legacyUser.id,
+          delta: 20,
+          kind: 'free',
+          reason: 'integration.legacy_grant',
+          refId: `${databaseName}:legacy-free`,
+        },
+        {
+          userId: legacyUser.id,
+          delta: 50,
+          kind: 'paid',
+          reason: 'integration.legacy_grant',
+          refId: `${databaseName}:legacy-paid`,
+        },
       ]);
       const legacyRequestId = `legacy-pending-${databaseName}`;
       await db.insert(creditReservations).values({
@@ -153,7 +231,11 @@ async function runAssertions() {
         status: 'pending',
         expiresAt: new Date(Date.now() + 60_000),
       });
-      const afterLegacy = await reserveCredits({ requestId: `legacy-next-${databaseName}`, userId: legacyUser.id, credits: 30 });
+      const afterLegacy = await reserveCredits({
+        requestId: `legacy-next-${databaseName}`,
+        userId: legacyUser.id,
+        credits: 30,
+      });
       assert.ok(afterLegacy.ok);
       assert.equal(afterLegacy.reservation.reservedFreeCredits, 20);
       assert.equal(
@@ -171,24 +253,59 @@ async function runAssertions() {
         .returning();
       assert.ok(negativeUser);
       await db.insert(creditLedger).values([
-        { userId: negativeUser.id, delta: -1, kind: 'free', reason: 'integration.legacy_deficit', refId: `${databaseName}:negative-free` },
-        { userId: negativeUser.id, delta: 100, kind: 'paid', reason: 'integration.legacy_deficit', refId: `${databaseName}:negative-paid` },
+        {
+          userId: negativeUser.id,
+          delta: -1,
+          kind: 'free',
+          reason: 'integration.legacy_deficit',
+          refId: `${databaseName}:negative-free`,
+        },
+        {
+          userId: negativeUser.id,
+          delta: 100,
+          kind: 'paid',
+          reason: 'integration.legacy_deficit',
+          refId: `${databaseName}:negative-paid`,
+        },
       ]);
-      const negativeAdmission = await reserveCredits({ requestId: `negative-${databaseName}`, userId: negativeUser.id, credits: 1 });
+      const negativeAdmission = await reserveCredits({
+        requestId: `negative-${databaseName}`,
+        userId: negativeUser.id,
+        credits: 1,
+      });
       assert.deepEqual(
         negativeAdmission,
         { ok: false, reason: 'insufficient_credits', balance: 99, reserved: 0 },
         'legacy negative pool blocks new admission instead of being silently offset',
       );
       const admissions = await Promise.all([
-        reserveCredits({ requestId: `reserve-a-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
-        reserveCredits({ requestId: `reserve-b-${databaseName}`, userId: user.id, kind: 'paid', credits: 80 }),
+        reserveCredits({
+          requestId: `reserve-a-${databaseName}`,
+          userId: user.id,
+          kind: 'paid',
+          credits: 80,
+        }),
+        reserveCredits({
+          requestId: `reserve-b-${databaseName}`,
+          userId: user.id,
+          kind: 'paid',
+          credits: 80,
+        }),
       ]);
-      assert.equal(admissions.filter((result) => result.ok).length, 1, 'only one near-empty concurrent reservation may succeed');
+      assert.equal(
+        admissions.filter((result) => result.ok).length,
+        1,
+        'only one near-empty concurrent reservation may succeed',
+      );
       const admitted = admissions.find((result) => result.ok);
       assert.ok(admitted?.ok);
       const requestId = admitted.reservation.requestId;
-      const cost = { provider: 'integration', modelId: 'reservation-model', inputUsdPerMtok: 1, outputUsdPerMtok: 1 };
+      const cost = {
+        provider: 'integration',
+        modelId: 'reservation-model',
+        inputUsdPerMtok: 1,
+        outputUsdPerMtok: 1,
+      };
       await finalizeReservation({
         requestId,
         outcome: 'settle',
@@ -212,13 +329,26 @@ async function runAssertions() {
         }),
         'already_terminal',
       );
-      assert.equal((await db.select().from(creditReservations).where(eq(creditReservations.requestId, requestId))).length, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(creditReservations)
+            .where(eq(creditReservations.requestId, requestId))
+        ).length,
+        1,
+      );
       assert.equal(
         (
           await db
             .select()
             .from(creditLedger)
-            .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, `${requestId}:paid`)))
+            .where(
+              and(
+                eq(creditLedger.reason, 'ai_usage'),
+                eq(creditLedger.refId, `${requestId}:paid`),
+              ),
+            )
         ).length,
         1,
         'settlement retries must create one ledger charge',
@@ -226,17 +356,37 @@ async function runAssertions() {
       const [underReservationDebit] = await db
         .select()
         .from(creditLedger)
-        .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, `${requestId}:paid`)));
+        .where(
+          and(
+            eq(creditLedger.reason, 'ai_usage'),
+            eq(creditLedger.refId, `${requestId}:paid`),
+          ),
+        );
       assert.ok(underReservationDebit);
-      assert.equal(underReservationDebit.delta, -1, 'settlement charges measured cost below the reserved amount');
       assert.equal(
-        (await db.select().from(usage).where(eq(usage.requestId, requestId))).length,
+        underReservationDebit.delta,
+        -1,
+        'settlement charges measured cost below the reserved amount',
+      );
+      assert.equal(
+        (await db.select().from(usage).where(eq(usage.requestId, requestId)))
+          .length,
         1,
         'settlement retries must create one usage row',
       );
       assert.deepEqual(
-        await reserveCredits({ requestId, userId: user.id, kind: 'paid', credits: 80 }),
-        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 80 },
+        await reserveCredits({
+          requestId,
+          userId: user.id,
+          kind: 'paid',
+          credits: 80,
+        }),
+        {
+          ok: false,
+          reason: 'request_already_reserved',
+          balance: 0,
+          reserved: 80,
+        },
         'a settled execution identity must never authorize more upstream work',
       );
 
@@ -256,7 +406,16 @@ async function runAssertions() {
         refId: databaseName,
       });
       const exactRequestId = `exact-cost-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: exactRequestId, userId: billingUser.id, credits: 1 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: exactRequestId,
+            userId: billingUser.id,
+            credits: 1,
+          })
+        ).ok,
+        true,
+      );
       await finalizeReservation({
         requestId: exactRequestId,
         outcome: 'settle',
@@ -268,14 +427,26 @@ async function runAssertions() {
         status: 200,
         latencyMs: 1,
       });
-      const [exactUsage] = await db.select().from(usage).where(eq(usage.requestId, exactRequestId));
+      const [exactUsage] = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, exactRequestId));
       assert.ok(exactUsage);
       assert.equal(exactUsage.costCredits, 1);
       assert.equal(exactUsage.upstreamCostSource, 'provider_reported');
       assert.equal(exactUsage.costOverrun, false);
 
       const exactCatalogId = `exact-catalog-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: exactCatalogId, userId: billingUser.id, credits: 1 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: exactCatalogId,
+            userId: billingUser.id,
+            credits: 1,
+          })
+        ).ok,
+        true,
+      );
       await finalizeReservation({
         requestId: exactCatalogId,
         outcome: 'settle',
@@ -283,19 +454,45 @@ async function runAssertions() {
         provider: 'integration',
         routeSlot: 'exact-catalog',
         tokens: { inputTokens: 1, outputTokens: 1 },
-        costRow: { provider: 'integration', modelId: 'exact-catalog-model', inputUsdPerMtok: 0.1, outputUsdPerMtok: 0.1 },
+        costRow: {
+          provider: 'integration',
+          modelId: 'exact-catalog-model',
+          inputUsdPerMtok: 0.1,
+          outputUsdPerMtok: 0.1,
+        },
         status: 200,
         latencyMs: 1,
       });
-      const [exactCatalogUsage] = await db.select().from(usage).where(eq(usage.requestId, exactCatalogId));
+      const [exactCatalogUsage] = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, exactCatalogId));
       assert.ok(exactCatalogUsage);
       assert.equal(exactCatalogUsage.upstreamCostSource, 'catalog_estimate');
       assert.equal(exactCatalogUsage.costOverrun, false);
 
       const providerOverrunId = `provider-overrun-${databaseName}`;
       const dispatchedBeforeTripId = `in-flight-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: providerOverrunId, userId: billingUser.id, credits: 1 })).ok, true);
-      assert.equal((await reserveCredits({ requestId: dispatchedBeforeTripId, userId: billingUser.id, credits: 1 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: providerOverrunId,
+            userId: billingUser.id,
+            credits: 1,
+          })
+        ).ok,
+        true,
+      );
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: dispatchedBeforeTripId,
+            userId: billingUser.id,
+            credits: 1,
+          })
+        ).ok,
+        true,
+      );
       await finalizeReservation({
         requestId: providerOverrunId,
         outcome: 'settle',
@@ -307,11 +504,24 @@ async function runAssertions() {
         status: 200,
         latencyMs: 1,
       });
-      assert.equal(await isRouteTripped('provider-overrun', 'integration', 'provider-overrun-model'), true);
-      const [providerOverrunUsage] = await db.select().from(usage).where(eq(usage.requestId, providerOverrunId));
+      assert.equal(
+        await isRouteTripped(
+          'provider-overrun',
+          'integration',
+          'provider-overrun-model',
+        ),
+        true,
+      );
+      const [providerOverrunUsage] = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, providerOverrunId));
       assert.ok(providerOverrunUsage);
       assert.equal(providerOverrunUsage.costOverrun, true);
-      assert.equal(providerOverrunUsage.upstreamCostSource, 'provider_reported');
+      assert.equal(
+        providerOverrunUsage.upstreamCostSource,
+        'provider_reported',
+      );
       assert.equal(
         providerOverrunUsage.upstreamCostMicrocents,
         100_000_000,
@@ -328,12 +538,28 @@ async function runAssertions() {
         status: 200,
         latencyMs: 1,
       });
-      const [inFlightUsage] = await db.select().from(usage).where(eq(usage.requestId, dispatchedBeforeTripId));
+      const [inFlightUsage] = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, dispatchedBeforeTripId));
       assert.ok(inFlightUsage);
-      assert.equal(inFlightUsage.costCredits, 1, 'already-dispatched work may still settle after the breaker trips');
+      assert.equal(
+        inFlightUsage.costCredits,
+        1,
+        'already-dispatched work may still settle after the breaker trips',
+      );
 
       const catalogOverrunId = `catalog-overrun-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: catalogOverrunId, userId: billingUser.id, credits: 1 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: catalogOverrunId,
+            userId: billingUser.id,
+            credits: 1,
+          })
+        ).ok,
+        true,
+      );
       await finalizeReservation({
         requestId: catalogOverrunId,
         outcome: 'settle',
@@ -341,17 +567,36 @@ async function runAssertions() {
         provider: 'integration',
         routeSlot: 'catalog-overrun',
         tokens: { inputTokens: 1_000_000, outputTokens: 0 },
-        costRow: { provider: 'integration', modelId: 'catalog-overrun-model', inputUsdPerMtok: 1, outputUsdPerMtok: 0 },
+        costRow: {
+          provider: 'integration',
+          modelId: 'catalog-overrun-model',
+          inputUsdPerMtok: 1,
+          outputUsdPerMtok: 0,
+        },
         status: 200,
         latencyMs: 1,
       });
-      const [catalogUsage] = await db.select().from(usage).where(eq(usage.requestId, catalogOverrunId));
+      const [catalogUsage] = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, catalogOverrunId));
       assert.ok(catalogUsage);
       assert.equal(catalogUsage.costOverrun, true);
       assert.equal(catalogUsage.upstreamCostSource, 'catalog_estimate');
       assert.equal(catalogUsage.upstreamCostMicrocents, 100_000_000);
-      assert.equal(catalogUsage.costCredits, 1, 'customer debit remains capped at the reserved allocation');
-      assert.equal(await isRouteTripped('catalog-overrun', 'integration', 'catalog-overrun-model'), true);
+      assert.equal(
+        catalogUsage.costCredits,
+        1,
+        'customer debit remains capped at the reserved allocation',
+      );
+      assert.equal(
+        await isRouteTripped(
+          'catalog-overrun',
+          'integration',
+          'catalog-overrun-model',
+        ),
+        true,
+      );
 
       await assert.rejects(
         reenableRouteBreaker({
@@ -363,7 +608,11 @@ async function runAssertions() {
         'audit insert failure must abort breaker re-enable',
       );
       assert.equal(
-        await isRouteTripped('provider-overrun', 'integration', 'provider-overrun-model'),
+        await isRouteTripped(
+          'provider-overrun',
+          'integration',
+          'provider-overrun-model',
+        ),
         true,
         'failed audit insert rolls back breaker deletion',
       );
@@ -373,45 +622,106 @@ async function runAssertions() {
         provider: 'integration',
         modelId: 'provider-overrun-model',
       });
-      assert.equal(await isRouteTripped('provider-overrun', 'integration', 'provider-overrun-model'), false);
+      assert.equal(
+        await isRouteTripped(
+          'provider-overrun',
+          'integration',
+          'provider-overrun-model',
+        ),
+        false,
+      );
       const billingBalances = await db
         .select({ kind: creditLedger.kind, delta: creditLedger.delta })
         .from(creditLedger)
         .where(eq(creditLedger.userId, billingUser.id));
       for (const kind of ['free', 'paid']) {
         assert.ok(
-          billingBalances.filter((entry) => entry.kind === kind).reduce((sum, entry) => sum + entry.delta, 0) >= 0,
+          billingBalances
+            .filter((entry) => entry.kind === kind)
+            .reduce((sum, entry) => sum + entry.delta, 0) >= 0,
           `${kind} ledger must never go negative`,
         );
       }
 
       const releasedRequestId = `released-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: releasedRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
-      assert.equal(await finalizeReservation({ requestId: releasedRequestId, outcome: 'release' }), 'released');
-      assert.equal(await finalizeReservation({ requestId: releasedRequestId, outcome: 'release' }), 'already_terminal');
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: releasedRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 20,
+          })
+        ).ok,
+        true,
+      );
+      assert.equal(
+        await finalizeReservation({
+          requestId: releasedRequestId,
+          outcome: 'release',
+        }),
+        'released',
+      );
+      assert.equal(
+        await finalizeReservation({
+          requestId: releasedRequestId,
+          outcome: 'release',
+        }),
+        'already_terminal',
+      );
       assert.equal(
         (
           await db
             .select()
             .from(creditLedger)
-            .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, releasedRequestId)))
+            .where(
+              and(
+                eq(creditLedger.reason, 'ai_usage'),
+                eq(creditLedger.refId, releasedRequestId),
+              ),
+            )
         ).length,
         0,
         'release retries must never debit',
       );
       assert.equal(
-        (await db.select().from(usage).where(eq(usage.requestId, releasedRequestId))).length,
+        (
+          await db
+            .select()
+            .from(usage)
+            .where(eq(usage.requestId, releasedRequestId))
+        ).length,
         0,
         'release retries must never record usage',
       );
       assert.deepEqual(
-        await reserveCredits({ requestId: releasedRequestId, userId: user.id, kind: 'paid', credits: 20 }),
-        { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 20 },
+        await reserveCredits({
+          requestId: releasedRequestId,
+          userId: user.id,
+          kind: 'paid',
+          credits: 20,
+        }),
+        {
+          ok: false,
+          reason: 'request_already_reserved',
+          balance: 0,
+          reserved: 20,
+        },
         'a released execution identity must never authorize more upstream work',
       );
 
       const resizeRequestId = `resize-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: resizeRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: resizeRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 20,
+          })
+        ).ok,
+        true,
+      );
       const resized = await resizeReservation(resizeRequestId, 90);
       assert.ok(resized.ok);
       assert.equal(resized.reservation.reservedCredits, 90);
@@ -421,7 +731,13 @@ async function runAssertions() {
         balance: 99,
         reserved: 0,
       });
-      assert.equal(await finalizeReservation({ requestId: resizeRequestId, outcome: 'release' }), 'released');
+      assert.equal(
+        await finalizeReservation({
+          requestId: resizeRequestId,
+          outcome: 'release',
+        }),
+        'released',
+      );
       assert.deepEqual(await resizeReservation(resizeRequestId, 20), {
         ok: false,
         reason: 'request_already_reserved',
@@ -430,7 +746,17 @@ async function runAssertions() {
       });
 
       const terminalRaceRequestId = `terminal-race-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: terminalRaceRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: terminalRaceRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 20,
+          })
+        ).ok,
+        true,
+      );
       const terminalRace = await Promise.all([
         finalizeReservation({
           requestId: terminalRaceRequestId,
@@ -442,7 +768,10 @@ async function runAssertions() {
           status: 200,
           latencyMs: 1,
         }),
-        finalizeReservation({ requestId: terminalRaceRequestId, outcome: 'release' }),
+        finalizeReservation({
+          requestId: terminalRaceRequestId,
+          outcome: 'release',
+        }),
       ]);
       assert.equal(
         terminalRace.filter((result) => result === 'already_terminal').length,
@@ -460,20 +789,47 @@ async function runAssertions() {
         .where(
           and(
             eq(creditLedger.reason, 'ai_usage'),
-            or(eq(creditLedger.refId, `${terminalRaceRequestId}:free`), eq(creditLedger.refId, `${terminalRaceRequestId}:paid`)),
+            or(
+              eq(creditLedger.refId, `${terminalRaceRequestId}:free`),
+              eq(creditLedger.refId, `${terminalRaceRequestId}:paid`),
+            ),
           ),
         );
-      const terminalRaceUsage = await db.select().from(usage).where(eq(usage.requestId, terminalRaceRequestId));
-      assert.ok(terminalRaceReservation.status === 'settled' || terminalRaceReservation.status === 'released');
-      assert.equal(terminalRaceCharges.length, terminalRaceReservation.status === 'settled' ? 1 : 0);
-      assert.equal(terminalRaceUsage.length, terminalRaceReservation.status === 'settled' ? 1 : 0);
+      const terminalRaceUsage = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, terminalRaceRequestId));
+      assert.ok(
+        terminalRaceReservation.status === 'settled' ||
+          terminalRaceReservation.status === 'released',
+      );
+      assert.equal(
+        terminalRaceCharges.length,
+        terminalRaceReservation.status === 'settled' ? 1 : 0,
+      );
+      assert.equal(
+        terminalRaceUsage.length,
+        terminalRaceReservation.status === 'settled' ? 1 : 0,
+      );
 
       const lockRaceRequestId = `lock-race-${databaseName}`;
-      assert.equal((await reserveCredits({ requestId: lockRaceRequestId, userId: user.id, kind: 'paid', credits: 20 })).ok, true);
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: lockRaceRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 20,
+          })
+        ).ok,
+        true,
+      );
       const userLock = await pool.connect();
       try {
         await userLock.query('BEGIN');
-        await userLock.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [user.id]);
+        await userLock.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [
+          user.id,
+        ]);
         const finalization = finalizeReservation({
           requestId: lockRaceRequestId,
           outcome: 'settle',
@@ -484,7 +840,12 @@ async function runAssertions() {
           status: 200,
           latencyMs: 1,
         });
-        const admission = reserveCredits({ requestId: lockRaceRequestId, userId: user.id, kind: 'paid', credits: 20 });
+        const admission = reserveCredits({
+          requestId: lockRaceRequestId,
+          userId: user.id,
+          kind: 'paid',
+          credits: 20,
+        });
 
         for (let attempt = 0; attempt < 50; attempt += 1) {
           const { rows } = await pool.query(
@@ -493,30 +854,44 @@ async function runAssertions() {
           );
           if (rows[0]?.count >= 2) break;
           await new Promise((resolve) => setTimeout(resolve, 10));
-          if (attempt === 49) assert.fail('admission and finalization did not both reach the user lock');
+          if (attempt === 49)
+            assert.fail(
+              'admission and finalization did not both reach the user lock',
+            );
         }
 
         const reservationProbe = await pool.connect();
         try {
           await reservationProbe.query('BEGIN');
-          await reservationProbe.query('SELECT request_id FROM credit_reservations WHERE request_id = $1 FOR UPDATE NOWAIT', [
-            lockRaceRequestId,
-          ]);
+          await reservationProbe.query(
+            'SELECT request_id FROM credit_reservations WHERE request_id = $1 FOR UPDATE NOWAIT',
+            [lockRaceRequestId],
+          );
           await reservationProbe.query('ROLLBACK');
         } finally {
           reservationProbe.release();
         }
         await userLock.query('COMMIT');
-        const [finalizationResult, admissionResult] = await Promise.all([finalization, admission]);
+        const [finalizationResult, admissionResult] = await Promise.all([
+          finalization,
+          admission,
+        ]);
         assert.equal(finalizationResult, 'settled');
-        assert.deepEqual(admissionResult, { ok: false, reason: 'request_already_reserved', balance: 0, reserved: 20 });
+        assert.deepEqual(admissionResult, {
+          ok: false,
+          reason: 'request_already_reserved',
+          balance: 0,
+          reserved: 20,
+        });
       } finally {
         await userLock.query('ROLLBACK').catch(() => undefined);
         userLock.release();
       }
 
       const reconciliationNow = new Date();
-      const staleRequestIds = [1, 2, 3].map((index) => `stale-${index}-${databaseName}`);
+      const staleRequestIds = [1, 2, 3].map(
+        (index) => `stale-${index}-${databaseName}`,
+      );
       const freshRequestId = `fresh-${databaseName}`;
       for (const staleRequestId of staleRequestIds) {
         assert.equal(
@@ -533,7 +908,15 @@ async function runAssertions() {
         );
       }
       assert.equal(
-        (await reserveCredits({ requestId: freshRequestId, userId: user.id, kind: 'paid', credits: 10, now: reconciliationNow })).ok,
+        (
+          await reserveCredits({
+            requestId: freshRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 10,
+            now: reconciliationNow,
+          })
+        ).ok,
         true,
       );
       assert.deepEqual(
@@ -546,16 +929,26 @@ async function runAssertions() {
         { released: 1 },
         'second page releases the remaining stale row',
       );
-      assert.deepEqual(await reconcileStaleReservations(2, reconciliationNow), { released: 0 }, 'repeat reconciliation is idempotent');
-      const reconciliationRows = await db.select().from(creditReservations).where(eq(creditReservations.userId, user.id));
+      assert.deepEqual(
+        await reconcileStaleReservations(2, reconciliationNow),
+        { released: 0 },
+        'repeat reconciliation is idempotent',
+      );
+      const reconciliationRows = await db
+        .select()
+        .from(creditReservations)
+        .where(eq(creditReservations.userId, user.id));
       assert.equal(
-        reconciliationRows.find((row) => row.requestId === freshRequestId)?.status,
+        reconciliationRows.find((row) => row.requestId === freshRequestId)
+          ?.status,
         'pending',
         'fresh reservations must be skipped',
       );
       assert.ok(
         staleRequestIds.every(
-          (staleRequestId) => reconciliationRows.find((row) => row.requestId === staleRequestId)?.status === 'released',
+          (staleRequestId) =>
+            reconciliationRows.find((row) => row.requestId === staleRequestId)
+              ?.status === 'released',
         ),
       );
 
@@ -572,18 +965,37 @@ async function runAssertions() {
 
       async function integrationRequestHash(content: string) {
         const request = integrationAiRequest(content);
-        return aiRequestHash(request, new Uint8Array(await request.arrayBuffer()));
+        return aiRequestHash(
+          request,
+          new Uint8Array(await request.arrayBuffer()),
+        );
       }
 
       const admissionKey = `admission-${databaseName}`;
       const admissionHash = await integrationRequestHash('same request');
       const admissionsForSameKey = await Promise.all([
-        handleDedup(admissionKey, user.id, admissionHash, `admission-a-${databaseName}`),
-        handleDedup(admissionKey, user.id, admissionHash, `admission-b-${databaseName}`),
+        handleDedup(
+          admissionKey,
+          user.id,
+          admissionHash,
+          `admission-a-${databaseName}`,
+        ),
+        handleDedup(
+          admissionKey,
+          user.id,
+          admissionHash,
+          `admission-b-${databaseName}`,
+        ),
       ]);
-      assert.equal(admissionsForSameKey.filter((result) => result === undefined).length, 1, 'same-key same-hash admission has one winner');
       assert.equal(
-        admissionsForSameKey.filter((result) => result instanceof Response && result.status === 409).length,
+        admissionsForSameKey.filter((result) => result === undefined).length,
+        1,
+        'same-key same-hash admission has one winner',
+      );
+      assert.equal(
+        admissionsForSameKey.filter(
+          (result) => result instanceof Response && result.status === 409,
+        ).length,
         1,
         'same-key same-hash admission rejects concurrent execution',
       );
@@ -591,17 +1003,49 @@ async function runAssertions() {
       const activeClaimRequestId = `active-claim-${databaseName}`;
       const activeClaimKey = `active-claim-key-${databaseName}`;
       const activeClaimHash = await integrationRequestHash('active claim');
-      assert.equal(await handleDedup(activeClaimKey, user.id, activeClaimHash, activeClaimRequestId), undefined);
-      assert.equal((await reserveCredits({ requestId: activeClaimRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok, true);
+      assert.equal(
+        await handleDedup(
+          activeClaimKey,
+          user.id,
+          activeClaimHash,
+          activeClaimRequestId,
+        ),
+        undefined,
+      );
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: activeClaimRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 5,
+          })
+        ).ok,
+        true,
+      );
       await db
         .update(requestDedup)
         .set({
           createdAt: new Date(Date.now() - 8 * 60_000),
         })
-        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, activeClaimKey)));
-      const activeClaimRetry = await handleDedup(activeClaimKey, user.id, activeClaimHash, `active-claim-retry-${databaseName}`);
+        .where(
+          and(
+            eq(requestDedup.userId, user.id),
+            eq(requestDedup.idempotencyKey, activeClaimKey),
+          ),
+        );
+      const activeClaimRetry = await handleDedup(
+        activeClaimKey,
+        user.id,
+        activeClaimHash,
+        `active-claim-retry-${databaseName}`,
+      );
       assert.ok(activeClaimRetry instanceof Response);
-      assert.equal(activeClaimRetry.status, 409, 'a pending reservation prevents stale claim reclaim');
+      assert.equal(
+        activeClaimRetry.status,
+        409,
+        'a pending reservation prevents stale claim reclaim',
+      );
       assert.equal(
         await finalizeReservation({
           requestId: activeClaimRequestId,
@@ -619,7 +1063,15 @@ async function runAssertions() {
       const expiredClaimRequestId = `expired-claim-${databaseName}`;
       const expiredClaimKey = `expired-claim-key-${databaseName}`;
       const expiredClaimHash = await integrationRequestHash('expired claim');
-      assert.equal(await handleDedup(expiredClaimKey, user.id, expiredClaimHash, expiredClaimRequestId), undefined);
+      assert.equal(
+        await handleDedup(
+          expiredClaimKey,
+          user.id,
+          expiredClaimHash,
+          expiredClaimRequestId,
+        ),
+        undefined,
+      );
       assert.equal(
         (
           await reserveCredits({
@@ -637,22 +1089,47 @@ async function runAssertions() {
         .set({
           createdAt: new Date(Date.now() - 8 * 60_000),
         })
-        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, expiredClaimKey)));
+        .where(
+          and(
+            eq(requestDedup.userId, user.id),
+            eq(requestDedup.idempotencyKey, expiredClaimKey),
+          ),
+        );
       assert.equal(
-        await handleDedup(expiredClaimKey, user.id, expiredClaimHash, `expired-claim-retry-${databaseName}`),
+        await handleDedup(
+          expiredClaimKey,
+          user.id,
+          expiredClaimHash,
+          `expired-claim-retry-${databaseName}`,
+        ),
         undefined,
         'an expired reservation is released before its stale claim is retried',
       );
       assert.equal(
-        (await db.select().from(creditReservations).where(eq(creditReservations.requestId, expiredClaimRequestId)))[0]?.status,
+        (
+          await db
+            .select()
+            .from(creditReservations)
+            .where(eq(creditReservations.requestId, expiredClaimRequestId))
+        )[0]?.status,
         'released',
       );
 
       const staleRaceRequestId = `stale-race-${databaseName}`;
       const staleRaceRetryId = `stale-race-retry-${databaseName}`;
       const staleRaceKey = `stale-race-key-${databaseName}`;
-      const staleRaceHash = await integrationRequestHash('stale settlement race');
-      assert.equal(await handleDedup(staleRaceKey, user.id, staleRaceHash, staleRaceRequestId), undefined);
+      const staleRaceHash = await integrationRequestHash(
+        'stale settlement race',
+      );
+      assert.equal(
+        await handleDedup(
+          staleRaceKey,
+          user.id,
+          staleRaceHash,
+          staleRaceRequestId,
+        ),
+        undefined,
+      );
       assert.equal(
         (
           await reserveCredits({
@@ -670,7 +1147,12 @@ async function runAssertions() {
         .set({
           createdAt: new Date(Date.now() - 8 * 60_000),
         })
-        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, staleRaceKey)));
+        .where(
+          and(
+            eq(requestDedup.userId, user.id),
+            eq(requestDedup.idempotencyKey, staleRaceKey),
+          ),
+        );
       const [staleRetryResult, staleSettlementResult] = await Promise.all([
         handleDedup(staleRaceKey, user.id, staleRaceHash, staleRaceRetryId),
         finalizeReservation({
@@ -691,11 +1173,19 @@ async function runAssertions() {
           },
         }),
       ]);
-      const [staleRaceReservation] = await db.select().from(creditReservations).where(eq(creditReservations.requestId, staleRaceRequestId));
+      const [staleRaceReservation] = await db
+        .select()
+        .from(creditReservations)
+        .where(eq(creditReservations.requestId, staleRaceRequestId));
       const [staleRaceDedup] = await db
         .select()
         .from(requestDedup)
-        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, staleRaceKey)));
+        .where(
+          and(
+            eq(requestDedup.userId, user.id),
+            eq(requestDedup.idempotencyKey, staleRaceKey),
+          ),
+        );
       const staleRaceCharges = await db
         .select()
         .from(creditLedger)
@@ -705,7 +1195,10 @@ async function runAssertions() {
             eq(creditLedger.refId, `${staleRaceRequestId}:paid`),
           ),
         );
-      const staleRaceUsage = await db.select().from(usage).where(eq(usage.requestId, staleRaceRequestId));
+      const staleRaceUsage = await db
+        .select()
+        .from(usage)
+        .where(eq(usage.requestId, staleRaceRequestId));
       if (staleRaceReservation?.status === 'settled') {
         assert.equal(staleSettlementResult, 'settled');
         assert.ok(staleRetryResult instanceof Response);
@@ -739,8 +1232,21 @@ async function runAssertions() {
       const atomicRequestId = `atomic-${databaseName}`;
       const atomicKey = `atomic-key-${databaseName}`;
       const atomicHash = await integrationRequestHash('atomic success');
-      assert.equal(await handleDedup(atomicKey, user.id, atomicHash, atomicRequestId), undefined);
-      assert.equal((await reserveCredits({ requestId: atomicRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok, true);
+      assert.equal(
+        await handleDedup(atomicKey, user.id, atomicHash, atomicRequestId),
+        undefined,
+      );
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: atomicRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 5,
+          })
+        ).ok,
+        true,
+      );
       assert.equal(
         await finalizeReservation({
           requestId: atomicRequestId,
@@ -763,7 +1269,12 @@ async function runAssertions() {
         }),
         'settled',
       );
-      const atomicReplay = await handleDedup(atomicKey, user.id, atomicHash, `atomic-retry-${databaseName}`);
+      const atomicReplay = await handleDedup(
+        atomicKey,
+        user.id,
+        atomicHash,
+        `atomic-retry-${databaseName}`,
+      );
       assert.ok(atomicReplay instanceof Response);
       assert.equal(atomicReplay.status, 200);
       assert.deepEqual(await atomicReplay.json(), { result: 'cached' });
@@ -786,8 +1297,26 @@ async function runAssertions() {
       const rollbackRequestId = `rollback-${databaseName}`;
       const rollbackKey = `rollback-key-${databaseName}`;
       const rollbackHash = await integrationRequestHash('rollback');
-      assert.equal(await handleDedup(rollbackKey, user.id, rollbackHash, rollbackRequestId), undefined);
-      assert.equal((await reserveCredits({ requestId: rollbackRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok, true);
+      assert.equal(
+        await handleDedup(
+          rollbackKey,
+          user.id,
+          rollbackHash,
+          rollbackRequestId,
+        ),
+        undefined,
+      );
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: rollbackRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 5,
+          })
+        ).ok,
+        true,
+      );
       await assert.rejects(
         () =>
           finalizeReservation({
@@ -824,12 +1353,22 @@ async function runAssertions() {
         'failure before commit rolls back the charge',
       );
       assert.equal(
-        (await db.select().from(usage).where(eq(usage.requestId, rollbackRequestId))).length,
+        (
+          await db
+            .select()
+            .from(usage)
+            .where(eq(usage.requestId, rollbackRequestId))
+        ).length,
         0,
         'failure before commit rolls back usage',
       );
       assert.equal(
-        (await db.select().from(creditReservations).where(eq(creditReservations.requestId, rollbackRequestId)))[0]?.status,
+        (
+          await db
+            .select()
+            .from(creditReservations)
+            .where(eq(creditReservations.requestId, rollbackRequestId))
+        )[0]?.status,
         'pending',
       );
       assert.equal(
@@ -837,7 +1376,12 @@ async function runAssertions() {
           await db
             .select()
             .from(requestDedup)
-            .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, rollbackKey)))
+            .where(
+              and(
+                eq(requestDedup.userId, user.id),
+                eq(requestDedup.idempotencyKey, rollbackKey),
+              ),
+            )
         )[0]?.status,
         'in_flight',
       );
@@ -857,18 +1401,37 @@ async function runAssertions() {
       const [retryableRow] = await db
         .select()
         .from(requestDedup)
-        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, rollbackKey)));
+        .where(
+          and(
+            eq(requestDedup.userId, user.id),
+            eq(requestDedup.idempotencyKey, rollbackKey),
+          ),
+        );
       assert.equal(retryableRow?.requestHash, rollbackHash);
       assert.equal(
-        await handleDedup(rollbackKey, user.id, rollbackHash, `rollback-retry-${databaseName}`),
+        await handleDedup(
+          rollbackKey,
+          user.id,
+          rollbackHash,
+          `rollback-retry-${databaseName}`,
+        ),
         undefined,
         'retryable failure retains and reuses the original hash',
       );
 
       const reconcileDedupRequestId = `reconcile-dedup-${databaseName}`;
       const reconcileDedupKey = `reconcile-dedup-key-${databaseName}`;
-      const reconcileDedupHash = await integrationRequestHash('reconcile dedup');
-      assert.equal(await handleDedup(reconcileDedupKey, user.id, reconcileDedupHash, reconcileDedupRequestId), undefined);
+      const reconcileDedupHash =
+        await integrationRequestHash('reconcile dedup');
+      assert.equal(
+        await handleDedup(
+          reconcileDedupKey,
+          user.id,
+          reconcileDedupHash,
+          reconcileDedupRequestId,
+        ),
+        undefined,
+      );
       assert.equal(
         (
           await reserveCredits({
@@ -885,15 +1448,38 @@ async function runAssertions() {
       const [reconciledDedup] = await db
         .select()
         .from(requestDedup)
-        .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, reconcileDedupKey)));
+        .where(
+          and(
+            eq(requestDedup.userId, user.id),
+            eq(requestDedup.idempotencyKey, reconcileDedupKey),
+          ),
+        );
       assert.equal(reconciledDedup?.status, 'failed');
       assert.equal(reconciledDedup?.requestHash, reconcileDedupHash);
 
       const dedupRaceRequestId = `dedup-race-${databaseName}`;
       const dedupRaceKey = `dedup-race-key-${databaseName}`;
       const dedupRaceHash = await integrationRequestHash('terminal race');
-      assert.equal(await handleDedup(dedupRaceKey, user.id, dedupRaceHash, dedupRaceRequestId), undefined);
-      assert.equal((await reserveCredits({ requestId: dedupRaceRequestId, userId: user.id, kind: 'paid', credits: 5 })).ok, true);
+      assert.equal(
+        await handleDedup(
+          dedupRaceKey,
+          user.id,
+          dedupRaceHash,
+          dedupRaceRequestId,
+        ),
+        undefined,
+      );
+      assert.equal(
+        (
+          await reserveCredits({
+            requestId: dedupRaceRequestId,
+            userId: user.id,
+            kind: 'paid',
+            credits: 5,
+          })
+        ).ok,
+        true,
+      );
       const terminalInput = {
         requestId: dedupRaceRequestId,
         outcome: 'settle' as const,
@@ -911,9 +1497,19 @@ async function runAssertions() {
           upstreamStatus: 200,
         },
       };
-      const dedupTerminalRace = await Promise.all([finalizeReservation(terminalInput), finalizeReservation(terminalInput)]);
-      assert.equal(dedupTerminalRace.filter((result) => result === 'settled').length, 1);
-      assert.equal(dedupTerminalRace.filter((result) => result === 'already_terminal').length, 1);
+      const dedupTerminalRace = await Promise.all([
+        finalizeReservation(terminalInput),
+        finalizeReservation(terminalInput),
+      ]);
+      assert.equal(
+        dedupTerminalRace.filter((result) => result === 'settled').length,
+        1,
+      );
+      assert.equal(
+        dedupTerminalRace.filter((result) => result === 'already_terminal')
+          .length,
+        1,
+      );
       assert.equal(
         (
           await db
@@ -928,15 +1524,335 @@ async function runAssertions() {
         ).length,
         1,
       );
-      assert.equal((await db.select().from(usage).where(eq(usage.requestId, dedupRaceRequestId))).length, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(usage)
+            .where(eq(usage.requestId, dedupRaceRequestId))
+        ).length,
+        1,
+      );
       assert.equal(
         (
           await db
             .select()
             .from(requestDedup)
-            .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, dedupRaceKey)))
+            .where(
+              and(
+                eq(requestDedup.userId, user.id),
+                eq(requestDedup.idempotencyKey, dedupRaceKey),
+              ),
+            )
         )[0]?.status,
         'completed',
+      );
+
+      const currentTime = new Date();
+      const admissionTime = new Date(
+        Date.UTC(
+          currentTime.getUTCFullYear(),
+          currentTime.getUTCMonth(),
+          0,
+          23,
+          59,
+          59,
+          999,
+        ),
+      );
+      const admissionMonth = `${admissionTime.getUTCFullYear()}-${String(admissionTime.getUTCMonth() + 1).padStart(2, '0')}`;
+      const currentMonth = `${currentTime.getUTCFullYear()}-${String(currentTime.getUTCMonth() + 1).padStart(2, '0')}`;
+      await db
+        .update(freeSpendCapConfig)
+        .set({ capMicrocents: 75, updatedBy: user.id, updatedAt: currentTime })
+        .where(eq(freeSpendCapConfig.id, 'global'));
+      try {
+        async function createCapUser(label: string, paidCredits = 0) {
+          const [capUser] = await db
+            .insert(users)
+            .values({
+              workosUserId: `free-cap-${label}-${databaseName}`,
+              email: `free-cap-${label}-${databaseName}@example.test`,
+            })
+            .returning();
+          assert.ok(capUser);
+          await db.insert(creditLedger).values({
+            userId: capUser.id,
+            delta: 10,
+            kind: 'free',
+            reason: 'integration.free_cap_grant',
+            refId: `${databaseName}:free-cap:${label}`,
+          });
+          if (paidCredits > 0) {
+            await db.insert(creditLedger).values({
+              userId: capUser.id,
+              delta: paidCredits,
+              kind: 'paid',
+              reason: 'integration.paid_credit_grant',
+              refId: `${databaseName}:free-cap-paid:${label}`,
+            });
+          }
+          return capUser;
+        }
+
+        const capUserA = await createCapUser('a');
+        const capUserB = await createCapUser('b');
+        const capRequestA = `free-cap-a-${databaseName}`;
+        const capRequestB = `free-cap-b-${databaseName}`;
+        const capAdmissionInput = {
+          credits: 1,
+          estimatedProviderCostUsd: 0.0000005,
+          estimateCostSource: 'catalog_estimate' as const,
+          now: admissionTime,
+        };
+        const concurrentCapAdmissions = await Promise.all([
+          reserveCredits({
+            ...capAdmissionInput,
+            userId: capUserA.id,
+            requestId: capRequestA,
+          }),
+          reserveCredits({
+            ...capAdmissionInput,
+            userId: capUserB.id,
+            requestId: capRequestB,
+          }),
+        ]);
+        assert.equal(
+          concurrentCapAdmissions.filter((result) => result.ok).length,
+          1,
+          'global cap admission must serialize across different users when their combined holds exceed capacity',
+        );
+        const winnerIndex = concurrentCapAdmissions.findIndex(
+          (result) => result.ok,
+        );
+        const winnerRequestId = winnerIndex === 0 ? capRequestA : capRequestB;
+        const winnerUser = winnerIndex === 0 ? capUserA : capUserB;
+        const losingAdmission = concurrentCapAdmissions[1 - winnerIndex];
+        assert.ok(losingAdmission);
+        assert.equal(
+          losingAdmission.ok ? 'unexpected_success' : losingAdmission.reason,
+          'free_spend_cap_reached',
+        );
+
+        const exactReplay = await reserveCredits({
+          ...capAdmissionInput,
+          userId: winnerUser.id,
+          requestId: winnerRequestId,
+          allowExistingPending: true,
+        });
+        assert.ok(
+          exactReplay.ok,
+          'an exact pending replay returns its original reservation',
+        );
+        await assert.rejects(
+          () =>
+            reserveCredits({
+              ...capAdmissionInput,
+              userId: winnerUser.id,
+              requestId: winnerRequestId,
+              estimatedProviderCostUsd: 0.0000006,
+              allowExistingPending: true,
+            }),
+          /reused with different billing parameters/,
+          'replay with a different estimate must not change the stored hold',
+        );
+
+        const resizeUser = await createCapUser('resize', 2);
+        const resizeRequestId = `free-cap-resize-${databaseName}`;
+        const resizeAdmission = await reserveCredits({
+          ...capAdmissionInput,
+          userId: resizeUser.id,
+          requestId: resizeRequestId,
+          estimatedProviderCostUsd: 0.00000025,
+        });
+        assert.ok(
+          resizeAdmission.ok,
+          'the remaining exact capacity admits a 25-microcent hold',
+        );
+        const [currentBudgetBefore] = await db
+          .select()
+          .from(freeSpendMonthlyBudgets)
+          .where(eq(freeSpendMonthlyBudgets.monthKey, currentMonth));
+
+        assert.equal(
+          await finalizeReservation({
+            requestId: winnerRequestId,
+            outcome: 'settle',
+            model: 'free-cap-overrun-model',
+            provider: 'integration',
+            tokens: { inputTokens: 1, outputTokens: 1 },
+            providerCostUsd: 0.000001,
+            status: 200,
+            latencyMs: 1,
+          }),
+          'settled',
+        );
+        const [admissionBudgetAfterSettlement] = await db
+          .select()
+          .from(freeSpendMonthlyBudgets)
+          .where(eq(freeSpendMonthlyBudgets.monthKey, admissionMonth));
+        assert.ok(admissionBudgetAfterSettlement);
+        assert.equal(
+          admissionBudgetAfterSettlement.actualFreeCostMicrocents,
+          100,
+        );
+        assert.equal(
+          admissionBudgetAfterSettlement.reservedFreeCostMicrocents,
+          25,
+        );
+        assert.equal(
+          admissionBudgetAfterSettlement.halted,
+          true,
+          'free-attributed overrun halts the admission month',
+        );
+        const [currentBudgetAfterSettlement] = await db
+          .select()
+          .from(freeSpendMonthlyBudgets)
+          .where(eq(freeSpendMonthlyBudgets.monthKey, currentMonth));
+        assert.equal(
+          currentBudgetAfterSettlement?.actualFreeCostMicrocents ?? null,
+          currentBudgetBefore?.actualFreeCostMicrocents ?? null,
+          'settlement after UTC rollover updates the reservation admission month, not the settlement month',
+        );
+
+        const paidOnlyResize = await resizeReservation(
+          resizeRequestId,
+          2,
+          0,
+          'catalog_estimate',
+        );
+        assert.ok(
+          paidOnlyResize.ok,
+          'a halted month can resize onto paid credits when they cover the request',
+        );
+        if (paidOnlyResize.ok) {
+          assert.equal(paidOnlyResize.reservation.reservedFreeCredits, 0);
+          assert.equal(paidOnlyResize.reservation.reservedPaidCredits, 2);
+          assert.equal(paidOnlyResize.reservation.kind, 'paid');
+        }
+        const [budgetAfterPaidOnlyResize] = await db
+          .select()
+          .from(freeSpendMonthlyBudgets)
+          .where(eq(freeSpendMonthlyBudgets.monthKey, admissionMonth));
+        assert.equal(
+          budgetAfterPaidOnlyResize?.reservedFreeCostMicrocents,
+          0,
+          'paid-only resize releases the prior free-spend hold',
+        );
+        assert.deepEqual(
+          await resizeReservation(resizeRequestId, 3, 0, 'catalog_estimate'),
+          {
+            ok: false,
+            reason: 'free_spend_cap_reached',
+            balance: 12,
+            reserved: 0,
+          },
+          'a halted month rejects a larger resize when paid credits cannot cover it',
+        );
+        assert.equal(
+          await finalizeReservation({
+            requestId: resizeRequestId,
+            outcome: 'release',
+          }),
+          'released',
+        );
+        assert.equal(
+          await finalizeReservation({
+            requestId: resizeRequestId,
+            outcome: 'release',
+          }),
+          'already_terminal',
+        );
+        const [budgetAfterRelease] = await db
+          .select()
+          .from(freeSpendMonthlyBudgets)
+          .where(eq(freeSpendMonthlyBudgets.monthKey, admissionMonth));
+        assert.ok(budgetAfterRelease);
+        assert.equal(
+          budgetAfterRelease.reservedFreeCostMicrocents,
+          0,
+          'release removes the exact hold only once',
+        );
+      } finally {
+        await db
+          .update(freeSpendCapConfig)
+          .set({ capMicrocents: null, updatedBy: null, updatedAt: new Date() })
+          .where(eq(freeSpendCapConfig.id, 'global'));
+      }
+
+      const rollbackMutationKey = '11111111-1111-4111-8111-111111111111';
+      const originalRole = user.role;
+      await pool.query(`
+        CREATE FUNCTION nvm_test_fail_admin_audit() RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'forced admin audit insert failure';
+        END;
+        $$ LANGUAGE plpgsql;
+        CREATE TRIGGER nvm_test_fail_admin_audit
+        BEFORE INSERT ON audit_log
+        FOR EACH ROW EXECUTE FUNCTION nvm_test_fail_admin_audit();
+      `);
+      try {
+        await assert.rejects(
+          () =>
+            executeAdminMutation({
+              actorUserId: user.id,
+              idempotencyKey: rollbackMutationKey,
+              payload: { role: 'admin' },
+              execute: async (tx) => {
+                await tx
+                  .update(users)
+                  .set({ role: 'admin' })
+                  .where(eq(users.id, user.id));
+                await recordAuditStrict(tx, {
+                  actorUserId: user.id,
+                  action: 'role.changed',
+                  targetType: 'user',
+                  targetId: user.id,
+                  meta: { role: 'admin' },
+                });
+                return { body: { ok: true } };
+              },
+            }),
+          (error: unknown) => {
+            let current = error;
+            while (current instanceof Error) {
+              if (current.message.includes('forced admin audit insert failure'))
+                return true;
+              current = current.cause;
+            }
+            return false;
+          },
+        );
+      } finally {
+        await pool.query(`
+          DROP TRIGGER nvm_test_fail_admin_audit ON audit_log;
+          DROP FUNCTION nvm_test_fail_admin_audit();
+        `);
+      }
+      const [afterAuditFailureUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id));
+      assert.equal(
+        afterAuditFailureUser.role,
+        originalRole,
+        'audit failure rolls the role mutation back',
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(adminMutationResults)
+            .where(
+              and(
+                eq(adminMutationResults.actorUserId, user.id),
+                eq(adminMutationResults.idempotencyKey, rollbackMutationKey),
+              ),
+            )
+        ).length,
+        0,
+        'audit failure rolls the idempotency result back with the state mutation',
       );
 
       const tokenHash = `hash-${databaseName}`;
@@ -954,10 +1870,19 @@ async function runAssertions() {
           name: 'duplicate',
         }),
       );
-      const tokenRows = await db.select().from(apiTokens).where(eq(apiTokens.tokenHash, tokenHash));
-      assert.equal(tokenRows.length, 1, 'token_hash uniqueness must leave one row');
+      const tokenRows = await db
+        .select()
+        .from(apiTokens)
+        .where(eq(apiTokens.tokenHash, tokenHash));
+      assert.equal(
+        tokenRows.length,
+        1,
+        'token_hash uniqueness must leave one row',
+      );
       async function countTokensWithName(name: string) {
-        return (await db.select().from(apiTokens).where(eq(apiTokens.name, name))).length;
+        return (
+          await db.select().from(apiTokens).where(eq(apiTokens.name, name))
+        ).length;
       }
 
       const duplicateEvent = `evt-${databaseName}`;
@@ -972,11 +1897,17 @@ async function runAssertions() {
         .onConflictDoNothing()
         .returning();
       assert.equal(firstEvent.length, 1);
-      assert.equal(secondEvent.length, 0, 'stripe event idempotency must ignore duplicate event_id');
+      assert.equal(
+        secondEvent.length,
+        0,
+        'stripe event idempotency must ignore duplicate event_id',
+      );
       const rollbackEvent = `evt-rollback-${databaseName}`;
       await assert.rejects(
         db.transaction(async (tx) => {
-          await tx.insert(stripeEvents).values({ eventId: rollbackEvent, type: 'integration.rollback' });
+          await tx
+            .insert(stripeEvents)
+            .values({ eventId: rollbackEvent, type: 'integration.rollback' });
           await tx.insert(creditLedger).values({
             userId: user.id,
             delta: 100,
@@ -986,8 +1917,24 @@ async function runAssertions() {
           throw new Error('forced integration rollback');
         }),
       );
-      assert.equal((await db.select().from(stripeEvents).where(eq(stripeEvents.eventId, rollbackEvent))).length, 0);
-      assert.equal((await db.select().from(creditLedger).where(eq(creditLedger.refId, rollbackEvent))).length, 0);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(stripeEvents)
+            .where(eq(stripeEvents.eventId, rollbackEvent))
+        ).length,
+        0,
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(creditLedger)
+            .where(eq(creditLedger.refId, rollbackEvent))
+        ).length,
+        0,
+      );
 
       const dedupKey = `request-${databaseName}`;
       await assert.rejects(
@@ -1006,7 +1953,12 @@ async function runAssertions() {
           await db
             .select()
             .from(requestDedup)
-            .where(and(eq(requestDedup.userId, user.id), eq(requestDedup.idempotencyKey, dedupKey)))
+            .where(
+              and(
+                eq(requestDedup.userId, user.id),
+                eq(requestDedup.idempotencyKey, dedupKey),
+              ),
+            )
         ).length,
         0,
       );
@@ -1019,9 +1971,22 @@ async function runAssertions() {
         approvedAt: new Date(),
         expiresAt: new Date(Date.now() + 60_000),
       });
-      assert.deepEqual(await exchangeApprovedDeviceCode(missingUserCode), { status: 'missing_user' });
-      assert.equal((await db.select().from(deviceCodes).where(eq(deviceCodes.code, missingUserCode)))[0]?.consumedAt, null);
-      assert.equal(await countTokensWithName(`missing-user-${databaseName}`), 0);
+      assert.deepEqual(await exchangeApprovedDeviceCode(missingUserCode), {
+        status: 'missing_user',
+      });
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(deviceCodes)
+            .where(eq(deviceCodes.code, missingUserCode))
+        )[0]?.consumedAt,
+        null,
+      );
+      assert.equal(
+        await countTokensWithName(`missing-user-${databaseName}`),
+        0,
+      );
 
       const pendingCode = `device-pending-${databaseName}`;
       await db.insert(deviceCodes).values({
@@ -1043,8 +2008,13 @@ async function runAssertions() {
         consumedAt: new Date(),
         expiresAt: new Date(Date.now() - 60_000),
       });
-      assert.deepEqual(await exchangeApprovedDeviceCode(expiredConsumedCode), { status: 'expired' });
-      assert.equal(await countTokensWithName(`expired-consumed-${databaseName}`), 0);
+      assert.deepEqual(await exchangeApprovedDeviceCode(expiredConsumedCode), {
+        status: 'expired',
+      });
+      assert.equal(
+        await countTokensWithName(`expired-consumed-${databaseName}`),
+        0,
+      );
 
       const consumedCode = `device-consumed-${databaseName}`;
       await db.insert(deviceCodes).values({
@@ -1079,12 +2049,25 @@ async function runAssertions() {
         /forced device token failure after insert/,
       );
       assert.equal(
-        (await db.select().from(deviceCodes).where(eq(deviceCodes.code, rollbackCode)))[0]?.consumedAt,
+        (
+          await db
+            .select()
+            .from(deviceCodes)
+            .where(eq(deviceCodes.code, rollbackCode))
+        )[0]?.consumedAt,
         null,
         'failed token creation must roll back code consumption',
       );
-      assert.equal(await countTokensWithName(rollbackLabel), 0, 'failed token creation must roll back the inserted token');
-      assert.equal((await exchangeApprovedDeviceCode(rollbackCode)).status, 'ok', 'a rolled-back code must remain retryable');
+      assert.equal(
+        await countTokensWithName(rollbackLabel),
+        0,
+        'failed token creation must roll back the inserted token',
+      );
+      assert.equal(
+        (await exchangeApprovedDeviceCode(rollbackCode)).status,
+        'ok',
+        'a rolled-back code must remain retryable',
+      );
       assert.equal(await countTokensWithName(rollbackLabel), 1);
 
       const concurrentCode = `device-concurrent-${databaseName}`;
@@ -1096,43 +2079,94 @@ async function runAssertions() {
         approvedAt: new Date(),
         expiresAt: new Date(Date.now() + 60_000),
       });
-      const exchanges = await Promise.all([exchangeApprovedDeviceCode(concurrentCode), exchangeApprovedDeviceCode(concurrentCode)]);
+      const exchanges = await Promise.all([
+        exchangeApprovedDeviceCode(concurrentCode),
+        exchangeApprovedDeviceCode(concurrentCode),
+      ]);
       assert.deepEqual(
         exchanges.map((result) => result.status).sort(),
         ['consumed', 'ok'],
         'concurrent device exchange must have one winner',
       );
-      assert.equal(await countTokensWithName(concurrentLabel), 1, 'concurrent exchange must persist one token');
-      assert.ok((await db.select().from(deviceCodes).where(eq(deviceCodes.code, concurrentCode)))[0]?.consumedAt);
+      assert.equal(
+        await countTokensWithName(concurrentLabel),
+        1,
+        'concurrent exchange must persist one token',
+      );
+      assert.ok(
+        (
+          await db
+            .select()
+            .from(deviceCodes)
+            .where(eq(deviceCodes.code, concurrentCode))
+        )[0]?.consumedAt,
+      );
 
-      await db.delete(appSettings).where(eq(appSettings.key, 'signups_enabled'));
+      await db
+        .delete(appSettings)
+        .where(eq(appSettings.key, 'signups_enabled'));
       process.env.INVITE_GATE_ENABLED = 'false';
-      assert.equal(await getSignupsEnabled(), true, 'absent policy row must preserve legacy open signups');
+      assert.equal(
+        await getSignupsEnabled(),
+        true,
+        'absent policy row must preserve legacy open signups',
+      );
       process.env.INVITE_GATE_ENABLED = 'true';
-      assert.equal(await getSignupsEnabled(), false, 'absent policy row must preserve legacy closed signups');
-      await db.insert(appSettings).values({ key: 'signups_enabled', value: 'true' });
+      assert.equal(
+        await getSignupsEnabled(),
+        false,
+        'absent policy row must preserve legacy closed signups',
+      );
+      await db
+        .insert(appSettings)
+        .values({ key: 'signups_enabled', value: 'true' });
       process.env.INVITE_GATE_ENABLED = 'true';
-      assert.equal(await getSignupsEnabled(), true, 'persisted policy must override legacy flag');
-      await db.update(appSettings).set({ value: 'malformed' }).where(eq(appSettings.key, 'signups_enabled'));
+      assert.equal(
+        await getSignupsEnabled(),
+        true,
+        'persisted policy must override legacy flag',
+      );
+      await db
+        .update(appSettings)
+        .set({ value: 'malformed' })
+        .where(eq(appSettings.key, 'signups_enabled'));
       await assert.rejects(
         () => getSignupsEnabled(),
         (error: unknown) => error instanceof SignupsPolicyError,
       );
-      await db.delete(appSettings).where(eq(appSettings.key, 'signups_enabled'));
+      await db
+        .delete(appSettings)
+        .where(eq(appSettings.key, 'signups_enabled'));
       delete process.env.INVITE_GATE_ENABLED;
 
       const concurrentEmail = `concurrent-${databaseName}@example.test`;
-      const concurrentInvites = await Promise.all([1, 2].map(() => createInvite({ email: concurrentEmail })));
+      const concurrentInvites = await Promise.all(
+        [1, 2].map(() => createInvite({ email: concurrentEmail })),
+      );
       assert.equal(
-        (await db.select().from(invites).where(eq(invites.email, concurrentEmail))).length,
+        (
+          await db
+            .select()
+            .from(invites)
+            .where(eq(invites.email, concurrentEmail))
+        ).length,
         1,
         'concurrent issuance must leave one active invite',
       );
-      assert.equal(concurrentInvites.filter((item) => !item.existing).length, 1, 'concurrent issuance must have one creator');
+      assert.equal(
+        concurrentInvites.filter((item) => !item.existing).length,
+        1,
+        'concurrent issuance must have one creator',
+      );
 
-      const leaseInvite = await createInvite({ email: `lease-${databaseName}@example.test` });
+      const leaseInvite = await createInvite({
+        email: `lease-${databaseName}@example.test`,
+      });
       assert.ok(leaseInvite.invite);
-      const [leaseRow] = await db.select().from(emailOutbox).where(eq(emailOutbox.inviteId, leaseInvite.invite.id));
+      const [leaseRow] = await db
+        .select()
+        .from(emailOutbox)
+        .where(eq(emailOutbox.inviteId, leaseInvite.invite.id));
       assert.ok(leaseRow);
       const expiredLease = new Date(Date.now() - 60_000);
       await db
@@ -1152,10 +2186,16 @@ async function runAssertions() {
       );
       assert.ok(reclaimed.find((row) => row.id === leaseRow.id)?.leaseOwner);
 
-      for (const [index, eventType] of ['email.bounced', 'email.complained'].entries()) {
+      for (const [index, eventType] of [
+        'email.bounced',
+        'email.complained',
+      ].entries()) {
         const recipient = `suppressed-${index}-${databaseName}@example.test`;
         const issued = await createInvite({ email: recipient });
-        const [providerRow] = await db.select().from(emailOutbox).where(eq(emailOutbox.inviteId, issued.invite.id));
+        const [providerRow] = await db
+          .select()
+          .from(emailOutbox)
+          .where(eq(emailOutbox.inviteId, issued.invite.id));
         const [laterRow] = await db
           .insert(emailOutbox)
           .values({
@@ -1173,10 +2213,29 @@ async function runAssertions() {
           id: `provider-event-${databaseName}-${index}`,
           type: eventType,
           messageId: `provider-${databaseName}-${index}`,
-          raw: JSON.stringify({ type: eventType, data: { email_id: `provider-${databaseName}-${index}` } }),
+          raw: JSON.stringify({
+            type: eventType,
+            data: { email_id: `provider-${databaseName}-${index}` },
+          }),
         });
-        assert.equal((await db.select().from(emailSuppressions).where(eq(emailSuppressions.email, recipient))).length, 1);
-        assert.equal((await db.select().from(emailOutbox).where(eq(emailOutbox.id, laterRow.id)))[0]?.status, 'cancelled');
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(emailSuppressions)
+              .where(eq(emailSuppressions.email, recipient))
+          ).length,
+          1,
+        );
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(emailOutbox)
+              .where(eq(emailOutbox.id, laterRow.id))
+          )[0]?.status,
+          'cancelled',
+        );
       }
 
       const redemptionEmail = `redemption-${databaseName}@example.test`;
@@ -1192,8 +2251,24 @@ async function runAssertions() {
         email: redemptionEmail,
       });
       assert.equal(redeemedUser.email, redemptionEmail);
-      assert.equal((await db.select().from(invites).where(eq(invites.id, redemptionInvite.invite.id)))[0]?.status, 'redeemed');
-      assert.equal((await db.select().from(creditLedger).where(eq(creditLedger.userId, redeemedUser.id))).length, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(invites)
+            .where(eq(invites.id, redemptionInvite.invite.id))
+        )[0]?.status,
+        'redeemed',
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(creditLedger)
+            .where(eq(creditLedger.userId, redeemedUser.id))
+        ).length,
+        1,
+      );
       await assert.rejects(
         () =>
           createUserFromInviteIntent({
@@ -1206,7 +2281,11 @@ async function runAssertions() {
         'invite intent must be one-time',
       );
 
-      assert.equal(await createInviteIntent(`unknown-${databaseName}`), null, 'unknown invite tokens must be rejected');
+      assert.equal(
+        await createInviteIntent(`unknown-${databaseName}`),
+        null,
+        'unknown invite tokens must be rejected',
+      );
 
       const expiredEmail = `expired-${databaseName}@example.test`;
       const expiredInvite = await createInvite({ email: expiredEmail });
@@ -1214,16 +2293,29 @@ async function runAssertions() {
         .update(invites)
         .set({ expiresAt: new Date(Date.now() - 60_000) })
         .where(eq(invites.id, expiredInvite.invite.id));
-      assert.equal(await createInviteIntent(expiredInvite.token!), null, 'expired invite tokens must be rejected');
+      assert.equal(
+        await createInviteIntent(expiredInvite.token!),
+        null,
+        'expired invite tokens must be rejected',
+      );
 
       const disabledEmail = `disabled-${databaseName}@example.test`;
       const disabledInvite = await createInvite({ email: disabledEmail });
-      await db.update(invites).set({ status: 'cancelled' }).where(eq(invites.id, disabledInvite.invite.id));
-      assert.equal(await createInviteIntent(disabledInvite.token!), null, 'disabled invite tokens must be rejected');
+      await db
+        .update(invites)
+        .set({ status: 'cancelled' })
+        .where(eq(invites.id, disabledInvite.invite.id));
+      assert.equal(
+        await createInviteIntent(disabledInvite.token!),
+        null,
+        'disabled invite tokens must be rejected',
+      );
 
       const wrongEmail = `wrong-email-${databaseName}@example.test`;
       const wrongEmailInvite = await createInvite({ email: wrongEmail });
-      const wrongEmailIntent = await createInviteIntent(wrongEmailInvite.token!);
+      const wrongEmailIntent = await createInviteIntent(
+        wrongEmailInvite.token!,
+      );
       assert.ok(wrongEmailIntent);
       const wrongEmailCookie = readInviteIntentCookie(wrongEmailIntent.cookie);
       assert.ok(wrongEmailCookie);
@@ -1238,17 +2330,32 @@ async function runAssertions() {
         (error: unknown) => error instanceof InviteRequiredError,
         'an invite must not grant a different email access',
       );
-      assert.equal((await db.select().from(authIntents).where(eq(authIntents.id, wrongEmailCookie.id)))[0]?.consumedAt, null);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(authIntents)
+            .where(eq(authIntents.id, wrongEmailCookie.id))
+        )[0]?.consumedAt,
+        null,
+      );
 
       const redeemedStatusEmail = `redeemed-status-${databaseName}@example.test`;
       const redeemedStatusInvite = await createInvite({
         email: redeemedStatusEmail,
       });
-      const redeemedStatusIntent = await createInviteIntent(redeemedStatusInvite.token!);
+      const redeemedStatusIntent = await createInviteIntent(
+        redeemedStatusInvite.token!,
+      );
       assert.ok(redeemedStatusIntent);
-      const redeemedStatusCookie = readInviteIntentCookie(redeemedStatusIntent.cookie);
+      const redeemedStatusCookie = readInviteIntentCookie(
+        redeemedStatusIntent.cookie,
+      );
       assert.ok(redeemedStatusCookie);
-      await db.update(invites).set({ status: 'redeemed', redeemedAt: new Date() }).where(eq(invites.id, redeemedStatusInvite.invite.id));
+      await db
+        .update(invites)
+        .set({ status: 'redeemed', redeemedAt: new Date() })
+        .where(eq(invites.id, redeemedStatusInvite.invite.id));
       await assert.rejects(
         () =>
           createUserFromInviteIntent({
@@ -1263,8 +2370,13 @@ async function runAssertions() {
 
       const raceEmail = `redemption-race-${databaseName}@example.test`;
       const raceInvite = await createInvite({ email: raceEmail });
-      const raceIntents = await Promise.all([createInviteIntent(raceInvite.token!), createInviteIntent(raceInvite.token!)]);
-      const raceCookies = raceIntents.map((item) => readInviteIntentCookie(item?.cookie || null));
+      const raceIntents = await Promise.all([
+        createInviteIntent(raceInvite.token!),
+        createInviteIntent(raceInvite.token!),
+      ]);
+      const raceCookies = raceIntents.map((item) =>
+        readInviteIntentCookie(item?.cookie || null),
+      );
       assert.ok(raceCookies.every(Boolean));
       const raceResults = await Promise.allSettled(
         raceCookies.map((item, index) =>
@@ -1282,20 +2394,36 @@ async function runAssertions() {
         'concurrent redemption of one invite must have one winner',
       );
       assert.equal(
-        raceResults.filter((result) => result.status === 'rejected' && result.reason instanceof InviteRequiredError).length,
+        raceResults.filter(
+          (result) =>
+            result.status === 'rejected' &&
+            result.reason instanceof InviteRequiredError,
+        ).length,
         1,
         'the losing concurrent redemption must be rejected cleanly',
       );
-      const [raceUser] = await db.select().from(users).where(eq(users.email, raceEmail));
+      const [raceUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, raceEmail));
       assert.ok(raceUser);
       assert.equal(
-        (await db.select().from(creditLedger).where(eq(creditLedger.userId, raceUser.id))).length,
+        (
+          await db
+            .select()
+            .from(creditLedger)
+            .where(eq(creditLedger.userId, raceUser.id))
+        ).length,
         1,
         'concurrent redemption must grant credits once',
       );
       assert.equal(
-        (await db.select().from(authIntents).where(eq(authIntents.inviteId, raceInvite.invite.id))).filter((item) => item.consumedAt)
-          .length,
+        (
+          await db
+            .select()
+            .from(authIntents)
+            .where(eq(authIntents.inviteId, raceInvite.invite.id))
+        ).filter((item) => item.consumedAt).length,
         1,
         'concurrent redemption must consume one intent',
       );
@@ -1332,17 +2460,28 @@ async function runAssertions() {
         `);
       }
       assert.equal(
-        (await db.select().from(users).where(eq(users.email, rollbackEmail))).length,
+        (await db.select().from(users).where(eq(users.email, rollbackEmail)))
+          .length,
         0,
         'failed redemption must roll back the user grant',
       );
       assert.equal(
-        (await db.select().from(authIntents).where(eq(authIntents.id, rollbackCookie.id)))[0]?.consumedAt,
+        (
+          await db
+            .select()
+            .from(authIntents)
+            .where(eq(authIntents.id, rollbackCookie.id))
+        )[0]?.consumedAt,
         null,
         'failed redemption must roll back intent consumption',
       );
       assert.notEqual(
-        (await db.select().from(invites).where(eq(invites.id, rollbackInvite.invite.id)))[0]?.status,
+        (
+          await db
+            .select()
+            .from(invites)
+            .where(eq(invites.id, rollbackInvite.invite.id))
+        )[0]?.status,
         'redeemed',
         'failed redemption must leave the invite available',
       );
@@ -1376,8 +2515,16 @@ try {
   targetPool = undefined;
   await runPostgresMigrations(targetUrl);
   targetPool = new Pool({ connectionString: targetUrl });
-  assert.equal(await fingerprint(targetPool), firstFingerprint, 'second migration changed schema fingerprint');
-  assert.deepEqual(await migrationMetadata(targetPool), firstMetadata, 'second migration changed migration metadata');
+  assert.equal(
+    await fingerprint(targetPool),
+    firstFingerprint,
+    'second migration changed schema fingerprint',
+  );
+  assert.deepEqual(
+    await migrationMetadata(targetPool),
+    firstMetadata,
+    'second migration changed migration metadata',
+  );
   await targetPool.end();
   targetPool = undefined;
   await runAssertions();
@@ -1389,13 +2536,23 @@ try {
   };
 } finally {
   await targetPool?.end().catch(() => {});
-  await adminPool.query(`DROP DATABASE IF EXISTS ${quotedIdentifier(databaseName)} WITH (FORCE)`).catch((error) => {
-    cleanupError = error;
-  });
+  await adminPool
+    .query(
+      `DROP DATABASE IF EXISTS ${quotedIdentifier(databaseName)} WITH (FORCE)`,
+    )
+    .catch((error) => {
+      cleanupError = error;
+    });
   if (!cleanupError) {
-    const { rows } = await adminPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [databaseName]);
+    const { rows } = await adminPool.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      [databaseName],
+    );
     cleanupVerified = rows.length === 0;
-    if (!cleanupVerified) cleanupError = new Error(`Test database still exists after cleanup: ${databaseName}`);
+    if (!cleanupVerified)
+      cleanupError = new Error(
+        `Test database still exists after cleanup: ${databaseName}`,
+      );
   }
   await adminPool.end().catch(() => {});
 }

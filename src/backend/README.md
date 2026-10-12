@@ -79,3 +79,12 @@ After an approved production deployment, follow the
 [production auth and proxy billing smoke](../../docs/production-auth-proxy-smoke.md)
 to verify the real WorkOS callback, packaged device handoff, structured tool
 calling, billing debit, and non-zero Google usage telemetry.
+
+Before enabling commercial Checkout, follow the
+[billing launch-readiness gates](../../docs/billing-launch-readiness.md).
+Configure `BILLING_PRICE_APPROVER_WORKOS_USER_ID` to the owner's exact WorkOS
+user ID in each environment before approval is needed. Price-term approval is
+fail-closed when this value is unset and is restricted to that WorkOS identity
+when the account also has the admin role. Code readiness does not approve
+production Price terms, webhook configuration, historical Stripe coverage, or
+the production migration/deploy consequence.

@@ -2,6 +2,7 @@ import type { CommandAction } from '../palette/model';
 
 const DASHBOARD_LIMIT_KINDS = new Set([
   'insufficient_credits',
+  'free_spend_cap_reached',
   'rate_limited',
   'prompt_too_large',
 ]);

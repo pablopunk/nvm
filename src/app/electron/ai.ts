@@ -17,6 +17,11 @@ import {
   CONVERSATION_AI_TOOLS,
   missingConversationAiTools,
 } from './ai-tool-policy';
+import {
+  fetchDiagnosticBackend,
+  observeAgentResponses,
+  observeProviderOptions,
+} from './backend-observability';
 import { type ByoKeySnapshot, getByoKey } from './byo-key';
 import {
   markDebugPerformance,
@@ -24,14 +29,16 @@ import {
   recordDebugPerformance,
 } from './debug-performance';
 import { inspectExtensionManifest } from './extension-manifest';
+import { freeSpendCapNoticeFromText } from './free-spend-cap-notice';
 import * as logger from './logger';
 import { type LogLevel, type LogSource, readRecentLogs } from './logger';
 import { nevermindDesktopHeaders } from './nevermind-api';
 import {
-  fetchDiagnosticBackend,
-  observeAgentResponses,
-  observeProviderOptions,
-} from './backend-observability';
+  getNevermindAuth,
+  getNevermindDashboardUrl,
+  NevermindAuthRequiredError,
+} from './nevermind-auth';
+import { checkNevermindCompatibility } from './nevermind-compatibility';
 import {
   bindOperation,
   currentOperation,
@@ -40,12 +47,6 @@ import {
   recordOperationFailure,
   runOperation,
 } from './observability';
-import {
-  getNevermindAuth,
-  getNevermindDashboardUrl,
-  NevermindAuthRequiredError,
-} from './nevermind-auth';
-import { checkNevermindCompatibility } from './nevermind-compatibility';
 
 type AiEvent = {
   type: string;
@@ -77,6 +78,7 @@ function observeAiEvent(event: AiEvent) {
 type AiLimitNotice = {
   kind:
     | 'insufficient_credits'
+    | 'free_spend_cap_reached'
     | 'rate_limited'
     | 'prompt_too_large'
     | 'unsupported_client';
@@ -329,6 +331,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     current: {
       credits: { paid: number; free: number; total: number };
       notice: string;
+      noticeReason?: string;
     } | null;
   } = { current: null };
 
@@ -399,11 +402,17 @@ function createNevermindAi(options: NevermindAiOptions) {
     if (credit?.notice === 'blocked') {
       operationOutcome('blocked');
       creditInfoRef.current = null;
+      const freeSpendPaused = credit.noticeReason === 'free_spend_cap_reached';
       const limit: AiLimitNotice = {
-        kind: 'insufficient_credits',
-        title: 'Credits needed',
-        message:
-          "You've reached your Nevermind AI credit limit. Open your dashboard to review your account.",
+        kind: freeSpendPaused
+          ? 'free_spend_cap_reached'
+          : 'insufficient_credits',
+        title: freeSpendPaused
+          ? 'Free AI temporarily paused'
+          : 'Credits needed',
+        message: freeSpendPaused
+          ? 'Free-pool requests are temporarily paused. Capacity may return earlier as in-flight reservations settle or release.'
+          : "You've reached your Nevermind AI credit limit. Open your dashboard to review your account.",
         actionTitle: 'Open Dashboard',
         action: {
           type: 'openUrl',
@@ -1257,6 +1266,18 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
   const text = searchableErrorText(error);
   const retryAfterSec =
     Number(text.match(/retry[_ -]?after[^0-9]*(\d+)/i)?.[1] || 0) || undefined;
+  const freeSpendNotice = freeSpendCapNoticeFromText(text);
+  if (freeSpendNotice) {
+    return {
+      ...freeSpendNotice,
+      actionTitle: 'Open Dashboard',
+      action: {
+        type: 'openUrl',
+        title: 'Open Dashboard',
+        url: getNevermindDashboardUrl(),
+      },
+    };
+  }
   if (/insufficient[_ -]?credits|no credits remaining|402\b/i.test(text)) {
     return {
       kind: 'insufficient_credits',
@@ -1458,6 +1479,7 @@ type BackendDescriptor = {
   creditKind?: 'paid' | 'free';
   credits?: { paid: number; free: number; total: number };
   notice?: 'ok' | 'low' | 'blocked';
+  noticeReason?: 'free_spend_cap_reached';
   costEstimate?: number;
 };
 
@@ -1544,6 +1566,9 @@ async function resolveAiModelAndAuth(
     ? {
         credits: descriptor.credits,
         notice: descriptor.notice ?? 'ok',
+        ...(descriptor.noticeReason
+          ? { noticeReason: descriptor.noticeReason }
+          : {}),
       }
     : null;
   return {

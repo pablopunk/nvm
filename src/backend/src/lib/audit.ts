@@ -3,7 +3,22 @@ import { auditLog } from '../db/schema';
 
 export type AuditExecutor = Pick<typeof db, 'insert'>;
 
-export type AuditAction = 'model.changed' | 'provider.changed' | 'role.changed' | 'credits.granted' | 'route_breaker.reenabled';
+export type AuditAction =
+  | 'model.changed'
+  | 'provider.changed'
+  | 'role.changed'
+  | 'credits.granted'
+  | 'credits.adjusted'
+  | 'route_breaker.reenabled'
+  | 'financials.reconciliation_started'
+  | 'financials.reconciliation_page_imported'
+  | 'free_spend_cap.changed'
+  | 'billing.price_terms_approved'
+  | 'billing.reconciliation_resolved'
+  | 'billing.reconciliation_attempted'
+  | 'waitlist.invite_queued'
+  | 'waitlist.status_changed'
+  | 'admin.mutation';
 
 type AuditInput = {
   actorUserId: string | null;
@@ -14,7 +29,10 @@ type AuditInput = {
 };
 
 /** Write audit data through the caller's transaction and let failures abort it. */
-export async function recordAuditStrict(executor: AuditExecutor, input: AuditInput) {
+export async function recordAuditStrict(
+  executor: AuditExecutor,
+  input: AuditInput,
+) {
   await executor.insert(auditLog).values({
     actorUserId: input.actorUserId,
     action: input.action,

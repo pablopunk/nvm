@@ -1,42 +1,68 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
-import { requireSameOrigin } from '../../../lib/csrf';
 import {
-  getModelRoute,
-  listKnownProviders,
-  isProviderEnabled,
-  modelRouteToRef,
-  parseModelRouteSlot,
-  parseModelRouteRef,
-  setModelRoute,
-  ModelNotConfiguredError,
+  adminMutationKeyFromRequest,
+  adminMutationResponse,
+  executeAdminMutation,
+} from '../../../lib/admin-mutations';
+import { recordAuditStrict } from '../../../lib/audit';
+import { requireSameOrigin } from '../../../lib/csrf';
+import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
+import {
   DEFAULT_THINKING_LEVEL,
+  getModelRoute,
+  isProviderEnabled,
+  listKnownProviders,
+  ModelNotConfiguredError,
+  type ModelRouteSlot,
+  modelRouteToRef,
+  parseModelRouteRef,
+  parseModelRouteSlot,
+  setModelRoute,
   THINKING_LEVELS,
   type ThinkingLevel,
-  type ModelRouteSlot,
 } from '../../../lib/settings';
-import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
-import { recordAudit } from '../../../lib/audit';
 import { safeJsonBody } from '../../../lib/validation';
 
 const putModelSchema = z.object({
   tier: z.enum(['paid', 'free']).optional(),
-  purpose: z.enum(['paid', 'free', 'smart', 'fast', 'pro-smart', 'pro-fast', 'free-smart', 'free-fast']).optional(),
+  purpose: z
+    .enum([
+      'paid',
+      'free',
+      'smart',
+      'fast',
+      'pro-smart',
+      'pro-fast',
+      'free-smart',
+      'free-fast',
+    ])
+    .optional(),
   model: z.string().optional(),
   modelRef: z.string().optional(),
-  thinkingLevel: z.string().optional().refine(
-    (value) => value === undefined || THINKING_LEVELS.includes(value as ThinkingLevel),
-    'Invalid thinking level',
-  ),
+  thinkingLevel: z
+    .string()
+    .optional()
+    .refine(
+      (value) =>
+        value === undefined || THINKING_LEVELS.includes(value as ThinkingLevel),
+      'Invalid thinking level',
+    ),
 });
 
 async function listModelRefs() {
   const providers = listKnownProviders();
-  const groups = await Promise.all(providers.map(async (provider) => {
-    const models = await listModelsForProvider(provider);
-    return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
-  }));
+  const groups = await Promise.all(
+    providers.map(async (provider) => {
+      const models = await listModelsForProvider(provider);
+      return models.map((modelId) => ({
+        provider,
+        modelId,
+        ref: modelRouteToRef({ provider, modelId }),
+      }));
+    }),
+  );
   return groups.flat();
 }
 
@@ -55,7 +81,8 @@ function modelRouteSlotFromBody(value: unknown): ModelRouteSlot {
 }
 
 export const GET: APIRoute = async ({ request }) => {
-  if (!(await requireAdmin(request))) return new Response('Forbidden', { status: 403 });
+  if (!(await requireAdmin(request)))
+    return new Response('Forbidden', { status: 403 });
   return Response.json({
     paid: await safeRoute('paid'),
     free: await safeRoute('free'),
@@ -82,22 +109,83 @@ export const PUT: APIRoute = async ({ request }) => {
 
   const slot = modelRouteSlotFromBody(body.purpose ?? body.tier);
   const route = parseModelRouteRef(body.modelRef ?? body.model ?? '');
-  if (!route) return new Response('Missing or invalid modelRef', { status: 400 });
+  if (!route)
+    return Response.json(
+      {
+        error: {
+          type: 'invalid_model',
+          message: 'Missing or invalid modelRef.',
+        },
+      },
+      { status: 400 },
+    );
 
   const cost = await lookupModelCost(route.provider, route.modelId);
-  if (!cost) return new Response(`No pricing for ${route.provider}/${route.modelId}`, { status: 400 });
-  if (!(await isProviderEnabled(route.provider))) return new Response(`Provider ${route.provider} is disabled`, { status: 400 });
+  if (!cost)
+    return Response.json(
+      {
+        error: {
+          type: 'pricing_unavailable',
+          message: 'The selected model has no known pricing.',
+        },
+      },
+      { status: 400 },
+    );
+  if (!(await isProviderEnabled(route.provider)))
+    return Response.json(
+      {
+        error: {
+          type: 'provider_disabled',
+          message: 'The selected provider is disabled.',
+        },
+      },
+      { status: 400 },
+    );
 
-  const thinkingLevel = (body.thinkingLevel as ThinkingLevel | undefined)
-    ?? (await safeRoute(slot))?.thinkingLevel
-    ?? DEFAULT_THINKING_LEVEL;
-  await setModelRoute(slot, { ...route, thinkingLevel });
-  await recordAudit({
+  const thinkingLevel =
+    (body.thinkingLevel as ThinkingLevel | undefined) ??
+    (await safeRoute(slot))?.thinkingLevel ??
+    DEFAULT_THINKING_LEVEL;
+  const idempotencyKey = adminMutationKeyFromRequest(request);
+  if (!idempotencyKey) {
+    return Response.json(
+      {
+        error: {
+          type: 'idempotency_key_required',
+          message: 'Provide a UUID Idempotency-Key.',
+        },
+      },
+      { status: 400 },
+    );
+  }
+  const result = await executeAdminMutation({
     actorUserId: actor.id,
-    action: 'model.changed',
-    targetType: 'model',
-    targetId: modelRouteToRef(route),
-    meta: { slot, provider: route.provider, thinkingLevel, ...(slot === 'free' || slot === 'paid' ? { tier: slot } : {}) },
+    idempotencyKey,
+    payload: { slot, route, thinkingLevel },
+    execute: async (tx) => {
+      await setModelRoute(slot, { ...route, thinkingLevel }, tx);
+      await recordAuditStrict(tx, {
+        actorUserId: actor.id,
+        action: 'model.changed',
+        targetType: 'model',
+        targetId: modelRouteToRef(route),
+        meta: {
+          slot,
+          provider: route.provider,
+          thinkingLevel,
+          ...(slot === 'free' || slot === 'paid' ? { tier: slot } : {}),
+          idempotencyKey,
+        },
+      });
+      return {
+        body: {
+          ok: true,
+          slot,
+          modelRef: modelRouteToRef(route),
+          thinkingLevel,
+        },
+      };
+    },
   });
-  return Response.json({ ok: true });
+  return adminMutationResponse(result);
 };
