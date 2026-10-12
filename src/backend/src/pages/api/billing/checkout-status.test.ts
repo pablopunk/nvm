@@ -168,6 +168,27 @@ function installApprovedPriceStripe(
   } as any);
 }
 
+function installOpenCheckoutSession(
+  sessionId: string,
+  orderId: string,
+  customerId: string,
+) {
+  setStripeForTests({
+    checkout: {
+      sessions: {
+        retrieve: async () => ({
+          id: sessionId,
+          status: 'open',
+          payment_status: 'unpaid',
+          customer: customerId,
+          metadata: { order_id: orderId },
+          payment_intent: null,
+        }),
+      },
+    },
+  } as any);
+}
+
 afterEach(() => {
   resetDbForTests();
   setStripeForTests(null);
@@ -470,11 +491,20 @@ test('checkout POST distinguishes missing, valid, invalid keys and persisted pro
     userId: user.id,
     attemptKey,
     intentHash,
+    priceTermsId: 'term_processing',
     priceId: 'price_unconfigured',
     state: 'creating',
     leaseExpiresAt: new Date(Date.now() + 60_000),
   };
-  installDb(new Map([[billingOrders, [[creatingOrder], [creatingOrder]]]]));
+  installDb(
+    new Map<unknown, unknown[][]>([
+      [billingOrders, [[creatingOrder], [creatingOrder]]],
+      [
+        billingPriceTerms,
+        [[{ id: 'term_processing', source: 'owner_approved_verified_stripe_price' }]],
+      ],
+    ]),
+  );
   const processing = await postCheckout(attemptKey);
   assert.equal(processing.status, 202);
   assert.deepEqual(await processing.json(), { status: 'processing' });
@@ -591,10 +621,19 @@ test('definitive customer creation failure is not_created, while a durably faile
     userId: user.id,
     attemptKey,
     intentHash,
+    priceTermsId: 'term_failed',
     priceId: 'price_pro',
     state: 'failed',
   };
-  installDb(new Map([[billingOrders, [[failedOrder]]]]));
+  installDb(
+    new Map<unknown, unknown[][]>([
+      [billingOrders, [[failedOrder], [failedOrder]]],
+      [
+        billingPriceTerms,
+        [[{ id: 'term_failed', source: 'owner_approved_verified_stripe_price' }]],
+      ],
+    ]),
+  );
   const durableFailure = await checkoutPost(
     subscriptionCheckoutRequest(attemptKey),
   );
@@ -795,6 +834,7 @@ test('Stripe return resolves the replacement order after browser attempt storage
     attemptKey: '33333333-3333-4333-8333-333333333333',
     sessionId: 'cs_replacement',
     sessionUrl: 'https://checkout.stripe.test/cs_replacement',
+    stripeCustomerId: 'cus_retry',
     kind: 'top_up',
     priceId: 'price_pack',
     priceTermsId: 'term-owner-approved',
@@ -818,6 +858,11 @@ test('Stripe return resolves the replacement order after browser attempt storage
     ]),
   );
   mockSession(t);
+  installOpenCheckoutSession(
+    replacement.sessionId,
+    replacement.id,
+    replacement.stripeCustomerId,
+  );
 
   const request = new Request(
     'https://www.nvm.fyi/api/billing/checkout-status',
@@ -854,6 +899,7 @@ test('Stripe return accepts prior attempt plus linked replacement session, but r
     attemptKey: '33333333-3333-4333-8333-333333333333',
     sessionId: 'cs_replacement',
     sessionUrl: 'https://checkout.stripe.test/cs_replacement',
+    stripeCustomerId: 'cus_retry',
     kind: 'top_up',
     priceId: 'price_pack',
     priceTermsId: 'term-owner-approved',
@@ -877,6 +923,11 @@ test('Stripe return accepts prior attempt plus linked replacement session, but r
     ]),
   );
   mockSession(t);
+  installOpenCheckoutSession(
+    replacement.sessionId,
+    replacement.id,
+    replacement.stripeCustomerId,
+  );
   const response = await POST(
     context(
       new Request('https://www.nvm.fyi/api/billing/checkout-status', {

@@ -1286,7 +1286,7 @@ async function runAssertions() {
             .where(
               and(
                 eq(creditLedger.reason, 'ai_usage'),
-                eq(creditLedger.refId, atomicRequestId),
+                eq(creditLedger.refId, `${atomicRequestId}:paid`),
               ),
             )
         ).length,
@@ -1345,7 +1345,7 @@ async function runAssertions() {
             .where(
               and(
                 eq(creditLedger.reason, 'ai_usage'),
-                eq(creditLedger.refId, rollbackRequestId),
+                eq(creditLedger.refId, `${rollbackRequestId}:paid`),
               ),
             )
         ).length,
@@ -1518,7 +1518,7 @@ async function runAssertions() {
             .where(
               and(
                 eq(creditLedger.reason, 'ai_usage'),
-                eq(creditLedger.refId, dedupRaceRequestId),
+                eq(creditLedger.refId, `${dedupRaceRequestId}:paid`),
               ),
             )
         ).length,

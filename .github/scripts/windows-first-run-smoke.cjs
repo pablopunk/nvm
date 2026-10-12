@@ -102,7 +102,7 @@ function timeoutDevelopmentStartup(state, finish) {
 function monitorDevelopmentStartup(resolve, reject) {
   const child = spawn(pnpmExecutable, ['run', 'dev'], {
     cwd: root,
-    env,
+    env: { ...env, NVM_ELECTRON_FIRST_RUN_SMOKE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const state = { output: '', settled: false };

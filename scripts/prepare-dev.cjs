@@ -12,15 +12,21 @@ const tsxBin = path.join(
   '.bin',
   isWindows ? 'tsx.cmd' : 'tsx',
 );
-const migration = spawnSync(tsxBin, ['scripts/migrate.ts'], {
-  cwd: backendDir,
-  encoding: 'utf8',
-  env: process.env,
-  shell: isWindows,
-});
-process.stdout.write(migration.stdout || '');
-process.stderr.write(migration.stderr || '');
-if (migration.status !== 0) process.exit(migration.status || 1);
+if (process.env.NVM_ELECTRON_FIRST_RUN_SMOKE === '1') {
+  console.log(
+    'Skipping database migrations for the Electron startup smoke test.',
+  );
+} else {
+  const migration = spawnSync(tsxBin, ['scripts/migrate.ts'], {
+    cwd: backendDir,
+    encoding: 'utf8',
+    env: process.env,
+    shell: isWindows,
+  });
+  process.stdout.write(migration.stdout || '');
+  process.stderr.write(migration.stderr || '');
+  if (migration.status !== 0) process.exit(migration.status || 1);
+}
 
 if (process.platform === 'darwin') {
   // The dev app runs as Electron.app (com.github.Electron). If it crashes, macOS

@@ -746,6 +746,10 @@ export async function createBillingCheckout(input: {
       );
     throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
   }
+  const successUrl = publicUrl(
+    '/profile?billing=success&session_id={CHECKOUT_SESSION_ID}',
+  );
+  const cancelUrl = publicUrl('/profile?billing=canceled');
   // Fail closed until an owner-approved, versioned price snapshot exists.
   // Retrieve Stripe facts before creating a Customer or entering any DB tx.
   const termVersions = await db
@@ -816,9 +820,8 @@ export async function createBillingCheckout(input: {
     verifiedPrice.unit_amount !== terms.unitAmount ||
     verifiedPrice.currency.toLowerCase() !== terms.currency ||
     (verifiedPrice.type === 'recurring') !== (terms.kind === 'subscription') ||
-    verifiedPrice.recurring?.interval !== terms.interval ||
-    (verifiedPrice.recurring?.interval_count ?? null) !== terms.intervalCount ||
-    recurringInterval !== terms.interval
+    recurringInterval !== terms.interval ||
+    (verifiedPrice.recurring?.interval_count ?? null) !== terms.intervalCount
   ) {
     throw new BillingRequestError(
       'unknown_price',
@@ -987,10 +990,8 @@ export async function createBillingCheckout(input: {
       customer,
       client_reference_id: input.user.id,
       line_items: [{ price: item.priceId, quantity: 1 }],
-      success_url: publicUrl(
-        '/profile?billing=success&session_id={CHECKOUT_SESSION_ID}',
-      ),
-      cancel_url: publicUrl('/profile?billing=canceled'),
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata,
       ...(item.kind === 'subscription'
         ? { subscription_data: { metadata } }
@@ -1737,6 +1738,7 @@ export async function retryBillingCheckout(input: {
       return {
         kind: 'status' as const,
         status: 'reconciliation_required' as const,
+        ...(operation ? { operationId: operation.id } : {}),
       };
     }
     if (!operation) {
