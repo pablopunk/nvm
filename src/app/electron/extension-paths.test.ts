@@ -10,8 +10,13 @@ test('uses the dot-config extension path on every platform', () => {
       userDataDirectory: '/data/nvm',
     }),
     {
-      extensionsDir: '/home/example/.config/nevermind/extensions',
-      extensionDraftsDir: '/data/nvm/extension-drafts',
+      extensionsDir: path.join(
+        '/home/example',
+        '.config',
+        'nevermind',
+        'extensions',
+      ),
+      extensionDraftsDir: path.join('/data/nvm', 'extension-drafts'),
     },
   );
 
@@ -44,8 +49,8 @@ test('keeps extension paths inside test user data', () => {
       useUserDataForExtensions: true,
     }),
     {
-      extensionsDir: '/tmp/nvm-test/extensions',
-      extensionDraftsDir: '/tmp/nvm-test/extension-drafts',
+      extensionsDir: path.join('/tmp/nvm-test', 'extensions'),
+      extensionDraftsDir: path.join('/tmp/nvm-test', 'extension-drafts'),
     },
   );
 });

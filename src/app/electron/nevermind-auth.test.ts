@@ -62,10 +62,12 @@ const {
 const production = 'https://api.nvm.fyi';
 
 async function waitFor(predicate: () => boolean) {
-  for (let attempt = 0; attempt < 1000; attempt += 1) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
     if (predicate()) return;
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
+  if (predicate()) return;
   throw new Error('Timed out waiting for auth test state');
 }
 
