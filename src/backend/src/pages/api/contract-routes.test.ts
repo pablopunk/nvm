@@ -58,7 +58,9 @@ function createChain(
 ) {
   let table: unknown;
   const promise = () =>
-    Promise.resolve(typeof result === 'function' ? result(table) : result);
+    Promise.resolve(
+      typeof result === 'function' ? result(table) : result,
+    );
   const chain = {
     from: (value: unknown) => {
       table = value;
