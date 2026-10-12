@@ -275,7 +275,7 @@ test('retry POST replays the durable same-key operation after its original respo
     state: 'checkout_open',
   };
   installDb(
-    new Map([
+    new Map<unknown, unknown[][]>([
       [billingRetryOperations, [[operation]]],
       [billingOrders, [[prior], [prior], [replacement]]],
       [
@@ -668,7 +668,7 @@ test('legacy checkout_in_flight error does not claim a persisted active order wa
     createdAt: new Date(0),
   };
   installDb(
-    new Map([
+    new Map<unknown, unknown[][]>([
       [users, [[userWithCustomer], [userWithCustomer]]],
       [billingPriceTerms, [[approvedTopUpTerm]]],
       [subscriptions, [[{ status: 'active' }], [{ status: 'active' }]]],
@@ -808,7 +808,7 @@ test('Stripe return resolves the replacement order after browser attempt storage
     state: 'checkout_open',
   };
   installDb(
-    new Map([
+    new Map<unknown, unknown[][]>([
       [billingOrders, [[replacement], [replacement]]],
       [billingRetryOperations, [[operation], [operation]]],
       [
@@ -867,7 +867,7 @@ test('Stripe return accepts prior attempt plus linked replacement session, but r
     state: 'checkout_open',
   };
   installDb(
-    new Map([
+    new Map<unknown, unknown[][]>([
       [billingOrders, [[prior], [replacement], [replacement]]],
       [billingRetryOperations, [[operation], [operation]]],
       [

@@ -1192,7 +1192,7 @@ async function runAssertions() {
         .where(
           and(
             eq(creditLedger.reason, 'ai_usage'),
-            eq(creditLedger.refId, staleRaceRequestId),
+            eq(creditLedger.refId, `${staleRaceRequestId}:paid`),
           ),
         );
       const staleRaceUsage = await db
