@@ -370,9 +370,20 @@ test('production billing rejects stale dashboard aliases as configuration withou
   const previousEnvironment = process.env.VERCEL_ENV;
   const previousProduction = process.env.PRODUCTION_ORIGIN;
   const previousDashboard = process.env.PUBLIC_DASHBOARD_URL;
+  const previousSubscriptionTiers = process.env.STRIPE_SUBSCRIPTION_TIERS;
   process.env.VERCEL_ENV = 'production';
   delete process.env.PRODUCTION_ORIGIN;
   process.env.PUBLIC_DASHBOARD_URL = 'https://nvm.fyi';
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    {
+      priceId: 'price_pro',
+      tier: 'pro',
+      credits: 1000,
+      amount: 1000,
+      currency: 'usd',
+      interval: 'month',
+    },
+  ]);
   try {
     await assert.rejects(
       () => createBillingCheckout({ user, kind: 'subscription' }),
@@ -385,6 +396,9 @@ test('production billing rejects stale dashboard aliases as configuration withou
     else process.env.PRODUCTION_ORIGIN = previousProduction;
     if (previousDashboard === undefined) delete process.env.PUBLIC_DASHBOARD_URL;
     else process.env.PUBLIC_DASHBOARD_URL = previousDashboard;
+    if (previousSubscriptionTiers === undefined)
+      delete process.env.STRIPE_SUBSCRIPTION_TIERS;
+    else process.env.STRIPE_SUBSCRIPTION_TIERS = previousSubscriptionTiers;
   }
 });
 

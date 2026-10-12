@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import type { APIContext } from 'astro';
-import { setDbForTests, resetDbForTests } from '../../db/client';
-import { resetRateLimitOverridesForTests, setRateLimitOverridesForTests } from '../../lib/ratelimit';
-import { resetPricingCacheForTests } from '../../lib/pricing';
+import { resetDbForTests, setDbForTests } from '../../db/client';
+import {
+  apiTokens,
+  creditReservations,
+  freeSpendCapConfig,
+  freeSpendMonthlyBudgets,
+} from '../../db/schema';
 import { chooseFundedAccountRoute } from '../../lib/active-model-funding';
-import { estimateInputTokensFromBody, MAX_INPUT_TOKENS } from '../../lib/limits';
+import {
+  estimateInputTokensFromBody,
+  MAX_INPUT_TOKENS,
+} from '../../lib/limits';
+import {
+  resetRateLimitOverridesForTests,
+  setRateLimitOverridesForTests,
+} from '../../lib/ratelimit';
+import { resetPricingCacheForTests } from '../../lib/pricing';
 import { POST as initiateDeviceAuth } from './auth/device/initiate';
 import { POST as exchangeDeviceAuth } from './auth/device/exchange';
 import { GET as getActiveModel } from './v1/active-model';
@@ -20,7 +32,7 @@ type FakeDb = {
   updatedValues: unknown[];
   select: () => ReturnType<typeof createChain>;
   insert: () => ReturnType<typeof createChain>;
-  update: () => ReturnType<typeof createChain>;
+  update: (table?: unknown) => ReturnType<typeof createChain>;
   transaction: (callback: (tx: FakeDb) => Promise<void>) => Promise<void>;
 };
 
@@ -30,10 +42,22 @@ function fixture(name: string) {
   return JSON.parse(readFileSync(new URL(`../../fixtures/contracts/desktop-v1/${name}.json`, import.meta.url), 'utf8'));
 }
 
-function createChain(result: unknown, onValues?: (values: unknown) => void, onSet?: (values: unknown) => void, valuesError?: Error) {
-  const promise = () => Promise.resolve(result);
+function createChain(
+  result: unknown | ((table: unknown) => unknown),
+  onValues?: (values: unknown) => void,
+  onSet?: (values: unknown) => void,
+  valuesError?: Error,
+) {
+  let table: unknown;
+  const promise = () =>
+    Promise.resolve(
+      typeof result === 'function' ? result(table) : result,
+    );
   const chain = {
-    from: () => chain,
+    from: (value: unknown) => {
+      table = value;
+      return chain;
+    },
     innerJoin: () => chain,
     where: () => chain,
     limit: () => chain,
@@ -57,25 +81,91 @@ function createChain(result: unknown, onValues?: (values: unknown) => void, onSe
   return chain;
 }
 
-function createFakeDb(input: { selects?: unknown[]; inserts?: unknown[]; updates?: unknown[]; failInsertAt?: number } = {}): FakeDb {
+function createFakeDb(
+  input: {
+    selects?: unknown[];
+    inserts?: unknown[];
+    updates?: unknown[];
+    failInsertAt?: number;
+    freeSpendCapReached?: boolean;
+    freeSpendBudget?: Partial<{
+      capMicrocents: number | null;
+      actualFreeCostMicrocents: number;
+      reservedFreeCostMicrocents: number;
+      halted: boolean;
+      baselineComplete: boolean;
+    }>;
+  } = {},
+): FakeDb {
   const selects = [...(input.selects ?? [])];
   const inserts = [...(input.inserts ?? [])];
   const updates = [...(input.updates ?? [])];
   const insertedValues: unknown[] = [];
   const updatedValues: unknown[] = [];
+  let lastReservationUpdate: Record<string, unknown> = {};
   let insertCalls = 0;
   let db: FakeDb;
   db = {
     insertedValues,
     updatedValues,
-    select: () => createChain(selects.shift() ?? []),
+    select: () =>
+      createChain((table: unknown) => {
+        if (table === freeSpendCapConfig)
+          return [
+            {
+              id: 'global',
+              capMicrocents: null,
+              updatedBy: null,
+              updatedAt: new Date(),
+            },
+          ];
+        if (table === freeSpendMonthlyBudgets) {
+          const now = new Date();
+          const capReached = input.freeSpendCapReached ?? false;
+          return [
+            {
+              monthKey: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
+              capMicrocents: capReached ? 0 : null,
+              actualFreeCostMicrocents: 0,
+              reservedFreeCostMicrocents: 0,
+              halted: capReached,
+              baselineComplete: !capReached,
+              updatedAt: now,
+              ...input.freeSpendBudget,
+            },
+          ];
+        }
+        return selects.shift() ?? [];
+      }),
     insert: () => {
       insertCalls += 1;
       const valuesError = insertCalls === input.failInsertAt ? new Error('forced settlement insert failure') : undefined;
       return createChain(inserts.shift() ?? [], (values) => insertedValues.push(values), undefined, valuesError);
     },
-    update: () => createChain(updates.shift() ?? [], undefined, (values) => updatedValues.push(values)),
-    transaction: async (callback: (tx: FakeDb) => Promise<void>) => callback(db),
+    update: (table?: unknown) =>
+      createChain(
+        table === creditReservations
+          ? () => [lastReservationUpdate]
+          : table === apiTokens ||
+          table === freeSpendCapConfig ||
+          table === freeSpendMonthlyBudgets
+          ? []
+          : (updates.shift() ?? []),
+        undefined,
+        (values) => {
+          if (table === creditReservations)
+            lastReservationUpdate = values as Record<string, unknown>;
+          if (
+            table !== apiTokens &&
+            table !== freeSpendCapConfig &&
+            table !== freeSpendMonthlyBudgets
+          ) {
+            updatedValues.push(values);
+          }
+        },
+      ),
+    transaction: async (callback: (tx: FakeDb) => Promise<void>) =>
+      callback(db),
   };
   return db;
 }
@@ -153,6 +243,9 @@ function proxySelects(
             }),
           },
         ];
+  const providerChainDepth =
+    options.providerChainDepth ??
+    (options.model === 'gemini-3-fast' ? 3 : 2);
   return [
     [{ user: { id: 'user_1', email: 'pablo@example.com', plan: options.plan ?? 'free', role: 'user' }, tokenId: 'token_1' }],
     [{ id: 1 }],
@@ -161,20 +254,50 @@ function proxySelects(
     [{ id: 'user_1' }],
     [],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
-    [{ reserved: 0 }],
-    ...Array.from({ length: options.providerChainDepth ?? (options.model === 'gemini-3-fast' ? 3 : 2) }, () => []),
+    [{ free: 0, paid: 0 }],
+    ...Array.from({ length: providerChainDepth }, () => []),
     [], // no tripped route breakers by default
+    ...reservationFinalizationSelects({
+      free: options.free ?? 10,
+      paid: options.paid ?? 0,
+    }),
+  ];
+}
+
+function reservationFinalizationSelects(input: {
+  free: number;
+  paid: number;
+}) {
+  const now = new Date();
+  const admissionMonth = `${now.getUTCFullYear()}-${String(
+    now.getUTCMonth() + 1,
+  ).padStart(2, '0')}`;
+  const reservedFreeCredits = input.free > 0 ? 1 : 0;
+  const reservedPaidCredits = reservedFreeCredits > 0 ? 0 : 1;
+  return [
+    [{ userId: 'user_1', admissionMonth }],
     [{ id: 'user_1' }],
     [
       {
         requestId: 'test-reservation',
         userId: 'user_1',
-        kind: (options.paid ?? 0) > 0 ? 'paid' : 'free',
+        kind: reservedFreeCredits > 0 ? 'free' : 'paid',
         reservedCredits: 1,
+        reservedFreeCredits,
+        reservedPaidCredits,
         status: 'pending',
+        admissionMonth,
+        reservedFreeCostMicrocents: 0,
       },
     ],
+    [{ free: input.free, paid: input.paid }],
   ];
+}
+
+function reservationResizeSelects(input: { free: number; paid: number }) {
+  const [snapshot, user, reservation, ledger] =
+    reservationFinalizationSelects(input);
+  return [snapshot, user, reservation, ledger, [{ free: 0, paid: 0 }]];
 }
 
 function authorizedChatRequest(
@@ -386,7 +509,12 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
         [{ value: JSON.stringify({ provider: 'openrouter', modelId: 'audio-model' }) }],
         [{ enabled: 'true' }],
         [{ requestId: 'audio-prepared-key' }],
-        [{ provider: 'openrouter' }],
+        [
+          {
+            userId: 'user_1',
+            admissionMonth: null,
+          },
+        ],
         [{ id: 'user_1' }],
         [
           {
@@ -397,6 +525,7 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
             reservedCredits: 5,
             reservedFreeCredits: 5,
             reservedPaidCredits: 0,
+            admissionMonth: null,
           },
         ],
       ],
@@ -436,7 +565,7 @@ test('tripped unprepared audio POST fails dedup without creating a reservation',
         [{ enabled: 'true' }],
         [{ provider: 'openrouter' }], // tripped breaker
       ],
-      inserts: [[{ id: 'dedup-claim' }], []],
+      inserts: [[], [{ id: 'dedup-claim' }]],
       updates: [[{ id: 'dedup-claim' }]],
     }),
   );
@@ -1310,11 +1439,15 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   assert.equal(promptSizeLogs[1]?.output_context_safety_tokens, 4096);
 });
 
-test('proxy route does not reject inline images as oversized text prompts', async () => {
+test('proxy rejects inline images before treating their payload size as text', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }));
-  installOpenAiFetch(() => Response.json({ usage: { prompt_tokens: 1_600, completion_tokens: 3 } }));
+  const db = installDb(
+    createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }),
+  );
+  installOpenAiFetch(() =>
+    Response.json({ usage: { prompt_tokens: 1_600, completion_tokens: 3 } }),
+  );
 
   const response = await postChatCompletion(
     routeContext(
@@ -1338,7 +1471,12 @@ test('proxy route does not reject inline images as oversized text prompts', asyn
     ),
   );
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 400);
+  assert.deepEqual(
+    await response.json(),
+    fixture('unsupported-request-shape-error'),
+  );
+  assert.equal(db.insertedValues.length, 0);
 });
 
 test('proxy route honors extension smart/fast model selection headers', async () => {
@@ -1423,18 +1561,7 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
           web_search_options: { search_context_size: 'high' },
           reasoning_effort: 'high',
           max_completion_tokens: 128,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'hello' },
-                {
-                  type: 'image_url',
-                  image_url: { url: 'data:image/png;base64,aGVsbG8=' },
-                },
-              ],
-            },
-          ],
+          messages: [{ role: 'user', content: 'hello' }],
         },
         { 'x-nevermind-ai-model': 'fast' },
       ),
@@ -1451,7 +1578,6 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
   assert.equal(forwardedBody.provider, undefined);
   assert.equal(forwardedBody.plugins, undefined);
   assert.equal(forwardedBody.web_search_options, undefined);
-  assert.equal(forwardedBody.messages[0].content[1].type, 'image_url');
   assert.equal((db.insertedValues.at(-1) as any).provider, 'openrouter');
   assert.equal((db.insertedValues.at(-1) as any).model, 'google/gemini-2.5-flash');
   assert.equal((db.insertedValues.at(-1) as any).upstreamCostMicrocents, 100_000_000);
@@ -1554,7 +1680,7 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
   assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 10);
 });
 
-test('proxy bills paid credits without granting a Free user Pro model entitlement', async () => {
+test('proxy spends free credits first without granting a Free user Pro model entitlement', async () => {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
@@ -1573,7 +1699,7 @@ test('proxy bills paid credits without granting a Free user Pro model entitlemen
 
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
-  assert.equal((db.insertedValues[1] as any).kind, 'paid');
+  assert.equal((db.insertedValues[1] as any).kind, 'free');
 });
 
 test('proxy preserves structured tool calls and debits the successful request', async function proxiesAndBillsToolCall() {
@@ -1646,9 +1772,9 @@ test('proxy preserves structured tool calls and debits the successful request', 
   assert.deepEqual(db.insertedValues[1], {
     userId: 'user_1',
     delta: -1,
-    kind: 'paid',
+    kind: 'free',
     reason: 'ai_usage',
-    refId: 'test-reservation',
+    refId: 'test-reservation:free',
   });
   assert.equal((db.insertedValues[2] as any).inputTokens, 9);
   assert.equal((db.insertedValues[2] as any).outputTokens, 4);
@@ -1802,8 +1928,7 @@ test('proxy retries release when settlement throws after reservation', async () 
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const selects = proxySelects({ free: 1000 });
   selects.push(
-    [{ id: 'user_1' }],
-    [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+    ...reservationFinalizationSelects({ free: 1000, paid: 0 }).slice(0, 3),
   );
   const db = installDb(createFakeDb({ selects, failInsertAt: 2 }));
   installOpenAiFetch(() =>
@@ -2060,9 +2185,9 @@ test('google proxy records split streaming usage metadata', async () => {
   assert.deepEqual(db.insertedValues[1], {
     userId: 'user_1',
     delta: -1,
-    kind: 'paid',
+    kind: 'free',
     reason: 'ai_usage',
-    refId: 'test-reservation',
+    refId: 'test-reservation:free',
   });
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
@@ -2087,11 +2212,11 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
         [{ id: 'user_1' }],
         [],
         [{ free: 500, paid: 1000 }],
-        [{ reserved: 0 }],
+        [{ free: 0, paid: 0 }],
         providerChain,
         [],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
+        ...reservationResizeSelects({ free: 500, paid: 1000 }),
+        ...reservationFinalizationSelects({ free: 500, paid: 1000 }),
       ],
     }),
   );
@@ -2130,7 +2255,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   assert.ok(primaryCalled, 'primary provider should have been tried');
   assert.ok(fallbackCalled, 'fallback provider should have been tried');
   assert.equal(db.insertedValues.length, 3);
-  assert.equal((db.insertedValues[1] as any).kind, 'paid');
+  assert.equal((db.insertedValues[1] as any).kind, 'free');
   assert.equal((db.insertedValues.at(-1) as any).provider, 'google');
   assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 5);
@@ -2154,11 +2279,11 @@ test('proxy breaker skips a tripped primary and dispatches only to its configure
         [{ id: 'user_1' }],
         [],
         [{ free: 500, paid: 1000 }],
-        [{ reserved: 0 }],
+        [{ free: 0, paid: 0 }],
         providerChain,
         [{ provider: 'opencode_zen', modelId: 'gemini-3-flash' }],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'paid', reservedCredits: 1, status: 'pending' }],
+        ...reservationResizeSelects({ free: 500, paid: 1000 }),
+        ...reservationFinalizationSelects({ free: 500, paid: 1000 }),
       ],
     }),
   );
@@ -2216,11 +2341,11 @@ test('proxy failover: when all providers fail, last error passes through', async
         [{ id: 'user_1' }],
         [],
         [{ free: 1000, paid: 0 }],
-        [{ reserved: 0 }],
+        [{ free: 0, paid: 0 }],
         providerChain,
         [],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        ...reservationResizeSelects({ free: 1000, paid: 0 }),
+        ...reservationFinalizationSelects({ free: 1000, paid: 0 }),
       ],
     }),
   );
@@ -2262,11 +2387,10 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
         [{ id: 'user_1' }],
         [],
         [{ free: 1000, paid: 0 }],
-        [{ reserved: 0 }],
+        [{ free: 0, paid: 0 }],
         providerChain,
         [],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        ...reservationFinalizationSelects({ free: 1000, paid: 0 }),
       ],
     }),
   );
@@ -2310,10 +2434,9 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
         [{ id: 'user_1' }],
         [],
         [{ free: 1000, paid: 0 }],
-        [{ reserved: 0 }],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [{ free: 0, paid: 0 }],
         [],
+        ...reservationFinalizationSelects({ free: 1000, paid: 0 }),
       ],
     }),
   );
@@ -2355,11 +2478,10 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
         [{ id: 'user_1' }],
         [],
         [{ free: 1000, paid: 0 }],
-        [{ reserved: 0 }],
+        [{ free: 0, paid: 0 }],
         providerChain,
         [],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        ...reservationFinalizationSelects({ free: 1000, paid: 0 }),
       ],
     }),
   );
@@ -2428,11 +2550,11 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
         [{ id: 'user_1' }],
         [],
         [{ free: 1000, paid: 0 }],
-        [{ reserved: 0 }],
+        [{ free: 0, paid: 0 }],
         [],
         [],
-        [{ id: 'user_1' }],
-        [{ requestId: 'test-reservation', userId: 'user_1', kind: 'free', reservedCredits: 1, status: 'pending' }],
+        [],
+        ...reservationFinalizationSelects({ free: 1000, paid: 0 }),
       ],
     }),
   );

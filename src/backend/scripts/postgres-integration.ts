@@ -772,7 +772,12 @@ async function runAssertions() {
           await db
             .select()
             .from(creditLedger)
-            .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, atomicRequestId)))
+            .where(
+              and(
+                eq(creditLedger.reason, 'ai_usage'),
+                eq(creditLedger.refId, `${atomicRequestId}:paid`),
+              ),
+            )
         ).length,
         1,
         'committed settlement retry has one charge',
@@ -808,7 +813,12 @@ async function runAssertions() {
           await db
             .select()
             .from(creditLedger)
-            .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, rollbackRequestId)))
+            .where(
+              and(
+                eq(creditLedger.reason, 'ai_usage'),
+                eq(creditLedger.refId, `${rollbackRequestId}:paid`),
+              ),
+            )
         ).length,
         0,
         'failure before commit rolls back the charge',
@@ -909,7 +919,12 @@ async function runAssertions() {
           await db
             .select()
             .from(creditLedger)
-            .where(and(eq(creditLedger.reason, 'ai_usage'), eq(creditLedger.refId, dedupRaceRequestId)))
+            .where(
+              and(
+                eq(creditLedger.reason, 'ai_usage'),
+                eq(creditLedger.refId, `${dedupRaceRequestId}:paid`),
+              ),
+            )
         ).length,
         1,
       );
