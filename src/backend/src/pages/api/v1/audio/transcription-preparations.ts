@@ -122,7 +122,11 @@ export const POST: APIRoute = async ({ request }) => {
     });
     if (!reservation.ok && reservation.reason === 'free_spend_cap_reached')
       return response(freeSpendCapErrorBody(), 503, auth.requestId);
-    if (!reservation.ok && reservation.reason === 'request_already_reserved')
+    if (
+      !reservation.ok &&
+      (reservation.reason === 'request_already_reserved' ||
+        reservation.reason === 'invalid_audio_preparation')
+    )
       return response(
         {
           error: {

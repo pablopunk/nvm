@@ -955,7 +955,7 @@ export async function finalizeReservation(
   return result;
 }
 
-/** DELETE may release provisional credit holds, never an active dispatch claim. */
+/** Cancellation releases provisional holds or tombstones an earlier cancel. */
 export async function cancelAudioPreparation(input: {
   reservationId: string;
   userId: string;
