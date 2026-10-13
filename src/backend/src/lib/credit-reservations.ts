@@ -955,7 +955,7 @@ export async function finalizeReservation(
   return result;
 }
 
-/** DELETE may release provisional credit holds, never an active dispatch claim. */
+/** Cancellation releases provisional holds or tombstones an earlier cancel. */
 export async function cancelAudioPreparation(input: {
   reservationId: string;
   userId: string;
@@ -995,6 +995,69 @@ async function finalizeReservationInternal(
     const now = new Date();
     const legacySettlementMonth =
       input.outcome === 'settle' ? utcMonthKey(now) : undefined;
+    if (onlyAudioPreparation) {
+      if (!input.expectedUserId)
+        throw new Error('Audio preparation cancellation requires an owner');
+      await lockFreeSpendCapConfig(tx, 'share');
+      const [user] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, input.expectedUserId))
+        .limit(1)
+        .for('update');
+      if (!user) throw new Error('Cannot cancel preparation for unknown user');
+      const [existing] = await tx
+        .select()
+        .from(creditReservations)
+        .where(eq(creditReservations.requestId, input.requestId))
+        .limit(1)
+        .for('update');
+      if (!existing) {
+        const [tombstone] = await tx
+          .insert(creditReservations)
+          .values({
+            requestId: input.requestId,
+            userId: input.expectedUserId,
+            kind: 'free',
+            reservedCredits: 0,
+            status: 'released',
+            purpose: 'audio',
+            audioState: 'cancelled',
+            actualCredits: 0,
+            reservedFreeCredits: 0,
+            reservedPaidCredits: 0,
+            actualFreeCredits: 0,
+            actualPaidCredits: 0,
+            estimatedProviderCostMicrocents: null,
+            estimatedTotalCredits: null,
+            estimateCostSource: null,
+            reservedFreeCostMicrocents: 0,
+            actualFreeCostMicrocents: 0,
+            expiresAt: now,
+            releasedAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoNothing({ target: creditReservations.requestId })
+          .returning({ requestId: creditReservations.requestId });
+        if (tombstone) return 'released';
+        const [conflict] = await tx
+          .select()
+          .from(creditReservations)
+          .where(eq(creditReservations.requestId, input.requestId))
+          .limit(1)
+          .for('update');
+        if (!conflict || conflict.userId !== input.expectedUserId)
+          throw new Error(`User does not own reservation ${input.requestId}`);
+        if (conflict.purpose === 'audio' && conflict.audioState === 'cancelled')
+          return 'already_terminal';
+        return 'not_prepared';
+      }
+      if (existing.userId !== input.expectedUserId)
+        throw new Error(`User does not own reservation ${input.requestId}`);
+      if (existing.status !== 'pending') return 'already_terminal';
+      if (existing.purpose !== 'audio' || existing.audioState !== 'prepared')
+        return 'not_prepared';
+    }
     const { reservation, budget } = await lockReservationAndBudget(
       tx,
       input.requestId,

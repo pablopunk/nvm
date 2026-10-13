@@ -533,4 +533,37 @@ export async function runAudioReservationAssertions(suffix: string) {
     assert.equal(raced.audioState, 'dispatched');
     await finalizeReservation({ requestId: racingId, outcome: 'release' });
   }
+
+  const cancelledBeforePreparationId = `audio-cancel-before-prepare-${suffix}`;
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: cancelledBeforePreparationId,
+      userId: user.id,
+    }),
+    'released',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: cancelledBeforePreparationId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'cancelled',
+  );
+  const latePreparation = await prepareAudioReservation({
+    ...input,
+    reservationId: cancelledBeforePreparationId,
+  });
+  assert.equal(latePreparation.ok, false);
+  if (!latePreparation.ok)
+    assert.equal(latePreparation.reason, 'invalid_audio_preparation');
+  const [cancelTombstone] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, cancelledBeforePreparationId));
+  assert.ok(cancelTombstone);
+  assert.equal(cancelTombstone.status, 'released');
+  assert.equal(cancelTombstone.audioState, 'cancelled');
+  assert.equal(cancelTombstone.reservedCredits, 0);
+  assert.equal(cancelTombstone.reservedFreeCostMicrocents, 0);
 }

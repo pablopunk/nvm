@@ -630,6 +630,21 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
         ],
         [{ enabled: 'true' }],
         [{ requestId: 'audio-prepared-key' }],
+        [{ id: 'user_1' }],
+        [
+          {
+            requestId: 'audio-prepared-key',
+            userId: 'user_1',
+            purpose: 'audio',
+            audioState: 'prepared',
+            status: 'pending',
+            kind: 'free',
+            reservedCredits: 5,
+            reservedFreeCredits: 5,
+            reservedPaidCredits: 0,
+            admissionMonth: null,
+          },
+        ],
         [
           {
             userId: 'user_1',
