@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import {
   BufferTarget,
@@ -146,6 +147,14 @@ test('canonical mono and stereo WAV workload equals outgoing sample count', asyn
       1920,
     );
   }
+});
+
+test('released-recorder-shaped Chromium speech normalizes from real WebM packets', async () => {
+  // Chromium MediaRecorder captured espeak-generated QA speech in an isolated VM.
+  const recording = await readFile(
+    new URL('../fixtures/audio/chromium-speech.webm', import.meta.url),
+  );
+  assertCanonicalWav(await normalizeTranscriptionAudio(recording), 2, 161_280);
 });
 
 test('Opus pre-skip is honored and zero-sample initial packets are not treated as decode errors', async () => {
