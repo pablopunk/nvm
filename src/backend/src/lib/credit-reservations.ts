@@ -252,7 +252,8 @@ async function reserveCreditsInternal(
         };
     }
 
-    let [existing] = await tx
+    let existing: typeof creditReservations.$inferSelect | undefined;
+    [existing] = await tx
       .select()
       .from(creditReservations)
       .where(eq(creditReservations.requestId, input.requestId))
