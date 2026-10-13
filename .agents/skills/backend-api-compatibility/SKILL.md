@@ -10,7 +10,7 @@ Nevermind's Electron desktop app ships on tagged releases while the backend may 
 ## Start here
 
 1. Read `docs/backend-api-compatibility.md`.
-2. Map both sides of the contract before changing code:
+2. Map both sides of the contract, including supported release tags rather than only current `main`, before changing code:
    - Desktop callers in `src/app/electron/nevermind-auth.ts`, `src/app/electron/ai.ts`, and related main-process flows.
    - Backend routes in `src/backend/src/pages/api/**` and shared backend libraries in `src/backend/src/lib/**`.
 3. Identify the change type: additive, compatibility shim, API-major change, or intentional unsupported-client block.
@@ -31,6 +31,7 @@ Nevermind's Electron desktop app ships on tagged releases while the backend may 
 - What happens if the desktop does not send the new field/header?
 - What happens if the backend returns an unknown field/error?
 - Is the change safe under continuous backend deploys?
+- Does a new server-side prerequisite reject previously successful requests with existing production configuration, including pricing and provider routes? Unchanged JSON shapes do not establish compatibility.
 - Does the user get a palette-safe update/account action if the client is unsupported?
 - Do logs identify desktop version, API contract version, route, status, and request ID?
 
@@ -46,7 +47,9 @@ For implementation work, add or update contract coverage for:
 - AI proxy success/error/rate-limit/billing responses when changed
 - streaming response behavior when changed
 
-Run package commands through `mise exec pnpm` as required by the repo guidelines.
+For new prerequisites, include regression cases using released-client requests and the configured production model/provider combinations, including absent catalog metadata. Mocked pricing success is not evidence that those models are covered. Establish read-only production configuration evidence before a merge that automatically deploys; leave unverified prerequisites blocking readiness rather than requiring users to install a new desktop release.
+
+Use `mise exec -- pnpm` and the repository's CI-only runtime verification policy.
 
 ## Output expectations
 
