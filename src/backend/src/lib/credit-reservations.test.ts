@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { creditReservations } from '../db/schema';
 import {
   allocateCreditsAcrossPools,
+  classifyAudioPreparationStatus,
   isAudioPreparation,
 } from './credit-reservations';
 
@@ -68,6 +69,89 @@ test('credit allocation remains free-first when free spend is allowed', () => {
     }),
     { ok: true, reservedFree: 50, reservedPaid: 30 },
   );
+});
+
+test('audio status preserves cancellation tombstones and rejects unverified pending provenance', () => {
+  const row = audioPreparationRow();
+  const input = { userId: 'owner', credits: 5 };
+  assert.equal(
+    classifyAudioPreparationStatus(undefined, input, row.createdAt),
+    'missing',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(row, input, row.createdAt),
+    'prepared',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(row, input, row.expiresAt),
+    'unavailable',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(
+      row,
+      { ...input, userId: 'other' },
+      row.createdAt,
+    ),
+    'unavailable',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(
+      row,
+      { ...input, credits: 4 },
+      row.createdAt,
+    ),
+    'unavailable',
+  );
+  for (const change of [
+    { purpose: null, audioState: null },
+    { purpose: 'text' },
+    { audioState: 'dispatched' },
+    { audioState: 'failed' },
+  ]) {
+    assert.equal(
+      classifyAudioPreparationStatus(
+        { ...row, ...change },
+        input,
+        row.createdAt,
+      ),
+      'unavailable',
+    );
+  }
+  const cancelled = { ...row, status: 'released', audioState: 'cancelled' };
+  assert.equal(
+    classifyAudioPreparationStatus(cancelled, input, row.expiresAt),
+    'cancelled',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(
+      cancelled,
+      { ...input, userId: 'other' },
+      row.createdAt,
+    ),
+    'unavailable',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(
+      { ...cancelled, purpose: 'text' },
+      input,
+      row.createdAt,
+    ),
+    'missing',
+  );
+  for (const change of [
+    { audioState: 'failed' },
+    { audioState: 'prepared' },
+    { status: 'settled', audioState: 'dispatched' },
+  ]) {
+    assert.equal(
+      classifyAudioPreparationStatus(
+        { ...row, status: 'released', ...change },
+        input,
+        row.createdAt,
+      ),
+      'missing',
+    );
+  }
 });
 
 test('credit allocation falls back to paid credits when the free cap is reached', () => {

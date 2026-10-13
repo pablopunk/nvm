@@ -661,9 +661,10 @@ export async function handleDedup(
             requestId,
           );
         }
-        await finalizeReservation({
+        const release = await finalizeReservation({
           requestId: existing.requestId!,
           outcome: 'release',
+          expectedExpiredAtBefore: new Date(),
           dedup: {
             userId,
             idempotencyKey,
@@ -671,6 +672,20 @@ export async function handleDedup(
             status: 'failed',
           },
         });
+        if (release === 'not_expired') {
+          return withRequestId(
+            Response.json(
+              {
+                error: {
+                  type: 'idempotency_conflict',
+                  message: 'Request reservation is still active',
+                },
+              },
+              { status: 409 },
+            ),
+            requestId,
+          );
+        }
         return handleDedup(idempotencyKey, userId, requestHash, requestId);
       }
       const [reclaimed] = await db
@@ -863,7 +878,7 @@ const HOP_BY_HOP = new Set([
 
 function buildForwardHeaders(
   request: Request,
-  desktopAuthHeader: PatHeaderName,
+  _desktopAuthHeader: PatHeaderName,
   upstreamAuthHeader: ProxyConfig['upstreamAuthHeaderName'],
   upstreamAuthValue: string,
 ): Headers {

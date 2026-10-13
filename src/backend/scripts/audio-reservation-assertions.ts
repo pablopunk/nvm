@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { eq } from 'drizzle-orm';
+import { and, eq, lte } from 'drizzle-orm';
 import { db } from '../src/db/client';
 import {
   creditLedger,
   creditReservations,
   freeSpendMonthlyBudgets,
+  requestDedup,
   usage,
   users,
 } from '../src/db/schema';
@@ -13,6 +14,7 @@ import {
   admitAudioReservation,
   cancelAudioPreparation,
   finalizeReservation,
+  getAudioPreparationStatus,
   prepareAudioReservation,
   resizeReservation,
 } from '../src/lib/credit-reservations';
@@ -163,6 +165,110 @@ export async function runAudioReservationAssertions(suffix: string) {
       .ok,
     false,
   );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: canceledId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'cancelled',
+  );
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: canceledId,
+      userId: user.id,
+      reason: 'failed',
+    }),
+    'already_terminal',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: canceledId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'cancelled',
+    'failure retry cannot erase cancellation',
+  );
+
+  const failedId = `audio-failed-preparation-${suffix}`;
+  await prepareAudioReservation({ ...input, reservationId: failedId });
+  const failedKey = `audio-failed-key-${suffix}`;
+  await db.insert(requestDedup).values({
+    userId: user.id,
+    idempotencyKey: failedKey,
+    requestId: failedId,
+    requestHash: `audio-failed-hash-${suffix}`,
+    status: 'in_flight',
+  });
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: failedId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'prepared',
+  );
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: failedId,
+      userId: user.id,
+      reason: 'failed',
+    }),
+    'released',
+  );
+  const [failed] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, failedId));
+  assert.equal(failed.audioState, 'failed');
+  const [failureClaim] = await db
+    .select()
+    .from(requestDedup)
+    .where(eq(requestDedup.idempotencyKey, failedKey));
+  assert.equal(
+    failureClaim.status,
+    'in_flight',
+    'cleanup commits before the caller publishes dedup failure',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: failedId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'missing',
+    'ordinary predispatch failure allows fresh fallback',
+  );
+  assert.equal(
+    await cancelAudioPreparation({ reservationId: failedId, userId: user.id }),
+    'already_terminal',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: failedId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'missing',
+    'terminal cleanup is idempotent without changing the original reason',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: failedId,
+      userId: '00000000-0000-0000-0000-000000000001',
+      credits: 5,
+    }),
+    'unavailable',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: `audio-missing-${suffix}`,
+      userId: user.id,
+      credits: 5,
+    }),
+    'missing',
+  );
 
   const expiredId = `audio-expired-${suffix}`;
   const prepared = await prepareAudioReservation({
@@ -190,6 +296,18 @@ export async function runAudioReservationAssertions(suffix: string) {
     ).ok,
     false,
   );
+  await db
+    .update(creditReservations)
+    .set({ expiresAt: new Date(0) })
+    .where(eq(creditReservations.requestId, expiredId));
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: expiredId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'unavailable',
+  );
   await cancelAudioPreparation({ reservationId: expiredId, userId: user.id });
 
   const legacyId = `audio-legacy-${suffix}`;
@@ -208,7 +326,108 @@ export async function runAudioReservationAssertions(suffix: string) {
     await cancelAudioPreparation({ reservationId: legacyId, userId: user.id }),
     'not_prepared',
   );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: legacyId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'unavailable',
+  );
   await finalizeReservation({ requestId: legacyId, outcome: 'release' });
+
+  // A reconciliation snapshot can become stale while admission renews its lease.
+  const staleId = `audio-renewed-lease-${suffix}`;
+  const stalePreparation = await prepareAudioReservation({
+    ...input,
+    reservationId: staleId,
+  });
+  assert.ok(stalePreparation.ok);
+  const cutoff = stalePreparation.reservation.expiresAt;
+  const [selected] = await db
+    .select()
+    .from(creditReservations)
+    .where(
+      and(
+        eq(creditReservations.requestId, staleId),
+        eq(creditReservations.status, 'pending'),
+        lte(creditReservations.expiresAt, cutoff),
+      ),
+    );
+  assert.ok(selected);
+  const renewed = await admitAudioReservation({
+    ...admission,
+    reservationId: staleId,
+    now: new Date(cutoff.getTime() - 1),
+  });
+  assert.ok(renewed.ok);
+  assert.ok(renewed.reservation.expiresAt.getTime() > cutoff.getTime());
+  const dedup = {
+    userId: user.id,
+    idempotencyKey: `audio-renewed-key-${suffix}`,
+    requestHash: `audio-renewed-hash-${suffix}`,
+    status: 'failed' as const,
+  };
+  await db
+    .insert(requestDedup)
+    .values({ ...dedup, requestId: staleId, status: 'in_flight' });
+  const [beforeReconciliation] = await db
+    .select()
+    .from(freeSpendMonthlyBudgets)
+    .where(eq(freeSpendMonthlyBudgets.monthKey, '2032-02'));
+  assert.equal(
+    await finalizeReservation({
+      requestId: selected.requestId,
+      expectedUserId: user.id,
+      outcome: 'release',
+      expectedExpiredAtBefore: cutoff,
+      dedup,
+    }),
+    'not_expired',
+  );
+  const [afterReconciliation] = await db
+    .select()
+    .from(freeSpendMonthlyBudgets)
+    .where(eq(freeSpendMonthlyBudgets.monthKey, '2032-02'));
+  assert.equal(
+    afterReconciliation.reservedFreeCostMicrocents,
+    beforeReconciliation.reservedFreeCostMicrocents,
+    'stale selection cannot release the renewed provider hold',
+  );
+  const [stillActive] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, staleId));
+  assert.equal(stillActive.status, 'pending');
+  assert.equal(stillActive.audioState, 'dispatched');
+  const [stillInFlight] = await db
+    .select()
+    .from(requestDedup)
+    .where(eq(requestDedup.idempotencyKey, dedup.idempotencyKey));
+  assert.equal(
+    stillInFlight.status,
+    'in_flight',
+    'stale expiry must not publish dedup failure',
+  );
+  assert.equal(
+    await finalizeReservation({
+      requestId: staleId,
+      outcome: 'release',
+      expectedExpiredAtBefore: renewed.reservation.expiresAt,
+      dedup,
+    }),
+    'released',
+    'expiry equality releases only after the renewed lease',
+  );
+  assert.equal(
+    await finalizeReservation({
+      requestId: staleId,
+      outcome: 'release',
+      expectedExpiredAtBefore: renewed.reservation.expiresAt,
+      dedup,
+    }),
+    'already_terminal',
+  );
 
   const zeroId = `audio-known-zero-${suffix}`;
   assert.ok(

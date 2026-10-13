@@ -10,12 +10,8 @@ import {
   unsupportedClientReason,
 } from '../../../../lib/compatibility';
 import {
-  estimateAudioProviderCostUsd,
-  lookupModelCost,
-} from '../../../../lib/cost';
-import {
-  finalizeReservation,
-  reserveCredits,
+  cancelAudioPreparation,
+  prepareAudioReservation,
 } from '../../../../lib/credit-reservations';
 import { freeSpendCapErrorBody } from '../../../../lib/free-spend-cap';
 import { isRouteTripped } from '../../../../lib/route-breakers';
@@ -30,10 +26,6 @@ import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 const RESERVATION_CREDITS = Math.max(
   1,
   Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
-);
-const MAX_AUDIO_BYTES = Math.max(
-  64 * 1024,
-  Number(process.env.AUDIO_TRANSCRIPTION_MAX_BYTES ?? 4 * 1024 * 1024),
 );
 const requestSchema = z
   .object({ operationId: z.string().min(1).max(200) })
@@ -117,19 +109,10 @@ export const POST: APIRoute = async ({ request }) => {
         503,
         auth.requestId,
       );
-    const costRow = await lookupModelCost(route.provider, route.modelId);
-    if (!costRow)
-      throw new Error('Audio transcription provider pricing is unavailable');
-    const reservation = await reserveCredits({
-      requestId: operationId,
+    const reservation = await prepareAudioReservation({
+      reservationId: operationId,
       userId: auth.user.id,
       credits: RESERVATION_CREDITS,
-      estimatedProviderCostUsd: estimateAudioProviderCostUsd(costRow, {
-        audioBytes: MAX_AUDIO_BYTES,
-        maxInputBytes: MAX_AUDIO_BYTES,
-      }),
-      estimateCostSource: 'catalog_estimate',
-      allowExistingPending: true,
     });
     if (!reservation.ok && reservation.reason === 'free_spend_cap_reached')
       return response(freeSpendCapErrorBody(), 503, auth.requestId);
@@ -178,10 +161,9 @@ export const DELETE: APIRoute = async ({ request }) => {
       auth.requestId,
     );
   try {
-    await finalizeReservation({
-      requestId: operationId,
-      expectedUserId: auth.user.id,
-      outcome: 'release',
+    await cancelAudioPreparation({
+      reservationId: operationId,
+      userId: auth.user.id,
     });
   } catch {}
   return response({ released: true, operationId }, 200, auth.requestId);

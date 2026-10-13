@@ -429,7 +429,7 @@ export async function preparedReservationExists(input: {
   credits: number;
 }) {
   const [reservation] = await db
-    .select({ requestId: creditReservations.requestId })
+    .select()
     .from(creditReservations)
     .where(
       and(
@@ -443,7 +443,49 @@ export async function preparedReservationExists(input: {
       ),
     )
     .limit(1);
-  return Boolean(reservation);
+  return Boolean(
+    reservation &&
+      isAudioPreparation(
+        reservation,
+        input.userId,
+        Math.max(1, Math.ceil(input.credits)),
+        new Date(),
+      ),
+  );
+}
+
+export type AudioPreparationStatus =
+  | 'prepared'
+  | 'cancelled'
+  | 'unavailable'
+  | 'missing';
+
+export function classifyAudioPreparationStatus(
+  reservation: typeof creditReservations.$inferSelect | undefined,
+  input: { userId: string; credits: number },
+  now: Date,
+): AudioPreparationStatus {
+  if (!reservation) return 'missing';
+  if (reservation.userId !== input.userId) return 'unavailable';
+  if (isAudioPreparation(reservation, input.userId, input.credits, now))
+    return 'prepared';
+  if (reservation.purpose === 'audio' && reservation.audioState === 'cancelled')
+    return 'cancelled';
+  return reservation.status === 'pending' ? 'unavailable' : 'missing';
+}
+
+/** A read-only hint, not dispatch authorization; admission revalidates under lock. */
+export async function getAudioPreparationStatus(input: {
+  requestId: string;
+  userId: string;
+  credits: number;
+}): Promise<AudioPreparationStatus> {
+  const [reservation] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, input.requestId))
+    .limit(1);
+  return classifyAudioPreparationStatus(reservation, input, new Date());
 }
 
 export async function getPendingCreditReservations(
@@ -519,6 +561,8 @@ async function lockReservationAndBudget(
 export type ReservationFinalization = {
   requestId: string;
   expectedUserId?: string;
+  /** Reconciliation must recheck the current lease under lock before releasing. */
+  expectedExpiredAtBefore?: Date;
   outcome: 'settle' | 'release';
   model?: string;
   provider?: string;
@@ -904,7 +948,7 @@ async function lockReservationAfterUser(
 /** Finalize exactly once. Terminal rows are intentionally no-ops on retries. */
 export async function finalizeReservation(
   input: ReservationFinalization,
-): Promise<'settled' | 'released' | 'already_terminal'> {
+): Promise<'settled' | 'released' | 'already_terminal' | 'not_expired'> {
   const result = await finalizeReservationInternal(input);
   if (result === 'not_prepared')
     throw new Error('Unexpected preparation-only finalization');
@@ -915,21 +959,35 @@ export async function finalizeReservation(
 export async function cancelAudioPreparation(input: {
   reservationId: string;
   userId: string;
-}) {
-  return finalizeReservationInternal(
+  reason?: 'cancelled' | 'failed';
+}): Promise<'released' | 'already_terminal' | 'not_prepared'> {
+  const result = await finalizeReservationInternal(
     {
       requestId: input.reservationId,
       expectedUserId: input.userId,
       outcome: 'release',
     },
     true,
+    input.reason ?? 'cancelled',
   );
+  if (result === 'settled' || result === 'not_expired')
+    throw new Error('Unexpected audio preparation cancellation result');
+  return result;
 }
 
 async function finalizeReservationInternal(
   input: ReservationFinalization,
   onlyAudioPreparation = false,
-): Promise<'settled' | 'released' | 'already_terminal' | 'not_prepared'> {
+  cancellationReason: 'cancelled' | 'failed' = 'cancelled',
+): Promise<
+  'settled' | 'released' | 'already_terminal' | 'not_prepared' | 'not_expired'
+> {
+  if (
+    input.expectedExpiredAtBefore &&
+    (input.outcome !== 'release' ||
+      !Number.isFinite(input.expectedExpiredAtBefore.getTime()))
+  )
+    throw new Error('Expiry reconciliation requires a valid release cutoff');
   return db.transaction(async (tx) => {
     // Every reservation transition takes row locks in the same order: parent
     // user first, reservation second. This matches admission and prevents a
@@ -951,6 +1009,11 @@ async function finalizeReservationInternal(
       );
     }
     if (reservation.status !== 'pending') return 'already_terminal';
+    if (
+      input.expectedExpiredAtBefore &&
+      reservation.expiresAt.getTime() > input.expectedExpiredAtBefore.getTime()
+    )
+      return 'not_expired';
     if (
       onlyAudioPreparation &&
       (reservation.purpose !== 'audio' || reservation.audioState !== 'prepared')
@@ -995,6 +1058,7 @@ async function finalizeReservationInternal(
         .update(creditReservations)
         .set({
           status: 'released',
+          ...(onlyAudioPreparation ? { audioState: cancellationReason } : {}),
           actualCredits: 0,
           actualFreeCredits: 0,
           actualPaidCredits: 0,
@@ -1278,7 +1342,9 @@ export async function reconcileStaleReservations(
     if (
       (await finalizeReservation({
         requestId: row.requestId,
+        expectedUserId: row.userId,
         outcome: 'release',
+        expectedExpiredAtBefore: now,
         dedup: dedup?.requestHash
           ? {
               userId: row.userId,
