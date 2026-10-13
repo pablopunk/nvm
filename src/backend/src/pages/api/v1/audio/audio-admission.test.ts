@@ -756,7 +756,12 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       assert.notEqual(retryId, CORRELATION_ID);
       assert.equal(state.dedupCalls[1]![3], retryId);
       assert.deepEqual(state.prepareCalls, [
-        { reservationId: retryId, userId: USER_ID, credits: 5 },
+        {
+          reservationId: retryId,
+          operationId: OPERATION_ID,
+          userId: USER_ID,
+          credits: 5,
+        },
       ]);
       assert.equal(state.upstreamBodies.length, 1);
       state.resolveSettlement();
