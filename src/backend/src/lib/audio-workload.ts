@@ -19,7 +19,7 @@ export const TRANSCRIPTION_AUDIO_LIMITS = {
       ? configuredInputBytes
       : 4 * 1024 * 1024,
   ),
-  decodedBytes: 64 * 1024 * 1024,
+  decodedBytes: 16 * 1024 * 1024,
   packets: 100_000,
   processingMs: 10_000,
 } as const;

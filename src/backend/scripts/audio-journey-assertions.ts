@@ -454,7 +454,11 @@ export async function runAudioJourneyAssertions(
       );
     }
     assert.equal(providerCalls, 2);
-    assert.equal(catalogCalls, 2);
+    assert.equal(
+      catalogCalls,
+      1,
+      'fresh pricing metadata is cached per instance',
+    );
     const grants = await database
       .select()
       .from(creditLedger)

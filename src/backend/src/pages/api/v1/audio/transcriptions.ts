@@ -486,11 +486,13 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     admitted = true;
-    const providerTimeoutMs = Math.min(
-      UPSTREAM_TIMEOUT_MS,
-      RELEASED_CLIENT_TIMEOUT_MS -
-        CLIENT_RESPONSE_MARGIN_MS -
-        (performance.now() - startedAt),
+    const providerTimeoutMs = Math.floor(
+      Math.min(
+        UPSTREAM_TIMEOUT_MS,
+        RELEASED_CLIENT_TIMEOUT_MS -
+          CLIENT_RESPONSE_MARGIN_MS -
+          (performance.now() - startedAt),
+      ),
     );
     if (providerTimeoutMs < 1_000)
       throw new Error(

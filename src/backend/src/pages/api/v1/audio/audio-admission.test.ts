@@ -300,6 +300,9 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
     },
   });
   mockLibrary('cost', {
+    usdToCredits(costUsd: number) {
+      return Math.max(1, Math.ceil((costUsd * 5) / 0.01));
+    },
     lookupModelCost: forbiddenLegacyBilling,
     estimateAudioProviderCostUsd: forbiddenLegacyBilling,
   });
