@@ -288,7 +288,15 @@ export async function runAudioJourneyAssertions(
     await ensureMonthlyFreeCredits(user.id);
     const token = await createApiToken(user.id, 'audio journey');
     const charge = usdToCredits(PROVIDER_COST);
-    for (const [index, version] of ['0.22.1', '0.21.3'].entries()) {
+    // Both tagged desktop clients use raw WebM. The final entry independently
+    // covers the legacy base64 JSON envelope accepted by the route.
+    const journeyCases = [
+      { version: '0.22.1', base64Json: false },
+      { version: '0.21.3', base64Json: false },
+      { version: '0.21.3', base64Json: true },
+    ];
+    for (const [index, journeyCase] of journeyCases.entries()) {
+      const { version, base64Json } = journeyCase;
       activeOperationId = `audio-journey-${index}-${suffix}`;
       const correlationId = `audio-correlation-${index}-${suffix}`;
       assert.notEqual(correlationId, activeOperationId);
@@ -343,17 +351,16 @@ export async function runAudioJourneyAssertions(
           headers: {
             ...headers,
             'idempotency-key': activeOperationId,
-            'content-type': index === 0 ? 'audio/webm' : 'application/json',
+            'content-type': base64Json ? 'application/json' : 'audio/webm',
           },
-          body:
-            index === 0
-              ? new Uint8Array(recording)
-              : JSON.stringify({
-                  input_audio: {
-                    data: recording.toString('base64'),
-                    format: 'webm',
-                  },
-                }),
+          body: base64Json
+            ? JSON.stringify({
+                input_audio: {
+                  data: recording.toString('base64'),
+                  format: 'webm',
+                },
+              })
+            : new Uint8Array(recording),
         }),
       } as Parameters<typeof transcribe>[0]);
       if (stubFailure) throw stubFailure;
@@ -453,7 +460,7 @@ export async function runAudioJourneyAssertions(
         before.actualFreeCostMicrocents + usdToMicrocents(PROVIDER_COST),
       );
     }
-    assert.equal(providerCalls, 2);
+    assert.equal(providerCalls, journeyCases.length);
     assert.equal(
       catalogCalls,
       1,

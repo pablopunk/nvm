@@ -119,8 +119,16 @@ test('audio status preserves cancellation tombstones and rejects unverified pend
   }
   const cancelled = { ...row, status: 'released', audioState: 'cancelled' };
   assert.equal(
-    classifyAudioPreparationStatus(cancelled, input, row.expiresAt),
+    classifyAudioPreparationStatus(
+      cancelled,
+      input,
+      new Date(row.expiresAt.getTime() - 1),
+    ),
     'cancelled',
+  );
+  assert.equal(
+    classifyAudioPreparationStatus(cancelled, input, row.expiresAt),
+    'missing',
   );
   assert.equal(
     classifyAudioPreparationStatus(

@@ -11,6 +11,7 @@ const TRANSCRIPTION_TIMEOUT_MS = 16_000;
 const TRAILING_SLASH_PATTERN = /\/$/;
 const SERVER_TIMING_ENTRY_PATTERN = /^([a-z_]+);dur=([0-9.]+)$/;
 const preparationRequests = new Map<string, Promise<void>>();
+type DictationCancellationReason = 'user_cancel' | 'cleanup';
 
 class ApiDictationUnavailableError extends Error {
   constructor(message: string) {
@@ -50,6 +51,7 @@ async function apiDictationIsAvailable() {
 async function requestDictationPreparation(
   operationId: string,
   method: 'POST' | 'DELETE',
+  cancellationReason?: DictationCancellationReason,
 ) {
   const auth = await getNevermindAuth();
   if (!auth) {
@@ -64,6 +66,14 @@ async function requestDictationPreparation(
           ['Authorization', `Bearer ${auth.token}`],
           ['Content-Type', 'application/json'],
           ['X-Request-ID', randomUUID()],
+          ...(method === 'DELETE' && cancellationReason === 'user_cancel'
+            ? [
+                [
+                  'X-Nevermind-Dictation-Cancellation-Reason',
+                  'user_cancel',
+                ] as const,
+              ]
+            : []),
         ]),
       ),
       body: JSON.stringify({ operationId }),
@@ -96,15 +106,20 @@ function prepareDictationTranscription(operationId: string) {
   return preparation;
 }
 
-async function cancelDictationPreparation(operationId: string) {
+async function cancelDictationPreparation(
+  operationId: string,
+  cancellationReason: DictationCancellationReason = 'cleanup',
+) {
   const preparation = preparationRequests.get(operationId);
   preparationRequests.delete(operationId);
   if (preparation) {
     await preparation.catch(ignorePreparationFailure);
   }
-  await requestDictationPreparation(operationId, 'DELETE').catch(
-    ignorePreparationFailure,
-  );
+  await requestDictationPreparation(
+    operationId,
+    'DELETE',
+    cancellationReason,
+  ).catch(ignorePreparationFailure);
 }
 
 function ignorePreparationFailure() {
@@ -113,6 +128,7 @@ function ignorePreparationFailure() {
 
 async function transcribeDictationAudio(input: {
   operationId: string;
+  cancellationId?: string;
   audio: Uint8Array;
   mimeType: string;
   signal: AbortSignal;
@@ -181,6 +197,7 @@ async function requestTranscription(options: {
   auth: { baseUrl: string; token: string };
   input: {
     operationId: string;
+    cancellationId?: string;
     audio: Uint8Array;
     signal: AbortSignal;
   };
@@ -189,11 +206,6 @@ async function requestTranscription(options: {
   prepared: boolean;
 }) {
   const { auth, input, signal, requestId, prepared } = options;
-  const timingDetail = {
-    operationId: input.operationId,
-    requestId,
-    alwaysLog: true,
-  };
   const body = input.audio;
   let response: Response;
   try {
@@ -207,6 +219,14 @@ async function requestTranscription(options: {
             ['Content-Type', 'audio/webm'],
             ['Idempotency-Key', input.operationId],
             ['X-Request-ID', requestId],
+            ...(input.cancellationId
+              ? [
+                  [
+                    'X-Nevermind-Dictation-Operation-ID',
+                    input.cancellationId,
+                  ] as const,
+                ]
+              : []),
             ...(prepared
               ? [
                   [

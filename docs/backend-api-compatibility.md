@@ -23,6 +23,8 @@ Desktop backend requests should include non-secret identity metadata: app name, 
 
 These values are for compatibility, observability, and support. They are not authentication and must not replace token/session checks.
 
+For audio transcription, `Idempotency-Key` remains the per-segment billing identity. New desktop clients may additionally send `X-Nevermind-Dictation-Operation-ID` to identify the root recording across segments. Preparation DELETE requests may identify explicit user cancellation with `X-Nevermind-Dictation-Cancellation-Reason: user_cancel`; without that header, cancellation is legacy cleanup and must not tombstone a missing reservation. These optional headers preserve the existing JSON body for installed clients and older backend deployments.
+
 ## Compatibility manifest
 
 The backend owns a small manifest that desktop can fetch during startup, sign-in, and AI setup. The manifest should describe the backend deployment, current and supported API majors, minimum supported desktop version, latest known desktop version, and any deprecation or force-update notices.

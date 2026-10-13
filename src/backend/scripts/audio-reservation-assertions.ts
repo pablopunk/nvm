@@ -11,11 +11,17 @@ import {
 } from '../src/db/schema';
 import { CREDIT_USD, MARKUP, usdToMicrocents } from '../src/lib/cost';
 import {
+  ensureFreeSpendMonthlyBudget,
+  lockFreeSpendCapConfig,
+  utcMonthKey,
+} from '../src/lib/free-spend-cap';
+import {
   admitAudioReservation,
   cancelAudioPreparation,
   finalizeReservation,
   getAudioPreparationStatus,
   prepareAudioReservation,
+  pruneExpiredAudioCancellationTombstones,
   resizeReservation,
 } from '../src/lib/credit-reservations';
 
@@ -150,6 +156,7 @@ export async function runAudioReservationAssertions(suffix: string) {
     await cancelAudioPreparation({
       reservationId: canceledId,
       userId: user.id,
+      reason: 'cancelled',
     }),
     'released',
   );
@@ -157,6 +164,7 @@ export async function runAudioReservationAssertions(suffix: string) {
     await cancelAudioPreparation({
       reservationId: canceledId,
       userId: user.id,
+      reason: 'cancelled',
     }),
     'already_terminal',
   );
@@ -521,7 +529,11 @@ export async function runAudioReservationAssertions(suffix: string) {
   await prepareAudioReservation({ ...input, reservationId: racingId });
   const race = await Promise.allSettled([
     admitAudioReservation({ ...admission, reservationId: racingId }),
-    cancelAudioPreparation({ reservationId: racingId, userId: user.id }),
+    cancelAudioPreparation({
+      reservationId: racingId,
+      userId: user.id,
+      reason: 'cancelled',
+    }),
   ]);
   const [raced] = await db
     .select()
@@ -539,6 +551,8 @@ export async function runAudioReservationAssertions(suffix: string) {
     await cancelAudioPreparation({
       reservationId: cancelledBeforePreparationId,
       userId: user.id,
+      reason: 'cancelled',
+      tombstoneMissing: true,
     }),
     'released',
   );
@@ -551,8 +565,9 @@ export async function runAudioReservationAssertions(suffix: string) {
     'cancelled',
   );
   const latePreparation = await prepareAudioReservation({
-    ...input,
     reservationId: cancelledBeforePreparationId,
+    userId: user.id,
+    credits: 5,
   });
   assert.equal(latePreparation.ok, false);
   if (!latePreparation.ok)
@@ -566,4 +581,187 @@ export async function runAudioReservationAssertions(suffix: string) {
   assert.equal(cancelTombstone.audioState, 'cancelled');
   assert.equal(cancelTombstone.reservedCredits, 0);
   assert.equal(cancelTombstone.reservedFreeCostMicrocents, 0);
+
+  const legacyCleanupId = `audio-legacy-cleanup-${suffix}`;
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: legacyCleanupId,
+      userId: user.id,
+      reason: 'failed',
+    }),
+    'not_prepared',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: legacyCleanupId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'missing',
+  );
+  const legacyRetryPreparation = await prepareAudioReservation({
+    ...input,
+    reservationId: legacyCleanupId,
+  });
+  assert.ok(legacyRetryPreparation.ok);
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: legacyCleanupId,
+      userId: user.id,
+      reason: 'failed',
+    }),
+    'released',
+  );
+  const legacyRetryBillingId = `${legacyCleanupId}-billing`;
+  const legacyRetryHold = await prepareAudioReservation({
+    reservationId: legacyRetryBillingId,
+    operationId: legacyCleanupId,
+    userId: user.id,
+    credits: 5,
+  });
+  assert.ok(legacyRetryHold.ok);
+  const legacyRetryAdmission = await admitAudioReservation({
+    reservationId: legacyRetryBillingId,
+    operationId: legacyCleanupId,
+    userId: user.id,
+    credits: 5,
+    estimatedProviderCostUsd: estimate,
+    estimateCostSource: 'catalog_estimate',
+  });
+  assert.ok(legacyRetryAdmission.ok);
+  assert.equal(
+    await finalizeReservation({
+      requestId: legacyRetryBillingId,
+      outcome: 'release',
+    }),
+    'released',
+  );
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: legacyCleanupId,
+      userId: user.id,
+      reason: 'cancelled',
+      tombstoneMissing: true,
+    }),
+    'released',
+  );
+  assert.equal(
+    await getAudioPreparationStatus({
+      requestId: legacyCleanupId,
+      userId: user.id,
+      credits: 5,
+    }),
+    'cancelled',
+    'explicit cancellation upgrades a cleanup that won the race',
+  );
+
+  const rootOperationId = `audio-cancel-fallback-${suffix}`;
+  const fallbackReservationId = `${rootOperationId}-billing`;
+  const fallbackPreparation = await prepareAudioReservation({
+    reservationId: fallbackReservationId,
+    operationId: rootOperationId,
+    userId: user.id,
+    credits: 5,
+  });
+  assert.ok(fallbackPreparation.ok);
+  const ledgerBeforeCancel = await db
+    .select()
+    .from(creditLedger)
+    .where(eq(creditLedger.userId, user.id));
+  const monthKey = utcMonthKey();
+  const budgetBeforeCancel = await db.transaction(async (tx) => {
+    const config = await lockFreeSpendCapConfig(tx, 'share');
+    return ensureFreeSpendMonthlyBudget(tx, monthKey, config.capMicrocents);
+  });
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: rootOperationId,
+      userId: user.id,
+      reason: 'cancelled',
+      tombstoneMissing: true,
+    }),
+    'released',
+  );
+  const rejectedFallbackAdmission = await admitAudioReservation({
+    reservationId: fallbackReservationId,
+    operationId: rootOperationId,
+    userId: user.id,
+    credits: 5,
+    estimatedProviderCostUsd: estimate,
+    estimateCostSource: 'catalog_estimate',
+  });
+  assert.equal(rejectedFallbackAdmission.ok, false);
+  if (!rejectedFallbackAdmission.ok)
+    assert.equal(rejectedFallbackAdmission.reason, 'invalid_audio_preparation');
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: fallbackReservationId,
+      userId: user.id,
+      reason: 'failed',
+    }),
+    'released',
+  );
+  const ledgerAfterCancel = await db
+    .select()
+    .from(creditLedger)
+    .where(eq(creditLedger.userId, user.id));
+  assert.equal(ledgerAfterCancel.length, ledgerBeforeCancel.length);
+  const [budgetAfterCancel] = await db
+    .select()
+    .from(freeSpendMonthlyBudgets)
+    .where(eq(freeSpendMonthlyBudgets.monthKey, monthKey));
+  assert.equal(
+    budgetAfterCancel?.actualFreeCostMicrocents ?? 0,
+    budgetBeforeCancel.actualFreeCostMicrocents,
+  );
+  assert.equal(
+    budgetAfterCancel?.reservedFreeCostMicrocents ?? 0,
+    budgetBeforeCancel.reservedFreeCostMicrocents,
+  );
+  const [fallbackTombstone] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, rootOperationId));
+  assert.ok(fallbackTombstone);
+  assert.equal(fallbackTombstone.reservedCredits, 0);
+  assert.equal(fallbackTombstone.reservedFreeCostMicrocents, 0);
+  await db
+    .update(creditReservations)
+    .set({ expiresAt: new Date(Date.now() - 1) })
+    .where(eq(creditReservations.requestId, rootOperationId));
+  const operationAfterTombstoneExpiry = await prepareAudioReservation({
+    reservationId: rootOperationId,
+    userId: user.id,
+    credits: 5,
+  });
+  assert.ok(operationAfterTombstoneExpiry.ok);
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: rootOperationId,
+      userId: user.id,
+      reason: 'failed',
+    }),
+    'released',
+  );
+
+  const pruneTombstoneId = `audio-prune-tombstone-${suffix}`;
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: pruneTombstoneId,
+      userId: user.id,
+      reason: 'cancelled',
+      tombstoneMissing: true,
+    }),
+    'released',
+  );
+  await db
+    .update(creditReservations)
+    .set({ expiresAt: new Date(Date.now() - 1) })
+    .where(eq(creditReservations.requestId, pruneTombstoneId));
+  assert.equal(await pruneExpiredAudioCancellationTombstones(), 1);
+  const [prunedTombstone] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, pruneTombstoneId));
+  assert.equal(prunedTombstone, undefined);
 }

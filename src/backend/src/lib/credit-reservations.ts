@@ -1,4 +1,4 @@
-import { and, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   creditLedger,
@@ -102,6 +102,7 @@ export async function reserveCredits(input: {
 type ReserveCreditInput = Parameters<typeof reserveCredits>[0];
 type AudioReservationInput = {
   reservationId: string;
+  operationId?: string;
   userId: string;
   /** The configured audio charge ceiling; preparation and admission must match. */
   credits: number;
@@ -143,6 +144,26 @@ function validateAudioCreditCeiling(credits: number) {
     );
 }
 
+function isReleasedAudioCancellation(
+  reservation: typeof creditReservations.$inferSelect,
+): boolean {
+  return (
+    reservation.purpose === 'audio' &&
+    reservation.audioState === 'cancelled' &&
+    reservation.status === 'released'
+  );
+}
+
+function isActiveAudioCancellation(
+  reservation: typeof creditReservations.$inferSelect,
+  now: Date,
+): boolean {
+  return (
+    isReleasedAudioCancellation(reservation) &&
+    reservation.expiresAt.getTime() > now.getTime()
+  );
+}
+
 /** Credit-only preparation is not authorization to contact a provider. */
 export async function prepareAudioReservation(input: AudioReservationInput) {
   validateAudioCreditCeiling(input.credits);
@@ -157,6 +178,7 @@ export async function prepareAudioReservation(input: AudioReservationInput) {
       now: input.now,
     },
     true,
+    input.operationId ?? input.reservationId,
   );
   return result.ok
     ? { ...result, reservationId: result.reservation.requestId }
@@ -166,6 +188,7 @@ export async function prepareAudioReservation(input: AudioReservationInput) {
 async function reserveCreditsInternal(
   input: ReserveCreditInput,
   audioPreparation = false,
+  audioOperationId = input.requestId,
 ): Promise<ReservationResult> {
   let now = input.now ?? new Date();
   const credits = Math.max(1, Math.ceil(input.credits));
@@ -202,14 +225,54 @@ async function reserveCreditsInternal(
       .limit(1)
       .for('update');
     if (!user) throw new Error('Cannot reserve credits for unknown user');
+    if (audioPreparation && input.now === undefined) now = new Date();
 
-    const [existing] = await tx
+    if (audioPreparation && audioOperationId !== input.requestId) {
+      const [cancellation] = await tx
+        .select()
+        .from(creditReservations)
+        .where(
+          and(
+            eq(creditReservations.requestId, audioOperationId),
+            eq(creditReservations.userId, input.userId),
+            eq(creditReservations.status, 'released'),
+            eq(creditReservations.purpose, 'audio'),
+            eq(creditReservations.audioState, 'cancelled'),
+            gt(creditReservations.expiresAt, now),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (cancellation && isActiveAudioCancellation(cancellation, now))
+        return {
+          ok: false,
+          reason: 'invalid_audio_preparation',
+          balance: 0,
+          reserved: 0,
+        };
+    }
+
+    let [existing] = await tx
       .select()
       .from(creditReservations)
       .where(eq(creditReservations.requestId, input.requestId))
       .limit(1)
       .for('update');
-    if (audioPreparation && input.now === undefined) now = new Date();
+    if (audioPreparation && existing && isReleasedAudioCancellation(existing)) {
+      if (existing.expiresAt.getTime() <= now.getTime()) {
+        await tx
+          .delete(creditReservations)
+          .where(eq(creditReservations.requestId, input.requestId));
+        existing = undefined;
+      } else if (audioOperationId !== input.requestId) {
+        return {
+          ok: false,
+          reason: 'invalid_audio_preparation',
+          balance: 0,
+          reserved: existing.reservedCredits,
+        };
+      }
+    }
     if (existing) {
       if (audioPreparation) {
         if (!isAudioPreparation(existing, input.userId, credits, now))
@@ -470,7 +533,9 @@ export function classifyAudioPreparationStatus(
   if (isAudioPreparation(reservation, input.userId, input.credits, now))
     return 'prepared';
   if (reservation.purpose === 'audio' && reservation.audioState === 'cancelled')
-    return 'cancelled';
+    return reservation.expiresAt.getTime() > now.getTime()
+      ? 'cancelled'
+      : 'missing';
   return reservation.status === 'pending' ? 'unavailable' : 'missing';
 }
 
@@ -479,13 +544,36 @@ export async function getAudioPreparationStatus(input: {
   requestId: string;
   userId: string;
   credits: number;
+  operationId?: string;
 }): Promise<AudioPreparationStatus> {
   const [reservation] = await db
     .select()
     .from(creditReservations)
     .where(eq(creditReservations.requestId, input.requestId))
     .limit(1);
-  return classifyAudioPreparationStatus(reservation, input, new Date());
+  const now = new Date();
+  const status = classifyAudioPreparationStatus(reservation, input, now);
+  if (
+    status !== 'missing' ||
+    !input.operationId ||
+    input.operationId === input.requestId
+  )
+    return status;
+  const [cancellation] = await db
+    .select({ requestId: creditReservations.requestId })
+    .from(creditReservations)
+    .where(
+      and(
+        eq(creditReservations.requestId, input.operationId),
+        eq(creditReservations.userId, input.userId),
+        eq(creditReservations.status, 'released'),
+        eq(creditReservations.purpose, 'audio'),
+        eq(creditReservations.audioState, 'cancelled'),
+        gt(creditReservations.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  return cancellation ? 'cancelled' : status;
 }
 
 export async function getPendingCreditReservations(
@@ -668,6 +756,31 @@ async function resizeReservationInternal(
           balance: 0,
           reserved: 0,
         };
+      const operationId = audioAdmission.operationId ?? requestId;
+      if (operationId !== requestId) {
+        const [cancellation] = await tx
+          .select()
+          .from(creditReservations)
+          .where(
+            and(
+              eq(creditReservations.requestId, operationId),
+              eq(creditReservations.userId, audioAdmission.userId),
+              eq(creditReservations.status, 'released'),
+              eq(creditReservations.purpose, 'audio'),
+              eq(creditReservations.audioState, 'cancelled'),
+              gt(creditReservations.expiresAt, now),
+            ),
+          )
+          .limit(1)
+          .for('update');
+        if (cancellation && isActiveAudioCancellation(cancellation, now))
+          return {
+            ok: false,
+            reason: 'invalid_audio_preparation',
+            balance: 0,
+            reserved: 0,
+          };
+      }
       const [reservation] = await tx
         .select()
         .from(creditReservations)
@@ -960,6 +1073,7 @@ export async function cancelAudioPreparation(input: {
   reservationId: string;
   userId: string;
   reason?: 'cancelled' | 'failed';
+  tombstoneMissing?: boolean;
 }): Promise<'released' | 'already_terminal' | 'not_prepared'> {
   const result = await finalizeReservationInternal(
     {
@@ -968,7 +1082,8 @@ export async function cancelAudioPreparation(input: {
       outcome: 'release',
     },
     true,
-    input.reason ?? 'cancelled',
+    input.reason ?? 'failed',
+    input.tombstoneMissing ?? false,
   );
   if (result === 'settled' || result === 'not_expired')
     throw new Error('Unexpected audio preparation cancellation result');
@@ -978,7 +1093,8 @@ export async function cancelAudioPreparation(input: {
 async function finalizeReservationInternal(
   input: ReservationFinalization,
   onlyAudioPreparation = false,
-  cancellationReason: 'cancelled' | 'failed' = 'cancelled',
+  cancellationReason: 'cancelled' | 'failed' = 'failed',
+  tombstoneMissing = false,
 ): Promise<
   'settled' | 'released' | 'already_terminal' | 'not_prepared' | 'not_expired'
 > {
@@ -1013,6 +1129,8 @@ async function finalizeReservationInternal(
         .limit(1)
         .for('update');
       if (!existing) {
+        if (cancellationReason !== 'cancelled' || !tombstoneMissing)
+          return 'not_prepared';
         const [tombstone] = await tx
           .insert(creditReservations)
           .values({
@@ -1033,7 +1151,7 @@ async function finalizeReservationInternal(
             estimateCostSource: null,
             reservedFreeCostMicrocents: 0,
             actualFreeCostMicrocents: 0,
-            expiresAt: now,
+            expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
             releasedAt: now,
             updatedAt: now,
           })
@@ -1054,7 +1172,28 @@ async function finalizeReservationInternal(
       }
       if (existing.userId !== input.expectedUserId)
         throw new Error(`User does not own reservation ${input.requestId}`);
-      if (existing.status !== 'pending') return 'already_terminal';
+      if (existing.status !== 'pending') {
+        if (
+          cancellationReason === 'cancelled' &&
+          input.outcome === 'release' &&
+          existing.purpose === 'audio' &&
+          existing.status === 'released' &&
+          (existing.audioState === 'failed' ||
+            (existing.audioState === 'cancelled' &&
+              existing.expiresAt.getTime() <= now.getTime()))
+        ) {
+          await tx
+            .update(creditReservations)
+            .set({
+              audioState: 'cancelled',
+              expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
+              updatedAt: now,
+            })
+            .where(eq(creditReservations.requestId, input.requestId));
+          return 'released';
+        }
+        return 'already_terminal';
+      }
       if (existing.purpose !== 'audio' || existing.audioState !== 'prepared')
         return 'not_prepared';
     }
@@ -1121,7 +1260,14 @@ async function finalizeReservationInternal(
         .update(creditReservations)
         .set({
           status: 'released',
-          ...(onlyAudioPreparation ? { audioState: cancellationReason } : {}),
+          ...(onlyAudioPreparation
+            ? {
+                audioState: cancellationReason,
+                ...(cancellationReason === 'cancelled'
+                  ? { expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS) }
+                  : {}),
+              }
+            : {}),
           actualCredits: 0,
           actualFreeCredits: 0,
           actualPaidCredits: 0,
@@ -1373,6 +1519,7 @@ export async function reconcileStaleReservations(
   limit = 100,
   now = new Date(),
 ): Promise<{ released: number }> {
+  const boundedLimit = Math.max(1, Math.min(limit, 500));
   const rows = await db
     .select({
       requestId: creditReservations.requestId,
@@ -1385,7 +1532,7 @@ export async function reconcileStaleReservations(
         lte(creditReservations.expiresAt, now),
       ),
     )
-    .limit(Math.max(1, Math.min(limit, 500)));
+    .limit(boundedLimit);
   let released = 0;
   for (const row of rows) {
     const [dedup] = await db
@@ -1420,7 +1567,54 @@ export async function reconcileStaleReservations(
     )
       released += 1;
   }
+  await pruneExpiredAudioCancellationTombstones(limit, now);
   if (released > 0)
     log.info('credit_reservations_stale_reconciled', { released });
   return { released };
+}
+
+export async function pruneExpiredAudioCancellationTombstones(
+  limit = 100,
+  now = new Date(),
+): Promise<number> {
+  const boundedLimit = Math.max(1, Math.min(limit, 500));
+  const expiredCancellationTombstones = await db
+    .select({ requestId: creditReservations.requestId })
+    .from(creditReservations)
+    .where(
+      and(
+        eq(creditReservations.status, 'released'),
+        eq(creditReservations.purpose, 'audio'),
+        eq(creditReservations.audioState, 'cancelled'),
+        eq(creditReservations.reservedCredits, 0),
+        lte(creditReservations.expiresAt, now),
+      ),
+    )
+    .limit(boundedLimit);
+  if (expiredCancellationTombstones.length === 0) return 0;
+  const deleted = await db
+    .delete(creditReservations)
+    .where(
+      and(
+        inArray(
+          creditReservations.requestId,
+          expiredCancellationTombstones.map(
+            function tombstoneRequestId(tombstone) {
+              return tombstone.requestId;
+            },
+          ),
+        ),
+        eq(creditReservations.status, 'released'),
+        eq(creditReservations.purpose, 'audio'),
+        eq(creditReservations.audioState, 'cancelled'),
+        eq(creditReservations.reservedCredits, 0),
+        lte(creditReservations.expiresAt, now),
+      ),
+    )
+    .returning({ requestId: creditReservations.requestId });
+  if (deleted.length > 0)
+    log.info('audio_cancellation_tombstones_pruned', {
+      deleted: deleted.length,
+    });
+  return deleted.length;
 }

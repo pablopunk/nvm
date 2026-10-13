@@ -67,6 +67,7 @@ export function createDictationService(
     onSystemAudioError?: (error: unknown) => void;
     transcribeAudio?: (input: {
       operationId: string;
+      cancellationId?: string;
       audio: Uint8Array;
       mimeType: string;
       signal: AbortSignal;
@@ -79,7 +80,10 @@ export function createDictationService(
       load(id: string): Promise<Uint8Array[]>;
       remove(id: string): Promise<void>;
     };
-    cancelPreparedTranscription?: (operationId: string) => Promise<void>;
+    cancelPreparedTranscription?: (
+      operationId: string,
+      reason?: 'user_cancel' | 'cleanup',
+    ) => Promise<void>;
     recordTiming?: (
       name: string,
       durationMs: number,
@@ -121,12 +125,15 @@ export function createDictationService(
     });
   }
 
-  function cancelPreparedTranscription(operationId: string | null) {
+  function cancelPreparedTranscription(
+    operationId: string | null,
+    reason: 'user_cancel' | 'cleanup' = 'cleanup',
+  ) {
     if (!operationId) {
       return;
     }
     dependencies
-      .cancelPreparedTranscription?.(operationId)
+      .cancelPreparedTranscription?.(operationId, reason)
       .catch(ignorePreparationFailure);
   }
 
@@ -242,7 +249,7 @@ export function createDictationService(
     pendingStop?.reject(new Error('Dictation cancelled'));
     pendingStop = null;
     const operationId = activeOperationId ?? undefined;
-    cancelPreparedTranscription(activeOperationId);
+    cancelPreparedTranscription(activeOperationId, 'user_cancel');
     activeOperationId = null;
     activeTiming = null;
     return restoreSystemAudio().finally(() =>
@@ -433,6 +440,7 @@ export function createDictationService(
       parts.push(
         await dependencies.transcribeAudio({
           operationId: index === 0 ? operationId : `${operationId}-${index}`,
+          cancellationId: operationId,
           audio,
           mimeType,
           signal,

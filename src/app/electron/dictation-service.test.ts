@@ -150,14 +150,17 @@ test('rejects start when renderer microphone startup fails', async () => {
 test('cancels a pending transcription', async () => {
   const commands: DictationRendererCommand[] = [];
   const prepared: string[] = [];
-  const cancelledPreparations: string[] = [];
+  const cancelledPreparations: Array<{
+    operationId: string;
+    reason: string | undefined;
+  }> = [];
   const service = createDictationService((command) => commands.push(command), {
     prepareTranscription: (operationId) => {
       prepared.push(operationId);
       return Promise.resolve();
     },
-    cancelPreparedTranscription: (operationId) => {
-      cancelledPreparations.push(operationId);
+    cancelPreparedTranscription: (operationId, reason) => {
+      cancelledPreparations.push({ operationId, reason });
       return Promise.resolve();
     },
   });
@@ -172,7 +175,9 @@ test('cancels a pending transcription', async () => {
   await assert.rejects(stopped, DICTATION_CANCELLED_PATTERN);
   assert.equal(await service.status(), 'idle');
   assert.deepEqual(prepared, [operationId]);
-  assert.deepEqual(cancelledPreparations, [operationId]);
+  assert.deepEqual(cancelledPreparations, [
+    { operationId, reason: 'user_cancel' },
+  ]);
 });
 
 test('sends captured audio to cloud transcription and releases the operation', async () => {
@@ -207,6 +212,11 @@ test('keeps failed segmented recordings and retries them under a fresh operation
   const commands: DictationRendererCommand[] = [];
   const saved = new Map<string, Uint8Array[]>();
   const calls: string[] = [];
+  const cancellationIds: Array<string | undefined> = [];
+  const cancellationCalls: Array<{
+    operationId: string;
+    reason: string | undefined;
+  }> = [];
   let shouldFail = true;
   const service = createDictationService((command) => commands.push(command), {
     recordings: {
@@ -220,8 +230,13 @@ test('keeps failed segmented recordings and retries them under a fresh operation
         saved.delete(id);
       },
     },
-    transcribeAudio: async ({ operationId }) => {
+    cancelPreparedTranscription: (operationId, reason) => {
+      cancellationCalls.push({ operationId, reason });
+      return Promise.resolve();
+    },
+    transcribeAudio: async ({ operationId, cancellationId }) => {
       calls.push(operationId);
+      cancellationIds.push(cancellationId);
       if (shouldFail) throw new Error('Upload rejected');
       return operationId.endsWith('-1') ? 'world' : 'hello';
     },
@@ -241,9 +256,11 @@ test('keeps failed segmented recordings and retries them under a fresh operation
   });
   await assert.rejects(stopped, /Upload rejected/);
   assert.equal((await service.recordings()).length, 1);
+  assert.deepEqual(cancellationCalls, [{ operationId, reason: 'cleanup' }]);
   shouldFail = false;
   assert.equal(await service.retry(operationId), 'hello world');
   assert.equal(calls[0], operationId);
+  assert.equal(cancellationIds[0], operationId);
   const retryCalls = calls.slice(1);
   assert.equal(retryCalls.length, 2);
   assert.ok(
@@ -251,6 +268,7 @@ test('keeps failed segmented recordings and retries them under a fresh operation
       !retryCalls.includes(`${operationId}-1`),
   );
   assert.equal(retryCalls[1], `${retryCalls[0]}-1`);
+  assert.deepEqual(cancellationIds.slice(1), [retryCalls[0], retryCalls[0]]);
   assert.equal((await service.recordings()).length, 1);
   await service.deleteRecording(operationId);
   assert.deepEqual(await service.recordings(), []);
