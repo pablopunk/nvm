@@ -10,6 +10,16 @@ function windowsClearsAltGraphModifiers() {
   );
 }
 
+export function isBrowserReloadShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey'>,
+) {
+  return (
+    event.key.toLowerCase() === 'r' &&
+    (event.metaKey || event.ctrlKey) &&
+    !event.altKey
+  );
+}
+
 export function keyNameForShortcut(event: Pick<KeyboardEvent, 'key' | 'code'>) {
   const key = event.key;
   if (!key || ['Meta', 'Control', 'Alt', 'Shift'].includes(key)) {

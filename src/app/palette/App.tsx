@@ -115,6 +115,7 @@ import {
 } from './shortcut-manager';
 import {
   acceleratorFromKeyboardEvent,
+  isBrowserReloadShortcut,
   isShortcutRecorderSaveKey,
   keyNameForShortcut,
   normalizedShortcut,
@@ -5257,7 +5258,10 @@ export function App() {
     return true;
   }
 
-  function onGridKeyDownCapture(event: React.KeyboardEvent) {
+  function onPaletteKeyDownCapture(event: React.KeyboardEvent) {
+    if (!shortcutFor && isBrowserReloadShortcut(event.nativeEvent))
+      event.preventDefault();
+
     if (
       ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
       ((!isEditableKeyTarget(event.target) &&
@@ -5711,7 +5715,7 @@ export function App() {
         shouldFilter={false}
         value={selectedValue}
         onValueChange={selectValue}
-        onKeyDownCapture={onGridKeyDownCapture}
+        onKeyDownCapture={onPaletteKeyDownCapture}
         onKeyDown={onCommandKeyDown}
       >
         <div

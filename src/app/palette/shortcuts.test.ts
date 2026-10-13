@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   acceleratorFromKeyboardEvent,
+  isBrowserReloadShortcut,
   isShortcutRecorderSaveKey,
 } from './shortcuts';
 
@@ -95,6 +96,30 @@ test('acceleratorFromKeyboardEvent ignores bare keys and lone modifiers', () => 
     ),
     '',
   );
+});
+
+test('isBrowserReloadShortcut matches platform reload keys without Alt', () => {
+  assert.equal(
+    isBrowserReloadShortcut(keyboardEvent({ key: 'r', metaKey: true })),
+    true,
+  );
+  assert.equal(
+    isBrowserReloadShortcut(
+      keyboardEvent({ key: 'R', metaKey: true, shiftKey: true }),
+    ),
+    true,
+  );
+  assert.equal(
+    isBrowserReloadShortcut(keyboardEvent({ key: 'r', ctrlKey: true })),
+    true,
+  );
+  assert.equal(
+    isBrowserReloadShortcut(
+      keyboardEvent({ key: 'r', metaKey: true, altKey: true }),
+    ),
+    false,
+  );
+  assert.equal(isBrowserReloadShortcut(keyboardEvent({ key: 'r' })), false);
 });
 
 test('isShortcutRecorderSaveKey accepts Return and numpad Enter variants', () => {
