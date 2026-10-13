@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { PRODUCTION_WEB_ORIGIN } from '../../../../../../app/shared/public-origin';
-import { handleTrippedAudioRoute } from '../../../../lib/audio-breaker';
 import {
   backendKillSwitchEnabled,
   compatibilityError,
@@ -14,14 +13,17 @@ import {
   unsupportedClientReason,
 } from '../../../../lib/compatibility';
 import {
-  estimateAudioProviderCostUsd,
-  lookupModelCost,
-} from '../../../../lib/cost';
+  normalizeTranscriptionAudio,
+  TRANSCRIPTION_AUDIO_LIMITS,
+} from '../../../../lib/audio-workload';
 import {
+  admitAudioReservation,
+  cancelAudioPreparation,
   finalizeReservation,
-  preparedReservationExists,
-  reserveCredits,
+  getAudioPreparationStatus,
+  prepareAudioReservation,
 } from '../../../../lib/credit-reservations';
+import { usdToCredits } from '../../../../lib/cost';
 import { freeSpendCapErrorBody } from '../../../../lib/free-spend-cap';
 import { log } from '../../../../lib/log';
 import { handleDedup, markDedupFailed } from '../../../../lib/proxy';
@@ -36,6 +38,7 @@ import {
   ModelNotConfiguredError,
 } from '../../../../lib/settings';
 import { getUserFromBearer } from '../../../../lib/tokens';
+import { lookupTranscriptionDurationPricing } from '../../../../lib/transcription-models';
 import {
   getUpstreamConfig,
   UpstreamConfigError,
@@ -44,10 +47,7 @@ import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 
 export const config = { maxDuration: 60 };
 
-const MAX_AUDIO_BYTES = Math.max(
-  64 * 1024,
-  Number(process.env.AUDIO_TRANSCRIPTION_MAX_BYTES ?? 4 * 1024 * 1024),
-);
+const MAX_AUDIO_BYTES = TRANSCRIPTION_AUDIO_LIMITS.inputBytes;
 const MAX_REQUEST_BYTES = Math.ceil((MAX_AUDIO_BYTES * 4) / 3) + 8 * 1024;
 const RESERVATION_CREDITS = Math.max(
   1,
@@ -57,6 +57,8 @@ const UPSTREAM_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.AUDIO_TRANSCRIPTION_TIMEOUT_MS ?? 15_000),
 );
+const RELEASED_CLIENT_TIMEOUT_MS = 16_000;
+const CLIENT_RESPONSE_MARGIN_MS = 1_000;
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
 const requestSchema = z
@@ -151,7 +153,7 @@ function responseWithRequestId(
 }
 
 async function releaseAfterFailure(input: {
-  requestId: string;
+  reservationId: string;
   userId: string;
   idempotencyKey: string;
   requestHash: string;
@@ -160,7 +162,8 @@ async function releaseAfterFailure(input: {
   startedAt: number;
 }) {
   await finalizeReservation({
-    requestId: input.requestId,
+    requestId: input.reservationId,
+    expectedUserId: input.userId,
     outcome: 'release',
     model: input.model,
     provider: 'openrouter',
@@ -270,331 +273,447 @@ export const POST: APIRoute = async ({ request }) => {
     .update('/api/v1/audio/transcriptions\0')
     .update(parsedAudio.requestHash)
     .digest('hex');
+  const preparationStatus = await timePhase('prepared', () =>
+    getAudioPreparationStatus({
+      requestId: idempotencyKey,
+      userId: user.id,
+      credits: RESERVATION_CREDITS,
+    }),
+  );
+  if (preparationStatus === 'cancelled' || preparationStatus === 'unavailable')
+    return responseWithRequestId(
+      {
+        error: {
+          type: 'idempotency_conflict',
+          message:
+            'The recording preparation is no longer available. Retry with a new recording operation.',
+        },
+      },
+      409,
+      requestId,
+    );
+  const hasPreparation = preparationStatus === 'prepared';
+  const reservationId = hasPreparation ? idempotencyKey : randomUUID();
   const duplicate = await timePhase('dedup', () =>
-    handleDedup(idempotencyKey, user.id, requestHash, requestId),
+    handleDedup(idempotencyKey, user.id, requestHash, reservationId),
   );
-  if (duplicate) return duplicate;
-  const preparationRequested =
-    request.headers.get('x-nevermind-dictation-preparation') === idempotencyKey;
-  const preparedPromise = preparationRequested
-    ? timePhase('prepared', () =>
-        preparedReservationExists({
-          requestId: idempotencyKey,
-          userId: user.id,
-          credits: RESERVATION_CREDITS,
-        }),
-      )
-    : Promise.resolve(false);
-  const creditsPromise = preparationRequested
-    ? Promise.resolve()
-    : timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
-  const rateLimitPromise = timePhase('rate_limit', () =>
-    rateLimitTranscription(user.id),
-  );
-  const routePromise = timePhase('model', async () => {
-    const [route, providerEnabled] = await Promise.all([
-      getAudioModelRoute(),
-      isProviderEnabled('openrouter'),
-    ]);
-    if (route.provider !== 'openrouter')
-      throw new Error('Audio model provider must be OpenRouter');
-    if (!providerEnabled) throw new Error('Audio model provider is disabled');
-    return route;
-  }).then(
-    (route) => ({ route }),
-    (error: unknown) => ({ error }),
-  );
-  const [, rateLimit, routeResult, prepared] = await Promise.all([
-    creditsPromise,
-    rateLimitPromise,
-    routePromise,
-    preparedPromise,
-  ]);
-  if (!rateLimit.ok) {
+  if (duplicate) {
+    duplicate.headers.set('x-request-id', requestId);
+    return duplicate;
+  }
+  let hasProvisionalHold = hasPreparation;
+  let admitted = false;
+  const authenticatedUser = user;
+  const claimedIdempotencyKey: string = idempotencyKey;
+  async function failClaim() {
+    if (hasProvisionalHold)
+      await cancelAudioPreparation({
+        reservationId,
+        userId: authenticatedUser.id,
+        reason: 'failed',
+      });
     await markDedupFailed({
-      userId: user.id,
-      idempotencyKey,
-      requestId,
+      userId: authenticatedUser.id,
+      idempotencyKey: claimedIdempotencyKey,
+      requestId: reservationId,
       requestHash,
     });
-    return tooManyRequests(rateLimit);
-  }
-  if ('error' in routeResult) {
-    await markDedupFailed({
-      userId: user.id,
-      idempotencyKey,
-      requestId,
-      requestHash,
-    });
-    const message =
-      routeResult.error instanceof ModelNotConfiguredError
-        ? 'No audio transcription model is configured.'
-        : 'Audio transcription is unavailable.';
-    return responseWithRequestId(
-      { error: { type: 'model_not_configured', message } },
-      503,
-      requestId,
-    );
-  }
-  const route = routeResult.route;
-  // Audio routing intentionally has one configured OpenRouter model today;
-  // unlike text proxy routes there is no provider-chain setting to fail over to.
-  if (await isRouteTripped('audio', route.provider, route.modelId)) {
-    await handleTrippedAudioRoute({
-      prepared,
-      releasePreparedReservation: async () => {
-        await finalizeReservation({
-          requestId: idempotencyKey,
-          expectedUserId: user.id,
-          outcome: 'release',
-        });
-      },
-      failDedup: async () => {
-        await markDedupFailed({
-          userId: user.id,
-          idempotencyKey,
-          requestId,
-          requestHash,
-        });
-      },
-    });
-    return responseWithRequestId(
-      {
-        error: {
-          type: 'model_not_configured',
-          message: 'Audio transcription is temporarily unavailable.',
-        },
-      },
-      503,
-      requestId,
-    );
-  }
-  if (preparationRequested && !prepared)
-    await timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
-  const audioCostRow = prepared
-    ? null
-    : await lookupModelCost(route.provider, route.modelId);
-  if (!prepared && !audioCostRow) {
-    await markDedupFailed({
-      userId: user.id,
-      idempotencyKey,
-      requestId,
-      requestHash,
-    });
-    return responseWithRequestId(
-      {
-        error: {
-          type: 'pricing_unavailable',
-          message: 'Audio transcription pricing is unavailable.',
-        },
-      },
-      503,
-      requestId,
-    );
-  }
-  const reservation = prepared
-    ? null
-    : await timePhase('reserve', () =>
-        reserveCredits({
-          requestId,
-          userId: user.id,
-          credits: RESERVATION_CREDITS,
-          estimatedProviderCostUsd: estimateAudioProviderCostUsd(
-            audioCostRow!,
-            {
-              audioBytes: parsedAudio.audio.length,
-              maxInputBytes: MAX_AUDIO_BYTES,
-            },
-          ),
-          estimateCostSource: 'catalog_estimate',
-        }),
-      );
-  if (reservation && !reservation.ok) {
-    await markDedupFailed({
-      userId: user.id,
-      idempotencyKey,
-      requestId,
-      requestHash,
-    });
-    if (reservation.reason === 'free_spend_cap_reached') {
-      return responseWithRequestId(freeSpendCapErrorBody(), 503, requestId);
-    }
-    return responseWithRequestId(
-      {
-        error: {
-          type: 'insufficient_credits',
-          message: 'Not enough credits for API dictation.',
-          dashboard_url: DASHBOARD_URL,
-        },
-      },
-      402,
-      requestId,
-    );
   }
   try {
-    const upstream = getUpstreamConfig('openrouter');
-    const { upstreamResponse, body } = await timePhase('provider', async () => {
-      const upstreamResponse = await fetch(
-        `${upstream.baseUrl}/audio/transcriptions`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${upstream.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: route.modelId,
-            input_audio: parsedAudio.inputAudio,
-            response_format: 'json',
-          }),
-          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-        },
-      );
-      const body = (await upstreamResponse
-        .json()
-        .catch(() => null)) as OpenRouterTranscription | null;
-      return { upstreamResponse, body };
-    });
-    if (!upstreamResponse.ok || typeof body?.text !== 'string') {
-      await releaseAfterFailure({
-        requestId,
-        userId: user.id,
-        idempotencyKey,
-        requestHash,
-        model: route.modelId,
-        status: upstreamResponse.status,
-        startedAt,
-      });
+    const creditsPromise = hasPreparation
+      ? Promise.resolve()
+      : timePhase('credits', () => ensureMonthlyFreeCredits(user.id));
+    const rateLimitPromise = timePhase('rate_limit', () =>
+      rateLimitTranscription(user.id),
+    );
+    const routePromise = timePhase('model', async () => {
+      const [route, providerEnabled] = await Promise.all([
+        getAudioModelRoute(),
+        isProviderEnabled('openrouter'),
+      ]);
+      if (route.provider !== 'openrouter')
+        throw new Error('Audio model provider must be OpenRouter');
+      if (!providerEnabled) throw new Error('Audio model provider is disabled');
+      return route;
+    }).then(
+      (route) => ({ route }),
+      (error: unknown) => ({ error }),
+    );
+    const [, rateLimit, routeResult] = await Promise.all([
+      creditsPromise,
+      rateLimitPromise,
+      routePromise,
+    ]);
+    if (!rateLimit.ok) {
+      await failClaim();
+      return tooManyRequests(rateLimit);
+    }
+    if ('error' in routeResult) {
+      await failClaim();
+      const message =
+        routeResult.error instanceof ModelNotConfiguredError
+          ? 'No audio transcription model is configured.'
+          : 'Audio transcription is unavailable.';
       return responseWithRequestId(
-        {
-          error: {
-            type: 'upstream_error',
-            message: 'The transcription provider could not process the audio.',
-          },
-        },
-        502,
+        { error: { type: 'model_not_configured', message } },
+        503,
         requestId,
       );
     }
-    const providerCostUsd = finiteNonnegative(body.usage?.cost);
-    if (
-      providerCostUsd == null ||
-      providerCostUsd > Number.MAX_SAFE_INTEGER / 1e8
-    ) {
-      log.error('audio_transcription_invalid_provider_cost', {
+    const route = routeResult.route;
+    // Audio routing intentionally has one configured OpenRouter model today;
+    // unlike text proxy routes there is no provider-chain setting to fail over to.
+    if (await isRouteTripped('audio', route.provider, route.modelId)) {
+      await failClaim();
+      return responseWithRequestId(
+        {
+          error: {
+            type: 'model_not_configured',
+            message: 'Audio transcription is temporarily unavailable.',
+          },
+        },
+        503,
+        requestId,
+      );
+    }
+    const [pricingResult, audioResult] = await Promise.all([
+      lookupTranscriptionDurationPricing(route.provider, route.modelId)
+        .then((pricing) => ({ pricing }))
+        .catch(() => ({ pricing: null })),
+      timePhase('audio', () => normalizeTranscriptionAudio(parsedAudio.audio))
+        .then((audio) => ({ audio }))
+        .catch((error: unknown) => ({ error })),
+    ]);
+    const pricing = pricingResult.pricing;
+    if ('error' in audioResult) {
+      await failClaim();
+      return responseWithRequestId(
+        {
+          error: {
+            type: 'invalid_audio',
+            message: 'The WebM recording could not be validated safely.',
+          },
+        },
+        400,
+        requestId,
+      );
+    }
+    const normalizedAudio = audioResult.audio;
+    if (!pricing) {
+      log.warn('audio_transcription_pricing_unavailable', {
         request_id: requestId,
+        reservation_id: reservationId,
+        client_version: client.version,
         provider: route.provider,
         model: route.modelId,
-        provider_cost_usd: providerCostUsd,
+      });
+      await failClaim();
+      return responseWithRequestId(
+        {
+          error: {
+            type: 'pricing_unavailable',
+            message: 'Audio transcription pricing is unavailable.',
+          },
+        },
+        503,
+        requestId,
+      );
+    }
+    const estimatedProviderCostUsd =
+      normalizedAudio.estimatedBillableSeconds * pricing.usdPerSecond;
+    if (usdToCredits(estimatedProviderCostUsd) > RESERVATION_CREDITS) {
+      await failClaim();
+      return responseWithRequestId(
+        {
+          error: {
+            type: 'audio_cost_limit',
+            message: `This recording exceeds the ${RESERVATION_CREDITS}-credit per-request limit. Split it into shorter clips and retry.`,
+          },
+        },
+        413,
+        requestId,
+      );
+    }
+    const preparation = hasPreparation
+      ? null
+      : await timePhase('prepare', () =>
+          prepareAudioReservation({
+            reservationId,
+            userId: user.id,
+            credits: RESERVATION_CREDITS,
+          }),
+        );
+    if (preparation?.ok) hasProvisionalHold = true;
+    const reservation =
+      preparation && !preparation.ok
+        ? preparation
+        : await timePhase('reserve', () =>
+            admitAudioReservation({
+              reservationId,
+              userId: user.id,
+              credits: RESERVATION_CREDITS,
+              estimatedProviderCostUsd,
+              estimateCostSource: 'catalog_estimate',
+            }),
+          );
+    if (reservation && !reservation.ok) {
+      await failClaim();
+      if (reservation.reason === 'free_spend_cap_reached') {
+        return responseWithRequestId(freeSpendCapErrorBody(), 503, requestId);
+      }
+      if (reservation.reason !== 'insufficient_credits')
+        return responseWithRequestId(
+          {
+            error: {
+              type: 'idempotency_conflict',
+              message:
+                'The recording preparation is no longer available. Retry the recording.',
+            },
+          },
+          409,
+          requestId,
+        );
+      return responseWithRequestId(
+        {
+          error: {
+            type: 'insufficient_credits',
+            message: 'Not enough credits for API dictation.',
+            dashboard_url: DASHBOARD_URL,
+          },
+        },
+        402,
+        requestId,
+      );
+    }
+    admitted = true;
+    const providerTimeoutMs = Math.floor(
+      Math.min(
+        UPSTREAM_TIMEOUT_MS,
+        RELEASED_CLIENT_TIMEOUT_MS -
+          CLIENT_RESPONSE_MARGIN_MS -
+          (performance.now() - startedAt),
+      ),
+    );
+    if (providerTimeoutMs < 1_000)
+      throw new Error(
+        'Insufficient time remains for the transcription request',
+      );
+    try {
+      const upstream = getUpstreamConfig('openrouter');
+      const { upstreamResponse, body } = await timePhase(
+        'provider',
+        async () => {
+          const upstreamResponse = await fetch(
+            `${upstream.baseUrl}/audio/transcriptions`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${upstream.apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: route.modelId,
+                input_audio: normalizedAudio.inputAudio,
+                response_format: 'json',
+              }),
+              signal: AbortSignal.timeout(providerTimeoutMs),
+            },
+          );
+          const body = (await upstreamResponse
+            .json()
+            .catch(() => null)) as OpenRouterTranscription | null;
+          return { upstreamResponse, body };
+        },
+      );
+      if (!upstreamResponse.ok || typeof body?.text !== 'string') {
+        await releaseAfterFailure({
+          reservationId,
+          userId: user.id,
+          idempotencyKey,
+          requestHash,
+          model: route.modelId,
+          status: upstreamResponse.status,
+          startedAt,
+        });
+        return responseWithRequestId(
+          {
+            error: {
+              type: 'upstream_error',
+              message:
+                'The transcription provider could not process the audio.',
+            },
+          },
+          502,
+          requestId,
+        );
+      }
+      const providerCostUsd = finiteNonnegative(body.usage?.cost);
+      if (
+        providerCostUsd == null ||
+        providerCostUsd > Number.MAX_SAFE_INTEGER / 1e8
+      ) {
+        log.error('audio_transcription_invalid_provider_cost', {
+          request_id: requestId,
+          reservation_id: reservationId,
+          provider: route.provider,
+          model: route.modelId,
+          provider_cost_usd: providerCostUsd,
+          provider_cost_known: false,
+        });
+        await releaseAfterFailure({
+          reservationId,
+          userId: user.id,
+          idempotencyKey,
+          requestHash,
+          model: route.modelId,
+          status: 502,
+          startedAt,
+        });
+        return responseWithRequestId(
+          {
+            error: {
+              type: 'upstream_contract_error',
+              message:
+                'The transcription provider returned billing data that cannot be stored safely.',
+            },
+          },
+          502,
+          requestId,
+        );
+      }
+      const seconds = finiteNonnegative(body.usage?.seconds);
+      const settlementStartedAt = performance.now();
+      const settlement = finalizeReservation({
+        requestId: reservationId,
+        expectedUserId: user.id,
+        outcome: 'settle',
+        model: route.modelId,
+        provider: route.provider,
+        routeSlot: 'audio',
+        modality: 'audio',
+        audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1000),
+        tokens: {
+          inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
+          outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,
+        },
+        audioTokenCountsAvailable:
+          finiteNonnegative(body.usage?.input_tokens) != null &&
+          finiteNonnegative(body.usage?.output_tokens) != null,
+        providerCostUsd,
+        status: upstreamResponse.status,
+        latencyMs: Math.round(performance.now() - startedAt),
+        dedup: {
+          userId: user.id,
+          idempotencyKey,
+          requestHash,
+          status: 'completed',
+          upstreamStatus: upstreamResponse.status,
+        },
+      })
+        .then(() => {
+          log.info('audio_transcription_settled', {
+            request_id: requestId,
+            reservation_id: reservationId,
+            settlement_ms:
+              Math.round((performance.now() - settlementStartedAt) * 100) / 100,
+          });
+        })
+        .catch((error) => {
+          log.error('audio_transcription_settlement_failed', {
+            request_id: requestId,
+            reservation_id: reservationId,
+            error,
+          });
+        });
+      waitUntil(settlement);
+      timings.total = Math.round((performance.now() - startedAt) * 100) / 100;
+      log.info('audio_transcription', {
+        request_id: requestId,
+        reservation_id: reservationId,
+        client_version: client.version,
+        user_id: user.id,
+        provider: route.provider,
+        model: route.modelId,
+        status: upstreamResponse.status,
+        latency_ms: Math.round(performance.now() - startedAt),
+        audio_bytes: parsedAudio.audio.length,
+        audio_duration_ms:
+          seconds == null ? undefined : Math.round(seconds * 1000),
+        timings_ms: timings,
+        settlement_deferred: true,
+      });
+      return responseWithRequestId(
+        {
+          text: body.text,
+          requestId,
+          ...(seconds == null ? {} : { usage: { seconds } }),
+        },
+        200,
+        requestId,
+        timings,
+      );
+    } catch (error) {
+      log.warn('audio_transcription_failed', {
+        request_id: requestId,
+        reservation_id: reservationId,
+        provider: route.provider,
+        model: route.modelId,
+        error:
+          error instanceof UpstreamConfigError
+            ? error.message
+            : error instanceof Error
+              ? error.name
+              : 'unknown',
       });
       await releaseAfterFailure({
-        requestId,
+        reservationId,
         userId: user.id,
         idempotencyKey,
         requestHash,
         model: route.modelId,
-        status: 502,
+        status: 503,
         startedAt,
       });
       return responseWithRequestId(
         {
           error: {
-            type: 'upstream_contract_error',
-            message:
-              'The transcription provider returned billing data that cannot be stored safely.',
+            type: 'service_unavailable',
+            message: 'API dictation is unavailable.',
           },
         },
-        502,
+        503,
         requestId,
       );
     }
-    const seconds = finiteNonnegative(body.usage?.seconds);
-    const settlementStartedAt = performance.now();
-    const settlement = finalizeReservation({
-      requestId,
-      outcome: 'settle',
-      model: route.modelId,
-      provider: route.provider,
-      routeSlot: 'audio',
-      modality: 'audio',
-      audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1000),
-      tokens: {
-        inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
-        outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,
-      },
-      audioTokenCountsAvailable:
-        finiteNonnegative(body.usage?.input_tokens) != null &&
-        finiteNonnegative(body.usage?.output_tokens) != null,
-      providerCostUsd,
-      status: upstreamResponse.status,
-      latencyMs: Math.round(performance.now() - startedAt),
-      dedup: {
-        userId: user.id,
-        idempotencyKey,
-        requestHash,
-        status: 'completed',
-        upstreamStatus: upstreamResponse.status,
-      },
-    })
-      .then(() => {
-        log.info('audio_transcription_settled', {
-          request_id: requestId,
-          settlement_ms:
-            Math.round((performance.now() - settlementStartedAt) * 100) / 100,
-        });
-      })
-      .catch((error) => {
-        log.error('audio_transcription_settlement_failed', {
-          request_id: requestId,
-          error,
-        });
-      });
-    waitUntil(settlement);
-    timings.total = Math.round((performance.now() - startedAt) * 100) / 100;
-    log.info('audio_transcription', {
-      request_id: requestId,
-      user_id: user.id,
-      provider: route.provider,
-      model: route.modelId,
-      status: upstreamResponse.status,
-      latency_ms: Math.round(performance.now() - startedAt),
-      audio_bytes: parsedAudio.audio.length,
-      audio_duration_ms:
-        seconds == null ? undefined : Math.round(seconds * 1000),
-      timings_ms: timings,
-      settlement_deferred: true,
-    });
-    return responseWithRequestId(
-      {
-        text: body.text,
-        requestId,
-        ...(seconds == null ? {} : { usage: { seconds } }),
-      },
-      200,
-      requestId,
-      timings,
-    );
   } catch (error) {
-    log.warn('audio_transcription_failed', {
+    log.warn('audio_transcription_admission_failed', {
       request_id: requestId,
-      provider: route.provider,
-      model: route.modelId,
-      error:
-        error instanceof UpstreamConfigError
-          ? error.message
-          : error instanceof Error
-            ? error.name
-            : 'unknown',
+      reservation_id: reservationId,
+      client_version: client.version,
+      dispatched: admitted,
+      error: error instanceof Error ? error.name : 'unknown',
     });
-    await releaseAfterFailure({
-      requestId,
-      userId: user.id,
-      idempotencyKey,
-      requestHash,
-      model: route.modelId,
-      status: 503,
-      startedAt,
-    });
+    try {
+      if (admitted)
+        await finalizeReservation({
+          requestId: reservationId,
+          expectedUserId: user.id,
+          outcome: 'release',
+          dedup: {
+            userId: user.id,
+            idempotencyKey,
+            requestHash,
+            status: 'failed',
+          },
+        });
+      else await failClaim();
+    } catch (cleanupError) {
+      log.error('audio_transcription_cleanup_failed', {
+        request_id: requestId,
+        reservation_id: reservationId,
+        error: cleanupError instanceof Error ? cleanupError.name : 'unknown',
+      });
+    }
     return responseWithRequestId(
       {
         error: {

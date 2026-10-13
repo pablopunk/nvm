@@ -116,6 +116,8 @@ export const creditReservations = pgTable(
     kind: text('kind').notNull(),
     reservedCredits: integer('reserved_credits').notNull(),
     status: text('status').notNull().default('pending'),
+    purpose: text('purpose'),
+    audioState: text('audio_state'),
     actualCredits: integer('actual_credits'),
     reservedFreeCredits: integer('reserved_free_credits'),
     reservedPaidCredits: integer('reserved_paid_credits'),

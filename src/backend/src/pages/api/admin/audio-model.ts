@@ -15,8 +15,8 @@ import {
   setAudioModelRoute,
 } from '../../../lib/settings';
 import {
-  isCompatibleTranscriptionModel,
   listTranscriptionModels,
+  lookupTranscriptionDurationPricing,
 } from '../../../lib/transcription-models';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -54,14 +54,18 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response(`Provider ${route.provider} is disabled`, {
       status: 400,
     });
-  if (
-    !(await isCompatibleTranscriptionModel(route.provider, route.modelId, {
-      fresh: true,
-    }))
-  )
-    return new Response('Model does not support audio transcription', {
-      status: 400,
-    });
+  const pricing = await lookupTranscriptionDurationPricing(
+    route.provider,
+    route.modelId,
+    { fresh: true },
+  ).catch(() => null);
+  if (!pricing)
+    return new Response(
+      'Model does not have verified audio transcription pricing',
+      {
+        status: 400,
+      },
+    );
   const idempotencyKey = adminMutationKeyFromRequest(request);
   if (!idempotencyKey) {
     return Response.json(

@@ -58,9 +58,7 @@ function createChain(
 ) {
   let table: unknown;
   const promise = () =>
-    Promise.resolve(
-      typeof result === 'function' ? result(table) : result,
-    );
+    Promise.resolve(typeof result === 'function' ? result(table) : result);
   const chain = {
     from: (value: unknown) => {
       table = value;
@@ -166,10 +164,10 @@ function createFakeDb(
         table === creditReservations
           ? () => [lastReservationUpdate]
           : table === apiTokens ||
-          table === freeSpendCapConfig ||
-          table === freeSpendMonthlyBudgets
-          ? []
-          : (updates.shift() ?? []),
+              table === freeSpendCapConfig ||
+              table === freeSpendMonthlyBudgets
+            ? []
+            : (updates.shift() ?? []),
         undefined,
         (values) => {
           if (table === creditReservations)
@@ -266,8 +264,7 @@ function proxySelects(
           },
         ];
   const providerChainDepth =
-    options.providerChainDepth ??
-    (options.model === 'gemini-3-fast' ? 3 : 2);
+    options.providerChainDepth ?? (options.model === 'gemini-3-fast' ? 3 : 2);
   return [
     [
       {
@@ -296,10 +293,7 @@ function proxySelects(
   ];
 }
 
-function reservationFinalizationSelects(input: {
-  free: number;
-  paid: number;
-}) {
+function reservationFinalizationSelects(input: { free: number; paid: number }) {
   const now = new Date();
   const admissionMonth = `${now.getUTCFullYear()}-${String(
     now.getUTCMonth() + 1,
@@ -608,7 +602,24 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
             tokenId: 'token_1',
           },
         ],
-        [{ requestId: 'audio-prepared-key' }],
+        [
+          {
+            requestId: 'audio-prepared-key',
+            userId: 'user_1',
+            purpose: 'audio',
+            audioState: 'prepared',
+            status: 'pending',
+            expiresAt: new Date(Date.now() + 60_000),
+            reservedCredits: 5,
+            estimatedTotalCredits: 5,
+            reservedFreeCredits: 5,
+            reservedPaidCredits: 0,
+            admissionMonth: null,
+            estimatedProviderCostMicrocents: null,
+            estimateCostSource: null,
+            reservedFreeCostMicrocents: 0,
+          },
+        ],
         [
           {
             value: JSON.stringify({
@@ -630,6 +641,8 @@ test('audio transcription POST releases a prepared reservation and fails dedup w
           {
             requestId: 'audio-prepared-key',
             userId: 'user_1',
+            purpose: 'audio',
+            audioState: 'prepared',
             status: 'pending',
             kind: 'free',
             reservedCredits: 5,
@@ -692,6 +705,7 @@ test('tripped unprepared audio POST fails dedup without creating a reservation',
             tokenId: 'token_2',
           },
         ],
+        [], // no audio preparation
         [], // monthly grant lookup
         [{ free: 500 }], // current free balance
         [

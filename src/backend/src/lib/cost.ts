@@ -65,27 +65,6 @@ export function computeUsdCost(
   );
 }
 
-export function estimateAudioProviderCostUsd(
-  cost: ModelCost,
-  input: { audioBytes: number; maxInputBytes: number; outputTokens?: number },
-): number {
-  if (
-    !Number.isSafeInteger(input.audioBytes) ||
-    !Number.isSafeInteger(input.maxInputBytes) ||
-    input.audioBytes < 0 ||
-    input.maxInputBytes < 1 ||
-    input.audioBytes > input.maxInputBytes
-  ) {
-    throw new Error('Invalid audio size for provider-cost estimate');
-  }
-  const estimatedInputTokens = Math.ceil(input.audioBytes / 4);
-  return computeUsdCost(
-    cost,
-    estimatedInputTokens,
-    input.outputTokens ?? 32_000,
-  );
-}
-
 export function usdToCredits(costUsd: number): number {
   return Math.max(1, Math.ceil((costUsd * MARKUP) / CREDIT_USD));
 }
