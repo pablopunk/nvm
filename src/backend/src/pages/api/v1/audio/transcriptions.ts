@@ -152,6 +152,19 @@ function responseWithRequestId(
   });
 }
 
+function requestCancelledResponse(requestId: string) {
+  return responseWithRequestId(
+    {
+      error: {
+        type: 'request_cancelled',
+        message: 'The transcription request was cancelled.',
+      },
+    },
+    499,
+    requestId,
+  );
+}
+
 async function releaseAfterFailure(input: {
   reservationId: string;
   userId: string;
@@ -269,6 +282,13 @@ export const POST: APIRoute = async ({ request }) => {
       400,
       requestId,
     );
+  const requestedOperationId = request.headers
+    .get('x-nevermind-dictation-operation-id')
+    ?.trim();
+  const operationId =
+    requestedOperationId && requestedOperationId.length <= 200
+      ? requestedOperationId
+      : idempotencyKey;
   const requestHash = createHash('sha256')
     .update('/api/v1/audio/transcriptions\0')
     .update(parsedAudio.requestHash)
@@ -278,6 +298,7 @@ export const POST: APIRoute = async ({ request }) => {
       requestId: idempotencyKey,
       userId: user.id,
       credits: RESERVATION_CREDITS,
+      operationId,
     }),
   );
   if (preparationStatus === 'cancelled' || preparationStatus === 'unavailable')
@@ -292,6 +313,16 @@ export const POST: APIRoute = async ({ request }) => {
       409,
       requestId,
     );
+  if (request.signal.aborted) {
+    if (preparationStatus === 'prepared') {
+      await cancelAudioPreparation({
+        reservationId: idempotencyKey,
+        userId: user.id,
+        reason: 'failed',
+      }).catch(function ignoreAbortedPreparationCleanup() {});
+    }
+    return requestCancelledResponse(requestId);
+  }
   const hasPreparation = preparationStatus === 'prepared';
   const reservationId = hasPreparation ? idempotencyKey : randomUUID();
   const duplicate = await timePhase('dedup', () =>
@@ -319,6 +350,10 @@ export const POST: APIRoute = async ({ request }) => {
       requestHash,
     });
   }
+  async function abandonCancelledRequest() {
+    await failClaim();
+    return requestCancelledResponse(requestId);
+  }
   try {
     const creditsPromise = hasPreparation
       ? Promise.resolve()
@@ -344,6 +379,7 @@ export const POST: APIRoute = async ({ request }) => {
       rateLimitPromise,
       routePromise,
     ]);
+    if (request.signal.aborted) return await abandonCancelledRequest();
     if (!rateLimit.ok) {
       await failClaim();
       return tooManyRequests(rateLimit);
@@ -399,6 +435,7 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     const normalizedAudio = audioResult.audio;
+    if (request.signal.aborted) return await abandonCancelledRequest();
     if (!pricing) {
       log.warn('audio_transcription_pricing_unavailable', {
         request_id: requestId,
@@ -434,22 +471,26 @@ export const POST: APIRoute = async ({ request }) => {
         requestId,
       );
     }
+    if (request.signal.aborted) return await abandonCancelledRequest();
     const preparation = hasPreparation
       ? null
       : await timePhase('prepare', () =>
           prepareAudioReservation({
             reservationId,
+            operationId,
             userId: user.id,
             credits: RESERVATION_CREDITS,
           }),
         );
     if (preparation?.ok) hasProvisionalHold = true;
+    if (request.signal.aborted) return await abandonCancelledRequest();
     const reservation =
       preparation && !preparation.ok
         ? preparation
         : await timePhase('reserve', () =>
             admitAudioReservation({
               reservationId,
+              operationId,
               userId: user.id,
               credits: RESERVATION_CREDITS,
               estimatedProviderCostUsd,
@@ -516,7 +557,10 @@ export const POST: APIRoute = async ({ request }) => {
                 input_audio: normalizedAudio.inputAudio,
                 response_format: 'json',
               }),
-              signal: AbortSignal.timeout(providerTimeoutMs),
+              signal: AbortSignal.any([
+                request.signal,
+                AbortSignal.timeout(providerTimeoutMs),
+              ]),
             },
           );
           const body = (await upstreamResponse

@@ -19,6 +19,7 @@ const PRICING = {
 
 type PreparationInput = {
   reservationId: string;
+  operationId?: string;
   userId: string;
   credits: number;
 };
@@ -30,7 +31,8 @@ type PreparationStatus = 'prepared' | 'missing' | 'cancelled' | 'unavailable';
 type CancellationInput = {
   reservationId: string;
   userId: string;
-  reason?: 'failed';
+  reason?: 'cancelled' | 'failed';
+  tombstoneMissing?: boolean;
 };
 type FailedDedupInput = {
   userId: string;
@@ -62,7 +64,12 @@ function createState() {
       string,
       'prepared' | 'admitted' | 'cancelled' | 'failed' | 'unavailable'
     >(),
-    statusCalls: [] as { requestId: string; userId: string; credits: number }[],
+    statusCalls: [] as {
+      requestId: string;
+      userId: string;
+      credits: number;
+      operationId?: string;
+    }[],
     prepareCalls: [] as PreparationInput[],
     admissionCalls: [] as AdmissionInput[],
     cancelCalls: [] as CancellationInput[],
@@ -73,6 +80,7 @@ function createState() {
     pricingCalls: [] as unknown[][],
     normalizationCalls: [] as Buffer[],
     upstreamBodies: [] as Record<string, unknown>[],
+    providerSignals: [] as Array<AbortSignal | null>,
     backgroundTasks: [] as Promise<unknown>[],
     events: [] as string[],
     claimEvents: [] as string[],
@@ -89,6 +97,14 @@ function createState() {
     upstreamError: null as Error | null,
     cancellationGate: null as Promise<void> | null,
     onCancellationStarted: null as (() => void) | null,
+    normalizationGate: null as Promise<void> | null,
+    onNormalizationStarted: null as (() => void) | null,
+    admissionGate: null as Promise<void> | null,
+    onAdmissionStarted: null as (() => void) | null,
+    preparationRateLimitDenied: false,
+    cancellationRateLimitDenied: false,
+    preparationRateLimitCalls: 0,
+    cancellationRateLimitCalls: 0,
     resolveSettlement,
     settlementGate,
   };
@@ -96,7 +112,16 @@ function createState() {
 
 function audioRequest(
   path: 'transcriptions' | 'transcription-preparations',
-  options: { method?: string; prepared?: boolean; legacy?: boolean } = {},
+  options: {
+    method?: string;
+    prepared?: boolean;
+    legacy?: boolean;
+    cancellationId?: string;
+    cancellationReason?: 'user_cancel' | 'cleanup';
+    clientVersion?: string;
+    operationId?: string;
+    signal?: AbortSignal;
+  } = {},
 ) {
   const preparation = path === 'transcription-preparations';
   return new Request(`https://api.nvm.fyi/api/v1/audio/${path}`, {
@@ -106,21 +131,31 @@ function audioRequest(
       'content-type':
         preparation || options.legacy ? 'application/json' : 'audio/webm',
       'x-nevermind-client': 'desktop',
-      'x-nevermind-client-version': '0.22.1',
+      'x-nevermind-client-version': options.clientVersion ?? '0.22.1',
       'x-nevermind-api-version': '1',
       'x-request-id': CORRELATION_ID,
-      'idempotency-key': OPERATION_ID,
+      'idempotency-key': options.operationId ?? OPERATION_ID,
+      ...(options.cancellationId
+        ? { 'x-nevermind-dictation-operation-id': options.cancellationId }
+        : {}),
+      ...(options.cancellationReason
+        ? {
+            'x-nevermind-dictation-cancellation-reason':
+              options.cancellationReason,
+          }
+        : {}),
       ...(options.prepared
         ? { 'x-nevermind-dictation-preparation': OPERATION_ID }
         : {}),
     },
     body: preparation
-      ? JSON.stringify({ operationId: OPERATION_ID })
+      ? JSON.stringify({ operationId: options.operationId ?? OPERATION_ID })
       : options.legacy
         ? JSON.stringify({
             input_audio: { data: WEBM.toString('base64'), format: 'webm' },
           })
         : new Uint8Array(WEBM),
+    ...(options.signal ? { signal: options.signal } : {}),
   });
 }
 
@@ -183,6 +218,16 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
     async prepareAudioReservation(input: PreparationInput) {
       state.prepareCalls.push(input);
       if (state.preparationError) throw state.preparationError;
+      if (
+        state.preparations.get(input.operationId ?? input.reservationId) ===
+        'cancelled'
+      )
+        return {
+          ok: false,
+          reason: 'invalid_audio_preparation',
+          balance: 100,
+          reserved: 0,
+        };
       if (state.preparations.has(input.reservationId)) {
         return {
           ok: false,
@@ -209,8 +254,21 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
     },
     async admitAudioReservation(input: AdmissionInput) {
       state.admissionCalls.push(input);
+      state.onAdmissionStarted?.();
+      if (state.admissionGate) await state.admissionGate;
       if (state.admissionError) throw state.admissionError;
       if (state.admissionFailure) return state.admissionFailure;
+      if (
+        state.preparations.get(input.operationId ?? input.reservationId) ===
+        'cancelled'
+      ) {
+        return {
+          ok: false,
+          reason: 'invalid_audio_preparation',
+          balance: 100,
+          reserved: 0,
+        };
+      }
       if (state.preparations.get(input.reservationId) !== 'prepared') {
         return {
           ok: false,
@@ -230,14 +288,15 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       state.onCancellationStarted?.();
       if (state.cancellationGate) await state.cancellationGate;
       if (!state.preparations.has(input.reservationId)) {
-        state.preparations.set(input.reservationId, 'cancelled');
+        if (input.reason === 'cancelled' && input.tombstoneMissing)
+          state.preparations.set(input.reservationId, 'cancelled');
         state.claimEvents.push('cancel_completed');
-        return 'released';
+        return input.tombstoneMissing ? 'released' : 'not_prepared';
       }
       if (state.preparations.get(input.reservationId) === 'prepared') {
         state.preparations.set(
           input.reservationId,
-          input.reason === 'failed' ? 'failed' : 'cancelled',
+          input.reason === 'cancelled' ? 'cancelled' : 'failed',
         );
         state.claimEvents.push('cancel_completed');
         return 'released';
@@ -278,11 +337,35 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       return { ok: true };
     },
     async rateLimitTranscriptionPreparation() {
+      state.preparationRateLimitCalls += 1;
       if (state.rateLimitError) throw state.rateLimitError;
-      return { ok: true };
+      return state.preparationRateLimitDenied
+        ? {
+            ok: false,
+            retryAfterSec: 30,
+            scope: 'transcription_preparation:minute',
+          }
+        : { ok: true };
     },
-    tooManyRequests() {
-      return Response.json({}, { status: 429 });
+    async rateLimitTranscriptionCancellationTombstone() {
+      state.cancellationRateLimitCalls += 1;
+      if (state.rateLimitError) throw state.rateLimitError;
+      return state.cancellationRateLimitDenied
+        ? {
+            ok: false,
+            retryAfterSec: 30,
+            scope: 'transcription_cancellation:minute',
+          }
+        : { ok: true };
+    },
+    tooManyRequests(decision: { retryAfterSec: number }) {
+      return Response.json(
+        {},
+        {
+          status: 429,
+          headers: { 'Retry-After': String(decision.retryAfterSec) },
+        },
+      );
     },
   });
   mockLibrary('settings', {
@@ -325,6 +408,8 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
     TRANSCRIPTION_AUDIO_LIMITS: { inputBytes: 4 * 1024 * 1024 },
     async normalizeTranscriptionAudio(audio: Buffer) {
       state.normalizationCalls.push(audio);
+      state.onNormalizationStarted?.();
+      if (state.normalizationGate) await state.normalizationGate;
       if (state.normalizationError) throw state.normalizationError;
       return {
         inputAudio: { data: WAV, format: 'wav' },
@@ -373,6 +458,10 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
         'admitted',
         'Provider dispatch requires successful admission',
       );
+      const signal = init?.signal as AbortSignal | undefined;
+      state.providerSignals.push(signal ?? null);
+      if (signal?.aborted)
+        throw new DOMException('The request was cancelled.', 'AbortError');
       state.events.push('dispatch');
       state.upstreamBodies.push(JSON.parse(String(init?.body)));
       return Response.json({
@@ -398,7 +487,7 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       mode === 'prepared' || mode === 'prepared_without_header';
     for (const legacy of [false, true]) {
       await t.test(
-        `v0.22.1 ${mode} ${legacy ? 'base64' : 'raw WebM'} settles its billing ID`,
+        `desktop ${mode} ${legacy ? 'base64 JSON compatibility' : 'raw WebM'} settles its billing ID`,
         async function successfulTranscription() {
           state = createState();
           if (existingPreparation) {
@@ -411,7 +500,11 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
               operationId: OPERATION_ID,
             });
             assert.deepEqual(state.prepareCalls, [
-              { reservationId: OPERATION_ID, userId: USER_ID, credits: 5 },
+              {
+                reservationId: OPERATION_ID,
+                userId: USER_ID,
+                credits: 5,
+              },
             ]);
             assert.equal(
               state.pricingCalls.length,
@@ -431,7 +524,12 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
           assert.equal(body.text, 'Released client dictation.');
           assert.equal(body.requestId, CORRELATION_ID);
           assert.deepEqual(state.statusCalls, [
-            { requestId: OPERATION_ID, userId: USER_ID, credits: 5 },
+            {
+              requestId: OPERATION_ID,
+              userId: USER_ID,
+              credits: 5,
+              operationId: OPERATION_ID,
+            },
           ]);
           assert.deepEqual(state.pricingCalls, [['openrouter', MODEL_ID]]);
           assert.deepEqual(state.normalizationCalls, [WEBM]);
@@ -449,18 +547,31 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
           }
           assert.deepEqual(admission, {
             reservationId: admission.reservationId,
+            operationId: OPERATION_ID,
             userId: USER_ID,
             credits: 5,
             estimatedProviderCostUsd: 13 * PRICING.usdPerSecond,
             estimateCostSource: 'catalog_estimate',
           });
-          assert.deepEqual(state.prepareCalls, [
-            {
-              reservationId: admission.reservationId,
-              userId: USER_ID,
-              credits: 5,
-            },
-          ]);
+          assert.deepEqual(
+            state.prepareCalls,
+            existingPreparation
+              ? [
+                  {
+                    reservationId: OPERATION_ID,
+                    userId: USER_ID,
+                    credits: 5,
+                  },
+                ]
+              : [
+                  {
+                    reservationId: admission.reservationId,
+                    operationId: OPERATION_ID,
+                    userId: USER_ID,
+                    credits: 5,
+                  },
+                ],
+          );
           assert.equal(state.dedupCalls.length, 1);
           assert.equal(state.dedupCalls[0]![0], OPERATION_ID);
           assert.equal(state.dedupCalls[0]![1], USER_ID);
@@ -645,7 +756,12 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       assert.notEqual(retryId, CORRELATION_ID);
       assert.equal(state.dedupCalls[1]![3], retryId);
       assert.deepEqual(state.prepareCalls, [
-        { reservationId: retryId, userId: USER_ID, credits: 5 },
+        {
+          reservationId: retryId,
+          operationId: OPERATION_ID,
+          userId: USER_ID,
+          credits: 5,
+        },
       ]);
       assert.equal(state.upstreamBodies.length, 1);
       state.resolveSettlement();
@@ -751,14 +867,27 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
     'cancellation before preparation creates a tombstone that blocks late prepare and transcription',
     async function cancellationBeforePrepare() {
       state = createState();
+      state.preparationRateLimitDenied = true;
+      const preparation = await prepare(
+        context(audioRequest('transcription-preparations')),
+      );
+      assert.equal(preparation.status, 429);
+      assert.equal(preparation.headers.get('x-request-id'), CORRELATION_ID);
+      assert.equal(preparation.headers.get('Retry-After'), '30');
       const cancellation = await cancel(
         context(
-          audioRequest('transcription-preparations', { method: 'DELETE' }),
+          audioRequest('transcription-preparations', {
+            method: 'DELETE',
+            cancellationReason: 'user_cancel',
+          }),
         ),
       );
       assert.equal(cancellation.status, 200);
       assert.equal(state.preparations.get(OPERATION_ID), 'cancelled');
+      assert.equal(state.preparationRateLimitCalls, 1);
+      assert.equal(state.cancellationRateLimitCalls, 1);
 
+      state.preparationRateLimitDenied = false;
       const latePreparation = await prepare(
         context(audioRequest('transcription-preparations')),
       );
@@ -774,6 +903,208 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       );
       assert.equal(transcription.status, 409);
       assert.equal(state.dedupCalls.length, 0);
+      assert.equal(state.upstreamBodies.length, 0);
+    },
+  );
+
+  await t.test(
+    'tombstone rate limit returns an explicit compatible 429 when no hold exists',
+    async function tombstoneRateLimit() {
+      state = createState();
+      state.cancellationRateLimitDenied = true;
+      const response = await cancel(
+        context(
+          audioRequest('transcription-preparations', {
+            method: 'DELETE',
+            cancellationReason: 'user_cancel',
+          }),
+        ),
+      );
+      assert.equal(response.status, 429);
+      assert.equal(response.headers.get('x-request-id'), CORRELATION_ID);
+      assert.equal(response.headers.get('Retry-After'), '30');
+      assert.equal(state.cancellationRateLimitCalls, 1);
+      assert.equal(state.cancelCalls.length, 2);
+      assert.equal(state.preparations.has(OPERATION_ID), false);
+    },
+  );
+
+  await t.test(
+    'legacy cleanup after failed preparation does not tombstone a v0.21.3 same-ID retry',
+    async function legacyCleanupAllowsRetry() {
+      state = createState();
+      state.preparationError = new Error('Preparation temporarily unavailable');
+      const preparation = await prepare(
+        context(
+          audioRequest('transcription-preparations', {
+            clientVersion: '0.21.3',
+          }),
+        ),
+      );
+      assert.equal(preparation.status, 503);
+
+      const cleanup = await cancel(
+        context(
+          audioRequest('transcription-preparations', {
+            method: 'DELETE',
+            clientVersion: '0.21.3',
+          }),
+        ),
+      );
+      assert.equal(cleanup.status, 200);
+      assert.deepEqual(await cleanup.json(), {
+        released: false,
+        operationId: OPERATION_ID,
+      });
+      assert.equal(state.preparations.has(OPERATION_ID), false);
+      assert.deepEqual(state.cancelCalls, [
+        {
+          reservationId: OPERATION_ID,
+          userId: USER_ID,
+          reason: 'failed',
+        },
+      ]);
+
+      state.preparationError = null;
+      const retry = await transcribe(
+        context(
+          audioRequest('transcriptions', {
+            legacy: true,
+            clientVersion: '0.21.3',
+          }),
+        ),
+      );
+      assert.equal(retry.status, 200, await retry.clone().text());
+      assert.equal(state.admissionCalls.length, 1);
+      assert.equal(state.admissionCalls[0]?.operationId, OPERATION_ID);
+      assert.notEqual(state.admissionCalls[0]?.reservationId, OPERATION_ID);
+      assert.equal(state.upstreamBodies.length, 1);
+      assert.equal(state.backgroundTasks.length, 1);
+      state.resolveSettlement();
+      await Promise.all(state.backgroundTasks);
+      assert.equal(state.settledRows.length, 1);
+    },
+  );
+
+  await t.test(
+    'explicit cancellation racing fallback preparation blocks before a billing hold is created',
+    async function cancellationBeforeFallbackPrepare() {
+      state = createState();
+      let markNormalizationStarted!: () => void;
+      const normalizationStarted = new Promise<void>(
+        function startGate(resolve) {
+          markNormalizationStarted = resolve;
+        },
+      );
+      let resumeNormalization!: () => void;
+      state.normalizationGate = new Promise<void>(
+        function holdNormalization(resolve) {
+          resumeNormalization = resolve;
+        },
+      );
+      state.onNormalizationStarted = markNormalizationStarted;
+
+      const transcription = transcribe(
+        context(
+          audioRequest('transcriptions', { cancellationId: OPERATION_ID }),
+        ),
+      );
+      await normalizationStarted;
+      const cancellation = await cancel(
+        context(
+          audioRequest('transcription-preparations', {
+            method: 'DELETE',
+            cancellationReason: 'user_cancel',
+          }),
+        ),
+      );
+      assert.equal(cancellation.status, 200);
+      resumeNormalization();
+
+      const response = await transcription;
+      assert.equal(response.status, 409);
+      assert.equal(state.prepareCalls.length, 1);
+      assert.notEqual(state.prepareCalls[0]?.reservationId, OPERATION_ID);
+      assert.equal(state.prepareCalls[0]?.operationId, OPERATION_ID);
+      assert.equal(state.admissionCalls.length, 0);
+      assert.equal(state.upstreamBodies.length, 0);
+      assert.equal(state.preparations.get(OPERATION_ID), 'cancelled');
+    },
+  );
+
+  await t.test(
+    'explicit cancellation racing fallback admission releases the provisional billing hold',
+    async function cancellationBeforeFallbackAdmission() {
+      state = createState();
+      let markAdmissionStarted!: () => void;
+      const admissionStarted = new Promise<void>(function startGate(resolve) {
+        markAdmissionStarted = resolve;
+      });
+      let resumeAdmission!: () => void;
+      state.admissionGate = new Promise<void>(function holdAdmission(resolve) {
+        resumeAdmission = resolve;
+      });
+      state.onAdmissionStarted = markAdmissionStarted;
+
+      const transcription = transcribe(
+        context(
+          audioRequest('transcriptions', { cancellationId: OPERATION_ID }),
+        ),
+      );
+      await admissionStarted;
+      const billingId = state.prepareCalls[0]?.reservationId;
+      assert.ok(billingId);
+      assert.notEqual(billingId, OPERATION_ID);
+      const cancellation = await cancel(
+        context(
+          audioRequest('transcription-preparations', {
+            method: 'DELETE',
+            cancellationReason: 'user_cancel',
+          }),
+        ),
+      );
+      assert.equal(cancellation.status, 200);
+      resumeAdmission();
+
+      const response = await transcription;
+      assert.equal(response.status, 409);
+      assert.equal(state.preparations.get(OPERATION_ID), 'cancelled');
+      assert.equal(state.preparations.get(billingId), 'failed');
+      assert.equal(state.upstreamBodies.length, 0);
+    },
+  );
+
+  await t.test(
+    'request cancellation signal reaches provider dispatch and prevents a network call',
+    async function abortsProviderDispatch() {
+      state = createState();
+      const controller = new AbortController();
+      let markAdmissionStarted!: () => void;
+      const admissionStarted = new Promise<void>(function startGate(resolve) {
+        markAdmissionStarted = resolve;
+      });
+      let resumeAdmission!: () => void;
+      state.admissionGate = new Promise<void>(function holdAdmission(resolve) {
+        resumeAdmission = resolve;
+      });
+      state.onAdmissionStarted = markAdmissionStarted;
+
+      const transcription = transcribe(
+        context(
+          audioRequest('transcriptions', {
+            signal: controller.signal,
+          }),
+        ),
+      );
+      await admissionStarted;
+      controller.abort();
+      resumeAdmission();
+
+      const response = await transcription;
+      assert.equal(response.status, 503);
+      assert.equal(state.providerSignals.length, 1);
+      assert.equal(state.providerSignals[0]?.aborted, true);
+      assert.deepEqual(state.events, ['admitted']);
       assert.equal(state.upstreamBodies.length, 0);
     },
   );
@@ -814,7 +1145,11 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       assert.equal((await response.json()).error.type, 'audio_cost_limit');
       assert.equal(state.admissionCalls.length, 0);
       assert.deepEqual(state.cancelCalls, [
-        { reservationId: OPERATION_ID, userId: USER_ID, reason: 'failed' },
+        {
+          reservationId: OPERATION_ID,
+          userId: USER_ID,
+          reason: 'failed',
+        },
       ]);
       assert.equal(state.upstreamBodies.length, 0);
     },
@@ -833,7 +1168,10 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       state.preparedLookupSnapshot = 'prepared';
       const response = await cancel(
         context(
-          audioRequest('transcription-preparations', { method: 'DELETE' }),
+          audioRequest('transcription-preparations', {
+            method: 'DELETE',
+            cancellationReason: 'user_cancel',
+          }),
         ),
       );
       assert.equal(response.status, 200);
@@ -842,7 +1180,11 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
         operationId: OPERATION_ID,
       });
       assert.deepEqual(state.cancelCalls, [
-        { reservationId: OPERATION_ID, userId: USER_ID },
+        {
+          reservationId: OPERATION_ID,
+          userId: USER_ID,
+          reason: 'cancelled',
+        },
       ]);
       assert.equal(
         state.finalizationCalls.length,

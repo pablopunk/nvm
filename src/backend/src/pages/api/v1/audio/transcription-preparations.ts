@@ -14,7 +14,9 @@ import {
   prepareAudioReservation,
 } from '../../../../lib/credit-reservations';
 import { freeSpendCapErrorBody } from '../../../../lib/free-spend-cap';
+import { log } from '../../../../lib/log';
 import {
+  rateLimitTranscriptionCancellationTombstone,
   rateLimitTranscriptionPreparation,
   tooManyRequests,
 } from '../../../../lib/ratelimit';
@@ -31,7 +33,7 @@ const RESERVATION_CREDITS = Math.max(
   1,
   Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
 );
-const requestSchema = z
+const preparationRequestSchema = z
   .object({ operationId: z.string().min(1).max(200) })
   .strict();
 
@@ -40,6 +42,19 @@ function response(body: unknown, status: number, requestId: string) {
     status,
     headers: compatibilityHeaders(requestId),
   });
+}
+
+function rateLimitedResponse(
+  decision: Parameters<typeof tooManyRequests>[0],
+  requestId: string,
+) {
+  const limited = tooManyRequests(decision);
+  compatibilityHeaders(requestId).forEach(
+    function setCompatibilityHeader(value, key) {
+      limited.headers.set(key, value);
+    },
+  );
+  return limited;
 }
 
 async function authenticatedRequest(request: Request, checkKillSwitch = true) {
@@ -72,18 +87,18 @@ async function authenticatedRequest(request: Request, checkKillSwitch = true) {
   return { requestId, user };
 }
 
-async function operationIdFromRequest(request: Request) {
-  const parsed = requestSchema.safeParse(
+async function preparationRequestFromRequest(request: Request) {
+  const parsed = preparationRequestSchema.safeParse(
     await request.json().catch(() => null),
   );
-  return parsed.success ? parsed.data.operationId : null;
+  return parsed.success ? parsed.data : null;
 }
 
 export const POST: APIRoute = async ({ request }) => {
   const auth = await authenticatedRequest(request);
   if (auth.error) return auth.error;
-  const operationId = await operationIdFromRequest(request);
-  if (!operationId)
+  const preparationRequest = await preparationRequestFromRequest(request);
+  if (!preparationRequest)
     return response(
       {
         error: {
@@ -94,8 +109,9 @@ export const POST: APIRoute = async ({ request }) => {
       400,
       auth.requestId,
     );
+  const operationId = preparationRequest.operationId;
   const rateLimit = await rateLimitTranscriptionPreparation(auth.user.id);
-  if (!rateLimit.ok) return tooManyRequests(rateLimit);
+  if (!rateLimit.ok) return rateLimitedResponse(rateLimit, auth.requestId);
   try {
     const [, route, providerEnabled] = await Promise.all([
       ensureMonthlyFreeCredits(auth.user.id),
@@ -170,8 +186,8 @@ export const POST: APIRoute = async ({ request }) => {
 export const DELETE: APIRoute = async ({ request }) => {
   const auth = await authenticatedRequest(request, false);
   if (auth.error) return auth.error;
-  const operationId = await operationIdFromRequest(request);
-  if (!operationId)
+  const cancellationRequest = await preparationRequestFromRequest(request);
+  if (!cancellationRequest)
     return response(
       {
         error: {
@@ -182,13 +198,71 @@ export const DELETE: APIRoute = async ({ request }) => {
       400,
       auth.requestId,
     );
-  const rateLimit = await rateLimitTranscriptionPreparation(auth.user.id);
-  if (!rateLimit.ok) return tooManyRequests(rateLimit);
+  const operationId = cancellationRequest.operationId;
+  const isUserCancellation =
+    request.headers.get('x-nevermind-dictation-cancellation-reason')?.trim() ===
+    'user_cancel';
+  let result: Awaited<ReturnType<typeof cancelAudioPreparation>>;
   try {
-    await cancelAudioPreparation({
+    result = await cancelAudioPreparation({
       reservationId: operationId,
       userId: auth.user.id,
+      reason: isUserCancellation ? 'cancelled' : 'failed',
     });
-  } catch {}
-  return response({ released: true, operationId }, 200, auth.requestId);
+    if (isUserCancellation && result === 'not_prepared') {
+      let rateLimit: Awaited<
+        ReturnType<typeof rateLimitTranscriptionCancellationTombstone>
+      >;
+      try {
+        rateLimit = await rateLimitTranscriptionCancellationTombstone(
+          auth.user.id,
+        );
+      } catch (error) {
+        log.warn('audio_cancellation_rate_limit_failed_open', {
+          request_id: auth.requestId,
+          error: error instanceof Error ? error.name : 'unknown',
+        });
+        rateLimit = { ok: true } as const;
+      }
+      if (!rateLimit.ok) {
+        // A preparation may have appeared while the tombstone limiter ran.
+        // Always release a hold that now exists, even when the tombstone write
+        // itself is over quota.
+        result = await cancelAudioPreparation({
+          reservationId: operationId,
+          userId: auth.user.id,
+          reason: 'cancelled',
+        });
+        if (result === 'not_prepared')
+          return rateLimitedResponse(rateLimit, auth.requestId);
+      } else {
+        result = await cancelAudioPreparation({
+          reservationId: operationId,
+          userId: auth.user.id,
+          reason: 'cancelled',
+          tombstoneMissing: true,
+        });
+      }
+    }
+  } catch (error) {
+    log.warn('audio_preparation_cancellation_failed', {
+      request_id: auth.requestId,
+      error: error instanceof Error ? error.name : 'unknown',
+    });
+    return response(
+      {
+        error: {
+          type: 'cancellation_failed',
+          message: 'Audio cancellation could not be recorded.',
+        },
+      },
+      503,
+      auth.requestId,
+    );
+  }
+  return response(
+    { released: result !== 'not_prepared', operationId },
+    200,
+    auth.requestId,
+  );
 };

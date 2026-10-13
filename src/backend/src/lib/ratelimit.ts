@@ -56,6 +56,16 @@ const transcriptionPreparationPerDay = makeLimiter(
   1000,
   '1 d',
 );
+const transcriptionCancellationPerMin = makeLimiter(
+  'transcription-cancellation:min',
+  60,
+  '1 m',
+);
+const transcriptionCancellationPerDay = makeLimiter(
+  'transcription-cancellation:day',
+  1000,
+  '1 d',
+);
 
 export type RateLimitDecision =
   | { ok: true }
@@ -143,6 +153,17 @@ export async function rateLimitTranscriptionPreparation(
     'transcription_preparation',
     transcriptionPreparationPerMin,
     transcriptionPreparationPerDay,
+  );
+}
+
+export async function rateLimitTranscriptionCancellationTombstone(
+  userId: string,
+): Promise<RateLimitDecision> {
+  return checkPair(
+    userId,
+    'transcription_cancellation',
+    transcriptionCancellationPerMin,
+    transcriptionCancellationPerDay,
   );
 }
 
