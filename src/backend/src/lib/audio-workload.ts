@@ -169,7 +169,7 @@ export async function normalizeTranscriptionAudio(
     checkDeadline();
     return result;
   }
-  let decoder: OpusDecoder | undefined;
+  let decoder: OpusDecoder<48000> | undefined;
   let decoderReady = false;
   try {
     const tracks = await bounded(input.getTracks());
@@ -186,8 +186,13 @@ export async function normalizeTranscriptionAudio(
       throw new InvalidTranscriptionAudioError('invalid_audio');
     const config = await bounded(track.getDecoderConfig());
     const { preSkip, gain } = readOpusHeader(config?.description, channels);
-    decoder = new OpusDecoder({ channels, sampleRate: 48_000, preSkip });
-    await bounded(decoder.ready);
+    const activeDecoder = new OpusDecoder<48000>({
+      channels,
+      sampleRate: 48_000,
+      preSkip,
+    });
+    decoder = activeDecoder;
+    await bounded(activeDecoder.ready);
     decoderReady = true;
     const sink = new EncodedPacketSink(track);
     const chunks: Buffer[] = [];
@@ -202,7 +207,7 @@ export async function normalizeTranscriptionAudio(
       if (!packet.data.length || packet.data.length > 3840 * channels) {
         throw new InvalidTranscriptionAudioError('invalid_audio');
       }
-      const decoded = decoder.decodeFrame(packet.data);
+      const decoded = activeDecoder.decodeFrame(packet.data);
       if (
         decoded.errors.length ||
         decoded.sampleRate !== 48_000 ||

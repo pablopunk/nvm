@@ -301,6 +301,7 @@ export const POST: APIRoute = async ({ request }) => {
   let hasProvisionalHold = hasPreparation;
   let admitted = false;
   const authenticatedUser = user;
+  const claimedIdempotencyKey: string = idempotencyKey;
   async function failClaim() {
     if (hasProvisionalHold)
       await cancelAudioPreparation({
@@ -310,7 +311,7 @@ export const POST: APIRoute = async ({ request }) => {
       });
     await markDedupFailed({
       userId: authenticatedUser.id,
-      idempotencyKey,
+      idempotencyKey: claimedIdempotencyKey,
       requestId: reservationId,
       requestHash,
     });

@@ -345,25 +345,29 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       },
     },
   });
-  t.mock.method(globalThis, 'fetch', async function upstreamFetch(input, init) {
-    if (state.upstreamError) throw state.upstreamError;
-    assert.equal(
-      String(input),
-      'https://openrouter.ai/api/v1/audio/transcriptions',
-    );
-    assert.equal(init?.method, 'POST');
-    assert.equal(
-      state.events.at(-1),
-      'admitted',
-      'Provider dispatch requires successful admission',
-    );
-    state.events.push('dispatch');
-    state.upstreamBodies.push(JSON.parse(String(init?.body)));
-    return Response.json({
-      text: 'Released client dictation.',
-      usage: { seconds: 12.25, cost: 0.001225 },
-    });
-  });
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async function upstreamFetch(input: RequestInfo | URL, init?: RequestInit) {
+      if (state.upstreamError) throw state.upstreamError;
+      assert.equal(
+        String(input),
+        'https://openrouter.ai/api/v1/audio/transcriptions',
+      );
+      assert.equal(init?.method, 'POST');
+      assert.equal(
+        state.events.at(-1),
+        'admitted',
+        'Provider dispatch requires successful admission',
+      );
+      state.events.push('dispatch');
+      state.upstreamBodies.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        text: 'Released client dictation.',
+        usage: { seconds: 12.25, cost: 0.001225 },
+      });
+    },
+  );
 
   const { POST: transcribe } = await import('./transcriptions');
   const { POST: prepare, DELETE: cancel } = await import(
