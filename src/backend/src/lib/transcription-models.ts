@@ -7,11 +7,19 @@ export type TranscriptionModel = {
   provider: 'openrouter';
   modelId: string;
   name: string;
+  durationPricing?: TranscriptionDurationPricing;
+};
+
+export type TranscriptionDurationPricing = {
+  unit: 'second';
+  usdPerSecond: number;
+  source: 'openrouter_transcription_catalog';
 };
 
 type OpenRouterModel = {
   id?: unknown;
   name?: unknown;
+  pricing?: { prompt?: unknown; completion?: unknown };
   architecture?: {
     input_modalities?: unknown;
     output_modalities?: unknown;
@@ -27,6 +35,29 @@ function hasModality(value: unknown, modality: string) {
   return Array.isArray(value) && value.includes(modality);
 }
 
+function decimalRate(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value))
+    return null;
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate >= 0 ? rate : null;
+}
+
+function durationPricing(
+  model: OpenRouterModel,
+): TranscriptionDurationPricing | null {
+  // Parakeet's provider documents USD/minute; the STT catalog exposes
+  // USD/second. Other STT models may bill tokens and must not inherit this unit.
+  if (model.id !== 'nvidia/parakeet-tdt-0.6b-v3') return null;
+  const usdPerSecond = decimalRate(model.pricing?.prompt);
+  const outputRate = decimalRate(model.pricing?.completion);
+  if (usdPerSecond == null || outputRate !== 0) return null;
+  return {
+    unit: 'second',
+    usdPerSecond,
+    source: 'openrouter_transcription_catalog',
+  };
+}
+
 function transcriptionModel(model: OpenRouterModel): TranscriptionModel | null {
   if (
     typeof model.id !== 'string' ||
@@ -34,10 +65,12 @@ function transcriptionModel(model: OpenRouterModel): TranscriptionModel | null {
     !hasModality(model.architecture?.output_modalities, 'transcription')
   )
     return null;
+  const pricing = durationPricing(model);
   return {
     provider: 'openrouter',
     modelId: model.id,
     name: typeof model.name === 'string' ? model.name : model.id,
+    ...(pricing ? { durationPricing: pricing } : {}),
   };
 }
 
@@ -53,7 +86,9 @@ async function fetchOpenRouterTranscriptionModels() {
   if (!response.ok)
     throw new Error(`OpenRouter transcription catalog returned ${response.status}`);
   const body = (await response.json()) as { data?: OpenRouterModel[] };
-  return (body.data ?? [])
+  if (!Array.isArray(body?.data))
+    throw new Error('OpenRouter transcription catalog is malformed');
+  return body.data
     .map(transcriptionModel)
     .filter((model): model is TranscriptionModel => Boolean(model))
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -67,21 +102,38 @@ export async function listTranscriptionModels(options: { fresh?: boolean } = {})
     now - cache.fetchedAt < CATALOG_TTL_MS
   )
     return cache.models;
-  if (inflight) return inflight;
-  inflight = fetchOpenRouterTranscriptionModels()
-    .then((models) => {
-      cache = { models, fetchedAt: Date.now() };
-      return models;
-    })
-    .catch((error) => {
-      if (cache && now - cache.fetchedAt < STALE_CATALOG_TTL_MS)
-        return cache.models;
-      throw error;
-    })
-    .finally(() => {
-      inflight = undefined;
-    });
-  return inflight;
+  if (!inflight) {
+    inflight = fetchOpenRouterTranscriptionModels()
+      .then((models) => {
+        cache = { models, fetchedAt: Date.now() };
+        return models;
+      })
+      .finally(() => {
+        inflight = undefined;
+      });
+  }
+  try {
+    return await inflight;
+  } catch (error) {
+    if (
+      !options.fresh &&
+      cache &&
+      now - cache.fetchedAt < STALE_CATALOG_TTL_MS
+    )
+      return cache.models;
+    throw error;
+  }
+}
+
+export async function lookupTranscriptionDurationPricing(
+  provider: string,
+  modelId: string,
+): Promise<TranscriptionDurationPricing | null> {
+  if (provider !== 'openrouter') return null;
+  const models = await listTranscriptionModels({ fresh: true });
+  return (
+    models.find((model) => model.modelId === modelId)?.durationPricing ?? null
+  );
 }
 
 export async function isCompatibleTranscriptionModel(
