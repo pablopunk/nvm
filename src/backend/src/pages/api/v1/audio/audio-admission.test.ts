@@ -186,10 +186,7 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       if (state.preparations.has(input.reservationId)) {
         return {
           ok: false,
-          reason:
-            state.preparations.get(input.reservationId) === 'cancelled'
-              ? 'request_already_reserved'
-              : 'invalid_audio_preparation',
+          reason: 'invalid_audio_preparation',
           balance: 100,
           reserved: 0,
         };

@@ -556,7 +556,7 @@ export async function runAudioReservationAssertions(suffix: string) {
   });
   assert.equal(latePreparation.ok, false);
   if (!latePreparation.ok)
-    assert.equal(latePreparation.reason, 'request_already_reserved');
+    assert.equal(latePreparation.reason, 'invalid_audio_preparation');
   const [cancelTombstone] = await db
     .select()
     .from(creditReservations)
