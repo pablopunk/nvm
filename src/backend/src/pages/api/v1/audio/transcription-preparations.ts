@@ -14,6 +14,10 @@ import {
   prepareAudioReservation,
 } from '../../../../lib/credit-reservations';
 import { freeSpendCapErrorBody } from '../../../../lib/free-spend-cap';
+import {
+  rateLimitTranscriptionPreparation,
+  tooManyRequests,
+} from '../../../../lib/ratelimit';
 import { isRouteTripped } from '../../../../lib/route-breakers';
 import {
   getAudioModelRoute,
@@ -90,6 +94,8 @@ export const POST: APIRoute = async ({ request }) => {
       400,
       auth.requestId,
     );
+  const rateLimit = await rateLimitTranscriptionPreparation(auth.user.id);
+  if (!rateLimit.ok) return tooManyRequests(rateLimit);
   try {
     const [, route, providerEnabled] = await Promise.all([
       ensureMonthlyFreeCredits(auth.user.id),
@@ -116,6 +122,18 @@ export const POST: APIRoute = async ({ request }) => {
     });
     if (!reservation.ok && reservation.reason === 'free_spend_cap_reached')
       return response(freeSpendCapErrorBody(), 503, auth.requestId);
+    if (!reservation.ok && reservation.reason === 'request_already_reserved')
+      return response(
+        {
+          error: {
+            type: 'idempotency_conflict',
+            message:
+              'This recording preparation is no longer available. Start a new recording.',
+          },
+        },
+        409,
+        auth.requestId,
+      );
     if (!reservation.ok)
       return response(
         {
@@ -160,6 +178,8 @@ export const DELETE: APIRoute = async ({ request }) => {
       400,
       auth.requestId,
     );
+  const rateLimit = await rateLimitTranscriptionPreparation(auth.user.id);
+  if (!rateLimit.ok) return tooManyRequests(rateLimit);
   try {
     await cancelAudioPreparation({
       reservationId: operationId,
