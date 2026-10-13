@@ -10,18 +10,27 @@ function isProduction(): boolean {
 }
 
 const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+const token =
+  process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
 const redis = url && token ? new Redis({ url, token }) : null;
 if (!redis && isProduction()) {
-  log.error('ratelimit_misconfigured', { reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing in production' });
+  log.error('ratelimit_misconfigured', {
+    reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing in production',
+  });
 } else if (!redis) {
-  log.warn('ratelimit_disabled', { reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing' });
+  log.warn('ratelimit_disabled', {
+    reason: 'UPSTASH_REDIS_REST_URL/TOKEN missing',
+  });
 }
 
-function makeLimiter(prefix: string, limit: number, window: `${number} ${'s' | 'm' | 'h' | 'd'}`) {
+function makeLimiter(
+  prefix: string,
+  limit: number,
+  window: `${number} ${'s' | 'm' | 'h' | 'd'}`,
+) {
   if (!redis) return null;
   return new Ratelimit({
     redis,
@@ -37,8 +46,20 @@ const chatPerMinPaid = makeLimiter('chat:min:paid', 60, '1 m');
 const chatPerDayPaid = makeLimiter('chat:day:paid', 5000, '1 d');
 const transcriptionPerMin = makeLimiter('transcription:min', 20, '1 m');
 const transcriptionPerDay = makeLimiter('transcription:day', 1000, '1 d');
+const transcriptionPreparationPerMin = makeLimiter(
+  'transcription-preparation:min',
+  60,
+  '1 m',
+);
+const transcriptionPreparationPerDay = makeLimiter(
+  'transcription-preparation:day',
+  1000,
+  '1 d',
+);
 
-export type RateLimitDecision = { ok: true } | { ok: false; retryAfterSec: number; scope: string };
+export type RateLimitDecision =
+  | { ok: true }
+  | { ok: false; retryAfterSec: number; scope: string };
 
 type RateLimitOverrides = {
   chat?: typeof rateLimitChat;
@@ -63,7 +84,9 @@ async function checkPair(
 ): Promise<RateLimitDecision> {
   if (!perMin || !perDay) {
     if (isProduction()) {
-      log.error('ratelimit_misconfigured', { reason: 'Redis unavailable in production' });
+      log.error('ratelimit_misconfigured', {
+        reason: 'Redis unavailable in production',
+      });
       return { ok: false, scope: `${scope}:misconfigured`, retryAfterSec: 60 };
     }
     return { ok: true };
@@ -73,17 +96,31 @@ async function checkPair(
     perDay.limit(key),
   ]);
   if (!minRes.success) {
-    return { ok: false, scope: `${scope}:minute`, retryAfterSec: Math.max(1, Math.ceil((minRes.reset - Date.now()) / 1000)) };
+    return {
+      ok: false,
+      scope: `${scope}:minute`,
+      retryAfterSec: Math.max(1, Math.ceil((minRes.reset - Date.now()) / 1000)),
+    };
   }
   if (!dayRes.success) {
-    return { ok: false, scope: `${scope}:day`, retryAfterSec: Math.max(1, Math.ceil((dayRes.reset - Date.now()) / 1000)) };
+    return {
+      ok: false,
+      scope: `${scope}:day`,
+      retryAfterSec: Math.max(1, Math.ceil((dayRes.reset - Date.now()) / 1000)),
+    };
   }
   return { ok: true };
 }
 
-export async function rateLimitChat(userId: string, kind: 'free' | 'paid'): Promise<RateLimitDecision> {
+export async function rateLimitChat(
+  userId: string,
+  kind: 'free' | 'paid',
+): Promise<RateLimitDecision> {
   if (testOverrides.chat) return testOverrides.chat(userId, kind);
-  const [perMin, perDay] = kind === 'free' ? [chatPerMinFree, chatPerDayFree] : [chatPerMinPaid, chatPerDayPaid];
+  const [perMin, perDay] =
+    kind === 'free'
+      ? [chatPerMinFree, chatPerDayFree]
+      : [chatPerMinPaid, chatPerDayPaid];
   return checkPair(userId, `chat:${kind}`, perMin, perDay);
 }
 
@@ -98,10 +135,26 @@ export async function rateLimitTranscription(
   );
 }
 
+export async function rateLimitTranscriptionPreparation(
+  userId: string,
+): Promise<RateLimitDecision> {
+  return checkPair(
+    userId,
+    'transcription_preparation',
+    transcriptionPreparationPerMin,
+    transcriptionPreparationPerDay,
+  );
+}
+
 const ipLimiters = new Map<string, Ratelimit | null>();
-function ipLimiter(scope: string, limit: number, window: `${number} ${'s' | 'm' | 'h' | 'd'}`) {
+function ipLimiter(
+  scope: string,
+  limit: number,
+  window: `${number} ${'s' | 'm' | 'h' | 'd'}`,
+) {
   const key = `${scope}:${limit}:${window}`;
-  if (!ipLimiters.has(key)) ipLimiters.set(key, makeLimiter(`ip:${scope}`, limit, window));
+  if (!ipLimiters.has(key))
+    ipLimiters.set(key, makeLimiter(`ip:${scope}`, limit, window));
   return ipLimiters.get(key)!;
 }
 
@@ -116,14 +169,24 @@ export async function rateLimitIp(
   const limiter = ipLimiter(scope, limit, window);
   if (!limiter) {
     if (isProduction()) {
-      log.error('ratelimit_misconfigured', { reason: 'Redis unavailable in production' });
-      return { ok: false, scope: `ip:${scope}:misconfigured`, retryAfterSec: 60 };
+      log.error('ratelimit_misconfigured', {
+        reason: 'Redis unavailable in production',
+      });
+      return {
+        ok: false,
+        scope: `ip:${scope}:misconfigured`,
+        retryAfterSec: 60,
+      };
     }
     return { ok: true };
   }
   const res = await limiter.limit(ip);
   if (res.success) return { ok: true };
-  return { ok: false, scope: `ip:${scope}`, retryAfterSec: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) };
+  return {
+    ok: false,
+    scope: `ip:${scope}`,
+    retryAfterSec: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)),
+  };
 }
 
 export function clientIp(request: Request): string | null {
@@ -132,9 +195,18 @@ export function clientIp(request: Request): string | null {
   return request.headers.get('x-real-ip');
 }
 
-export function tooManyRequests(decision: RateLimitDecision & { ok: false }): Response {
+export function tooManyRequests(
+  decision: RateLimitDecision & { ok: false },
+): Response {
   return Response.json(
-    { error: { type: 'rate_limited', message: `Rate limit exceeded (${decision.scope})`, retry_after: decision.retryAfterSec, dashboard_url: DASHBOARD_URL } },
+    {
+      error: {
+        type: 'rate_limited',
+        message: `Rate limit exceeded (${decision.scope})`,
+        retry_after: decision.retryAfterSec,
+        dashboard_url: DASHBOARD_URL,
+      },
+    },
     { status: 429, headers: { 'Retry-After': String(decision.retryAfterSec) } },
   );
 }
@@ -169,12 +241,17 @@ export function setCheckoutLockForTests(lock: CheckoutLockFn | null) {
 
 const CHECKOUT_LOCK_TTL = 600;
 
-export async function acquireCheckoutLock(userId: string, ttlSec = CHECKOUT_LOCK_TTL): Promise<CheckoutLockResult> {
+export async function acquireCheckoutLock(
+  userId: string,
+  ttlSec = CHECKOUT_LOCK_TTL,
+): Promise<CheckoutLockResult> {
   if (checkoutLockOverride) return checkoutLockOverride.acquire(userId, ttlSec);
   if (isCheckoutLockKillSwitched()) return { ok: true };
   if (!redis) {
     if (isProduction()) {
-      log.error('checkout_lock_failed', { reason: 'Redis unavailable in production' });
+      log.error('checkout_lock_failed', {
+        reason: 'Redis unavailable in production',
+      });
       return { ok: false };
     }
     log.warn('checkout_lock_disabled', { reason: 'Redis unavailable' });

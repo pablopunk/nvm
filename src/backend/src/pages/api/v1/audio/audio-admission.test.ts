@@ -186,7 +186,10 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       if (state.preparations.has(input.reservationId)) {
         return {
           ok: false,
-          reason: 'invalid_audio_preparation',
+          reason:
+            state.preparations.get(input.reservationId) === 'cancelled'
+              ? 'request_already_reserved'
+              : 'invalid_audio_preparation',
           balance: 100,
           reserved: 0,
         };
@@ -229,6 +232,11 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       state.claimEvents.push('cancel_started');
       state.onCancellationStarted?.();
       if (state.cancellationGate) await state.cancellationGate;
+      if (!state.preparations.has(input.reservationId)) {
+        state.preparations.set(input.reservationId, 'cancelled');
+        state.claimEvents.push('cancel_completed');
+        return 'released';
+      }
       if (state.preparations.get(input.reservationId) === 'prepared') {
         state.preparations.set(
           input.reservationId,
@@ -269,6 +277,10 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
   });
   mockLibrary('ratelimit', {
     async rateLimitTranscription() {
+      if (state.rateLimitError) throw state.rateLimitError;
+      return { ok: true };
+    },
+    async rateLimitTranscriptionPreparation() {
       if (state.rateLimitError) throw state.rateLimitError;
       return { ok: true };
     },
@@ -737,6 +749,37 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       );
     }
   }
+
+  await t.test(
+    'cancellation before preparation creates a tombstone that blocks late prepare and transcription',
+    async function cancellationBeforePrepare() {
+      state = createState();
+      const cancellation = await cancel(
+        context(
+          audioRequest('transcription-preparations', { method: 'DELETE' }),
+        ),
+      );
+      assert.equal(cancellation.status, 200);
+      assert.equal(state.preparations.get(OPERATION_ID), 'cancelled');
+
+      const latePreparation = await prepare(
+        context(audioRequest('transcription-preparations')),
+      );
+      assert.equal(latePreparation.status, 409);
+      assert.equal(
+        (await latePreparation.json()).error.type,
+        'idempotency_conflict',
+      );
+      assert.equal(state.prepareCalls.length, 1);
+
+      const transcription = await transcribe(
+        context(audioRequest('transcriptions', { prepared: true })),
+      );
+      assert.equal(transcription.status, 409);
+      assert.equal(state.dedupCalls.length, 0);
+      assert.equal(state.upstreamBodies.length, 0);
+    },
+  );
 
   await t.test(
     'provider rejection uses transactional finalization, not provisional cleanup',
