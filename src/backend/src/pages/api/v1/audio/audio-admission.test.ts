@@ -78,6 +78,7 @@ function createState() {
     claimEvents: [] as string[],
     pricing: PRICING as typeof PRICING | null,
     normalizationError: null as Error | null,
+    estimatedBillableSeconds: 13,
     admissionFailure: null as Extract<ReservationResult, { ok: false }> | null,
     preparedLookupSnapshot: null as PreparationStatus | null,
     rateLimitError: null as Error | null,
@@ -315,8 +316,8 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       if (state.normalizationError) throw state.normalizationError;
       return {
         inputAudio: { data: WAV, format: 'wav' },
-        durationSeconds: 12.25,
-        estimatedBillableSeconds: 13,
+        durationSeconds: state.estimatedBillableSeconds - 0.75,
+        estimatedBillableSeconds: state.estimatedBillableSeconds,
       };
     },
   });
@@ -754,6 +755,25 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       assert.equal(finalization.outcome, 'release');
       assert.equal(finalization.dedup?.status, 'failed');
       assert.equal(finalization.dedup?.idempotencyKey, OPERATION_ID);
+    },
+  );
+
+  await t.test(
+    'audio whose estimate exceeds the preserved five-credit ceiling is rejected before dispatch',
+    async function rejectsOverBudgetAudio() {
+      state = createState();
+      state.preparations.set(OPERATION_ID, 'prepared');
+      state.estimatedBillableSeconds = 101;
+      const response = await transcribe(
+        context(audioRequest('transcriptions')),
+      );
+      assert.equal(response.status, 413);
+      assert.equal((await response.json()).error.type, 'audio_cost_limit');
+      assert.equal(state.admissionCalls.length, 0);
+      assert.deepEqual(state.cancelCalls, [
+        { reservationId: OPERATION_ID, userId: USER_ID, reason: 'failed' },
+      ]);
+      assert.equal(state.upstreamBodies.length, 0);
     },
   );
 

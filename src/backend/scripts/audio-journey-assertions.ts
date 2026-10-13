@@ -33,8 +33,8 @@ import {
 
 const MODEL = 'nvidia/parakeet-tdt-0.6b-v3';
 const USD_PER_SECOND = 0.000025;
-const SAMPLES = 161_280;
-const SECONDS = SAMPLES / 48_000;
+const SAMPLES = 53_760;
+const SECONDS = SAMPLES / 16_000;
 const ESTIMATE = Math.ceil(SECONDS) * USD_PER_SECOND;
 const PROVIDER_COST = SECONDS * USD_PER_SECOND;
 const TEXT = 'Loopback transcription of the Chromium speech fixture.';
@@ -80,7 +80,10 @@ export async function runAudioJourneyAssertions(
     import('../src/pages/api/v1/audio/transcriptions'),
   ]);
   const recording = await readFile(
-    new URL('../src/fixtures/audio/chromium-speech.webm', import.meta.url),
+    new URL(
+      ['..', 'src', 'fixtures', 'audio', 'chromium-speech.webm'].join('/'),
+      import.meta.url,
+    ),
   );
   const [savedRoute] = await database
     .select()
@@ -171,14 +174,14 @@ export async function runAudioJourneyAssertions(
       assert.equal(wav.readUInt32LE(4), wav.length - 8);
       assert.equal(wav.readUInt32LE(16), 16);
       assert.equal(wav.readUInt16LE(20), 1);
-      assert.equal(wav.readUInt16LE(22), 2);
-      assert.equal(wav.readUInt32LE(24), 48_000);
-      assert.equal(wav.readUInt32LE(28), 48_000 * 4);
-      assert.equal(wav.readUInt16LE(32), 4);
+      assert.equal(wav.readUInt16LE(22), 1);
+      assert.equal(wav.readUInt32LE(24), 16_000);
+      assert.equal(wav.readUInt32LE(28), 16_000 * 2);
+      assert.equal(wav.readUInt16LE(32), 2);
       assert.equal(wav.readUInt16LE(34), 16);
       assert.equal(wav.toString('ascii', 36, 40), 'data');
-      assert.equal(wav.readUInt32LE(40), SAMPLES * 4);
-      assert.equal(wav.length, 44 + SAMPLES * 4);
+      assert.equal(wav.readUInt32LE(40), SAMPLES * 2);
+      assert.equal(wav.length, 44 + SAMPLES * 2);
       assert.ok(
         wav.subarray(44).some(function isSpeechByte(byte) {
           return byte !== 0;

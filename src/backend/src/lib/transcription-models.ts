@@ -1,6 +1,6 @@
 import { getUpstreamConfig } from './upstream';
 
-const CATALOG_TTL_MS = 15 * 60 * 1000;
+export const TRANSCRIPTION_CATALOG_TTL_MS = 15 * 60 * 1000;
 const STALE_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type TranscriptionModel = {
@@ -26,9 +26,7 @@ type OpenRouterModel = {
   };
 };
 
-let cache:
-  | { models: TranscriptionModel[]; fetchedAt: number }
-  | undefined;
+let cache: { models: TranscriptionModel[]; fetchedAt: number } | undefined;
 let inflight: Promise<TranscriptionModel[]> | undefined;
 
 function hasModality(value: unknown, modality: string) {
@@ -36,8 +34,7 @@ function hasModality(value: unknown, modality: string) {
 }
 
 function decimalRate(value: unknown): number | null {
-  if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value))
-    return null;
+  if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) return null;
   const rate = Number(value);
   return Number.isFinite(rate) && rate >= 0 ? rate : null;
 }
@@ -84,7 +81,9 @@ async function fetchOpenRouterTranscriptionModels() {
     },
   );
   if (!response.ok)
-    throw new Error(`OpenRouter transcription catalog returned ${response.status}`);
+    throw new Error(
+      `OpenRouter transcription catalog returned ${response.status}`,
+    );
   const body = (await response.json()) as { data?: OpenRouterModel[] };
   if (!Array.isArray(body?.data))
     throw new Error('OpenRouter transcription catalog is malformed');
@@ -94,14 +93,7 @@ async function fetchOpenRouterTranscriptionModels() {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export async function listTranscriptionModels(options: { fresh?: boolean } = {}) {
-  const now = Date.now();
-  if (
-    !options.fresh &&
-    cache &&
-    now - cache.fetchedAt < CATALOG_TTL_MS
-  )
-    return cache.models;
+function refreshTranscriptionModels(): Promise<TranscriptionModel[]> {
   if (!inflight) {
     inflight = fetchOpenRouterTranscriptionModels()
       .then((models) => {
@@ -112,14 +104,23 @@ export async function listTranscriptionModels(options: { fresh?: boolean } = {})
         inflight = undefined;
       });
   }
+  return inflight;
+}
+
+export async function listTranscriptionModels(
+  options: { fresh?: boolean } = {},
+) {
+  const now = Date.now();
+  if (
+    !options.fresh &&
+    cache &&
+    now - cache.fetchedAt < TRANSCRIPTION_CATALOG_TTL_MS
+  )
+    return cache.models;
   try {
-    return await inflight;
+    return await refreshTranscriptionModels();
   } catch (error) {
-    if (
-      !options.fresh &&
-      cache &&
-      now - cache.fetchedAt < STALE_CATALOG_TTL_MS
-    )
+    if (!options.fresh && cache && now - cache.fetchedAt < STALE_CATALOG_TTL_MS)
       return cache.models;
     throw error;
   }
@@ -128,9 +129,16 @@ export async function listTranscriptionModels(options: { fresh?: boolean } = {})
 export async function lookupTranscriptionDurationPricing(
   provider: string,
   modelId: string,
+  options: { fresh?: boolean } = {},
 ): Promise<TranscriptionDurationPricing | null> {
   if (provider !== 'openrouter') return null;
-  const models = await listTranscriptionModels({ fresh: true });
+  const now = Date.now();
+  const models =
+    !options.fresh &&
+    cache &&
+    now - cache.fetchedAt < TRANSCRIPTION_CATALOG_TTL_MS
+      ? cache.models
+      : await refreshTranscriptionModels();
   return (
     models.find((model) => model.modelId === modelId)?.durationPricing ?? null
   );

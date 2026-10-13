@@ -23,6 +23,7 @@ import {
   getAudioPreparationStatus,
   prepareAudioReservation,
 } from '../../../../lib/credit-reservations';
+import { usdToCredits } from '../../../../lib/cost';
 import { freeSpendCapErrorBody } from '../../../../lib/free-spend-cap';
 import { log } from '../../../../lib/log';
 import { handleDedup, markDedupFailed } from '../../../../lib/proxy';
@@ -56,6 +57,8 @@ const UPSTREAM_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.AUDIO_TRANSCRIPTION_TIMEOUT_MS ?? 15_000),
 );
+const RELEASED_CLIENT_TIMEOUT_MS = 16_000;
+const CLIENT_RESPONSE_MARGIN_MS = 1_000;
 const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 
 const requestSchema = z
@@ -373,10 +376,29 @@ export const POST: APIRoute = async ({ request }) => {
         requestId,
       );
     }
-    const pricing = await lookupTranscriptionDurationPricing(
-      route.provider,
-      route.modelId,
-    ).catch(() => null);
+    const [pricingResult, audioResult] = await Promise.all([
+      lookupTranscriptionDurationPricing(route.provider, route.modelId)
+        .then((pricing) => ({ pricing }))
+        .catch(() => ({ pricing: null })),
+      timePhase('audio', () => normalizeTranscriptionAudio(parsedAudio.audio))
+        .then((audio) => ({ audio }))
+        .catch((error: unknown) => ({ error })),
+    ]);
+    const pricing = pricingResult.pricing;
+    if ('error' in audioResult) {
+      await failClaim();
+      return responseWithRequestId(
+        {
+          error: {
+            type: 'invalid_audio',
+            message: 'The WebM recording could not be validated safely.',
+          },
+        },
+        400,
+        requestId,
+      );
+    }
+    const normalizedAudio = audioResult.audio;
     if (!pricing) {
       log.warn('audio_transcription_pricing_unavailable', {
         request_id: requestId,
@@ -397,23 +419,18 @@ export const POST: APIRoute = async ({ request }) => {
         requestId,
       );
     }
-    let normalizedAudio: Awaited<
-      ReturnType<typeof normalizeTranscriptionAudio>
-    >;
-    try {
-      normalizedAudio = await timePhase('audio', () =>
-        normalizeTranscriptionAudio(parsedAudio.audio),
-      );
-    } catch {
+    const estimatedProviderCostUsd =
+      normalizedAudio.estimatedBillableSeconds * pricing.usdPerSecond;
+    if (usdToCredits(estimatedProviderCostUsd) > RESERVATION_CREDITS) {
       await failClaim();
       return responseWithRequestId(
         {
           error: {
-            type: 'invalid_audio',
-            message: 'The WebM recording could not be validated safely.',
+            type: 'audio_cost_limit',
+            message: `This recording exceeds the ${RESERVATION_CREDITS}-credit per-request limit. Split it into shorter clips and retry.`,
           },
         },
-        400,
+        413,
         requestId,
       );
     }
@@ -435,8 +452,7 @@ export const POST: APIRoute = async ({ request }) => {
               reservationId,
               userId: user.id,
               credits: RESERVATION_CREDITS,
-              estimatedProviderCostUsd:
-                normalizedAudio.estimatedBillableSeconds * pricing.usdPerSecond,
+              estimatedProviderCostUsd,
               estimateCostSource: 'catalog_estimate',
             }),
           );
@@ -470,6 +486,16 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     admitted = true;
+    const providerTimeoutMs = Math.min(
+      UPSTREAM_TIMEOUT_MS,
+      RELEASED_CLIENT_TIMEOUT_MS -
+        CLIENT_RESPONSE_MARGIN_MS -
+        (performance.now() - startedAt),
+    );
+    if (providerTimeoutMs < 1_000)
+      throw new Error(
+        'Insufficient time remains for the transcription request',
+      );
     try {
       const upstream = getUpstreamConfig('openrouter');
       const { upstreamResponse, body } = await timePhase(
@@ -488,7 +514,7 @@ export const POST: APIRoute = async ({ request }) => {
                 input_audio: normalizedAudio.inputAudio,
                 response_format: 'json',
               }),
-              signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+              signal: AbortSignal.timeout(providerTimeoutMs),
             },
           );
           const body = (await upstreamResponse

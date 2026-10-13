@@ -57,6 +57,7 @@ export const PUT: APIRoute = async ({ request }) => {
   const pricing = await lookupTranscriptionDurationPricing(
     route.provider,
     route.modelId,
+    { fresh: true },
   ).catch(() => null);
   if (!pricing)
     return new Response(

@@ -102,7 +102,6 @@ async function makeWebm(options: FixtureOptions = {}): Promise<Uint8Array> {
 
 function assertCanonicalWav(
   result: NormalizedTranscriptionAudio,
-  channels: number,
   samples: number,
 ) {
   assert.equal(result.inputAudio.format, 'wav');
@@ -112,16 +111,16 @@ function assertCanonicalWav(
   assert.equal(wav.readUInt32LE(4), wav.length - 8);
   assert.equal(wav.readUInt32LE(16), 16);
   assert.equal(wav.readUInt16LE(20), 1);
-  assert.equal(wav.readUInt16LE(22), channels);
-  assert.equal(wav.readUInt32LE(24), 48_000);
-  assert.equal(wav.readUInt32LE(28), 48_000 * channels * 2);
-  assert.equal(wav.readUInt16LE(32), channels * 2);
+  assert.equal(wav.readUInt16LE(22), 1);
+  assert.equal(wav.readUInt32LE(24), 16_000);
+  assert.equal(wav.readUInt32LE(28), 16_000 * 2);
+  assert.equal(wav.readUInt16LE(32), 2);
   assert.equal(wav.readUInt16LE(34), 16);
   assert.equal(wav.toString('ascii', 36, 40), 'data');
-  assert.equal(wav.readUInt32LE(40), samples * channels * 2);
-  assert.equal(wav.length, 44 + samples * channels * 2);
-  assert.equal(result.durationSeconds, samples / 48_000);
-  assert.equal(result.estimatedBillableSeconds, Math.ceil(samples / 48_000));
+  assert.equal(wav.readUInt32LE(40), samples * 2);
+  assert.equal(wav.length, 44 + samples * 2);
+  assert.equal(result.durationSeconds, samples / 16_000);
+  assert.equal(result.estimatedBillableSeconds, Math.ceil(samples / 16_000));
 }
 
 async function assertRejected(
@@ -139,12 +138,11 @@ async function assertRejected(
   );
 }
 
-test('canonical mono and stereo WAV workload equals outgoing sample count', async () => {
+test('mono and stereo WebM both normalize to provider-required 16 kHz mono WAV', async () => {
   for (const channels of [1, 2]) {
     assertCanonicalWav(
       await normalizeTranscriptionAudio(await makeWebm({ channels })),
-      channels,
-      1920,
+      640,
     );
   }
 });
@@ -154,14 +152,13 @@ test('released-recorder-shaped Chromium speech normalizes from real WebM packets
   const recording = await readFile(
     new URL('../fixtures/audio/chromium-speech.webm', import.meta.url),
   );
-  assertCanonicalWav(await normalizeTranscriptionAudio(recording), 2, 161_280);
+  assertCanonicalWav(await normalizeTranscriptionAudio(recording), 53_760);
 });
 
 test('Opus pre-skip is honored and zero-sample initial packets are not treated as decode errors', async () => {
   assertCanonicalWav(
     await normalizeTranscriptionAudio(await makeWebm({ preSkip: 1200 })),
-    1,
-    720,
+    240,
   );
 });
 
@@ -176,14 +173,13 @@ test('a final packet with zero container duration still contributes decoded samp
   } finally {
     input.dispose();
   }
-  assertCanonicalWav(await normalizeTranscriptionAudio(bytes), 1, 960);
+  assertCanonicalWav(await normalizeTranscriptionAudio(bytes), 320);
 });
 
 test('large timestamp gaps do not synthesize billable silence', async () => {
   assertCanonicalWav(
     await normalizeTranscriptionAudio(await makeWebm({ lastTimestamp: 3600 })),
-    1,
-    1920,
+    640,
   );
 });
 
@@ -192,29 +188,25 @@ test('declared file duration does not override canonical sample duration', async
     await normalizeTranscriptionAudio(
       await makeWebm({ appendOnly: false, lastTimestamp: 3600 }),
     ),
-    1,
-    1920,
+    640,
   );
 });
 
 test('whole seconds are rounded up without adding a provider-specific minimum', async () => {
   assertCanonicalWav(
     await normalizeTranscriptionAudio(await makeWebm({ packets: 50 })),
-    1,
-    48_000,
+    16_000,
   );
   assertCanonicalWav(
     await normalizeTranscriptionAudio(await makeWebm({ packets: 51 })),
-    1,
-    48_960,
+    16_320,
   );
 });
 
 test('normalization does not impose a new sixty-second clip limit', async () => {
   assertCanonicalWav(
     await normalizeTranscriptionAudio(await makeWebm({ packets: 3001 })),
-    1,
-    2_880_960,
+    960_320,
   );
 });
 
@@ -296,7 +288,7 @@ test('compressed input memory is limited before demuxing', async () => {
 
 test('highly compressible audio cannot produce an unbounded PCM payload', async () => {
   const packets =
-    Math.floor(TRANSCRIPTION_AUDIO_LIMITS.decodedBytes / (960 * 2)) + 1;
+    Math.floor(TRANSCRIPTION_AUDIO_LIMITS.decodedBytes / (320 * 2)) + 1;
   const bytes = await makeWebm({ packets });
   assert.ok(bytes.byteLength < TRANSCRIPTION_AUDIO_LIMITS.inputBytes);
   await assertRejected(bytes, 'resource_limit');

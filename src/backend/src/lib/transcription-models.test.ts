@@ -5,6 +5,7 @@ import {
   listTranscriptionModels,
   lookupTranscriptionDurationPricing,
   resetTranscriptionModelCacheForTests,
+  TRANSCRIPTION_CATALOG_TTL_MS,
 } from './transcription-models';
 
 test('lists only OpenRouter audio-to-transcription models', async () => {
@@ -47,10 +48,7 @@ test('lists only OpenRouter audio-to-transcription models', async () => {
       },
     ]);
     assert.equal(
-      await isCompatibleTranscriptionModel(
-        'openrouter',
-        'nvidia/parakeet',
-      ),
+      await isCompatibleTranscriptionModel('openrouter', 'nvidia/parakeet'),
       true,
     );
     assert.equal(
@@ -77,6 +75,11 @@ test('audio admission resolves verified duration pricing without a text catalog'
   let failure = false;
   let removed = false;
   let requests = 0;
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = function mockedNow() {
+    return now;
+  };
   globalThis.fetch = async (input) => {
     requests += 1;
     assert.match(
@@ -114,6 +117,17 @@ test('audio admission resolves verified duration pricing without a text catalog'
       null,
     );
     assert.equal(requests, 1);
+    assert.equal(
+      (await lookupTranscriptionDurationPricing('openrouter', modelId))
+        ?.usdPerSecond,
+      0.000025,
+    );
+    assert.equal(
+      requests,
+      1,
+      'fresh pricing metadata is shared within its TTL',
+    );
+    now += TRANSCRIPTION_CATALOG_TTL_MS + 1;
     failure = true;
     await assert.rejects(
       lookupTranscriptionDurationPricing('openrouter', modelId),
@@ -125,28 +139,39 @@ test('audio admission resolves verified duration pricing without a text catalog'
       await lookupTranscriptionDurationPricing('openrouter', modelId),
       null,
     );
-    removed = false;
+    assert.equal(requests, 3);
     for (const invalidRate of [
-      '', '-1', 'NaN', 'Infinity', '1e999', ' 0.000025 ',
+      '',
+      '-1',
+      'NaN',
+      'Infinity',
+      '1e999',
+      ' 0.000025 ',
     ]) {
+      resetTranscriptionModelCacheForTests();
+      removed = false;
       pricing = { prompt: invalidRate, completion: '0' };
       assert.equal(
         await lookupTranscriptionDurationPricing('openrouter', modelId),
         null,
       );
     }
+    resetTranscriptionModelCacheForTests();
     pricing = { prompt: '0.000025', completion: '0.1' };
     assert.equal(
       await lookupTranscriptionDurationPricing('openrouter', modelId),
       null,
     );
+    resetTranscriptionModelCacheForTests();
     pricing = { prompt: '0', completion: '0' };
     assert.equal(
-      (await lookupTranscriptionDurationPricing('openrouter', modelId))?.usdPerSecond,
+      (await lookupTranscriptionDurationPricing('openrouter', modelId))
+        ?.usdPerSecond,
       0,
     );
   } finally {
     globalThis.fetch = originalFetch;
+    Date.now = originalNow;
     if (originalKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = originalKey;
     resetTranscriptionModelCacheForTests();
