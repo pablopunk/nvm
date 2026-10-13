@@ -48,6 +48,7 @@ import {
   readInviteIntentCookie,
 } from '../src/lib/waitlist';
 import { runPostgresMigrations } from './migrate-postgres';
+import { runAudioReservationAssertions } from './audio-reservation-assertions';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
   throw new Error('Postgres integration requires NVM_DB_DRIVER=postgres');
@@ -2485,6 +2486,7 @@ async function runAssertions() {
         'redeemed',
         'failed redemption must leave the invite available',
       );
+      await runAudioReservationAssertions(databaseName);
     });
   } finally {
     await pool.end();

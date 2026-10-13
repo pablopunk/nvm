@@ -1,0 +1,317 @@
+import assert from 'node:assert/strict';
+import { eq } from 'drizzle-orm';
+import { db } from '../src/db/client';
+import {
+  creditLedger,
+  creditReservations,
+  freeSpendMonthlyBudgets,
+  usage,
+  users,
+} from '../src/db/schema';
+import { CREDIT_USD, MARKUP, usdToMicrocents } from '../src/lib/cost';
+import {
+  admitAudioReservation,
+  cancelAudioPreparation,
+  finalizeReservation,
+  prepareAudioReservation,
+  resizeReservation,
+} from '../src/lib/credit-reservations';
+
+/** Runs only inside the existing isolated PostgreSQL integration database. */
+export async function runAudioReservationAssertions(suffix: string) {
+  const [user] = await db
+    .insert(users)
+    .values({
+      workosUserId: `audio-${suffix}`,
+      email: `audio-${suffix}@example.test`,
+    })
+    .returning();
+  await db.insert(creditLedger).values({
+    userId: user.id,
+    delta: 40,
+    kind: 'free',
+    reason: 'integration.audio_grant',
+  });
+  const now = new Date('2032-01-31T23:59:30Z');
+  const input = { userId: user.id, credits: 5, now };
+  const reservationId = `audio-operation-${suffix}`;
+  const estimate = (CREDIT_USD * 5) / MARKUP;
+  await db.insert(freeSpendMonthlyBudgets).values({
+    monthKey: '2032-02',
+    capMicrocents: null,
+    baselineComplete: true,
+  });
+  const preparations = await Promise.all([
+    prepareAudioReservation({ ...input, reservationId }),
+    prepareAudioReservation({ ...input, reservationId }),
+  ]);
+  for (const preparation of preparations) {
+    assert.ok(preparation.ok);
+    assert.equal(preparation.reservationId, reservationId);
+    assert.equal(preparation.reservation.estimatedProviderCostMicrocents, null);
+    assert.equal(preparation.reservation.admissionMonth, null);
+    assert.equal(preparation.reservation.reservedFreeCostMicrocents, 0);
+  }
+  const [preparationBudget] = await db
+    .select()
+    .from(freeSpendMonthlyBudgets)
+    .where(eq(freeSpendMonthlyBudgets.monthKey, '2032-02'));
+  assert.equal(preparationBudget.reservedFreeCostMicrocents, 0);
+  assert.equal((await resizeReservation(reservationId, 5, estimate)).ok, false);
+  await assert.rejects(
+    () =>
+      finalizeReservation({
+        requestId: reservationId,
+        outcome: 'settle',
+      }),
+    /Audio settlement requires/,
+  );
+  const admission = {
+    ...input,
+    reservationId,
+    now: new Date('2032-02-01T00:00:00Z'),
+    estimatedProviderCostUsd: estimate,
+    estimateCostSource: 'catalog_estimate' as const,
+  };
+  const claims = await Promise.all([
+    admitAudioReservation(admission),
+    admitAudioReservation(admission),
+  ]);
+  assert.equal(
+    claims.filter((claim) => claim.ok).length,
+    1,
+    'exactly one dispatch claim',
+  );
+  const winner = claims.find((claim) => claim.ok);
+  assert.ok(winner?.ok);
+  assert.equal(winner.reservationId, reservationId);
+  assert.equal(winner.reservation.admissionMonth, '2032-02');
+  assert.equal(winner.reservation.audioState, 'dispatched');
+  assert.equal(
+    await cancelAudioPreparation({ reservationId, userId: user.id }),
+    'not_prepared',
+  );
+  const [claimedBudget] = await db
+    .select()
+    .from(freeSpendMonthlyBudgets)
+    .where(eq(freeSpendMonthlyBudgets.monthKey, '2032-02'));
+  assert.equal(
+    claimedBudget.reservedFreeCostMicrocents,
+    usdToMicrocents(estimate),
+  );
+  const settlement = {
+    requestId: reservationId,
+    expectedUserId: user.id,
+    outcome: 'settle' as const,
+    model: 'audio-test',
+    provider: 'test',
+    modality: 'audio' as const,
+    providerCostUsd: estimate * 2,
+    tokens: { inputTokens: 0, outputTokens: 0 },
+    status: 200,
+    latencyMs: 1,
+  };
+  const terminal = await Promise.all([
+    finalizeReservation(settlement),
+    finalizeReservation(settlement),
+  ]);
+  assert.deepEqual(terminal.sort(), ['already_terminal', 'settled']);
+  const [settled] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, reservationId));
+  assert.equal(
+    settled.actualCredits,
+    5,
+    'settlement preserves the five-credit ceiling',
+  );
+  assert.equal(
+    (await db.select().from(usage).where(eq(usage.requestId, reservationId)))
+      .length,
+    1,
+  );
+  const [settledBudget] = await db
+    .select()
+    .from(freeSpendMonthlyBudgets)
+    .where(eq(freeSpendMonthlyBudgets.monthKey, '2032-02'));
+  assert.equal(settledBudget.reservedFreeCostMicrocents, 0);
+  assert.equal(
+    settledBudget.actualFreeCostMicrocents,
+    usdToMicrocents(estimate * 2),
+  );
+
+  const canceledId = `audio-canceled-${suffix}`;
+  assert.ok(
+    (await prepareAudioReservation({ ...input, reservationId: canceledId })).ok,
+  );
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: canceledId,
+      userId: user.id,
+    }),
+    'released',
+  );
+  assert.equal(
+    await cancelAudioPreparation({
+      reservationId: canceledId,
+      userId: user.id,
+    }),
+    'already_terminal',
+  );
+  assert.equal(
+    (await admitAudioReservation({ ...admission, reservationId: canceledId }))
+      .ok,
+    false,
+  );
+
+  const expiredId = `audio-expired-${suffix}`;
+  const prepared = await prepareAudioReservation({
+    ...input,
+    reservationId: expiredId,
+  });
+  assert.ok(prepared.ok);
+  assert.equal(
+    (
+      await admitAudioReservation({
+        ...admission,
+        reservationId: expiredId,
+        now: prepared.reservation.expiresAt,
+      })
+    ).ok,
+    false,
+  );
+  assert.equal(
+    (
+      await admitAudioReservation({
+        ...admission,
+        reservationId: expiredId,
+        userId: '00000000-0000-0000-0000-000000000001',
+      })
+    ).ok,
+    false,
+  );
+  await cancelAudioPreparation({ reservationId: expiredId, userId: user.id });
+
+  const legacyId = `audio-legacy-${suffix}`;
+  await db.insert(creditReservations).values({
+    requestId: legacyId,
+    userId: user.id,
+    kind: 'free',
+    reservedCredits: 5,
+    expiresAt: new Date('2032-02-01T00:05:00Z'),
+  });
+  assert.equal(
+    (await admitAudioReservation({ ...admission, reservationId: legacyId })).ok,
+    false,
+  );
+  assert.equal(
+    await cancelAudioPreparation({ reservationId: legacyId, userId: user.id }),
+    'not_prepared',
+  );
+  await finalizeReservation({ requestId: legacyId, outcome: 'release' });
+
+  const zeroId = `audio-known-zero-${suffix}`;
+  assert.ok(
+    (await prepareAudioReservation({ ...input, reservationId: zeroId })).ok,
+  );
+  const zero = await admitAudioReservation({
+    ...admission,
+    reservationId: zeroId,
+    estimatedProviderCostUsd: 0,
+  });
+  assert.ok(zero.ok);
+  assert.equal(zero.reservation.estimatedProviderCostMicrocents, 0);
+  await finalizeReservation({ requestId: zeroId, outcome: 'release' });
+
+  const [limitedUser] = await db
+    .insert(users)
+    .values({
+      workosUserId: `audio-limited-${suffix}`,
+      email: `audio-limited-${suffix}@example.test`,
+    })
+    .returning();
+  await db.insert(creditLedger).values({
+    userId: limitedUser.id,
+    delta: 5,
+    kind: 'free',
+    reason: 'integration.audio_limited_grant',
+  });
+  const limited = await Promise.all(
+    ['a', 'b'].map((key) =>
+      prepareAudioReservation({
+        ...input,
+        userId: limitedUser.id,
+        reservationId: `audio-limited-${key}-${suffix}`,
+      }),
+    ),
+  );
+  assert.equal(
+    limited.filter((result) => result.ok).length,
+    1,
+    'credit-only preparations still serialize balance admission',
+  );
+  for (const result of limited) {
+    if (result.ok)
+      await cancelAudioPreparation({
+        reservationId: result.reservationId,
+        userId: limitedUser.id,
+      });
+  }
+
+  // Provisional free credits do not bypass cap admission, including a known zero estimate.
+  await db
+    .update(freeSpendMonthlyBudgets)
+    .set({ capMicrocents: 0, halted: true })
+    .where(eq(freeSpendMonthlyBudgets.monthKey, '2032-02'));
+  const cappedId = `audio-capped-${suffix}`;
+  assert.ok(
+    (await prepareAudioReservation({ ...input, reservationId: cappedId })).ok,
+  );
+  const capped = await admitAudioReservation({
+    ...admission,
+    reservationId: cappedId,
+    estimatedProviderCostUsd: 0,
+  });
+  assert.equal(capped.ok, false);
+  if (!capped.ok) assert.equal(capped.reason, 'free_spend_cap_reached');
+  await db.insert(creditLedger).values({
+    userId: user.id,
+    delta: 5,
+    kind: 'paid',
+    reason: 'integration.audio_paid_grant',
+  });
+  const paid = await admitAudioReservation({
+    ...admission,
+    reservationId: cappedId,
+  });
+  assert.ok(paid.ok);
+  assert.equal(paid.reservation.reservedFreeCredits, 0);
+  assert.equal(paid.reservation.reservedPaidCredits, 5);
+  assert.equal(paid.reservation.reservedFreeCostMicrocents, 0);
+  assert.equal(
+    await finalizeReservation({ requestId: cappedId, outcome: 'release' }),
+    'released',
+  );
+  assert.equal(
+    await finalizeReservation({ requestId: cappedId, outcome: 'release' }),
+    'already_terminal',
+  );
+
+  // Both serial orderings of cancellation versus dispatch are safe (covered above).
+  const racingId = `audio-race-${suffix}`;
+  await prepareAudioReservation({ ...input, reservationId: racingId });
+  const race = await Promise.allSettled([
+    admitAudioReservation({ ...admission, reservationId: racingId }),
+    cancelAudioPreparation({ reservationId: racingId, userId: user.id }),
+  ]);
+  const [raced] = await db
+    .select()
+    .from(creditReservations)
+    .where(eq(creditReservations.requestId, racingId));
+  const claimed = race[0].status === 'fulfilled' && race[0].value.ok;
+  assert.equal(raced.status, claimed ? 'pending' : 'released');
+  if (claimed) {
+    assert.equal(raced.audioState, 'dispatched');
+    await finalizeReservation({ requestId: racingId, outcome: 'release' });
+  }
+}

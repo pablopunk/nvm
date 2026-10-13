@@ -46,6 +46,7 @@ export type ReservationResult =
       reason:
         | 'insufficient_credits'
         | 'request_already_reserved'
+        | 'invalid_audio_preparation'
         | 'free_spend_cap_reached';
       balance: number;
       reserved: number;
@@ -95,7 +96,78 @@ export async function reserveCredits(input: {
   now?: Date;
   allowExistingPending?: boolean;
 }): Promise<ReservationResult> {
-  const now = input.now ?? new Date();
+  return reserveCreditsInternal(input);
+}
+
+type ReserveCreditInput = Parameters<typeof reserveCredits>[0];
+type AudioReservationInput = {
+  reservationId: string;
+  userId: string;
+  /** The configured audio charge ceiling; preparation and admission must match. */
+  credits: number;
+  now?: Date;
+};
+
+/** Untagged legacy rows are deliberately not reusable as audio preparation. */
+export function isAudioPreparation(
+  reservation: typeof creditReservations.$inferSelect,
+  userId: string,
+  credits: number,
+  now: Date,
+): boolean {
+  return (
+    reservation.userId === userId &&
+    reservation.purpose === 'audio' &&
+    reservation.audioState === 'prepared' &&
+    reservation.status === 'pending' &&
+    reservation.expiresAt.getTime() > now.getTime() &&
+    reservation.reservedCredits === credits &&
+    reservation.estimatedTotalCredits === credits &&
+    reservation.admissionMonth === null &&
+    reservation.estimatedProviderCostMicrocents === null &&
+    reservation.estimateCostSource === null &&
+    reservation.reservedFreeCostMicrocents === 0 &&
+    reservation.reservedFreeCredits !== null &&
+    reservation.reservedPaidCredits !== null &&
+    reservation.reservedFreeCredits >= 0 &&
+    reservation.reservedPaidCredits >= 0 &&
+    reservation.reservedFreeCredits + reservation.reservedPaidCredits ===
+      credits
+  );
+}
+
+function validateAudioCreditCeiling(credits: number) {
+  if (!Number.isSafeInteger(credits) || credits !== 5)
+    throw new Error(
+      'Audio reservations require the configured five-credit ceiling',
+    );
+}
+
+/** Credit-only preparation is not authorization to contact a provider. */
+export async function prepareAudioReservation(input: AudioReservationInput) {
+  validateAudioCreditCeiling(input.credits);
+  const result = await reserveCreditsInternal(
+    {
+      requestId: input.reservationId,
+      userId: input.userId,
+      credits: input.credits,
+      estimatedProviderCostUsd: 0,
+      estimateCostSource: 'catalog_estimate',
+      allowExistingPending: true,
+      now: input.now,
+    },
+    true,
+  );
+  return result.ok
+    ? { ...result, reservationId: result.reservation.requestId }
+    : result;
+}
+
+async function reserveCreditsInternal(
+  input: ReserveCreditInput,
+  audioPreparation = false,
+): Promise<ReservationResult> {
+  let now = input.now ?? new Date();
   const credits = Math.max(1, Math.ceil(input.credits));
   const estimateCostMicrocents = usdToMicrocents(
     input.estimatedProviderCostUsd,
@@ -115,12 +187,12 @@ export async function reserveCredits(input: {
   }
   const monthKey = utcMonthKey(now);
   return db.transaction(async (tx) => {
-    const config = await lockFreeSpendCapConfig(tx, 'share');
-    const budget = await ensureFreeSpendMonthlyBudget(
-      tx,
-      monthKey,
-      config.capMicrocents,
-    );
+    const config = audioPreparation
+      ? null
+      : await lockFreeSpendCapConfig(tx, 'share');
+    const budget = config
+      ? await ensureFreeSpendMonthlyBudget(tx, monthKey, config.capMicrocents)
+      : null;
     // Locking the parent user serializes all admission decisions for that user
     // without blocking unrelated users.
     const [user] = await tx
@@ -137,7 +209,30 @@ export async function reserveCredits(input: {
       .where(eq(creditReservations.requestId, input.requestId))
       .limit(1)
       .for('update');
+    if (audioPreparation && input.now === undefined) now = new Date();
     if (existing) {
+      if (audioPreparation) {
+        if (!isAudioPreparation(existing, input.userId, credits, now))
+          return {
+            ok: false,
+            reason: 'invalid_audio_preparation',
+            balance: 0,
+            reserved: existing.reservedCredits,
+          };
+        return {
+          ok: true,
+          reservation: existing,
+          balance: 0,
+          reserved: credits,
+        };
+      }
+      if (existing.purpose === 'audio')
+        return {
+          ok: false,
+          reason: 'request_already_reserved',
+          balance: 0,
+          reserved: existing.reservedCredits,
+        };
       if (
         existing.userId !== input.userId ||
         existing.reservedCredits !== credits
@@ -242,9 +337,10 @@ export async function reserveCredits(input: {
       totalCredits: credits,
     });
     const freeSpendAllowed =
+      audioPreparation ||
       candidateFree === 0 ||
       canReserveFreeSpend({
-        budget,
+        budget: budget!,
         requestedMicrocents: candidateFreeCost,
       });
     const allocation = allocateCreditsAcrossPools({
@@ -290,10 +386,14 @@ export async function reserveCredits(input: {
         reservedCredits: credits,
         reservedFreeCredits: reservedFree,
         reservedPaidCredits: reservedPaid,
-        admissionMonth: monthKey,
-        estimatedProviderCostMicrocents: estimateCostMicrocents,
+        purpose: audioPreparation ? 'audio' : null,
+        audioState: audioPreparation ? 'prepared' : null,
+        admissionMonth: audioPreparation ? null : monthKey,
+        estimatedProviderCostMicrocents: audioPreparation
+          ? null
+          : estimateCostMicrocents,
         estimatedTotalCredits: credits,
-        estimateCostSource: input.estimateCostSource,
+        estimateCostSource: audioPreparation ? null : input.estimateCostSource,
         reservedFreeCostMicrocents,
         expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
       })
@@ -457,12 +557,110 @@ export async function resizeReservation(
     | 'provider_reported'
     | 'catalog_estimate' = 'catalog_estimate',
 ): Promise<ReservationResult> {
-  const credits = Math.max(1, Math.ceil(creditsInput));
-  return db.transaction(async (tx) => {
-    const { reservation, budget } = await lockReservationAndBudget(
-      tx,
-      requestId,
+  return resizeReservationInternal(
+    requestId,
+    creditsInput,
+    estimatedProviderCostUsd,
+    estimateCostSource,
+  );
+}
+
+/** Success claims exactly one dispatch. Never dispatch on preparation alone or retry a successful claim. */
+export async function admitAudioReservation(
+  input: AudioReservationInput & {
+    estimatedProviderCostUsd: number;
+    estimateCostSource: 'provider_reported' | 'catalog_estimate';
+  },
+) {
+  validateAudioCreditCeiling(input.credits);
+  if (
+    !Number.isFinite(input.estimatedProviderCostUsd) ||
+    input.estimatedProviderCostUsd < 0
+  )
+    throw new Error(
+      'Audio admission requires a known non-negative provider estimate',
     );
+  const result = await resizeReservationInternal(
+    input.reservationId,
+    input.credits,
+    input.estimatedProviderCostUsd,
+    input.estimateCostSource,
+    input,
+  );
+  return result.ok
+    ? { ...result, reservationId: result.reservation.requestId }
+    : result;
+}
+
+async function resizeReservationInternal(
+  requestId: string,
+  creditsInput: number,
+  estimatedProviderCostUsd?: number,
+  estimateCostSource:
+    | 'provider_reported'
+    | 'catalog_estimate' = 'catalog_estimate',
+  audioAdmission?: AudioReservationInput,
+): Promise<ReservationResult> {
+  const credits = Math.max(1, Math.ceil(creditsInput));
+  let now = audioAdmission?.now ?? new Date();
+  return db.transaction(async (tx) => {
+    let locked: Awaited<ReturnType<typeof lockReservationAndBudget>>;
+    if (audioAdmission) {
+      const config = await lockFreeSpendCapConfig(tx, 'share');
+      const budget = await ensureFreeSpendMonthlyBudget(
+        tx,
+        utcMonthKey(now),
+        config.capMicrocents,
+      );
+      const [user] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, audioAdmission.userId))
+        .for('update');
+      if (!user)
+        return {
+          ok: false,
+          reason: 'invalid_audio_preparation',
+          balance: 0,
+          reserved: 0,
+        };
+      const [reservation] = await tx
+        .select()
+        .from(creditReservations)
+        .where(
+          and(
+            eq(creditReservations.requestId, requestId),
+            eq(creditReservations.userId, audioAdmission.userId),
+          ),
+        )
+        .for('update');
+      if (audioAdmission.now === undefined) now = new Date();
+      if (
+        utcMonthKey(now) !== budget.monthKey ||
+        !reservation ||
+        !isAudioPreparation(reservation, audioAdmission.userId, credits, now)
+      )
+        return {
+          ok: false,
+          reason: 'invalid_audio_preparation',
+          balance: 0,
+          reserved: reservation?.reservedCredits ?? 0,
+        };
+      locked = {
+        reservation: { ...reservation, admissionMonth: budget.monthKey },
+        budget,
+      };
+    } else {
+      locked = await lockReservationAndBudget(tx, requestId);
+      if (locked.reservation.purpose === 'audio')
+        return {
+          ok: false,
+          reason: 'request_already_reserved',
+          balance: 0,
+          reserved: locked.reservation.reservedCredits,
+        };
+    }
+    const { reservation, budget } = locked;
     if (reservation.status !== 'pending') {
       return {
         ok: false,
@@ -542,13 +740,18 @@ export async function resizeReservation(
       candidateFree === 0 ||
       Boolean(
         budget &&
-          canResizeFreeSpend({
-            budget,
-            previousFreeCredits: oldFree,
-            nextFreeCredits: candidateFree,
-            previousHoldMicrocents: oldFreeCost,
-            nextHoldMicrocents: candidateFreeCost,
-          }),
+          (audioAdmission
+            ? canReserveFreeSpend({
+                budget,
+                requestedMicrocents: candidateFreeCost,
+              })
+            : canResizeFreeSpend({
+                budget,
+                previousFreeCredits: oldFree,
+                nextFreeCredits: candidateFree,
+                previousHoldMicrocents: oldFreeCost,
+                nextHoldMicrocents: candidateFreeCost,
+              })),
       );
     const allocation = allocateCreditsAcrossPools({
       credits,
@@ -592,7 +795,14 @@ export async function resizeReservation(
         estimatedTotalCredits: credits,
         estimateCostSource,
         reservedFreeCostMicrocents: newFreeCost,
-        updatedAt: new Date(),
+        ...(audioAdmission
+          ? {
+              admissionMonth: reservation.admissionMonth,
+              audioState: 'dispatched',
+              expiresAt: new Date(now.getTime() + RESERVATION_TTL_MS),
+            }
+          : {}),
+        updatedAt: now,
       })
       .where(eq(creditReservations.requestId, requestId))
       .returning();
@@ -695,6 +905,31 @@ async function lockReservationAfterUser(
 export async function finalizeReservation(
   input: ReservationFinalization,
 ): Promise<'settled' | 'released' | 'already_terminal'> {
+  const result = await finalizeReservationInternal(input);
+  if (result === 'not_prepared')
+    throw new Error('Unexpected preparation-only finalization');
+  return result;
+}
+
+/** DELETE may release provisional credit holds, never an active dispatch claim. */
+export async function cancelAudioPreparation(input: {
+  reservationId: string;
+  userId: string;
+}) {
+  return finalizeReservationInternal(
+    {
+      requestId: input.reservationId,
+      expectedUserId: input.userId,
+      outcome: 'release',
+    },
+    true,
+  );
+}
+
+async function finalizeReservationInternal(
+  input: ReservationFinalization,
+  onlyAudioPreparation = false,
+): Promise<'settled' | 'released' | 'already_terminal' | 'not_prepared'> {
   return db.transaction(async (tx) => {
     // Every reservation transition takes row locks in the same order: parent
     // user first, reservation second. This matches admission and prevents a
@@ -716,6 +951,17 @@ export async function finalizeReservation(
       );
     }
     if (reservation.status !== 'pending') return 'already_terminal';
+    if (
+      onlyAudioPreparation &&
+      (reservation.purpose !== 'audio' || reservation.audioState !== 'prepared')
+    )
+      return 'not_prepared';
+    if (
+      input.outcome === 'settle' &&
+      reservation.purpose === 'audio' &&
+      reservation.audioState !== 'dispatched'
+    )
+      throw new Error('Audio settlement requires an admitted dispatch claim');
     if (input.outcome === 'release') {
       if (
         input.model &&
