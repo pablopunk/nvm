@@ -668,7 +668,7 @@ export async function runAudioReservationAssertions(suffix: string) {
     .select()
     .from(creditLedger)
     .where(eq(creditLedger.userId, user.id));
-  const monthKey = utcMonthKey();
+  const monthKey = utcMonthKey(new Date());
   const budgetBeforeCancel = await db.transaction(async (tx) => {
     const config = await lockFreeSpendCapConfig(tx, 'share');
     return ensureFreeSpendMonthlyBudget(tx, monthKey, config.capMicrocents);

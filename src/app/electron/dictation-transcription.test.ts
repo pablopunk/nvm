@@ -52,6 +52,7 @@ test('sends explicit cancellation intent and stable root operation identity', as
     operationId: 'segmented-operation-1',
     cancellationId: 'segmented-operation',
     audio: new Uint8Array([1]),
+    mimeType: 'audio/webm',
     signal: new AbortController().signal,
   });
 
