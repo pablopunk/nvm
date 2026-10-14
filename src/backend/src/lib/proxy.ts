@@ -1829,7 +1829,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
               routing = {
                 user: routing.user,
                 tier: 'free',
-                routeSlot: freeDecision.routeSlot,
                 ...freeRouting,
                 kind: 'free',
                 balanceAvailable:
