@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "request_too_large",
+    "message": "AI request bodies must be 4 MB or smaller."
+  }
+}

@@ -65,6 +65,55 @@ export function computeUsdCost(
   );
 }
 
+/** Cost ceiling when preflight cannot know how input tokens will be cached. */
+export function computeMaximumTokenPricedCost(
+  cost: ModelCost,
+  inputTokens: number,
+  outputTokens: number,
+  reviewedMaximum?: Pick<
+    ModelCost,
+    | 'inputUsdPerMtok'
+    | 'outputUsdPerMtok'
+    | 'cacheReadUsdPerMtok'
+    | 'cacheWriteUsdPerMtok'
+    | 'tiers'
+  >,
+): number {
+  const priceRows = reviewedMaximum ? [cost, reviewedMaximum] : [cost];
+  const inputRates = priceRows.flatMap((row) => {
+    const applicableTiers = (row.tiers ?? []).filter(
+      (tier) => inputTokens >= tier.thresholdTokens,
+    );
+    return [
+      row.inputUsdPerMtok,
+      row.cacheReadUsdPerMtok ?? row.inputUsdPerMtok,
+      row.cacheWriteUsdPerMtok ?? row.inputUsdPerMtok,
+      ...applicableTiers.flatMap((tier) => [
+        tier.inputUsdPerMtok ?? row.inputUsdPerMtok,
+        tier.cacheReadUsdPerMtok ??
+          row.cacheReadUsdPerMtok ??
+          tier.inputUsdPerMtok ??
+          row.inputUsdPerMtok,
+        tier.cacheWriteUsdPerMtok ??
+          row.cacheWriteUsdPerMtok ??
+          tier.inputUsdPerMtok ??
+          row.inputUsdPerMtok,
+      ]),
+    ];
+  });
+  const outputRates = priceRows.flatMap((row) => [
+    row.outputUsdPerMtok,
+    ...(row.tiers ?? [])
+      .filter((tier) => inputTokens >= tier.thresholdTokens)
+      .map((tier) => tier.outputUsdPerMtok ?? row.outputUsdPerMtok),
+  ]);
+  return (
+    (inputTokens * Math.max(...inputRates) +
+      outputTokens * Math.max(...outputRates)) /
+    1_000_000
+  );
+}
+
 export function usdToCredits(costUsd: number): number {
   return Math.max(1, Math.ceil((costUsd * MARKUP) / CREDIT_USD));
 }
