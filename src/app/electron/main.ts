@@ -38,6 +38,7 @@ import {
   powerMonitor,
   protocol,
   screen,
+  safeStorage,
   shell,
   systemPreferences,
 } from 'electron';
@@ -220,10 +221,15 @@ import {
 import { filterWebviewPermissionsForExtension } from './extension-capabilities';
 import { extensionCommandAction } from './extension-command-action';
 import { createExtensionDraftStore } from './extension-draft-store';
+import { sameExtensionSourceFile } from './extension-identity';
 import { createExtensionJsonStore } from './extension-json-store';
 import { createStandaloneExtensionFork } from './extension-manifest';
 import { createExtensionPrSubmitter } from './extension-pr-submitter';
 import { createExtensionStorage as createPersistentExtensionStorage } from './extension-storage';
+import {
+  createExtensionSecrets as createPersistentExtensionSecrets,
+  extensionSecretsPath,
+} from './extension-secrets';
 import { createExtensionUiApi } from './extension-ui-api';
 import { createExtensionWindowActions } from './extension-window-actions';
 import { createExtensionWindowManager } from './extension-window-manager';
@@ -606,6 +612,7 @@ let extensionsDir = '';
 let extensionPrSubmitter: ReturnType<typeof createExtensionPrSubmitter> | null =
   null;
 let extensionStorageDir = '';
+let extensionSecretsDir = '';
 let extensionCacheDir = '';
 let learningRulesPath = '';
 let legacyLearningRulesPath = '';
@@ -620,7 +627,7 @@ type PreparedFileWatcher = {
   trigger: any;
 };
 type PreparedExtensionRuntime = {
-  filename: string;
+  filePath: string;
   extensionIds: Set<string>;
   modules: Map<string, any>;
   actions: Map<string, any>;
@@ -6424,6 +6431,12 @@ function isExtensionSourceFile(filename) {
   );
 }
 
+function compareExtensionSourceEntries(left, right) {
+  if (left.name < right.name) return -1;
+  if (left.name > right.name) return 1;
+  return 0;
+}
+
 function safeExtensionStorageKey(extension) {
   const key = extension.__filePath
     ? extensionSourceBasename(extension.__filePath)
@@ -6474,6 +6487,14 @@ function createExtensionStorage(extension) {
     cachePath: extensionCachePath(extension),
     store: extensionJsonStore,
     refreshes: extensionStorageRefreshes,
+  });
+}
+
+function createExtensionSecrets(extension) {
+  return createPersistentExtensionSecrets({
+    storagePath: extensionSecretsPath(extensionSecretsDir, extension.id),
+    store: extensionJsonStore,
+    safeStorage,
   });
 }
 
@@ -7748,6 +7769,7 @@ function createExtensionContext(
         }
       : undefined,
     storage: createExtensionStorage(extension),
+    secrets: createExtensionSecrets(extension),
     drafts: {
       commit: (key, version) =>
         commitExtensionDraft(extension.id, key, version),
@@ -8459,8 +8481,8 @@ async function removeGeneratedExtensionForChat(
     const proposalSource = proposal?.draftFile
       ? await fs.readFile(proposal.draftFile).catch(() => null)
       : null;
-    const runtime = captureManagedExtensionRuntime(base);
-    detachManagedExtensionRuntime(base);
+    const runtime = captureManagedExtensionRuntime(filePath);
+    detachManagedExtensionRuntime(filePath);
     delete manager.files[base];
     delete manager.proposals[base];
     try {
@@ -8475,16 +8497,7 @@ async function removeGeneratedExtensionForChat(
       if (proposal?.draftFile && proposalSource)
         await atomicWriteFile(proposal.draftFile, proposalSource);
       restoreManagedExtensionRuntime(runtime, {
-        filename: base,
         extensionIds: new Set(),
-        modules: new Map(),
-        actions: new Map(),
-        handlers: new Map(),
-        viewActions: new Map(),
-        rootActions: new Map(),
-        viewRefreshes: new Map(),
-        jobs: [],
-        fileWatchers: [],
       });
       throw error;
     }
@@ -8497,16 +8510,7 @@ async function removeGeneratedExtensionForChat(
       if (proposal?.draftFile && proposalSource)
         await atomicWriteFile(proposal.draftFile, proposalSource);
       restoreManagedExtensionRuntime(runtime, {
-        filename: base,
         extensionIds: new Set(),
-        modules: new Map(),
-        actions: new Map(),
-        handlers: new Map(),
-        viewActions: new Map(),
-        rootActions: new Map(),
-        viewRefreshes: new Map(),
-        jobs: [],
-        fileWatchers: [],
       });
       await persistUserState();
       throw error;
@@ -8949,19 +8953,11 @@ function replaceMapContents(target: Map<any, any>, source: Map<any, any>) {
   for (const [key, value] of source) target.set(key, value);
 }
 
-function runtimeEntryFilename(entry: any) {
-  return path.basename(entry?.extension?.__filePath || '');
-}
-
 function executionRecordBelongsToExtension(
   record: ExtensionExecutionRecord,
-  filename: string,
   extensionIds: Set<string>,
 ) {
-  return (
-    record.extensionFile === filename ||
-    Boolean(record.extensionId && extensionIds.has(record.extensionId))
-  );
+  return Boolean(record.extensionId && extensionIds.has(record.extensionId));
 }
 
 async function prepareManagedExtensionRuntime(
@@ -8981,6 +8977,15 @@ async function prepareManagedExtensionRuntime(
     rootActions: new Map(rootActionExecutionRecords),
     viewRefreshes: new Map(viewRefreshRecords),
   };
+  const existingOwner = extension.id ? live.modules.get(extension.id) : null;
+  if (
+    existingOwner &&
+    !sameExtensionSourceFile(existingOwner.__filePath, activeFile)
+  ) {
+    throw new Error(
+      `Extension id ${extension.id} is already owned by another file`,
+    );
+  }
   const jobs: JobDefinition[] = [];
   const fileWatchers: PreparedFileWatcher[] = [];
   try {
@@ -8997,13 +9002,13 @@ async function prepareManagedExtensionRuntime(
     const extensionIds = new Set(extensionModules.keys());
     for (const extensionId of extensionIds) {
       const existing = live.modules.get(extensionId);
-      if (existing && path.basename(existing.__filePath || '') !== filename)
+      if (existing && !sameExtensionSourceFile(existing.__filePath, activeFile))
         throw new Error(
           `Extension id ${extensionId} is already owned by another file`,
         );
     }
     return {
-      filename,
+      filePath: path.resolve(activeFile),
       extensionIds,
       modules: new Map(extensionModules),
       actions: new Map(extensionActionRegistry),
@@ -9025,40 +9030,29 @@ async function prepareManagedExtensionRuntime(
   }
 }
 
-function detachManagedExtensionRuntime(filename: string) {
+function detachManagedExtensionRuntime(sourceFile: string) {
   const extensionIds = new Set(
     Array.from(extensionModules.entries())
       .filter(([, extension]) =>
-        filename
-          ? path.basename(extension?.__filePath || '') === filename
-          : false,
+        sameExtensionSourceFile(extension?.__filePath, sourceFile),
       )
       .map(([extensionId]) => extensionId),
   );
   for (const extensionId of extensionIds) extensionModules.delete(extensionId);
   for (const [key, entry] of extensionActionRegistry)
-    if (
-      runtimeEntryFilename(entry) === filename ||
-      extensionIds.has(entry?.extension?.id)
-    )
+    if (extensionIds.has(entry?.extension?.id))
       extensionActionRegistry.delete(key);
   for (const [key, record] of extensionActionHandlers)
-    if (
-      runtimeEntryFilename(record?.entry) === filename ||
-      extensionIds.has(record?.entry?.extension?.id)
-    )
+    if (extensionIds.has(record?.entry?.extension?.id))
       extensionActionHandlers.delete(key);
   for (const [key, record] of viewRefreshRecords)
-    if (
-      runtimeEntryFilename(record?.entry) === filename ||
-      extensionIds.has(record?.entry?.extension?.id)
-    )
+    if (extensionIds.has(record?.entry?.extension?.id))
       viewRefreshRecords.delete(key);
   for (const [key, record] of viewActionExecutionRecords)
-    if (executionRecordBelongsToExtension(record, filename, extensionIds))
+    if (executionRecordBelongsToExtension(record, extensionIds))
       viewActionExecutionRecords.delete(key);
   for (const [key, record] of rootActionExecutionRecords)
-    if (executionRecordBelongsToExtension(record, filename, extensionIds))
+    if (executionRecordBelongsToExtension(record, extensionIds))
       rootActionExecutionRecords.delete(key);
   jobRegistry.unregisterWhere(
     (job) => job.owner === 'extension' && extensionIds.has(job.scope || ''),
@@ -9071,22 +9065,27 @@ function detachManagedExtensionRuntime(filename: string) {
   }
   extensionFileWatchers = retainedWatchers;
   for (const cacheKey of extensionRootItemsCache.keys())
-    if (path.basename(cacheKey) === filename)
+    if (
+      sameExtensionSourceFile(cacheKey, sourceFile) ||
+      extensionIds.has(cacheKey)
+    )
       extensionRootItemsCache.delete(cacheKey);
   for (const cacheKey of extensionRootItemsRefreshes.keys())
-    if (path.basename(cacheKey) === filename)
+    if (
+      sameExtensionSourceFile(cacheKey, sourceFile) ||
+      extensionIds.has(cacheKey)
+    )
       extensionRootItemsRefreshes.delete(cacheKey);
   return extensionIds;
 }
 
 function captureManagedExtensionRuntime(
-  filename: string,
+  sourceFile: string,
 ): LiveExtensionRuntimeSnapshot {
   const extensionIds = new Set(
     Array.from(extensionModules.entries())
-      .filter(
-        ([, extension]) =>
-          path.basename(extension?.__filePath || '') === filename,
+      .filter(([, extension]) =>
+        sameExtensionSourceFile(extension?.__filePath, sourceFile),
       )
       .map(([extensionId]) => extensionId),
   );
@@ -9128,7 +9127,7 @@ function removeManagedExtensionSideEffects(extensionIds: Set<string>) {
 
 function restoreManagedExtensionRuntime(
   snapshot: LiveExtensionRuntimeSnapshot,
-  candidate: PreparedExtensionRuntime,
+  candidate: Pick<PreparedExtensionRuntime, 'extensionIds'>,
 ) {
   removeManagedExtensionSideEffects(
     new Set([...snapshot.extensionIds, ...candidate.extensionIds]),
@@ -9153,7 +9152,7 @@ function restoreManagedExtensionRuntime(
 }
 
 function commitPreparedExtensionRuntime(runtime: PreparedExtensionRuntime) {
-  detachManagedExtensionRuntime(runtime.filename);
+  detachManagedExtensionRuntime(runtime.filePath);
   for (const [key, value] of runtime.modules) extensionModules.set(key, value);
   for (const [key, value] of runtime.actions)
     extensionActionRegistry.set(key, value);
@@ -9225,7 +9224,7 @@ async function installManagedExtension(filename: string) {
     failTestExtensionActivationAt('state-persist');
     await persistUserState();
     failTestExtensionActivationAt('after-persist');
-    previousRuntime = captureManagedExtensionRuntime(safeName);
+    previousRuntime = captureManagedExtensionRuntime(activeFile);
     runtimeCommitStarted = true;
     commitPreparedExtensionRuntime(preparedRuntime);
   } catch (error) {
@@ -9259,7 +9258,7 @@ async function disableManagedExtension(filename: string) {
     else delete manager.files[safeName];
     throw error;
   }
-  detachManagedExtensionRuntime(safeName);
+  detachManagedExtensionRuntime(path.join(extensionsDir, safeName));
   syncFrontmostAppPolling();
   registerActionShortcuts();
   invalidateExtensionRootItems();
@@ -9387,9 +9386,9 @@ async function loadExtensions(preparedExtensions = new Map<string, any>()) {
       await fs.mkdir(extensionsDir, { recursive: true });
       await ensureExtensionTypeDefinitions();
       await initializeExtensionManager();
-      const entries = await fs
-        .readdir(extensionsDir, { withFileTypes: true })
-        .catch(() => []);
+      const entries = (
+        await fs.readdir(extensionsDir, { withFileTypes: true }).catch(() => [])
+      ).sort(compareExtensionSourceEntries);
       for (const entry of entries) {
         if (!isExtensionSourceFile(entry.name)) continue;
         if (!extensionFileIsEnabled(entry.name)) continue;
@@ -9615,9 +9614,9 @@ function createFixturesExtension() {
 
 async function loadDevExtensions() {
   const fixturesDir = path.join(app.getAppPath(), 'src', 'app', 'fixtures');
-  const entries = await fs
-    .readdir(fixturesDir, { withFileTypes: true })
-    .catch(() => []);
+  const entries = (
+    await fs.readdir(fixturesDir, { withFileTypes: true }).catch(() => [])
+  ).sort(compareExtensionSourceEntries);
   for (const entry of entries) {
     if (!isExtensionSourceFile(entry.name)) continue;
     const fullPath = path.join(fixturesDir, entry.name);
@@ -9626,8 +9625,8 @@ async function loadDevExtensions() {
       extension.__filePath = fullPath;
       extension.__dev = true;
       extension.__fixture = true;
-      fixtureExtensions.push(extension);
       registerExtension(extension);
+      fixtureExtensions.push(extension);
     } catch (error) {
       logError('extension.dev.load.failed', error, {
         source: 'host',
@@ -9987,6 +9986,18 @@ function registerExtension(extension) {
         },
         () => {
           if (!extension?.id) return;
+          const existing = extensionModules.get(extension.id);
+          if (existing) {
+            const existingOwner = path.basename(
+              existing.__filePath || `internal:${existing.id}`,
+            );
+            const incomingOwner = path.basename(
+              extension.__filePath || `internal:${extension.id}`,
+            );
+            throw new Error(
+              `Duplicate extension id "${extension.id}": ${existingOwner} is already registered; cannot also register ${incomingOwner}`,
+            );
+          }
           extension.__executionVersion ||= crypto.randomUUID();
           extensionModules.set(extension.id, extension);
           for (const command of extension.commands || []) {
@@ -10376,6 +10387,7 @@ async function loadUserState() {
     useUserDataForExtensions: isNvmTestMode,
   }).extensionsDir;
   extensionStorageDir = path.join(app.getPath('userData'), 'extension-storage');
+  extensionSecretsDir = path.join(app.getPath('userData'), 'extension-secrets');
   extensionCacheDir = path.join(cacheRoot, 'extension-storage');
   learningStore = new LocalLearningStore({
     tracesPath: learningTracesPath,
