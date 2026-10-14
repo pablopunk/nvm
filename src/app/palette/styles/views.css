@@ -1676,18 +1676,6 @@
   opacity: 0.82;
 }
 
-.siblingPane.inertSibling::before {
-  content: "";
-  position: absolute;
-  left: -19px;
-  top: -11px;
-  width: 16px;
-  height: 40px;
-  border-left: 2px solid var(--edge-strong);
-  border-bottom: 2px solid var(--edge-subtle);
-  border-radius: 0 0 0 12px;
-}
-
 .siblingPane .siblingHeader {
   font-size: var(--fs-2xs);
   text-transform: uppercase;

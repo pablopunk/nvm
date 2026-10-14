@@ -14,6 +14,11 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  ArcherContainer,
+  ArcherElement,
+  type ArcherContainerRef,
+} from 'react-archer';
+import {
   type MouseEvent,
   useEffect,
   useLayoutEffect,
@@ -1642,6 +1647,7 @@ export function App() {
   const compactActionInputRef = useRef<HTMLInputElement>(null);
   const resultsListRef = useRef<HTMLDivElement>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
+  const paneConnectionsRef = useRef<ArcherContainerRef>(null);
   const requestedIcons = useRef(new Set<string>());
   const runningAppsRequestIdRef = useRef(0);
   const aiChatOpenRef = useRef(false);
@@ -1776,6 +1782,38 @@ export function App() {
     },
   );
   const siblingViews = extensionNavigation.siblingViews;
+  const activePaneObscured = Boolean(
+    shortcutFor ||
+      shortcutManagerOpen ||
+      aliasFor ||
+      confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
+      actionSubmenuFor ||
+      extensionItemOptionsFor ||
+      optionsFor ||
+      previewFor ||
+      paletteForm.choices ||
+      palettePrompt.active,
+  );
+  const paneConnectionLayoutKey = JSON.stringify(
+    extensionNavigation.frames.map((frame) => frame.history.at(-1)?.id || null),
+  );
+  const paneConnectionRelations = useMemo(() => {
+    if (siblingViews.length === 0) return [];
+    const paneIds = JSON.parse(paneConnectionLayoutKey) as Array<string | null>;
+    return paneIds.flatMap((id, frameIndex) => {
+      if (!id || (activePaneObscured && frameIndex === paneIds.length - 1))
+        return [];
+      return [
+        {
+          targetId: `palette-pane-${id}`,
+          sourceAnchor: 'left' as const,
+          targetAnchor: 'left' as const,
+        },
+      ];
+    });
+  }, [activePaneObscured, paneConnectionLayoutKey, siblingViews.length]);
   const extensionViewRef = useRef<ExtensionView | null>(null);
   const wasChildOpenRef = useRef(false);
   const isCompactActionMenuOpen = Boolean(
@@ -2034,39 +2072,23 @@ export function App() {
   }, [extensionView?.id]);
 
   useLayoutEffect(() => {
-    const palette = paletteRef.current;
-    if (!palette) return;
-    if (siblingViews.length === 0) {
-      palette.style.removeProperty('--spine-top');
-      palette.style.removeProperty('--spine-height');
-      return;
-    }
-    const updateSpine = () => {
-      const searchRow = palette.querySelector(
-        '.searchRow',
-      ) as HTMLElement | null;
-      const activePane = palette.querySelector(
-        '.results',
-      ) as HTMLElement | null;
-      if (!(searchRow && activePane)) return;
-      const paletteRect = palette.getBoundingClientRect();
-      const top = searchRow.getBoundingClientRect().bottom - paletteRect.top;
-      const bottom =
-        activePane.getBoundingClientRect().top - paletteRect.top - 11;
-      palette.style.setProperty('--spine-top', `${top}px`);
-      palette.style.setProperty(
-        '--spine-height',
-        `${Math.max(0, bottom - top)}px`,
-      );
+    if (siblingViews.length === 0) return;
+    const results = resultsListRef.current;
+    if (!results) return;
+    const refreshConnections = () =>
+      paneConnectionsRef.current?.refreshScreen();
+    const animationFrame = requestAnimationFrame(refreshConnections);
+    results.addEventListener('scroll', refreshConnections, { passive: true });
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      results.removeEventListener('scroll', refreshConnections);
     };
-    updateSpine();
-    const observer = new ResizeObserver(updateSpine);
-    observer.observe(palette);
-    palette
-      .querySelectorAll('.siblingPane')
-      .forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [siblingViews, extensionView]);
+  }, [
+    activePaneObscured,
+    paneConnectionLayoutKey,
+    showPaletteHotkeyNotice,
+    siblingViews.length,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -5707,246 +5729,258 @@ export function App() {
   return (
     <main className="shell" onMouseDown={dismissFromEmptyWindowSpace}>
       <DictationRendererController />
-      <Command
-        ref={paletteRef}
-        className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
-        label="Nevermind"
-        loop={true}
-        shouldFilter={false}
-        value={selectedValue}
-        onValueChange={selectValue}
-        onKeyDownCapture={onPaletteKeyDownCapture}
-        onKeyDown={onCommandKeyDown}
+      <ArcherContainer
+        ref={paneConnectionsRef}
+        className="paneConnections"
+        style={{ height: '100%' }}
+        strokeColor="var(--edge-strong)"
+        strokeWidth={1.5}
+        strokeDasharray="3 5"
+        lineStyle="curve"
+        endMarker={false}
+        svgContainerStyle={{ pointerEvents: 'none', zIndex: 0 }}
       >
-        <div
-          className={`searchRow card searchCard ${isVisuallyStacked ? 'stackParentCard' : ''}`}
+        <Command
+          ref={paletteRef}
+          className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
+          label="Nevermind"
+          loop={true}
+          shouldFilter={false}
+          value={selectedValue}
+          onValueChange={selectValue}
+          onKeyDownCapture={onPaletteKeyDownCapture}
+          onKeyDown={onCommandKeyDown}
         >
-          <Zap className="brandIcon" size={22} />
-          <Command.Input
-            ref={inputRef}
-            onKeyDown={shortcutFor ? onShortcutRecorderKeyDown : undefined}
-            className={
-              palettePrompt.concealed || paletteForm.concealed
-                ? 'palettePromptConcealed'
-                : ''
-            }
-            value={inputValue}
-            onValueChange={(value) => {
-              if (shortcutFor) return;
-              if (palettePrompt.active) palettePrompt.setQuery(value);
-              else if (paletteForm.editing) paletteForm.setQuery(value);
-              else if (isActionWorkflowOpen) setActionQuery(value);
-              else if (isFilterableChildOpen) setChildQuery(value);
-              else if (!isChildOpen) setRootQuery(value);
-            }}
-            placeholder={placeholder}
-            readOnly={
-              compactActionMenuVisible ||
-              paletteForm.editor ||
-              (!(shortcutFor || isFilterableChildOpen) && isChildOpen)
-            }
-            spellCheck={false}
-          />
-          {renderSearchAccessory(extensionView)}
-          {!isChildOpen && query ? (
-            <div className="tabHint">
-              <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to ask AI
-            </div>
-          ) : null}
-        </div>
-
-        {showPaletteHotkeyNotice && paletteHotkeyStatus ? (
-          <div
-            className="shortcutRegistrationNotice"
-            role={paletteHotkeyStatus.configured ? 'alert' : 'status'}
-            data-state={
-              paletteHotkeyStatus.configured
-                ? 'registration-failed'
-                : 'unconfigured'
-            }
+          <ArcherElement
+            id="palette-search"
+            relations={paneConnectionRelations}
           >
-            <Keyboard size={16} aria-hidden="true" />
-            <div className="shortcutRegistrationMessage">
-              <strong>
-                {paletteHotkeyStatus.configured
-                  ? `Could not register ${shortcutLabel(paletteHotkeyStatus.accelerator, paletteHotkeyStatus.platform)}.`
-                  : 'No keyboard shortcut is set.'}
-              </strong>
-              <span>
-                {!paletteHotkeyStatus.configured
-                  ? 'Set an optional shortcut to open Nevermind from anywhere. Launching the app also opens the palette.'
-                  : paletteHotkeyStatus.recoveryAccelerator
-                    ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
-                    : 'Open Nevermind again from your app launcher; the running app will come forward.'}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="shortcutRegistrationButton"
-              onClick={() =>
-                startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
-              }
+            <div
+              className={`searchRow card searchCard ${isVisuallyStacked ? 'stackParentCard' : ''}`}
             >
-              {paletteHotkeyStatus.configured
-                ? 'Change shortcut'
-                : 'Set shortcut'}
-            </button>
-          </div>
-        ) : null}
-
-        {aiChatSessions.providers}
-
-        <Command.List
-          ref={resultsListRef}
-          data-pane-stack={siblingViews.length > 0 || undefined}
-          className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
-        >
-          {extensionNavigation.frames.flatMap((frame, frameIndex) =>
-            frame.history.map((entry, historyIndex) => {
-              const isTop = historyIndex === frame.history.length - 1;
-              const active =
-                frameIndex === extensionNavigation.frames.length - 1 && isTop;
-              const obscured =
-                active &&
-                Boolean(
-                  shortcutFor ||
-                    shortcutManagerOpen ||
-                    aliasFor ||
-                    confirmRemoveFor ||
-                    confirmViewActionFor ||
-                    confirmBuilderPreviewAction ||
-                    actionSubmenuFor ||
-                    extensionItemOptionsFor ||
-                    optionsFor ||
-                    previewFor ||
-                    paletteForm.choices ||
-                    palettePrompt.active,
-                );
-              return (
-                <div
-                  key={entry.id}
-                  hidden={!isTop || obscured}
-                  inert={!active || undefined}
-                  className={
-                    active
-                      ? `activeExtensionPane ${siblingViews.length > 0 ? 'card' : ''}`
-                      : `siblingPane card inertSibling siblingPane-${entry.view.aiChat ? 'aiChat' : entry.view.type}`
-                  }
-                  aria-hidden={!isTop || undefined}
-                >
-                  {!active ? (
-                    <div className="siblingHeader">{entry.view.title}</div>
-                  ) : null}
-                  <div
-                    className={
-                      active
-                        ? entry.view.aiChat && selectedBuilderPreview
-                          ? 'builderWorkspace'
-                          : 'activePaneBody'
-                        : 'siblingBody'
-                    }
-                  >
-                    {renderExtensionView(entry.view, entry)}
-                    {active && entry.view.aiChat && selectedBuilderPreview
-                      ? renderBuilderPreview()
-                      : null}
-                  </div>
-                </div>
-              );
-            }),
-          )}
-          {shortcutFor ? (
-            <div className="shortcutRecorder" aria-busy={savingShortcut}>
-              <div className="shortcutKeys">
-                {(recordedShortcut
-                  ? recordedShortcut.split('+')
-                  : ['Press keys']
-                ).map((part) => (
-                  <kbd key={part}>{part}</kbd>
-                ))}
-              </div>
-              {renderActionPanel(getShortcutRecorderRows())}
-            </div>
-          ) : shortcutManagerOpen ? (
-            renderShortcutManager()
-          ) : aliasFor ? (
-            renderActionPanel(getAliasActionRows())
-          ) : confirmRemoveFor ? (
-            renderActionPanel(getConfirmActionRows())
-          ) : confirmViewActionFor ? (
-            renderActionPanel(getConfirmViewActionRows())
-          ) : confirmBuilderPreviewAction ? (
-            renderActionPanel(getConfirmBuilderPreviewActionRows())
-          ) : previewFor ? (
-            <div className="previewPane">
-              {previewFor.videoUrl ? (
-                <video
-                  className="previewImage"
-                  src={previewFor.videoUrl}
-                  controls={true}
-                  autoPlay={true}
-                  muted={true}
-                  loop={true}
-                  playsInline={true}
-                />
-              ) : previewFor.imageDataUrl ? (
-                <img
-                  className="previewImage"
-                  src={previewFor.imageDataUrl}
-                  alt="Clipboard preview"
-                />
-              ) : previewFor.thumbnailUrl ? (
-                <img
-                  className="previewImage"
-                  src={previewFor.thumbnailUrl}
-                  alt={previewFor.title}
-                />
-              ) : previewFor.text ? (
-                <pre className="previewText">{previewFor.text}</pre>
-              ) : (
-                <div className="previewDetails">
-                  <strong>{previewFor.title}</strong>
-                  <span>{previewFor.subtitle}</span>
-                </div>
-              )}
-            </div>
-          ) : palettePrompt.active ? (
-            <ActionPanel
-              rows={palettePrompt.rows}
-              emptyMessage="No matching choices"
-            />
-          ) : paletteForm.choices ? (
-            <ActionPanel
-              rows={paletteForm.rows}
-              emptyMessage="No matching choices"
-            />
-          ) : extensionView ? null : (
-            renderActionResults()
-          )}
-        </Command.List>
-        {compactActionMenuVisible ? (
-          <aside className="extensionWindowCompactPanel paletteCompactPanel">
-            <div className="extensionWindowSearchRow">
-              <Search size={15} className="extensionWindowSearchIcon" />
-              <input
-                ref={compactActionInputRef}
-                autoFocus
-                value={actionQuery}
-                onChange={(event) => setActionQuery(event.currentTarget.value)}
-                placeholder={compactActionPlaceholder}
-                aria-label={compactActionPlaceholder}
+              <Zap className="brandIcon" size={22} />
+              <Command.Input
+                ref={inputRef}
+                onKeyDown={shortcutFor ? onShortcutRecorderKeyDown : undefined}
+                className={
+                  palettePrompt.concealed || paletteForm.concealed
+                    ? 'palettePromptConcealed'
+                    : ''
+                }
+                value={inputValue}
+                onValueChange={(value) => {
+                  if (shortcutFor) return;
+                  if (palettePrompt.active) palettePrompt.setQuery(value);
+                  else if (paletteForm.editing) paletteForm.setQuery(value);
+                  else if (isActionWorkflowOpen) setActionQuery(value);
+                  else if (isFilterableChildOpen) setChildQuery(value);
+                  else if (!isChildOpen) setRootQuery(value);
+                }}
+                placeholder={placeholder}
+                readOnly={
+                  compactActionMenuVisible ||
+                  paletteForm.editor ||
+                  (!(shortcutFor || isFilterableChildOpen) && isChildOpen)
+                }
                 spellCheck={false}
               />
+              {renderSearchAccessory(extensionView)}
+              {!isChildOpen && query ? (
+                <div className="tabHint">
+                  <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to
+                  ask AI
+                </div>
+              ) : null}
             </div>
-            <Command.List className="extensionWindowCompactResults">
+          </ArcherElement>
+
+          {showPaletteHotkeyNotice && paletteHotkeyStatus ? (
+            <div
+              className="shortcutRegistrationNotice"
+              role={paletteHotkeyStatus.configured ? 'alert' : 'status'}
+              data-state={
+                paletteHotkeyStatus.configured
+                  ? 'registration-failed'
+                  : 'unconfigured'
+              }
+            >
+              <Keyboard size={16} aria-hidden="true" />
+              <div className="shortcutRegistrationMessage">
+                <strong>
+                  {paletteHotkeyStatus.configured
+                    ? `Could not register ${shortcutLabel(paletteHotkeyStatus.accelerator, paletteHotkeyStatus.platform)}.`
+                    : 'No keyboard shortcut is set.'}
+                </strong>
+                <span>
+                  {!paletteHotkeyStatus.configured
+                    ? 'Set an optional shortcut to open Nevermind from anywhere. Launching the app also opens the palette.'
+                    : paletteHotkeyStatus.recoveryAccelerator
+                      ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
+                      : 'Open Nevermind again from your app launcher; the running app will come forward.'}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="shortcutRegistrationButton"
+                onClick={() =>
+                  startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
+                }
+              >
+                {paletteHotkeyStatus.configured
+                  ? 'Change shortcut'
+                  : 'Set shortcut'}
+              </button>
+            </div>
+          ) : null}
+
+          {aiChatSessions.providers}
+
+          <Command.List
+            ref={resultsListRef}
+            data-pane-stack={siblingViews.length > 0 || undefined}
+            className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+          >
+            {extensionNavigation.frames.flatMap((frame, frameIndex) =>
+              frame.history.map((entry, historyIndex) => {
+                const isTop = historyIndex === frame.history.length - 1;
+                const active =
+                  frameIndex === extensionNavigation.frames.length - 1 && isTop;
+                const obscured = active && activePaneObscured;
+                const pane = (
+                  <div
+                    key={entry.id}
+                    hidden={!isTop || obscured}
+                    inert={!active || undefined}
+                    className={
+                      active
+                        ? `activeExtensionPane ${siblingViews.length > 0 ? 'card' : ''}`
+                        : `siblingPane card inertSibling siblingPane-${entry.view.aiChat ? 'aiChat' : entry.view.type}`
+                    }
+                    aria-hidden={!isTop || undefined}
+                  >
+                    {!active ? (
+                      <div className="siblingHeader">{entry.view.title}</div>
+                    ) : null}
+                    <div
+                      className={
+                        active
+                          ? entry.view.aiChat && selectedBuilderPreview
+                            ? 'builderWorkspace'
+                            : 'activePaneBody'
+                          : 'siblingBody'
+                      }
+                    >
+                      {renderExtensionView(entry.view, entry)}
+                      {active && entry.view.aiChat && selectedBuilderPreview
+                        ? renderBuilderPreview()
+                        : null}
+                    </div>
+                  </div>
+                );
+                return isTop && siblingViews.length > 0 ? (
+                  <ArcherElement key={entry.id} id={`palette-pane-${entry.id}`}>
+                    {pane}
+                  </ArcherElement>
+                ) : (
+                  pane
+                );
+              }),
+            )}
+            {shortcutFor ? (
+              <div className="shortcutRecorder" aria-busy={savingShortcut}>
+                <div className="shortcutKeys">
+                  {(recordedShortcut
+                    ? recordedShortcut.split('+')
+                    : ['Press keys']
+                  ).map((part) => (
+                    <kbd key={part}>{part}</kbd>
+                  ))}
+                </div>
+                {renderActionPanel(getShortcutRecorderRows())}
+              </div>
+            ) : shortcutManagerOpen ? (
+              renderShortcutManager()
+            ) : aliasFor ? (
+              renderActionPanel(getAliasActionRows())
+            ) : confirmRemoveFor ? (
+              renderActionPanel(getConfirmActionRows())
+            ) : confirmViewActionFor ? (
+              renderActionPanel(getConfirmViewActionRows())
+            ) : confirmBuilderPreviewAction ? (
+              renderActionPanel(getConfirmBuilderPreviewActionRows())
+            ) : previewFor ? (
+              <div className="previewPane">
+                {previewFor.videoUrl ? (
+                  <video
+                    className="previewImage"
+                    src={previewFor.videoUrl}
+                    controls={true}
+                    autoPlay={true}
+                    muted={true}
+                    loop={true}
+                    playsInline={true}
+                  />
+                ) : previewFor.imageDataUrl ? (
+                  <img
+                    className="previewImage"
+                    src={previewFor.imageDataUrl}
+                    alt="Clipboard preview"
+                  />
+                ) : previewFor.thumbnailUrl ? (
+                  <img
+                    className="previewImage"
+                    src={previewFor.thumbnailUrl}
+                    alt={previewFor.title}
+                  />
+                ) : previewFor.text ? (
+                  <pre className="previewText">{previewFor.text}</pre>
+                ) : (
+                  <div className="previewDetails">
+                    <strong>{previewFor.title}</strong>
+                    <span>{previewFor.subtitle}</span>
+                  </div>
+                )}
+              </div>
+            ) : palettePrompt.active ? (
               <ActionPanel
-                rows={getCompactActionRows()}
-                emptyMessage="No matching actions"
+                rows={palettePrompt.rows}
+                emptyMessage="No matching choices"
               />
-            </Command.List>
-          </aside>
-        ) : null}
-      </Command>
+            ) : paletteForm.choices ? (
+              <ActionPanel
+                rows={paletteForm.rows}
+                emptyMessage="No matching choices"
+              />
+            ) : extensionView ? null : (
+              renderActionResults()
+            )}
+          </Command.List>
+          {compactActionMenuVisible ? (
+            <aside className="extensionWindowCompactPanel paletteCompactPanel">
+              <div className="extensionWindowSearchRow">
+                <Search size={15} className="extensionWindowSearchIcon" />
+                <input
+                  ref={compactActionInputRef}
+                  autoFocus
+                  value={actionQuery}
+                  onChange={(event) =>
+                    setActionQuery(event.currentTarget.value)
+                  }
+                  placeholder={compactActionPlaceholder}
+                  aria-label={compactActionPlaceholder}
+                  spellCheck={false}
+                />
+              </div>
+              <Command.List className="extensionWindowCompactResults">
+                <ActionPanel
+                  rows={getCompactActionRows()}
+                  emptyMessage="No matching actions"
+                />
+              </Command.List>
+            </aside>
+          ) : null}
+        </Command>
+      </ArcherContainer>
     </main>
   );
 }

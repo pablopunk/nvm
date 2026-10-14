@@ -9,6 +9,17 @@
   display: none;
 }
 
+.paneConnections {
+  width: 100%;
+  height: 100%;
+}
+
+.paneConnections > div:last-child {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+}
+
 .results[data-pane-stack] {
   width: 100%;
   margin-left: 0;
@@ -30,6 +41,7 @@
   height: auto;
   max-height: none;
   overflow: visible;
+  padding-top: 11px;
 }
 
 .results[data-pane-stack] .activeExtensionPane {

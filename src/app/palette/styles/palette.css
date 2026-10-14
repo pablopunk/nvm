@@ -35,18 +35,6 @@
   padding-right: 34px;
 }
 
-.palette.isStacked::after {
-  content: "";
-  position: absolute;
-  left: 16px;
-  top: var(--spine-top, 58px);
-  height: var(--spine-height, 0);
-  width: 2px;
-  background: var(--edge-strong);
-  pointer-events: none;
-  z-index: 0;
-}
-
 .card {
   position: relative;
   border: 1px solid var(--edge-subtle);
