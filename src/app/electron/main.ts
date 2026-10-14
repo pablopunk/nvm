@@ -6495,7 +6495,6 @@ function createExtensionSecrets(extension) {
     storagePath: extensionSecretsPath(extensionSecretsDir, extension.id),
     store: extensionJsonStore,
     safeStorage,
-    platform: process.platform,
   });
 }
 

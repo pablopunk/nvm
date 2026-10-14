@@ -17,6 +17,7 @@ function createTestSafeStorage(
   options: {
     available?: boolean;
     backend?: string;
+    omitBackendMethod?: boolean;
     syncAvailable?: boolean;
     probeShouldReEncrypt?: boolean;
     reEncryptStoredSecrets?: boolean;
@@ -25,7 +26,7 @@ function createTestSafeStorage(
     asyncEncryptionCalls?: number;
   } = {},
 ): ExtensionSafeStorage {
-  return {
+  const safeStorage: ExtensionSafeStorage = {
     isEncryptionAvailable() {
       return options.syncAvailable ?? true;
     },
@@ -62,10 +63,12 @@ function createTestSafeStorage(
         shouldReEncrypt: options.reEncryptStoredSecrets ?? false,
       };
     },
-    getSelectedStorageBackend() {
-      return options.backend ?? 'gnome_libsecret';
-    },
   };
+  if (!options.omitBackendMethod) {
+    safeStorage.getSelectedStorageBackend = () =>
+      options.backend ?? 'gnome_libsecret';
+  }
+  return safeStorage;
 }
 
 async function withSecrets(
@@ -74,7 +77,6 @@ async function withSecrets(
     storagePath: string;
   }) => Promise<void>,
   options: {
-    platform?: NodeJS.Platform;
     safeStorage?: ExtensionSafeStorage;
   } = {},
 ) {
@@ -86,7 +88,6 @@ async function withSecrets(
     storagePath,
     store: createExtensionJsonStore(),
     safeStorage: options.safeStorage ?? createTestSafeStorage(),
-    platform: options.platform ?? 'linux',
   });
   try {
     await callback({ secrets, storagePath });
@@ -184,6 +185,21 @@ test('fails closed for Linux basic_text and unknown storage backends', async () 
       { safeStorage: createTestSafeStorage({ backend }) },
     );
   }
+});
+
+test('skips Linux verification where the storage backend API is absent', async () => {
+  await withSecrets(
+    async ({ secrets }) => {
+      await secrets.set(secretName, secretValue);
+      assert.equal(await secrets.get(secretName), secretValue);
+    },
+    {
+      safeStorage: createTestSafeStorage({
+        omitBackendMethod: true,
+        syncAvailable: false,
+      }),
+    },
+  );
 });
 
 test('re-encrypts stored values when safeStorage reports key rotation', async () => {

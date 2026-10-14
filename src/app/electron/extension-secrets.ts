@@ -23,7 +23,6 @@ interface ExtensionSecretsOptions {
   storagePath: string;
   store: ExtensionJsonStore;
   safeStorage: ExtensionSafeStorage;
-  platform?: NodeJS.Platform;
 }
 
 type SecretValues = Record<string, string>;
@@ -86,16 +85,16 @@ async function verifyLinuxEncryption(safeStorage: ExtensionSafeStorage) {
   }
 }
 
-async function assertSecureEncryption(
-  safeStorage: ExtensionSafeStorage,
-  platform: NodeJS.Platform,
-) {
+async function assertSecureEncryption(safeStorage: ExtensionSafeStorage) {
   if (!(await safeStorage.isAsyncEncryptionAvailable())) {
     throw new Error(
       'Secure extension secrets are unavailable because OS encryption is not ready',
     );
   }
-  if (platform !== 'linux') return;
+  // getSelectedStorageBackend exists only on Linux builds. Its presence
+  // selects the extra Linux verification; other platforms rely on async
+  // availability alone without a platform branch.
+  if (typeof safeStorage.getSelectedStorageBackend !== 'function') return;
 
   const backend = safeStorage.getSelectedStorageBackend?.();
   if (!backend || backend === 'unknown' || backend === 'basic_text') {
@@ -135,7 +134,6 @@ function secretValuesFromJson(value: string): SecretValues {
 async function decryptSecretValues(
   data: Record<string, unknown>,
   safeStorage: ExtensionSafeStorage,
-  platform: NodeJS.Platform,
 ): Promise<{ values: SecretValues; shouldReEncrypt: boolean }> {
   if (!Object.hasOwn(data, 'encryptedPayload')) {
     return { values: Object.create(null), shouldReEncrypt: false };
@@ -147,7 +145,7 @@ async function decryptSecretValues(
     throw new Error('Stored extension secrets are invalid');
   }
 
-  await assertSecureEncryption(safeStorage, platform);
+  await assertSecureEncryption(safeStorage);
   let decrypted: { result: string; shouldReEncrypt: boolean };
   try {
     decrypted = await safeStorage.decryptStringAsync(
@@ -173,9 +171,8 @@ async function decryptSecretValues(
 async function encryptSecretValues(
   values: SecretValues,
   safeStorage: ExtensionSafeStorage,
-  platform: NodeJS.Platform,
 ) {
-  await assertSecureEncryption(safeStorage, platform);
+  await assertSecureEncryption(safeStorage);
   let encryptedPayload: Buffer;
   try {
     encryptedPayload = await safeStorage.encryptStringAsync(
@@ -194,29 +191,15 @@ async function encryptSecretValues(
 }
 
 function createExtensionSecrets(options: ExtensionSecretsOptions) {
-  const platform = options.platform ?? process.platform;
-
   async function get(name: string): Promise<string | undefined> {
     assertSecretName(name);
     const data = await options.store.read(options.storagePath);
-    const decrypted = await decryptSecretValues(
-      data,
-      options.safeStorage,
-      platform,
-    );
+    const decrypted = await decryptSecretValues(data, options.safeStorage);
     if (decrypted.shouldReEncrypt) {
       await options.store.mutate(options.storagePath, async (current) => {
-        const latest = await decryptSecretValues(
-          current,
-          options.safeStorage,
-          platform,
-        );
+        const latest = await decryptSecretValues(current, options.safeStorage);
         if (!latest.shouldReEncrypt) return current;
-        return encryptSecretValues(
-          latest.values,
-          options.safeStorage,
-          platform,
-        );
+        return encryptSecretValues(latest.values, options.safeStorage);
       });
     }
     return Object.hasOwn(decrypted.values, name)
@@ -228,29 +211,21 @@ function createExtensionSecrets(options: ExtensionSecretsOptions) {
     assertSecretName(name);
     assertSecretValue(value);
     await options.store.mutate(options.storagePath, async (current) => {
-      const decrypted = await decryptSecretValues(
-        current,
-        options.safeStorage,
-        platform,
-      );
+      const decrypted = await decryptSecretValues(current, options.safeStorage);
       const values = decrypted.values;
       values[name] = value;
-      return encryptSecretValues(values, options.safeStorage, platform);
+      return encryptSecretValues(values, options.safeStorage);
     });
   }
 
   async function deleteSecret(name: string): Promise<void> {
     assertSecretName(name);
     await options.store.mutate(options.storagePath, async (current) => {
-      const decrypted = await decryptSecretValues(
-        current,
-        options.safeStorage,
-        platform,
-      );
+      const decrypted = await decryptSecretValues(current, options.safeStorage);
       const values = decrypted.values;
       delete values[name];
       if (Object.keys(values).length === 0) return {};
-      return encryptSecretValues(values, options.safeStorage, platform);
+      return encryptSecretValues(values, options.safeStorage);
     });
   }
 
