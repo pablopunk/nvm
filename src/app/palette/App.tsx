@@ -2045,14 +2045,15 @@ export function App() {
       const searchRow = palette.querySelector(
         '.searchRow',
       ) as HTMLElement | null;
-      const activePane = palette.querySelector(
-        '.results',
-      ) as HTMLElement | null;
-      if (!(searchRow && activePane)) return;
+      const cards = palette.querySelectorAll(
+        '.siblingPane, .activeExtensionPane',
+      );
+      const lastCard = cards.item(cards.length - 1) as HTMLElement | null;
+      if (!(searchRow && lastCard)) return;
       const paletteRect = palette.getBoundingClientRect();
       const top = searchRow.getBoundingClientRect().bottom - paletteRect.top;
       const bottom =
-        activePane.getBoundingClientRect().top - paletteRect.top - 11;
+        lastCard.getBoundingClientRect().top - paletteRect.top + 29;
       palette.style.setProperty('--spine-top', `${top}px`);
       palette.style.setProperty(
         '--spine-height',
@@ -2062,10 +2063,15 @@ export function App() {
     updateSpine();
     const observer = new ResizeObserver(updateSpine);
     observer.observe(palette);
+    const results = palette.querySelector('.results') as HTMLElement | null;
+    results?.addEventListener('scroll', updateSpine, { passive: true });
     palette
-      .querySelectorAll('.siblingPane')
+      .querySelectorAll('.siblingPane, .activeExtensionPane')
       .forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      results?.removeEventListener('scroll', updateSpine);
+    };
   }, [siblingViews, extensionView]);
 
   useEffect(() => {
