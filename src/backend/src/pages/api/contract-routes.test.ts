@@ -251,6 +251,7 @@ function proxySelects(
     thinkingLevel?: string;
     providerChainDepth?: number;
     providerRoutes?: Array<{ providerId: string; modelId: string }>;
+    imageAdmission?: boolean;
   } = {},
 ) {
   const modelRoute =
@@ -282,6 +283,7 @@ function proxySelects(
     [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     modelRoute,
+    ...(options.imageAdmission ? [[], []] : []),
     [{ id: 'user_1' }],
     [],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
@@ -2028,6 +2030,7 @@ test('proxy forwards a bounded image through a reviewed image-capable route', as
         model: 'openai/gpt-6.1-sol',
         routeProvider: 'openrouter',
         providerChainDepth: 2,
+        imageAdmission: true,
       }),
     }),
   );
@@ -2249,6 +2252,9 @@ test('production free-smart Muse route stays fail-closed without a Chat Completi
 });
 
 test('proxy rejects malformed images with an actionable contract error', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
     createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }),
   );
@@ -2301,6 +2307,7 @@ test('proxy route honors extension smart/fast model selection headers', async ()
             'gemini-3-fast': {
               id: 'gemini-3-fast',
               cost: { input: 0.1, output: 0.5 },
+              limit: { context: 64_000, output: 4_096 },
             },
           },
         },

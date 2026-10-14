@@ -1465,15 +1465,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       'client_api_version',
       String(client.apiVersion),
     );
-  let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
-  if (routing instanceof Response) return withRequestId(routing, requestId);
-  const routingFinishedAt = Date.now();
-
   const requestBodyBytes = await readRequestBodyWithinLimit(cfg.request);
   if (!requestBodyBytes) return requestTooLargeResponse(requestId);
   const requestBodyText = new TextDecoder().decode(requestBodyBytes);
   const requestHash = aiRequestHash(cfg.request, requestBodyBytes);
   const requestPreparedAt = Date.now();
+
+  let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
+  if (routing instanceof Response) return withRequestId(routing, requestId);
+  const routingFinishedAt = Date.now();
 
   const idempotencyKey = cfg.idempotencyKey;
   const dedupEnabled =
@@ -1896,9 +1896,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       reservationCommitted = true;
       log.info('proxy_preflight', {
         request_id: requestId,
-        routing_ms: routingFinishedAt - startedAt,
-        request_prepare_ms: requestPreparedAt - routingFinishedAt,
-        dedup_ms: dedupFinishedAt - requestPreparedAt,
+        routing_ms: routingFinishedAt - requestPreparedAt,
+        request_prepare_ms: requestPreparedAt - startedAt,
+        dedup_ms: dedupFinishedAt - routingFinishedAt,
         rate_limit_ms: rateLimitFinishedAt - dedupFinishedAt,
         admission_ms: Date.now() - rateLimitFinishedAt,
         latency_ms: Date.now() - startedAt,
