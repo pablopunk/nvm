@@ -419,6 +419,7 @@ type ModelRouting = Pick<
   | 'costRow'
   | 'upstreamBaseUrl'
   | 'upstreamApiKey'
+  | 'routeSlot'
 >;
 
 export function decideProxyModel(input: {
@@ -480,6 +481,7 @@ async function resolveModelRouting(
   try {
     const upstream = getUpstreamConfig(provider);
     return {
+      routeSlot: slot,
       provider,
       activeModelId,
       thinkingLevel,
@@ -893,7 +895,6 @@ async function resolveRouting(
   return {
     user,
     tier,
-    routeSlot,
     ...modelRouting,
     kind,
     balanceAvailable: kind === 'paid' ? balances.paid : balances.free,
@@ -956,7 +957,7 @@ function withRequestId(res: Response, requestId: string): Response {
 
 async function readRequestBodyWithinLimit(
   request: Request,
-): Promise<Uint8Array | null> {
+): Promise<Uint8Array<ArrayBuffer> | null> {
   const body = request.body;
   if (!body) return new Uint8Array();
 
@@ -1018,7 +1019,7 @@ function chainExhaustedResponse(requestId: string): Response {
 }
 
 async function hasConfiguredImageRoute(
-  routing: ResolvedRouting,
+  routing: ModelRouting,
   primaryDescriptor: ModelDescriptor | null,
 ) {
   const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
@@ -1332,6 +1333,7 @@ async function tryUpstreamProviders(
     }
 
     const candidateRouting: ModelRouting = {
+      routeSlot: routing.routeSlot,
       provider: providerId,
       activeModelId: modelId,
       thinkingLevel: routing.thinkingLevel,
@@ -1619,14 +1621,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       }
       requestedOutput = requestedMaxOutputTokens(parsedBody);
       let contextWindowTokens: number | undefined;
+      const admissionRouting = routing;
       const maxOutputFor = async (candidate: ModelRouting) => {
         const descriptor = await lookupModelDescriptor(
           candidate.provider,
           candidate.activeModelId,
         );
         if (
-          candidate.provider === routing.provider &&
-          candidate.activeModelId === routing.activeModelId
+          candidate.provider === admissionRouting.provider &&
+          candidate.activeModelId === admissionRouting.activeModelId
         )
           routingDescriptor = descriptor;
         const reviewedLimits =
