@@ -570,6 +570,14 @@ export const POST: APIRoute = async ({ request }) => {
         },
       );
       if (!upstreamResponse.ok || typeof body?.text !== 'string') {
+        log.warn('audio_transcription_upstream_failed', {
+          request_id: requestId,
+          reservation_id: reservationId,
+          provider: route.provider,
+          model: route.modelId,
+          upstream_status: upstreamResponse.status,
+          has_text: typeof body?.text === 'string',
+        });
         await releaseAfterFailure({
           reservationId,
           userId: user.id,
