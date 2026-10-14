@@ -2,16 +2,33 @@
 import Layout from '../layouts/Layout.astro';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import { DEFAULT_THINKING_LEVEL, getAudioModelRoute, getModelRoute, listKnownProviders, modelRouteToRef, ModelNotConfiguredError, THINKING_LEVELS, type ModelRouteConfig, type ModelRouteSlot } from '../lib/settings';
-import { listModelsForProvider } from '../lib/pricing';
-import { CREDIT_USD, CREDIT_USD_SOURCE, MARKUP, MARKUP_SOURCE } from '../lib/cost';
+import {
+  DEFAULT_THINKING_LEVEL,
+  getAudioModelRoute,
+  getModelRoute,
+  listKnownProviders,
+  modelRouteToRef,
+  ModelNotConfiguredError,
+  THINKING_LEVELS,
+  type ModelRouteConfig,
+  type ModelRouteSlot,
+} from '../lib/settings';
+import { listReviewedImageModelsForProvider } from '../lib/pricing';
+import {
+  CREDIT_USD,
+  CREDIT_USD_SOURCE,
+  MARKUP,
+  MARKUP_SOURCE,
+} from '../lib/cost';
 import { listTranscriptionModels } from '../lib/transcription-models';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-const safeModelRoute = async (slot: ModelRouteSlot): Promise<(ModelRouteConfig & { ref: string }) | null> => {
+const safeModelRoute = async (
+  slot: ModelRouteSlot,
+): Promise<(ModelRouteConfig & { ref: string }) | null> => {
   try {
     const route = await getModelRoute(slot);
     return { ...route, ref: modelRouteToRef(route) };
@@ -20,16 +37,25 @@ const safeModelRoute = async (slot: ModelRouteSlot): Promise<(ModelRouteConfig &
     throw err;
   }
 };
-const [proSmartRoute, proFastRoute, freeSmartRoute, freeFastRoute] = await Promise.all([
-  safeModelRoute('pro-smart'),
-  safeModelRoute('pro-fast'),
-  safeModelRoute('free-smart'),
-  safeModelRoute('free-fast'),
-]);
-const modelOptions = (await Promise.all(listKnownProviders().map(async (provider) => {
-  const models = await listModelsForProvider(provider);
-  return models.map((modelId) => ({ provider, modelId, ref: modelRouteToRef({ provider, modelId }) }));
-}))).flat();
+const [proSmartRoute, proFastRoute, freeSmartRoute, freeFastRoute] =
+  await Promise.all([
+    safeModelRoute('pro-smart'),
+    safeModelRoute('pro-fast'),
+    safeModelRoute('free-smart'),
+    safeModelRoute('free-fast'),
+  ]);
+const modelOptions = (
+  await Promise.all(
+    listKnownProviders().map(async (provider) => {
+      const models = await listReviewedImageModelsForProvider(provider);
+      return models.map((modelId) => ({
+        provider,
+        modelId,
+        ref: modelRouteToRef({ provider, modelId }),
+      }));
+    }),
+  )
+).flat();
 const modelRoutes = [
   { slot: 'pro-smart', title: 'Pro smart', route: proSmartRoute },
   { slot: 'pro-fast', title: 'Pro fast', route: proFastRoute },
@@ -38,10 +64,12 @@ const modelRoutes = [
 ] as const;
 const audioRoute = await getAudioModelRoute().catch(() => null);
 const audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
-const audioModels = (await listTranscriptionModels().catch(() => [])).map((model) => ({
-  ...model,
-  ref: modelRouteToRef(model),
-}));
+const audioModels = (await listTranscriptionModels().catch(() => [])).map(
+  (model) => ({
+    ...model,
+    ref: modelRouteToRef(model),
+  }),
+);
 ---
 <Layout title="Nevermind · Admin" width="wide">
   <Combobox />
@@ -150,12 +178,12 @@ const audioModels = (await listTranscriptionModels().catch(() => [])).map((model
     <section class="section card admin-panel" id="models">
       <h2>Models &amp; Providers</h2>
       <p class="muted">Route eligibility and credit-pool funding are separate server-owned decisions.</p>
-      <div class="admin-subpanel"><h3>Model routes</h3><p class="muted">Choose Smart and Fast models independently for Pro and Free users, plus one Dictation audio model.</p>
+      <div class="admin-subpanel"><h3>Model routes</h3><p class="muted">Smart and Fast routes only offer models with image input and reviewed billing support. Existing unsupported routes remain visible until replaced. Dictation uses its separate audio model catalog.</p>
         <div class="model-routes">
           {modelRoutes.map(({ slot, title, route }) => (
             <section class="model-route-row" data-model-route={slot}>
               <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status-for={slot}></span></header>
-              <label class="field">Model<select id={`model-select-${slot}`} class="input combo model-select">{modelOptions.map((model) => <option value={model.ref} selected={model.ref === route?.ref}>{model.ref}</option>)}</select></label>
+              <label class="field">Model<select id={`model-select-${slot}`} class="input combo model-select">{route && !modelOptions.some((model) => model.ref === route.ref) && <option value={route.ref} selected disabled>{route.ref} (currently configured · not selectable)</option>}{modelOptions.map((model) => <option value={model.ref} selected={model.ref === route?.ref}>{model.ref}</option>)}</select></label>
               <label class="field model-route-row__thinking">Thinking<select id={`thinking-select-${slot}`} class="input thinking-select">{THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}</select></label>
               <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
             </section>
@@ -403,11 +431,36 @@ const audioModels = (await listTranscriptionModels().catch(() => [])).map((model
     }
 
     function providerOptionsHtml(providers, selected) {
-      return providers.map((provider) => `<option value="${esc(provider.id)}" ${provider.id === selected ? 'selected' : ''} ${provider.enabled ? '' : 'disabled'}>${esc(provider.displayName)}${provider.enabled ? '' : ' (disabled)'}</option>`).join('');
+      return providers
+        .map((provider) => {
+          const hasImageModels = provider.compatibleModels.length > 0;
+          const disabled =
+            !provider.enabled || (!hasImageModels && provider.id !== selected);
+          const suffix = !provider.enabled
+            ? ' (disabled)'
+            : hasImageModels
+              ? ''
+              : ' (no reviewed image models)';
+          return `<option value="${esc(provider.id)}" ${provider.id === selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${esc(provider.displayName)}${suffix}</option>`;
+        })
+        .join('');
     }
 
     function modelOptionsHtml(provider, selected) {
-      return (provider?.compatibleModels || []).map((model) => `<option value="${esc(model)}" ${model === selected ? 'selected' : ''}>${esc(model)}</option>`).join('');
+      const models = provider?.compatibleModels || [];
+      const currentUnsupported =
+        selected && !models.includes(selected)
+          ? `<option value="${esc(selected)}" selected disabled>${esc(selected)} (currently configured · not selectable)</option>`
+          : '';
+      return (
+        currentUnsupported +
+        models
+          .map(
+            (model) =>
+              `<option value="${esc(model)}" ${model === selected ? 'selected' : ''}>${esc(model)}</option>`,
+          )
+          .join('')
+      );
     }
 
     function initializeComboboxes() {

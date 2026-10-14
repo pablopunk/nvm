@@ -1,3 +1,5 @@
+import { hasReviewedImageBilling } from './image-cost-bound';
+
 export type ModelCost = {
   provider: string;
   modelId: string;
@@ -388,6 +390,26 @@ export async function listModelsForProvider(
   const models = catalog[key]?.models ?? {};
   const bundled = BUNDLED_RUNTIME_MODELS[key]?.models ?? {};
   return [...new Set([...Object.keys(models), ...Object.keys(bundled)])].sort();
+}
+
+/** Models the proxy has reviewed for image input and conservative billing. */
+export async function hasReviewedImageInputSupport(
+  provider: string,
+  modelId: string,
+): Promise<boolean> {
+  if (!hasReviewedImageBilling(provider, modelId)) return false;
+  const descriptor = await lookupModelDescriptor(provider, modelId);
+  return Boolean(descriptor?.input.includes('image'));
+}
+
+export async function listReviewedImageModelsForProvider(
+  provider: string,
+): Promise<string[]> {
+  const models = await listModelsForProvider(provider);
+  const support = await Promise.all(
+    models.map((modelId) => hasReviewedImageInputSupport(provider, modelId)),
+  );
+  return models.filter((_, index) => support[index]);
 }
 
 export function resetPricingCacheForTests() {

@@ -9,7 +9,8 @@ import {
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
-  listModelsForProvider,
+  hasReviewedImageInputSupport,
+  listReviewedImageModelsForProvider,
   lookupModelPricing,
 } from '../../../lib/pricing';
 import {
@@ -76,7 +77,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   const providerOptions = await Promise.all(
     providers.map(async (provider) => {
       const compatibleModels = providerSupportsFormat(provider.id, format)
-        ? (await listModelsForProvider(provider.id)).filter(
+        ? (await listReviewedImageModelsForProvider(provider.id)).filter(
             (candidateModelId) =>
               selectApiForModel(provider.id, candidateModelId) === format,
           )
@@ -194,6 +195,22 @@ export const PUT: APIRoute = async ({ request }) => {
       { status: 400 },
     );
   }
+  const routesSupportImages = await Promise.all(
+    routes.map((route) =>
+      hasReviewedImageInputSupport(route.providerId, route.modelId),
+    ),
+  );
+  if (routesSupportImages.some((supported) => !supported))
+    return Response.json(
+      {
+        error: {
+          type: 'unsupported_image_model',
+          message:
+            'Every provider route must have reviewed image-input and billing support.',
+        },
+      },
+      { status: 400 },
+    );
   const pricing = await Promise.all(
     routes.map((route) => lookupModelPricing(route.providerId, route.modelId)),
   );
