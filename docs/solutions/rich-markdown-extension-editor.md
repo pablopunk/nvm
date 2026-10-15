@@ -42,7 +42,7 @@ that did not reuse the full replacement surface.
 
 ## Fix
 
-- `src/app/palette/markdown-editor.tsx` uses Lexical with the standard Markdown
+- `src/app/palette/extension-view/markdown-editor.tsx` uses Lexical with the standard Markdown
   transformers and registered heading, quote, list, link, and code nodes.
 - The editor imports and exports Markdown, so extension storage and draft
   autosave remain format-compatible rather than persisting Lexical state or
@@ -51,7 +51,7 @@ that did not reuse the full replacement surface.
   full-document serialization off the raw keystroke path. Pending editor state
   flushes directly to the host draft on unmount so an immediate close cannot
   lose the final edit through an ignored parent state update.
-- `src/app/palette/editor-title.ts` derives a plain title from the first non-empty content
+- `src/app/palette/extension-view/editor-title.ts` derives a plain title from the first non-empty content
   line, stripping common block and inline Markdown markers. Note-like editors
   opt into the shared `titleFromContent` view contract instead of adding rename
   UI.

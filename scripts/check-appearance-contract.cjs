@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const { readElectronSources } = require('./lib/read-electron-sources.cjs');
 
 // ── config ──────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ const API_DTS = path.join(
   'resources',
   'nevermind-extension-api.d.ts',
 );
-const MAIN_TS = path.join(ROOT, 'src', 'app', 'electron', 'main.ts');
+const ELECTRON_DIR = path.join(ROOT, 'src', 'app', 'electron');
 
 /**
  * Per docs/solutions/extension-result-appearance-contract.md,
@@ -96,15 +97,15 @@ function main() {
     }
   }
 
-  // 2. Verify runtime command appearance propagation in main.ts
-  const mainSource = fs.readFileSync(MAIN_TS, 'utf8');
+  // 2. Verify runtime command appearance propagation in the electron host
+  const electronSources = readElectronSources(ROOT);
   if (
-    !mainSource.includes(
+    !electronSources.includes(
       'appearance: normalizeItemAppearance(command.appearance)',
     )
   ) {
     fail(
-      `Command appearance propagation missing from ${relative(MAIN_TS)}.\n` +
+      `Command appearance propagation missing from ${relative(ELECTRON_DIR)}.\n` +
         `  Command registration must copy command.appearance into the registered action item.\n` +
         `  Expected: appearance: normalizeItemAppearance(command.appearance)`,
     );

@@ -19,7 +19,7 @@ mock.module('electron', {
 });
 
 const { clearNevermindAuthCacheForTests } = await import(
-  '../electron/nevermind-auth'
+  '../electron/backend/nevermind-auth'
 );
 const { createAccountExtension } = await import('./account');
 const { initExtensionContext } = await import('./_context');

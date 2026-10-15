@@ -1,6 +1,6 @@
 import { systemPreferences } from 'electron';
-import { selectedTextAccessState } from '../electron/os';
-import type { DesktopTextAccess } from '../electron/desktop-text-access';
+import { selectedTextAccessState } from '../electron/os/os';
+import type { DesktopTextAccess } from '../electron/os/desktop-text-access';
 
 export type OsPermissionState =
   | 'allowed'

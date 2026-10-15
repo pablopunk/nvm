@@ -2,8 +2,8 @@ import {
   knownUserFolderPath,
   settingsTitle,
   systemSettingsLabel,
-} from '../electron/os';
-import { systemSettingsEntries } from '../electron/system-settings';
+} from '../electron/os/os';
+import { systemSettingsEntries } from '../electron/os/system-settings';
 import { extensionContext } from './_context';
 
 function systemItems(ctx) {

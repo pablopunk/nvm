@@ -2,7 +2,7 @@ import {
   calculate,
   getUrlFromQuery,
   parseRateExpression,
-} from '../electron/search-utils';
+} from '../electron/search/search-utils';
 import { extensionContext } from './_context';
 
 const AI_BUILDER_EXTENSION_ID = 'nevermind.ai-builder';

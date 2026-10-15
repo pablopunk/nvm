@@ -1,5 +1,5 @@
 // biome-ignore-all lint: First-party extension mirrors dynamic extension context payloads and bounded note limits.
-import { titleFromFirstContentLine } from '../palette/editor-title';
+import { titleFromFirstContentLine } from '../palette/extension-view/editor-title';
 import { showExtensionFeedback } from './feedback';
 
 type FloatingNote = {

@@ -35,16 +35,16 @@ test('platform inventory covers every planned category and non-os platform seam'
     ...inventory.resolvedEntries.map((entry) => entry.file),
   ]);
   for (const expected of [
-    'src/app/electron/byo-key.ts',
-    'src/app/electron/nevermind-auth.ts',
+    'src/app/electron/backend/byo-key.ts',
+    'src/app/electron/backend/nevermind-auth.ts',
     'src/app/electron/main.ts',
-    'src/app/electron/nevermind-api.ts',
-    'src/app/electron/system-settings.ts',
-    'src/app/electron/app-uninstall-service.ts',
-    'src/app/electron/running-app-status.ts',
-    'src/app/electron/app-ipc-handlers.ts',
+    'src/app/electron/backend/nevermind-api.ts',
+    'src/app/electron/os/system-settings.ts',
+    'src/app/electron/app/app-uninstall-service.ts',
+    'src/app/electron/app/running-app-status.ts',
+    'src/app/electron/ipc/app-ipc-handlers.ts',
     'src/app/extensions/system.ts',
-    'src/app/palette/extension-view.tsx',
+    'src/app/palette/extension-view/extension-view.tsx',
   ]) {
     assert.equal(files.has(expected), true, expected);
   }
@@ -61,7 +61,7 @@ test('platform inventory covers every planned category and non-os platform seam'
 });
 
 test('every detector category rejects a second site in an already inventoried file', () => {
-  const file = 'src/app/electron/os.ts';
+  const file = 'src/app/electron/os/os.ts';
   const source = fs.readFileSync(file, 'utf8');
   const additions = new Map([
     [
@@ -97,7 +97,7 @@ test('every detector category rejects a second site in an already inventoried fi
 });
 
 test('a new direct platform site needs its own selector, disposition, and readiness surface', () => {
-  const file = 'src/app/electron/os.ts';
+  const file = 'src/app/electron/os/os.ts';
   const source = fs.readFileSync(file, 'utf8');
   const addition = 'export const inventoryRegressionDirect = process.platform;';
   const observed = detectSitesInSource(file, `${source}\n${addition}\n`);
@@ -150,7 +150,7 @@ test('a new direct platform site needs its own selector, disposition, and readin
 });
 
 test('structurally ambiguous sites cannot share one inventory entry', () => {
-  const file = 'src/app/electron/os.ts';
+  const file = 'src/app/electron/os/os.ts';
   const source = fs.readFileSync(file, 'utf8');
   const duplicate =
     'export const inventoryRegressionDuplicate = process.platform;';

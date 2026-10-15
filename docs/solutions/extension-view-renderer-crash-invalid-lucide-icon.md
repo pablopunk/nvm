@@ -14,7 +14,7 @@ The stack pointed into `lucide-react`, and the palette then hid.
 
 ## Context
 
-Extension views are host-rendered React surfaces. Extension payload fields such as `icon`, `image`, `appearance`, actions, and nested views cross Electron IPC and then render in `src/app/palette/extension-view.tsx`, `src/app/palette/ui.tsx`, and `src/app/palette/command-icons.tsx`.
+Extension views are host-rendered React surfaces. Extension payload fields such as `icon`, `image`, `appearance`, actions, and nested views cross Electron IPC and then render in `src/app/palette/extension-view/extension-view.tsx`, `src/app/palette/ui.tsx`, and `src/app/palette/command-icons.tsx`.
 
 Because this is an extension API boundary, a malformed or surprising extension UI payload must degrade to fallback UI. It must not crash the renderer or leave the palette impossible to reopen.
 
@@ -47,7 +47,7 @@ Fix the renderer-side API boundary, not the individual extension:
 
 - In `src/app/palette/command-icons.tsx`, only accept renderable concrete Lucide icon components. Known safe generated icons have a string `displayName`; unsafe helper exports fall back to the default icon.
 - Add regression coverage in `src/app/palette/command-icons.test.tsx` for unsafe icon names such as `icon` and normal aliases such as `trash-2`.
-- In `src/app/palette/extension-view.tsx`, wrap extension view surfaces in an error boundary so a bad extension payload shows a contained error state instead of bricking the whole palette renderer.
+- In `src/app/palette/extension-view/extension-view.tsx`, wrap extension view surfaces in an error boundary so a bad extension payload shows a contained error state instead of bricking the whole palette renderer.
 
 ## Verification
 

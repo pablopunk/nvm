@@ -32,15 +32,15 @@ The packaged macOS journey remains outstanding: select text in Slack, run the co
 Formatting was applied with:
 
 ```sh
-mise exec -- pnpm format src/app/electron/selected-text.ts src/app/electron/selected-text.test.ts src/app/electron/macos-selected-text.ts src/app/electron/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
-mise exec -- pnpm format src/app/electron/macos-selected-text.ts src/app/electron/macos-selected-text.test.ts src/app/resources/nevermind-extension-api.d.ts
+mise exec -- pnpm format src/app/electron/os/selected-text.ts src/app/electron/os/selected-text.test.ts src/app/electron/os/macos-selected-text.ts src/app/electron/os/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
+mise exec -- pnpm format src/app/electron/os/macos-selected-text.ts src/app/electron/os/macos-selected-text.test.ts src/app/resources/nevermind-extension-api.d.ts
 ```
 
 These checks passed:
 
 ```sh
 git diff --check
-mise exec -- pnpm check src/app/electron/selected-text.ts src/app/electron/selected-text.test.ts src/app/electron/macos-selected-text.ts src/app/electron/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
+mise exec -- pnpm check src/app/electron/os/selected-text.ts src/app/electron/os/selected-text.test.ts src/app/electron/os/macos-selected-text.ts src/app/electron/os/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
 ```
 
 The initial `mise exec -- pnpm check:changed 299e43e` attempt processed no files before commit; it is not lint evidence. The following checks then passed for repair commit `6fe754d` on `fix/selected-text-access`:

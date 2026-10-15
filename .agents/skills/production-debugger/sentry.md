@@ -9,7 +9,7 @@ Use this connector for Sentry alerts, issue URLs, event URLs, crash spikes, cron
 Do not treat the backend and the packaged Electron app as one integration.
 
 - **Backend:** verify `SENTRY_DSN` in the linked Vercel production environment.
-- **Desktop:** inspect `src/app/electron/sentry.ts` and the packaged release. The
+- **Desktop:** inspect `src/app/electron/diagnostics/sentry.ts` and the packaged release. The
   desktop DSN is selected from `SENTRY_DSN_DESKTOP`, then
   `NEVERMIND_SENTRY_DSN`, then its built-in fallback. It does not inherit the
   backend Vercel runtime environment.

@@ -1,8 +1,8 @@
 import {
   declaredExtensionCapabilities,
   EXTENSION_TRUST_DISCLOSURE,
-} from '../electron/extension-capabilities';
-import { inspectExtensionManifest } from '../electron/extension-manifest';
+} from '../electron/extension-host/extension-capabilities';
+import { inspectExtensionManifest } from '../electron/extension-host/extension-manifest';
 import { extensionContext } from './_context';
 
 async function extensionsView(ctx) {

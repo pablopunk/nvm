@@ -34,8 +34,8 @@ import {
   confirmationReturnSurface,
 } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
-import { shouldStartConversationFromTab } from './ai-chat-shortcuts';
-import { chatSessionKey, useAiChatSessions } from './ai-chat-sessions';
+import { shouldStartConversationFromTab } from './ai-chat/ai-chat-shortcuts';
+import { chatSessionKey, useAiChatSessions } from './ai-chat/ai-chat-sessions';
 import { useSessionState } from './use-session-state';
 import { isAppIconPath } from './app-icons';
 import {
@@ -51,7 +51,7 @@ import {
   resetBuilderPreviewState,
   retryBuilderPreviewHydration,
   upsertBuilderPreview,
-} from './builder-preview';
+} from './ai-chat/builder-preview';
 import {
   type CommandIconName,
   iconFor,
@@ -65,9 +65,9 @@ import {
   measureDebugPerformanceSync,
   recordPerformanceTrace,
 } from './debug-performance';
-import { dictationDevices } from './dictation-devices';
-import { recordDictation } from './dictation-renderer';
-import { ExtensionViewRenderer } from './extension-view';
+import { dictationDevices } from './dictation/dictation-devices';
+import { recordDictation } from './dictation/dictation-renderer';
+import { ExtensionViewRenderer } from './extension-view/extension-view';
 import { feedbackView } from './feedback';
 import {
   allViewItems,
@@ -81,7 +81,7 @@ import {
   formFieldMatches,
   formFieldValue,
   formRowId,
-} from './form-fields';
+} from './extension-view/form-fields';
 import {
   actionDefinition,
   actionDescription,
@@ -97,7 +97,7 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
-import { usePaletteForm } from './palette-form';
+import { usePaletteForm } from './extension-view/palette-form';
 import {
   resetTransientPaletteState,
   rootResultSelection,
@@ -138,10 +138,10 @@ import {
   setShortcutLabelHyperKey,
   shortcutLabel,
 } from './ui';
-import { useAiChat } from './use-ai-chat';
-import { useExtensionNavigation } from './use-extension-navigation';
+import { useAiChat } from './ai-chat/use-ai-chat';
+import { useExtensionNavigation } from './extension-view/use-extension-navigation';
 import { useSearchResults } from './use-search-results';
-import { patchCommandView } from './view-patches';
+import { patchCommandView } from './extension-view/view-patches';
 
 type ActionKind =
   | 'open-url'

@@ -10,9 +10,9 @@ The user reproduced the failure with screenshots copied as image files and later
 
 Electron 44 replaced the legacy synchronous image clipboard methods with the asynchronous `ClipboardItem` API. Nevermind adapted this contract in:
 
-- `src/app/electron/electron-clipboard.ts`
-- `src/app/electron/clipboard-history.ts`
-- `src/app/electron/clipboard-history.test.ts`
+- `src/app/electron/os/electron-clipboard.ts`
+- `src/app/electron/clipboard/clipboard-history.ts`
+- `src/app/electron/clipboard/clipboard-history.test.ts`
 
 The clipboard watcher starts as a background job. Its startup failures are written to `.tmp/dev.log` under `clipboard.watcher.start.failed`.
 
@@ -50,10 +50,10 @@ The user manually confirmed that image clipboard history worked after the image-
 Formatting and static diagnostics run for the repair:
 
 ```sh
-mise exec -- pnpm format src/app/electron/electron-clipboard.ts src/app/electron/electron-clipboard.test.ts
-mise exec -- pnpm check src/app/electron/electron-clipboard.ts src/app/electron/electron-clipboard.test.ts
-mise exec -- pnpm format src/app/electron/clipboard-history.ts src/app/electron/clipboard-history.test.ts
-mise exec -- pnpm check src/app/electron/clipboard-history.ts src/app/electron/clipboard-history.test.ts
+mise exec -- pnpm format src/app/electron/os/electron-clipboard.ts src/app/electron/os/electron-clipboard.test.ts
+mise exec -- pnpm check src/app/electron/os/electron-clipboard.ts src/app/electron/os/electron-clipboard.test.ts
+mise exec -- pnpm format src/app/electron/clipboard/clipboard-history.ts src/app/electron/clipboard/clipboard-history.test.ts
+mise exec -- pnpm check src/app/electron/clipboard/clipboard-history.ts src/app/electron/clipboard/clipboard-history.test.ts
 ```
 
 Runtime tests and builds were intentionally left to CI under the repository verification policy.

@@ -13,7 +13,7 @@ Use this skill to dogfood Nevermind's host-rendered extension UI contract. The g
 - Fixture rule: `docs/extension-api-ui-fixtures.md`
 - Fixture extensions: `src/app/fixtures/`
 - Current fixture entrypoint: search for `Fixtures` in the dev palette
-- Renderer/model: `src/app/palette/extension-view.tsx`, `src/app/palette/ui.tsx`, `src/app/palette/model.ts`, `src/app/palette/styles.css`
+- Renderer/model: `src/app/palette/extension-view/extension-view.tsx`, `src/app/palette/ui.tsx`, `src/app/palette/model.ts`, `src/app/palette/styles.css`
 - Runtime fixture loader: `src/app/electron/main.ts`
 - General UI review skill: `.agents/skills/ui-design/`
 
@@ -127,7 +127,7 @@ Apply the `ui-design` skill checklist, especially:
 3. Identify whether the issue belongs in:
    - public contract: `src/app/resources/nevermind-extension-api.d.ts`
    - model: `src/app/palette/model.ts`
-   - renderer: `src/app/palette/extension-view.tsx` or `src/app/palette/ui.tsx`
+   - renderer: `src/app/palette/extension-view/extension-view.tsx` or `src/app/palette/ui.tsx`
    - styles: `src/app/palette/styles.css`
    - runtime normalization/loading: `src/app/electron/main.ts`
    - fixture coverage: `src/app/fixtures/`

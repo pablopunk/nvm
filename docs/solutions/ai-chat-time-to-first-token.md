@@ -67,9 +67,9 @@ The admin Probe action requested the provider model catalog. A healthy catalog e
 
 ### Warm on palette open
 
-`src/app/electron/palette-window.ts` now exposes a non-blocking palette-open callback. `src/app/electron/main.ts` uses it to prepare the Fast conversation configuration, with a 30-second throttle, without delaying palette paint.
+`src/app/electron/app/palette-window.ts` now exposes a non-blocking palette-open callback. `src/app/electron/main.ts` uses it to prepare the Fast conversation configuration, with a 30-second throttle, without delaying palette paint.
 
-`src/app/electron/ai.ts` now lets `generalSession()` consume prepared fallback sessions and stores a prepared session under its chat-specific cache key. Later messages reuse the same session instead of treating the warm session as an uncached one-shot object.
+`src/app/electron/ai/ai.ts` now lets `generalSession()` consume prepared fallback sessions and stores a prepared session under its chat-specific cache key. Later messages reuse the same session instead of treating the warm session as an uncached one-shot object.
 
 ### Reduce and trace proxy preflight work
 

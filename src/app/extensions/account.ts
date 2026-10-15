@@ -1,9 +1,9 @@
 // biome-ignore-all lint: This extension follows the existing palette-extension API conventions.
-import { clearByoKey, getCachedByoKey } from '../electron/byo-key';
+import { clearByoKey, getCachedByoKey } from '../electron/backend/byo-key';
 import {
   getCachedNevermindAuth,
   signOutFromNevermind,
-} from '../electron/nevermind-auth';
+} from '../electron/backend/nevermind-auth';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import { extensionContext } from './_context';
 import { showExtensionFeedback } from './feedback';

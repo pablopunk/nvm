@@ -1,0 +1,427 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test, { mock } from 'node:test';
+
+const openedUrls: string[] = [];
+const authLogEntries: string[] = [];
+let failNextOpenExternal = false;
+
+function recordAuthLog(...args: unknown[]) {
+  authLogEntries.push(args.map((value) => String(value)).join(' '));
+}
+
+mock.module('electron', {
+  namedExports: {
+    app: {
+      getPath: () => '/tmp/nevermind-auth-test',
+      getVersion: () => '0.13.2',
+    },
+    safeStorage: {
+      isEncryptionAvailable: () => false,
+      encryptString: () => Buffer.from(''),
+      decryptString: () => '',
+    },
+    shell: {
+      openExternal: async (url: string) => {
+        if (failNextOpenExternal) {
+          failNextOpenExternal = false;
+          throw new Error('xdg-open is unavailable');
+        }
+        openedUrls.push(url);
+      },
+    },
+  },
+});
+
+mock.module('../platform/logger', {
+  namedExports: {
+    warn: recordAuthLog,
+    error: recordAuthLog,
+  },
+});
+
+const {
+  clearNevermindAuth,
+  clearNevermindAuthCacheForTests,
+  getCachedNevermindAuth,
+  getNevermindDeviceSignInState,
+  getNevermindDashboardUrl,
+  getNevermindAuth,
+  onNevermindDeviceSignInChanged,
+  retryNevermindDeviceSignInBrowser,
+  cancelNevermindDeviceSignIn,
+  resolveDefaultNevermindBaseUrl,
+  setActiveNevermindAuthBaseUrl,
+  setNevermindAuthFilePathForTests,
+  signInToNevermind,
+  signOutFromNevermind,
+} = await import('./nevermind-auth');
+
+const production = 'https://api.nvm.fyi';
+
+async function waitFor(predicate: () => boolean) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+  if (predicate()) return;
+  throw new Error('Timed out waiting for auth test state');
+}
+
+function storedAuth(baseUrl: string, token: string) {
+  return {
+    token: Buffer.from(token).toString('base64'),
+    email: `${token}@example.com`,
+    role: 'member',
+    baseUrl,
+    connectedAt: new Date().toISOString(),
+  };
+}
+
+test('migrates a legacy auth file into the per-origin store', async () => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const legacyPath = path.join(userData, 'nevermind-auth.json');
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(production);
+  await fs.writeFile(legacyPath, JSON.stringify(storedAuth(production, 'one')));
+
+  const auth = await getNevermindAuth();
+  assert.equal(auth?.token, 'one');
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(storePath, 'utf8'))[production].token,
+    Buffer.from('one').toString('base64'),
+  );
+  assert.equal(await fs.stat(`${legacyPath}.bak`).then(() => true), true);
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('leaves a corrupt legacy auth file in place', async () => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const legacyPath = path.join(userData, 'nevermind-auth.json');
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(production);
+  await fs.writeFile(legacyPath, 'not json');
+
+  assert.equal(await getNevermindAuth(), null);
+  assert.equal(
+    await fs.stat(`${legacyPath}.bak`).then(
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('handles an empty userData directory and skips migration after success', async () => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const legacyPath = path.join(userData, 'nevermind-auth.json');
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(production);
+  assert.equal(await getNevermindAuth(), null);
+
+  await fs.writeFile(legacyPath, JSON.stringify(storedAuth(production, 'one')));
+  clearNevermindAuthCacheForTests();
+  setActiveNevermindAuthBaseUrl(production);
+  await getNevermindAuth();
+  const backupMtime = (await fs.stat(`${legacyPath}.bak`)).mtimeMs;
+  clearNevermindAuthCacheForTests();
+  setActiveNevermindAuthBaseUrl(production);
+  assert.equal((await getNevermindAuth())?.token, 'one');
+  assert.equal((await fs.stat(`${legacyPath}.bak`)).mtimeMs, backupMtime);
+
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('isolates auth snapshots by active backend origin', async () => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const preview = 'https://preview.example.com';
+  setNevermindAuthFilePathForTests(storePath);
+  await fs.writeFile(
+    storePath,
+    JSON.stringify({
+      [production]: storedAuth(production, 'production-token'),
+      [preview]: storedAuth(preview, 'preview-token'),
+    }),
+  );
+
+  setActiveNevermindAuthBaseUrl(preview);
+  assert.equal((await getNevermindAuth())?.token, 'preview-token');
+  setActiveNevermindAuthBaseUrl(preview);
+  assert.equal(getCachedNevermindAuth()?.token, 'preview-token');
+  setActiveNevermindAuthBaseUrl(production);
+  assert.equal((await getNevermindAuth())?.token, 'production-token');
+
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('uses production by default for packaged builds and localhost for development', () => {
+  assert.equal(resolveDefaultNevermindBaseUrl({}, true), production);
+  assert.equal(
+    resolveDefaultNevermindBaseUrl(
+      { ELECTRON_RENDERER_URL: 'http://localhost:5173' },
+      false,
+    ),
+    'http://localhost:4321',
+  );
+  assert.equal(
+    resolveDefaultNevermindBaseUrl(
+      {
+        NEVERMIND_BASE_URL: 'https://explicit.example/api?bad=1',
+        ELECTRON_RENDERER_URL: 'http://localhost:5173',
+      },
+      true,
+    ),
+    production,
+  );
+  for (const [input, expected] of [
+    ['http://localhost', 'http://localhost'],
+    ['http://localhost:80', 'http://localhost'],
+    ['http://localhost:4321', 'http://localhost:4321'],
+    ['http://127.0.0.1', 'http://127.0.0.1'],
+    ['http://127.0.0.1:80', 'http://127.0.0.1'],
+    ['http://127.0.0.1:4321', 'http://127.0.0.1:4321'],
+    ['http://[::1]', 'http://[::1]'],
+    ['http://[::1]:80', 'http://[::1]'],
+    ['http://[::1]:4321', 'http://[::1]:4321'],
+    ['HTTP://LOCALHOST:4321', 'http://localhost:4321'],
+  ]) {
+    assert.equal(
+      resolveDefaultNevermindBaseUrl({ NEVERMIND_BASE_URL: input }, true),
+      expected,
+    );
+  }
+});
+
+test('dashboard URL follows the active backend origin', () => {
+  setActiveNevermindAuthBaseUrl('http://localhost:4321');
+  assert.equal(getNevermindDashboardUrl(), 'http://localhost:4321/dashboard');
+  setActiveNevermindAuthBaseUrl('https://preview.example.com');
+  assert.equal(
+    getNevermindDashboardUrl(),
+    'https://preview.example.com/dashboard',
+  );
+  setActiveNevermindAuthBaseUrl(production);
+  assert.equal(getNevermindDashboardUrl(), 'https://www.nvm.fyi/dashboard');
+  clearNevermindAuthCacheForTests();
+});
+
+test('reopens the verification URL for an active sign-in', async (t) => {
+  const baseUrl = 'http://localhost:4321';
+  const verifyUrl = `${baseUrl}/auth/device?code=test-code`;
+  openedUrls.length = 0;
+  clearNevermindAuthCacheForTests();
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const url = String(input);
+    if (url.endsWith('/api/compatibility'))
+      return new Response(null, { status: 404 });
+    if (url.endsWith('/api/auth/device/initiate'))
+      return Response.json({
+        code: 'test-code',
+        verifyUrl,
+        expiresAt: new Date(Date.now() + 5000).toISOString(),
+        pollIntervalMs: 1000,
+      });
+    if (url.endsWith('/api/auth/device/exchange'))
+      return new Response(null, { status: 410 });
+    throw new Error(`Unexpected URL: ${url}`);
+  });
+
+  const firstSignIn = signInToNevermind({ baseUrl, label: 'Test Mac' });
+  await waitFor(() => openedUrls.length > 0);
+  const repeatedSignIn = signInToNevermind({ baseUrl, label: 'Test Mac' });
+  await waitFor(() => openedUrls.length > 1);
+
+  assert.deepEqual(openedUrls, [verifyUrl, verifyUrl]);
+  const result = await firstSignIn;
+  assert.deepEqual(await repeatedSignIn, result);
+  assert.deepEqual(getNevermindDeviceSignInState(), { state: 'expired' });
+  clearNevermindAuthCacheForTests();
+});
+
+test('manual URL and code approval completes after browser launch fails', async (t) => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const baseUrl = 'http://localhost:4321';
+  const code = 'manual-device-code';
+  const verifyUrl = `${baseUrl}/auth/device?code=${code}`;
+  let manuallyApproved = false;
+  let exchangeCalls = 0;
+  const states: string[] = [];
+  const browserLaunchFailures: boolean[] = [];
+  authLogEntries.length = 0;
+  openedUrls.length = 0;
+  failNextOpenExternal = true;
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(baseUrl);
+  clearNevermindAuthCacheForTests();
+  setActiveNevermindAuthBaseUrl(baseUrl);
+  const unsubscribe = onNevermindDeviceSignInChanged((status) => {
+    if (status) {
+      states.push(status.state);
+      if (status.state === 'pending')
+        browserLaunchFailures.push(status.browserOpenFailed);
+    }
+  });
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/api/compatibility'))
+      return new Response(null, { status: 404 });
+    if (url.endsWith('/api/auth/device/initiate'))
+      return Response.json({
+        code,
+        verifyUrl,
+        expiresAt: new Date(Date.now() + 10_000).toISOString(),
+        pollIntervalMs: 1000,
+      });
+    if (url.endsWith('/api/auth/device/exchange')) {
+      exchangeCalls += 1;
+      assert.deepEqual(JSON.parse(String(init?.body)), { code });
+      return manuallyApproved
+        ? Response.json({
+            status: 'ok',
+            token: 'manually-approved-token',
+            user: { email: 'pablo@example.com', role: 'member' },
+          })
+        : Response.json({ status: 'pending' });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  });
+
+  const signIn = signInToNevermind({ baseUrl, label: 'QA VM' });
+  await waitFor(() => {
+    const status = getNevermindDeviceSignInState();
+    return status?.state === 'pending' && status.browserOpenFailed;
+  });
+  const pending = getNevermindDeviceSignInState();
+  assert.equal(pending?.state, 'pending');
+  if (pending?.state !== 'pending')
+    throw new Error('Sign-in did not become pending');
+  assert.equal(pending.verificationUrl, verifyUrl);
+  assert.equal(pending.code, code);
+
+  assert.equal(await retryNevermindDeviceSignInBrowser(), true);
+  assert.deepEqual(openedUrls, [verifyUrl]);
+  manuallyApproved = true;
+  const result = await signIn;
+
+  assert.equal(result.ok, true);
+  assert.ok(exchangeCalls > 0);
+  assert.ok(states.includes('pending'));
+  assert.ok(states.includes('approved'));
+  assert.deepEqual(browserLaunchFailures, [false, true, false]);
+  assert.equal((await getNevermindAuth())?.email, 'pablo@example.com');
+  assert.equal(
+    authLogEntries.some(
+      (entry) => entry.includes(code) || entry.includes(verifyUrl),
+    ),
+    false,
+  );
+
+  unsubscribe();
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('cancelling a pending device sign-in clears its code and stops polling', async (t) => {
+  const baseUrl = 'http://localhost:4321';
+  const code = 'cancel-device-code';
+  const verifyUrl = `${baseUrl}/auth/device?code=${code}`;
+  openedUrls.length = 0;
+  clearNevermindAuthCacheForTests();
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const url = String(input);
+    if (url.endsWith('/api/compatibility'))
+      return new Response(null, { status: 404 });
+    if (url.endsWith('/api/auth/device/initiate'))
+      return Response.json({
+        code,
+        verifyUrl,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        pollIntervalMs: 1000,
+      });
+    if (url.endsWith('/api/auth/device/exchange'))
+      return Response.json({ status: 'pending' });
+    throw new Error(`Unexpected URL: ${url}`);
+  });
+
+  const signIn = signInToNevermind({ baseUrl, label: 'QA VM' });
+  await waitFor(() => getNevermindDeviceSignInState()?.state === 'pending');
+  assert.equal(cancelNevermindDeviceSignIn(), true);
+  assert.deepEqual(await signIn, { ok: false, error: 'Sign-in cancelled' });
+  assert.deepEqual(getNevermindDeviceSignInState(), { state: 'cancelled' });
+  clearNevermindAuthCacheForTests();
+});
+
+test('invalid stored bases fall back to the canonical origin and never become store keys', async () => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  setNevermindAuthFilePathForTests(storePath);
+  setActiveNevermindAuthBaseUrl(production);
+  await fs.writeFile(
+    storePath,
+    JSON.stringify({
+      [production]: storedAuth('https://example.test/api?bad=1', 'safe-token'),
+    }),
+  );
+  const auth = await getNevermindAuth();
+  assert.equal(auth?.baseUrl, production);
+  assert.equal(
+    Object.keys(JSON.parse(await fs.readFile(storePath, 'utf8'))).includes(
+      'https://example.test/api?bad=1',
+    ),
+    false,
+  );
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});
+
+test('auth calls use the active origin and clearing it preserves other origins', async (t) => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nevermind-auth-'));
+  const storePath = path.join(userData, 'nevermind-auth-by-origin.json');
+  const preview = 'https://preview.example.com';
+  setNevermindAuthFilePathForTests(storePath);
+  await fs.writeFile(
+    storePath,
+    JSON.stringify({
+      [production]: storedAuth(production, 'production-token'),
+      [preview]: storedAuth(preview, 'preview-token'),
+    }),
+  );
+  const requestedUrls: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    requestedUrls.push(String(input));
+    return new Response(null, { status: 204 });
+  });
+
+  setActiveNevermindAuthBaseUrl(preview);
+  assert.deepEqual(await signOutFromNevermind(), { revoked: true });
+  assert.deepEqual(requestedUrls, [`${preview}/api/tokens/current`]);
+  assert.equal(await getNevermindAuth(), null);
+
+  setActiveNevermindAuthBaseUrl(production);
+  assert.equal((await getNevermindAuth())?.token, 'production-token');
+  await clearNevermindAuth();
+  assert.deepEqual(JSON.parse(await fs.readFile(storePath, 'utf8')), {});
+
+  await fs.rm(userData, { recursive: true, force: true });
+  setNevermindAuthFilePathForTests(null);
+  clearNevermindAuthCacheForTests();
+});

@@ -16,7 +16,7 @@ When adding or changing an extension API method that renders UI:
 
 ## Current Fixture
 
-`src/app/fixtures/*.ts` covers the current host-rendered UI surface:
+`src/app/fixtures/*.ts` and the view modules under `src/app/fixtures/ui/` cover the current host-rendered UI surface:
 
 - `ctx.ui.list`
 - `ctx.ui.collection`
@@ -40,7 +40,7 @@ and OS/session capability degradation remain automated contract-test coverage.
 
 ## Loading Model
 
-The app loads `src/app/fixtures/` only in dev mode. Fixture extensions are registered for execution but hidden from normal root/search contributions; the only visible entry point is the dev-only `Fixtures` root item. Searching `fixtures` should return that single root item, and opening it should show fixture commands directly without another nesting layer. Fixtures are intentionally excluded from shipped product registration and from packaging.
+The app loads `src/app/fixtures/` only in dev mode. Fixture extensions are registered for execution but hidden from normal root/search contributions; the only visible entry point is the dev-only `Fixtures` root item. Searching `fixtures` should return that single root item, and opening it should show fixture commands directly without another nesting layer. Only top-level `.ts` files in `src/app/fixtures/` become fixture extensions; keep helper and view modules in subdirectories such as `src/app/fixtures/ui/` so they are never registered as extensions. Fixtures are intentionally excluded from shipped product registration and from packaging.
 
 ## AI UI Testing Workflow
 

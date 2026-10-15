@@ -6,7 +6,7 @@ const ts = require('typescript');
 // ── config ──────────────────────────────────────────────────────────────────
 
 const ROOT = process.cwd();
-const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os.ts');
+const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os', 'os.ts');
 
 /**
  * Contract points from docs/window-management.md.

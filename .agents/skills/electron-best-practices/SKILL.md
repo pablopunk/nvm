@@ -11,8 +11,8 @@ Nevermind is an Electron command palette with privileged desktop capabilities. T
 
 1. **Map the path.** Identify which process owns the behavior: renderer UI, preload API, main process, extension host, backend, OS capability, or packaging.
 2. **Check runtime evidence before hypothesizing.** For palette disappearing, blank windows, failed shortcuts, or extension action hangs, inspect recent host logs and renderer console messages for `render-process-gone`, `renderer.console`, `palette-window`, and action timing entries before assuming a main-process freeze.
-3. **Read the contracts.** Inspect `src/app/electron/preload.ts`, `src/app/palette/preload-api.ts`, `src/app/electron/main.ts`, `src/app/electron/palette-window.ts`, and `src/app/electron/os.ts` before changing Electron behavior.
-4. **Prefer intent-named OS capabilities.** Use `src/app/electron/os.ts` primitives and follow `docs/os-architecture.md` instead of scattering platform-specific native calls.
+3. **Read the contracts.** Inspect `src/app/electron/preload.ts`, `src/app/palette/preload-api.ts`, `src/app/electron/main.ts`, `src/app/electron/app/palette-window.ts`, and `src/app/electron/os/os.ts` before changing Electron behavior.
+4. **Prefer intent-named OS capabilities.** Use `src/app/electron/os/os.ts` primitives and follow `docs/os-architecture.md` instead of scattering platform-specific native calls.
 5. **Keep extension APIs declarative.** If an extension needs a capability, add a typed host primitive and permission gate; do not bypass the extension API with bespoke native code.
 6. **Protect packaged boundaries.** For dependency, bundling, or app-size changes, follow `docs/packaged-app-size.md`; fix main/preload runtime boundaries instead of moving renderer/build/test packages into production dependencies.
 7. **Verify native contracts.** Check keyboard shortcuts, dismissal, focus, icons/thumbnails, drag/drop, updater behavior, async lifecycle, and cross-platform fallbacks.
@@ -30,12 +30,12 @@ Nevermind is an Electron command palette with privileged desktop capabilities. T
 
 ## Nevermind Electron surfaces
 
-- Window/session policy: `src/app/electron/palette-window.ts`.
+- Window/session policy: `src/app/electron/app/palette-window.ts`.
 - Preload bridge and typed renderer contract: `src/app/electron/preload.ts`, `src/app/palette/preload-api.ts`.
 - IPC, actions, custom protocols, extension host: `src/app/electron/main.ts`.
-- Platform-specific OS behavior: `src/app/electron/os.ts`.
-- Auth and backend token use: `src/app/electron/nevermind-auth.ts`, `src/app/electron/ai.ts`.
-- Renderer extension surfaces: `src/app/palette/extension-view.tsx`, `src/app/palette/ui.tsx`, `src/app/palette/command-icons.tsx`.
+- Platform-specific OS behavior: `src/app/electron/os/os.ts`.
+- Auth and backend token use: `src/app/electron/backend/nevermind-auth.ts`, `src/app/electron/ai/ai.ts`.
+- Renderer extension surfaces: `src/app/palette/extension-view/extension-view.tsx`, `src/app/palette/ui.tsx`, `src/app/palette/command-icons.tsx`.
 - Packaging/update config: `electron-builder.yml`, `electron.vite.config.ts`.
 - Packaged runtime dependency rules: `docs/packaged-app-size.md`.
 

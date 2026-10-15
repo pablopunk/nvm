@@ -1,9 +1,9 @@
-import { warn as logWarn } from '../electron/logger';
+import { warn as logWarn } from '../electron/platform/logger';
 import {
   calculateDetailed,
   calculateRateResult,
   parseRateExpression,
-} from '../electron/search-utils';
+} from '../electron/search/search-utils';
 import { extensionContext } from './_context';
 
 const FRANKFURTER_API_BASE = 'https://api.frankfurter.dev';

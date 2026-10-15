@@ -8,7 +8,7 @@ Concrete case: the Screenshots extension sets `kind` on its hydrated file object
 
 ## Context
 
-`ctx.ui.preview()` in `src/app/electron/extension-ui-api.ts` routes to three code paths:
+`ctx.ui.preview()` in `src/app/electron/extension-host/extension-ui-api.ts` routes to three code paths:
 
 1. **File preview** — when the input has `path` or `fileUrl` (file objects), it builds a full preview view with `image`, `video`, `title`, etc.
 2. **Clipboard/item preview** — when the input has `kind` matching `['clipboard', 'image', 'video', 'file', 'text']`, it delegates to `buildPreviewItemAction()` which returns a `previewClipboardItem` action (no `view.image`).
@@ -30,7 +30,7 @@ Additionally, `isFilePreviewInput` originally included `videoUrl` and `thumbnail
 
 ## Fix
 
-Two changes in `src/app/electron/extension-ui-api.ts`:
+Two changes in `src/app/electron/extension-host/extension-ui-api.ts`:
 
 1. **Reorder checks**: `isFilePreviewInput` runs first, so file objects always take the preview-view path regardless of `kind`.
 2. **Tighten `isFilePreviewInput`** to only `value?.path || value?.fileUrl`. `path` is required on `ExtensionFile` and absent from clipboard descriptors; `fileUrl` is a Nevermind custom-protocol URL only present on host-hydrated files.

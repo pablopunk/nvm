@@ -11,7 +11,7 @@ Nevermind's Electron desktop app ships on tagged releases while the backend may 
 
 1. Read `docs/backend-api-compatibility.md`.
 2. Map both sides of the contract, including supported release tags rather than only current `main`, before changing code:
-   - Desktop callers in `src/app/electron/nevermind-auth.ts`, `src/app/electron/ai.ts`, and related main-process flows.
+   - Desktop callers in `src/app/electron/backend/nevermind-auth.ts`, `src/app/electron/ai/ai.ts`, and related main-process flows.
    - Backend routes in `src/backend/src/pages/api/**` and shared backend libraries in `src/backend/src/lib/**`.
 3. Identify the change type: additive, compatibility shim, API-major change, or intentional unsupported-client block.
 4. Prefer additive fields and compatibility shims over lockstep frontend/backend releases; Nevermind does not use feature flags.
