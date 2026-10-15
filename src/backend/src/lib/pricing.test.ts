@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import {
   expirePricingCacheForTests,
+  listReviewedImageModelsForProvider,
   listModelsForProvider,
   lookupModelCost,
   lookupModelDescriptor,
@@ -12,7 +13,10 @@ import {
 let originalFetch: typeof globalThis.fetch;
 
 function mockFetch(json: unknown) {
-  return (async () => ({ ok: true, json: async () => json })) as unknown as typeof globalThis.fetch;
+  return (async () => ({
+    ok: true,
+    json: async () => json,
+  })) as unknown as typeof globalThis.fetch;
 }
 
 before(() => {
@@ -32,7 +36,10 @@ test('lookupModelCost resolves provider slug and returns cost', async () => {
   globalThis.fetch = mockFetch({
     opencode: {
       models: {
-        'claude-haiku-4-5': { id: 'claude-haiku-4-5', cost: { input: 1, output: 5 } },
+        'claude-haiku-4-5': {
+          id: 'claude-haiku-4-5',
+          cost: { input: 1, output: 5 },
+        },
       },
     },
   });
@@ -86,8 +93,18 @@ test('lookupModelCost fails closed on invalid base and tier rates', async () => 
   globalThis.fetch = mockFetch({
     openrouter: {
       models: {
-        'negative-base': { id: 'negative-base', cost: { input: -1, output: 1 } },
-        'negative-tier': { id: 'negative-tier', cost: { input: 1, output: 1, tiers: [{ input: -2, tier: { size: 100 } }] } },
+        'negative-base': {
+          id: 'negative-base',
+          cost: { input: -1, output: 1 },
+        },
+        'negative-tier': {
+          id: 'negative-tier',
+          cost: {
+            input: 1,
+            output: 1,
+            tiers: [{ input: -2, tier: { size: 100 } }],
+          },
+        },
       },
     },
   });
@@ -113,7 +130,13 @@ test('lookupModelPricing preserves source cache and tier prices', async () => {
             output: 10,
             cache_read: 0.2,
             cache_write: 2.5,
-            tiers: [{ input: 4, output: 15, tier: { type: 'context', size: 272_000 } }],
+            tiers: [
+              {
+                input: 4,
+                output: 15,
+                tier: { type: 'context', size: 272_000 },
+              },
+            ],
           },
         },
       },
@@ -146,15 +169,89 @@ test('admin model listing includes bundled runtime models', async () => {
   assert.ok(models.includes('deepseek/deepseek-v4-flash-0731'));
 });
 
+test('admin image model choices require both models.dev image input and reviewed billing', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: {
+      models: {
+        'openai/gpt-6.1-sol': {
+          id: 'openai/gpt-6.1-sol',
+          modalities: { input: ['text', 'image'] },
+          limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+          cost: { input: 2, output: 10 },
+        },
+        'google/gemini-2.5-flash': {
+          id: 'google/gemini-2.5-flash',
+          modalities: { input: ['text', 'image'] },
+          limit: { context: 1_048_576, output: 65_535 },
+          cost: { input: 0.3, output: 2.5 },
+        },
+        'meta/muse-spark-1.3-contributor': {
+          id: 'meta/muse-spark-1.3-contributor',
+          modalities: { input: ['text', 'image'] },
+          limit: { context: 1_048_576, output: 943_718 },
+          cost: { input: 0.1, output: 0.2 },
+        },
+        'provider/unreviewed-image-model': {
+          id: 'provider/unreviewed-image-model',
+          modalities: { input: ['text', 'image'] },
+          limit: { context: 32_000, output: 4_096 },
+          cost: { input: 0.1, output: 0.2 },
+        },
+        'provider/text-only-model': {
+          id: 'provider/text-only-model',
+          modalities: { input: ['text'] },
+          limit: { context: 32_000, output: 4_096 },
+          cost: { input: 0.1, output: 0.2 },
+        },
+      },
+    },
+    opencode: {
+      models: {
+        'muse-spark-1.3-contributor-free': {
+          id: 'muse-spark-1.3-contributor-free',
+          modalities: { input: ['text', 'image'] },
+          limit: { context: 1_048_576, output: 131_072 },
+          cost: { input: 0, output: 0 },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(await listReviewedImageModelsForProvider('openrouter'), [
+    'google/gemini-2.5-flash',
+    'meta/muse-spark-1.3-contributor',
+    'openai/gpt-6.1-sol',
+  ]);
+  assert.deepEqual(
+    await listReviewedImageModelsForProvider('opencode_zen'),
+    [],
+  );
+});
+
 test('active runtime models do not wait for the remote catalog', async () => {
   globalThis.fetch = (() => new Promise(() => {})) as typeof globalThis.fetch;
 
   const cost = await lookupModelCost('opencode_zen', 'gpt-5.6-luna');
-  const descriptor = await lookupModelDescriptor('opencode_zen', 'deepseek-v4-flash');
-  const openRouterCost = await lookupModelCost('openrouter', 'google/gemini-2.5-flash');
-  const openRouterDescriptor = await lookupModelDescriptor('openrouter', 'google/gemini-2.5-flash');
-  const deepSeekFlashDescriptor = await lookupModelDescriptor('openrouter', 'deepseek/deepseek-v4-flash-0731');
-  const deepSeekProCost = await lookupModelCost('openrouter', 'deepseek/deepseek-v4-pro-0813');
+  const descriptor = await lookupModelDescriptor(
+    'opencode_zen',
+    'deepseek-v4-flash',
+  );
+  const openRouterCost = await lookupModelCost(
+    'openrouter',
+    'google/gemini-2.5-flash',
+  );
+  const openRouterDescriptor = await lookupModelDescriptor(
+    'openrouter',
+    'google/gemini-2.5-flash',
+  );
+  const deepSeekFlashDescriptor = await lookupModelDescriptor(
+    'openrouter',
+    'deepseek/deepseek-v4-flash-0731',
+  );
+  const deepSeekProCost = await lookupModelCost(
+    'openrouter',
+    'deepseek/deepseek-v4-pro-0813',
+  );
 
   assert.deepEqual(cost, {
     provider: 'opencode_zen',
@@ -172,7 +269,13 @@ test('active runtime models do not wait for the remote catalog', async () => {
   });
   assert.equal(openRouterDescriptor?.name, 'Gemini 2.5 Flash');
   assert.equal(openRouterDescriptor?.contextWindow, 1_048_576);
-  assert.deepEqual(openRouterDescriptor?.input, ['text', 'image', 'audio', 'video', 'pdf']);
+  assert.deepEqual(openRouterDescriptor?.input, [
+    'text',
+    'image',
+    'audio',
+    'video',
+    'pdf',
+  ]);
   assert.equal(deepSeekFlashDescriptor?.name, 'DeepSeek V4 Flash 0731');
   assert.equal(deepSeekFlashDescriptor?.contextWindow, 1_310_720);
   assert.equal(deepSeekFlashDescriptor?.maxTokens, 393_216);
@@ -184,6 +287,31 @@ test('active runtime models do not wait for the remote catalog', async () => {
   });
 });
 
+test('model descriptors retain catalog max-input limits for safe image reservations', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: {
+      models: {
+        'openai/gpt-6.1-sol': {
+          id: 'openai/gpt-6.1-sol',
+          modalities: { input: ['text', 'image'] },
+          limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+          cost: { input: 2, output: 10 },
+        },
+      },
+    },
+  });
+
+  const descriptor = await lookupModelDescriptor(
+    'openrouter',
+    'openai/gpt-6.1-sol',
+  );
+
+  assert.equal(descriptor?.contextWindow, 1_050_000);
+  assert.equal(descriptor?.maxInputTokens, 922_000);
+  assert.equal(descriptor?.maxTokens, 128_000);
+  assert.deepEqual(descriptor?.input, ['text', 'image']);
+});
+
 test('bundled pricing is usable only for the exact bundled provider/model entry', async () => {
   globalThis.fetch = mockFetch({ opencode: { models: {} } });
   const bundled = await lookupModelPricing('opencode_zen', 'gpt-5.6-luna');
@@ -192,7 +320,10 @@ test('bundled pricing is usable only for the exact bundled provider/model entry'
 });
 
 test('estimated fallback catalog rates are not accepted for admission', async () => {
-  globalThis.fetch = (async () => ({ ok: false, status: 503 })) as unknown as typeof globalThis.fetch;
+  globalThis.fetch = (async () => ({
+    ok: false,
+    status: 503,
+  })) as unknown as typeof globalThis.fetch;
   assert.equal(await lookupModelCost('opencode_zen', 'claude-haiku-4-5'), null);
 });
 
@@ -203,7 +334,16 @@ test('failed refresh does not make stale models.dev pricing admissible again', a
     if (calls === 1)
       return {
         ok: true,
-        json: async () => ({ openrouter: { models: { 'stale-model': { id: 'stale-model', cost: { input: 1, output: 2 } } } } }),
+        json: async () => ({
+          openrouter: {
+            models: {
+              'stale-model': {
+                id: 'stale-model',
+                cost: { input: 1, output: 2 },
+              },
+            },
+          },
+        }),
       };
     return { ok: false, status: 503 };
   }) as unknown as typeof globalThis.fetch;
@@ -212,7 +352,11 @@ test('failed refresh does not make stale models.dev pricing admissible again', a
   expirePricingCacheForTests();
   assert.equal(await lookupModelCost('openrouter', 'stale-model'), null);
   assert.equal(await lookupModelCost('openrouter', 'stale-model'), null);
-  assert.equal(calls, 3, 'each stale lookup should retry instead of resetting successful-fetch age');
+  assert.equal(
+    calls,
+    3,
+    'each stale lookup should retry instead of resetting successful-fetch age',
+  );
 });
 
 test('resetPricingCacheForTests clears the internal cache', async () => {

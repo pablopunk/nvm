@@ -5,6 +5,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
 import { db } from '../db/client';
 import { creditReservations, requestDedup } from '../db/schema';
+import { analyzeAiImageInputs } from './ai-image-input';
 import {
   backendKillSwitchEnabled,
   backendVersion,
@@ -13,6 +14,7 @@ import {
   killSwitchResponse,
 } from './compatibility';
 import {
+  computeMaximumTokenPricedCost,
   computeUsdCost,
   lookupModelCost,
   type ModelCost,
@@ -26,15 +28,25 @@ import {
 import { captureStreamFailure } from './diagnostics';
 import { freeSpendCapErrorBody } from './free-spend-cap';
 import {
+  type ReviewedImageTokenLimits,
+  reviewedImageTokenLimits,
+} from './image-cost-bound';
+import {
+  conservativeImageRequestInputTokenCeiling,
+  containsUnpricedProviderTool,
   containsUnsupportedMultimodalPayload,
   estimateInputTokensFromBody,
   estimateInputTokensFromValue,
-  estimateRequestCredits,
+  MAX_CHAT_COMPLETION_CHOICES,
   MAX_INPUT_TOKENS,
+  MAX_PROXY_REQUEST_BODY_BYTES,
+  OUTPUT_CONTEXT_SAFETY_TOKENS,
+  requestedCompletionCount,
   requestedMaxOutputTokens,
+  supportsBoundedImageInput,
 } from './limits';
 import { log } from './log';
-import { lookupModelDescriptor } from './pricing';
+import { lookupModelDescriptor, type ModelDescriptor } from './pricing';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { healthyRouteCandidates } from './route-breakers';
 import {
@@ -107,8 +119,6 @@ export type StreamUsageAccumulator = {
   reportMalformedFrame?: (error: unknown) => void;
 };
 
-const OUTPUT_CONTEXT_SAFETY_TOKENS = 4_096;
-
 export function completeStreamLines(
   chunkText: string,
   acc: StreamUsageAccumulator,
@@ -150,6 +160,45 @@ type BillContext = {
   dedupIdempotencyKey?: string;
   dedupRequestHash?: string;
 };
+
+function requestReservationCostUsd(
+  costRow: ModelCost,
+  inputTokens: number,
+  outputTokens: number,
+  imageCount: number,
+  completionCount: number,
+  reviewedLimits?: ReviewedImageTokenLimits,
+) {
+  const totalOutputTokens = outputTokens * completionCount;
+  return imageCount > 0
+    ? computeMaximumTokenPricedCost(
+        costRow,
+        inputTokens,
+        totalOutputTokens,
+        reviewedLimits?.maximumCost,
+      )
+    : computeUsdCost(costRow, inputTokens, totalOutputTokens);
+}
+
+function requestReservationCredits(
+  costRow: ModelCost,
+  inputTokens: number,
+  outputTokens: number,
+  imageCount: number,
+  completionCount: number,
+  reviewedLimits?: ReviewedImageTokenLimits,
+) {
+  return usdToCredits(
+    requestReservationCostUsd(
+      costRow,
+      inputTokens,
+      outputTokens,
+      imageCount,
+      completionCount,
+      reviewedLimits,
+    ),
+  );
+}
 
 export type DedupClaim = {
   userId: string;
@@ -370,6 +419,7 @@ type ModelRouting = Pick<
   | 'costRow'
   | 'upstreamBaseUrl'
   | 'upstreamApiKey'
+  | 'routeSlot'
 >;
 
 export function decideProxyModel(input: {
@@ -431,6 +481,7 @@ async function resolveModelRouting(
   try {
     const upstream = getUpstreamConfig(provider);
     return {
+      routeSlot: slot,
       provider,
       activeModelId,
       thinkingLevel,
@@ -844,7 +895,6 @@ async function resolveRouting(
   return {
     user,
     tier,
-    routeSlot,
     ...modelRouting,
     kind,
     balanceAvailable: kind === 'paid' ? balances.paid : balances.free,
@@ -905,6 +955,54 @@ function withRequestId(res: Response, requestId: string): Response {
   return res;
 }
 
+async function readRequestBodyWithinLimit(
+  request: Request,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  const body = request.body;
+  if (!body) return new Uint8Array();
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_PROXY_REQUEST_BODY_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function requestTooLargeResponse(requestId: string) {
+  return withRequestId(
+    Response.json(
+      {
+        error: {
+          type: 'request_too_large',
+          message: 'AI request bodies must be 4 MB or smaller.',
+        },
+      },
+      { status: 413 },
+    ),
+    requestId,
+  );
+}
+
 function chainExhaustedResponse(requestId: string): Response {
   return withRequestId(
     Response.json(
@@ -920,6 +1018,57 @@ function chainExhaustedResponse(requestId: string): Response {
   );
 }
 
+async function hasConfiguredImageRoute(
+  routing: ModelRouting,
+  primaryDescriptor: ModelDescriptor | null,
+) {
+  const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
+  let configuredFallbacks: Array<{ providerId: string; modelId: string }> = [];
+  if (!backendKillSwitchEnabled('ai_failover')) {
+    try {
+      configuredFallbacks = await getModelProviderRoutes(
+        routing.routeSlot,
+        routing.activeModelId,
+      );
+    } catch (error) {
+      log.warn('provider_chain_fetch_failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const candidates = [
+    { providerId: routing.provider, modelId: routing.activeModelId },
+    ...configuredFallbacks,
+  ];
+  for (const candidate of candidates) {
+    if (
+      !providerSupportsFormat(candidate.providerId, apiFormat) ||
+      selectApiForModel(candidate.providerId, candidate.modelId) !== apiFormat
+    )
+      continue;
+    const descriptor =
+      candidate.providerId === routing.provider &&
+      candidate.modelId === routing.activeModelId
+        ? primaryDescriptor
+        : await lookupModelDescriptor(candidate.providerId, candidate.modelId);
+    const reviewedLimits = reviewedImageTokenLimits(
+      candidate.providerId,
+      candidate.modelId,
+    );
+    if (
+      reviewedLimits &&
+      supportsBoundedImageInput(
+        candidate.providerId,
+        candidate.modelId,
+        descriptor?.input,
+      )
+    )
+      return true;
+  }
+  return false;
+}
+
 async function tryUpstreamProviders(
   cfg: ProxyConfig,
   routing: ResolvedRouting,
@@ -929,6 +1078,9 @@ async function tryUpstreamProviders(
   reservedCredits: number | undefined,
   maxOutputTokens: number | undefined,
   requestedOutputTokens: number | undefined,
+  imageCount: number,
+  completionCount: number,
+  primaryDescriptor: ModelDescriptor | null,
   requestId: string,
 ): Promise<
   | {
@@ -937,6 +1089,7 @@ async function tryUpstreamProviders(
       modelId: string;
       costRow: ModelCost;
       reservedCredits: number | undefined;
+      estimatedInputTokens: number;
     }
   | {
       failure: Response;
@@ -988,9 +1141,13 @@ async function tryUpstreamProviders(
     costRow: ModelCost;
   } | null = null;
   let currentReservedCredits = reservedCredits;
+  let imageBoundRouteFound = false;
+  let imageBoundRouteRejected = false;
 
   for (const [attemptIndex, candidate] of providerChain.entries()) {
     const { providerId, modelId } = candidate;
+    const candidateIsPrimary =
+      providerId === routing.provider && modelId === routing.activeModelId;
     if (
       !providerSupportsFormat(providerId, apiFormat) ||
       selectApiForModel(providerId, modelId) !== apiFormat
@@ -1030,22 +1187,61 @@ async function tryUpstreamProviders(
     }
     lastFailure = { provider: providerId, modelId, costRow };
 
-    const descriptor =
-      providerId === routing.provider && modelId === routing.activeModelId
-        ? null
-        : await lookupModelDescriptor(providerId, modelId);
-    const candidateMaxOutputTokens = descriptor
-      ? Math.min(
-          requestedOutputTokens ?? descriptor.maxTokens,
-          descriptor.maxTokens,
-          Math.max(
-            0,
-            descriptor.contextWindow -
-              estimatedInputTokens -
-              OUTPUT_CONTEXT_SAFETY_TOKENS,
-          ),
-        )
-      : maxOutputTokens;
+    const descriptor = candidateIsPrimary
+      ? primaryDescriptor
+      : await lookupModelDescriptor(providerId, modelId);
+    const reviewedLimits =
+      imageCount > 0
+        ? reviewedImageTokenLimits(providerId, modelId)
+        : undefined;
+    if (
+      imageCount > 0 &&
+      (!reviewedLimits ||
+        !supportsBoundedImageInput(providerId, modelId, descriptor?.input))
+    ) {
+      imageBoundRouteRejected = true;
+      log.info('upstream_image_bound_skip', {
+        request_id: requestId,
+        provider: providerId,
+        model: modelId,
+      });
+      continue;
+    }
+    const candidateInputTokenCeiling =
+      imageCount === 0
+        ? estimatedInputTokens
+        : descriptor && reviewedLimits
+          ? conservativeImageRequestInputTokenCeiling(
+              reviewedLimits,
+              requestedOutputTokens,
+              estimatedInputTokens,
+            )
+          : undefined;
+    if (candidateInputTokenCeiling === undefined) {
+      imageBoundRouteRejected = true;
+      log.info('upstream_image_context_skip', {
+        request_id: requestId,
+        provider: providerId,
+        model: modelId,
+      });
+      continue;
+    }
+    if (imageCount > 0) imageBoundRouteFound = true;
+    const candidateMaxOutputTokens =
+      !candidateIsPrimary && descriptor
+        ? Math.min(
+            requestedOutputTokens ??
+              reviewedLimits?.maxTokens ??
+              descriptor.maxTokens,
+            reviewedLimits?.maxTokens ?? descriptor.maxTokens,
+            Math.max(
+              0,
+              (reviewedLimits?.contextWindow ?? descriptor.contextWindow) -
+                candidateInputTokenCeiling -
+                OUTPUT_CONTEXT_SAFETY_TOKENS,
+            ),
+          )
+        : maxOutputTokens;
     if (candidateMaxOutputTokens != null && candidateMaxOutputTokens < 1) {
       log.warn('upstream_context_skip', {
         request_id: requestId,
@@ -1054,24 +1250,19 @@ async function tryUpstreamProviders(
       });
       continue;
     }
-    const candidateCredits =
-      candidateMaxOutputTokens == null
-        ? undefined
-        : estimateRequestCredits(
-            estimatedInputTokens,
-            candidateMaxOutputTokens,
-            costRow,
-          );
     const candidateCostUsd =
       candidateMaxOutputTokens == null
         ? undefined
-        : computeUsdCost(
+        : requestReservationCostUsd(
             costRow,
-            estimatedInputTokens,
+            candidateInputTokenCeiling,
             candidateMaxOutputTokens,
+            imageCount,
+            completionCount,
+            reviewedLimits,
           );
-    const candidateIsPrimary =
-      providerId === routing.provider && modelId === routing.activeModelId;
+    const candidateCredits =
+      candidateCostUsd == null ? undefined : usdToCredits(candidateCostUsd);
     if (
       candidateCredits != null &&
       candidateCostUsd != null &&
@@ -1142,6 +1333,7 @@ async function tryUpstreamProviders(
     }
 
     const candidateRouting: ModelRouting = {
+      routeSlot: routing.routeSlot,
       provider: providerId,
       activeModelId: modelId,
       thinkingLevel: routing.thinkingLevel,
@@ -1209,6 +1401,27 @@ async function tryUpstreamProviders(
       modelId,
       costRow,
       reservedCredits: currentReservedCredits,
+      estimatedInputTokens,
+    };
+  }
+
+  if (imageCount > 0 && !imageBoundRouteFound && imageBoundRouteRejected) {
+    return {
+      failure: withRequestId(
+        Response.json(
+          {
+            error: {
+              type: 'unsupported_request_shape',
+              message:
+                'Images are not available for this model route because no configured provider has a reviewed image billing and request-format contract.',
+            },
+          },
+          { status: 400 },
+        ),
+        requestId,
+      ),
+      ...lastFailure,
+      status: 400,
     };
   }
 
@@ -1236,6 +1449,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       'AI proxy is temporarily disabled.',
       requestId,
     );
+  const declaredBodyBytes = Number(cfg.request.headers.get('content-length'));
+  if (
+    Number.isFinite(declaredBodyBytes) &&
+    declaredBodyBytes > MAX_PROXY_REQUEST_BODY_BYTES
+  )
+    return requestTooLargeResponse(requestId);
   const startedAt = Date.now();
   const client = desktopClientFromRequest(cfg.request);
   Sentry.getCurrentScope().setTag('request_id', requestId);
@@ -1246,15 +1465,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       'client_api_version',
       String(client.apiVersion),
     );
-  let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
-  if (routing instanceof Response) return withRequestId(routing, requestId);
-  const routingFinishedAt = Date.now();
-
-  const requestBodyBuffer = await cfg.request.clone().arrayBuffer();
-  const requestBodyBytes = new Uint8Array(requestBodyBuffer);
+  const requestBodyBytes = await readRequestBodyWithinLimit(cfg.request);
+  if (!requestBodyBytes) return requestTooLargeResponse(requestId);
   const requestBodyText = new TextDecoder().decode(requestBodyBytes);
   const requestHash = aiRequestHash(cfg.request, requestBodyBytes);
   const requestPreparedAt = Date.now();
+
+  let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
+  if (routing instanceof Response) return withRequestId(routing, requestId);
+  const routingFinishedAt = Date.now();
 
   const idempotencyKey = cfg.idempotencyKey;
   const dedupEnabled =
@@ -1297,9 +1516,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     let forwardBody: BodyInit | undefined;
     let maxOutputTokens: number | undefined;
     let requestedOutput: number | undefined;
+    let completionCount = 1;
     let estimatedInputTokens = 0;
+    let reservationInputTokenCeiling = 0;
     let estimatedCredits: number | undefined;
     let requestShape = aiRequestShape(null);
+    let imageCount = 0;
+    let routingDescriptor: ModelDescriptor | null = null;
     if (cfg.request.method !== 'GET' && cfg.request.method !== 'HEAD') {
       let parsedBody: unknown = null;
       let bodyIsJson = false;
@@ -1309,18 +1532,28 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       } catch {
         bodyIsJson = false;
       }
-      if (
-        (bodyIsJson && containsUnsupportedMultimodalPayload(parsedBody)) ||
-        (!bodyIsJson && containsUnsupportedMultimodalPayload(requestBodyText))
-      ) {
+      const parsedImageInputs = analyzeAiImageInputs(
+        bodyIsJson ? parsedBody : requestBodyText,
+      );
+      imageCount = parsedImageInputs.imageCount;
+      const unsupportedMultimodal =
+        parsedImageInputs.invalid ||
+        (bodyIsJson &&
+          containsUnsupportedMultimodalPayload(
+            parsedBody,
+            parsedImageInputs,
+          )) ||
+        (!bodyIsJson && containsUnsupportedMultimodalPayload(requestBodyText));
+      if (unsupportedMultimodal) {
         await markDedupFailed(dedupClaim);
         return withRequestId(
           Response.json(
             {
               error: {
                 type: 'unsupported_request_shape',
-                message:
-                  'Multimodal requests are unavailable because this route has no conservative modality-cost bound.',
+                message: parsedImageInputs.invalid
+                  ? 'Only inline, non-animated PNG, JPEG, WebP, or GIF images up to 2048 × 2048 pixels and 2 MB each (2 MB total) are supported.'
+                  : 'Multimodal requests are unavailable because this route has no conservative modality-cost bound.',
               },
             },
             { status: 400 },
@@ -1328,6 +1561,39 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           requestId,
         );
       }
+      if (bodyIsJson && containsUnpricedProviderTool(parsedBody)) {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(
+          Response.json(
+            {
+              error: {
+                type: 'unsupported_request_shape',
+                message:
+                  'OpenRouter web search is unavailable because its per-search charge is outside Nevermind’s token reservation.',
+              },
+            },
+            { status: 400 },
+          ),
+          requestId,
+        );
+      }
+      const requestedChoices = requestedCompletionCount(parsedBody);
+      if (requestedChoices === undefined) {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(
+          Response.json(
+            {
+              error: {
+                type: 'unsupported_request_shape',
+                message: `The n field must be an integer from 1 to ${MAX_CHAT_COMPLETION_CHOICES}.`,
+              },
+            },
+            { status: 400 },
+          ),
+          requestId,
+        );
+      }
+      completionCount = requestedChoices;
       estimatedInputTokens = bodyIsJson
         ? estimateInputTokensFromValue(parsedBody)
         : estimateInputTokensFromBody(requestBodyText);
@@ -1355,25 +1621,90 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       }
       requestedOutput = requestedMaxOutputTokens(parsedBody);
       let contextWindowTokens: number | undefined;
+      const admissionRouting = routing;
       const maxOutputFor = async (candidate: ModelRouting) => {
         const descriptor = await lookupModelDescriptor(
           candidate.provider,
           candidate.activeModelId,
         );
-        contextWindowTokens = descriptor?.contextWindow;
-        const serverMaximum = descriptor?.maxTokens ?? 32_000;
-        const contextMaximum = descriptor
-          ? descriptor.contextWindow -
-            estimatedInputTokens -
-            OUTPUT_CONTEXT_SAFETY_TOKENS
-          : serverMaximum;
-        return Math.min(
+        if (
+          candidate.provider === admissionRouting.provider &&
+          candidate.activeModelId === admissionRouting.activeModelId
+        )
+          routingDescriptor = descriptor;
+        const reviewedLimits =
+          imageCount > 0
+            ? reviewedImageTokenLimits(
+                candidate.provider,
+                candidate.activeModelId,
+              )
+            : undefined;
+        contextWindowTokens =
+          reviewedLimits?.contextWindow ?? descriptor?.contextWindow;
+        const serverMaximum =
+          reviewedLimits?.maxTokens ?? descriptor?.maxTokens ?? 32_000;
+        const desiredOutputMaximum = Math.min(
           requestedOutput ?? serverMaximum,
           serverMaximum,
-          Math.max(0, contextMaximum),
         );
+        const imageInputTokenCeiling =
+          imageCount > 0 &&
+          descriptor &&
+          reviewedLimits &&
+          supportsBoundedImageInput(
+            candidate.provider,
+            candidate.activeModelId,
+            descriptor.input,
+          )
+            ? conservativeImageRequestInputTokenCeiling(
+                reviewedLimits,
+                desiredOutputMaximum,
+                estimatedInputTokens,
+              )
+            : undefined;
+        const inputTokensForReservation =
+          imageInputTokenCeiling ?? estimatedInputTokens;
+        const contextMaximum = descriptor
+          ? (reviewedLimits?.contextWindow ?? descriptor.contextWindow) -
+            inputTokensForReservation -
+            OUTPUT_CONTEXT_SAFETY_TOKENS
+          : serverMaximum;
+        return {
+          descriptor,
+          inputTokensForReservation,
+          maxOutputTokens: Math.min(
+            desiredOutputMaximum,
+            Math.max(0, contextMaximum),
+          ),
+        };
       };
-      maxOutputTokens = await maxOutputFor(routing);
+      const initialAdmission = await maxOutputFor(routing);
+      routingDescriptor = initialAdmission.descriptor;
+      maxOutputTokens = initialAdmission.maxOutputTokens;
+      reservationInputTokenCeiling = initialAdmission.inputTokensForReservation;
+      const initialReviewedLimits =
+        imageCount > 0
+          ? reviewedImageTokenLimits(routing.provider, routing.activeModelId)
+          : undefined;
+      if (
+        imageCount > 0 &&
+        !(await hasConfiguredImageRoute(routing, routingDescriptor))
+      ) {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(
+          Response.json(
+            {
+              error: {
+                type: 'unsupported_request_shape',
+                message:
+                  'Images are not available for this model route because no configured provider has a reviewed image billing and request-format contract.',
+              },
+            },
+            { status: 400 },
+          ),
+          requestId,
+        );
+      }
       if (maxOutputTokens < 1) {
         logPromptTooLargeEvent(cfg.request, requestId, client, {
           bodyBytes: requestBodyBytes.byteLength,
@@ -1398,15 +1729,21 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           requestId,
         );
       }
-      estimatedCredits = estimateRequestCredits(
-        estimatedInputTokens,
-        maxOutputTokens,
+      estimatedCredits = requestReservationCredits(
         routing.costRow,
+        reservationInputTokenCeiling,
+        maxOutputTokens,
+        imageCount,
+        completionCount,
+        initialReviewedLimits,
       );
-      const estimatedProviderCostUsd = computeUsdCost(
+      const estimatedProviderCostUsd = requestReservationCostUsd(
         routing.costRow,
-        estimatedInputTokens,
+        reservationInputTokenCeiling,
         maxOutputTokens,
+        imageCount,
+        completionCount,
+        initialReviewedLimits,
       );
       let reservation = await reserveCredits({
         requestId,
@@ -1441,22 +1778,49 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           selectApiForModel(freeRouting.provider, freeRouting.activeModelId) ===
           selectApiForModel(routing.provider, routing.activeModelId)
         ) {
-          const freeMaxOutputTokens = await maxOutputFor(freeRouting);
+          const freeDescriptor = await lookupModelDescriptor(
+            freeRouting.provider,
+            freeRouting.activeModelId,
+          );
+          const freeImageRouteSupported =
+            imageCount === 0 ||
+            (await hasConfiguredImageRoute(freeRouting, freeDescriptor));
+          const freeAdmission = freeImageRouteSupported
+            ? await maxOutputFor(freeRouting)
+            : null;
+          const freeMaxOutputTokens = freeAdmission?.maxOutputTokens ?? 0;
           if (freeMaxOutputTokens > 0) {
-            const freeEstimatedCredits = estimateRequestCredits(
-              estimatedInputTokens,
-              freeMaxOutputTokens,
+            const freeEstimatedCredits = requestReservationCredits(
               freeRouting.costRow,
+              freeAdmission?.inputTokensForReservation ?? estimatedInputTokens,
+              freeMaxOutputTokens,
+              imageCount,
+              completionCount,
+              freeImageRouteSupported && imageCount > 0
+                ? reviewedImageTokenLimits(
+                    freeRouting.provider,
+                    freeRouting.activeModelId,
+                  )
+                : undefined,
             );
             const freeReservation = await reserveCredits({
               requestId,
               userId: routing.user.id,
               kind: 'free',
               credits: freeEstimatedCredits,
-              estimatedProviderCostUsd: computeUsdCost(
+              estimatedProviderCostUsd: requestReservationCostUsd(
                 freeRouting.costRow,
-                estimatedInputTokens,
+                freeAdmission?.inputTokensForReservation ??
+                  estimatedInputTokens,
                 freeMaxOutputTokens,
+                imageCount,
+                completionCount,
+                freeImageRouteSupported && imageCount > 0
+                  ? reviewedImageTokenLimits(
+                      freeRouting.provider,
+                      freeRouting.activeModelId,
+                    )
+                  : undefined,
               ),
               estimateCostSource: 'catalog_estimate',
             });
@@ -1465,7 +1829,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
               routing = {
                 user: routing.user,
                 tier: 'free',
-                routeSlot: freeDecision.routeSlot,
                 ...freeRouting,
                 kind: 'free',
                 balanceAvailable:
@@ -1473,6 +1836,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                 freeBalanceAvailable:
                   freeReservation.balance - freeReservation.reserved,
               };
+              routingDescriptor = freeAdmission?.descriptor ?? null;
+              reservationInputTokenCeiling =
+                freeAdmission?.inputTokensForReservation ??
+                estimatedInputTokens;
               estimatedCredits = freeEstimatedCredits;
               reservation = freeReservation;
             } else if (freeReservation.reason === 'free_spend_cap_reached') {
@@ -1529,9 +1896,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       reservationCommitted = true;
       log.info('proxy_preflight', {
         request_id: requestId,
-        routing_ms: routingFinishedAt - startedAt,
-        request_prepare_ms: requestPreparedAt - routingFinishedAt,
-        dedup_ms: dedupFinishedAt - requestPreparedAt,
+        routing_ms: routingFinishedAt - requestPreparedAt,
+        request_prepare_ms: requestPreparedAt - startedAt,
+        dedup_ms: dedupFinishedAt - routingFinishedAt,
         rate_limit_ms: rateLimitFinishedAt - dedupFinishedAt,
         admission_ms: Date.now() - rateLimitFinishedAt,
         latency_ms: Date.now() - startedAt,
@@ -1550,7 +1917,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       }
       forwardBody = cfg.rewriteRequestBody
         ? cfg.rewriteRequestBody(requestBodyText, routing, maxOutputTokens)
-        : requestBodyBuffer;
+        : requestBodyBytes;
     }
 
     const result = await tryUpstreamProviders(
@@ -1562,6 +1929,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       estimatedCredits,
       maxOutputTokens,
       requestedOutput,
+      imageCount,
+      completionCount,
+      routingDescriptor,
       requestId,
     );
     if ('failure' in result) {
@@ -1603,7 +1973,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       kind: routing.kind,
       requestId,
       client,
-      estimatedInputTokens,
+      estimatedInputTokens: result.estimatedInputTokens,
       reservationCredits: result.reservedCredits,
       dedupIdempotencyKey: dedupEnabled ? idempotencyKey : undefined,
       dedupRequestHash: dedupEnabled ? requestHash : undefined,

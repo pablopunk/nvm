@@ -2,12 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AI_CHAT_IMAGE_LIMIT,
   AI_CHAT_IMAGE_MAX_BYTES,
+  AI_CHAT_IMAGE_MAX_DIMENSION,
   AI_CHAT_IMAGE_MIME_TYPES,
   AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
   type AiChatImageInput,
   type AiChatMessageImage,
   canSendAiChatMessage,
 } from '../shared/ai-chat-images';
+import { imageDimensions } from '../shared/ai-image-dimensions';
 import {
   type AiChatModel,
   DEFAULT_AI_CHAT_MODEL,
@@ -52,39 +54,112 @@ export type AiChatAttachment = AiChatImageInput & {
   byteLength: number;
 };
 
-function readImageFile(file: File) {
+type ImageReadResult = PromiseSettledResult<AiChatAttachment>;
+
+async function readImageFile(file: File) {
   const mimeType = file.type.toLowerCase();
   if (!AI_CHAT_IMAGE_MIME_TYPES.includes(mimeType as never))
-    return Promise.reject(new Error('Paste a PNG, JPEG, WebP, or GIF image'));
+    throw new Error('Paste a PNG, JPEG, WebP, or GIF image');
   if (!file.size || file.size > AI_CHAT_IMAGE_MAX_BYTES)
-    return Promise.reject(new Error('Each image must be 8 MB or smaller'));
-  return new Promise<AiChatAttachment>((resolve, reject) => {
-    const reader = new FileReader();
-    const previewUrl = URL.createObjectURL(file);
-    function rejectRead() {
-      URL.revokeObjectURL(previewUrl);
-      reject(new Error('Could not read the pasted image'));
-    }
-    reader.onerror = rejectRead;
-    reader.onabort = rejectRead;
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '');
-      const separator = dataUrl.indexOf(',');
-      if (separator < 0) {
-        URL.revokeObjectURL(previewUrl);
-        return reject(new Error('Could not read the pasted image'));
-      }
-      resolve({
-        id: crypto.randomUUID(),
-        previewUrl,
-        data: dataUrl.slice(separator + 1),
-        mimeType,
-        byteLength: file.size,
-        ...(file.name ? { name: file.name } : {}),
-      });
+    throw new Error('Each image must be 2 MB or smaller');
+
+  let dimensions: ReturnType<typeof imageDimensions>;
+  try {
+    dimensions = imageDimensions(
+      new Uint8Array(await file.arrayBuffer()),
+      mimeType,
+    );
+  } catch {
+    throw new Error('Could not read the pasted image');
+  }
+  if (!dimensions) throw new Error('Could not read the pasted image');
+  if (
+    dimensions.width > AI_CHAT_IMAGE_MAX_DIMENSION ||
+    dimensions.height > AI_CHAT_IMAGE_MAX_DIMENSION
+  )
+    throw new Error('Images must be 2048 pixels or smaller on each side');
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error('Could not read the pasted image');
+  }
+  const dimensionsAreSupported =
+    bitmap.width <= AI_CHAT_IMAGE_MAX_DIMENSION &&
+    bitmap.height <= AI_CHAT_IMAGE_MAX_DIMENSION;
+  bitmap.close();
+  if (!dimensionsAreSupported)
+    throw new Error('Images must be 2048 pixels or smaller on each side');
+
+  const previewUrl = URL.createObjectURL(file);
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () =>
+        reject(new Error('Could not read the pasted image'));
+      reader.onabort = () =>
+        reject(new Error('Could not read the pasted image'));
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.readAsDataURL(file);
+    });
+    const separator = dataUrl.indexOf(',');
+    if (separator < 0) throw new Error('Could not read the pasted image');
+    return {
+      id: crypto.randomUUID(),
+      previewUrl,
+      data: dataUrl.slice(separator + 1),
+      mimeType,
+      byteLength: file.size,
+      ...(file.name ? { name: file.name } : {}),
     };
-    reader.readAsDataURL(file);
-  });
+  } catch (error) {
+    URL.revokeObjectURL(previewUrl);
+    throw error;
+  }
+}
+
+function releaseFulfilledImagePreviews(results: ImageReadResult[]) {
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      URL.revokeObjectURL(result.value.previewUrl);
+    }
+  }
+}
+
+function fulfilledImageAttachments(results: ImageReadResult[]) {
+  return results.flatMap((result) =>
+    result.status === 'fulfilled' ? [result.value] : [],
+  );
+}
+
+function keepAttachmentsWithinTotalLimit(
+  attachments: AiChatAttachment[],
+  existingBytes: number,
+) {
+  let totalBytes = existingBytes;
+  let exceededLimit = false;
+  const accepted: AiChatAttachment[] = [];
+  for (const attachment of attachments) {
+    if (totalBytes + attachment.byteLength > AI_CHAT_IMAGE_TOTAL_MAX_BYTES) {
+      URL.revokeObjectURL(attachment.previewUrl);
+      exceededLimit = true;
+      continue;
+    }
+    totalBytes += attachment.byteLength;
+    accepted.push(attachment);
+  }
+  return { accepted, exceededLimit };
+}
+
+function imageReadFailureMessage(results: ImageReadResult[]) {
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (!failure) return null;
+  return failure.reason instanceof Error
+    ? failure.reason.message
+    : String(failure.reason);
 }
 
 function isSafeLimitAction(action: unknown): action is CommandAction {
@@ -407,7 +482,7 @@ export function useAiChat(
 
   async function attachImageFiles(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    if (!imageFiles.length) return false;
+    if (imageFiles.length === 0) return false;
     const available = Math.max(
       0,
       AI_CHAT_IMAGE_LIMIT -
@@ -420,44 +495,28 @@ export function useAiChat(
         ? `Attach no more than ${AI_CHAT_IMAGE_LIMIT} images`
         : null,
     );
-    if (!acceptedFiles.length) return true;
+    if (acceptedFiles.length === 0) return true;
     const generation = attachmentGenerationRef.current;
     pendingAttachmentCountRef.current += acceptedFiles.length;
     setAttaching(true);
     const results = await Promise.allSettled(acceptedFiles.map(readImageFile));
     if (generation !== attachmentGenerationRef.current) {
-      for (const result of results)
-        if (result.status === 'fulfilled')
-          URL.revokeObjectURL(result.value.previewUrl);
+      releaseFulfilledImagePreviews(results);
       return true;
     }
-    const readable = results.flatMap((result) =>
-      result.status === 'fulfilled' ? [result.value] : [],
-    );
-    const next: AiChatAttachment[] = [];
-    let totalBytes = attachmentsRef.current.reduce(
+    const existingBytes = attachmentsRef.current.reduce(
       (total, attachment) => total + attachment.byteLength,
       0,
     );
-    for (const attachment of readable) {
-      if (totalBytes + attachment.byteLength > AI_CHAT_IMAGE_TOTAL_MAX_BYTES) {
-        URL.revokeObjectURL(attachment.previewUrl);
-        setAttachmentError('AI chat images must total 24 MB or less');
-        continue;
-      }
-      totalBytes += attachment.byteLength;
-      next.push(attachment);
-    }
-    const failure = results.find(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    const { accepted: next, exceededLimit } = keepAttachmentsWithinTotalLimit(
+      fulfilledImageAttachments(results),
+      existingBytes,
     );
-    if (failure)
-      setAttachmentError(
-        failure.reason instanceof Error
-          ? failure.reason.message
-          : String(failure.reason),
-      );
-    if (next.length) {
+    if (exceededLimit)
+      setAttachmentError('AI chat images must total 2 MB or less');
+    const failureMessage = imageReadFailureMessage(results);
+    if (failureMessage) setAttachmentError(failureMessage);
+    if (next.length > 0) {
       for (const attachment of next)
         attachmentPreviewUrlsRef.current.add(attachment.previewUrl);
       updateAttachments([...attachmentsRef.current, ...next]);

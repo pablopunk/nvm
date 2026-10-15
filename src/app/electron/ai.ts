@@ -81,6 +81,8 @@ type AiLimitNotice = {
     | 'free_spend_cap_reached'
     | 'rate_limited'
     | 'prompt_too_large'
+    | 'request_too_large'
+    | 'unsupported_request_shape'
     | 'unsupported_client';
   title: string;
   message: string;
@@ -1306,6 +1308,22 @@ function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
         url: getNevermindDashboardUrl(),
       },
       retryAfterSec,
+    };
+  }
+  if (/request[_ -]?too[_ -]?large/i.test(text)) {
+    return {
+      kind: 'request_too_large',
+      title: 'AI request too large',
+      message:
+        'Remove some images or start a new chat to make this request smaller.',
+    };
+  }
+  if (/unsupported[_ -]?request[_ -]?shape/i.test(text)) {
+    return {
+      kind: 'unsupported_request_shape',
+      title: 'Unsupported AI request',
+      message:
+        'This AI request uses an input or tool that the selected route cannot safely process. Remove it or switch to a supported model.',
     };
   }
   if (/prompt[_ -]?too[_ -]?large|prompt exceeds|413\b/i.test(text)) {

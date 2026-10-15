@@ -8,7 +8,11 @@ import {
 } from '../../../lib/admin-mutations';
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
-import { listModelsForProvider, lookupModelCost } from '../../../lib/pricing';
+import {
+  hasReviewedImageInputSupport,
+  listReviewedImageModelsForProvider,
+  lookupModelCost,
+} from '../../../lib/pricing';
 import {
   DEFAULT_THINKING_LEVEL,
   getModelRoute,
@@ -55,7 +59,7 @@ async function listModelRefs() {
   const providers = listKnownProviders();
   const groups = await Promise.all(
     providers.map(async (provider) => {
-      const models = await listModelsForProvider(provider);
+      const models = await listReviewedImageModelsForProvider(provider);
       return models.map((modelId) => ({
         provider,
         modelId,
@@ -115,6 +119,18 @@ export const PUT: APIRoute = async ({ request }) => {
         error: {
           type: 'invalid_model',
           message: 'Missing or invalid modelRef.',
+        },
+      },
+      { status: 400 },
+    );
+
+  if (!(await hasReviewedImageInputSupport(route.provider, route.modelId)))
+    return Response.json(
+      {
+        error: {
+          type: 'unsupported_image_model',
+          message:
+            'Choose a model with reviewed image-input and billing support.',
         },
       },
       { status: 400 },

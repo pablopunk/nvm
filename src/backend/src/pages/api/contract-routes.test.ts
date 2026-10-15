@@ -13,6 +13,7 @@ import { chooseFundedAccountRoute } from '../../lib/active-model-funding';
 import {
   estimateInputTokensFromBody,
   MAX_INPUT_TOKENS,
+  MAX_PROXY_REQUEST_BODY_BYTES,
 } from '../../lib/limits';
 import { resetPricingCacheForTests } from '../../lib/pricing';
 import {
@@ -249,6 +250,8 @@ function proxySelects(
     routeProvider?: string;
     thinkingLevel?: string;
     providerChainDepth?: number;
+    providerRoutes?: Array<{ providerId: string; modelId: string }>;
+    imageAdmission?: boolean;
   } = {},
 ) {
   const modelRoute =
@@ -280,11 +283,14 @@ function proxySelects(
     [{ id: 1 }],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     modelRoute,
+    ...(options.imageAdmission ? [[], []] : []),
     [{ id: 'user_1' }],
     [],
     [{ free: options.free ?? 10, paid: options.paid ?? 0 }],
     [{ free: 0, paid: 0 }],
-    ...Array.from({ length: providerChainDepth }, () => []),
+    ...Array.from({ length: providerChainDepth }, (_, index) =>
+      index === 0 ? (options.providerRoutes ?? []) : [],
+    ),
     [], // no tripped route breakers by default
     ...reservationFinalizationSelects({
       free: options.free ?? 10,
@@ -345,6 +351,18 @@ function authorizedChatRequest(
     },
     body: JSON.stringify(body),
   });
+}
+
+function inlinePngDataUrl(width = 1, height = 1) {
+  const bytes = Buffer.alloc(57);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+  bytes.writeUInt32BE(13, 8);
+  bytes.write('IHDR', 12, 'ascii');
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  bytes.write('IDAT', 37, 'ascii');
+  bytes.write('IEND', 49, 'ascii');
+  return `data:image/png;base64,${bytes.toString('base64')}`;
 }
 
 function authorizedRawChatRequest(
@@ -2001,15 +2019,211 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   assert.equal(promptSizeLogs[1]?.output_context_safety_tokens, 4096);
 });
 
-test('proxy rejects inline images before treating their payload size as text', async () => {
+test('proxy forwards a bounded image through a reviewed image-capable route', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000_000,
+        model: 'openai/gpt-6.1-sol',
+        routeProvider: 'openrouter',
+        providerChainDepth: 2,
+        imageAdmission: true,
+      }),
+    }),
+  );
+  let forwardedBody: Record<string, any> | undefined;
+  let upstreamCalls = 0;
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        openrouter: {
+          models: {
+            'openai/gpt-6.1-sol': {
+              id: 'openai/gpt-6.1-sol',
+              cost: { input: 2, output: 10 },
+              modalities: { input: ['text', 'image'] },
+            },
+          },
+        },
+      });
+    assert.equal(url, 'https://openrouter.example/api/v1/chat/completions');
+    upstreamCalls += 1;
+    forwardedBody = JSON.parse(String(init?.body));
+    return Response.json({
+      choices: [{ message: { role: 'assistant', content: 'A test image.' } }],
+    });
+  };
+
+  const requestBody = {
+    model: 'placeholder',
+    max_tokens: 512,
+    n: 2,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'What is in this image?' },
+          {
+            type: 'image_url',
+            image_url: { url: inlinePngDataUrl() },
+          },
+        ],
+      },
+    ],
+  };
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest(requestBody)),
+  );
+  await response.json();
+  await waitForBackgroundTasks();
+
+  assert.equal(response.status, 200);
+  assert.equal(upstreamCalls, 1);
+  assert.equal(forwardedBody?.model, 'openai/gpt-6.1-sol');
+  assert.equal(forwardedBody?.max_tokens, 512);
+  assert.equal(forwardedBody?.n, 2);
+  assert.equal(
+    forwardedBody?.messages[0].content[1].image_url.url,
+    inlinePngDataUrl(),
+  );
+  assert.ok(
+    db.insertedValues.length > 0,
+    'accepted image requests reserve credits',
+  );
+  const reservation = db.insertedValues.find(
+    (value) =>
+      value !== null &&
+      typeof value === 'object' &&
+      'estimatedProviderCostMicrocents' in value,
+  ) as { estimatedProviderCostMicrocents?: number } | undefined;
+  assert.equal(reservation?.estimatedProviderCostMicrocents, 462_536_000);
+  assert.equal(
+    (db.insertedValues.at(-1) as any).inputTokens,
+    estimateInputTokensFromBody(JSON.stringify(requestBody)),
+    'missing usage settles from the image token estimate, not the reservation ceiling',
+  );
+});
+
+test('proxy rejects image billing when the configured model catalog omits its modality bound', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000_000,
+        model: 'openai/gpt-6.1-sol',
+        routeProvider: 'openrouter',
+      }),
+    }),
+  );
+  let upstreamCalls = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        openrouter: {
+          models: {
+            'openai/gpt-6.1-sol': {
+              id: 'openai/gpt-6.1-sol',
+              cost: { input: 2, output: 10 },
+            },
+          },
+        },
+      });
+    upstreamCalls += 1;
+    throw new Error(`Unexpected upstream request: ${url}`);
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        model: 'placeholder',
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'image_url', image_url: inlinePngDataUrl() }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(
+    await response.json(),
+    fixture('unsupported-image-route-error'),
+  );
+  assert.equal(upstreamCalls, 0);
+  assert.equal(db.insertedValues.length, 0);
+});
+
+test('proxy rejects oversized request bodies when Content-Length is absent', async () => {
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        messages: [
+          { role: 'user', content: 'x'.repeat(MAX_PROXY_REQUEST_BODY_BYTES) },
+        ],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), fixture('request-too-large-error'));
+});
+
+test('proxy returns a stable error when the declared request body exceeds its limit', async () => {
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest(undefined, {
+        'content-length': String(MAX_PROXY_REQUEST_BODY_BYTES + 1),
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), fixture('request-too-large-error'));
+});
+
+test('production free-smart Muse route stays fail-closed without a Chat Completions image contract', async () => {
+  resetPricingCacheForTests();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
-    createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }),
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000_000,
+        model: 'muse-spark-1.3-contributor-free',
+      }),
+    }),
   );
-  installOpenAiFetch(() =>
-    Response.json({ usage: { prompt_tokens: 1_600, completion_tokens: 3 } }),
-  );
+  let upstreamCalls = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        opencode: {
+          models: {
+            'muse-spark-1.3-contributor-free': {
+              id: 'muse-spark-1.3-contributor-free',
+              cost: { input: 0, output: 0 },
+              limit: { context: 1_048_576, output: 131_072 },
+              modalities: { input: ['text', 'image'] },
+            },
+          },
+        },
+      });
+    upstreamCalls += 1;
+    throw new Error(`Unexpected upstream request: ${url}`);
+  };
 
   const response = await postChatCompletion(
     routeContext(
@@ -2020,11 +2234,41 @@ test('proxy rejects inline images before treating their payload size as text', a
             role: 'user',
             content: [
               { type: 'text', text: 'What is in this image?' },
+              { type: 'image_url', image_url: inlinePngDataUrl() },
+            ],
+          },
+        ],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(
+    await response.json(),
+    fixture('unsupported-image-route-error'),
+  );
+  assert.equal(upstreamCalls, 0);
+  assert.equal(db.insertedValues.length, 0);
+});
+
+test('proxy rejects malformed images with an actionable contract error', async () => {
+  installModelsDevFetch();
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(
+    createFakeDb({ selects: proxySelects({ free: 1_000_000 }) }),
+  );
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        model: 'placeholder',
+        messages: [
+          {
+            role: 'user',
+            content: [
               {
                 type: 'image_url',
-                image_url: {
-                  url: `data:image/png;base64,${'a'.repeat(600_000)}`,
-                },
+                image_url: 'data:image/png;base64,not-base64',
               },
             ],
           },
@@ -2036,7 +2280,7 @@ test('proxy rejects inline images before treating their payload size as text', a
   assert.equal(response.status, 400);
   assert.deepEqual(
     await response.json(),
-    fixture('unsupported-request-shape-error'),
+    fixture('invalid-image-request-error'),
   );
   assert.equal(db.insertedValues.length, 0);
 });
@@ -2063,6 +2307,7 @@ test('proxy route honors extension smart/fast model selection headers', async ()
             'gemini-3-fast': {
               id: 'gemini-3-fast',
               cost: { input: 0.1, output: 0.5 },
+              limit: { context: 64_000, output: 4_096 },
             },
           },
         },
@@ -2082,6 +2327,7 @@ test('proxy route honors extension smart/fast model selection headers', async ()
 
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(forwardedBody).model, 'gemini-3-fast');
+  assert.equal(JSON.parse(forwardedBody).max_tokens, 4096);
   assert.equal(db.insertedValues.length, 3);
   assert.equal((db.insertedValues.at(-1) as any).model, 'gemini-3-fast');
 });
@@ -2147,6 +2393,7 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
           provider: { order: ['attacker'] },
           plugins: [{ id: 'web' }],
           web_search_options: { search_context_size: 'high' },
+          service_tier: 'ultrafast',
           reasoning_effort: 'high',
           max_completion_tokens: 128,
           messages: [{ role: 'user', content: 'hello' }],
@@ -2166,6 +2413,7 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
   assert.equal(forwardedBody.provider, undefined);
   assert.equal(forwardedBody.plugins, undefined);
   assert.equal(forwardedBody.web_search_options, undefined);
+  assert.equal(forwardedBody.service_tier, undefined);
   assert.equal((db.insertedValues.at(-1) as any).provider, 'openrouter');
   assert.equal(
     (db.insertedValues.at(-1) as any).model,
@@ -2186,6 +2434,94 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
   );
   assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 1);
   assert.equal((db.insertedValues.at(-1) as any).reasoningTokens, 2);
+});
+
+test('OpenAI-compatible proxy caps conflicting output-limit fields', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installDb(
+    createFakeDb({
+      selects: proxySelects({ free: 1_000, model: 'gpt-5.6-luna' }),
+    }),
+  );
+  let forwardedBody: any;
+  globalThis.fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({ opencode: { models: {} } });
+    assert.equal(url, 'https://upstream.example/v1/chat/completions');
+    forwardedBody = JSON.parse(String(init?.body));
+    return Response.json({
+      choices: [{ message: { role: 'assistant', content: 'Bounded.' } }],
+      usage: { prompt_tokens: 2, completion_tokens: 1 },
+    });
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        max_tokens: 1,
+        max_completion_tokens: 128_000,
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBody.max_tokens, undefined);
+  assert.equal(forwardedBody.max_completion_tokens, 1);
+});
+
+test('proxy rejects separately billed OpenRouter web search before reservation', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000,
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+      }),
+    }),
+  );
+  let upstreamCalls = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    upstreamCalls += 1;
+    throw new Error(`Unexpected upstream request: ${url}`);
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        messages: [{ role: 'user', content: 'Search for this.' }],
+        tools: [{ type: 'openrouter:web_search' }],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(
+    await response.json(),
+    fixture('unpriced-provider-tool-error'),
+  );
+  assert.equal(upstreamCalls, 0);
+  assert.equal(db.insertedValues.length, 0);
 });
 
 test('OpenRouter proxy reserves prompt context from the requested output limit', async () => {
@@ -2306,6 +2642,55 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
     'provider_reported',
   );
   assert.equal((db.insertedValues.at(-1) as any).cachedInputTokens, 10);
+});
+
+test('stream usage fallback counts every requested completion choice', async () => {
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000,
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+      }),
+    }),
+  );
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    return new Response(
+      'data: {"choices":[{"index":0,"delta":{"content":"one "}},{"index":1,"delta":{"content":"two two"}}]}\n\ndata: [DONE]\n\n',
+      {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      },
+    );
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        stream: true,
+        n: 2,
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    ),
+  );
+  await response.text();
+  await waitForBackgroundTasks();
+
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 3);
 });
 
 test('proxy spends free credits first without granting a Free user Pro model entitlement', async () => {
@@ -2467,7 +2852,7 @@ test('proxy route returns the rate-limit contract', async () => {
   });
 });
 
-test('proxy rejects image and other multimodal payloads before reservation or provider dispatch', async () => {
+test('proxy rejects unsupported non-image multimodal payloads before reservation or provider dispatch', async () => {
   resetPricingCacheForTests();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   let upstreamCalls = 0;
@@ -2489,21 +2874,6 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
     return Response.json({ choices: [] });
   };
   const unsupportedBodies = [
-    {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: { url: 'https://images.example/picture.png' },
-              detail: 'high',
-              metadata: 'extra',
-            },
-          ],
-        },
-      ],
-    },
     {
       messages: [
         {
@@ -2545,6 +2915,7 @@ test('proxy rejects image and other multimodal payloads before reservation or pr
       ],
     },
     { messages: [{ role: 'user', content: 'data:audio/wav;base64,AAAA' }] },
+    { modalities: ['text', 'image'] },
   ];
   for (const body of unsupportedBodies) {
     const db = installDb(

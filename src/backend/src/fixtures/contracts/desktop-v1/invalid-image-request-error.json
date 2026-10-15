@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "unsupported_request_shape",
+    "message": "Only inline, non-animated PNG, JPEG, WebP, or GIF images up to 2048 × 2048 pixels and 2 MB each (2 MB total) are supported."
+  }
+}

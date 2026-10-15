@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { computeUsdCost, usdToCredits, usdToMicrocents, CREDIT_USD, MARKUP } from './cost';
+import {
+  CREDIT_USD,
+  computeMaximumTokenPricedCost,
+  computeUsdCost,
+  MARKUP,
+  usdToCredits,
+  usdToMicrocents,
+} from './cost';
 import type { ModelCost } from './pricing';
 
 const makeCost = (input: number, output: number): ModelCost => ({
@@ -51,9 +58,66 @@ describe('computeUsdCost', () => {
   test('uses the highest matching long-context tier', () => {
     const cost = {
       ...makeCost(2, 10),
-      tiers: [{ thresholdTokens: 272_000, inputUsdPerMtok: 4, outputUsdPerMtok: 15 }],
+      tiers: [
+        { thresholdTokens: 272_000, inputUsdPerMtok: 4, outputUsdPerMtok: 15 },
+      ],
     };
     assert.strictEqual(computeUsdCost(cost, 300_000, 100_000), 2.7);
+  });
+});
+
+describe('computeMaximumTokenPricedCost', () => {
+  test('reserves the highest applicable input, cache-write, and output rates', () => {
+    const cost: ModelCost = {
+      ...makeCost(2, 10),
+      cacheReadUsdPerMtok: 0.1,
+      cacheWriteUsdPerMtok: 2.5,
+      tiers: [
+        {
+          thresholdTokens: 272_000,
+          inputUsdPerMtok: 4,
+          outputUsdPerMtok: 15,
+          cacheReadUsdPerMtok: 0.2,
+          cacheWriteUsdPerMtok: 5,
+        },
+        {
+          thresholdTokens: 2_000_000,
+          inputUsdPerMtok: 8,
+          outputUsdPerMtok: 30,
+        },
+      ],
+    };
+
+    assert.equal(computeMaximumTokenPricedCost(cost, 922_000, 512), 4.61768);
+    assert.equal(computeMaximumTokenPricedCost(cost, 100_000, 512), 0.25512);
+  });
+
+  test('uses the zero-cost rate for reviewed free routes', () => {
+    assert.equal(
+      computeMaximumTokenPricedCost(makeCost(0, 0), 1_043_968, 512),
+      0,
+    );
+  });
+
+  test('applies reviewed maximum tiers when the live catalog omits them', () => {
+    assert.equal(
+      computeMaximumTokenPricedCost(makeCost(2, 10), 922_000, 1_024, {
+        inputUsdPerMtok: 2,
+        outputUsdPerMtok: 10,
+        cacheReadUsdPerMtok: 0.1,
+        cacheWriteUsdPerMtok: 2.5,
+        tiers: [
+          {
+            thresholdTokens: 272_000,
+            inputUsdPerMtok: 4,
+            outputUsdPerMtok: 15,
+            cacheReadUsdPerMtok: 0.2,
+            cacheWriteUsdPerMtok: 5,
+          },
+        ],
+      }),
+      4.62536,
+    );
   });
 });
 

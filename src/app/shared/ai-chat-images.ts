@@ -1,6 +1,7 @@
 export const AI_CHAT_IMAGE_LIMIT = 8;
-export const AI_CHAT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
-export const AI_CHAT_IMAGE_TOTAL_MAX_BYTES = 24 * 1024 * 1024;
+export const AI_CHAT_IMAGE_MAX_DIMENSION = 2048;
+export const AI_CHAT_IMAGE_MAX_BYTES = 2_097_152;
+export const AI_CHAT_IMAGE_TOTAL_MAX_BYTES = AI_CHAT_IMAGE_MAX_BYTES;
 
 export const AI_CHAT_IMAGE_MIME_TYPES = [
   'image/png',
