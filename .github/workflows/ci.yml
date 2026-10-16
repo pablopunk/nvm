@@ -220,9 +220,9 @@ jobs:
         shell: pwsh
         run: >-
           & $env:PNPM_STANDALONE_PATH -C src/backend exec node --import tsx --test
-          "../app/electron/extension-json-store.test.ts"
-          "../app/electron/extension-storage.test.ts"
-          "../app/electron/data-loader.test.ts"
+          "../app/electron/extension-host/extension-json-store.test.ts"
+          "../app/electron/extension-host/extension-storage.test.ts"
+          "../app/electron/state/data-loader.test.ts"
 
       - name: Root pnpm run dev repairs Electron and starts the app
         env:
