@@ -1768,7 +1768,7 @@ export function App() {
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([]);
   const [shortcutOptionsFor, setShortcutOptionsFor] =
     useState<ShortcutRecord | null>(null);
-  const formValues = extensionNavigation.activeEntry?.formValues || {};
+  const formValues = extensionNavigation.formValues;
   const setFormValues = extensionNavigation.setFormValues;
   const palettePrompt = usePalettePrompt(extensionView, runViewAction);
   const paletteForm = usePaletteForm(
