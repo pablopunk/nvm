@@ -43,6 +43,8 @@ function applyValue<T>(value: SetStateAction<T>, current: T): T {
     ? (value as (current: T) => T)(current)
     : value;
 }
+const NO_FORM_VALUES: NonNullable<PaneView['formValues']> = {};
+
 export function useExtensionNavigation(focusSearch?: () => void) {
   const [state, setState] = useState<PaneState>({ frames: [] });
   const stateRef = useRef(state);
@@ -265,6 +267,7 @@ export function useExtensionNavigation(focusSearch?: () => void) {
     frames: state.frames,
     activeFrame: frame,
     activeEntry: entry,
+    formValues: entry?.formValues ?? NO_FORM_VALUES,
     siblingViews: state.frames
       .slice(0, -1)
       .flatMap((item) => paneView(item)?.view || []),
