@@ -44,6 +44,7 @@ import {
   requestedCompletionCount,
   requestedMaxOutputTokens,
   supportsBoundedImageInput,
+  withoutSchemaDefinitions,
 } from './limits';
 import { log } from './log';
 import { lookupModelDescriptor, type ModelDescriptor } from './pricing';
@@ -1532,18 +1533,14 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       } catch {
         bodyIsJson = false;
       }
-      const parsedImageInputs = analyzeAiImageInputs(
-        bodyIsJson ? parsedBody : requestBodyText,
-      );
+      const inspectedBody = bodyIsJson
+        ? withoutSchemaDefinitions(parsedBody)
+        : requestBodyText;
+      const parsedImageInputs = analyzeAiImageInputs(inspectedBody);
       imageCount = parsedImageInputs.imageCount;
       const unsupportedMultimodal =
         parsedImageInputs.invalid ||
-        (bodyIsJson &&
-          containsUnsupportedMultimodalPayload(
-            parsedBody,
-            parsedImageInputs,
-          )) ||
-        (!bodyIsJson && containsUnsupportedMultimodalPayload(requestBodyText));
+        containsUnsupportedMultimodalPayload(inspectedBody, parsedImageInputs);
       if (unsupportedMultimodal) {
         await markDedupFailed(dedupClaim);
         return withRequestId(

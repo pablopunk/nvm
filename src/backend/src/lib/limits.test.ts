@@ -12,6 +12,7 @@ import {
   MAX_INPUT_TOKENS,
   requestedCompletionCount,
   requestedMaxOutputTokens,
+  withoutSchemaDefinitions,
 } from './limits';
 import type { ModelCost } from './pricing';
 
@@ -333,6 +334,77 @@ describe('estimateInputTokensFromBody', () => {
       containsImagePayload({ input_audio: { data: 'AAAA' } }),
       true,
       'legacy broad detector alias remains compatible',
+    );
+  });
+});
+
+describe('text-only requests that mention media words', () => {
+  const extensionSource = `export default {
+    "video": ['mp4', 'mov'], 'audio': ['mp3'], "pdf": true, "document": {},
+    type: 'file', mimeType: 'video/mp4',
+  }`;
+
+  test('tool results and prompts carrying extension source are not multimodal', () => {
+    const payload = {
+      messages: [
+        { role: 'user', content: 'centralize the media extensions' },
+        {
+          role: 'assistant',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'read_extension', arguments: '{"video":1}' },
+            },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: extensionSource },
+      ],
+    };
+    assert.equal(containsUnsupportedMultimodalPayload(payload), false);
+  });
+
+  test('tool schemas with media-named properties are not multimodal', () => {
+    const payload = {
+      messages: [{ role: 'user', content: 'convert it' }],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'convert',
+            parameters: {
+              type: 'object',
+              properties: {
+                video: { type: 'string' },
+                image: { type: 'string' },
+              },
+            },
+          },
+        },
+      ],
+    };
+    const inspected = withoutSchemaDefinitions(payload);
+    assert.equal(containsUnsupportedMultimodalPayload(inspected), false);
+    assert.equal(containsImagePayload(inspected), false);
+  });
+
+  test('real media parts are still rejected beside a schema-only tools list', () => {
+    const payload = {
+      tools: [{ type: 'function', function: { name: 'noop' } }],
+      messages: [
+        { role: 'user', content: [{ type: 'input_audio', input_audio: {} }] },
+      ],
+    };
+    assert.equal(
+      containsUnsupportedMultimodalPayload(withoutSchemaDefinitions(payload)),
+      true,
+    );
+  });
+
+  test('unparseable raw bodies still use text patterns', () => {
+    assert.equal(
+      containsUnsupportedMultimodalPayload('{"input_audio": {"data": '),
+      true,
     );
   });
 });
