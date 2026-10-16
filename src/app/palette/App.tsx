@@ -143,6 +143,8 @@ import { useExtensionNavigation } from './extension-view/use-extension-navigatio
 import { useSearchResults } from './use-search-results';
 import { patchCommandView } from './extension-view/view-patches';
 
+const NO_FORM_VALUES: Record<string, FormValue> = {};
+
 type ActionKind =
   | 'open-url'
   | 'web-search'
@@ -1768,7 +1770,8 @@ export function App() {
   const [shortcutRecords, setShortcutRecords] = useState<ShortcutRecord[]>([]);
   const [shortcutOptionsFor, setShortcutOptionsFor] =
     useState<ShortcutRecord | null>(null);
-  const formValues = extensionNavigation.activeEntry?.formValues || {};
+  const formValues =
+    extensionNavigation.activeEntry?.formValues || NO_FORM_VALUES;
   const setFormValues = extensionNavigation.setFormValues;
   const palettePrompt = usePalettePrompt(extensionView, runViewAction);
   const paletteForm = usePaletteForm(
