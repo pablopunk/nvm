@@ -81,22 +81,46 @@ export function containsUnpricedProviderTool(value: unknown): boolean {
   return false;
 }
 
+const SCHEMA_DEFINITION_FIELDS = [
+  'tools',
+  'functions',
+  'tool_choice',
+  'response_format',
+];
+
+/** Tool and format schemas describe shapes; their property names are not media inputs. */
+export function withoutSchemaDefinitions(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const node = { ...(value as Record<string, unknown>) };
+  for (const field of SCHEMA_DEFINITION_FIELDS) delete node[field];
+  return node;
+}
+
 /** Detect modalities whose provider cost cannot be bounded by the text estimator. */
 export function containsUnsupportedMultimodalPayload(
   value: unknown,
   imageAnalysis = analyzeAiImageInputs(value),
 ): boolean {
   if (imageAnalysis.invalid) return true;
+  if (typeof value === 'string') return rawTextLooksMultimodal(value);
   return containsUnsupportedNonImagePayload(value);
 }
 
+/** Unparseable bodies have no structure, so only raw text patterns can reveal media. */
+function rawTextLooksMultimodal(text: string): boolean {
+  return (
+    MULTIMODAL_DATA_URI_PATTERN.test(text) ||
+    MULTIMODAL_FIELD_PATTERN.test(text)
+  );
+}
+
+/** Parsed strings are text (prompts, tool results, source code) and never media by content. */
+function isModalityDataUri(text: string): boolean {
+  return MULTIMODAL_DATA_URI_PATTERN.test(text);
+}
+
 function containsUnsupportedNonImagePayload(value: unknown): boolean {
-  if (typeof value === 'string') {
-    return (
-      MULTIMODAL_DATA_URI_PATTERN.test(value) ||
-      MULTIMODAL_FIELD_PATTERN.test(value)
-    );
-  }
+  if (typeof value === 'string') return isModalityDataUri(value);
   if (Array.isArray(value))
     return value.some(containsUnsupportedNonImagePayload);
   if (!value || typeof value !== 'object') return false;
