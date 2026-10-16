@@ -99,7 +99,10 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
 });
 
 test('portable marker distinguishes wrapper identity from packaged child identity', () => {
-  const marker = fs.readFileSync('src/app/electron/test-mode.ts', 'utf8');
+  const marker = fs.readFileSync(
+    'src/app/electron/platform/test-mode.ts',
+    'utf8',
+  );
   const harness = fs.readFileSync('scripts/windows-portable-smoke.cjs', 'utf8');
   for (const field of [
     'appIsPackaged',

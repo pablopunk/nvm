@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { extensionActionContributionIsDiscoverable } from '../electron/search-snapshot';
+import { extensionActionContributionIsDiscoverable } from '../electron/search/search-snapshot';
 import { createAiCommandsExtension } from './ai-commands';
 
 function commandHandler(context: any) {

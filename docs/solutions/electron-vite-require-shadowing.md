@@ -14,7 +14,7 @@ The crash happens before app initialization, so normal app logging or Sentry cap
 
 ## Context
 
-This surfaced after changing `src/app/electron/sentry.ts` to load `@sentry/electron/main` through `createRequire(import.meta.url)` so Sentry could be optional or package-safe at startup.
+This surfaced after changing `src/app/electron/diagnostics/sentry.ts` to load `@sentry/electron/main` through `createRequire(import.meta.url)` so Sentry could be optional or package-safe at startup.
 
 The TypeScript source was valid and `electron-vite build` completed, but the generated ESM main bundle was not parseable.
 
@@ -36,7 +36,7 @@ The Sentry module also declared a top-level `require` binding from `createRequir
 
 ## Fix
 
-Rename the app-owned `createRequire` binding in `src/app/electron/sentry.ts` to a domain-specific name, such as `requireSentryModule`, instead of using the reserved/common shim name `require`.
+Rename the app-owned `createRequire` binding in `src/app/electron/diagnostics/sentry.ts` to a domain-specific name, such as `requireSentryModule`, instead of using the reserved/common shim name `require`.
 
 Add generated-bundle syntax checks to the normal test path so this class of production-only failure is caught:
 

@@ -15,16 +15,19 @@ import {
   formFieldValue,
   formRowId,
   formValueLabel,
-} from './form-fields';
-import { IndicatorMicTrace } from './indicator-mic-trace';
-import { IndicatorOrb, indicatorOrbState } from './indicator-orb';
+} from './extension-view/form-fields';
+import { IndicatorMicTrace } from './indicator/indicator-mic-trace';
+import { IndicatorOrb, indicatorOrbState } from './indicator/indicator-orb';
 import {
   IndicatorStatusIcon,
   indicatorStatusIconKind,
-} from './indicator-status-icon';
-import { MarkdownEditor } from './markdown-editor';
+} from './indicator/indicator-status-icon';
+import { MarkdownEditor } from './extension-view/markdown-editor';
 import type { CommandImage } from './model';
-import { MorphingActivityText, MorphingIndicatorText } from './morphing-text';
+import {
+  MorphingActivityText,
+  MorphingIndicatorText,
+} from './indicator/morphing-text';
 import {
   type SystemTheme,
   themedImageSource,

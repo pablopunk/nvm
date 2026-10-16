@@ -1,4 +1,4 @@
-import type { JobSnapshot } from '../electron/jobs';
+import type { JobSnapshot } from '../electron/platform/jobs';
 import { extensionContext } from './_context';
 
 function jobTime(value?: number) {

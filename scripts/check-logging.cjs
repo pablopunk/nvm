@@ -5,7 +5,14 @@ const path = require('node:path');
 // ── config ──────────────────────────────────────────────────────────────────
 
 const ROOT = process.cwd();
-const LOGGER_FILE = path.join(ROOT, 'src', 'app', 'electron', 'logger.ts');
+const LOGGER_FILE = path.join(
+  ROOT,
+  'src',
+  'app',
+  'electron',
+  'platform',
+  'logger.ts',
+);
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

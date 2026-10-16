@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   EXTENSION_WINDOW_CAPABILITIES,
   type ExtensionWindowCapability as HostExtensionWindowCapability,
-} from '../electron/extension-window-capabilities';
+} from '../electron/os/extension-window-capabilities';
 import type {
   CommandAccessoryTone,
   CommandFormFieldType,

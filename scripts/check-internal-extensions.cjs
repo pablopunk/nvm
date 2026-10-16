@@ -45,12 +45,34 @@ if (!factories.includes('createAiBuilderExtension'))
 if (factories.includes('createAiBuilderExtension()'))
   fail('AI Builder must not be constructed in the factory list');
 
+const aiBuilderModuleSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'src',
+    'app',
+    'electron',
+    'ai',
+    'extension-ai-builder.ts',
+  ),
+  'utf8',
+);
+
 if (
   !/const\s+AI_BUILDER_EXTENSION_ID\s*=\s*['"]nevermind\.ai-builder['"]/.test(
-    source,
+    aiBuilderModuleSource,
   )
 ) {
   fail('missing canonical AI Builder extension id constant');
+}
+
+if (
+  !/import\s*\{[^}]*\bAI_BUILDER_EXTENSION_ID\b[^}]*\}\s*from\s*['"]\.\/ai\/extension-ai-builder['"]/.test(
+    source,
+  )
+) {
+  fail(
+    'main.ts does not import the canonical AI Builder extension id constant',
+  );
 }
 
 if (
@@ -67,7 +89,23 @@ if (
   fail('AI Chats command is not required by internal command assertions');
 }
 
-if (!/function\s+assertInternalExtensionsRegistered\s*\(/.test(source)) {
+const extensionRegistrationSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'src',
+    'app',
+    'electron',
+    'extension-host',
+    'extension-registration.ts',
+  ),
+  'utf8',
+);
+
+if (
+  !/function\s+assertInternalExtensionsRegistered\s*\(/.test(
+    extensionRegistrationSource,
+  )
+) {
   fail('missing internal extension registration assertion');
 }
 

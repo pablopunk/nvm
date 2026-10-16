@@ -2,7 +2,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const {
+  listElectronSourceFiles,
+} = require('../../scripts/lib/read-electron-sources.cjs');
 const root = path.resolve(__dirname, '../..');
+
+function electronSourcePath(basename) {
+  const matches = listElectronSourceFiles(root).filter(
+    (file) => path.basename(file) === basename,
+  );
+  assert.equal(matches.length, 1, `expected one ${basename} under electron`);
+  return matches[0];
+}
 
 test('release packaging uploads the final generated maps before packaging without a rebuild', () => {
   const packageJson = JSON.parse(
@@ -47,24 +58,21 @@ test('maps are hidden for all processes and upload credentials are not build def
 
 test('desktop and backend capture all instrumented journeys and initialize diagnostics after logging', () => {
   for (const file of [
-    'src/app/electron/sentry.ts',
-    'src/backend/src/sentry.server.config.ts',
+    electronSourcePath('sentry.ts'),
+    path.join(root, 'src/backend/src/sentry.server.config.ts'),
   ]) {
-    assert.match(
-      fs.readFileSync(path.join(root, file), 'utf8'),
-      /tracesSampleRate: 1,/,
-    );
+    assert.match(fs.readFileSync(file, 'utf8'), /tracesSampleRate: 1,/);
   }
   const main = fs.readFileSync(
     path.join(root, 'src/app/electron/main.ts'),
     'utf8',
   );
-  assert.ok(
-    main.indexOf('configureLogger(isDev);') <
-      main.indexOf(
-        'if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();',
-      ),
+  const loggerIndex = main.indexOf('configureLogger(isDev);');
+  const sentryIndex = main.indexOf(
+    'if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();',
   );
+  assert.ok(loggerIndex >= 0 && sentryIndex >= 0);
+  assert.ok(loggerIndex < sentryIndex);
 });
 
 test('packaging gates publication on the final dependency graph and native SDK capture', () => {

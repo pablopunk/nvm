@@ -4,7 +4,7 @@ import {
   characterId,
   characterWithSkinTone,
   type CharacterCatalogRecord,
-} from '../electron/emoji-symbol-catalog';
+} from '../electron/app/emoji-symbol-catalog';
 
 type CharacterPickerState = {
   category: string;

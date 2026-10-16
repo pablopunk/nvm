@@ -6,7 +6,7 @@ An extension capability was represented by a `Dictate` root item and a separate 
 
 ## Context
 
-The search host selects `rootItems()` for an empty query and `searchItems()` for a typed query in `src/app/electron/search-snapshot.ts`. Root provider results become `extension-root-item` actions in `src/app/electron/main.ts`; durable `actions(ctx)` contributions become `extension-action` records with aliases, shortcuts, and customization metadata.
+The search host selects `rootItems()` for an empty query and `searchItems()` for a typed query in `src/app/electron/search/search-snapshot.ts`. Root provider results become `extension-root-item` actions in `src/app/electron/main.ts`; durable `actions(ctx)` contributions become `extension-action` records with aliases, shortcuts, and customization metadata.
 
 ## What Did Not Work
 

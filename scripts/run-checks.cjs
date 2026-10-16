@@ -23,6 +23,8 @@ const checks = [
   'check-appearance-contract.cjs',
   'check-logging.cjs',
   'check-backend-api-major.cjs',
+  'check-electron-structure.cjs',
+  'check-file-size.cjs',
 ];
 
 let failed = false;

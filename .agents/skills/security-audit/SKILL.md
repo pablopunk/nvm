@@ -17,9 +17,9 @@ Use this skill for defensive security work on Nevermind. Produce evidence-backed
 
 ## Nevermind security surfaces
 
-- Electron main/preload/renderer: `src/app/electron/main.ts`, `src/app/electron/preload.ts`, `src/app/electron/palette-window.ts`, `src/app/palette/preload-api.ts`.
-- Extension host and API: `src/app/resources/nevermind-extension-api.d.ts`, `src/app/electron/main.ts`, `src/app/palette/extension-view.tsx`, internal extensions under `src/app/resources/`.
-- Desktop auth/model proxy integration: `src/app/electron/nevermind-auth.ts`, `src/app/electron/ai.ts`.
+- Electron main/preload/renderer: `src/app/electron/main.ts`, `src/app/electron/preload.ts`, `src/app/electron/app/palette-window.ts`, `src/app/palette/preload-api.ts`.
+- Extension host and API: `src/app/resources/nevermind-extension-api.d.ts`, `src/app/electron/main.ts`, `src/app/palette/extension-view/extension-view.tsx`, internal extensions under `src/app/resources/`.
+- Desktop auth/model proxy integration: `src/app/electron/backend/nevermind-auth.ts`, `src/app/electron/ai/ai.ts`.
 - Astro backend routes: `src/backend/src/pages/api/**`, especially auth, device auth, admin, tokens, and `/api/v1/**` proxy routes.
 - Backend libraries: `src/backend/src/lib/workos.ts`, `tokens.ts`, `admin.ts`, `proxy.ts`, `ratelimit.ts`, `cron-auth.ts`, `audit.ts`, `settings.ts`.
 - Persistence/config: `src/backend/src/db/schema.ts`, Drizzle migrations, `electron-builder.yml`, `src/backend/vercel.json`, env examples.

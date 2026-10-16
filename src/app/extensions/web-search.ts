@@ -1,4 +1,4 @@
-import { getUrlFromQuery } from '../electron/search-utils';
+import { getUrlFromQuery } from '../electron/search/search-utils';
 import { extensionContext } from './_context';
 
 export function createWebSearchExtension() {

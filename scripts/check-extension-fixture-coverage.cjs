@@ -47,11 +47,14 @@ function readFile(filePath) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-function fixtureFiles() {
+function fixtureFiles(directory = FIXTURE_DIR) {
   return fs
-    .readdirSync(FIXTURE_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
-    .map((entry) => path.join(FIXTURE_DIR, entry.name))
+    .readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return fixtureFiles(entryPath);
+      return entry.isFile() && entry.name.endsWith('.ts') ? [entryPath] : [];
+    })
     .sort();
 }
 

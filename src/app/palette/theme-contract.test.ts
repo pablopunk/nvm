@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { EXTENSION_WINDOW_BACKGROUND } from '../electron/extension-window-manager';
+import { EXTENSION_WINDOW_BACKGROUND } from '../electron/extension-host/extension-window-manager';
 
 const paletteDirectory = path.dirname(fileURLToPath(import.meta.url));
 const stylesDirectory = path.join(paletteDirectory, 'styles');

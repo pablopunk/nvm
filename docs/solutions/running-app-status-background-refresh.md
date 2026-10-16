@@ -16,7 +16,7 @@ Relevant paths:
 
 - `src/app/palette/App.tsx`
 - `src/app/electron/main.ts`
-- `src/app/electron/os.ts`
+- `src/app/electron/os/os.ts`
 - `src/app/electron/preload.ts`
 - `src/app/palette/preload-api.ts`
 

@@ -11,10 +11,22 @@ const apiPath = path.join(
 const trustDocPath = path.join(root, 'docs/extension-trust-model.md');
 const disclosurePath = path.join(
   root,
-  'src/app/electron/extension-capabilities.ts',
+  'src/app/electron/extension-host/extension-capabilities.ts',
 );
 const trustDoc = fs.readFileSync(trustDocPath, 'utf8');
 const disclosure = fs.readFileSync(disclosurePath, 'utf8');
+
+function listTypeScriptFiles(directory) {
+  return fs
+    .readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return listTypeScriptFiles(entryPath);
+      return entry.name.endsWith('.ts') ? [entryPath] : [];
+    })
+    .sort();
+}
+const fixtureFiles = listTypeScriptFiles(path.join(root, 'src/app/fixtures'));
 
 const forbiddenEnforcementCopy = [
   /requires? (?:the )?`[^`]+` permission/i,
@@ -26,8 +38,8 @@ const forbiddenEnforcementCopy = [
 ];
 const extensionContractCopyFiles = [
   apiPath,
-  path.join(root, 'src/app/electron/ai.ts'),
-  path.join(root, 'src/app/fixtures/ui-fixtures.ts'),
+  path.join(root, 'src/app/electron/ai/ai.ts'),
+  ...fixtureFiles,
 ];
 for (const file of extensionContractCopyFiles) {
   const source = fs.readFileSync(file, 'utf8');
@@ -67,8 +79,8 @@ const builtInFiles = [
     .readdirSync(path.join(root, 'src/app/extensions'))
     .filter((name) => name.endsWith('.ts') && name !== 'extensions.ts')
     .map((name) => path.join(root, 'src/app/extensions', name)),
-  path.join(root, 'src/app/electron/clipboard-history.ts'),
-  path.join(root, 'src/app/fixtures/ui-fixtures.ts'),
+  path.join(root, 'src/app/electron/clipboard/clipboard-history.ts'),
+  ...fixtureFiles,
 ];
 for (const file of builtInFiles) {
   if (/\bpermissions\s*:/.test(fs.readFileSync(file, 'utf8'))) {

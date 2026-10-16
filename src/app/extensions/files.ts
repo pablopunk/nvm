@@ -1,4 +1,4 @@
-import { quickLookTitle, revealPathTitle } from '../electron/os';
+import { quickLookTitle, revealPathTitle } from '../electron/os/os';
 import { extensionContext } from './_context';
 
 function buildPreviewItemActionForFile(input: any) {
