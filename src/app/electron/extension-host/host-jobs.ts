@@ -1,5 +1,12 @@
 import { frontmostApp, hasCapability } from '../os/os';
 import type { JobDefinition, JobRegistry } from '../platform/jobs';
+import {
+  CLIPBOARD_IMAGE_GC_INTERVAL_MS,
+  CLIPBOARD_IMAGE_GC_JOB_ID,
+  CLIPBOARD_IMAGE_GC_STARTUP_DELAY_MS,
+  type ClipboardImageGcDeps,
+  createClipboardImageGcJob,
+} from './clipboard-image-gc-job';
 import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 
 export const FRONTMOST_APP_CHANGED_EVENT = 'app.frontmost.changed';
@@ -15,6 +22,7 @@ export type HostJobsDeps = {
   appIconCache: { processPending: JobRun };
   indexFiles: JobRun;
   processPendingThumbnails: JobRun;
+  clipboardImages: ClipboardImageGcDeps;
 };
 
 export function createHostJobs(deps: HostJobsDeps) {
@@ -25,6 +33,7 @@ export function createHostJobs(deps: HostJobsDeps) {
     appIconCache,
     indexFiles,
     processPendingThumbnails,
+    clipboardImages,
   } = deps;
   let frontmostWatcherLastId = '';
 
@@ -109,6 +118,21 @@ export function createHostJobs(deps: HostJobsDeps) {
       scope: 'cache',
       timeoutMs: 20_000,
       run: processPendingThumbnails,
+    });
+    jobRegistry.register({
+      id: CLIPBOARD_IMAGE_GC_JOB_ID,
+      title: 'Clipboard Image Cleanup',
+      owner: 'host',
+      scope: 'cache',
+      timeoutMs: 20_000,
+      triggers: [
+        {
+          type: 'interval',
+          everyMs: CLIPBOARD_IMAGE_GC_INTERVAL_MS,
+          delayMs: CLIPBOARD_IMAGE_GC_STARTUP_DELAY_MS,
+        },
+      ],
+      run: createClipboardImageGcJob(clipboardImages).run,
     });
   }
 

@@ -110,19 +110,21 @@ export function createClipboardActionHandlers(
         };
   }
 
-  async function handleCopyImage(action) {
+  function imageForCopyAction(action) {
     if (action.path)
-      await clipboardApi.writeImage(
-        nativeImage.createFromPath(expandUserPath(action.path)),
-      );
-    else if (action.imagePath)
-      await clipboardApi.writeImage(
-        nativeImage.createFromPath(action.imagePath),
-      );
-    else
-      await clipboardApi.writeImage(
-        nativeImage.createFromDataURL(action.imageDataUrl),
-      );
+      return nativeImage.createFromPath(expandUserPath(action.path));
+    if (action.imagePath) return nativeImage.createFromPath(action.imagePath);
+    return nativeImage.createFromDataURL(action.imageDataUrl);
+  }
+
+  async function handleCopyImage(action) {
+    const image = imageForCopyAction(action);
+    if (!image || image.isEmpty()) {
+      return {
+        toast: { message: 'Image no longer available', tone: 'error' },
+      };
+    }
+    await clipboardApi.writeImage(image);
   }
 
   function handleRemoveClipboardHistory(action) {

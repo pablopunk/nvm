@@ -6,7 +6,7 @@
   "electron/extension-window-manager.ts": 1039,
   "electron/jobs.ts": 505,
   "electron/learning-store.ts": 935,
-  "electron/main.ts": 2304,
+  "electron/main.ts": 2282,
   "electron/nevermind-auth.ts": 692,
   "electron/os.ts": 1504,
   "electron/palette-window.ts": 540,
