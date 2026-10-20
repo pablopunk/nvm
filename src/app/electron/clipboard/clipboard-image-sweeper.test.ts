@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import test from 'node:test';
 import {
   CLIPBOARD_IMAGE_GRACE_MS,
@@ -40,14 +41,14 @@ function createSweeper(setup: Setup = {}) {
     isStateTrusted: () => setup.trusted !== false,
     readdir: async () => Object.keys(files),
     lstat: async (filePath) => {
-      const entry = files[filePath.split('/').pop() as string];
+      const entry = files[path.basename(filePath)];
       return {
         isFile: () => entry?.file !== false,
         mtimeMs: entry?.mtimeMs ?? OLD,
       };
     },
     unlink: async (filePath) => {
-      unlinked.push(filePath.split('/').pop() as string);
+      unlinked.push(path.basename(filePath));
     },
     now: () => NOW,
     logWarn: (message) => warnings.push(message),
@@ -158,7 +159,7 @@ test('swallows unlink errors and keeps sweeping', async () => {
     overrides: {
       unlink: async (filePath) => {
         attempted.push(filePath);
-        if (filePath.endsWith(ORPHAN)) throw new Error('EPERM');
+        if (path.basename(filePath) === ORPHAN) throw new Error('EPERM');
       },
     },
   });
