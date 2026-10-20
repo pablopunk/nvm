@@ -1,6 +1,7 @@
 import { measureDebugPerformance } from '../../diagnostics/debug-performance';
 import { expandUserPath } from '../../files/file-utils';
 import { frontmostApp, typeTextIntoFrontmostApp } from '../../os/os';
+import { copyImageAction } from './copy-image-action';
 
 export type ClipboardActionHandlerDeps = {
   clipboardApi: {
@@ -110,19 +111,12 @@ export function createClipboardActionHandlers(
         };
   }
 
-  async function handleCopyImage(action) {
-    if (action.path)
-      await clipboardApi.writeImage(
-        nativeImage.createFromPath(expandUserPath(action.path)),
-      );
-    else if (action.imagePath)
-      await clipboardApi.writeImage(
-        nativeImage.createFromPath(action.imagePath),
-      );
-    else
-      await clipboardApi.writeImage(
-        nativeImage.createFromDataURL(action.imageDataUrl),
-      );
+  function handleCopyImage(action) {
+    return copyImageAction(action, {
+      clipboardApi,
+      nativeImage,
+      expandUserPath,
+    });
   }
 
   function handleRemoveClipboardHistory(action) {

@@ -1,12 +1,12 @@
 // biome-ignore-all lint: This module normalizes heterogeneous persisted clipboard records.
 import path from 'node:path';
-import type { ClipboardApi } from '../os/electron-clipboard';
 import {
   expandUserPath,
   fileUrlForPath,
   isVideoPath,
   thumbnailUrlForPath,
 } from '../files/file-utils';
+import type { ClipboardApi } from '../os/electron-clipboard';
 import { hashValue } from '../search/search-utils';
 
 export type ClipboardHistoryItem =

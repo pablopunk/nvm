@@ -39,7 +39,10 @@ export type UserStateLoaderDeps = {
   }) => { extensionsDir: string };
   assignRuntimePaths: (paths: RuntimePaths) => void;
   setLearningStore: (learningStore: LocalLearningStore) => void;
-  userStateStore: Pick<UserStateStore, 'get' | 'replace'>;
+  userStateStore: Pick<
+    UserStateStore,
+    'get' | 'replace' | 'markLoadedFromDisk'
+  >;
   settingValue: (
     settings: Record<string, unknown> | undefined,
     id: 'errorReporting',
@@ -135,6 +138,7 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
     });
     if (loaded) {
       userStateStore.replace(userStateFromLoadedFile(loaded));
+      userStateStore.markLoadedFromDisk(paths.statePath);
     }
 
     setDiagnosticReporting(

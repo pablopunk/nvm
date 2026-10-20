@@ -1,10 +1,10 @@
+import type { ClipboardApi, MaybePromise } from '../os/electron-clipboard';
 import {
   type ClipboardHistoryItem,
   clipboardFilePaths,
   clipboardItemSubtitle,
   clipboardItemTitle,
 } from './clipboard-utils';
-import type { ClipboardApi, MaybePromise } from '../os/electron-clipboard';
 
 export type ClipboardHistoryDeps = {
   // ── State ──────────────────────────────────────────────
@@ -607,13 +607,12 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
 
   // ── polling ─────────────────────────────────────────────
 
-  const CLIPBOARD_IMAGE_RECHECK_MS = 5000;
+  const ClipboardImageRecheckMs = 5000;
   let lastClipboardImageCheckAt = 0;
 
   async function throttledClipboardImageItem(): Promise<any> {
     const now = Date.now();
-    if (now - lastClipboardImageCheckAt < CLIPBOARD_IMAGE_RECHECK_MS)
-      return null;
+    if (now - lastClipboardImageCheckAt < ClipboardImageRecheckMs) return null;
     lastClipboardImageCheckAt = now;
     return readClipboardImageItem();
   }

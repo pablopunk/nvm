@@ -34,19 +34,12 @@ import {
   nativeTheme,
   powerMonitor,
   protocol,
-  screen,
   safeStorage,
+  screen,
   shell,
   systemPreferences,
 } from 'electron';
 import electronUpdater from 'electron-updater';
-import { createExtensionAiFactory } from './ai/extension-ai';
-import {
-  AI_BUILDER_EXTENSION_ID,
-  createAiBuilderApiFactory,
-} from './ai/extension-ai-builder';
-import { createExtensionOwnershipApiFactory } from './ai/extension-ownership-api';
-import { resolveExtensionPaths } from './extension-host/extension-paths';
 import { createAiChatEventBroadcaster } from './ai/ai-chat-events';
 import { createAiChatImageStorage } from './ai/ai-chat-image-storage';
 import {
@@ -64,35 +57,23 @@ import { createAiChatStore } from './ai/ai-chat-store';
 import { createAiChatViews } from './ai/ai-chat-views';
 import { createAiCreatedActions } from './ai/ai-created-actions';
 import { createAiExtensionOwnership } from './ai/ai-extension-ownership';
-import { trustedAiLimitAction } from './ai/ai-limit-action-policy';
 import { createAiLearningReview } from './ai/ai-learning-review';
+import { trustedAiLimitAction } from './ai/ai-limit-action-policy';
 import { createConversationAiWarmup } from './ai/conversation-ai-warmup';
+import { createExtensionAiFactory } from './ai/extension-ai';
+import {
+  AI_BUILDER_EXTENSION_ID,
+  createAiBuilderApiFactory,
+} from './ai/extension-ai-builder';
+import { createExtensionOwnershipApiFactory } from './ai/extension-ownership-api';
 import { createNevermindAiEventHandler } from './ai/nevermind-ai-event-handler';
 import { createNevermindAiInitializer } from './ai/nevermind-ai-init';
-import { getByoKey } from './backend/byo-key';
-import { createClipboardHistory } from './clipboard/clipboard-history';
-import { createClipboardSearchActions } from './clipboard/clipboard-search-actions';
-import { isClipboardHistoryAction } from './clipboard/clipboard-utils';
-import { createClipboardWatcher } from './clipboard/clipboard-watcher';
-import { createDesktopSelection } from './clipboard/desktop-selection';
 import {
   DEEP_LINK_SCHEME,
   parseAuthDeepLink,
   setDeepLinkLogger,
 } from './app/deep-link';
-import { createElectronClipboardApi } from './os/electron-clipboard';
-import { createLinuxX11Clipboard } from './os/linux-x11-clipboard';
-import {
-  configureLocalFileUrlSecret,
-  expandUserPath,
-  extensionForPath,
-  fileUrlForPath,
-  isImagePath,
-  isVideoPath,
-  LOCAL_FILE_PROTOCOL,
-  LOCAL_THUMB_PROTOCOL,
-  thumbnailUrlForPath,
-} from './files/file-utils';
+import { getByoKey } from './backend/byo-key';
 import {
   cancelNevermindDeviceSignIn,
   getNevermindAuth,
@@ -110,24 +91,43 @@ import {
 import { createNevermindDeepLinks } from './backend/nevermind-deep-links';
 import { createNevermindEnvironmentSelection } from './backend/nevermind-environment-selection';
 import { createNevermindSignIn } from './backend/nevermind-sign-in';
-import {
-  initSentry,
-  flushDiagnosticRecords,
-  setDiagnosticReporting,
-  recentDiagnosticRecords,
-  rendererFailureHandle,
-  reportDiagnosticProblem,
-  recordUpdateInstallAttempt,
-} from './diagnostics/sentry';
+import { createClipboardHistory } from './clipboard/clipboard-history';
+import { createClipboardSearchActions } from './clipboard/clipboard-search-actions';
+import { isClipboardHistoryAction } from './clipboard/clipboard-utils';
+import { createClipboardWatcher } from './clipboard/clipboard-watcher';
+import { createDesktopSelection } from './clipboard/desktop-selection';
 import {
   recordOperationFailure,
   runOperation,
 } from './diagnostics/observability';
 import {
+  flushDiagnosticRecords,
+  initSentry,
+  recentDiagnosticRecords,
+  recordUpdateInstallAttempt,
+  rendererFailureHandle,
+  reportDiagnosticProblem,
+  setDiagnosticReporting,
+} from './diagnostics/sentry';
+import { resolveExtensionPaths } from './extension-host/extension-paths';
+import {
+  configureLocalFileUrlSecret,
+  expandUserPath,
+  extensionForPath,
+  fileUrlForPath,
+  isImagePath,
+  isVideoPath,
+  LOCAL_FILE_PROTOCOL,
+  LOCAL_THUMB_PROTOCOL,
+  thumbnailUrlForPath,
+} from './files/file-utils';
+import { createElectronClipboardApi } from './os/electron-clipboard';
+import { createLinuxX11Clipboard } from './os/linux-x11-clipboard';
+import {
   configureNvmTestMode,
   installTestNetworkPolicy,
-  isNvmTestMode,
   isNvmDiagnosticTestMode,
+  isNvmTestMode,
   recordTestWindowEvent,
 } from './platform/test-mode';
 
@@ -143,16 +143,14 @@ import { initExtensionContext } from '../extensions/_context';
 import { createAiBuilderExtension } from '../extensions/ai-builder';
 import { createActionExecutionCapabilities } from './actions/action-execution-policy';
 import { createActionExecutionRecords } from './actions/action-execution-records';
-import { createActionRegistration } from './actions/action-registration';
-import { createExtensionRootActionNormalizer } from './actions/extension-root-action';
-import { normalizeItemAppearance } from './actions/item-appearance';
-import { createViewNormalizer } from './actions/view-normalizer';
-import { createViewResultNormalizer } from './actions/view-results';
 import { createActionFeedback } from './actions/action-feedback';
 import { createActionIpc } from './actions/action-ipc';
 import { createActionIpcResolver } from './actions/action-ipc-resolution';
+import { createActionRegistration } from './actions/action-registration';
 import { createExtensionActionLookup } from './actions/extension-action-lookup';
 import { createExtensionActionResults } from './actions/extension-action-results';
+import { createExtensionRootActionNormalizer } from './actions/extension-root-action';
+import { normalizeItemAppearance } from './actions/item-appearance';
 import { createRootActionExecutor } from './actions/root-action-executor';
 import { runInBackground } from './actions/run-in-background';
 import { createShellCommands } from './actions/shell-commands';
@@ -166,20 +164,46 @@ import { createSettingActionHandlers } from './actions/view-action-handlers/sett
 import { createShellActionHandlers } from './actions/view-action-handlers/shell-actions';
 import { createSystemActionHandlers } from './actions/view-action-handlers/system-actions';
 import { createWindowActionHandlers } from './actions/view-action-handlers/window-actions';
-import { createActionRanker } from './search/action-ranker';
+import { createViewNormalizer } from './actions/view-normalizer';
+import { createViewResultNormalizer } from './actions/view-results';
 import { readAppBundleIconPng } from './app/app-bundle-icons';
 import { createAppIconCache } from './app/app-icon-cache';
 import {
   createAppIndexService,
   trackFirstSeenApps,
 } from './app/app-index-service';
-import { registerAppIpcHandlers } from './ipc/app-ipc-handlers';
-import { createMeasuredIpcRegistrar } from './ipc/ipc-registration';
 import {
   createProductionAppUninstallService,
   NEVERMIND_BUNDLE_ID,
 } from './app/app-uninstall-service';
-import { createViewLoaderRegistry } from './state/data-loader';
+import {
+  CHARACTER_RECORDS_BY_ID,
+  characterCodePoints,
+  characterWithSkinTone,
+} from './app/emoji-symbol-catalog';
+import { createExtensionRootItems } from './app/extension-root-items';
+import { createFormFieldPathPicker } from './app/form-field-paths';
+import { createPaletteSearch } from './app/palette-search';
+import {
+  createPaletteWindowController,
+  installPermissionHandlers,
+} from './app/palette-window';
+import { createQuitLifecycle } from './app/quit-lifecycle';
+import { createRunningAppStatusService } from './app/running-app-status';
+import {
+  settingDefinition,
+  settingValue,
+  toggledSettingValue,
+} from './app/settings';
+import { createSettingsService } from './app/settings-service';
+import { createTestModeIpc } from './app/test-mode-ipc';
+import { createUpdateManager } from './app/update-manager';
+import { createUpdatesService } from './app/updates-service';
+import {
+  installExternalNavigationPolicy,
+  isTrustedAppPage,
+  isTrustedExtensionWindowPage,
+} from './app/window-navigation-policy';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -200,44 +224,40 @@ import {
   transcribeDictationAudio,
 } from './dictation/dictation-transcription';
 import {
-  CHARACTER_RECORDS_BY_ID,
-  characterCodePoints,
-  characterWithSkinTone,
-} from './app/emoji-symbol-catalog';
-import {
   buildPreviewItemAction,
   commandFromItem,
 } from './extension-host/extension-action-builders';
 import { createExtensionContextFactory } from './extension-host/extension-context';
-import { createDiagnosticExtensionTargets } from './extension-host/extension-diagnostic-target';
 import { createExtensionDevFixtures } from './extension-host/extension-dev-fixtures';
+import { createDiagnosticExtensionTargets } from './extension-host/extension-diagnostic-target';
+import { createExtensionDraftPersistence } from './extension-host/extension-draft-persistence';
+import { createExtensionDraftStore } from './extension-host/extension-draft-store';
+import { createExtensionJsonStore } from './extension-host/extension-json-store';
 import { createExtensionLoader } from './extension-host/extension-loader';
 import { createExtensionManager } from './extension-host/extension-manager';
+import { createExtensionMemoryCache } from './extension-host/extension-memory-cache';
+import { createExtensionPrSubmitter } from './extension-host/extension-pr-submitter';
 import { createExtensionProposals } from './extension-host/extension-proposals';
 import { createExtensionRegistration } from './extension-host/extension-registration';
 import { createExtensionRuntimeState } from './extension-host/extension-runtime-state';
 import { createExtensionRuntimeTransaction } from './extension-host/extension-runtime-transaction';
-import { createPersistentExtensionWindowRestorer } from './extension-host/extension-window-restore';
-import { createExtensionTriggers } from './extension-host/extension-triggers';
-import { createHostJobs } from './extension-host/host-jobs';
-import { createExtensionDraftPersistence } from './extension-host/extension-draft-persistence';
-import { createExtensionDraftStore } from './extension-host/extension-draft-store';
-import { createExtensionJsonStore } from './extension-host/extension-json-store';
-import { createExtensionPrSubmitter } from './extension-host/extension-pr-submitter';
-import { createExtensionMemoryCache } from './extension-host/extension-memory-cache';
 import { createExtensionStorageService } from './extension-host/extension-storage-service';
+import { createExtensionTriggers } from './extension-host/extension-triggers';
 import { createExtensionWindowManager } from './extension-host/extension-window-manager';
+import { createPersistentExtensionWindowRestorer } from './extension-host/extension-window-restore';
 import { createExtensionWindowsState } from './extension-host/extension-windows-state';
+import { createHostJobs } from './extension-host/host-jobs';
 import { createOpenViewPatcher } from './extension-host/open-view-patch';
-import { JobRegistry, type JobSnapshot } from './platform/jobs';
-import { LocalLearningStore } from './state/learning-store';
-import {
-  configureLogger,
-  error as logError,
-  debug as loggerDebug,
-  info as logInfo,
-  warn as logWarn,
-} from './platform/logger';
+import { execFileText } from './files/exec-file-text';
+import { fileToExtensionFile } from './files/extension-file';
+import { createFileIndexService } from './files/file-index';
+import { findFiles } from './files/find-files';
+import { registerLocalFileProtocol } from './files/local-file-protocol';
+import { createOpenWithApps } from './files/quick-look-and-open-with';
+import { startFileDrag } from './files/start-file-drag';
+import { createThumbnailService } from './files/thumbnails';
+import { registerAppIpcHandlers } from './ipc/app-ipc-handlers';
+import { createMeasuredIpcRegistrar } from './ipc/ipc-registration';
 import {
   type AppFocusTarget,
   appIconSources,
@@ -261,24 +281,18 @@ import {
   setLaunchAtLoginEnabled,
   watchApps,
 } from './os/os';
-import { execFileText } from './files/exec-file-text';
-import { fileToExtensionFile } from './files/extension-file';
-import { createFileIndexService } from './files/file-index';
-import { findFiles } from './files/find-files';
-import { registerLocalFileProtocol } from './files/local-file-protocol';
-import { createOpenWithApps } from './files/quick-look-and-open-with';
-import { startFileDrag } from './files/start-file-drag';
-import { createThumbnailService } from './files/thumbnails';
+import { createSelectedTextReader } from './os/selected-text';
+import { createSystemAudioMuteCapability } from './os/system-audio';
+import { bundledResourcePath } from './platform/bundled-resource-path';
+import { JobRegistry, type JobSnapshot } from './platform/jobs';
 import {
-  createPaletteWindowController,
-  installPermissionHandlers,
-} from './app/palette-window';
-import { createExtensionRootItems } from './app/extension-root-items';
-import { createFormFieldPathPicker } from './app/form-field-paths';
-import { createPaletteSearch } from './app/palette-search';
-import { createQuitLifecycle } from './app/quit-lifecycle';
-import { createRunningAppStatusService } from './app/running-app-status';
-import { createTestModeIpc } from './app/test-mode-ipc';
+  configureLogger,
+  error as logError,
+  debug as loggerDebug,
+  info as logInfo,
+  warn as logWarn,
+} from './platform/logger';
+import { createActionRanker } from './search/action-ranker';
 import {
   calculateDetailed,
   calculateRateResult,
@@ -288,32 +302,19 @@ import {
   parseRateExpression,
   score,
 } from './search/search-utils';
-import { createSelectedTextReader } from './os/selected-text';
-import {
-  settingDefinition,
-  settingValue,
-  toggledSettingValue,
-} from './app/settings';
-import { createSettingsService } from './app/settings-service';
 import { createActionCustomization } from './shortcuts/action-customization';
 import { createGlobalShortcutRegistration } from './shortcuts/global-shortcut-registration';
 import { createShortcutCatalog } from './shortcuts/shortcut-catalog';
 import { createShortcutHints } from './shortcuts/shortcut-hints';
 import { withInheritedShortcutLifecycle } from './shortcuts/shortcut-lifecycle';
 import { createShortcutRunner } from './shortcuts/shortcut-runner';
+import { createViewLoaderRegistry } from './state/data-loader';
+import { LocalLearningStore } from './state/learning-store';
 import { createStateSafeQuit } from './state/state-safe-quit';
-import { createSystemAudioMuteCapability } from './os/system-audio';
-import { createUpdateManager } from './app/update-manager';
-import { createUpdatesService } from './app/updates-service';
 import { createUserStateLoader } from './state/user-state-loader';
 import { createUserStatePersistence } from './state/user-state-persistence';
 import { createDefaultUserState } from './state/user-state-shape';
 import { createUserStateStore } from './state/user-state-store';
-import {
-  installExternalNavigationPolicy,
-  isTrustedAppPage,
-  isTrustedExtensionWindowPage,
-} from './app/window-navigation-policy';
 
 const { autoUpdater } = electronUpdater;
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -508,34 +509,6 @@ const nevermindApp = app as NevermindApp;
 
 function markAppQuitting() {
   nevermindApp.isQuiting = true;
-}
-
-async function bundledResourcePath(...relativePath) {
-  const candidates = [
-    path.join(app.getAppPath(), 'src', 'app', 'resources', ...relativePath),
-    path.join(
-      process.resourcesPath,
-      'app.asar',
-      'src',
-      'app',
-      'resources',
-      ...relativePath,
-    ),
-    path.join(
-      process.resourcesPath,
-      'src',
-      'app',
-      'resources',
-      ...relativePath,
-    ),
-  ];
-  for (const candidate of candidates) {
-    try {
-      await fs.access(candidate);
-      return candidate;
-    } catch {}
-  }
-  return candidates[0];
 }
 
 let clipboardHistory: any[] = [];
@@ -1607,6 +1580,11 @@ const { stopFrontmostAppPolling, syncFrontmostAppPolling, registerHostJobs } =
     appIconCache,
     indexFiles,
     processPendingThumbnails,
+    clipboardImages: {
+      getClipboardHistory: () => clipboardHistory,
+      getClipboardImagesDir: () => clipboardImagesDir,
+      loadedStatePath: userStateStore.loadedStatePath,
+    },
   });
 const { attachExtensionFileTrigger, registerExtensionBackgroundJob } =
   createExtensionTriggers({
