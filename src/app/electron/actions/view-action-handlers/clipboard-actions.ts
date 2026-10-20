@@ -1,6 +1,7 @@
 import { measureDebugPerformance } from '../../diagnostics/debug-performance';
 import { expandUserPath } from '../../files/file-utils';
 import { frontmostApp, typeTextIntoFrontmostApp } from '../../os/os';
+import { copyImageAction } from './copy-image-action';
 
 export type ClipboardActionHandlerDeps = {
   clipboardApi: {
@@ -110,21 +111,12 @@ export function createClipboardActionHandlers(
         };
   }
 
-  function imageForCopyAction(action) {
-    if (action.path)
-      return nativeImage.createFromPath(expandUserPath(action.path));
-    if (action.imagePath) return nativeImage.createFromPath(action.imagePath);
-    return nativeImage.createFromDataURL(action.imageDataUrl);
-  }
-
-  async function handleCopyImage(action) {
-    const image = imageForCopyAction(action);
-    if (!image || image.isEmpty()) {
-      return {
-        toast: { message: 'Image no longer available', tone: 'error' },
-      };
-    }
-    await clipboardApi.writeImage(image);
+  function handleCopyImage(action) {
+    return copyImageAction(action, {
+      clipboardApi,
+      nativeImage,
+      expandUserPath,
+    });
   }
 
   function handleRemoveClipboardHistory(action) {
