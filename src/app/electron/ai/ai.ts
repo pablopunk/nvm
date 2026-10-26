@@ -1,6 +1,5 @@
 // biome-ignore-all lint: This legacy AI integration retains established provider and session conventions.
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { app } from 'electron';
@@ -36,6 +35,12 @@ import {
   CONVERSATION_AI_TOOLS,
   missingConversationAiTools,
 } from './ai-tool-policy';
+import {
+  compactionSettingsForModel,
+  findPiWebAccessPath,
+  PI_AI_COMPACTION_RESERVE_TOKENS,
+} from './pi-runtime';
+import { ensurePiToolAllowlist } from './pi-session-tool-policy';
 import {
   fetchDiagnosticBackend,
   observeAgentResponses,
@@ -196,12 +201,16 @@ type ThinkingLevel =
   | 'max';
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
 const ACTIVE_MODEL_FETCH_TIMEOUT_MS = 5_000;
-export const PI_AI_COMPACTION_RESERVE_TOKENS = 16_384;
+export { PI_AI_COMPACTION_RESERVE_TOKENS };
 const BUILDER_PI_WEB_ACCESS_TOOLS = [
   'web_search',
   'source_check',
   'fetch_content',
   'get_search_content',
+] as const;
+const CONVERSATION_PI_WEB_ACCESS_TOOLS = [
+  'web_search',
+  'fetch_content',
 ] as const;
 let piCodingAgentVersionPromise: Promise<string> | null = null;
 
@@ -1335,6 +1344,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       reasoning: model.reasoning,
     };
     onEvent?.({ type: 'debug', label: 'model', data: modelDebug });
+    const compactionSettings = compactionSettingsForModel(pi, model);
     logger.info(
       'ai.pi.session.configured',
       {
@@ -1345,6 +1355,7 @@ function createNevermindAi(options: NevermindAiOptions) {
         model: modelDebug,
         contextWindow: model.contextWindow,
         reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
+        keepRecentTokens: compactionSettings.keepRecentTokens,
         compactionEnabled: true,
         transientRetries: 2,
       },
@@ -1352,10 +1363,7 @@ function createNevermindAi(options: NevermindAiOptions) {
     );
 
     const settingsManager = pi.SettingsManager.inMemory({
-      compaction: {
-        enabled: true,
-        reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
-      },
+      compaction: compactionSettings,
       retry: { enabled: true, maxRetries: 2 },
     });
 
@@ -1435,7 +1443,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       sessionManager: pi.SessionManager.inMemory(workspaceDir),
       settingsManager,
     });
-    const registeredToolNames = ensurePiToolAllowlist(
+    const toolPolicy = ensurePiToolAllowlist(
       result.session,
       allowedToolNames,
       'builder',
@@ -1465,11 +1473,7 @@ function createNevermindAi(options: NevermindAiOptions) {
 
     const toolNames = result.session.agent.state.tools.map((tool) => tool.name);
     onEvent?.({ type: 'debug', label: 'tools', data: toolNames });
-    onEvent?.({
-      type: 'debug',
-      label: 'registered-tools',
-      data: registeredToolNames,
-    });
+    onEvent?.({ type: 'debug', label: 'pi-tool-policy', data: toolPolicy });
 
     const entry = sessions.get(chatId);
     if (entry)
@@ -1694,6 +1698,7 @@ async function createGeneralSession(
     initialPromptChars,
   );
   const toolMode = sessionOptions.toolMode || 'none';
+  const compactionSettings = compactionSettingsForModel(pi, model);
   logger.info(
     'ai.pi.session.configured',
     {
@@ -1708,16 +1713,14 @@ async function createGeneralSession(
       },
       contextWindow: model.contextWindow,
       reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
+      keepRecentTokens: compactionSettings.keepRecentTokens,
       compactionEnabled: true,
       transientRetries: 0,
     },
     { source: 'host', scope: 'ai' },
   );
   const settingsManager = pi.SettingsManager.inMemory({
-    compaction: {
-      enabled: true,
-      reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
-    },
+    compaction: compactionSettings,
     retry: { enabled: false },
   });
   const resourceLoader = await createGeneralResourceLoader(pi, {
@@ -1731,7 +1734,7 @@ async function createGeneralSession(
   });
   const allowedToolNames =
     toolMode === 'conversation'
-      ? [...CONVERSATION_AI_TOOLS, ...BUILDER_PI_WEB_ACCESS_TOOLS]
+      ? [...CONVERSATION_AI_TOOLS, ...CONVERSATION_PI_WEB_ACCESS_TOOLS]
       : [];
   const result = await pi.createAgentSession({
     cwd: workspaceDir,
@@ -1751,7 +1754,16 @@ async function createGeneralSession(
     ),
     settingsManager,
   });
-  ensurePiToolAllowlist(result.session, allowedToolNames, 'general session');
+  const toolPolicy = ensurePiToolAllowlist(
+    result.session,
+    allowedToolNames,
+    'general session',
+  );
+  options.onEvent?.({
+    type: 'debug',
+    label: 'pi-tool-policy',
+    data: toolPolicy,
+  });
   observeAgentResponses(result.session.agent);
   if (toolMode === 'conversation') {
     const activeTools = result.session.agent.state.tools.map(
@@ -2056,32 +2068,6 @@ function ensurePiExtensionsLoaded(
     throw new Error(
       `Pi extensions failed to load for ${mode}: ${loadErrors[0].error}`,
     );
-  }
-}
-
-function ensurePiToolAllowlist(
-  session: AgentSession,
-  allowedToolNames: readonly string[],
-  mode: string,
-) {
-  const allowed = new Set(allowedToolNames);
-  const registeredToolNames = session.getAllTools().map((tool) => tool.name);
-  const unexpected = registeredToolNames.filter((name) => !allowed.has(name));
-  if (unexpected.length > 0) {
-    session.dispose?.();
-    throw new Error(
-      `Pi loaded tools outside the ${mode} allowlist: ${unexpected.join(', ')}`,
-    );
-  }
-  return registeredToolNames;
-}
-
-async function findPiWebAccessPath() {
-  const require = createRequire(import.meta.url);
-  try {
-    return path.dirname(require.resolve('pi-web-access/package.json'));
-  } catch (error) {
-    throw new Error('Bundled Pi web access is unavailable', { cause: error });
   }
 }
 

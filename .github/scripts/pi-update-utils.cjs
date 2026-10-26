@@ -7,6 +7,8 @@ const PI_PACKAGES = [
   '@earendil-works/pi-ai',
   '@earendil-works/pi-coding-agent',
 ];
+const PI_WEB_ACCESS_PACKAGE = 'pi-web-access';
+const PI_WEB_ACCESS_PEERS = [...PI_PACKAGES, '@earendil-works/pi-tui'];
 const PACKAGE_FILES = ['package.json', 'pnpm-lock.yaml'];
 const DEFAULT_MINIMUM_RELEASE_AGE_MINUTES = 1_440;
 
@@ -267,17 +269,243 @@ function validateUnchangedLockfilePolicy(candidate, baseline) {
   if (stableJson(candidatePolicy) !== stableJson(baselinePolicy))
     throw new Error('Candidate lockfile changed pnpm policy or metadata.');
 
-  const candidateImporters = structuredClone(candidate.importers);
-  const baselineImporters = structuredClone(baseline.importers);
+  validatePiWebAccessPeerUpdate(candidate, baseline);
+
+  const candidateImporters = importerPolicyView(candidate.importers);
+  const baselineImporters = importerPolicyView(baseline.importers);
   for (const importers of [candidateImporters, baselineImporters]) {
     const dependencies = importers['.']?.dependencies;
     if (!isRecord(dependencies)) continue;
-    for (const packageName of PI_PACKAGES) delete dependencies[packageName];
+    for (const packageName of PI_PACKAGES) {
+      const pin = dependencies[packageName];
+      if (!isRecord(pin)) continue;
+      delete pin.specifier;
+      delete pin.version;
+      if (Object.keys(pin).length === 0) delete dependencies[packageName];
+    }
   }
+  const candidateWeb =
+    candidateImporters['.']?.dependencies?.[PI_WEB_ACCESS_PACKAGE];
+  const baselineWeb =
+    baselineImporters['.']?.dependencies?.[PI_WEB_ACCESS_PACKAGE];
+  if (isRecord(candidateWeb) && isRecord(baselineWeb))
+    candidateWeb.version = baselineWeb.version;
   if (stableJson(candidateImporters) !== stableJson(baselineImporters))
     throw new Error(
       'Candidate lockfile changed importers beyond the two direct Pi pins.',
     );
+}
+
+function importerPolicyView(importers) {
+  return structuredClone(importers);
+}
+
+function validatePiWebAccessPeerUpdate(candidate, baseline) {
+  const candidateImporter = candidate.importers['.'];
+  const baselineImporter = baseline.importers['.'];
+  const candidateWeb = candidateImporter?.dependencies?.[PI_WEB_ACCESS_PACKAGE];
+  const baselineWeb = baselineImporter?.dependencies?.[PI_WEB_ACCESS_PACKAGE];
+  if (candidateWeb === undefined && baselineWeb === undefined) return;
+  if (!isRecord(candidateWeb) || !isRecord(baselineWeb))
+    throw new Error('Candidate lockfile changed the pi-web-access importer.');
+  if (candidateWeb.specifier !== baselineWeb.specifier)
+    throw new Error('Candidate lockfile changed the pi-web-access specifier.');
+
+  const candidateResolution = splitPnpmPeerResolution(candidateWeb.version);
+  const baselineResolution = splitPnpmPeerResolution(baselineWeb.version);
+  if (candidateResolution.baseVersion !== baselineResolution.baseVersion)
+    throw new Error('Candidate lockfile changed the pi-web-access version.');
+
+  const candidatePackageKey = `${PI_WEB_ACCESS_PACKAGE}@${candidateResolution.baseVersion}`;
+  const baselinePackageKey = `${PI_WEB_ACCESS_PACKAGE}@${baselineResolution.baseVersion}`;
+  const candidatePackage = candidate.packages[candidatePackageKey];
+  const baselinePackage = baseline.packages[baselinePackageKey];
+  if (
+    !isRecord(candidatePackage) ||
+    !isRecord(baselinePackage) ||
+    stableJson(candidatePackage) !== stableJson(baselinePackage)
+  )
+    throw new Error(
+      'Candidate lockfile changed the pi-web-access package source or metadata.',
+    );
+
+  const expectedCandidatePeers = piWebAccessPeerVersions(candidate);
+  const expectedBaselinePeers = piWebAccessPeerVersions(baseline);
+  validatePiPeerContexts(
+    candidateResolution,
+    baselineResolution,
+    candidatePackage,
+    expectedCandidatePeers,
+    expectedBaselinePeers,
+  );
+
+  const candidateSnapshot =
+    candidate.snapshots[`${PI_WEB_ACCESS_PACKAGE}@${candidateWeb.version}`];
+  const baselineSnapshot =
+    baseline.snapshots[`${PI_WEB_ACCESS_PACKAGE}@${baselineWeb.version}`];
+  if (!isRecord(candidateSnapshot) || !isRecord(baselineSnapshot))
+    throw new Error(
+      'Candidate lockfile is missing a pi-web-access peer snapshot.',
+    );
+  if (
+    stableJson(
+      snapshotWithoutPiWebAccessPeerResolutions(
+        candidateSnapshot,
+        expectedCandidatePeers,
+      ),
+    ) !==
+    stableJson(
+      snapshotWithoutPiWebAccessPeerResolutions(
+        baselineSnapshot,
+        expectedBaselinePeers,
+      ),
+    )
+  )
+    throw new Error(
+      'Candidate lockfile changed unrelated pi-web-access snapshot dependencies.',
+    );
+}
+
+function splitPnpmPeerResolution(value) {
+  if (typeof value !== 'string' || value.length === 0)
+    throw new Error(
+      'Candidate lockfile has an invalid pi-web-access resolution.',
+    );
+  const firstPeer = value.indexOf('(');
+  const baseVersion = firstPeer < 0 ? value : value.slice(0, firstPeer);
+  const peers = new Map();
+  let cursor = firstPeer < 0 ? value.length : firstPeer;
+  while (cursor < value.length) {
+    if (value[cursor] !== '(')
+      throw new Error(
+        'Candidate lockfile has a malformed pnpm peer resolution.',
+      );
+    let depth = 0;
+    let end = cursor;
+    for (; end < value.length; end += 1) {
+      if (value[end] === '(') depth += 1;
+      else if (value[end] === ')') {
+        depth -= 1;
+        if (depth === 0) break;
+        if (depth < 0) break;
+      }
+    }
+    if (depth !== 0 || end === cursor + 1)
+      throw new Error(
+        'Candidate lockfile has an unbalanced pnpm peer resolution.',
+      );
+    const peerPath = value.slice(cursor + 1, end);
+    const packageName = packageNameInPeerPath(peerPath);
+    if (peers.has(packageName))
+      throw new Error(
+        `Candidate lockfile repeats the ${packageName} peer context.`,
+      );
+    peers.set(packageName, peerPath);
+    cursor = end + 1;
+  }
+  return { baseVersion, peers };
+}
+
+function packageNameInPeerPath(peerPath) {
+  const packageVersionSeparator = peerPath.startsWith('@')
+    ? peerPath.indexOf('@', peerPath.indexOf('/') + 1)
+    : peerPath.indexOf('@');
+  if (packageVersionSeparator <= 0)
+    throw new Error(
+      'Candidate lockfile has an invalid pnpm peer package path.',
+    );
+  return peerPath.slice(0, packageVersionSeparator);
+}
+
+function piWebAccessPeerVersions(lockfile) {
+  const rootImporter = lockfile.importers['.'];
+  const dependencies = rootImporter?.dependencies;
+  if (!isRecord(dependencies))
+    throw new Error('Candidate lockfile has no root importer dependencies.');
+  const peerVersions = new Map();
+  for (const packageName of PI_PACKAGES) {
+    const pin = dependencies[packageName];
+    if (!isRecord(pin) || typeof pin.version !== 'string')
+      throw new Error(
+        `Candidate lockfile is missing the ${packageName} Pi peer pin.`,
+      );
+    peerVersions.set(packageName, pin.version);
+  }
+  const codingAgentPin = dependencies[PI_PACKAGES[1]];
+  const codingAgentSnapshot =
+    lockfile.snapshots[`${PI_PACKAGES[1]}@${codingAgentPin.version}`];
+  const tuiVersion =
+    codingAgentSnapshot?.dependencies?.['@earendil-works/pi-tui'] ??
+    codingAgentSnapshot?.optionalDependencies?.['@earendil-works/pi-tui'];
+  if (typeof tuiVersion !== 'string')
+    throw new Error(
+      'Candidate lockfile is missing the Pi TUI dependency path.',
+    );
+  peerVersions.set('@earendil-works/pi-tui', tuiVersion);
+  return peerVersions;
+}
+
+function validatePiPeerContexts(
+  candidateResolution,
+  baselineResolution,
+  webPackage,
+  candidatePeerVersions,
+  baselinePeerVersions,
+) {
+  const expectedPeers = new Set(Object.keys(webPackage.peerDependencies || {}));
+  if (!sameStringSet(expectedPeers, new Set(candidateResolution.peers.keys())))
+    throw new Error('Candidate lockfile changed the pi-web-access peer set.');
+  if (!sameStringSet(expectedPeers, new Set(baselineResolution.peers.keys())))
+    throw new Error('Baseline lockfile has an invalid pi-web-access peer set.');
+  for (const peerName of expectedPeers) {
+    const candidatePath = candidateResolution.peers.get(peerName);
+    const baselinePath = baselineResolution.peers.get(peerName);
+    if (PI_WEB_ACCESS_PEERS.includes(peerName)) {
+      if (
+        candidatePath !==
+          `${peerName}@${candidatePeerVersions.get(peerName)}` ||
+        baselinePath !== `${peerName}@${baselinePeerVersions.get(peerName)}`
+      )
+        throw new Error(
+          `Candidate lockfile changed the ${peerName} peer context incoherently.`,
+        );
+    } else if (candidatePath !== baselinePath) {
+      throw new Error(
+        `Candidate lockfile changed an unrelated ${peerName} peer context.`,
+      );
+    }
+  }
+}
+
+function sameStringSet(left, right) {
+  return (
+    left.size === right.size && [...left].every((value) => right.has(value))
+  );
+}
+
+function snapshotWithoutPiWebAccessPeerResolutions(
+  snapshot,
+  expectedPeerVersions,
+) {
+  const normalized = structuredClone(snapshot);
+  for (const peerName of PI_WEB_ACCESS_PEERS) {
+    let occurrences = 0;
+    for (const sectionName of ['dependencies', 'optionalDependencies']) {
+      const section = normalized[sectionName];
+      if (!isRecord(section) || !Object.hasOwn(section, peerName)) continue;
+      if (section[peerName] !== expectedPeerVersions.get(peerName))
+        throw new Error(
+          `Candidate lockfile has an incoherent ${peerName} peer snapshot.`,
+        );
+      delete section[peerName];
+      occurrences += 1;
+    }
+    if (occurrences !== 1)
+      throw new Error(
+        `Candidate lockfile must contain one ${peerName} peer snapshot.`,
+      );
+  }
+  return normalized;
 }
 
 function lockVersionMatches(actual, expected) {

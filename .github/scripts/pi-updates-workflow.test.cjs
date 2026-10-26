@@ -130,7 +130,7 @@ test('every relevant PR gets one same-run fail-closed gate and three OS package 
   assert.match(ciWorkflow, /NVM_TEST_PI_PACKAGED: '1'/g);
   assert.match(ciWorkflow, /--mac dir/);
   assert.match(ciWorkflow, /CSC_IDENTITY_AUTO_DISCOVERY: 'false'/);
-  assert.match(ciWorkflow, /verify-packaged-pi-archive-evidence\.cjs/);
-  assert.match(ciWorkflow, /Verify Pi archive Node session evidence/);
+  assert.match(ciWorkflow, /verify-packaged-pi-electron-evidence\.cjs/);
+  assert.match(ciWorkflow, /Verify packaged Pi Electron session evidence/);
   assert.match(ciWorkflow, /verify-pi-integration-evidence\.cjs/);
 });

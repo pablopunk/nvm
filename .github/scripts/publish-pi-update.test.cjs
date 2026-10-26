@@ -81,9 +81,39 @@ test('PR body records an exact rejected tuple and generated commit fingerprint',
     candidateVersions: versions,
     generatedCommitSha,
   });
-  assert.match(body, /Review classification: routine update/);
+  assert.match(
+    body,
+    /Review classification: major; targeted API, tool, provider, auth, and packaging review required/,
+  );
   assert.match(body, /Generated commit: b{40}/);
   assert.match(body, /Required CI: pending/);
+});
+
+test('same-major Pi candidates retain the routine update review classification', function routineUpdateClassification() {
+  const routineVersions = {
+    '@earendil-works/pi-ai': '1.4.1',
+    '@earendil-works/pi-coding-agent': '1.4.1',
+  };
+  const body = candidateBody(
+    {
+      metadata: {
+        candidateVersions: routineVersions,
+        baseVersions: {
+          '@earendil-works/pi-ai': '1.4.0',
+          '@earendil-works/pi-coding-agent': '1.4.0',
+        },
+        baseSha: 'c'.repeat(40),
+        transitiveDelta: [],
+      },
+      fingerprint: 'a'.repeat(64),
+      transitiveDelta: [],
+    },
+    'b'.repeat(40),
+  );
+  assert.match(
+    body,
+    /Review classification: routine update; skim the upstream release notes/,
+  );
 });
 
 test('state marker parser reads nested JSON safely and accepts previously written candidate markers', function legacyStateMarker() {

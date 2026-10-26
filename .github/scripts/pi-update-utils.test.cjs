@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { parse: parseYaml, stringify: stringifyYaml } = require('yaml');
 const {
   DEFAULT_MINIMUM_RELEASE_AGE_MINUTES,
   compareVersions,
@@ -45,6 +46,80 @@ function lockfile(extraPackage = '') {
     "  '@earendil-works/pi-coding-agent@1.4.0': {}",
     '',
   ].join('\n');
+}
+
+function pnpmPiWebPeerContextLockfile(piVersion) {
+  const piAiPath =
+    piVersion === '0.80.10'
+      ? '0.80.10(supports-color@8.1.1)(ws@8.21.0)(zod@4.4.3)'
+      : '1.4.0(@aws-sdk/credential-provider-node@3.972.88)(@smithy/signature-v4@5.7.4)(supports-color@8.1.1)(undici@8.10.2)(ws@8.21.0)(zod@4.4.3)';
+  const piCodingAgentPath =
+    piVersion === '0.80.10'
+      ? '0.80.10(supports-color@8.1.1)(ws@8.21.0)(zod@4.4.3)'
+      : '1.4.0(@aws-sdk/credential-provider-node@3.972.88)(@smithy/signature-v4@5.7.4)(supports-color@8.1.1)(ws@8.21.0)(zod@4.4.3)';
+  const piTuiVersion = piVersion;
+  const webVersion = [
+    `0.24.0(@earendil-works/pi-ai@${piAiPath})`,
+    `(@earendil-works/pi-coding-agent@${piCodingAgentPath})`,
+    `(@earendil-works/pi-tui@${piTuiVersion})`,
+  ].join('');
+  return stringifyYaml({
+    lockfileVersion: '9.0',
+    settings: { autoInstallPeers: true, excludeLinksFromLockfile: false },
+    importers: {
+      '.': {
+        dependencies: {
+          '@earendil-works/pi-ai': {
+            specifier: piVersion,
+            version: piAiPath,
+          },
+          '@earendil-works/pi-coding-agent': {
+            specifier: piVersion,
+            version: piCodingAgentPath,
+          },
+          'pi-web-access': { specifier: '0.24.0', version: webVersion },
+          unrelated: {
+            specifier: '1.0.0',
+            version: '1.0.0(peer-runtime@1.0.0)',
+          },
+        },
+      },
+    },
+    packages: {
+      [`@earendil-works/pi-ai@${piVersion}`]: {
+        resolution: { integrity: `sha512-pi-ai-${piVersion}` },
+      },
+      [`@earendil-works/pi-coding-agent@${piVersion}`]: {
+        resolution: { integrity: `sha512-pi-agent-${piVersion}` },
+      },
+      [`@earendil-works/pi-tui@${piTuiVersion}`]: {
+        resolution: { integrity: `sha512-pi-tui-${piTuiVersion}` },
+      },
+      'pi-web-access@0.24.0': {
+        resolution: { integrity: 'sha512-pi-web-access-0.24.0' },
+        peerDependencies: {
+          '@earendil-works/pi-ai': '*',
+          '@earendil-works/pi-coding-agent': '*',
+          '@earendil-works/pi-tui': '*',
+        },
+      },
+    },
+    snapshots: {
+      [`@earendil-works/pi-ai@${piAiPath}`]: {},
+      [`@earendil-works/pi-coding-agent@${piCodingAgentPath}`]: {
+        dependencies: { '@earendil-works/pi-tui': piTuiVersion },
+      },
+      [`@earendil-works/pi-tui@${piTuiVersion}`]: {},
+      [`pi-web-access@${webVersion}`]: {
+        dependencies: {
+          '@earendil-works/pi-ai': piAiPath,
+          '@earendil-works/pi-coding-agent': piCodingAgentPath,
+          '@earendil-works/pi-tui': piTuiVersion,
+          '@mozilla/readability': '0.6.0',
+        },
+      },
+    },
+  });
 }
 
 test('Pi candidates are exact stable semver versions and majors remain comparable', function semverPolicy() {
@@ -197,6 +272,54 @@ test('publisher rejects unrelated importer and pnpm policy edits in a candidate 
   );
   assert.throws(
     () => validateLockfile(baseline, versions, baselineWithPolicy),
+    /changed pnpm policy or metadata/,
+  );
+});
+
+test('publisher accepts only coherent Pi-induced pi-web-access peer context changes', function piWebPeerContextBoundary() {
+  const baseline = pnpmPiWebPeerContextLockfile('0.80.10');
+  const candidate = pnpmPiWebPeerContextLockfile('1.4.0');
+  validateLockfile(candidate, versions, baseline);
+
+  const wrongPiPeer = parseYaml(candidate);
+  wrongPiPeer.importers['.'].dependencies['pi-web-access'].version =
+    wrongPiPeer.importers['.'].dependencies['pi-web-access'].version.replace(
+      '@earendil-works/pi-tui@1.4.0',
+      '@earendil-works/pi-tui@9.9.9',
+    );
+  assert.throws(
+    () => validateLockfile(stringifyYaml(wrongPiPeer), versions, baseline),
+    /changed the @earendil-works\/pi-tui peer context incoherently/,
+  );
+
+  const unrelatedPeer = parseYaml(candidate);
+  unrelatedPeer.importers['.'].dependencies.unrelated.version =
+    '1.0.0(peer-runtime@2.0.0)';
+  assert.throws(
+    () => validateLockfile(stringifyYaml(unrelatedPeer), versions, baseline),
+    /changed importers beyond the two direct Pi pins/,
+  );
+
+  const changedSpecifier = parseYaml(candidate);
+  changedSpecifier.importers['.'].dependencies['pi-web-access'].specifier =
+    '0.25.0';
+  assert.throws(
+    () => validateLockfile(stringifyYaml(changedSpecifier), versions, baseline),
+    /changed the pi-web-access specifier/,
+  );
+
+  const changedSource = parseYaml(candidate);
+  changedSource.packages['pi-web-access@0.24.0'].resolution.integrity =
+    'sha512-unreviewed-source';
+  assert.throws(
+    () => validateLockfile(stringifyYaml(changedSource), versions, baseline),
+    /changed the pi-web-access package source or metadata/,
+  );
+
+  const changedPolicy = parseYaml(candidate);
+  changedPolicy.settings.autoInstallPeers = false;
+  assert.throws(
+    () => validateLockfile(stringifyYaml(changedPolicy), versions, baseline),
     /changed pnpm policy or metadata/,
   );
 });

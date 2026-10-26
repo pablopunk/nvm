@@ -1743,6 +1743,8 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
   getSetting,
   getShortcuts,
   showRendererIndicator,
+  initializeAi: () => initNevermindAi(),
+  getAi: () => nevermindAi,
 });
 
 function setActiveAiChatId(chatId: string | undefined) {

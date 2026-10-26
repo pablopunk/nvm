@@ -188,7 +188,7 @@ jobs:
         run: mise exec -- pnpm install --frozen-lockfile
       - name: Run real Pi and Nevermind adapter fixtures
         env:
-          PI_INTEGRATION_EVIDENCE_DIR: test-results/pi-integration
+          PI_INTEGRATION_EVIDENCE_DIR: ${{ github.workspace }}/test-results/pi-integration
         run: >-
           mise exec -- pnpm -C src/backend exec node
           --experimental-test-module-mocks --import tsx --test
@@ -228,15 +228,17 @@ jobs:
       - name: Verify package dependency and blockmap contracts
         run: mise exec -- pnpm exec node --test .github/scripts/packaged-dependencies.test.cjs .github/scripts/linux-blockmap.test.cjs
       - name: Build
+        env:
+          NVM_TEST_PI_PACKAGED_BUILD: '1'
         run: mise exec -- pnpm build
-      - name: Package app and collect diagnostics plus Pi archive evidence
+      - name: Package app and run diagnostics plus packaged Pi Electron session
         env:
           NVM_TEST_PI_PACKAGED: '1'
         run: mise exec -- pnpm exec electron-builder --config electron-builder.yml --win dir --x64 --publish never
-      - name: Verify Pi archive Node session evidence
+      - name: Verify packaged Pi Electron session evidence
         run: >-
-          mise exec -- node .github/scripts/verify-packaged-pi-archive-evidence.cjs
-          test-results/packaged-pi-archive-node-win32-x64 "$GITHUB_SHA" win32-x64
+          mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs
+          test-results/packaged-pi-electron-win32-x64 "$GITHUB_SHA" win32-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -244,7 +246,7 @@ jobs:
           name: packaged-diagnostics-windows-x64
           path: |
             test-results/packaged-diagnostics-*
-            test-results/packaged-pi-archive-node-win32-x64
+            test-results/packaged-pi-electron-win32-x64
           if-no-files-found: error
           retention-days: 7
 
@@ -268,15 +270,17 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install --yes xvfb
       - name: Build
+        env:
+          NVM_TEST_PI_PACKAGED_BUILD: '1'
         run: mise exec -- pnpm build
-      - name: Package app and collect diagnostics plus Pi archive evidence
+      - name: Package app and run diagnostics plus packaged Pi Electron session
         env:
           NVM_TEST_PI_PACKAGED: '1'
         run: xvfb-run -a mise exec -- pnpm exec electron-builder --config electron-builder.yml --linux dir --x64 --publish never
-      - name: Verify Pi archive Node session evidence
+      - name: Verify packaged Pi Electron session evidence
         run: >-
-          mise exec -- node .github/scripts/verify-packaged-pi-archive-evidence.cjs
-          test-results/packaged-pi-archive-node-linux-x64 "$GITHUB_SHA" linux-x64
+          mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs
+          test-results/packaged-pi-electron-linux-x64 "$GITHUB_SHA" linux-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -284,12 +288,12 @@ jobs:
           name: packaged-diagnostics-linux-x64
           path: |
             test-results/packaged-diagnostics-*
-            test-results/packaged-pi-archive-node-linux-x64
+            test-results/packaged-pi-electron-linux-x64
           if-no-files-found: error
           retention-days: 7
 
   pi-packaged-macos:
-    name: macOS Pi archive Node session
+    name: macOS Pi packaged Electron runtime
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
       needs['pi-change-classification'].outputs.relevant == 'true'
@@ -304,29 +308,31 @@ jobs:
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
       - name: Build
+        env:
+          NVM_TEST_PI_PACKAGED_BUILD: '1'
         run: mise exec -- pnpm build
       - name: Build selected-text helper resources
         run: node scripts/build-macos-selected-text-helper.cjs --universal
-      - name: Package unsigned native-architecture app and run archive Node smoke
+      - name: Package unsigned native-architecture app and run packaged Pi session
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           NVM_TEST_PI_PACKAGED: '1'
         run: |
           ARCH="$(node -p 'process.arch')"
           mise exec -- pnpm exec electron-builder --config electron-builder.yml --mac dir "--${ARCH}" --publish never
-      - name: Verify Pi archive Node session evidence
+      - name: Verify packaged Pi Electron session evidence
         run: |
           ARCH="$(node -p 'process.arch')"
-          mise exec -- node .github/scripts/verify-packaged-pi-archive-evidence.cjs \
-            "test-results/packaged-pi-archive-node-darwin-${ARCH}" "$GITHUB_SHA" "darwin-${ARCH}"
+          mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs \
+            "test-results/packaged-pi-electron-darwin-${ARCH}" "$GITHUB_SHA" "darwin-${ARCH}"
       - name: Upload packaged macOS Pi evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: packaged-pi-archive-node-macos-${{ runner.arch }}-${{ github.run_id }}
+          name: packaged-pi-electron-macos-${{ runner.arch }}-${{ github.run_id }}
           path: |
             test-results/packaged-diagnostics-darwin-*
-            test-results/packaged-pi-archive-node-darwin-*
+            test-results/packaged-pi-electron-darwin-*
           if-no-files-found: error
           retention-days: 14
 

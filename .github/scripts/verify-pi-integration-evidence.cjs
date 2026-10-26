@@ -27,6 +27,67 @@ const REQUIRED_SCENARIOS = [
   'builder-transient-retry-budget-two',
   'general-transient-retries-disabled',
 ];
+const EXPECTED_CONVERSATION_TOOLS = [
+  'fetch_content',
+  'find',
+  'grep',
+  'ls',
+  'read',
+  'web_search',
+];
+
+function verifyToolPolicy(outcome, label) {
+  assert.ok(Array.isArray(outcome.toolAllowlist));
+  assert.ok(Array.isArray(outcome.activeToolNames));
+  assert.ok(Array.isArray(outcome.callableToolNames));
+  assert.ok(Array.isArray(outcome.registeredTools));
+  const allowed = new Set(outcome.toolAllowlist);
+  const registeredByName = new Map(
+    outcome.registeredTools.map((tool) => [tool.name, tool]),
+  );
+  assert.deepEqual(
+    [...outcome.activeToolNames].sort(),
+    [...outcome.toolAllowlist].sort(),
+    `${label} active tools must match the provider-visible allowlist`,
+  );
+  assert.ok(
+    outcome.callableToolNames.every((name) => allowed.has(name)),
+    `${label} callable and deferred tools must stay within the allowlist`,
+  );
+  assert.ok(
+    outcome.registeredTools.every(
+      (tool) =>
+        typeof tool.name === 'string' && typeof tool.exposure === 'string',
+    ),
+    `${label} must report the SDK's registered tool inventory and exposure`,
+  );
+  assert.ok(
+    outcome.toolAllowlist.every((name) => registeredByName.has(name)),
+    `${label} allowlist must contain tools registered by the SDK`,
+  );
+  assert.ok(
+    outcome.toolAllowlist.every(
+      (name) => registeredByName.get(name)?.exposure === 'direct',
+    ),
+    `${label} allowlist may only declare direct tools`,
+  );
+  assert.ok(
+    !outcome.registeredTools.some((tool) =>
+      ['tool_search', 'codemode', 'mcp'].some((forbidden) =>
+        tool.name.toLowerCase().includes(forbidden),
+      ),
+    ),
+    `${label} must not load tool search, codemode, or MCP tools`,
+  );
+  assert.ok(
+    outcome.registeredTools.every(
+      (tool) =>
+        !['deferred', 'codemode'].includes(tool.exposure) ||
+        allowed.has(tool.name),
+    ),
+    `${label} must not expose unallowlisted deferred tools`,
+  );
+}
 
 function verifyPiIntegrationEvidence(directory, expectedSha) {
   const evidencePath = path.join(directory, 'integration-evidence.json');
@@ -97,21 +158,24 @@ function verifyPiIntegrationEvidence(directory, expectedSha) {
   assert.ok(
     estimatorBoundary.backendEstimate < estimatorBoundary.piProactiveThreshold,
   );
-  assert.ok(Array.isArray(builder.registeredToolAllowlist));
-  assert.ok(
-    builder.registeredToolAllowlist.every((name) =>
-      builder.toolAllowlist.includes(name),
-    ),
-    'registered or deferred tools must stay within the active allowlist',
+  verifyToolPolicy(builder, 'builder');
+  const conversation = byScenario.get(
+    'conversation-explicit-read-only-tool-allowlist',
   );
-  assert.ok(
-    !builder.registeredToolAllowlist.some((name) =>
-      ['tool_search', 'codemode', 'mcp'].some((forbidden) =>
-        String(name).toLowerCase().includes(forbidden),
-      ),
-    ),
-    'tool discovery and native extension tools must not be loaded',
-  );
+  assert.equal(conversation.finalOutcome, 'done');
+  assert.deepEqual(conversation.toolAllowlist, EXPECTED_CONVERSATION_TOOLS);
+  verifyToolPolicy(conversation, 'conversation');
+  for (const inactiveWebTool of ['source_check', 'get_search_content']) {
+    const registered = conversation.registeredTools.find(
+      (tool) => tool.name === inactiveWebTool,
+    );
+    assert.equal(registered?.exposure, 'direct');
+    assert.equal(conversation.activeToolNames.includes(inactiveWebTool), false);
+    assert.equal(
+      conversation.callableToolNames.includes(inactiveWebTool),
+      false,
+    );
+  }
   const validationFailure = byScenario.get(
     'invalid-generated-extension-preserves-live-source',
   );

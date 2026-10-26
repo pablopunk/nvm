@@ -55,6 +55,9 @@ const { MAX_INPUT_TOKENS, estimateInputTokensFromValue } = await import(
 );
 const FIXTURE_REQUEST_TIMEOUT_MS = 10_000;
 const FIXTURE_CLOSE_TIMEOUT_MS = 5_000;
+const LONG_SESSION_TURN =
+  'Deterministic session history retained by the Pi SDK fixture. '.repeat(110);
+const LONG_SESSION_TURN_COUNT = 16;
 
 after(async () => {
   clearNevermindAuthCacheForTests();
@@ -86,11 +89,14 @@ after(async () => {
 type CapturedRequest = {
   headers: IncomingMessage['headers'];
   body: Record<string, any>;
+  method?: string;
+  path: string;
   responseStatus?: number;
 };
 
 type FixtureScenario =
   | 'builder'
+  | 'builder-long-session'
   | 'builder-validation-failure'
   | 'request-too-large'
   | 'backend-estimator-boundary'
@@ -118,7 +124,15 @@ function sendJson(response: ServerResponse, status: number, value: unknown) {
   response.end(JSON.stringify(value));
 }
 
-function sendStream(response: ServerResponse, value: object) {
+function sendStream(
+  response: ServerResponse,
+  value: object,
+  usage = {
+    prompt_tokens: 1_280,
+    completion_tokens: 18,
+    total_tokens: 1_298,
+  },
+) {
   response.writeHead(200, {
     'cache-control': 'no-cache',
     connection: 'keep-alive',
@@ -137,20 +151,28 @@ function sendStream(response: ServerResponse, value: object) {
       created: 1,
       model: 'fixture-model',
       choices: [],
-      usage: {
-        prompt_tokens: 1_280,
-        completion_tokens: 18,
-        total_tokens: 1_298,
-      },
+      usage,
     })}\n\ndata: [DONE]\n\n`,
   );
 }
 
-function sendText(response: ServerResponse, text: string) {
-  sendStream(response, {
-    delta: { content: text },
-    finish_reason: 'stop',
-  });
+function sendText(
+  response: ServerResponse,
+  text: string,
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  },
+) {
+  sendStream(
+    response,
+    {
+      delta: { content: text },
+      finish_reason: 'stop',
+    },
+    usage,
+  );
 }
 
 function sendAnthropicText(response: ServerResponse, text: string) {
@@ -304,6 +326,27 @@ function sendPromptTooLargeForApi(
   });
 }
 
+function providerApiForRequestPath(
+  requestUrl: string | undefined,
+  baseUrl: string,
+) {
+  const request = new URL(requestUrl || '/', baseUrl);
+  if (
+    request.pathname === '/v1/chat/completions' &&
+    request.search.length === 0
+  )
+    return 'openai-completions';
+  if (request.pathname === '/v1/messages' && request.search.length === 0)
+    return 'anthropic-messages';
+  if (
+    /^\/v1beta\/models\/[^/]+:streamGenerateContent$/.test(request.pathname) &&
+    [...request.searchParams.keys()].length === 1 &&
+    request.searchParams.get('alt') === 'sse'
+  )
+    return 'google-generative-ai';
+  return undefined;
+}
+
 function hasBuilderTools(body: Record<string, any>) {
   return Array.isArray(body.tools) && body.tools.length > 0;
 }
@@ -328,6 +371,12 @@ function createProtocolFixture(
   api = 'openai-completions',
 ) {
   const requests: CapturedRequest[] = [];
+  const unexpectedRoutes: Array<{
+    method: string;
+    path: string;
+    expectedApi: string;
+    detectedApi: string | null;
+  }> = [];
   const managedDescriptors: Array<{ provider: string; api: string }> = [];
   const requestWaiters: Array<{
     count: number;
@@ -335,6 +384,7 @@ function createProtocolFixture(
   }> = [];
   let rejectedLargeResult = false;
   let requestedContinuation = false;
+  let builderTaskStarted = false;
   let summaryServed = false;
   let fixtureClosed = false;
   let activeModelRequestCount = 0;
@@ -369,9 +419,20 @@ function createProtocolFixture(
         await modelRefreshGate;
       }
       const contextWindow =
-        scenario === 'backend-estimator-boundary'
-          ? MAX_INPUT_TOKENS + PI_AI_COMPACTION_RESERVE_TOKENS + 20_000
-          : 24_576;
+        scenario === 'builder-long-session'
+          ? 40_000
+          : scenario === 'backend-estimator-boundary'
+            ? MAX_INPUT_TOKENS + PI_AI_COMPACTION_RESERVE_TOKENS + 20_000
+            : [
+                  'session-overflow',
+                  'summary-unauthorized',
+                  'summary-credits',
+                  'summary-hangs',
+                  'recovery-exhausted',
+                  'raw-provider-413',
+                ].includes(scenario)
+              ? 200_000
+              : 24_576;
       const descriptor = {
         id: 'fixture-model',
         name: 'Fixture Model',
@@ -393,15 +454,21 @@ function createProtocolFixture(
       sendJson(response, 200, descriptor);
       return;
     }
-    const requestApi = request.url?.startsWith('/v1/chat/completions')
-      ? 'openai-completions'
-      : request.url?.startsWith('/v1/messages')
-        ? 'anthropic-messages'
-        : request.url?.startsWith('/v1beta/models/')
-          ? 'google-generative-ai'
-          : undefined;
-    if (requestApi !== api) {
-      sendJson(response, 404, { error: 'unknown fixture route' });
+    const requestUrl = new URL(request.url || '/', fixture.baseUrl);
+    const requestPath = `${requestUrl.pathname}${requestUrl.search}`;
+    const requestApi = providerApiForRequestPath(request.url, fixture.baseUrl);
+    if (request.method !== 'POST' || requestApi !== api) {
+      const route = {
+        method: request.method || 'UNKNOWN',
+        path: requestPath,
+        expectedApi: api,
+        detectedApi: requestApi || null,
+      };
+      unexpectedRoutes.push(route);
+      console.error(`[Pi fixture route mismatch] ${JSON.stringify(route)}`);
+      sendJson(response, 404, {
+        error: `unknown fixture route: ${request.method} ${requestPath} for ${api}`,
+      });
       return;
     }
 
@@ -412,11 +479,28 @@ function createProtocolFixture(
       sendJson(response, 400, { error: 'invalid request JSON' });
       return;
     }
-    requests.push({ headers: request.headers, body });
+    requests.push({
+      headers: request.headers,
+      body,
+      method: request.method,
+      path: requestPath,
+    });
     const callIndex = requests.length;
     for (const waiter of requestWaiters.splice(0)) {
       if (requests.length >= waiter.count) waiter.resolve();
       else requestWaiters.push(waiter);
+    }
+
+    if (
+      scenario === 'builder-long-session' &&
+      JSON.stringify(body.messages).includes('PI_BUILDER_HISTORY_SEED')
+    ) {
+      sendText(response, LONG_SESSION_TURN, {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      });
+      return;
     }
 
     if (
@@ -427,9 +511,19 @@ function createProtocolFixture(
       scenario === 'recovery-exhausted' ||
       scenario === 'raw-provider-413'
     ) {
+      if (callIndex <= LONG_SESSION_TURN_COUNT) {
+        sendText(response, LONG_SESSION_TURN, {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+        });
+        return;
+      }
+      const overflowRequestIndex = LONG_SESSION_TURN_COUNT + 1;
       if (
-        callIndex === 1 ||
-        (scenario === 'recovery-exhausted' && callIndex >= 3)
+        callIndex === overflowRequestIndex ||
+        (scenario === 'recovery-exhausted' &&
+          callIndex >= overflowRequestIndex + 2)
       ) {
         requests.at(-1)!.responseStatus = 413;
         sendPromptTooLargeForApi(
@@ -437,12 +531,18 @@ function createProtocolFixture(
           api,
           scenario !== 'raw-provider-413',
         );
-      } else if (callIndex === 2 && scenario === 'summary-unauthorized') {
+      } else if (
+        callIndex === overflowRequestIndex + 1 &&
+        scenario === 'summary-unauthorized'
+      ) {
         requests.at(-1)!.responseStatus = 401;
         sendJson(response, 401, {
           error: { type: 'invalid_api_key', message: 'Invalid API key' },
         });
-      } else if (callIndex === 2 && scenario === 'summary-credits') {
+      } else if (
+        callIndex === overflowRequestIndex + 1 &&
+        scenario === 'summary-credits'
+      ) {
         requests.at(-1)!.responseStatus = 402;
         sendJson(response, 402, {
           error: {
@@ -450,9 +550,12 @@ function createProtocolFixture(
             message: 'No credits remaining',
           },
         });
-      } else if (callIndex === 2 && scenario === 'summary-hangs') {
+      } else if (
+        callIndex === overflowRequestIndex + 1 &&
+        scenario === 'summary-hangs'
+      ) {
         return;
-      } else if (callIndex === 2) {
+      } else if (callIndex === overflowRequestIndex + 1) {
         sendTextForApi(
           response,
           api,
@@ -561,7 +664,12 @@ function createProtocolFixture(
       return;
     }
 
-    if (callIndex === 1) {
+    const shouldStartBuilderTask =
+      scenario === 'builder-long-session'
+        ? !builderTaskStarted && hasBuilderTools(body)
+        : callIndex === 1;
+    if (shouldStartBuilderTask) {
+      if (scenario === 'builder-long-session') builderTaskStarted = true;
       sendBuilderToolCall(response);
       return;
     }
@@ -601,6 +709,7 @@ function createProtocolFixture(
   const fixture = {
     server,
     requests,
+    unexpectedRoutes,
     managedDescriptors,
     baseUrl: '',
     nextOffset: undefined as number | undefined,
@@ -790,11 +899,44 @@ async function withFixture(
   }
 }
 
+async function seedLongPiSession(session: {
+  ask: (message: string) => Promise<unknown>;
+}) {
+  for (let turn = 0; turn < LONG_SESSION_TURN_COUNT; turn += 1)
+    await session.ask(`Earlier fixture session turn ${turn + 1}.`);
+}
+
 test('the real builder adapter bounds and continues API reads, recovers a backend-shaped 413, and accepts a follow-up', async (context) => {
-  await withFixture('builder', 'proactive', async (fixture) => {
-    const events: Array<{ type: string; name?: string; data?: any }> = [];
+  await withFixture('builder-long-session', 'proactive', async (fixture) => {
+    const events: Array<{
+      type: string;
+      name?: string;
+      label?: string;
+      data?: any;
+      text?: string;
+    }> = [];
     const ai = createAi(fixture, events);
     try {
+      let toolPolicy: unknown;
+      for (let turn = 0; turn < 4; turn += 1) {
+        events.length = 0;
+        await ai.send(
+          `PI_BUILDER_HISTORY_SEED ${turn + 1}`,
+          'large-builder-chat',
+        );
+        assert.deepEqual(
+          terminalEvents(events).map((event) => event.type),
+          ['done'],
+          'each earlier builder turn should finish through the real adapter',
+        );
+        if (turn === 0) {
+          toolPolicy = events.find(
+            (event) =>
+              event.type === 'debug' && event.label === 'pi-tool-policy',
+          )?.data;
+        }
+      }
+      events.length = 0;
       await ai.send(
         'The user confirmed the extension request. Read the API, then summarize the requested change.',
         'large-builder-chat',
@@ -832,24 +974,48 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       );
       assert.ok(pageDetails[0].nextOffset > 0);
       assert.notEqual(pageDetails[1].totalLines, undefined);
+      const taskPromptIndex = fixture.requests.findIndex((request) =>
+        JSON.stringify(request.body.messages).includes(
+          'The user confirmed the extension request.',
+        ),
+      );
+      assert.ok(taskPromptIndex >= 4, 'the task must follow seeded history');
+      const taskRequests = fixture.requests.slice(taskPromptIndex);
       assert.equal(
-        fixture.requests.filter((request) => request.responseStatus === 413)
-          .length,
+        taskRequests.filter((request) => request.responseStatus === 413).length,
         1,
       );
       assert.ok(fixture.requests.length >= 4);
-      if (!hasTrailingToolCompaction(piCodingAgentVersion)) {
-        assert.ok(
-          hasBuilderTools(fixture.requests[1].body) &&
-            containsApiReadResult(fixture.requests[1].body),
+      const taskSummaryIndices = taskRequests.flatMap((request, index) =>
+        !hasBuilderTools(request.body) && containsApiReadResult(request.body)
+          ? [index]
+          : [],
+      );
+      const taskOverflowIndex = taskRequests.findIndex(
+        (request) => request.responseStatus === 413,
+      );
+      assert.ok(
+        taskOverflowIndex >= 0,
+        'the fixture should reject one task request',
+      );
+      const proactiveCompaction =
+        hasTrailingToolCompaction(piCodingAgentVersion) &&
+        taskSummaryIndices.some((index) => index < taskOverflowIndex);
+      const overflowFallback = taskSummaryIndices.some(
+        (index) => index > taskOverflowIndex,
+      );
+      if (hasTrailingToolCompaction(piCodingAgentVersion))
+        assert.equal(
+          proactiveCompaction,
+          true,
+          'upgraded Pi should compact the large tool result before the next normal request',
+        );
+      else
+        assert.equal(
+          overflowFallback,
+          true,
           'locked Pi should use overflow fallback after the large API result',
         );
-      } else {
-        assert.ok(
-          !hasBuilderTools(fixture.requests[1].body),
-          'upgraded Pi should compact before its next normal request',
-        );
-      }
       assert.ok(
         fixture.requests.every(
           (request) =>
@@ -861,8 +1027,9 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         'normal and summary requests must preserve managed routing and billing headers',
       );
       const packagePi = await import('@earendil-works/pi-coding-agent');
-      const summaryRequest = fixture.requests.find(
-        (request) => !hasBuilderTools(request.body),
+      const summaryRequest = taskRequests.find(
+        (request) =>
+          !hasBuilderTools(request.body) && containsApiReadResult(request.body),
       );
       assert.ok(summaryRequest, 'Pi should make a summary request');
       const piSessionBudget = events.filter(
@@ -931,27 +1098,28 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         ),
         'the completed builder response should stream through the actual adapter',
       );
+      const taskStartRequest = taskRequests.find((request) =>
+        hasBuilderTools(request.body),
+      );
+      assert.ok(taskStartRequest, 'builder should start the task with tools');
       assert.ok(
-        fixture.requests[0].body.tools.some(
+        taskStartRequest.body.tools.some(
           (tool: { function?: { name?: string } }) =>
             tool.function?.name === 'read_extension_api',
         ),
       );
-      const builderToolNames = fixture.requests[0].body.tools.map(
+      const builderToolNames = taskStartRequest.body.tools.map(
         (tool: { function?: { name?: string } }) => tool.function?.name,
       );
-      const registeredToolEvent = events.find(
-        (event) => event.type === 'debug' && event.label === 'registered-tools',
+      assert.ok(toolPolicy && typeof toolPolicy === 'object');
+      const policy = toolPolicy as {
+        registeredTools: Array<{ name: string; exposure: string }>;
+        activeToolNames: string[];
+        callableToolNames: string[];
+      };
+      const registeredToolNames = policy.registeredTools.map(
+        (tool) => tool.name,
       );
-      assert.ok(Array.isArray(registeredToolEvent?.data));
-      const registeredToolNames = registeredToolEvent.data as string[];
-      const proactiveCompaction = hasTrailingToolCompaction(piPackage.version)
-        ? !hasBuilderTools(fixture.requests[1].body)
-        : false;
-      const overflowFallback = !hasTrailingToolCompaction(piPackage.version)
-        ? hasBuilderTools(fixture.requests[1].body) &&
-          containsApiReadResult(fixture.requests[1].body)
-        : false;
       const raw413Recovered = fixture.requests.some(
         (request) => request.responseStatus === 413,
       );
@@ -993,8 +1161,12 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         `the builder loaded an unintended tool: ${builderToolNames.find((name) => !allowedBuilderTools.has(name))}`,
       );
       assert.ok(
-        registeredToolNames.every((name) => allowedBuilderTools.has(name)),
-        `the builder registered an undeclared or deferred tool: ${registeredToolNames.find((name) => !allowedBuilderTools.has(name))}`,
+        policy.activeToolNames.every((name) => allowedBuilderTools.has(name)),
+        'the builder must declare only tools in its active allowlist',
+      );
+      assert.ok(
+        policy.callableToolNames.every((name) => allowedBuilderTools.has(name)),
+        'the builder must keep deferred and callable tools within its allowlist',
       );
       assert.ok(
         !registeredToolNames.some((name) =>
@@ -1015,7 +1187,9 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         tokenEvidence,
         pageCount: apiReadEvents.length,
         toolAllowlist: builderToolNames,
-        registeredToolAllowlist: registeredToolNames,
+        activeToolNames: policy.activeToolNames,
+        callableToolNames: policy.callableToolNames,
+        registeredTools: policy.registeredTools,
         managedHeadersPreserved: true,
         managedProviderIdentity: 'nevermind',
         providerApiFormat: 'openai-completions',
@@ -1030,7 +1204,7 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         'mcp',
       ])
         assert.equal(
-          fixture.requests[0].body.tools.some(
+          taskStartRequest.body.tools.some(
             (tool: { function?: { name?: string } }) =>
               tool.function?.name === forbidden,
           ),
@@ -1226,12 +1400,14 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
       const ai = createAi(fixture, []);
       const events: Array<{ type: string }> = [];
       try {
-        const response = await ai
-          .session('extension-overflow-session', {
-            model: 'fast',
-            toolMode: 'none',
-          })
-          .ask('Continue this extension conversation after context recovery.', {
+        const session = ai.session('extension-overflow-session', {
+          model: 'fast',
+          toolMode: 'none',
+        });
+        await seedLongPiSession(session);
+        const response = await session.ask(
+          'Continue this extension conversation after context recovery.',
+          {
             images: [
               {
                 type: 'image',
@@ -1240,21 +1416,22 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
               },
             ],
             onEvent: (event) => events.push(event),
-          });
+          },
+        );
         assert.match(String(response), /recovered successfully/);
         assert.deepEqual(
           terminalEvents(events).map((event) => event.type),
           ['done'],
         );
-        assert.equal(fixture.requests.length, 3);
+        assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
         assert.ok(
-          JSON.stringify(fixture.requests[0].body.messages).includes(
-            'iVBORw0KGgo',
-          ),
+          JSON.stringify(
+            fixture.requests[LONG_SESSION_TURN_COUNT].body.messages,
+          ).includes('iVBORw0KGgo'),
           'the provider request should preserve supported image input',
         );
         const byoTokenEstimate = estimateInputTokensFromValue(
-          fixture.requests[0].body,
+          fixture.requests[LONG_SESSION_TURN_COUNT].body,
         );
         assert.ok(byoTokenEstimate > 0);
         assert.ok(
@@ -1285,18 +1462,22 @@ test('configured provider adapters recover the backend-compatible token-limit 41
     {
       provider: 'openai',
       api: 'openai-completions',
+      expectedPath: '/v1/chat/completions',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         `${fixture.baseUrl}/v1`,
     },
     {
       provider: 'anthropic',
       api: 'anthropic-messages',
+      expectedPath: '/v1/messages',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         fixture.baseUrl,
     },
     {
       provider: 'google',
       api: 'google-generative-ai',
+      expectedPath:
+        '/v1beta/models/gemini-fixture:streamGenerateContent?alt=sse',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         `${fixture.baseUrl}/v1beta`,
     },
@@ -1327,18 +1508,19 @@ test('configured provider adapters recover the backend-compatible token-limit 41
           modelName: 'Fixture Model',
         });
         const ai = createAi(fixture, []);
+        const session = ai.session(`raw-413-${provider.provider}`, {
+          model: 'fast',
+          toolMode: 'none',
+        });
         const events: Array<{ type: string }> = [];
         try {
-          const response = await ai
-            .session(`raw-413-${provider.provider}`, {
-              model: 'fast',
-              toolMode: 'none',
-            })
-            .ask('Recover this provider request after Pi compacts.', {
-              onEvent: (event) => events.push(event),
-            });
+          await seedLongPiSession(session);
+          const response = await session.ask(
+            'Recover this provider request after Pi compacts.',
+            { onEvent: (event) => events.push(event) },
+          );
           assert.match(String(response), /recovered successfully/);
-          assert.equal(fixture.requests.length, 3);
+          assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
           assert.equal(
             fixture.managedDescriptors.length,
             0,
@@ -1348,7 +1530,22 @@ test('configured provider adapters recover the backend-compatible token-limit 41
             terminalEvents(events).map((event) => event.type),
             ['done'],
           );
-          assert.equal(fixture.requests[0].responseStatus, 413);
+          assert.equal(
+            fixture.requests[LONG_SESSION_TURN_COUNT].responseStatus,
+            413,
+          );
+          assert.deepEqual(fixture.unexpectedRoutes, []);
+          assert.deepEqual(
+            fixture.requests.map(({ method, path: requestPath }) => [
+              method,
+              requestPath,
+            ]),
+            Array.from({ length: fixture.requests.length }, () => [
+              'POST',
+              provider.expectedPath,
+            ]),
+            `${provider.provider} should use the installed SDK's exact endpoint beneath the configured base URL`,
+          );
           fixtureEvidence.push({
             scenario: `provider-413-${provider.api}`,
             finalOutcome: 'done',
@@ -1369,18 +1566,22 @@ test('configured provider adapters classify unmodified 413 responses by the inst
     {
       provider: 'openai',
       api: 'openai-completions',
+      expectedPath: '/v1/chat/completions',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         `${fixture.baseUrl}/v1`,
     },
     {
       provider: 'anthropic',
       api: 'anthropic-messages',
+      expectedPath: '/v1/messages',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         fixture.baseUrl,
     },
     {
       provider: 'google',
       api: 'google-generative-ai',
+      expectedPath:
+        '/v1beta/models/gemini-fixture:streamGenerateContent?alt=sse',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         `${fixture.baseUrl}/v1beta`,
     },
@@ -1415,21 +1616,19 @@ test('configured provider adapters classify unmodified 413 responses by the inst
         });
         const events: Array<{ type: string }> = [];
         const ai = createAi(fixture, []);
+        const session = ai.session(`unmodified-413-${provider.provider}`, {
+          model: 'fast',
+          toolMode: 'none',
+        });
         let response: unknown;
         let error: unknown;
         try {
+          await seedLongPiSession(session);
           try {
-            response = await ai
-              .session(`unmodified-413-${provider.provider}`, {
-                model: 'fast',
-                toolMode: 'none',
-              })
-              .ask(
-                'Recover this unmodified provider 413 when supported by Pi.',
-                {
-                  onEvent: (event) => events.push(event),
-                },
-              );
+            response = await session.ask(
+              'Recover this unmodified provider 413 when supported by Pi.',
+              { onEvent: (event) => events.push(event) },
+            );
           } catch (caught) {
             error = caught;
           }
@@ -1437,19 +1636,31 @@ test('configured provider adapters classify unmodified 413 responses by the inst
           if (raw413Recognized) {
             assert.equal(error, undefined);
             assert.match(String(response), /recovered successfully/);
-            assert.equal(fixture.requests.length, 3);
+            assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
             assert.deepEqual(
               terminalEvents(events).map((event) => event.type),
               ['done'],
             );
           } else {
             assert.ok(error instanceof Error);
-            assert.equal(fixture.requests.length, 1);
+            assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 1);
             assert.deepEqual(
               terminalEvents(events).map((event) => event.type),
               ['error'],
             );
           }
+          assert.deepEqual(
+            fixture.requests.map(({ method, path: requestPath }) => [
+              method,
+              requestPath,
+            ]),
+            Array.from({ length: fixture.requests.length }, () => [
+              'POST',
+              provider.expectedPath,
+            ]),
+            `${provider.provider} should use the installed SDK's exact endpoint beneath the configured base URL`,
+          );
+          assert.deepEqual(fixture.unexpectedRoutes, []);
           fixtureEvidence.push({
             scenario: `provider-raw-413-${provider.api}`,
             finalOutcome: raw413Recognized ? 'done' : 'error',
@@ -1608,22 +1819,20 @@ test('Pi summary auth and credit failures produce one terminal error, never succ
   for (const scenario of ['summary-unauthorized', 'summary-credits'] as const) {
     await withFixture(scenario, scenario, async (fixture) => {
       const ai = createAi(fixture, []);
+      const session = ai.session(`summary-failure-${scenario}`, {
+        model: 'fast',
+        toolMode: 'none',
+      });
       const events: Array<{ type: string; message?: string }> = [];
       try {
+        await seedLongPiSession(session);
         await assert.rejects(
-          ai
-            .session(`summary-failure-${scenario}`, {
-              model: 'fast',
-              toolMode: 'none',
-            })
-            .ask(
-              'Recover this request after Pi summarizes the rejected input.',
-              {
-                onEvent: (event) => events.push(event),
-              },
-            ),
+          session.ask(
+            'Recover this request after Pi summarizes the rejected input.',
+            { onEvent: (event) => events.push(event) },
+          ),
         );
-        assert.equal(fixture.requests.length, 2);
+        assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 2);
         assert.deepEqual(
           terminalEvents(events).map((event) => event.type),
           ['error'],
@@ -1647,20 +1856,22 @@ test('Pi stops after an exhausted overflow recovery attempt and emits one final 
     'recovery-exhausted',
     async (fixture) => {
       const ai = createAi(fixture, []);
+      const session = ai.session('recovery-exhausted-session', {
+        model: 'fast',
+        toolMode: 'none',
+      });
       const events: Array<{ type: string }> = [];
       try {
+        await seedLongPiSession(session);
         await assert.rejects(
-          ai
-            .session('recovery-exhausted-session', {
-              model: 'fast',
-              toolMode: 'none',
-            })
-            .ask('Return an error if Pi cannot recover the rejected request.', {
+          session.ask(
+            'Return an error if Pi cannot recover the rejected request.',
+            {
               onEvent: (event) => events.push(event),
-            }),
+            },
+          ),
         );
-        assert.ok(fixture.requests.length >= 3);
-        assert.ok(fixture.requests.length <= 5);
+        assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
         assert.deepEqual(
           terminalEvents(events).map((event) => event.type),
           ['error'],
@@ -1683,20 +1894,23 @@ test('host cancellation during Pi compaction settles as aborted without false su
     const ai = createAi(fixture, []);
     const events: Array<{ type: string }> = [];
     const controller = new AbortController();
+    const session = ai.session('summary-cancel-session', {
+      model: 'fast',
+      toolMode: 'none',
+    });
     try {
-      const pending = ai
-        .session('summary-cancel-session', {
-          model: 'fast',
-          toolMode: 'none',
-        })
-        .ask('Cancel while Pi is preparing a context summary.', {
+      await seedLongPiSession(session);
+      const pending = session.ask(
+        'Cancel while Pi is preparing a context summary.',
+        {
           signal: controller.signal,
           onEvent: (event) => events.push(event),
-        });
+        },
+      );
       let summaryTimeout: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
-          fixture.waitForRequests(2),
+          fixture.waitForRequests(LONG_SESSION_TURN_COUNT + 2),
           new Promise<never>((_resolve, reject) => {
             summaryTimeout = setTimeout(
               () => reject(new Error('Pi did not start its summary')),
@@ -1819,8 +2033,8 @@ test('builder transient retries stay enabled while general session retries stay 
 
 test('conversation AI exposes the exact real read-only and web tool allowlist', async () => {
   await withFixture('complete', 'conversation', async (fixture) => {
-    const ai = createAi(fixture, []);
-    const events: Array<{ type: string }> = [];
+    const events: Array<{ type: string; label?: string; data?: any }> = [];
+    const ai = createAi(fixture, events);
     try {
       await ai
         .session('conversation-tool-session', {
@@ -1845,11 +2059,44 @@ test('conversation AI exposes the exact real read-only and web tool allowlist', 
         'read',
         'web_search',
       ]);
+      const policyEvent = events.find(
+        (event) => event.type === 'debug' && event.label === 'pi-tool-policy',
+      );
+      assert.ok(policyEvent?.data);
+      const policy = policyEvent.data as {
+        registeredTools: Array<{ name: string; exposure: string }>;
+        activeToolNames: string[];
+        callableToolNames: string[];
+      };
+      assert.deepEqual(policy.activeToolNames, names);
+      assert.deepEqual(policy.callableToolNames, names);
+      for (const inactiveWebTool of ['source_check', 'get_search_content']) {
+        assert.equal(
+          policy.registeredTools.find((tool) => tool.name === inactiveWebTool)
+            ?.exposure,
+          'direct',
+          `${inactiveWebTool} should be registered but direct-only in the SDK`,
+        );
+        assert.equal(policy.activeToolNames.includes(inactiveWebTool), false);
+        assert.equal(policy.callableToolNames.includes(inactiveWebTool), false);
+      }
+      assert.equal(
+        policy.registeredTools.some((tool) =>
+          ['tool_search', 'codemode', 'mcp'].some((forbidden) =>
+            tool.name.toLowerCase().includes(forbidden),
+          ),
+        ),
+        false,
+        'tool discovery and native extension tools must not be registered',
+      );
       fixtureEvidence.push({
         scenario: 'conversation-explicit-read-only-tool-allowlist',
         finalOutcome: 'done',
         providerCalls: fixture.requests.length,
         toolAllowlist: names,
+        activeToolNames: policy.activeToolNames,
+        callableToolNames: policy.callableToolNames,
+        registeredTools: policy.registeredTools,
       });
       for (const forbidden of [
         'bash',

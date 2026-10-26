@@ -168,6 +168,7 @@ const api: NevermindApi = {
   testStageExtensionProposal: (filename, source) =>
     invokeMeasured('test:stage-extension-proposal', filename, source),
   testRunJob: (id) => invokeMeasured('test:run-job', id),
+  testRunPiSession: () => invokeMeasured('test:run-pi-session'),
   testFailNextExtensionActivation: (phase) =>
     invokeMeasured('test:fail-next-extension-activation', phase),
   testIsActionShortcutRegistered: (accelerator) =>
