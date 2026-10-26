@@ -419,6 +419,7 @@ async function packagedDiagnosticsSmoke(
     }
     collector = await createDiagnosticSmokeCollector();
     await prepareDiagnosticFixture(temporary);
+    console.log('Packaged diagnostics: launching Electron');
     app = await electron.launch({
       executablePath: executable,
       args: process.platform === 'linux' ? ['--no-sandbox'] : [],
@@ -431,6 +432,9 @@ async function packagedDiagnosticsSmoke(
     app.process().stderr?.on('data', function recordStderr(chunk) {
       void fs.appendFile(path.join(artifacts, 'app.stderr.log'), chunk);
     });
+    console.log(
+      'Packaged diagnostics: Electron launched; checking main process',
+    );
     const packaged = await app.evaluate(function inspectPackage({ app }) {
       return app.isPackaged;
     });
@@ -439,7 +443,9 @@ async function packagedDiagnosticsSmoke(
       true,
       'Diagnostics smoke must use the packaged application',
     );
+    console.log('Packaged diagnostics: waiting for palette window');
     page = await app.firstWindow();
+    console.log('Packaged diagnostics: testing support report');
     await runPaletteCommand(page, 'Report a Problem');
     const report = await waitForCapture(
       collector,
@@ -463,6 +469,9 @@ async function packagedDiagnosticsSmoke(
       },
     );
     assert.match(journey.tags.action_id, /^[a-f0-9]{32}$/);
+    console.log(
+      'Packaged diagnostics: support report captured; testing errors',
+    );
     await page.keyboard.press('Escape');
     await runPaletteCommand(page, 'QA Diagnostics Error');
     const mainError = await waitForCapture(
@@ -499,6 +508,7 @@ async function packagedDiagnosticsSmoke(
     );
     assert.notEqual(mainError.tags.support_ref, rendererError.tags.support_ref);
     if (piFixture && piArtifacts) {
+      console.log('Packaged diagnostics: testing Pi adapter session');
       page.setDefaultTimeout(45_000);
       await runPackagedPiSessionSmoke(page, piFixture, archive, piArtifacts);
     }
@@ -518,6 +528,7 @@ async function packagedDiagnosticsSmoke(
     );
     console.log(JSON.stringify(evidence));
   } finally {
+    console.log('Packaged diagnostics: saving final artifacts');
     if (page && !page.isClosed()) {
       await page.screenshot({ path: path.join(artifacts, 'final-state.png') });
       await fs.writeFile(
@@ -534,10 +545,13 @@ async function packagedDiagnosticsSmoke(
           2,
         ),
       );
+    console.log('Packaged diagnostics: closing Electron');
     await app?.close();
+    console.log('Packaged diagnostics: closing loopback collectors');
     await collector?.close();
     await piFixture?.close();
     await fs.rm(temporary, { recursive: true, force: true });
+    console.log('Packaged diagnostics: cleanup complete');
   }
 }
 
