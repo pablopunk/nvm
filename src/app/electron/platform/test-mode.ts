@@ -6,6 +6,7 @@ import { app, session } from 'electron';
 import {
   isNvmDiagnosticTestMode,
   isNvmHeadlessTestMode,
+  isNvmPackagedPiTestMode,
   isNvmTestMode,
 } from './test-mode-flags';
 import {
@@ -16,6 +17,7 @@ import {
 export {
   isNvmDiagnosticTestMode,
   isNvmHeadlessTestMode,
+  isNvmPackagedPiTestMode,
   isNvmTestMode,
 } from './test-mode-flags';
 

@@ -22,6 +22,8 @@ export type RecentLogOptions = {
   level?: LogLevel;
   source?: LogSource;
   sinceMs?: number;
+  beforeTimestamp?: string;
+  beforeCount?: number;
   query?: string;
   extensionId?: string;
 };
@@ -110,8 +112,15 @@ export async function readRecentLogs(options: RecentLogOptions = {}) {
   const text = await fs.readFile(logPath(), 'utf8').catch(() => '');
   if (!text) return [];
   const since = options.sinceMs ? Date.now() - Number(options.sinceMs) : 0;
+  const before = options.beforeTimestamp
+    ? Date.parse(options.beforeTimestamp)
+    : Number.POSITIVE_INFINITY;
+  const beforeCount = Math.min(
+    Math.max(Math.floor(Number(options.beforeCount) || 0), 0),
+    MAX_LOG_LINES,
+  );
   const query = options.query ? String(options.query).toLowerCase() : '';
-  const entries = text
+  let entries = text
     .trimEnd()
     .split('\n')
     .slice(-MAX_LOG_LINES)
@@ -127,6 +136,24 @@ export async function readRecentLogs(options: RecentLogOptions = {}) {
     )
     .filter((entry) => !since || Date.parse(entry.timestamp) >= since)
     .filter((entry) => !query || lineContains(entry, query));
+  if (Number.isFinite(before)) {
+    const sameTimestampCount = entries.filter(
+      (entry) => Date.parse(entry.timestamp) === before,
+    ).length;
+    const keepAtTimestamp = Math.max(
+      sameTimestampCount -
+        (options.beforeCount === undefined ? sameTimestampCount : beforeCount),
+      0,
+    );
+    let seenAtTimestamp = 0;
+    entries = entries.filter((entry) => {
+      const timestamp = Date.parse(entry.timestamp);
+      if (timestamp < before) return true;
+      if (timestamp > before) return false;
+      seenAtTimestamp += 1;
+      return seenAtTimestamp <= keepAtTimestamp;
+    });
+  }
   return entries.slice(-limit);
 }
 

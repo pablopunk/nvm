@@ -44,8 +44,8 @@
     "dist:win:x64": "pnpm build && node scripts/build-windows-desktop-text-helper.cjs && electron-builder --config electron-builder.yml --win nsis portable --x64 --publish never"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.80.10",
-    "@earendil-works/pi-coding-agent": "^0.80.10",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
     "@lexical/code": "^0.48.0",
     "@lexical/link": "^0.48.0",
     "@lexical/list": "^0.48.0",
@@ -89,6 +89,7 @@
     "remark-gfm": "^4.0.1",
     "tsx": "4.22.3",
     "vite": "^8.0.13",
-    "wait-on": "^9.0.10"
+    "wait-on": "^9.0.10",
+    "yaml": "2.9.0"
   }
 }

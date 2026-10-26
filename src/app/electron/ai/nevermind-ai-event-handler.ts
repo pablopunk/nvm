@@ -21,9 +21,7 @@ export type NevermindAiEvent = {
 export type NevermindAiEventHandlerDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   draftAiChats: Map<string, AnyRecord>;
-  activeBuilderSessionIds: Set<string>;
   getActiveAiChatId: () => string | undefined;
-  getNevermindAi: () => any;
   getLearningStore: () => LocalLearningStore | null;
   aiLearningMetadata: (chatId: string) => any;
   appendAiChatDelta: (chatId: string, text: string) => void;
@@ -44,9 +42,7 @@ export function createNevermindAiEventHandler(
   const {
     userStateStore,
     draftAiChats,
-    activeBuilderSessionIds,
     getActiveAiChatId,
-    getNevermindAi,
     getLearningStore,
     aiLearningMetadata,
     appendAiChatDelta,
@@ -131,18 +127,6 @@ export function createNevermindAiEventHandler(
   ) {
     if (chatId && event.type === 'error' && event.message)
       appendAiChatMessage(chatId, 'system', event.message);
-    if (
-      chatId &&
-      event.type === 'error' &&
-      /prompt[_ -]?too[_ -]?large|prompt exceeds|413\b/i.test(
-        String(event.message || ''),
-      )
-    ) {
-      activeBuilderSessionIds.delete(chatId);
-      void getNevermindAi()
-        ?.reset(chatId)
-        .catch(() => {});
-    }
   }
 
   function recordExtensionActivated(
