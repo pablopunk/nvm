@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.tsx",
-    "render": "remotion render src/index.tsx ThemeSwitcher out/theme-switcher-v6.mp4 --dark-mode --concurrency=4",
+    "render": "remotion render src/index.tsx ThemeSwitcher out/theme-switcher-v7.mp4 --dark-mode --concurrency=4",
     "still": "remotion still src/index.tsx ThemeSwitcher out/review.png --dark-mode",
-    "gif": "ffmpeg -hide_banner -loglevel warning -y -i out/theme-switcher-v6.mp4 -vf 'fps=15,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' out/theme-switcher-v6.gif"
+    "gif": "ffmpeg -hide_banner -loglevel warning -y -i out/theme-switcher-v7.mp4 -vf 'fps=15,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' out/theme-switcher-v7.gif"
   },
   "dependencies": {
     "@remotion/cli": "4.0.539",

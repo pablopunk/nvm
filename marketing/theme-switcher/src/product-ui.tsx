@@ -9,7 +9,13 @@ import {
   GridView,
 } from '../../../src/app/palette/ui';
 import THEMES from './themes.json';
-import { REQUEST, STORY, themeTransition, tween } from './timeline';
+import {
+  GRID_CLICKS,
+  REQUEST,
+  STORY,
+  themeTransition,
+  tween,
+} from './timeline';
 
 export const WALLPAPERS = [
   { id: 'mountain', title: 'Moonlit Mountains' },
@@ -33,7 +39,9 @@ export function ProductUi({ frame, scene }: { frame: number; scene: string }) {
   const grid = scene === 'grid';
   const chat = scene === 'chat';
   const selection = grid
-    ? THEMES[themeTransition(frame).theme].wallpaper || 'pink'
+    ? THEMES[themeTransition(frame).theme].wallpaper ||
+      THEMES[GRID_CLICKS[0].theme].wallpaper ||
+      ''
     : query
       ? 'create'
       : 'apps';

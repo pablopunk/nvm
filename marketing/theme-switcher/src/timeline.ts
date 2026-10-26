@@ -24,16 +24,16 @@ export const STORY = {
 };
 
 export const GRID_CLICKS = [
-  { frame: 210, theme: 1, x: 960, y: 330 },
-  { frame: 234, theme: 2, x: 1240, y: 330 },
+  { frame: 210, theme: 2, x: 1240, y: 330 },
+  { frame: 234, theme: 1, x: 960, y: 330 },
   { frame: 258, theme: 3, x: 1240, y: 550 },
 ];
 
 export const THEME_CHANGES = [
   { frame: 0, theme: 0 },
   ...GRID_CLICKS,
-  { frame: 301, theme: 1 },
-  { frame: 336, theme: 2 },
+  { frame: 301, theme: 2 },
+  { frame: 336, theme: 1 },
   { frame: 371, theme: 3 },
 ];
 
