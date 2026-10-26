@@ -201,17 +201,20 @@ function verifyPiIntegrationEvidence(directory, expectedSha) {
     'provider-raw-413-google-generative-ai',
   ]) {
     const rawOutcome = byScenario.get(scenario);
+    const recoveryExpected =
+      scenario !== 'provider-raw-413-google-generative-ai';
     assert.equal(
       rawOutcome.finalOutcome,
-      supportsBetweenToolCompaction(candidateVersion) ? 'done' : 'error',
+      recoveryExpected ? 'done' : 'error',
       scenario,
     );
-    assert.equal(
-      rawOutcome.raw413Recovered,
-      supportsBetweenToolCompaction(candidateVersion),
-      scenario,
-    );
+    assert.equal(rawOutcome.raw413Recovered, recoveryExpected, scenario);
   }
+  assert.equal(
+    byScenario.get('provider-raw-413-google-generative-ai')
+      .errorMessagePreserved,
+    true,
+  );
   assert.equal(
     byScenario.get('conversation-explicit-read-only-tool-allowlist')
       .finalOutcome,

@@ -99,12 +99,17 @@ function validIntegrationEvidence() {
     ...[
       'provider-raw-413-openai-completions',
       'provider-raw-413-anthropic-messages',
-      'provider-raw-413-google-generative-ai',
     ].map((scenario) => ({
       scenario,
       finalOutcome: 'done',
       raw413Recovered: true,
     })),
+    {
+      scenario: 'provider-raw-413-google-generative-ai',
+      finalOutcome: 'error',
+      raw413Recovered: false,
+      errorMessagePreserved: true,
+    },
     {
       scenario: 'conversation-explicit-read-only-tool-allowlist',
       finalOutcome: 'done',
@@ -214,6 +219,35 @@ test('Pi integration evidence rejects a broken overflow recovery result', async 
       JSON.stringify(evidence),
     );
     assert.throws(() => verifyPiIntegrationEvidence(directory, expectedSha));
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('Pi evidence rejects false success or a lost unrecognized Google error', async function googleTerminalEvidence() {
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'pi-google-terminal-evidence-'),
+  );
+  try {
+    for (const [field, value] of [
+      ['finalOutcome', 'done'],
+      ['raw413Recovered', true],
+      ['errorMessagePreserved', false],
+    ]) {
+      const evidence = validIntegrationEvidence();
+      const outcome = evidence.outcomes.find(
+        (entry) => entry.scenario === 'provider-raw-413-google-generative-ai',
+      );
+      outcome[field] = value;
+      await fs.writeFile(
+        path.join(directory, 'integration-evidence.json'),
+        JSON.stringify(evidence),
+      );
+      assert.throws(
+        () => verifyPiIntegrationEvidence(directory, expectedSha),
+        field,
+      );
+    }
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }

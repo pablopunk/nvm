@@ -158,6 +158,7 @@ type CapturedRequest = {
   path: string;
   phase: string;
   responseStatus?: number;
+  apiReadCompleted?: boolean;
 };
 
 function hasByoRequestHeaders(request: CapturedRequest) {
@@ -467,11 +468,6 @@ function hasBuilderTools(body: Record<string, any>) {
   return Array.isArray(body.tools) && body.tools.length > 0;
 }
 
-function hasTrailingToolCompaction(version: string) {
-  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
-  return major > 0 || minor > 84 || (minor === 84 && patch >= 4);
-}
-
 async function installedPiCodingAgentVersion() {
   const modulePath = fileURLToPath(
     import.meta.resolve('@earendil-works/pi-coding-agent'),
@@ -521,7 +517,12 @@ function latestProviderUserText(body: Record<string, any>) {
 function compactionSummaryPhase(body: Record<string, any>) {
   const serialized = JSON.stringify(body.messages || body.contents || body);
   if (
-    serialized.includes('The messages above are a conversation to summarize.')
+    serialized.includes(
+      'The messages above are a conversation to summarize.',
+    ) ||
+    serialized.includes(
+      'The messages above are NEW conversation messages to incorporate into the existing summary',
+    )
   )
     return 'history';
   if (
@@ -816,6 +817,8 @@ function createProtocolFixture(
       const summaryPhase = compactionSummaryPhase(body);
 
       if (summaryPhase) {
+        currentRequest.apiReadCompleted =
+          typeof fixture.nextOffset === 'number';
         setRequestPhase(
           currentRequest,
           `builder-proactive-summary-${summaryPhase}`,
@@ -824,7 +827,10 @@ function createProtocolFixture(
         return;
       }
 
-      if (latestUserText.includes('PI_BUILDER_HISTORY_SEED ')) {
+      if (
+        !builderTaskStarted &&
+        /^PI_BUILDER_HISTORY_SEED \d+$/.test(latestUserText.trim())
+      ) {
         setRequestPhase(currentRequest, 'builder-seed');
         sendTextForApi(response, api, LONG_SESSION_TURN, ZERO_USAGE);
         return;
@@ -1415,7 +1421,7 @@ test('the real builder adapter proactively compacts bounded API reads and accept
       );
       const proactiveSummaryIndices = taskRequests.flatMap((request, index) =>
         request.phase.startsWith('builder-proactive-summary-') &&
-        containsApiReadResult(request.body)
+        request.apiReadCompleted
           ? [index]
           : [],
       );
@@ -1436,7 +1442,11 @@ test('the real builder adapter proactively compacts bounded API reads and accept
       assert.equal(
         proactiveCompaction,
         true,
-        'Pi must compact the first large API result before requesting the continued page',
+        `Pi must compact after the first API read and before continuing: ${taskRequests.map((request) => request.phase).join(', ')}`,
+      );
+      assert.ok(
+        containsApiReadResult(taskRequests[continuationIndex].body),
+        'Pi should retain the recent API result while compacting older history',
       );
       assert.ok(completionIndex > continuationIndex);
       assert.ok(
@@ -1462,8 +1472,7 @@ test('the real builder adapter proactively compacts bounded API reads and accept
       const packagePi = await import('@earendil-works/pi-coding-agent');
       const summaryRequest = taskRequests.find(
         (request) =>
-          request.phase.includes('-summary-') &&
-          containsApiReadResult(request.body),
+          request.phase.includes('-summary-') && request.apiReadCompleted,
       );
       assert.ok(summaryRequest, 'Pi should make a summary request');
       const piSessionBudget = events.filter(
@@ -2011,7 +2020,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
   }
 });
 
-test('configured provider adapters classify unmodified 413 responses by the installed Pi version', async () => {
+test('configured provider adapters preserve Pi classification of unmodified 413 responses', async () => {
   const providers = [
     {
       provider: 'openai',
@@ -2039,11 +2048,8 @@ test('configured provider adapters classify unmodified 413 responses by the inst
         `${fixture.baseUrl}/v1beta`,
     },
   ];
-  const raw413Recognized = hasTrailingToolCompaction(
-    await installedPiCodingAgentVersion(),
-  );
-
   for (const provider of providers) {
+    const raw413Recognized = provider.api !== 'google-generative-ai';
     await withFixture(
       'raw-provider-413',
       `unmodified-413-${provider.provider}`,
@@ -2102,6 +2108,9 @@ test('configured provider adapters classify unmodified 413 responses by the inst
             });
           } else {
             assert.ok(error instanceof Error);
+            assert.match(error.message, /Prompt exceeds 100000 input tokens/);
+            if (provider.api === 'google-generative-ai')
+              assert.match(error.message, /"code":413/);
             assertLongSessionPhaseTrace(fixture.requests, 'raw-413');
             assert.deepEqual(
               terminalEvents(events).map((event) => event.type),
@@ -2112,6 +2121,7 @@ test('configured provider adapters classify unmodified 413 responses by the inst
               finalOutcome: 'error',
               providerCalls: fixture.requests.length,
               raw413Recovered: false,
+              errorMessagePreserved: true,
             });
           }
           assert.deepEqual(
