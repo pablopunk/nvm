@@ -1,40 +1,21 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { DesktopBackground, DesktopDock } from './desktop';
 import { ProductUi } from './product-ui';
-import { camera, PLAYBACK_SPEED, sceneAt, tween } from './timeline';
+import {
+  camera,
+  PLAYBACK_SPEED,
+  pointerAt,
+  sceneAt,
+  STORY,
+  tween,
+} from './timeline';
 
 function Pointer({ frame }: { frame: number }) {
-  const create = frame < 174;
-  const progress = tween(frame, 119, 153);
-  const positions = [279, 304, 338, 402, 433, 492, 523, 600];
-  const options = {
-    extrapolateLeft: 'clamp' as const,
-    extrapolateRight: 'clamp' as const,
-  };
-  const x = create
-    ? interpolate(progress, [0, 1], [1460, 1060])
-    : interpolate(
-        frame,
-        positions,
-        [1460, 1460, 960, 960, 1240, 1240, 1240, 1240],
-        options,
-      );
-  const y = create
-    ? interpolate(progress, [0, 1], [740, 280])
-    : interpolate(
-        frame,
-        positions,
-        [740, 740, 330, 330, 330, 330, 550, 550],
-        options,
-      );
-  const clickAt = create ? 158 : frame >= 492 ? 530 : frame >= 402 ? 440 : 348;
+  const { x, y, clickAt, opacity } = pointerAt(frame);
   const click =
     tween(frame, clickAt - 3, clickAt) *
     (1 - tween(frame, clickAt, clickAt + 8));
-  const opacity = create
-    ? tween(frame, 117, 123)
-    : tween(frame, 304, 311) * (1 - tween(frame, 546, 560));
   return (
     <div
       className="videoPointer"
@@ -81,7 +62,7 @@ export function ThemeSwitcher() {
         className="videoStage"
         style={{
           transform: `translate(960px, 540px) scale(${view.scale}) translate(${-view.x}px, ${-view.y}px)`,
-          filter: `blur(${tween(frame, 254, 274) * (1 - tween(frame, 279, 287)) * 8}px)`,
+          filter: `blur(${tween(frame, STORY.zoomStart, STORY.zoomPeak) * (1 - tween(frame, STORY.gridStart, STORY.gridSettled)) * 8}px)`,
         }}
       >
         <DesktopDock frame={frame} />

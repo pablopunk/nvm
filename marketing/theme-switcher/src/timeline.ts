@@ -1,38 +1,54 @@
 import { Easing, interpolate } from 'remotion';
 
-export const REQUEST = 'I want to create themes for my mac';
+export const REQUEST = 'mac theme switcher';
 export const FPS = 30;
 export const PLAYBACK_SPEED = 1.15;
-export const DURATION = Math.ceil(810 / PLAYBACK_SPEED);
+export const DURATION = Math.ceil(480 / PLAYBACK_SPEED);
+
+export const STORY = {
+  typingStart: 24,
+  typingInterval: 1.7,
+  createMoveStart: 67,
+  createMoveEnd: 74,
+  createClick: 77,
+  chatStart: 92,
+  chatSettled: 104,
+  zoomStart: 158,
+  zoomPeak: 179,
+  gridStart: 184,
+  gridSettled: 191,
+  dismissStart: 292,
+  dismissEnd: 304,
+  dockZoomStart: 312,
+  dockZoomEnd: 343,
+};
+
+export const GRID_CLICKS = [
+  { frame: 210, theme: 1, x: 960, y: 330 },
+  { frame: 234, theme: 2, x: 1240, y: 330 },
+  { frame: 258, theme: 3, x: 1240, y: 550 },
+];
 
 export const THEME_CHANGES = [
   { frame: 0, theme: 0 },
-  { frame: 357, theme: 1 },
-  { frame: 449, theme: 2 },
-  { frame: 539, theme: 3 },
-  { frame: 666, theme: 1 },
-  { frame: 707, theme: 2 },
-  { frame: 748, theme: 3 },
+  ...GRID_CLICKS,
+  { frame: 355, theme: 1 },
+  { frame: 390, theme: 2 },
+  { frame: 425, theme: 3 },
 ];
 
 export const BEATS = [
-  { frame: 0, name: 'Palette', scale: 1, x: 960, y: 540 },
-  { frame: 30, name: 'Type request', scale: 1.72, x: 920, y: 320 },
-  { frame: 118, name: 'Create with AI', scale: 1.72, x: 920, y: 320 },
-  { frame: 145, name: 'Click create', scale: 1.9, x: 900, y: 355 },
-  { frame: 174, name: 'Slide in chat', scale: 1.25, x: 960, y: 450 },
-  { frame: 250, name: 'Building', scale: 1.25, x: 960, y: 450 },
-  { frame: 274, name: 'Zoom transition', scale: 5, x: 850, y: 380 },
-  { frame: 285, name: 'Wallpaper grid', scale: 1, x: 960, y: 540 },
-  { frame: 345, name: 'Choose pink', scale: 1, x: 960, y: 540 },
-  { frame: 370, name: 'Pink desktop', scale: 1, x: 960, y: 540 },
-  { frame: 414, name: 'Choose forest', scale: 1, x: 960, y: 540 },
-  { frame: 454, name: 'Forest desktop', scale: 1, x: 960, y: 540 },
-  { frame: 504, name: 'Choose meadow', scale: 1, x: 960, y: 540 },
-  { frame: 544, name: 'Meadow desktop', scale: 1, x: 960, y: 540 },
-  { frame: 610, name: 'Zoom to Dock', scale: 1, x: 960, y: 540 },
-  { frame: 660, name: 'Dock color sweep', scale: 2.25, x: 960, y: 1008 },
-  { frame: 809, name: 'Hold', scale: 2.25, x: 960, y: 1008 },
+  { frame: 0, scale: 1, x: 960, y: 540 },
+  { frame: 18, scale: 1.72, x: 920, y: 320 },
+  { frame: 64, scale: 1.72, x: 920, y: 320 },
+  { frame: STORY.createClick, scale: 1.9, x: 900, y: 355 },
+  { frame: STORY.chatSettled, scale: 1.25, x: 960, y: 450 },
+  { frame: STORY.zoomStart, scale: 1.25, x: 960, y: 450 },
+  { frame: STORY.zoomPeak, scale: 5, x: 850, y: 380 },
+  { frame: STORY.gridSettled, scale: 1, x: 960, y: 540 },
+  { frame: STORY.dockZoomStart, scale: 1, x: 960, y: 540 },
+  { frame: STORY.dockZoomEnd, scale: 2.25, x: 960, y: 1008 },
+  { frame: 479, scale: 2.25, x: 960, y: 1008 },
 ];
 
 const easing = Easing.bezier(0.65, 0, 0.2, 1);
@@ -75,9 +91,9 @@ export function camera(frame: number) {
 }
 
 export function sceneAt(frame: number) {
-  if (frame < 174) return 'palette';
-  if (frame < 279) return 'chat';
-  if (frame < 600) return 'grid';
+  if (frame < STORY.chatStart) return 'palette';
+  if (frame < STORY.gridStart) return 'chat';
+  if (frame < STORY.dismissEnd) return 'grid';
   return 'desktop';
 }
 
@@ -90,6 +106,33 @@ export function themeTransition(frame: number) {
     theme: change.theme,
     previous,
     changedAt: change.frame,
-    mix: index === 0 ? 1 : tween(frame, change.frame, change.frame + 10),
+    mix: index === 0 ? 1 : tween(frame, change.frame, change.frame + 6),
+  };
+}
+
+export function pointerAt(frame: number) {
+  if (frame < STORY.chatStart) {
+    const progress = tween(frame, STORY.createMoveStart, STORY.createMoveEnd);
+    return {
+      x: interpolate(progress, [0, 1], [1460, 1060]),
+      y: interpolate(progress, [0, 1], [740, 280]),
+      opacity: tween(frame, STORY.createMoveStart - 2, STORY.createMoveStart),
+      clickAt: STORY.createClick,
+    };
+  }
+  let x = 1460;
+  let y = 740;
+  let clickAt = GRID_CLICKS[0].frame;
+  for (const click of GRID_CLICKS) {
+    if (frame >= click.frame - 10) clickAt = click.frame;
+    const progress = tween(frame, click.frame - 10, click.frame - 3);
+    x = interpolate(progress, [0, 1], [x, click.x]);
+    y = interpolate(progress, [0, 1], [y, click.y]);
+  }
+  return {
+    x,
+    y,
+    opacity: tween(frame, 198, 200) * (1 - tween(frame, 266, 270)),
+    clickAt,
   };
 }

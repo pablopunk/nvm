@@ -8,7 +8,8 @@ import {
   CommandTile,
   GridView,
 } from '../../../src/app/palette/ui';
-import { REQUEST, tween } from './timeline';
+import THEMES from './themes.json';
+import { REQUEST, STORY, themeTransition, tween } from './timeline';
 
 export const WALLPAPERS = [
   { id: 'mountain', title: 'Moonlit Mountains' },
@@ -25,20 +26,19 @@ export const WALLPAPERS = [
 function ignore() {}
 
 export function ProductUi({ frame, scene }: { frame: number; scene: string }) {
-  const query = REQUEST.slice(0, Math.floor(Math.max(0, frame - 37) / 2.05));
+  const query = REQUEST.slice(
+    0,
+    Math.floor(Math.max(0, frame - STORY.typingStart) / STORY.typingInterval),
+  );
   const grid = scene === 'grid';
   const chat = scene === 'chat';
   const selection = grid
-    ? frame >= 523
-      ? 'meadow'
-      : frame >= 433
-        ? 'forest'
-        : 'pink'
+    ? THEMES[themeTransition(frame).theme].wallpaper || 'pink'
     : query
       ? 'create'
       : 'apps';
-  const slide = chat ? 1 - tween(frame, 174, 192) : 0;
-  const dismiss = grid ? tween(frame, 580, 599) : 0;
+  const slide = chat ? 1 - tween(frame, STORY.chatStart, STORY.chatSettled) : 0;
+  const dismiss = grid ? tween(frame, STORY.dismissStart, STORY.dismissEnd) : 0;
 
   return (
     <div
@@ -49,6 +49,7 @@ export function ProductUi({ frame, scene }: { frame: number; scene: string }) {
       }}
     >
       <Command
+        key={grid ? `grid:${selection}` : scene}
         className="palette"
         label="Nevermind"
         shouldFilter={false}
