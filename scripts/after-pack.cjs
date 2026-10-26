@@ -1,7 +1,10 @@
 const path = require('node:path');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const {
   verifyPackagedDependencies,
 } = require('./verify-packaged-dependencies.cjs');
+const execFileAsync = promisify(execFile);
 
 module.exports = async function verifyPackagedRuntime(context) {
   const resources =
@@ -47,4 +50,20 @@ module.exports = async function verifyPackagedRuntime(context) {
     executable,
     artifacts,
   );
+  if (process.env.NVM_TEST_PI_PACKAGED === '1') {
+    const piArtifacts = path.join(
+      context.packager.projectDir,
+      'test-results',
+      `packaged-pi-${context.electronPlatformName}-${process.arch}`,
+    );
+    await execFileAsync(
+      process.execPath,
+      [
+        path.join(__dirname, 'packaged-pi-session-smoke.cjs'),
+        path.join(resources, 'app.asar'),
+        piArtifacts,
+      ],
+      { cwd: context.packager.projectDir, env: process.env },
+    );
+  }
 };

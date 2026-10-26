@@ -1,0 +1,116 @@
+name: Weekly Pi SDK update PR
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-pi-sdk-update
+  cancel-in-progress: false
+
+jobs:
+  resolve-candidate:
+    name: Resolve and install candidate without write credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      has_update: ${{ steps.resolve.outputs.has_update }}
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record candidate base commit
+        run: echo "PI_UPDATE_BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Install trusted base dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Resolve the latest eligible coherent stable release
+        id: resolve
+        run: >-
+          mise exec -- node .github/scripts/resolve-pi-update.cjs
+          "$RUNNER_TEMP/pi-update-candidate.json"
+      - name: Install candidate graph and snapshot only package data
+        if: steps.resolve.outputs.has_update == 'true'
+        run: |
+          mise exec -- pnpm install --no-frozen-lockfile
+          mise exec -- node .github/scripts/resolve-pi-update.cjs --snapshot \
+            "$RUNNER_TEMP/pi-update-candidate.json" \
+            "$RUNNER_TEMP/pi-update-artifact"
+      - name: Upload validated candidate data
+        if: steps.resolve.outputs.has_update == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/pi-update-artifact/package.json
+            ${{ runner.temp }}/pi-update-artifact/pnpm-lock.yaml
+            ${{ runner.temp }}/pi-update-artifact/metadata.json
+          if-no-files-found: error
+          retention-days: 2
+
+  publish-pr:
+    name: Publish candidate data as a single bot PR
+    needs: [resolve-candidate]
+    if: >-
+      needs.resolve-candidate.outputs.has_update == 'true' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record trusted publisher base commit
+        run: echo "PI_UPDATE_BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Download this run's package data artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pi-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pi-update-artifact
+      - name: Validate artifact provenance and allowed data changes
+        env:
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: >-
+          mise exec -- node .github/scripts/publish-pi-update.cjs --validate
+          "$RUNNER_TEMP/pi-update-artifact"
+      - name: Require the scoped GitHub App installation
+        env:
+          PI_UPDATE_APP_ID: ${{ secrets.PI_UPDATE_APP_ID }}
+          PI_UPDATE_APP_PRIVATE_KEY: ${{ secrets.PI_UPDATE_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$PI_UPDATE_APP_ID" ] || [ -z "$PI_UPDATE_APP_PRIVATE_KEY" ]; then
+            echo 'Pi update publishing is blocked: configure PI_UPDATE_APP_ID and PI_UPDATE_APP_PRIVATE_KEY for a repository GitHub App with contents and pull-requests write access.' >&2
+            exit 1
+          fi
+      - name: Mint narrowly scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          app-id: ${{ secrets.PI_UPDATE_APP_ID }}
+          private-key: ${{ secrets.PI_UPDATE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Create or update the bot-owned PR
+        env:
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: >-
+          mise exec -- node .github/scripts/publish-pi-update.cjs
+          "$RUNNER_TEMP/pi-update-artifact"
