@@ -234,7 +234,7 @@ function packagedPiVersions(archive) {
   const root = JSON.parse(asar.extractFile(archive, 'package.json').toString());
   return Object.fromEntries(
     names.map(function packageVersion(name) {
-      const manifestPath = `node_modules/${name}/package.json`;
+      const manifestPath = path.join('node_modules', name, 'package.json');
       const packageManifest = JSON.parse(
         asar.extractFile(archive, manifestPath).toString(),
       );

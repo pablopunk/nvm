@@ -23,7 +23,7 @@ const PACKAGED_PI_PACKAGES = [
 ];
 
 function readArchiveManifest(archive, directory) {
-  const entry = directory ? `${directory}/package.json` : 'package.json';
+  const entry = path.join(directory || '', 'package.json');
   return JSON.parse(asar.extractFile(archive, entry).toString());
 }
 
