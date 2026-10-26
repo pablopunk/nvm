@@ -21,7 +21,7 @@ const {
 async function readRegistryPackage(packageName) {
   const registryUrl = `https://registry.npmjs.org/${encodeURIComponent(packageName)}`;
   const response = await fetch(registryUrl, {
-    headers: { accept: 'application/vnd.npm.install-v1+json' },
+    headers: { accept: 'application/json' },
   });
   if (!response.ok)
     throw new Error(

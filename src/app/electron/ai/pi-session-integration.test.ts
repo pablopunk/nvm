@@ -411,7 +411,10 @@ function providerApiForRequestPath(
     request.search.length === 0
   )
     return 'openai-completions';
-  if (request.pathname === '/v1/messages' && request.search.length === 0)
+  if (
+    request.pathname === '/v1/messages' &&
+    (request.search.length === 0 || request.search === '?beta=true')
+  )
     return 'anthropic-messages';
   if (
     /^\/v1beta\/models\/[^/]+:streamGenerateContent$/.test(request.pathname) &&
@@ -506,7 +509,7 @@ function isLongSessionTask(text: string) {
     'Recover this request after Pi summarizes the rejected input.',
     'Return an error if Pi cannot recover the rejected request.',
     'Cancel while Pi is preparing a context summary.',
-  ].includes(text.trim());
+  ].includes(text.trim().split('\n')[0]);
 }
 
 function assertLongSessionPhaseTrace(
@@ -776,16 +779,6 @@ function createProtocolFixture(
       const latestUserText = latestProviderUserText(body);
       const summaryPhase = compactionSummaryPhase(body);
 
-      if (latestUserText.includes('PI_BUILDER_HISTORY_SEED ')) {
-        setRequestPhase(currentRequest, 'builder-seed');
-        sendText(response, LONG_SESSION_TURN, {
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_tokens: 0,
-        });
-        return;
-      }
-
       if (summaryPhase) {
         const compactionKind = rejectedLargeResult ? 'overflow' : 'proactive';
         setRequestPhase(
@@ -793,6 +786,16 @@ function createProtocolFixture(
           `builder-${compactionKind}-summary-${summaryPhase}`,
         );
         sendText(response, 'The builder conversation context is summarized.');
+        return;
+      }
+
+      if (latestUserText.includes('PI_BUILDER_HISTORY_SEED ')) {
+        setRequestPhase(currentRequest, 'builder-seed');
+        sendText(response, LONG_SESSION_TURN, {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+        });
         return;
       }
 
@@ -1013,12 +1016,7 @@ function createProtocolFixture(
       return;
     }
 
-    const shouldStartBuilderTask =
-      scenario === 'builder-long-session'
-        ? !builderTaskStarted && hasBuilderTools(body)
-        : callIndex === 1;
-    if (shouldStartBuilderTask) {
-      if (scenario === 'builder-long-session') builderTaskStarted = true;
+    if (callIndex === 1) {
       sendBuilderToolCall(response);
       return;
     }
@@ -1846,7 +1844,7 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
             images: [
               {
                 type: 'image',
-                data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2WQAAAAASUVORK5CYII=',
+                data: 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGNQaDgARAwQCgAkDgWBfAdHdAAAAABJRU5ErkJggg==',
                 mimeType: 'image/png',
               },
             ],
@@ -1910,7 +1908,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
       provider: 'anthropic',
       api: 'anthropic-messages',
       modelId: 'claude-fixture',
-      expectedPath: '/v1/messages',
+      expectedPath: '/v1/messages?beta=true',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         fixture.baseUrl,
     },
@@ -2028,7 +2026,7 @@ test('configured provider adapters classify unmodified 413 responses by the inst
       provider: 'anthropic',
       api: 'anthropic-messages',
       modelId: 'claude-fixture',
-      expectedPath: '/v1/messages',
+      expectedPath: '/v1/messages?beta=true',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         fixture.baseUrl,
     },
