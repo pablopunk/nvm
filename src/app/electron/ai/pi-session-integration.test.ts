@@ -55,6 +55,8 @@ const FIXTURE_CLOSE_TIMEOUT_MS = 5_000;
 const LONG_SESSION_TURN =
   'Deterministic session history retained by the Pi SDK fixture. '.repeat(110);
 const LONG_SESSION_TURN_COUNT = 16;
+const BUILDER_HISTORY_TURN_COUNT = 8;
+const ZERO_USAGE = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
 type FixtureAiEvent = {
   type: string;
@@ -250,7 +252,11 @@ function sendText(
   );
 }
 
-function sendAnthropicText(response: ServerResponse, text: string) {
+function sendAnthropicText(
+  response: ServerResponse,
+  text: string,
+  usage?: typeof ZERO_USAGE,
+) {
   const events = [
     [
       'message_start',
@@ -264,7 +270,7 @@ function sendAnthropicText(response: ServerResponse, text: string) {
           content: [],
           stop_reason: null,
           stop_sequence: null,
-          usage: { input_tokens: 12, output_tokens: 0 },
+          usage: { input_tokens: usage?.prompt_tokens ?? 12, output_tokens: 0 },
         },
       },
     ],
@@ -290,7 +296,7 @@ function sendAnthropicText(response: ServerResponse, text: string) {
       {
         type: 'message_delta',
         delta: { stop_reason: 'end_turn', stop_sequence: null },
-        usage: { output_tokens: 12 },
+        usage: { output_tokens: usage?.completion_tokens ?? 12 },
       },
     ],
     ['message_stop', { type: 'message_stop' }],
@@ -309,7 +315,11 @@ function sendAnthropicText(response: ServerResponse, text: string) {
   );
 }
 
-function sendGoogleText(response: ServerResponse, text: string) {
+function sendGoogleText(
+  response: ServerResponse,
+  text: string,
+  usage?: typeof ZERO_USAGE,
+) {
   response.writeHead(200, {
     'cache-control': 'no-cache',
     connection: 'keep-alive',
@@ -325,38 +335,58 @@ function sendGoogleText(response: ServerResponse, text: string) {
         },
       ],
       usageMetadata: {
-        promptTokenCount: 12,
-        candidatesTokenCount: 12,
-        totalTokenCount: 24,
+        promptTokenCount: usage?.prompt_tokens ?? 12,
+        candidatesTokenCount: usage?.completion_tokens ?? 12,
+        totalTokenCount: usage?.total_tokens ?? 24,
       },
     })}\n\n`,
   );
 }
 
-function sendTextForApi(response: ServerResponse, api: string, text: string) {
-  if (api === 'anthropic-messages') return sendAnthropicText(response, text);
-  if (api === 'google-generative-ai') return sendGoogleText(response, text);
-  return sendText(response, text);
+function sendTextForApi(
+  response: ServerResponse,
+  api: string,
+  text: string,
+  usage?: typeof ZERO_USAGE,
+) {
+  if (api === 'anthropic-messages')
+    return sendAnthropicText(response, text, usage);
+  if (api === 'google-generative-ai')
+    return sendGoogleText(response, text, usage);
+  return sendText(response, text, usage);
 }
 
-function sendBuilderToolCall(response: ServerResponse, params = '{}') {
-  sendToolCall(response, 'read_extension_api', params);
+function sendBuilderToolCall(
+  response: ServerResponse,
+  params = '{}',
+  usage?: typeof ZERO_USAGE,
+) {
+  sendToolCall(response, 'read_extension_api', params, usage);
 }
 
-function sendToolCall(response: ServerResponse, name: string, params = '{}') {
-  sendStream(response, {
-    delta: {
-      tool_calls: [
-        {
-          index: 0,
-          id: `call_${name}_${params === '{}' ? 'first' : 'continued'}`,
-          type: 'function',
-          function: { name, arguments: params },
-        },
-      ],
+function sendToolCall(
+  response: ServerResponse,
+  name: string,
+  params = '{}',
+  usage?: typeof ZERO_USAGE,
+) {
+  sendStream(
+    response,
+    {
+      delta: {
+        tool_calls: [
+          {
+            index: 0,
+            id: `call_${name}_${params === '{}' ? 'first' : 'continued'}`,
+            type: 'function',
+            function: { name, arguments: params },
+          },
+        ],
+      },
+      finish_reason: 'tool_calls',
     },
-    finish_reason: 'tool_calls',
-  });
+    usage,
+  );
 }
 
 function sendPromptTooLarge(response: ServerResponse) {
@@ -427,13 +457,6 @@ function providerApiForRequestPath(
 
 function hasBuilderTools(body: Record<string, any>) {
   return Array.isArray(body.tools) && body.tools.length > 0;
-}
-
-function hasTrailingToolCompaction(version: string) {
-  const [major = 0, minor = 0, patch = 0] = version
-    .split('.')
-    .map((part) => Number(part));
-  return major > 0 || minor > 84 || (minor === 84 && patch >= 4);
 }
 
 async function installedPiCodingAgentVersion() {
@@ -780,10 +803,9 @@ function createProtocolFixture(
       const summaryPhase = compactionSummaryPhase(body);
 
       if (summaryPhase) {
-        const compactionKind = rejectedLargeResult ? 'overflow' : 'proactive';
         setRequestPhase(
           currentRequest,
-          `builder-${compactionKind}-summary-${summaryPhase}`,
+          `builder-proactive-summary-${summaryPhase}`,
         );
         sendText(response, 'The builder conversation context is summarized.');
         return;
@@ -791,27 +813,25 @@ function createProtocolFixture(
 
       if (latestUserText.includes('PI_BUILDER_HISTORY_SEED ')) {
         setRequestPhase(currentRequest, 'builder-seed');
-        sendText(response, LONG_SESSION_TURN, {
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_tokens: 0,
-        });
+        sendTextForApi(response, api, LONG_SESSION_TURN, ZERO_USAGE);
+        return;
+      }
+
+      if (latestUserText.includes('Make one more small change')) {
+        setRequestPhase(currentRequest, 'builder-follow-up');
+        sendText(response, 'The follow-up change is complete.');
         return;
       }
 
       if (
+        builderTaskStarted ||
         latestUserText.includes('The user confirmed the extension request.')
       ) {
         if (!builderTaskStarted) {
           builderTaskStarted = true;
           setRequestPhase(currentRequest, 'builder-task-start');
-          sendBuilderToolCall(response);
-        } else if (!rejectedLargeResult && containsApiReadResult(body)) {
-          rejectedLargeResult = true;
-          currentRequest.responseStatus = 413;
-          setRequestPhase(currentRequest, 'builder-overflow');
-          sendPromptTooLarge(response);
-        } else if (rejectedLargeResult && !requestedContinuation) {
+          sendBuilderToolCall(response, '{}', ZERO_USAGE);
+        } else if (!requestedContinuation) {
           requestedContinuation = true;
           setRequestPhase(currentRequest, 'builder-read-continuation');
           const nextOffset = fixture.nextOffset;
@@ -821,17 +841,15 @@ function createProtocolFixture(
             });
             return;
           }
-          sendBuilderToolCall(response, JSON.stringify({ offset: nextOffset }));
+          sendBuilderToolCall(
+            response,
+            JSON.stringify({ offset: nextOffset }),
+            ZERO_USAGE,
+          );
         } else {
           setRequestPhase(currentRequest, 'builder-task-complete');
           sendText(response, 'The requested extension operation is complete.');
         }
-        return;
-      }
-
-      if (latestUserText.includes('Make one more small change')) {
-        setRequestPhase(currentRequest, 'builder-follow-up');
-        sendText(response, 'The follow-up change is complete.');
         return;
       }
 
@@ -855,11 +873,7 @@ function createProtocolFixture(
 
       if (isLongSessionSeed(latestUserText)) {
         setRequestPhase(currentRequest, 'session-seed');
-        sendText(response, LONG_SESSION_TURN, {
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_tokens: 0,
-        });
+        sendTextForApi(response, api, LONG_SESSION_TURN, ZERO_USAGE);
         return;
       }
       if (summaryPhase) {
@@ -1280,13 +1294,13 @@ async function seedLongPiSession(session: {
     await session.ask(`Earlier fixture session turn ${turn + 1}.`);
 }
 
-test('the real builder adapter bounds and continues API reads, recovers a backend-shaped 413, and accepts a follow-up', async (context) => {
+test('the real builder adapter proactively compacts bounded API reads and accepts a follow-up', async (context) => {
   await withFixture('builder-long-session', 'proactive', async (fixture) => {
     const events: FixtureAiEvent[] = [];
     const ai = createAi(fixture, events);
     try {
       let toolPolicy: unknown;
-      for (let turn = 0; turn < 4; turn += 1) {
+      for (let turn = 0; turn < BUILDER_HISTORY_TURN_COUNT; turn += 1) {
         events.length = 0;
         await ai.send(
           `PI_BUILDER_HISTORY_SEED ${turn + 1}`,
@@ -1363,25 +1377,18 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         (request) => request.phase === 'builder-task-start',
       );
       assert.ok(
-        taskPromptIndex >= 4,
-        'the task must follow four semantically seeded history turns',
+        taskPromptIndex >= BUILDER_HISTORY_TURN_COUNT,
+        'the task must follow the semantically seeded history turns',
       );
       const taskRequests = fixture.requests.slice(taskPromptIndex);
       assert.equal(
         fixture.requests.filter((request) => request.phase === 'builder-seed')
           .length,
-        4,
+        BUILDER_HISTORY_TURN_COUNT,
       );
       assert.equal(
         taskRequests.filter((request) => request.responseStatus === 413).length,
-        1,
-      );
-      const taskOverflowIndex = taskRequests.findIndex(
-        (request) => request.phase === 'builder-overflow',
-      );
-      assert.ok(
-        taskOverflowIndex >= 0,
-        'the fixture should reject one task request',
+        0,
       );
       const proactiveSummaryIndices = taskRequests.flatMap((request, index) =>
         request.phase.startsWith('builder-proactive-summary-') &&
@@ -1389,37 +1396,24 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
           ? [index]
           : [],
       );
-      const overflowSummaryIndices = taskRequests.flatMap((request, index) =>
-        request.phase.startsWith('builder-overflow-summary-') &&
-        containsApiReadResult(request.body)
-          ? [index]
-          : [],
-      );
-      const proactiveCompaction =
-        hasTrailingToolCompaction(piCodingAgentVersion) &&
-        proactiveSummaryIndices.some((index) => index < taskOverflowIndex);
-      const overflowFallback = overflowSummaryIndices.some(
-        (index) => index > taskOverflowIndex,
-      );
       const continuationIndex = taskRequests.findIndex(
         (request) => request.phase === 'builder-read-continuation',
       );
       const completionIndex = taskRequests.findIndex(
         (request) => request.phase === 'builder-task-complete',
       );
-      assert.ok(
-        proactiveSummaryIndices.length <= 2 &&
-          overflowSummaryIndices.length <= 2,
-        'each Pi compaction cycle may issue only its history and split-turn summaries',
+      const proactiveCompaction = proactiveSummaryIndices.some(
+        (index) => index < continuationIndex,
       );
       assert.ok(
-        overflowFallback,
-        'Pi must summarize the actual backend-shaped 413 before retrying the task',
+        proactiveSummaryIndices.length <= 4,
+        'each API page may cause at most a history and split-turn summary',
       );
-      assert.ok(continuationIndex > taskOverflowIndex);
-      assert.ok(
-        overflowSummaryIndices.every((index) => index < continuationIndex),
-        'Pi recovery must finish before it requests the continued API page',
+      assert.ok(continuationIndex > 0);
+      assert.equal(
+        proactiveCompaction,
+        true,
+        'Pi must compact the first large API result before requesting the continued page',
       );
       assert.ok(completionIndex > continuationIndex);
       assert.ok(
@@ -1432,18 +1426,6 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         ),
         'the task must complete after the continued API read',
       );
-      if (hasTrailingToolCompaction(piCodingAgentVersion))
-        assert.equal(
-          proactiveCompaction,
-          true,
-          'upgraded Pi should compact the large tool result before the next normal request',
-        );
-      else
-        assert.equal(
-          overflowFallback,
-          true,
-          'locked Pi should use overflow fallback after the large API result',
-        );
       assert.ok(
         fixture.requests.every(
           (request) =>
@@ -1544,9 +1526,6 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       const registeredToolNames = policy.registeredTools.map(
         (tool) => tool.name,
       );
-      const raw413Recovered = fixture.requests.some(
-        (request) => request.responseStatus === 413,
-      );
       const allowedBuilderTools = new Set([
         'read_extension_api',
         'list_capabilities',
@@ -1638,12 +1617,9 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       );
       assert.equal(fixture.requests.at(-1)?.phase, 'builder-follow-up');
       fixtureEvidence.push({
-        scenario:
-          'builder-proactive-compaction-overflow-continuation-follow-up',
+        scenario: 'builder-proactive-compaction-continuation-follow-up',
         finalOutcome: 'done',
         proactiveCompaction,
-        overflowFallback,
-        raw413Recovered,
         providerCalls: fixture.requests.length,
         requestPhases: fixture.requests.map((request) => request.phase),
         tokenEvidence,

@@ -44,10 +44,9 @@ test('adapter evidence distinguishes installed lock versions from the legacy man
 
 function validIntegrationEvidence() {
   const builder = {
-    scenario: 'builder-proactive-compaction-overflow-continuation-follow-up',
+    scenario: 'builder-proactive-compaction-continuation-follow-up',
     finalOutcome: 'done',
     proactiveCompaction: true,
-    raw413Recovered: true,
     managedHeadersPreserved: true,
     managedProviderIdentity: 'nevermind',
     providerApiFormat: 'openai-completions',
@@ -206,7 +205,10 @@ test('Pi integration evidence rejects a broken overflow recovery result', async 
   );
   try {
     const evidence = validIntegrationEvidence();
-    evidence.outcomes[0].raw413Recovered = false;
+    evidence.outcomes.find(
+      (outcome) =>
+        outcome.scenario === 'backend-admission-below-pi-proactive-threshold',
+    ).raw413Recovered = false;
     await fs.writeFile(
       path.join(directory, 'integration-evidence.json'),
       JSON.stringify(evidence),

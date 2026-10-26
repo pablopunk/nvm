@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const REQUIRED_SCENARIOS = [
-  'builder-proactive-compaction-overflow-continuation-follow-up',
+  'builder-proactive-compaction-continuation-follow-up',
   'byte-size-413-keeps-request-too-large-notice',
   'invalid-generated-extension-preserves-live-source',
   'backend-admission-below-pi-proactive-threshold',
@@ -128,13 +128,10 @@ function verifyPiIntegrationEvidence(directory, expectedSha) {
   }
 
   const builder = byScenario.get(
-    'builder-proactive-compaction-overflow-continuation-follow-up',
+    'builder-proactive-compaction-continuation-follow-up',
   );
   assert.equal(builder.finalOutcome, 'done');
-  if (supportsBetweenToolCompaction(candidateVersion))
-    assert.equal(builder.proactiveCompaction, true);
-  else assert.equal(builder.overflowFallback, true);
-  assert.equal(builder.raw413Recovered, true);
+  assert.equal(builder.proactiveCompaction, true);
   assert.equal(builder.managedHeadersPreserved, true);
   assert.equal(builder.managedProviderIdentity, 'nevermind');
   assert.equal(builder.providerApiFormat, 'openai-completions');
