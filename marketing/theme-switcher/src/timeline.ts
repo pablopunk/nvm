@@ -3,7 +3,7 @@ import { Easing, interpolate } from 'remotion';
 export const REQUEST = 'mac theme switcher';
 export const FPS = 30;
 export const PLAYBACK_SPEED = 1.15;
-export const DURATION = Math.ceil(480 / PLAYBACK_SPEED);
+export const DURATION = Math.ceil(426 / PLAYBACK_SPEED);
 
 export const STORY = {
   typingStart: 24,
@@ -17,10 +17,10 @@ export const STORY = {
   zoomPeak: 179,
   gridStart: 184,
   gridSettled: 191,
-  dismissStart: 292,
-  dismissEnd: 304,
-  dockZoomStart: 312,
-  dockZoomEnd: 343,
+  dismissStart: 258,
+  dismissEnd: 270,
+  dockZoomStart: 258,
+  dockZoomEnd: 289,
 };
 
 export const GRID_CLICKS = [
@@ -32,9 +32,9 @@ export const GRID_CLICKS = [
 export const THEME_CHANGES = [
   { frame: 0, theme: 0 },
   ...GRID_CLICKS,
-  { frame: 355, theme: 1 },
-  { frame: 390, theme: 2 },
-  { frame: 425, theme: 3 },
+  { frame: 301, theme: 1 },
+  { frame: 336, theme: 2 },
+  { frame: 371, theme: 3 },
 ];
 
 export const BEATS = [
@@ -48,7 +48,7 @@ export const BEATS = [
   { frame: STORY.gridSettled, scale: 1, x: 960, y: 540 },
   { frame: STORY.dockZoomStart, scale: 1, x: 960, y: 540 },
   { frame: STORY.dockZoomEnd, scale: 2.25, x: 960, y: 1008 },
-  { frame: 479, scale: 2.25, x: 960, y: 1008 },
+  { frame: 425, scale: 2.25, x: 960, y: 1008 },
 ];
 
 const easing = Easing.bezier(0.65, 0, 0.2, 1);

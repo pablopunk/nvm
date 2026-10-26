@@ -54,7 +54,7 @@ export function DesktopBackground({ frame }: { frame: number }) {
 
 export function DesktopDock({ frame }: { frame: number }) {
   const { theme, previous, changedAt } = themeTransition(frame);
-  const iconDelay = changedAt >= STORY.dockZoomEnd ? 2 : 0.5;
+  const iconDelay = changedAt >= STORY.dockZoomStart ? 2 : 0.5;
   return (
     <div className="desktopDock">
       {ICONS.map(function renderIcon(icon, index) {
