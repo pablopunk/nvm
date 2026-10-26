@@ -1,6 +1,6 @@
 import React from 'react';
 import { Img, staticFile } from 'remotion';
-import { camera, themeTransition } from './timeline';
+import { camera, STORY, themeTransition } from './timeline';
 import THEMES from './themes.json';
 
 const ICONS = [
@@ -54,10 +54,12 @@ export function DesktopBackground({ frame }: { frame: number }) {
 
 export function DesktopDock({ frame }: { frame: number }) {
   const { theme, previous, changedAt } = themeTransition(frame);
+  const iconDelay = changedAt >= STORY.dockZoomEnd ? 2 : 0.5;
   return (
     <div className="desktopDock">
       {ICONS.map(function renderIcon(icon, index) {
-        const iconTheme = frame >= changedAt + index * 0.5 ? theme : previous;
+        const iconTheme =
+          frame >= changedAt + index * iconDelay ? theme : previous;
         return (
           <React.Fragment key={icon}>
             {index === 10 ? <span className="dockDivider" /> : null}
