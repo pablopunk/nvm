@@ -154,6 +154,7 @@ type CapturedRequest = {
   body: Record<string, any>;
   method?: string;
   path: string;
+  phase: string;
   responseStatus?: number;
 };
 
@@ -453,6 +454,180 @@ function containsApiReadResult(body: Record<string, any>) {
   return JSON.stringify(body.messages || []).includes('[Read page:');
 }
 
+function providerMessageText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(providerMessageText).join('\n');
+  if (!isRecord(value)) return '';
+  if (typeof value.text === 'string') return value.text;
+  return [value.content, value.parts].map(providerMessageText).join('\n');
+}
+
+function latestProviderUserText(body: Record<string, any>) {
+  const messages = Array.isArray(body.messages)
+    ? body.messages
+    : Array.isArray(body.contents)
+      ? body.contents
+      : [];
+  const userMessages = messages.filter(
+    (message: unknown) =>
+      isRecord(message) &&
+      ['user', 'human'].includes(String(message.role).toLowerCase()),
+  );
+  const latest = userMessages.at(-1);
+  return isRecord(latest)
+    ? providerMessageText(latest.content ?? latest.parts)
+    : '';
+}
+
+function compactionSummaryPhase(body: Record<string, any>) {
+  const serialized = JSON.stringify(body.messages || body.contents || body);
+  if (
+    serialized.includes('The messages above are a conversation to summarize.')
+  )
+    return 'history';
+  if (
+    serialized.includes(
+      'The messages above are earlier context from an ongoing conversation.',
+    )
+  )
+    return 'turn-prefix';
+  return undefined;
+}
+
+function isLongSessionSeed(text: string) {
+  return /^Earlier fixture session turn \d+\.$/.test(text.trim());
+}
+
+function isLongSessionTask(text: string) {
+  return [
+    'Continue this extension conversation after context recovery.',
+    'Recover this provider request after Pi compacts.',
+    'Recover this unmodified provider 413 when supported by Pi.',
+    'Recover this request after Pi summarizes the rejected input.',
+    'Return an error if Pi cannot recover the rejected request.',
+    'Cancel while Pi is preparing a context summary.',
+  ].includes(text.trim());
+}
+
+function assertLongSessionPhaseTrace(
+  requests: readonly CapturedRequest[],
+  outcome:
+    | 'recovered'
+    | 'summary-error'
+    | 'summary-pending'
+    | 'recovery-exhausted'
+    | 'raw-413',
+) {
+  const phases = requests.map((request) => request.phase);
+  const seedRequests = requests.filter(
+    (request) => request.phase === 'session-seed',
+  );
+  const taskRequests = requests.filter(
+    (request) => request.phase === 'session-task',
+  );
+  const summaryRequests = requests.filter((request) =>
+    request.phase.startsWith('session-summary-'),
+  );
+  const recoveryRequests = requests.filter(
+    (request) => request.phase === 'session-recovery',
+  );
+
+  assert.equal(seedRequests.length, LONG_SESSION_TURN_COUNT);
+  assert.equal(
+    taskRequests.length,
+    1,
+    'one semantic task request must be rejected',
+  );
+  assert.equal(taskRequests[0].responseStatus, 413);
+  assert.ok(
+    isLongSessionTask(latestProviderUserText(taskRequests[0].body)),
+    'the actual user request must be the one rejected by the fixture backend',
+  );
+  assert.ok(
+    seedRequests.every(
+      (request, index) =>
+        isLongSessionSeed(latestProviderUserText(request.body)) &&
+        requests.indexOf(request) === index,
+    ),
+    'the fixture must seed the requested history turns in order',
+  );
+
+  const taskIndex = requests.indexOf(taskRequests[0]);
+  const summaryIndices = summaryRequests.map((request) =>
+    requests.indexOf(request),
+  );
+  assert.ok(
+    summaryIndices.every((index) => index > taskIndex),
+    'Pi must start compaction only after the task request is rejected',
+  );
+  const summaryKinds = summaryRequests.map((request) =>
+    request.phase.replace('session-summary-', ''),
+  );
+  assert.ok(summaryKinds.length <= 2, 'Pi compaction must remain bounded');
+  assert.ok(
+    summaryKinds.length === 0 ||
+      (summaryKinds.length === 1 &&
+        ['history', 'turn-prefix'].includes(summaryKinds[0])) ||
+      (summaryKinds.length === 2 &&
+        summaryKinds[0] === 'history' &&
+        summaryKinds[1] === 'turn-prefix'),
+    `Pi summary phases should follow its history-then-split-turn order: ${summaryKinds.join(', ')}`,
+  );
+
+  if (outcome === 'raw-413') {
+    assert.equal(summaryRequests.length, 0);
+    assert.equal(recoveryRequests.length, 0);
+  } else if (outcome === 'summary-error' || outcome === 'summary-pending') {
+    assert.equal(summaryRequests.length, 1);
+    assert.equal(recoveryRequests.length, 0);
+    if (outcome === 'summary-error')
+      assert.ok([401, 402].includes(summaryRequests[0].responseStatus || 0));
+    else assert.equal(summaryRequests[0].responseStatus, undefined);
+  } else if (outcome === 'recovery-exhausted') {
+    assert.ok(summaryRequests.length >= 1);
+    assert.equal(recoveryRequests.length, 1);
+    assert.ok(
+      isLongSessionTask(latestProviderUserText(recoveryRequests[0].body)),
+      'Pi must retry the rejected task after compaction',
+    );
+    assert.ok(
+      summaryIndices.every(
+        (index) => index < requests.indexOf(recoveryRequests[0]),
+      ),
+      'Pi must finish every summary call before retrying the rejected task',
+    );
+    assert.equal(recoveryRequests[0].responseStatus, 413);
+  } else {
+    assert.ok(summaryRequests.length >= 1);
+    assert.equal(recoveryRequests.length, 1);
+    assert.ok(
+      isLongSessionTask(latestProviderUserText(recoveryRequests[0].body)),
+      'Pi must retry the rejected task after compaction',
+    );
+    assert.ok(
+      summaryIndices.every(
+        (index) => index < requests.indexOf(recoveryRequests[0]),
+      ),
+      'Pi must finish every summary call before retrying the rejected task',
+    );
+    assert.notEqual(recoveryRequests[0].responseStatus, 413);
+  }
+
+  assert.ok(
+    requests.every((request) => request.phase !== 'unclassified'),
+    `every provider call must have a semantic fixture phase: ${phases.join(', ')}`,
+  );
+  assert.ok(
+    requests.length <=
+      seedRequests.length +
+        taskRequests.length +
+        summaryRequests.length +
+        recoveryRequests.length,
+    'the provider trace must contain only seeded turns, task, compaction, and recovery calls',
+  );
+  return { phases, summaryKinds };
+}
+
 function createProtocolFixture(
   scenario: FixtureScenario = 'builder',
   api = 'openai-completions',
@@ -469,10 +644,17 @@ function createProtocolFixture(
     count: number;
     resolve: () => void;
   }> = [];
+  const phaseWaiters: Array<{
+    phase: string;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  }> = [];
   let rejectedLargeResult = false;
   let requestedContinuation = false;
   let builderTaskStarted = false;
   let summaryServed = false;
+  let sessionTaskRejected = false;
   let fixtureClosed = false;
   let activeModelRequestCount = 0;
   let notifyModelRefreshStarted!: () => void;
@@ -483,6 +665,16 @@ function createProtocolFixture(
   const modelRefreshGate = new Promise<void>((resolve) => {
     releaseModelRefresh = resolve;
   });
+  function setRequestPhase(request: CapturedRequest, phase: string) {
+    request.phase = phase;
+    for (let index = phaseWaiters.length - 1; index >= 0; index -= 1) {
+      const waiter = phaseWaiters[index];
+      if (waiter.phase !== phase) continue;
+      clearTimeout(waiter.timeout);
+      phaseWaiters.splice(index, 1);
+      waiter.resolve();
+    }
+  }
   const server = createServer(async (request, response) => {
     const bodyText = await readRequestBody(request);
     if (request.url === '/api/compatibility') {
@@ -571,6 +763,7 @@ function createProtocolFixture(
       body,
       method: request.method,
       path: requestPath,
+      phase: 'unclassified',
     });
     const callIndex = requests.length;
     for (const waiter of requestWaiters.splice(0)) {
@@ -578,14 +771,69 @@ function createProtocolFixture(
       else requestWaiters.push(waiter);
     }
 
-    if (
-      scenario === 'builder-long-session' &&
-      JSON.stringify(body.messages).includes('PI_BUILDER_HISTORY_SEED')
-    ) {
-      sendText(response, LONG_SESSION_TURN, {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
+    if (scenario === 'builder-long-session') {
+      const currentRequest = requests.at(-1)!;
+      const latestUserText = latestProviderUserText(body);
+      const summaryPhase = compactionSummaryPhase(body);
+
+      if (latestUserText.includes('PI_BUILDER_HISTORY_SEED ')) {
+        setRequestPhase(currentRequest, 'builder-seed');
+        sendText(response, LONG_SESSION_TURN, {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+        });
+        return;
+      }
+
+      if (summaryPhase) {
+        const compactionKind = rejectedLargeResult ? 'overflow' : 'proactive';
+        setRequestPhase(
+          currentRequest,
+          `builder-${compactionKind}-summary-${summaryPhase}`,
+        );
+        sendText(response, 'The builder conversation context is summarized.');
+        return;
+      }
+
+      if (
+        latestUserText.includes('The user confirmed the extension request.')
+      ) {
+        if (!builderTaskStarted) {
+          builderTaskStarted = true;
+          setRequestPhase(currentRequest, 'builder-task-start');
+          sendBuilderToolCall(response);
+        } else if (!rejectedLargeResult && containsApiReadResult(body)) {
+          rejectedLargeResult = true;
+          currentRequest.responseStatus = 413;
+          setRequestPhase(currentRequest, 'builder-overflow');
+          sendPromptTooLarge(response);
+        } else if (rejectedLargeResult && !requestedContinuation) {
+          requestedContinuation = true;
+          setRequestPhase(currentRequest, 'builder-read-continuation');
+          const nextOffset = fixture.nextOffset;
+          if (typeof nextOffset !== 'number') {
+            sendJson(response, 500, {
+              error: 'read page did not offer continuation',
+            });
+            return;
+          }
+          sendBuilderToolCall(response, JSON.stringify({ offset: nextOffset }));
+        } else {
+          setRequestPhase(currentRequest, 'builder-task-complete');
+          sendText(response, 'The requested extension operation is complete.');
+        }
+        return;
+      }
+
+      if (latestUserText.includes('Make one more small change')) {
+        setRequestPhase(currentRequest, 'builder-follow-up');
+        sendText(response, 'The follow-up change is complete.');
+        return;
+      }
+
+      sendJson(response, 500, {
+        error: `unrecognized builder fixture turn: ${latestUserText.slice(0, 120)}`,
       });
       return;
     }
@@ -598,7 +846,12 @@ function createProtocolFixture(
       scenario === 'recovery-exhausted' ||
       scenario === 'raw-provider-413'
     ) {
-      if (callIndex <= LONG_SESSION_TURN_COUNT) {
+      const currentRequest = requests.at(-1)!;
+      const latestUserText = latestProviderUserText(body);
+      const summaryPhase = compactionSummaryPhase(body);
+
+      if (isLongSessionSeed(latestUserText)) {
+        setRequestPhase(currentRequest, 'session-seed');
         sendText(response, LONG_SESSION_TURN, {
           prompt_tokens: 0,
           completion_tokens: 0,
@@ -606,48 +859,57 @@ function createProtocolFixture(
         });
         return;
       }
-      const overflowRequestIndex = LONG_SESSION_TURN_COUNT + 1;
-      if (
-        callIndex === overflowRequestIndex ||
-        (scenario === 'recovery-exhausted' &&
-          callIndex >= overflowRequestIndex + 2)
-      ) {
-        requests.at(-1)!.responseStatus = 413;
+      if (summaryPhase) {
+        setRequestPhase(currentRequest, `session-summary-${summaryPhase}`);
+        if (scenario === 'summary-unauthorized') {
+          currentRequest.responseStatus = 401;
+          sendJson(response, 401, {
+            error: { type: 'invalid_api_key', message: 'Invalid API key' },
+          });
+        } else if (scenario === 'summary-credits') {
+          currentRequest.responseStatus = 402;
+          sendJson(response, 402, {
+            error: {
+              type: 'insufficient_credits',
+              message: 'No credits remaining',
+            },
+          });
+        } else if (scenario === 'summary-hangs') {
+          return;
+        } else {
+          sendTextForApi(
+            response,
+            api,
+            'The extension session context is summarized.',
+          );
+        }
+        return;
+      }
+
+      if (!isLongSessionTask(latestUserText)) {
+        setRequestPhase(currentRequest, 'session-unexpected');
+        sendJson(response, 500, {
+          error: `unrecognized session fixture turn: ${latestUserText.slice(0, 120)}`,
+        });
+        return;
+      }
+
+      if (!sessionTaskRejected) {
+        sessionTaskRejected = true;
+        setRequestPhase(currentRequest, 'session-task');
+        currentRequest.responseStatus = 413;
         sendPromptTooLargeForApi(
           response,
           api,
           scenario !== 'raw-provider-413',
         );
-      } else if (
-        callIndex === overflowRequestIndex + 1 &&
-        scenario === 'summary-unauthorized'
-      ) {
-        requests.at(-1)!.responseStatus = 401;
-        sendJson(response, 401, {
-          error: { type: 'invalid_api_key', message: 'Invalid API key' },
-        });
-      } else if (
-        callIndex === overflowRequestIndex + 1 &&
-        scenario === 'summary-credits'
-      ) {
-        requests.at(-1)!.responseStatus = 402;
-        sendJson(response, 402, {
-          error: {
-            type: 'insufficient_credits',
-            message: 'No credits remaining',
-          },
-        });
-      } else if (
-        callIndex === overflowRequestIndex + 1 &&
-        scenario === 'summary-hangs'
-      ) {
         return;
-      } else if (callIndex === overflowRequestIndex + 1) {
-        sendTextForApi(
-          response,
-          api,
-          'The extension session context is summarized.',
-        );
+      }
+
+      setRequestPhase(currentRequest, 'session-recovery');
+      if (scenario === 'recovery-exhausted') {
+        currentRequest.responseStatus = 413;
+        sendPromptTooLargeForApi(response, api);
       } else {
         sendTextForApi(
           response,
@@ -815,6 +1077,12 @@ function createProtocolFixture(
       notifyModelRefreshStarted();
       releaseModelRefresh();
       for (const waiter of requestWaiters.splice(0)) waiter.resolve();
+      for (const waiter of phaseWaiters.splice(0)) {
+        clearTimeout(waiter.timeout);
+        waiter.reject(
+          new Error('Fixture closed before expected request phase.'),
+        );
+      }
       server.closeAllConnections();
       let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
@@ -863,6 +1131,31 @@ function createProtocolFixture(
           );
         }, FIXTURE_REQUEST_TIMEOUT_MS);
         requestWaiters.push(waiter);
+      });
+    },
+    waitForPhase(phase: string) {
+      if (requests.some((request) => request.phase === phase))
+        return Promise.resolve();
+      if (fixtureClosed)
+        return Promise.reject(
+          new Error(`Fixture closed before provider phase ${phase}.`),
+        );
+      return new Promise<void>((resolve, reject) => {
+        const waiter = {
+          phase,
+          resolve,
+          reject,
+          timeout: setTimeout(() => {
+            const waiterIndex = phaseWaiters.indexOf(waiter);
+            if (waiterIndex >= 0) phaseWaiters.splice(waiterIndex, 1);
+            reject(
+              new Error(
+                `Timed out waiting for provider phase ${phase}; observed ${requests.map((request) => request.phase).join(', ')}.`,
+              ),
+            );
+          }, FIXTURE_REQUEST_TIMEOUT_MS),
+        };
+        phaseWaiters.push(waiter);
       });
     },
     async waitForModelRefresh() {
@@ -1068,35 +1361,78 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         ),
         'the continued tool output must include source content after the returned offset',
       );
-      const taskPromptIndex = fixture.requests.findIndex((request) =>
-        JSON.stringify(request.body.messages).includes(
-          'The user confirmed the extension request.',
-        ),
+      const taskPromptIndex = fixture.requests.findIndex(
+        (request) => request.phase === 'builder-task-start',
       );
-      assert.ok(taskPromptIndex >= 4, 'the task must follow seeded history');
+      assert.ok(
+        taskPromptIndex >= 4,
+        'the task must follow four semantically seeded history turns',
+      );
       const taskRequests = fixture.requests.slice(taskPromptIndex);
+      assert.equal(
+        fixture.requests.filter((request) => request.phase === 'builder-seed')
+          .length,
+        4,
+      );
       assert.equal(
         taskRequests.filter((request) => request.responseStatus === 413).length,
         1,
       );
-      assert.ok(fixture.requests.length >= 4);
-      const taskSummaryIndices = taskRequests.flatMap((request, index) =>
-        !hasBuilderTools(request.body) && containsApiReadResult(request.body)
-          ? [index]
-          : [],
-      );
       const taskOverflowIndex = taskRequests.findIndex(
-        (request) => request.responseStatus === 413,
+        (request) => request.phase === 'builder-overflow',
       );
       assert.ok(
         taskOverflowIndex >= 0,
         'the fixture should reject one task request',
       );
+      const proactiveSummaryIndices = taskRequests.flatMap((request, index) =>
+        request.phase.startsWith('builder-proactive-summary-') &&
+        containsApiReadResult(request.body)
+          ? [index]
+          : [],
+      );
+      const overflowSummaryIndices = taskRequests.flatMap((request, index) =>
+        request.phase.startsWith('builder-overflow-summary-') &&
+        containsApiReadResult(request.body)
+          ? [index]
+          : [],
+      );
       const proactiveCompaction =
         hasTrailingToolCompaction(piCodingAgentVersion) &&
-        taskSummaryIndices.some((index) => index < taskOverflowIndex);
-      const overflowFallback = taskSummaryIndices.some(
+        proactiveSummaryIndices.some((index) => index < taskOverflowIndex);
+      const overflowFallback = overflowSummaryIndices.some(
         (index) => index > taskOverflowIndex,
+      );
+      const continuationIndex = taskRequests.findIndex(
+        (request) => request.phase === 'builder-read-continuation',
+      );
+      const completionIndex = taskRequests.findIndex(
+        (request) => request.phase === 'builder-task-complete',
+      );
+      assert.ok(
+        proactiveSummaryIndices.length <= 2 &&
+          overflowSummaryIndices.length <= 2,
+        'each Pi compaction cycle may issue only its history and split-turn summaries',
+      );
+      assert.ok(
+        overflowFallback,
+        'Pi must summarize the actual backend-shaped 413 before retrying the task',
+      );
+      assert.ok(continuationIndex > taskOverflowIndex);
+      assert.ok(
+        overflowSummaryIndices.every((index) => index < continuationIndex),
+        'Pi recovery must finish before it requests the continued API page',
+      );
+      assert.ok(completionIndex > continuationIndex);
+      assert.ok(
+        taskRequests.every((request) => request.phase !== 'unclassified'),
+        `every builder provider call must have a semantic phase: ${taskRequests.map((request) => request.phase).join(', ')}`,
+      );
+      assert.ok(
+        taskRequests.some(
+          (request) => request.phase === 'builder-task-complete',
+        ),
+        'the task must complete after the continued API read',
       );
       if (hasTrailingToolCompaction(piCodingAgentVersion))
         assert.equal(
@@ -1123,7 +1459,8 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       const packagePi = await import('@earendil-works/pi-coding-agent');
       const summaryRequest = taskRequests.find(
         (request) =>
-          !hasBuilderTools(request.body) && containsApiReadResult(request.body),
+          request.phase.includes('-summary-') &&
+          containsApiReadResult(request.body),
       );
       assert.ok(summaryRequest, 'Pi should make a summary request');
       const piSessionBudget = events.filter(
@@ -1265,25 +1602,6 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         ),
         'the builder must not load tool search, codemode, or MCP tools',
       );
-      fixtureEvidence.push({
-        scenario:
-          'builder-proactive-compaction-overflow-continuation-follow-up',
-        finalOutcome: 'done',
-        proactiveCompaction,
-        overflowFallback,
-        raw413Recovered,
-        providerCalls: fixture.requests.length,
-        tokenEvidence,
-        pageCount: apiReadEvents.length,
-        toolAllowlist: builderToolNames,
-        activeToolNames: policy.activeToolNames,
-        callableToolNames: policy.callableToolNames,
-        registeredTools: policy.registeredTools,
-        managedHeadersPreserved: true,
-        managedProviderIdentity: 'nevermind',
-        providerApiFormat: 'openai-completions',
-        budgetEvidence,
-      });
       for (const forbidden of [
         'bash',
         'edit',
@@ -1310,6 +1628,38 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         terminalEvents(events).map((event) => event.type),
         ['done'],
       );
+      assert.ok(
+        events.some(
+          (event) =>
+            event.type === 'delta' &&
+            String(event.text || '').includes(
+              'The follow-up change is complete.',
+            ),
+        ),
+        'the recovered builder session must answer its follow-up through the adapter',
+      );
+      assert.equal(fixture.requests.at(-1)?.phase, 'builder-follow-up');
+      fixtureEvidence.push({
+        scenario:
+          'builder-proactive-compaction-overflow-continuation-follow-up',
+        finalOutcome: 'done',
+        proactiveCompaction,
+        overflowFallback,
+        raw413Recovered,
+        providerCalls: fixture.requests.length,
+        requestPhases: fixture.requests.map((request) => request.phase),
+        tokenEvidence,
+        pageCount: apiReadEvents.length,
+        toolAllowlist: builderToolNames,
+        activeToolNames: policy.activeToolNames,
+        callableToolNames: policy.callableToolNames,
+        registeredTools: policy.registeredTools,
+        managedHeadersPreserved: true,
+        managedProviderIdentity: 'nevermind',
+        providerApiFormat: 'openai-completions',
+        budgetEvidence,
+        followUpCompleted: true,
+      });
     } finally {
       await ai.disposeAllSessions();
     }
@@ -1508,16 +1858,19 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
           terminalEvents(events).map((event) => event.type),
           ['done'],
         );
-        assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
+        const phaseTrace = assertLongSessionPhaseTrace(
+          fixture.requests,
+          'recovered',
+        );
+        const taskRequest = fixture.requests.find(
+          (request) => request.phase === 'session-task',
+        );
+        assert.ok(taskRequest);
         assert.ok(
-          JSON.stringify(
-            fixture.requests[LONG_SESSION_TURN_COUNT].body.messages,
-          ).includes('iVBORw0KGgo'),
+          JSON.stringify(taskRequest.body).includes('iVBORw0KGgo'),
           'the provider request should preserve supported image input',
         );
-        const byoTokenEstimate = estimateInputTokensFromValue(
-          fixture.requests[LONG_SESSION_TURN_COUNT].body,
-        );
+        const byoTokenEstimate = estimateInputTokensFromValue(taskRequest.body);
         assert.ok(byoTokenEstimate > 0);
         assert.ok(
           fixture.requests.every(
@@ -1531,6 +1884,8 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
           scenario: 'byo-extension-session-overflow-recovery',
           finalOutcome: 'done',
           providerCalls: fixture.requests.length,
+          requestPhases: phaseTrace.phases,
+          compactionPhases: phaseTrace.summaryKinds,
           imageRequestEstimate: byoTokenEstimate,
           byoRoutingPreserved: true,
         });
@@ -1602,7 +1957,10 @@ test('configured provider adapters recover the backend-compatible token-limit 41
             { onEvent: (event) => events.push(event) },
           );
           assert.match(String(response), /recovered successfully/);
-          assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
+          const phaseTrace = assertLongSessionPhaseTrace(
+            fixture.requests,
+            'recovered',
+          );
           assert.equal(
             fixture.managedDescriptors.length,
             0,
@@ -1613,7 +1971,8 @@ test('configured provider adapters recover the backend-compatible token-limit 41
             ['done'],
           );
           assert.equal(
-            fixture.requests[LONG_SESSION_TURN_COUNT].responseStatus,
+            fixture.requests.find((request) => request.phase === 'session-task')
+              ?.responseStatus,
             413,
           );
           assert.deepEqual(fixture.unexpectedRoutes, []);
@@ -1642,6 +2001,8 @@ test('configured provider adapters recover the backend-compatible token-limit 41
             scenario: `provider-413-${provider.api}`,
             finalOutcome: 'done',
             providerCalls: fixture.requests.length,
+            requestPhases: phaseTrace.phases,
+            compactionPhases: phaseTrace.summaryKinds,
             raw413Recovered: true,
           });
         } finally {
@@ -1726,18 +2087,35 @@ test('configured provider adapters classify unmodified 413 responses by the inst
           if (raw413Recognized) {
             assert.equal(error, undefined);
             assert.match(String(response), /recovered successfully/);
-            assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
+            const phaseTrace = assertLongSessionPhaseTrace(
+              fixture.requests,
+              'recovered',
+            );
             assert.deepEqual(
               terminalEvents(events).map((event) => event.type),
               ['done'],
             );
+            fixtureEvidence.push({
+              scenario: `provider-raw-413-${provider.api}`,
+              finalOutcome: 'done',
+              providerCalls: fixture.requests.length,
+              requestPhases: phaseTrace.phases,
+              compactionPhases: phaseTrace.summaryKinds,
+              raw413Recovered: true,
+            });
           } else {
             assert.ok(error instanceof Error);
-            assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 1);
+            assertLongSessionPhaseTrace(fixture.requests, 'raw-413');
             assert.deepEqual(
               terminalEvents(events).map((event) => event.type),
               ['error'],
             );
+            fixtureEvidence.push({
+              scenario: `provider-raw-413-${provider.api}`,
+              finalOutcome: 'error',
+              providerCalls: fixture.requests.length,
+              raw413Recovered: false,
+            });
           }
           assert.deepEqual(
             fixture.requests.map(({ method, path: requestPath }) => [
@@ -1761,12 +2139,6 @@ test('configured provider adapters classify unmodified 413 responses by the inst
             ),
             'BYO model and credentials must remain attached when Pi classifies an unmodified 413',
           );
-          fixtureEvidence.push({
-            scenario: `provider-raw-413-${provider.api}`,
-            finalOutcome: raw413Recognized ? 'done' : 'error',
-            providerCalls: fixture.requests.length,
-            raw413Recovered: raw413Recognized,
-          });
         } finally {
           await ai.disposeAllSessions();
         }
@@ -1932,7 +2304,10 @@ test('Pi summary auth and credit failures produce one terminal error, never succ
             { onEvent: (event) => events.push(event) },
           ),
         );
-        assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 2);
+        const phaseTrace = assertLongSessionPhaseTrace(
+          fixture.requests,
+          'summary-error',
+        );
         assert.deepEqual(
           terminalEvents(events).map((event) => event.type),
           ['error'],
@@ -1941,6 +2316,8 @@ test('Pi summary auth and credit failures produce one terminal error, never succ
           scenario: `summary-failure-${scenario}`,
           finalOutcome: 'error',
           providerCalls: fixture.requests.length,
+          requestPhases: phaseTrace.phases,
+          compactionPhases: phaseTrace.summaryKinds,
           noFalseSuccess: true,
         });
       } finally {
@@ -1971,7 +2348,10 @@ test('Pi stops after an exhausted overflow recovery attempt and emits one final 
             },
           ),
         );
-        assert.equal(fixture.requests.length, LONG_SESSION_TURN_COUNT + 3);
+        const phaseTrace = assertLongSessionPhaseTrace(
+          fixture.requests,
+          'recovery-exhausted',
+        );
         assert.deepEqual(
           terminalEvents(events).map((event) => event.type),
           ['error'],
@@ -1980,6 +2360,9 @@ test('Pi stops after an exhausted overflow recovery attempt and emits one final 
           scenario: 'overflow-recovery-exhausted',
           finalOutcome: 'error',
           providerCalls: fixture.requests.length,
+          requestPhases: phaseTrace.phases,
+          compactionPhases: phaseTrace.summaryKinds,
+          recoveryRejectedByBackend: true,
           noFalseSuccess: true,
         });
       } finally {
@@ -2010,7 +2393,7 @@ test('host cancellation during Pi compaction settles as aborted without false su
       let summaryTimeout: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
-          fixture.waitForRequests(LONG_SESSION_TURN_COUNT + 2),
+          fixture.waitForPhase('session-summary-history'),
           new Promise<never>((_resolve, reject) => {
             summaryTimeout = setTimeout(
               () => reject(new Error('Pi did not start its summary')),
@@ -2023,6 +2406,10 @@ test('host cancellation during Pi compaction settles as aborted without false su
       }
       controller.abort();
       await assert.rejects(pending, /aborted/i);
+      const phaseTrace = assertLongSessionPhaseTrace(
+        fixture.requests,
+        'summary-pending',
+      );
       assert.deepEqual(
         terminalEvents(events).map((event) => event.type),
         ['aborted'],
@@ -2031,6 +2418,8 @@ test('host cancellation during Pi compaction settles as aborted without false su
         scenario: 'host-cancellation-during-compaction',
         finalOutcome: 'aborted',
         providerCalls: fixture.requests.length,
+        requestPhases: phaseTrace.phases,
+        compactionPhases: phaseTrace.summaryKinds,
         noFalseSuccess: true,
       });
     } finally {
