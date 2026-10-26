@@ -238,7 +238,7 @@ jobs:
       - name: Verify packaged Pi Electron session evidence
         run: >-
           mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs
-          test-results/packaged-pi-electron-win32-x64 "$GITHUB_SHA" win32-x64
+          test-results/packaged-pi-electron-win32-x64 "$env:GITHUB_SHA" win32-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
