@@ -161,8 +161,16 @@ type CapturedRequest = {
 };
 
 function hasByoRequestHeaders(request: CapturedRequest) {
+  const api = providerApiForRequestPath(request.path, 'http://fixture.invalid');
+  const authenticated =
+    api === 'anthropic-messages'
+      ? request.headers['x-api-key'] === 'byo-fixture-token'
+      : api === 'google-generative-ai'
+        ? request.headers['x-goog-api-key'] === 'byo-fixture-token'
+        : api === 'openai-completions' &&
+          request.headers.authorization === 'Bearer byo-fixture-token';
   return (
-    request.headers.authorization === 'Bearer byo-fixture-token' &&
+    authenticated &&
     request.headers['x-nevermind-client'] === 'desktop' &&
     request.headers['x-nevermind-client-version'] === 'test' &&
     request.headers['x-nevermind-api-version'] === '1' &&
@@ -457,6 +465,11 @@ function providerApiForRequestPath(
 
 function hasBuilderTools(body: Record<string, any>) {
   return Array.isArray(body.tools) && body.tools.length > 0;
+}
+
+function hasTrailingToolCompaction(version: string) {
+  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
+  return major > 0 || minor > 84 || (minor === 84 && patch >= 4);
 }
 
 async function installedPiCodingAgentVersion() {
@@ -1343,7 +1356,17 @@ test('the real builder adapter proactively compacts bounded API reads and accept
           event.name === 'read_extension_api',
       );
       assert.equal(apiReadEvents.length, 2);
-      const pageInputs = apiReadEvents.map(toolTraceInput);
+      const apiReadStarts = events.filter(
+        (event) =>
+          event.type === 'tool_trace_start' &&
+          event.name === 'read_extension_api',
+      );
+      assert.equal(apiReadStarts.length, apiReadEvents.length);
+      assert.deepEqual(
+        apiReadStarts.map((event) => eventDataValue(event, 'toolCallId')),
+        apiReadEvents.map((event) => eventDataValue(event, 'toolCallId')),
+      );
+      const pageInputs = apiReadStarts.map(toolTraceInput);
       const pageDetails = apiReadEvents.map(toolTraceDetails);
       const firstNextOffset = Number(pageDetails[0].nextOffset);
       const apiSource = await fs.readFile(
