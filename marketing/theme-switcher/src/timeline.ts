@@ -17,10 +17,10 @@ export const STORY = {
   zoomPeak: 179,
   gridStart: 184,
   gridSettled: 191,
-  dismissStart: 258,
-  dismissEnd: 270,
-  dockZoomStart: 258,
-  dockZoomEnd: 289,
+  dismissStart: 260,
+  dismissEnd: 274,
+  dockZoomStart: 248,
+  dockZoomEnd: 276,
 };
 
 export const GRID_CLICKS = [
