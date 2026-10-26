@@ -128,6 +128,77 @@ test('new local, git, and non-registry lockfile resolutions fail while unchanged
       ),
     /new non-registry package resolution/,
   );
+  assert.throws(
+    () =>
+      validateLockfile(
+        lockfile(
+          "  'new-github@github:owner/repository#commit':\n    resolution: {integrity: sha512-example}",
+        ),
+        versions,
+      ),
+    /new non-registry package resolution/,
+  );
+  assert.throws(
+    () =>
+      validateLockfile(
+        lockfile(
+          "  'new-tarball@2.0.0':\n    resolution:\n      tarball: 'https://example.invalid/package.tgz'",
+        ),
+        versions,
+      ),
+    /new non-registry package resolution/,
+  );
+  assert.throws(
+    () =>
+      validateLockfile(
+        lockfile(
+          "  'new-ssh@ssh://example.invalid/repo#commit':\n    resolution: {integrity: sha512-example}",
+        ),
+        versions,
+      ),
+    /new non-registry package resolution/,
+  );
+  assert.throws(
+    () =>
+      validateLockfile(
+        lockfile(
+          "  'new-url@2.0.0':\n    resolution:\n      type: tarball\n      url: 'https://example.invalid/package.tgz'",
+        ),
+        versions,
+      ),
+    /new non-registry package resolution/,
+  );
+  validateLockfile(
+    lockfile(
+      "  'alias@npm:real-package@2.0.0':\n    resolution: {tarball: https://registry.npmjs.org/real-package/-/real-package-2.0.0.tgz}",
+    ),
+    versions,
+  );
+});
+
+test('publisher rejects unrelated importer and pnpm policy edits in a candidate lockfile', function importerAndPolicyBoundary() {
+  const baseline = lockfile().replace(
+    '        version: 1.4.0\n\npackages:',
+    '        version: 1.4.0\n      unrelated:\n        specifier: 1.0.0\n        version: 1.0.0\n\npackages:',
+  );
+  validateLockfile(baseline, versions, baseline);
+  const unrelatedImporterEdit = baseline.replace(
+    '        specifier: 1.0.0\n        version: 1.0.0',
+    '        specifier: 2.0.0\n        version: 2.0.0',
+  );
+  assert.throws(
+    () => validateLockfile(unrelatedImporterEdit, versions, baseline),
+    /changed importers beyond the two direct Pi pins/,
+  );
+
+  const baselineWithPolicy = baseline.replace(
+    "lockfileVersion: '9.0'",
+    "lockfileVersion: '9.1'",
+  );
+  assert.throws(
+    () => validateLockfile(baseline, versions, baselineWithPolicy),
+    /changed pnpm policy or metadata/,
+  );
 });
 
 test('resolver manifest validation allows only the two direct Pi pins', function manifestBoundary() {

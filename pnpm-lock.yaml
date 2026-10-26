@@ -145,6 +145,9 @@ importers:
       wait-on:
         specifier: ^9.0.10
         version: 9.0.10(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 

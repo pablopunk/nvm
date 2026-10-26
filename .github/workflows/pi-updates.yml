@@ -78,6 +78,8 @@ jobs:
         run: echo "PI_UPDATE_BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Setup mise
         uses: jdx/mise-action@v2
+      - name: Install trusted default-branch dependencies
+        run: mise exec -- pnpm install --frozen-lockfile --ignore-scripts
       - name: Download this run's package data artifact
         uses: actions/download-artifact@v4
         with:
@@ -95,7 +97,7 @@ jobs:
           PI_UPDATE_APP_PRIVATE_KEY: ${{ secrets.PI_UPDATE_APP_PRIVATE_KEY }}
         run: |
           if [ -z "$PI_UPDATE_APP_ID" ] || [ -z "$PI_UPDATE_APP_PRIVATE_KEY" ]; then
-            echo 'Pi update publishing is blocked: configure PI_UPDATE_APP_ID and PI_UPDATE_APP_PRIVATE_KEY for a repository GitHub App with contents and pull-requests write access.' >&2
+            echo 'PI update publishing is blocked: configure PI_UPDATE_APP_ID and PI_UPDATE_APP_PRIVATE_KEY for a repository GitHub App with contents and pull-requests write access.' >&2
             exit 1
           fi
       - name: Mint narrowly scoped GitHub App token

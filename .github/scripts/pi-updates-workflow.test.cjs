@@ -86,7 +86,10 @@ test('candidate publisher applies data through GitHub APIs without executing art
   );
   assert.match(publisherScript, /execFileSync\(\s*'git'/);
   assert.match(publisherScript, /'merge-file'/);
-  assert.doesNotMatch(publisherScript, /spawn\(|exec\(|eval\(/);
+  assert.doesNotMatch(
+    publisherScript,
+    /(?<![.\w])(?:spawn|spawnSync|exec|execSync|eval)\s*\(/,
+  );
   assert.match(publisherScript, /PACKAGE_FILES/);
   assert.match(publisherScript, /metadata\.runId/);
   assert.match(publisherScript, /metadata\.baseSha/);
@@ -127,6 +130,7 @@ test('every relevant PR gets one same-run fail-closed gate and three OS package 
   assert.match(ciWorkflow, /NVM_TEST_PI_PACKAGED: '1'/g);
   assert.match(ciWorkflow, /--mac dir/);
   assert.match(ciWorkflow, /CSC_IDENTITY_AUTO_DISCOVERY: 'false'/);
-  assert.match(ciWorkflow, /verify-packaged-pi-evidence\.cjs/);
+  assert.match(ciWorkflow, /verify-packaged-pi-archive-evidence\.cjs/);
+  assert.match(ciWorkflow, /Verify Pi archive Node session evidence/);
   assert.match(ciWorkflow, /verify-pi-integration-evidence\.cjs/);
 });

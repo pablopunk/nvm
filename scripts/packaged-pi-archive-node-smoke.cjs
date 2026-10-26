@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const { createRequire } = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 const asar = require('@electron/asar');
 
 function sendFixtureResponse(response) {
@@ -44,37 +44,74 @@ function assistantText(messages) {
   return '';
 }
 
-async function packagedPiSessionSmoke(archivePath, evidenceDirectory) {
+async function packagedPiArchiveNodeSmoke(archivePath, evidenceDirectory) {
   const temporary = await fs.mkdtemp(
     path.join(os.tmpdir(), 'nevermind-packaged-pi-'),
   );
   const extractionRoot = path.join(temporary, 'application');
   const agentDir = path.join(temporary, 'pi-agent');
   const workspaceDir = path.join(temporary, 'workspace');
+  const evidencePath = path.join(
+    evidenceDirectory,
+    'pi-archive-node-evidence.json',
+  );
   await fs.mkdir(evidenceDirectory, { recursive: true });
   await fs.mkdir(extractionRoot, { recursive: true });
   asar.extractAll(path.resolve(archivePath), extractionRoot);
 
+  const manifest = JSON.parse(
+    await fs.readFile(path.join(extractionRoot, 'package.json'), 'utf8'),
+  );
   const packagedRequire = createRequire(
     path.join(extractionRoot, 'package.json'),
   );
-  const piEntryPath = packagedRequire.resolve(
-    '@earendil-works/pi-coding-agent',
+  const esmLoaderPath = path.join(
+    extractionRoot,
+    'pi-archive-smoke-loader.mjs',
   );
-  const piAiEntryPath = packagedRequire.resolve('@earendil-works/pi-ai');
-  const piPackagePath = path.resolve(
-    path.dirname(piEntryPath),
-    '../package.json',
+  await fs.writeFile(
+    esmLoaderPath,
+    [
+      'export async function loadPiPackages() {',
+      '  return Promise.all([',
+      "    import('@earendil-works/pi-coding-agent'),",
+      "    import('@earendil-works/pi-ai'),",
+      '  ]);',
+      '}',
+      'export function resolvePiPackages() {',
+      '  return {',
+      "    codingAgent: import.meta.resolve('@earendil-works/pi-coding-agent'),",
+      "    piAi: import.meta.resolve('@earendil-works/pi-ai'),",
+      '  };',
+      '}',
+      '',
+    ].join('\n'),
   );
-  const piAiPackagePath = path.resolve(
-    path.dirname(piAiEntryPath),
-    '../package.json',
+  const esmLoader = await import(pathToFileURL(esmLoaderPath).href);
+  const packageEntries = esmLoader.resolvePiPackages();
+  const archiveNodeModules = `${path.join(extractionRoot, 'node_modules')}${path.sep}`;
+  const piCodingAgentEntry = fileURLToPath(packageEntries.codingAgent);
+  const piAiEntry = fileURLToPath(packageEntries.piAi);
+  assert.ok(
+    piCodingAgentEntry.startsWith(archiveNodeModules),
+    'Pi coding agent must resolve from the extracted application archive',
   );
+  assert.ok(
+    piAiEntry.startsWith(archiveNodeModules),
+    'Pi AI must resolve from the extracted application archive',
+  );
+  const [pi] = await esmLoader.loadPiPackages();
   const webPackagePath = packagedRequire.resolve('pi-web-access/package.json');
-  const pi = await import(pathToFileURL(piEntryPath).href);
-  const piPackage = JSON.parse(await fs.readFile(piPackagePath, 'utf8'));
-  const piAiPackage = JSON.parse(await fs.readFile(piAiPackagePath, 'utf8'));
-  const webPackage = JSON.parse(await fs.readFile(webPackagePath, 'utf8'));
+  const webPackageRoot = path.dirname(webPackagePath);
+  assert.ok(
+    webPackagePath.startsWith(archiveNodeModules),
+    'Pi web access must resolve from the extracted application archive',
+  );
+  const packageVersions = {
+    'pi-coding-agent': manifest.dependencies['@earendil-works/pi-coding-agent'],
+    'pi-ai': manifest.dependencies['@earendil-works/pi-ai'],
+    'pi-web-access': manifest.dependencies['pi-web-access'],
+  };
 
   let providerCalls = 0;
   const server = createServer(async (request, response) => {
@@ -140,8 +177,29 @@ async function packagedPiSessionSmoke(archivePath, evidenceDirectory) {
       systemPrompt: 'Return the supplied local fixture response.',
     });
     await resourceLoader.reload();
-    assert.equal(resourceLoader.getExtensions().errors.length, 0);
-    assert.ok(resourceLoader.getExtensions().extensions.length > 0);
+    const loadedExtensions = resourceLoader.getExtensions();
+    assert.equal(loadedExtensions.errors.length, 0);
+    const webExtension = loadedExtensions.extensions.find(
+      function extensionFromPackagedWebAccess(extension) {
+        return [extension.path, extension.resolvedPath].some((candidate) => {
+          if (typeof candidate !== 'string') return false;
+          const resolvedCandidate = path.isAbsolute(candidate)
+            ? candidate
+            : path.resolve(webPackageRoot, candidate);
+          const relative = path.relative(webPackageRoot, resolvedCandidate);
+          return (
+            relative === '' ||
+            (!path.isAbsolute(relative) &&
+              !relative.startsWith(`..${path.sep}`) &&
+              relative !== '..')
+          );
+        });
+      },
+    );
+    assert.ok(
+      webExtension,
+      'Pi must load the web extension from the extracted app archive',
+    );
     const { session: createdSession } = await pi.createAgentSession({
       cwd: workspaceDir,
       agentDir,
@@ -165,21 +223,28 @@ async function packagedPiSessionSmoke(archivePath, evidenceDirectory) {
     assert.equal(providerCalls, 1);
     assert.equal(session.getSessionStats().assistantMessages, 1);
     const evidence = {
-      packagedImports: {
-        'pi-coding-agent': piPackage.version,
-        'pi-ai': piAiPackage.version,
-        'pi-web-access': webPackage.version,
+      packageVersions,
+      resolvedPackageEntries: {
+        'pi-coding-agent': path.relative(extractionRoot, piCodingAgentEntry),
+        'pi-ai': path.relative(extractionRoot, piAiEntry),
+        'pi-web-access': path.relative(extractionRoot, webPackagePath),
       },
+      loadedPiPackages: ['pi-coding-agent', 'pi-ai'],
+      loadedWebExtensionPath: path.relative(
+        extractionRoot,
+        path.resolve(webExtension.resolvedPath || webExtension.path),
+      ),
+      runtimeBoundary: 'stock-node-session-from-extracted-app-asar',
+      runtime: 'host-node',
+      electronRuntime: false,
+      adapterIntegration: false,
       fixtureSession: 'success',
       providerCalls,
       provider: 'loopback-openai-completions',
       architecture: `${process.platform}-${process.arch}`,
       commitSha: process.env.GITHUB_SHA || 'local',
     };
-    await fs.writeFile(
-      path.join(evidenceDirectory, 'pi-session-evidence.json'),
-      `${JSON.stringify(evidence, null, 2)}\n`,
-    );
+    await fs.writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
     console.log(JSON.stringify(evidence));
   } finally {
     await session?.dispose();
@@ -189,12 +254,12 @@ async function packagedPiSessionSmoke(archivePath, evidenceDirectory) {
 }
 
 if (require.main === module) {
-  packagedPiSessionSmoke(process.argv[2], process.argv[3]).catch(
-    function reportPackagedPiFailure(error) {
+  packagedPiArchiveNodeSmoke(process.argv[2], process.argv[3]).catch(
+    function reportPackagedPiArchiveNodeFailure(error) {
       console.error(error);
       process.exitCode = 1;
     },
   );
 }
 
-module.exports = { packagedPiSessionSmoke };
+module.exports = { packagedPiArchiveNodeSmoke };

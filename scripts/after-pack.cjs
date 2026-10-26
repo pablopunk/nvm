@@ -54,12 +54,12 @@ module.exports = async function verifyPackagedRuntime(context) {
     const piArtifacts = path.join(
       context.packager.projectDir,
       'test-results',
-      `packaged-pi-${context.electronPlatformName}-${process.arch}`,
+      `packaged-pi-archive-node-${context.electronPlatformName}-${process.arch}`,
     );
     await execFileAsync(
       process.execPath,
       [
-        path.join(__dirname, 'packaged-pi-session-smoke.cjs'),
+        path.join(__dirname, 'packaged-pi-archive-node-smoke.cjs'),
         path.join(resources, 'app.asar'),
         piArtifacts,
       ],

@@ -39,24 +39,20 @@ let logWarn: (message: string, data?: unknown) => void = () => {
   /* no-op: overridden in tests */
 };
 
-function getSafeStorage(): SafeStorageLike {
-  if (safeStorageImpl) {
-    return safeStorageImpl;
-  }
-  const { safeStorage } = require('electron');
+async function getSafeStorage(): Promise<SafeStorageLike> {
+  if (safeStorageImpl) return safeStorageImpl;
+  const { safeStorage } = await import('electron');
   return safeStorage;
 }
 
-function byoKeyPath() {
-  if (filePathOverride) {
-    return filePathOverride;
-  }
-  const { app } = require('electron');
+async function byoKeyPath() {
+  if (filePathOverride) return filePathOverride;
+  const { app } = await import('electron');
   return path.join(app.getPath('userData'), FILENAME);
 }
 
-function decryptApiKey(data: StoredByoKey): string | null {
-  const storage = getSafeStorage();
+async function decryptApiKey(data: StoredByoKey): Promise<string | null> {
+  const storage = await getSafeStorage();
   if (data.encryptedApiKey && storage.isEncryptionAvailable()) {
     return storage.decryptString(Buffer.from(data.encryptedApiKey, 'base64'));
   }
@@ -76,9 +72,9 @@ function getByoKey(): Promise<ByoKeySnapshot> {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     try {
-      const raw = await fs.readFile(byoKeyPath(), 'utf8');
+      const raw = await fs.readFile(await byoKeyPath(), 'utf8');
       const data = JSON.parse(raw) as StoredByoKey;
-      const apiKey = decryptApiKey(data);
+      const apiKey = await decryptApiKey(data);
       if (!apiKey) {
         cached = null;
         return null;
@@ -123,7 +119,7 @@ async function persistByoKey(input: {
     modelName: input.modelName,
     createdAt: new Date().toISOString(),
   };
-  const storage = getSafeStorage();
+  const storage = await getSafeStorage();
   if (storage.isEncryptionAvailable()) {
     payload.encryptedApiKey = storage
       .encryptString(input.apiKey)
@@ -132,7 +128,7 @@ async function persistByoKey(input: {
     logWarn('safeStorage unavailable; storing BYO key as plaintext');
     payload.apiKey = Buffer.from(input.apiKey, 'utf8').toString('base64');
   }
-  await writePrivateFile(byoKeyPath(), JSON.stringify(payload, null, 2));
+  await writePrivateFile(await byoKeyPath(), JSON.stringify(payload, null, 2));
   cached = {
     providerId: input.providerId,
     apiKey: input.apiKey,
@@ -147,7 +143,7 @@ async function persistByoKey(input: {
 }
 
 async function clearByoKey() {
-  await fs.rm(byoKeyPath(), { force: true });
+  await fs.rm(await byoKeyPath(), { force: true });
   cached = null;
   loadPromise = Promise.resolve(null);
 }

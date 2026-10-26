@@ -23,6 +23,7 @@ const REQUIRED_SCENARIOS = [
   'overflow-recovery-exhausted',
   'host-cancellation-during-compaction',
   'host-cancellation-during-transient-retry',
+  'general-session-cancellation-during-model-prepare',
   'builder-transient-retry-budget-two',
   'general-transient-retries-disabled',
 ];
@@ -74,6 +75,8 @@ function verifyPiIntegrationEvidence(directory, expectedSha) {
   else assert.equal(builder.overflowFallback, true);
   assert.equal(builder.raw413Recovered, true);
   assert.equal(builder.managedHeadersPreserved, true);
+  assert.equal(builder.managedProviderIdentity, 'nevermind');
+  assert.equal(builder.providerApiFormat, 'openai-completions');
   assert.ok(builder.pageCount >= 2);
   assert.ok(
     Array.isArray(builder.tokenEvidence) && builder.tokenEvidence.length >= 3,
@@ -173,6 +176,12 @@ function verifyPiIntegrationEvidence(directory, expectedSha) {
     byScenario.get('host-cancellation-during-transient-retry').finalOutcome,
     'aborted',
   );
+  const cancelledPreparation = byScenario.get(
+    'general-session-cancellation-during-model-prepare',
+  );
+  assert.equal(cancelledPreparation.finalOutcome, 'aborted');
+  assert.equal(cancelledPreparation.providerCalls, 1);
+  assert.equal(cancelledPreparation.promptSuppressed, true);
   assert.equal(
     byScenario.get('builder-transient-retry-budget-two').providerCalls,
     3,

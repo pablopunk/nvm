@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { app } from 'electron';
 import ts from 'typescript';
 import type {
   AgentSession as PiAgentSession,
@@ -801,6 +802,10 @@ function createNevermindAi(options: NevermindAiOptions) {
         },
         async () => {
           await prepareSessionModel(session, prompt);
+          if (activeRun.abortRequested || askOptions.signal?.aborted) {
+            await session.abort?.();
+            throw aiAbortError();
+          }
           return session.prompt(prompt, { images: askOptions.images });
         },
       );
@@ -2562,13 +2567,13 @@ Generated extensions are standalone app contributions. AI chats are builder/hist
 function piCodingAgentVersion() {
   piCodingAgentVersionPromise ??= (async function readPackageVersion() {
     try {
-      const require = createRequire(import.meta.url);
-      const entry = require.resolve('@earendil-works/pi-coding-agent');
-      const packagePath = path.resolve(path.dirname(entry), '../package.json');
+      const packagePath = path.join(app.getAppPath(), 'package.json');
       const metadata = JSON.parse(await fs.readFile(packagePath, 'utf8')) as {
-        version?: string;
+        dependencies?: Record<string, unknown>;
       };
-      return metadata.version || 'unknown';
+      const version =
+        metadata.dependencies?.['@earendil-works/pi-coding-agent'];
+      return typeof version === 'string' ? version : 'unknown';
     } catch {
       return 'unknown';
     }

@@ -9,8 +9,8 @@ const {
   verifyPiIntegrationEvidence,
 } = require('./verify-pi-integration-evidence.cjs');
 const {
-  verifyPackagedPiEvidence,
-} = require('./verify-packaged-pi-evidence.cjs');
+  verifyPackagedPiArchiveEvidence,
+} = require('./verify-packaged-pi-archive-evidence.cjs');
 
 const repository = path.resolve(__dirname, '../..');
 const packageManifest = require(path.join(repository, 'package.json'));
@@ -18,8 +18,8 @@ const expectedSha = 'a'.repeat(40);
 const candidateVersion =
   packageManifest.dependencies['@earendil-works/pi-coding-agent'];
 
-test('adapter evidence distinguishes installed lock versions from the legacy manifest range', function lockedSdkBoundary() {
-  const lockfile = fs.readFileSync(
+test('adapter evidence distinguishes installed lock versions from the legacy manifest range', async function lockedSdkBoundary() {
+  const lockfile = await fs.readFile(
     path.join(repository, 'pnpm-lock.yaml'),
     'utf8',
   );
@@ -40,6 +40,8 @@ function validIntegrationEvidence() {
     proactiveCompaction: true,
     raw413Recovered: true,
     managedHeadersPreserved: true,
+    managedProviderIdentity: 'nevermind',
+    providerApiFormat: 'openai-completions',
     pageCount: 2,
     tokenEvidence: [{ backendEstimate: 10, requestBytes: 20 }],
     toolAllowlist: ['read_extension_api'],
@@ -111,6 +113,12 @@ function validIntegrationEvidence() {
       finalOutcome: 'aborted',
     },
     {
+      scenario: 'general-session-cancellation-during-model-prepare',
+      finalOutcome: 'aborted',
+      providerCalls: 1,
+      promptSuppressed: true,
+    },
+    {
       scenario: 'builder-transient-retry-budget-two',
       providerCalls: 3,
     },
@@ -156,29 +164,46 @@ test('Pi integration evidence rejects forbidden tool activation', async function
   }
 });
 
-test('packaged Pi evidence fails when a required import is missing', async function missingPackagedImport() {
+function validPiArchiveEvidence() {
+  return {
+    commitSha: expectedSha,
+    fixtureSession: 'success',
+    provider: 'loopback-openai-completions',
+    providerCalls: 1,
+    architecture: 'linux-x64',
+    runtimeBoundary: 'stock-node-session-from-extracted-app-asar',
+    runtime: 'host-node',
+    electronRuntime: false,
+    adapterIntegration: false,
+    loadedPiPackages: ['pi-coding-agent', 'pi-ai'],
+    loadedWebExtensionPath: 'node_modules/pi-web-access/index.ts',
+    packageVersions: {
+      'pi-coding-agent': candidateVersion,
+      'pi-ai': packageManifest.dependencies['@earendil-works/pi-ai'],
+      'pi-web-access': packageManifest.dependencies['pi-web-access'],
+    },
+    resolvedPackageEntries: {
+      'pi-coding-agent':
+        'node_modules/@earendil-works/pi-coding-agent/dist/index.js',
+      'pi-ai': 'node_modules/@earendil-works/pi-ai/dist/index.js',
+      'pi-web-access': 'node_modules/pi-web-access/package.json',
+    },
+  };
+}
+
+test('packaged Pi archive evidence fails when a required package resolution is missing', async function missingPackagedImport() {
   const directory = await fs.mkdtemp(
     path.join(os.tmpdir(), 'pi-packaged-evidence-'),
   );
   try {
-    const evidence = {
-      commitSha: expectedSha,
-      fixtureSession: 'success',
-      provider: 'loopback-openai-completions',
-      providerCalls: 1,
-      architecture: 'linux-x64',
-      packagedImports: {
-        'pi-coding-agent': candidateVersion,
-        'pi-ai': packageManifest.dependencies['@earendil-works/pi-ai'],
-        'pi-web-access': undefined,
-      },
-    };
+    const evidence = validPiArchiveEvidence();
+    delete evidence.resolvedPackageEntries['pi-web-access'];
     await fs.writeFile(
-      path.join(directory, 'pi-session-evidence.json'),
+      path.join(directory, 'pi-archive-node-evidence.json'),
       JSON.stringify(evidence),
     );
     assert.throws(() =>
-      verifyPackagedPiEvidence(directory, expectedSha, 'linux-x64'),
+      verifyPackagedPiArchiveEvidence(directory, expectedSha, 'linux-x64'),
     );
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
@@ -191,7 +216,26 @@ test('packaged Pi evidence fails when the runtime session artifact is missing', 
   );
   try {
     assert.throws(() =>
-      verifyPackagedPiEvidence(directory, expectedSha, 'linux-x64'),
+      verifyPackagedPiArchiveEvidence(directory, expectedSha, 'linux-x64'),
+    );
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('packaged archive evidence cannot claim the host Node session used Electron or the Nevermind adapter', async function accurateRuntimeBoundary() {
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'pi-packaged-boundary-evidence-'),
+  );
+  try {
+    const evidence = validPiArchiveEvidence();
+    evidence.electronRuntime = true;
+    await fs.writeFile(
+      path.join(directory, 'pi-archive-node-evidence.json'),
+      JSON.stringify(evidence),
+    );
+    assert.throws(() =>
+      verifyPackagedPiArchiveEvidence(directory, expectedSha, 'linux-x64'),
     );
   } finally {
     await fs.rm(directory, { recursive: true, force: true });

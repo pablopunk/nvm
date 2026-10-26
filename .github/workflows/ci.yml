@@ -229,14 +229,14 @@ jobs:
         run: mise exec -- pnpm exec node --test .github/scripts/packaged-dependencies.test.cjs .github/scripts/linux-blockmap.test.cjs
       - name: Build
         run: mise exec -- pnpm build
-      - name: Package and verify real SDK capture
+      - name: Package app and collect diagnostics plus Pi archive evidence
         env:
           NVM_TEST_PI_PACKAGED: '1'
         run: mise exec -- pnpm exec electron-builder --config electron-builder.yml --win dir --x64 --publish never
-      - name: Verify packaged Pi session evidence
+      - name: Verify Pi archive Node session evidence
         run: >-
-          mise exec -- node .github/scripts/verify-packaged-pi-evidence.cjs
-          test-results/packaged-pi-win32-x64 "$GITHUB_SHA" win32-x64
+          mise exec -- node .github/scripts/verify-packaged-pi-archive-evidence.cjs
+          test-results/packaged-pi-archive-node-win32-x64 "$GITHUB_SHA" win32-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -244,7 +244,7 @@ jobs:
           name: packaged-diagnostics-windows-x64
           path: |
             test-results/packaged-diagnostics-*
-            test-results/packaged-pi-win32-x64
+            test-results/packaged-pi-archive-node-win32-x64
           if-no-files-found: error
           retention-days: 7
 
@@ -269,14 +269,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes xvfb
       - name: Build
         run: mise exec -- pnpm build
-      - name: Package and verify real SDK capture
+      - name: Package app and collect diagnostics plus Pi archive evidence
         env:
           NVM_TEST_PI_PACKAGED: '1'
         run: xvfb-run -a mise exec -- pnpm exec electron-builder --config electron-builder.yml --linux dir --x64 --publish never
-      - name: Verify packaged Pi session evidence
+      - name: Verify Pi archive Node session evidence
         run: >-
-          mise exec -- node .github/scripts/verify-packaged-pi-evidence.cjs
-          test-results/packaged-pi-linux-x64 "$GITHUB_SHA" linux-x64
+          mise exec -- node .github/scripts/verify-packaged-pi-archive-evidence.cjs
+          test-results/packaged-pi-archive-node-linux-x64 "$GITHUB_SHA" linux-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -284,12 +284,12 @@ jobs:
           name: packaged-diagnostics-linux-x64
           path: |
             test-results/packaged-diagnostics-*
-            test-results/packaged-pi-linux-x64
+            test-results/packaged-pi-archive-node-linux-x64
           if-no-files-found: error
           retention-days: 7
 
   pi-packaged-macos:
-    name: macOS packaged Pi session
+    name: macOS Pi archive Node session
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
       needs['pi-change-classification'].outputs.relevant == 'true'
@@ -307,26 +307,26 @@ jobs:
         run: mise exec -- pnpm build
       - name: Build selected-text helper resources
         run: node scripts/build-macos-selected-text-helper.cjs --universal
-      - name: Package unsigned native-architecture app with Pi fixture
+      - name: Package unsigned native-architecture app and run archive Node smoke
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           NVM_TEST_PI_PACKAGED: '1'
         run: |
           ARCH="$(node -p 'process.arch')"
           mise exec -- pnpm exec electron-builder --config electron-builder.yml --mac dir "--${ARCH}" --publish never
-      - name: Verify packaged Pi session evidence
+      - name: Verify Pi archive Node session evidence
         run: |
           ARCH="$(node -p 'process.arch')"
-          mise exec -- node .github/scripts/verify-packaged-pi-evidence.cjs \
-            "test-results/packaged-pi-darwin-${ARCH}" "$GITHUB_SHA" "darwin-${ARCH}"
+          mise exec -- node .github/scripts/verify-packaged-pi-archive-evidence.cjs \
+            "test-results/packaged-pi-archive-node-darwin-${ARCH}" "$GITHUB_SHA" "darwin-${ARCH}"
       - name: Upload packaged macOS Pi evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: packaged-pi-macos-${{ runner.arch }}-${{ github.run_id }}
+          name: packaged-pi-archive-node-macos-${{ runner.arch }}-${{ github.run_id }}
           path: |
             test-results/packaged-diagnostics-darwin-*
-            test-results/packaged-pi-darwin-*
+            test-results/packaged-pi-archive-node-darwin-*
           if-no-files-found: error
           retention-days: 14
 

@@ -26,11 +26,11 @@ test('Pi classifier includes SDK, policies, integration, backend, and packaging 
     '.github/workflows/pi-updates.yml',
     '.github/scripts/pi-change-classification.cjs',
     '.github/scripts/verify-pi-integration-evidence.cjs',
-    '.github/scripts/verify-packaged-pi-evidence.cjs',
+    '.github/scripts/verify-packaged-pi-archive-evidence.cjs',
     '.github/scripts/electron-smoke-paths.cjs',
     '.github/scripts/windows-package-paths.cjs',
     'scripts/check-packaged-resources.cjs',
-    'scripts/packaged-pi-session-smoke.cjs',
+    'scripts/packaged-pi-archive-node-smoke.cjs',
     'scripts/file-size-baseline.json',
     'electron-builder.yml',
   ])

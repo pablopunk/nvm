@@ -55,9 +55,18 @@ test('oversized UTF-8 lines have bounded byte continuation and count as read onl
 
   const third = boundedBuilderReadPage(pi, source, {
     offset: second.nextOffset ?? undefined,
+    byteOffset: second.nextByteOffset ?? undefined,
   });
-  assert.match(third.text, /next line/);
-  assert.equal(recordExtensionReadCoverage(coverage, 'large.ts', third), true);
+  assert.equal(third.byteRange?.start, second.byteRange?.end);
+  assert.equal(third.nextOffset, 1);
+  assert.equal(third.nextByteOffset, null);
+  assert.equal(recordExtensionReadCoverage(coverage, 'large.ts', third), false);
+
+  const fourth = boundedBuilderReadPage(pi, source, {
+    offset: third.nextOffset ?? undefined,
+  });
+  assert.match(fourth.text, /next line/);
+  assert.equal(recordExtensionReadCoverage(coverage, 'large.ts', fourth), true);
 });
 
 test('validation errors retain filenames and actionable locations within the Pi output ceiling', () => {

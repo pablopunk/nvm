@@ -5,7 +5,6 @@ import {
   type ServerResponse,
 } from 'node:http';
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, mock } from 'node:test';
@@ -20,6 +19,11 @@ const repoRoot =
   path.basename(process.cwd()) === 'backend'
     ? path.resolve(process.cwd(), '..', '..')
     : process.cwd();
+const repositoryManifest = JSON.parse(
+  await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8'),
+) as { dependencies: Record<string, string> };
+const piCodingAgentVersion =
+  repositoryManifest.dependencies['@earendil-works/pi-coding-agent'];
 
 mock.module('electron', {
   namedExports: {
@@ -49,6 +53,8 @@ const byoKey = await import('../backend/byo-key');
 const { MAX_INPUT_TOKENS, estimateInputTokensFromValue } = await import(
   '../../../backend/src/lib/limits'
 );
+const FIXTURE_REQUEST_TIMEOUT_MS = 10_000;
+const FIXTURE_CLOSE_TIMEOUT_MS = 5_000;
 
 after(async () => {
   clearNevermindAuthCacheForTests();
@@ -60,20 +66,12 @@ after(async () => {
   else process.env.PI_CODING_AGENT_DIR = previousPiCodingAgentDir;
   const evidenceDirectory = process.env.PI_INTEGRATION_EVIDENCE_DIR;
   if (evidenceDirectory) {
-    const piRequire = createRequire(import.meta.url);
-    const piEntry = piRequire.resolve('@earendil-works/pi-coding-agent');
-    const piPackage = JSON.parse(
-      await fs.readFile(
-        path.resolve(path.dirname(piEntry), '../package.json'),
-        'utf8',
-      ),
-    ) as { version: string };
     await fs.mkdir(evidenceDirectory, { recursive: true });
     await fs.writeFile(
       path.join(evidenceDirectory, 'integration-evidence.json'),
       `${JSON.stringify(
         {
-          sdkVersion: piPackage.version,
+          sdkVersion: piCodingAgentVersion,
           commitSha: process.env.GITHUB_SHA || 'local',
           outcomes: fixtureEvidence,
         },
@@ -105,6 +103,7 @@ type FixtureScenario =
   | 'builder-transient'
   | 'builder-retry-hangs'
   | 'general-transient'
+  | 'prepare-cancel'
   | 'queue-conversations'
   | 'complete';
 
@@ -317,15 +316,7 @@ function hasTrailingToolCompaction(version: string) {
 }
 
 async function installedPiCodingAgentVersion() {
-  const piRequire = createRequire(import.meta.url);
-  const piEntry = piRequire.resolve('@earendil-works/pi-coding-agent');
-  const packageJson = JSON.parse(
-    await fs.readFile(
-      path.resolve(path.dirname(piEntry), '../package.json'),
-      'utf8',
-    ),
-  ) as { version: string };
-  return packageJson.version;
+  return piCodingAgentVersion;
 }
 
 function containsApiReadResult(body: Record<string, any>) {
@@ -337,10 +328,24 @@ function createProtocolFixture(
   api = 'openai-completions',
 ) {
   const requests: CapturedRequest[] = [];
-  const requestWaiters: Array<{ count: number; resolve: () => void }> = [];
+  const managedDescriptors: Array<{ provider: string; api: string }> = [];
+  const requestWaiters: Array<{
+    count: number;
+    resolve: () => void;
+  }> = [];
   let rejectedLargeResult = false;
   let requestedContinuation = false;
   let summaryServed = false;
+  let fixtureClosed = false;
+  let activeModelRequestCount = 0;
+  let notifyModelRefreshStarted!: () => void;
+  let releaseModelRefresh!: () => void;
+  const modelRefreshStarted = new Promise<void>((resolve) => {
+    notifyModelRefreshStarted = resolve;
+  });
+  const modelRefreshGate = new Promise<void>((resolve) => {
+    releaseModelRefresh = resolve;
+  });
   const server = createServer(async (request, response) => {
     const bodyText = await readRequestBody(request);
     if (request.url === '/api/compatibility') {
@@ -358,14 +363,19 @@ function createProtocolFixture(
       return;
     }
     if (request.url?.startsWith('/api/v1/active-model')) {
+      activeModelRequestCount += 1;
+      if (scenario === 'prepare-cancel' && activeModelRequestCount === 2) {
+        notifyModelRefreshStarted();
+        await modelRefreshGate;
+      }
       const contextWindow =
         scenario === 'backend-estimator-boundary'
           ? MAX_INPUT_TOKENS + PI_AI_COMPACTION_RESERVE_TOKENS + 20_000
           : 24_576;
-      sendJson(response, 200, {
+      const descriptor = {
         id: 'fixture-model',
         name: 'Fixture Model',
-        provider: 'openai',
+        provider: 'nevermind',
         api: 'openai-completions',
         baseUrl: `${fixture.baseUrl}/v1`,
         contextWindow,
@@ -378,7 +388,9 @@ function createProtocolFixture(
         creditKind: 'paid',
         credits: { paid: 1000, free: 0, total: 1000 },
         notice: 'ok',
-      });
+      };
+      managedDescriptors.push(descriptor);
+      sendJson(response, 200, descriptor);
       return;
     }
     const requestApi = request.url?.startsWith('/v1/chat/completions')
@@ -493,7 +505,7 @@ function createProtocolFixture(
       return;
     }
 
-    if (scenario === 'complete') {
+    if (scenario === 'complete' || scenario === 'prepare-cancel') {
       sendText(response, 'The fixture request completed.');
       return;
     }
@@ -589,6 +601,7 @@ function createProtocolFixture(
   const fixture = {
     server,
     requests,
+    managedDescriptors,
     baseUrl: '',
     nextOffset: undefined as number | undefined,
     async listen() {
@@ -602,16 +615,78 @@ function createProtocolFixture(
       return fixture.baseUrl;
     },
     async close() {
+      fixtureClosed = true;
+      notifyModelRefreshStarted();
+      releaseModelRefresh();
+      for (const waiter of requestWaiters.splice(0)) waiter.resolve();
       server.closeAllConnections();
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          new Promise<void>((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          ),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `Fixture server did not close within ${FIXTURE_CLOSE_TIMEOUT_MS}ms.`,
+                  ),
+                ),
+              FIXTURE_CLOSE_TIMEOUT_MS,
+            );
+          }),
+        ]);
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
     },
     waitForRequests(count: number) {
       if (requests.length >= count) return Promise.resolve();
-      return new Promise<void>((resolve) => {
-        requestWaiters.push({ count, resolve });
+      if (fixtureClosed)
+        return Promise.reject(
+          new Error('Fixture closed before provider request.'),
+        );
+      return new Promise<void>((resolve, reject) => {
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const waiter = {
+          count,
+          resolve() {
+            if (timeout) clearTimeout(timeout);
+            resolve();
+          },
+        };
+        timeout = setTimeout(() => {
+          const waiterIndex = requestWaiters.indexOf(waiter);
+          if (waiterIndex >= 0) requestWaiters.splice(waiterIndex, 1);
+          reject(
+            new Error(
+              `Timed out waiting for provider request ${count}; received ${requests.length}.`,
+            ),
+          );
+        }, FIXTURE_REQUEST_TIMEOUT_MS);
+        requestWaiters.push(waiter);
       });
+    },
+    async waitForModelRefresh() {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          modelRefreshStarted,
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error('Model refresh did not start')),
+              15_000,
+            );
+          }),
+        ]);
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
+    },
+    releaseModelRefresh() {
+      releaseModelRefresh();
     },
   };
   return fixture;
@@ -724,6 +799,15 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         'The user confirmed the extension request. Read the API, then summarize the requested change.',
         'large-builder-chat',
       );
+      assert.ok(fixture.managedDescriptors.length > 0);
+      assert.ok(
+        fixture.managedDescriptors.every(
+          (descriptor) =>
+            descriptor.provider === 'nevermind' &&
+            descriptor.api === 'openai-completions',
+        ),
+        'managed identity must stay Nevermind while API format identifies OpenAI compatibility',
+      );
       assert.deepEqual(
         terminalEvents(events).map((event) => event.type),
         ['done'],
@@ -754,15 +838,7 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         1,
       );
       assert.ok(fixture.requests.length >= 4);
-      const piRequire = createRequire(import.meta.url);
-      const piEntry = piRequire.resolve('@earendil-works/pi-coding-agent');
-      const piPackage = JSON.parse(
-        await fs.readFile(
-          path.resolve(path.dirname(piEntry), '../package.json'),
-          'utf8',
-        ),
-      ) as { version: string };
-      if (!hasTrailingToolCompaction(piPackage.version)) {
+      if (!hasTrailingToolCompaction(piCodingAgentVersion)) {
         assert.ok(
           hasBuilderTools(fixture.requests[1].body) &&
             containsApiReadResult(fixture.requests[1].body),
@@ -941,6 +1017,8 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         toolAllowlist: builderToolNames,
         registeredToolAllowlist: registeredToolNames,
         managedHeadersPreserved: true,
+        managedProviderIdentity: 'nevermind',
+        providerApiFormat: 'openai-completions',
         budgetEvidence,
       });
       for (const forbidden of [
@@ -1261,6 +1339,11 @@ test('configured provider adapters recover the backend-compatible token-limit 41
             });
           assert.match(String(response), /recovered successfully/);
           assert.equal(fixture.requests.length, 3);
+          assert.equal(
+            fixture.managedDescriptors.length,
+            0,
+            'BYO provider identities must not be replaced by the managed Nevermind identity',
+          );
           assert.deepEqual(
             terminalEvents(events).map((event) => event.type),
             ['done'],
@@ -1457,6 +1540,7 @@ test('overlapping prompts on one extension session settle in request order', asy
       const first = session.ask('First queued extension request.');
       await fixture.waitForRequests(1);
       const second = session.ask('Second queued extension request.');
+      await fixture.waitForRequests(2);
       const [firstResult, secondResult] = await Promise.all([first, second]);
 
       assert.match(String(firstResult), /Queued request 1 completed/);
@@ -1475,6 +1559,46 @@ test('overlapping prompts on one extension session settle in request order', asy
         providerCalls: fixture.requests.length,
       });
     } finally {
+      await ai.disposeAllSessions();
+    }
+  });
+});
+
+test('cancellation during model preparation prevents the next provider request', async () => {
+  await withFixture('prepare-cancel', 'prepare-cancel', async (fixture) => {
+    const ai = createAi(fixture, []);
+    const events: Array<{ type: string }> = [];
+    const session = ai.session('prepare-cancel-session', {
+      model: 'fast',
+      toolMode: 'none',
+    });
+    try {
+      await session.ask('Complete the first fixture request.');
+      assert.equal(fixture.requests.length, 1);
+
+      const controller = new AbortController();
+      const pending = session.ask('Cancel before this request is sent.', {
+        signal: controller.signal,
+        onEvent: (event) => events.push(event),
+      });
+      await fixture.waitForModelRefresh();
+      controller.abort();
+      fixture.releaseModelRefresh();
+
+      await assert.rejects(pending, /aborted/i);
+      assert.equal(fixture.requests.length, 1);
+      assert.deepEqual(
+        terminalEvents(events).map((event) => event.type),
+        ['aborted'],
+      );
+      fixtureEvidence.push({
+        scenario: 'general-session-cancellation-during-model-prepare',
+        finalOutcome: 'aborted',
+        providerCalls: fixture.requests.length,
+        promptSuppressed: true,
+      });
+    } finally {
+      fixture.releaseModelRefresh();
       await ai.disposeAllSessions();
     }
   });

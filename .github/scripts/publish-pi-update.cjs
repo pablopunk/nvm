@@ -23,13 +23,56 @@ function exactCandidateMarker(versions) {
 function parseStateMarker(body) {
   const start = body.indexOf(STATE_MARKER);
   if (start < 0) return null;
-  const end = body.indexOf('-->', start);
-  if (end < 0) return null;
+
+  const jsonStart = start + STATE_MARKER.length;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let jsonEnd = -1;
+  for (let index = jsonStart; index < body.length; index += 1) {
+    const character = body[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === '{') depth += 1;
+    else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        jsonEnd = index + 1;
+        break;
+      }
+      if (depth < 0) return null;
+    }
+  }
+  if (jsonEnd < 0 || !/^\s*-->/.test(body.slice(jsonEnd))) return null;
   try {
-    return JSON.parse(body.slice(start + STATE_MARKER.length, end).trim());
+    return JSON.parse(body.slice(jsonStart, jsonEnd));
   } catch {
     return null;
   }
+}
+
+function sameCandidateVersions(left, right) {
+  return PI_PACKAGES.every(
+    (packageName) => left?.[packageName] === right?.[packageName],
+  );
+}
+
+function candidateVersionsFromBody(body) {
+  const markers = body
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.startsWith('<!-- pi-update-candidate:') && line.endsWith(' -->'),
+    );
+  if (markers.length !== 1)
+    throw new Error('Pi update PR must contain one candidate tuple marker.');
+  return parseCandidateMarker(markers[0]);
 }
 
 function validateArtifact(snapshot, expected) {
@@ -131,7 +174,7 @@ function candidateBody(validated, generatedCommitSha) {
   const state = {
     baseSha: metadata.baseSha,
     fingerprint,
-    candidateMarker: tupleMarker,
+    candidateVersions: versions,
     generatedCommitSha,
   };
   return [
@@ -161,9 +204,21 @@ function setGeneratedCommit(body, commitSha) {
   );
 }
 
-function readState(body, expectedMarker) {
+function readState(body, expectedCandidateVersions) {
   const state = parseStateMarker(body);
-  if (!state || state.candidateMarker !== expectedMarker)
+  let candidateVersions;
+  try {
+    candidateVersions = state?.candidateVersions
+      ? validateCandidateVersions(state.candidateVersions)
+      : parseCandidateMarker(state?.candidateMarker);
+  } catch {
+    candidateVersions = null;
+  }
+  if (
+    !state ||
+    !candidateVersions ||
+    !sameCandidateVersions(candidateVersions, expectedCandidateVersions)
+  )
     throw new Error(
       'Open Pi update PR has an invalid bot state marker; inspect it manually.',
     );
@@ -173,7 +228,7 @@ function readState(body, expectedMarker) {
     throw new Error('Open Pi update PR has an invalid original base SHA.');
   if (!/^[a-f0-9]{40}$/.test(state.generatedCommitSha || ''))
     throw new Error('Open Pi update PR has an invalid generated commit SHA.');
-  return state;
+  return { ...state, candidateVersions };
 }
 
 async function readArtifact(directory, expected) {
@@ -195,15 +250,17 @@ async function readArtifact(directory, expected) {
   );
 }
 
-function githubClient(token, repository) {
+function githubClient(token, repository, dependencies = {}) {
   const [owner, name] = repository.split('/');
+  const fetchImplementation = dependencies.fetchImplementation || fetch;
+  const apiBaseUrl = dependencies.apiBaseUrl || 'https://api.github.com';
   const headers = {
     accept: 'application/vnd.github+json',
     authorization: `Bearer ${token}`,
     'x-github-api-version': '2022-11-28',
   };
   async function request(endpoint, options = {}) {
-    const response = await fetch(`https://api.github.com${endpoint}`, {
+    const response = await fetchImplementation(`${apiBaseUrl}${endpoint}`, {
       ...options,
       headers: {
         ...headers,
@@ -261,7 +318,7 @@ async function verifyGeneratedCommit(client, pullRequest, state) {
     `/repos/${client.owner}/${client.name}/commits/${state.generatedCommitSha}`,
   );
   const botLogin = pullRequest.user?.login;
-  const candidateVersions = parseCandidateMarker(state.candidateMarker);
+  const candidateVersions = state.candidateVersions;
   if (
     !botLogin ||
     commit.author?.login !== botLogin ||
@@ -289,10 +346,17 @@ function parseCandidateMarker(marker) {
   } catch {
     throw new Error('Pi update PR candidate tuple marker is not valid JSON.');
   }
+  return validateCandidateVersions(versions);
+}
+
+function validateCandidateVersions(versions) {
+  const expectedKeys = [...PI_PACKAGES].sort();
+  const actualKeys = Object.keys(versions || {}).sort();
   if (
+    JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys) ||
     !PI_PACKAGES.every(
       (packageName) =>
-        parseStableVersion(versions?.[packageName]) &&
+        parseStableVersion(versions[packageName]) &&
         versions[packageName] === versions[PI_PACKAGES[0]],
     )
   )
@@ -318,44 +382,170 @@ function mergeGeneratedFileWithCurrentBase(
         fs.writeFile(originalBasePath, originalBaseText),
         fs.writeFile(currentBasePath, currentBaseText),
       ]);
-      return execFileSync(
-        'git',
-        [
-          'merge-file',
-          '-p',
-          '-L',
-          'bot-generated',
-          '-L',
-          'original-base',
-          '-L',
-          'current-base',
-          generatedPath,
-          originalBasePath,
-          currentBasePath,
-        ],
-        { encoding: 'utf8' },
-      );
-    } catch (error) {
-      if (error && error.status === 1) return null;
-      throw error;
+      try {
+        return execFileSync(
+          'git',
+          [
+            'merge-file',
+            '-p',
+            '-L',
+            'bot-generated',
+            '-L',
+            'original-base',
+            '-L',
+            'current-base',
+            generatedPath,
+            originalBasePath,
+            currentBasePath,
+          ],
+          { encoding: 'utf8' },
+        );
+      } catch (error) {
+        if (error && error.status === 1)
+          return mergeDisjointLineEdits(
+            generatedPath,
+            originalBasePath,
+            currentBasePath,
+            originalBaseText,
+          );
+        throw error;
+      }
     } finally {
       await fs.rm(temporaryDirectory, { recursive: true, force: true });
     }
   });
 }
 
-async function verifyOpenPullRequest(
-  client,
-  pullRequest,
-  expectedMarker,
-  currentBaseFiles,
+function mergeDisjointLineEdits(
+  generatedPath,
+  originalBasePath,
+  currentBasePath,
+  originalBaseText,
 ) {
+  const generatedEdits = gitLineEdits(originalBasePath, generatedPath);
+  const currentBaseEdits = gitLineEdits(originalBasePath, currentBasePath);
+  const edits = combineLineEdits(generatedEdits, currentBaseEdits);
+  if (!edits) return null;
+  return applyLineEdits(originalBaseText, edits);
+}
+
+function gitLineEdits(basePath, changedPath) {
+  let diff;
+  try {
+    diff = execFileSync(
+      'git',
+      [
+        'diff',
+        '--no-index',
+        '--no-ext-diff',
+        '--no-color',
+        '--unified=0',
+        '--',
+        basePath,
+        changedPath,
+      ],
+      { encoding: 'utf8' },
+    );
+  } catch (error) {
+    if (error && error.status === 1) diff = String(error.stdout || '');
+    else throw error;
+  }
+  return parseUnifiedDiffEdits(diff);
+}
+
+function parseUnifiedDiffEdits(diff) {
+  const lines = diff.split('\n');
+  const edits = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(
+      lines[index],
+    );
+    if (!header) continue;
+    const oldStart = Number(header[1]);
+    const oldCount = Number(header[2] || 1);
+    const newCount = Number(header[4] || 1);
+    const removed = [];
+    const added = [];
+    for (index += 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (line.startsWith('@@ ')) {
+        index -= 1;
+        break;
+      }
+      if (line.startsWith('\\ No newline at end of file')) continue;
+      if (line.startsWith('-')) removed.push(line.slice(1));
+      else if (line.startsWith('+')) added.push(line.slice(1));
+      else if (line !== '')
+        throw new Error('Could not safely parse a zero-context line diff.');
+    }
+    if (removed.length !== oldCount || added.length !== newCount)
+      throw new Error('Git line diff hunk did not match its declared counts.');
+    const start = oldCount === 0 ? oldStart : oldStart - 1;
+    edits.push({ start, end: start + oldCount, replacement: added });
+  }
+  return edits;
+}
+
+function combineLineEdits(first, second) {
+  const combined = [...first];
+  for (const candidate of second) {
+    let duplicate = false;
+    for (const existing of combined) {
+      if (sameLineEdit(existing, candidate)) {
+        duplicate = true;
+        break;
+      }
+      if (lineEditsConflict(existing, candidate)) return null;
+    }
+    if (!duplicate) combined.push(candidate);
+  }
+  return combined.sort(function sortLineEdits(left, right) {
+    return left.start - right.start || left.end - right.end;
+  });
+}
+
+function sameLineEdit(left, right) {
+  return (
+    left.start === right.start &&
+    left.end === right.end &&
+    JSON.stringify(left.replacement) === JSON.stringify(right.replacement)
+  );
+}
+
+function lineEditsConflict(left, right) {
+  const leftInsert = left.start === left.end;
+  const rightInsert = right.start === right.end;
+  if (leftInsert || rightInsert) {
+    if (leftInsert && rightInsert) return left.start === right.start;
+    const insertion = leftInsert ? left : right;
+    const range = leftInsert ? right : left;
+    return insertion.start >= range.start && insertion.start <= range.end;
+  }
+  return Math.max(left.start, right.start) < Math.min(left.end, right.end);
+}
+
+function applyLineEdits(originalText, edits) {
+  const sourceLines = originalText.split('\n');
+  const mergedLines = [];
+  let cursor = 0;
+  for (const edit of edits) {
+    if (edit.start < cursor || edit.start > sourceLines.length) return null;
+    mergedLines.push(...sourceLines.slice(cursor, edit.start));
+    mergedLines.push(...edit.replacement);
+    cursor = edit.end;
+  }
+  mergedLines.push(...sourceLines.slice(cursor));
+  return mergedLines.join('\n');
+}
+
+async function verifyOpenPullRequest(client, pullRequest, currentBaseFiles) {
   const currentBranchSha = await botBranchHeadSha(client);
   if (currentBranchSha !== pullRequest.head.sha)
     throw new Error(
       'Pi update PR head differs from the current bot branch; inspect the branch before updating it.',
     );
-  const state = readState(pullRequest.body || '', expectedMarker);
+  const candidateVersions = candidateVersionsFromBody(pullRequest.body || '');
+  const state = readState(pullRequest.body || '', candidateVersions);
   await verifyGeneratedCommit(client, pullRequest, state);
   const files = await client.paginated(
     `/repos/${client.owner}/${client.name}/pulls/${pullRequest.number}/files?per_page=100`,
@@ -385,7 +575,6 @@ async function verifyOpenPullRequest(
     throw new Error(
       'Pi update PR generated commit does not match its bot fingerprint.',
     );
-  const candidateVersions = parseCandidateMarker(state.candidateMarker);
   const manifest = JSON.parse(branchManifest);
   for (const packageName of PI_PACKAGES) {
     if (manifest.dependencies?.[packageName] !== candidateVersions[packageName])
@@ -470,15 +659,7 @@ async function verifyClosedBotBranch(client, repository, currentBaseFiles) {
     throw new Error(
       'Closed Pi update PR head differs from the current bot branch; inspect the branch before replacement.',
     );
-  const expectedMarker = parseStateMarker(
-    previousPullRequest.body || '',
-  )?.candidateMarker;
-  return verifyOpenPullRequest(
-    client,
-    previousPullRequest,
-    expectedMarker,
-    currentBaseFiles,
-  );
+  return verifyOpenPullRequest(client, previousPullRequest, currentBaseFiles);
 }
 
 async function writeBranchCommit(client, baseSha, validated) {
@@ -552,15 +733,25 @@ async function writeBranchCommit(client, baseSha, validated) {
   return commit.sha;
 }
 
-async function validateCandidateArtifact(directory, environment = process.env) {
+async function validateCandidateArtifact(
+  directory,
+  environment = process.env,
+  trustedRoot = process.cwd(),
+) {
   const repository = environment.GITHUB_REPOSITORY;
   const baseSha = environment.PI_UPDATE_BASE_SHA || environment.GITHUB_SHA;
   if (!repository || !baseSha || !environment.GITHUB_RUN_ID)
     throw new Error(
       'Publisher requires repository, trusted base SHA, and workflow run provenance.',
     );
-  const baseManifestText = await fs.readFile('package.json', 'utf8');
-  const baseLockText = await fs.readFile('pnpm-lock.yaml', 'utf8');
+  const baseManifestText = await fs.readFile(
+    path.join(trustedRoot, 'package.json'),
+    'utf8',
+  );
+  const baseLockText = await fs.readFile(
+    path.join(trustedRoot, 'pnpm-lock.yaml'),
+    'utf8',
+  );
   const validated = await readArtifact(directory, {
     repository,
     runId: environment.GITHUB_RUN_ID,
@@ -578,7 +769,11 @@ async function validateCandidateArtifact(directory, environment = process.env) {
   };
 }
 
-async function publishCandidate(directory, environment = process.env) {
+async function publishCandidate(
+  directory,
+  environment = process.env,
+  dependencies = {},
+) {
   const repository = environment.GITHUB_REPOSITORY;
   const readToken = environment.GITHUB_TOKEN;
   const writeToken = environment.GH_APP_TOKEN;
@@ -588,9 +783,13 @@ async function publishCandidate(directory, environment = process.env) {
     throw new Error(
       'Publisher requires repository, trusted base SHA, a read token, and scoped GitHub App token.',
     );
-  const validated = await validateCandidateArtifact(directory, environment);
-  const readClient = githubClient(readToken, repository);
-  const writeClient = githubClient(writeToken, repository);
+  const validated = await validateCandidateArtifact(
+    directory,
+    environment,
+    dependencies.trustedRoot || process.cwd(),
+  );
+  const readClient = githubClient(readToken, repository, dependencies);
+  const writeClient = githubClient(writeToken, repository, dependencies);
   const marker = exactCandidateMarker(validated.metadata.candidateVersions);
   if (await closedUnmergedTupleExists(readClient, marker)) {
     console.log(
@@ -606,12 +805,14 @@ async function publishCandidate(directory, environment = process.env) {
     ? await verifyOpenPullRequest(
         readClient,
         existingPullRequest,
-        parseStateMarker(existingPullRequest.body || '')?.candidateMarker,
         validated.currentBaseFiles,
       )
     : null;
   if (
-    existingState?.candidateMarker === marker &&
+    sameCandidateVersions(
+      existingState?.candidateVersions,
+      validated.metadata.candidateVersions,
+    ) &&
     existingState.fingerprint === validated.fingerprint
   ) {
     console.log(
@@ -712,6 +913,7 @@ module.exports = {
   BOT_BRANCH,
   candidateBody,
   candidateTitle,
+  candidateVersionsFromBody,
   exactCandidateMarker,
   mergeGeneratedFileWithCurrentBase,
   parseStateMarker,
