@@ -405,6 +405,17 @@ async function packagedDiagnosticsSmoke(
   let collector;
   let app;
   let page;
+  let smokeFailed = false;
+  let smokeError;
+  const cleanupFailures = [];
+  async function cleanUpStage(stage, cleanup) {
+    try {
+      await cleanup();
+    } catch (error) {
+      cleanupFailures.push(error);
+      console.error(`Packaged diagnostics: ${stage} cleanup failed`, error);
+    }
+  }
   try {
     await fs.mkdir(artifacts, { recursive: true });
     piFixture = piArtifacts ? await createPackagedPiFixture() : null;
@@ -422,7 +433,12 @@ async function packagedDiagnosticsSmoke(
     console.log('Packaged diagnostics: launching Electron');
     app = await electron.launch({
       executablePath: executable,
-      args: process.platform === 'linux' ? ['--no-sandbox'] : [],
+      args:
+        process.platform === 'linux'
+          ? ['--no-sandbox']
+          : process.platform === 'darwin'
+            ? ['--use-mock-keychain']
+            : [],
       env: smokeEnvironment(temporary, artifacts, collector.dsn, piFixture),
       timeout: 30_000,
     });
@@ -527,32 +543,65 @@ async function packagedDiagnosticsSmoke(
       JSON.stringify(evidence, null, 2),
     );
     console.log(JSON.stringify(evidence));
+  } catch (error) {
+    smokeFailed = true;
+    smokeError = error;
   } finally {
     console.log('Packaged diagnostics: saving final artifacts');
-    if (page && !page.isClosed()) {
-      await page.screenshot({ path: path.join(artifacts, 'final-state.png') });
-      await fs.writeFile(
-        path.join(artifacts, 'final-state.txt'),
-        await page.locator('body').innerText(),
-      );
-    }
+    await cleanUpStage('artifacts', async function saveFinalArtifacts() {
+      if (page && !page.isClosed()) {
+        await page.screenshot({
+          path: path.join(artifacts, 'final-state.png'),
+          timeout: 5_000,
+        });
+        await fs.writeFile(
+          path.join(artifacts, 'final-state.txt'),
+          await page.locator('body').innerText({ timeout: 5_000 }),
+        );
+      }
+    });
     if (collector)
-      await fs.writeFile(
-        path.join(artifacts, 'received-events.json'),
-        JSON.stringify(
-          { events: collector.events, failures: collector.failures },
-          null,
-          2,
-        ),
+      await cleanUpStage(
+        'collector evidence',
+        function saveCollectorEvidence() {
+          return fs.writeFile(
+            path.join(artifacts, 'received-events.json'),
+            JSON.stringify(
+              { events: collector.events, failures: collector.failures },
+              null,
+              2,
+            ),
+          );
+        },
       );
     console.log('Packaged diagnostics: closing Electron');
-    await app?.close();
+    const shutdownTimer = app
+      ? setTimeout(function killUnresponsiveSmokeApp() {
+          if (app.process().exitCode === null) app.process().kill('SIGKILL');
+        }, 10_000)
+      : undefined;
+    try {
+      await cleanUpStage('Electron', async function closeSmokeApp() {
+        await app?.close();
+      });
+    } finally {
+      clearTimeout(shutdownTimer);
+    }
     console.log('Packaged diagnostics: closing loopback collectors');
-    await collector?.close();
-    await piFixture?.close();
-    await fs.rm(temporary, { recursive: true, force: true });
+    await cleanUpStage('collector', async function closeCollector() {
+      await collector?.close();
+    });
+    await cleanUpStage('Pi provider', async function closePiFixture() {
+      await piFixture?.close();
+    });
+    await cleanUpStage('temporary profile', function removeProfile() {
+      return fs.rm(temporary, { recursive: true, force: true });
+    });
     console.log('Packaged diagnostics: cleanup complete');
   }
+  if (smokeFailed) throw smokeError;
+  if (cleanupFailures.length)
+    throw new AggregateError(cleanupFailures, 'Packaged smoke cleanup failed');
 }
 
 module.exports = { packagedDiagnosticsSmoke };
