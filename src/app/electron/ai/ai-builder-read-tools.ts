@@ -342,7 +342,11 @@ export function createBuilderReadTools(
           options.recordRead(filePath, page);
           return {
             content: [{ type: 'text', text: page.text }],
-            details: { filePath, ...readPageDetails(page) },
+            details: {
+              filename: params.filename,
+              source: 'generated',
+              ...readPageDetails(page),
+            },
           };
         },
       ),

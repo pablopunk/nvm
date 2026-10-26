@@ -166,10 +166,6 @@ function verifyPiIntegrationEvidence(directory, expectedSha) {
   assert.deepEqual(conversation.toolAllowlist, EXPECTED_CONVERSATION_TOOLS);
   verifyToolPolicy(conversation, 'conversation');
   for (const inactiveWebTool of ['source_check', 'get_search_content']) {
-    const registered = conversation.registeredTools.find(
-      (tool) => tool.name === inactiveWebTool,
-    );
-    assert.equal(registered?.exposure, 'direct');
     assert.equal(conversation.activeToolNames.includes(inactiveWebTool), false);
     assert.equal(
       conversation.callableToolNames.includes(inactiveWebTool),

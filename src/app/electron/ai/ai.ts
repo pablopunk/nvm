@@ -40,10 +40,11 @@ import {
   findPiWebAccessPath,
   PI_AI_COMPACTION_RESERVE_TOKENS,
 } from './pi-runtime';
+import { registerObservedPiProvider } from './pi-provider';
+import { isMessageUpdateEvent } from './pi-session-events';
 import { ensurePiToolAllowlist } from './pi-session-tool-policy';
 import {
   fetchDiagnosticBackend,
-  observeAgentResponses,
   observeProviderOptions,
 } from '../diagnostics/backend-observability';
 import { type ByoKeySnapshot, getByoKey } from '../backend/byo-key';
@@ -271,11 +272,6 @@ function sessionUsageDiagnostic(session: AgentSession) {
   };
 }
 
-type MessageUpdateEvent = Extract<
-  AgentSessionEvent,
-  { type: 'message_update' }
->;
-
 type ToolExecutionStartEvent = Extract<
   AgentSessionEvent,
   { type: 'tool_execution_start' }
@@ -313,20 +309,11 @@ function createActiveBuilderRun(): ActiveBuilderRun {
 
 type PiApi = typeof import('@earendil-works/pi-coding-agent');
 type DirectAiApi = typeof import('@earendil-works/pi-ai/compat');
+type PiSettingsManager = ReturnType<PiApi['SettingsManager']['inMemory']>;
 type DirectModelDescriptor = {
   descriptor: BackendDescriptor;
   useDynamicBackendRouting: boolean;
 } | null;
-function isMessageUpdateEvent(
-  event: AgentSessionEvent,
-): event is MessageUpdateEvent {
-  return (
-    event.type === 'message_update' &&
-    event.assistantMessageEvent.type === 'text_delta' &&
-    typeof event.assistantMessageEvent.delta === 'string'
-  );
-}
-
 function isToolExecutionStartEvent(
   event: AgentSessionEvent,
 ): event is ToolExecutionStartEvent {
@@ -1448,7 +1435,6 @@ function createNevermindAi(options: NevermindAiOptions) {
       allowedToolNames,
       'builder',
     );
-    observeAgentResponses(result.session.agent);
     let initialPromptPrepared = initialPromptChars > 0;
     sessionModelPreparations.set(
       result.session,
@@ -1764,7 +1750,6 @@ async function createGeneralSession(
     label: 'pi-tool-policy',
     data: toolPolicy,
   });
-  observeAgentResponses(result.session.agent);
   if (toolMode === 'conversation') {
     const activeTools = result.session.agent.state.tools.map(
       (tool) => tool.name,
@@ -1873,12 +1858,18 @@ async function resolveAiModelAndAuth(
 ) {
   const byo = await getByoKey();
   if (byo) {
+    const model = byoModelDescriptor(
+      byo,
+      modelRuntime.getModel(byo.providerId, byo.modelId)?.input,
+    );
+    await registerObservedPiProvider(modelRuntime, byo.providerId, {
+      api: byo.api,
+      baseUrl: byo.baseUrl,
+      models: [model],
+    });
     await modelRuntime.setRuntimeApiKey(byo.providerId, byo.apiKey);
     return {
-      model: byoModelDescriptor(
-        byo,
-        modelRuntime.getModel(byo.providerId, byo.modelId)?.input,
-      ),
+      model,
       source: 'byo' as const,
       creditInfo: null,
       thinkingLevel: DEFAULT_THINKING_LEVEL,
@@ -1894,7 +1885,7 @@ async function resolveAiModelAndAuth(
     chars,
   );
   const model = nevermindModelDescriptor(descriptor, modelRole);
-  modelRuntime.registerProvider(NEVERMIND_PROVIDER_ID, {
+  await registerObservedPiProvider(modelRuntime, NEVERMIND_PROVIDER_ID, {
     name: 'Nevermind',
     api: descriptor.api,
     baseUrl: descriptor.baseUrl,
@@ -1981,7 +1972,7 @@ async function createResourceLoader(
   }: Pick<
     NevermindAiOptions,
     'agentDir' | 'workspaceDir' | 'extensionApiPath' | 'skillPath'
-  > & { settingsManager: InstanceType<PiApi['SettingsManager']> },
+  > & { settingsManager: PiSettingsManager },
 ) {
   const webAccessPath = await findPiWebAccessPath();
   if (!webAccessPath) throw new Error('Bundled Pi web access is unavailable');
@@ -2025,7 +2016,7 @@ async function createGeneralResourceLoader(
     systemPrompt: sessionSystemPrompt,
     includeWebAccess,
   }: Pick<NevermindAiOptions, 'agentDir' | 'workspaceDir'> & {
-    settingsManager: InstanceType<PiApi['SettingsManager']>;
+    settingsManager: PiSettingsManager;
     systemPrompt: string;
     includeWebAccess: boolean;
   },

@@ -7,6 +7,7 @@ import {
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test, { after, mock } from 'node:test';
 
 const testDataRoot = await fs.mkdtemp(
@@ -19,11 +20,7 @@ const repoRoot =
   path.basename(process.cwd()) === 'backend'
     ? path.resolve(process.cwd(), '..', '..')
     : process.cwd();
-const repositoryManifest = JSON.parse(
-  await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8'),
-) as { dependencies: Record<string, string> };
-const piCodingAgentVersion =
-  repositoryManifest.dependencies['@earendil-works/pi-coding-agent'];
+const piCodingAgentVersion = await installedPiCodingAgentVersion();
 
 mock.module('electron', {
   namedExports: {
@@ -59,6 +56,72 @@ const LONG_SESSION_TURN =
   'Deterministic session history retained by the Pi SDK fixture. '.repeat(110);
 const LONG_SESSION_TURN_COUNT = 16;
 
+type FixtureAiEvent = {
+  type: string;
+  name?: string;
+  label?: string;
+  data?: unknown;
+  text?: string;
+  message?: string;
+  isError?: boolean;
+};
+
+type PiToolPolicy = {
+  registeredTools: Array<{ name: string; exposure: string }>;
+  activeToolNames: string[];
+  callableToolNames: string[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function eventData(event: FixtureAiEvent) {
+  return isRecord(event.data) ? event.data : undefined;
+}
+
+function eventDataValue(event: FixtureAiEvent, key: string) {
+  return eventData(event)?.[key];
+}
+
+function toolTraceOutput(event: FixtureAiEvent) {
+  const output = eventDataValue(event, 'output');
+  return isRecord(output) ? output : undefined;
+}
+
+function toolTraceInput(event: FixtureAiEvent) {
+  const input = eventDataValue(event, 'input');
+  return isRecord(input) ? input : undefined;
+}
+
+function toolTraceDetails(event: FixtureAiEvent) {
+  const details = toolTraceOutput(event)?.details;
+  if (typeof details !== 'string') return {};
+  try {
+    const parsed: unknown = JSON.parse(details);
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isPiToolPolicy(value: unknown): value is PiToolPolicy {
+  if (!isRecord(value)) return false;
+  return (
+    Array.isArray(value.registeredTools) &&
+    value.registeredTools.every(
+      (tool: unknown) =>
+        isRecord(tool) &&
+        typeof tool.name === 'string' &&
+        typeof tool.exposure === 'string',
+    ) &&
+    Array.isArray(value.activeToolNames) &&
+    value.activeToolNames.every((name: unknown) => typeof name === 'string') &&
+    Array.isArray(value.callableToolNames) &&
+    value.callableToolNames.every((name: unknown) => typeof name === 'string')
+  );
+}
+
 after(async () => {
   clearNevermindAuthCacheForTests();
   setNevermindAuthFilePathForTests(null);
@@ -93,6 +156,17 @@ type CapturedRequest = {
   path: string;
   responseStatus?: number;
 };
+
+function hasByoRequestHeaders(request: CapturedRequest) {
+  return (
+    request.headers.authorization === 'Bearer byo-fixture-token' &&
+    request.headers['x-nevermind-client'] === 'desktop' &&
+    request.headers['x-nevermind-client-version'] === 'test' &&
+    request.headers['x-nevermind-api-version'] === '1' &&
+    !request.headers['x-nevermind-ai-model-tier'] &&
+    !request.headers['x-nevermind-ai-credit-kind']
+  );
+}
 
 type FixtureScenario =
   | 'builder'
@@ -359,7 +433,20 @@ function hasTrailingToolCompaction(version: string) {
 }
 
 async function installedPiCodingAgentVersion() {
-  return piCodingAgentVersion;
+  const modulePath = fileURLToPath(
+    import.meta.resolve('@earendil-works/pi-coding-agent'),
+  );
+  const packagePath = path.resolve(
+    path.dirname(modulePath),
+    '..',
+    'package.json',
+  );
+  const packageJson: unknown = JSON.parse(
+    await fs.readFile(packagePath, 'utf8'),
+  );
+  if (!isRecord(packageJson) || typeof packageJson.version !== 'string')
+    throw new Error('The installed Pi coding agent package has no version.');
+  return packageJson.version;
 }
 
 function containsApiReadResult(body: Record<string, any>) {
@@ -820,7 +907,7 @@ async function configureAuth(baseUrl: string, suffix: string) {
 
 function createAi(
   fixture: ReturnType<typeof createProtocolFixture>,
-  events: any[],
+  events: FixtureAiEvent[],
   activeExtensionFile?: string,
 ) {
   return createNevermindAi({
@@ -861,18 +948,14 @@ function createAi(
         event.type === 'tool_trace_end' &&
         event.name === 'read_extension_api'
       ) {
-        try {
-          const details = JSON.parse(
-            String(event.data?.output?.details || '{}'),
-          );
-          fixture.nextOffset = details.nextOffset ?? undefined;
-        } catch {}
+        const nextOffset = toolTraceDetails(event).nextOffset;
+        if (typeof nextOffset === 'number') fixture.nextOffset = nextOffset;
       }
     },
   });
 }
 
-function terminalEvents(events: Array<{ type: string }>) {
+function terminalEvents(events: readonly FixtureAiEvent[]) {
   return events.filter((event) =>
     ['done', 'error', 'aborted'].includes(event.type),
   );
@@ -908,13 +991,7 @@ async function seedLongPiSession(session: {
 
 test('the real builder adapter bounds and continues API reads, recovers a backend-shaped 413, and accepts a follow-up', async (context) => {
   await withFixture('builder-long-session', 'proactive', async (fixture) => {
-    const events: Array<{
-      type: string;
-      name?: string;
-      label?: string;
-      data?: any;
-      text?: string;
-    }> = [];
+    const events: FixtureAiEvent[] = [];
     const ai = createAi(fixture, events);
     try {
       let toolPolicy: unknown;
@@ -930,10 +1007,11 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
           'each earlier builder turn should finish through the real adapter',
         );
         if (turn === 0) {
-          toolPolicy = events.find(
+          const policyEvent = events.find(
             (event) =>
               event.type === 'debug' && event.label === 'pi-tool-policy',
-          )?.data;
+          );
+          toolPolicy = policyEvent ? eventData(policyEvent) : undefined;
         }
       }
       events.length = 0;
@@ -954,26 +1032,42 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         terminalEvents(events).map((event) => event.type),
         ['done'],
       );
-      assert.ok(
-        events.some(
-          (event) =>
-            event.type === 'tool_trace_end' &&
-            event.name === 'read_extension_api' &&
-            Number(event.data?.output?.textBytes) > 30_000,
-        ),
-        'the real builder read tool should return a substantial bounded page',
-      );
       const apiReadEvents = events.filter(
         (event) =>
           event.type === 'tool_trace_end' &&
           event.name === 'read_extension_api',
       );
       assert.equal(apiReadEvents.length, 2);
-      const pageDetails = apiReadEvents.map((event) =>
-        JSON.parse(String(event.data?.output?.details || '{}')),
+      const pageInputs = apiReadEvents.map(toolTraceInput);
+      const pageDetails = apiReadEvents.map(toolTraceDetails);
+      const firstNextOffset = Number(pageDetails[0].nextOffset);
+      const apiSource = await fs.readFile(
+        path.join(repoRoot, 'src/app/resources/nevermind-extension-api.d.ts'),
+        'utf8',
       );
-      assert.ok(pageDetails[0].nextOffset > 0);
-      assert.notEqual(pageDetails[1].totalLines, undefined);
+      const apiLines = apiSource.split('\n');
+      if (apiLines.at(-1) === '') apiLines.pop();
+      assert.ok(
+        firstNextOffset > 0,
+        'the first API page must offer continuation',
+      );
+      assert.equal(pageDetails[0].totalLines, apiLines.length);
+      assert.ok(firstNextOffset < apiLines.length);
+      assert.equal(Number(pageInputs[1]?.offset), firstNextOffset);
+      assert.equal(pageDetails[1].nextOffset, null);
+      assert.equal(pageDetails[1].complete, true);
+      assert.equal(pageDetails[1].totalLines, pageDetails[0].totalLines);
+      assert.equal(pageDetails[1].revision, pageDetails[0].revision);
+      const continuationLine = apiLines
+        .slice(firstNextOffset)
+        .find((line) => line.trim().length > 0);
+      assert.ok(continuationLine);
+      assert.ok(
+        String(toolTraceOutput(apiReadEvents[1])?.text || '').includes(
+          continuationLine,
+        ),
+        'the continued tool output must include source content after the returned offset',
+      );
       const taskPromptIndex = fixture.requests.findIndex((request) =>
         JSON.stringify(request.body.messages).includes(
           'The user confirmed the extension request.',
@@ -1037,8 +1131,10 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
           event.type === 'debug' && event.label === 'pi-session-budget',
       );
       assert.ok(piSessionBudget.length > 0);
+      const finalBudget = piSessionBudget.at(-1);
+      const finalBudgetData = finalBudget ? eventData(finalBudget) : undefined;
       assert.ok(
-        Number(piSessionBudget.at(-1)?.data?.reportedInputTokens) > 0,
+        Number(finalBudgetData?.reportedInputTokens) > 0,
         'Pi session diagnostics should include provider-reported usage',
       );
       const tokenEvidence = fixture.requests.map((request) => ({
@@ -1050,14 +1146,12 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       }));
       const budgetEvidence = {
         piEstimatedContextTokens:
-          piSessionBudget.at(-1)?.data?.piEstimatedContextTokens ?? null,
-        reportedInputTokens:
-          piSessionBudget.at(-1)?.data?.reportedInputTokens ?? 0,
-        effectiveContextWindow:
-          piSessionBudget.at(-1)?.data?.contextWindow ?? 24_576,
+          finalBudgetData?.piEstimatedContextTokens ?? null,
+        reportedInputTokens: finalBudgetData?.reportedInputTokens ?? 0,
+        effectiveContextWindow: finalBudgetData?.contextWindow ?? 24_576,
         reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
         piProactiveThreshold:
-          Number(piSessionBudget.at(-1)?.data?.contextWindow ?? 24_576) -
+          Number(finalBudgetData?.contextWindow ?? 24_576) -
           PI_AI_COMPACTION_RESERVE_TOKENS,
         summaryRequestEstimate: estimateInputTokensFromValue(
           summaryRequest.body,
@@ -1066,16 +1160,14 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       context.diagnostic(
         JSON.stringify({
           sdk: packagePi.AgentSession.name,
-          version: piPackage.version,
+          version: piCodingAgentVersion,
           defaultMaxBytes: packagePi.DEFAULT_MAX_BYTES,
           reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
-          piSessionBudget: piSessionBudget.at(-1)?.data,
-          effectiveContextWindow:
-            piSessionBudget.at(-1)?.data?.contextWindow ?? 24_576,
+          piSessionBudget: finalBudgetData,
+          effectiveContextWindow: finalBudgetData?.contextWindow ?? 24_576,
           piEstimatedContextTokens:
-            piSessionBudget.at(-1)?.data?.piEstimatedContextTokens ?? null,
-          reportedInputTokens:
-            piSessionBudget.at(-1)?.data?.reportedInputTokens ?? 0,
+            finalBudgetData?.piEstimatedContextTokens ?? null,
+          reportedInputTokens: finalBudgetData?.reportedInputTokens ?? 0,
           ...budgetEvidence,
           tokenEvidence,
         }),
@@ -1083,8 +1175,9 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       assert.ok(
         apiReadEvents.every(
           (event) =>
-            Number(event.data?.output?.textBytes) <=
-            packagePi.DEFAULT_MAX_BYTES,
+            Number(toolTraceOutput(event)?.textBytes) > 0 &&
+            Number(toolTraceOutput(event)?.textBytes) <=
+              packagePi.DEFAULT_MAX_BYTES,
         ),
         'every page returned to Pi must respect its exported byte ceiling',
       );
@@ -1092,7 +1185,7 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
         events.some(
           (event) =>
             event.type === 'delta' &&
-            String((event as { text?: string }).text || '').includes(
+            String(event.text || '').includes(
               'The requested extension operation is complete.',
             ),
         ),
@@ -1111,12 +1204,8 @@ test('the real builder adapter bounds and continues API reads, recovers a backen
       const builderToolNames = taskStartRequest.body.tools.map(
         (tool: { function?: { name?: string } }) => tool.function?.name,
       );
-      assert.ok(toolPolicy && typeof toolPolicy === 'object');
-      const policy = toolPolicy as {
-        registeredTools: Array<{ name: string; exposure: string }>;
-        activeToolNames: string[];
-        callableToolNames: string[];
-      };
+      assert.ok(isPiToolPolicy(toolPolicy));
+      const policy = toolPolicy;
       const registeredToolNames = policy.registeredTools.map(
         (tool) => tool.name,
       );
@@ -1232,12 +1321,7 @@ test('backend token admission can reject below Pi proactive compaction threshold
     'backend-estimator-boundary',
     'backend-estimator-boundary',
     async (fixture) => {
-      const events: Array<{
-        type: string;
-        label?: string;
-        data?: any;
-        text?: string;
-      }> = [];
+      const events: FixtureAiEvent[] = [];
       const ai = createAi(fixture, events);
       try {
         await ai.send(
@@ -1262,7 +1346,11 @@ test('backend token admission can reject below Pi proactive compaction threshold
           (event) =>
             event.type === 'debug' && event.label === 'pi-session-budget',
         );
-        const effectiveContextWindow = Number(budgetEvent?.data?.contextWindow);
+        const effectiveContextWindow = Number(
+          budgetEvent
+            ? eventDataValue(budgetEvent, 'contextWindow')
+            : undefined,
+        );
         const piThreshold =
           effectiveContextWindow - PI_AI_COMPACTION_RESERVE_TOKENS;
         assert.ok(backendEstimate >= MAX_INPUT_TOKENS);
@@ -1309,11 +1397,7 @@ test('invalid Pi builder output leaves the current live extension untouched', as
       await fs.mkdir(extensionsDir, { recursive: true });
       const livePath = path.join(extensionsDir, 'existing.ts');
       await fs.writeFile(livePath, liveSource);
-      const events: Array<{
-        type: string;
-        name?: string;
-        isError?: boolean;
-      }> = [];
+      const events: FixtureAiEvent[] = [];
       const ai = createAi(fixture, events, 'existing.ts');
       try {
         await ai.send(
@@ -1356,7 +1440,7 @@ test('a byte-size 413 retains its distinct host notice after Pi recovery', async
     'request-too-large',
     'request-too-large',
     async (fixture) => {
-      const events: Array<{ type: string; data?: any }> = [];
+      const events: FixtureAiEvent[] = [];
       const ai = createAi(fixture, events);
       try {
         await ai.send(
@@ -1368,11 +1452,12 @@ test('a byte-size 413 retains its distinct host notice after Pi recovery', async
           terminal.map((event) => event.type),
           ['error'],
         );
-        assert.equal(terminal[0].data?.kind, 'request_too_large');
+        const noticeKind = eventDataValue(terminal[0], 'kind');
+        assert.equal(noticeKind, 'request_too_large');
         fixtureEvidence.push({
           scenario: 'byte-size-413-keeps-request-too-large-notice',
           finalOutcome: 'error',
-          noticeKind: terminal[0].data?.kind,
+          noticeKind,
         });
       } finally {
         await ai.disposeAllSessions();
@@ -1398,7 +1483,7 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
         modelName: 'Fixture Model',
       });
       const ai = createAi(fixture, []);
-      const events: Array<{ type: string }> = [];
+      const events: FixtureAiEvent[] = [];
       try {
         const session = ai.session('extension-overflow-session', {
           model: 'fast',
@@ -1437,11 +1522,10 @@ test('extension sessions keep overflow recovery, final status, and BYO routing i
         assert.ok(
           fixture.requests.every(
             (request) =>
-              request.headers.authorization === 'Bearer byo-fixture-token' &&
-              !request.headers['x-nevermind-ai-model-tier'] &&
-              !request.headers['x-nevermind-ai-credit-kind'],
+              hasByoRequestHeaders(request) &&
+              request.body.model === 'fixture-model',
           ),
-          'BYO credentials must be retained for both summary and recovered requests',
+          'BYO auth and model identity must be retained for normal, summary, and recovered requests',
         );
         fixtureEvidence.push({
           scenario: 'byo-extension-session-overflow-recovery',
@@ -1462,6 +1546,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
     {
       provider: 'openai',
       api: 'openai-completions',
+      modelId: 'fixture-model',
       expectedPath: '/v1/chat/completions',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         `${fixture.baseUrl}/v1`,
@@ -1469,6 +1554,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
     {
       provider: 'anthropic',
       api: 'anthropic-messages',
+      modelId: 'claude-fixture',
       expectedPath: '/v1/messages',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         fixture.baseUrl,
@@ -1476,6 +1562,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
     {
       provider: 'google',
       api: 'google-generative-ai',
+      modelId: 'gemini-fixture',
       expectedPath:
         '/v1beta/models/gemini-fixture:streamGenerateContent?alt=sse',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
@@ -1499,12 +1586,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
           provider: provider.provider,
           api: provider.api,
           baseUrl: provider.baseUrl(fixture),
-          modelId:
-            provider.provider === 'anthropic'
-              ? 'claude-fixture'
-              : provider.provider === 'google'
-                ? 'gemini-fixture'
-                : 'fixture-model',
+          modelId: provider.modelId,
           modelName: 'Fixture Model',
         });
         const ai = createAi(fixture, []);
@@ -1512,7 +1594,7 @@ test('configured provider adapters recover the backend-compatible token-limit 41
           model: 'fast',
           toolMode: 'none',
         });
-        const events: Array<{ type: string }> = [];
+        const events: FixtureAiEvent[] = [];
         try {
           await seedLongPiSession(session);
           const response = await session.ask(
@@ -1535,6 +1617,16 @@ test('configured provider adapters recover the backend-compatible token-limit 41
             413,
           );
           assert.deepEqual(fixture.unexpectedRoutes, []);
+          assert.ok(
+            fixture.requests.every(
+              (request) =>
+                hasByoRequestHeaders(request) &&
+                (provider.provider === 'google'
+                  ? request.path.includes(`/models/${provider.modelId}:`)
+                  : request.body.model === provider.modelId),
+            ),
+            'BYO model and credentials must remain attached to every normal, summary, and recovered request',
+          );
           assert.deepEqual(
             fixture.requests.map(({ method, path: requestPath }) => [
               method,
@@ -1566,6 +1658,7 @@ test('configured provider adapters classify unmodified 413 responses by the inst
     {
       provider: 'openai',
       api: 'openai-completions',
+      modelId: 'fixture-model',
       expectedPath: '/v1/chat/completions',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         `${fixture.baseUrl}/v1`,
@@ -1573,6 +1666,7 @@ test('configured provider adapters classify unmodified 413 responses by the inst
     {
       provider: 'anthropic',
       api: 'anthropic-messages',
+      modelId: 'claude-fixture',
       expectedPath: '/v1/messages',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
         fixture.baseUrl,
@@ -1580,6 +1674,7 @@ test('configured provider adapters classify unmodified 413 responses by the inst
     {
       provider: 'google',
       api: 'google-generative-ai',
+      modelId: 'gemini-fixture',
       expectedPath:
         '/v1beta/models/gemini-fixture:streamGenerateContent?alt=sse',
       baseUrl: (fixture: ReturnType<typeof createProtocolFixture>) =>
@@ -1606,15 +1701,10 @@ test('configured provider adapters classify unmodified 413 responses by the inst
           provider: provider.provider,
           api: provider.api,
           baseUrl: provider.baseUrl(fixture),
-          modelId:
-            provider.provider === 'anthropic'
-              ? 'claude-fixture'
-              : provider.provider === 'google'
-                ? 'gemini-fixture'
-                : 'fixture-model',
+          modelId: provider.modelId,
           modelName: 'Fixture Model',
         });
-        const events: Array<{ type: string }> = [];
+        const events: FixtureAiEvent[] = [];
         const ai = createAi(fixture, []);
         const session = ai.session(`unmodified-413-${provider.provider}`, {
           model: 'fast',
@@ -1661,6 +1751,16 @@ test('configured provider adapters classify unmodified 413 responses by the inst
             `${provider.provider} should use the installed SDK's exact endpoint beneath the configured base URL`,
           );
           assert.deepEqual(fixture.unexpectedRoutes, []);
+          assert.ok(
+            fixture.requests.every(
+              (request) =>
+                hasByoRequestHeaders(request) &&
+                (provider.provider === 'google'
+                  ? request.path.includes(`/models/${provider.modelId}:`)
+                  : request.body.model === provider.modelId),
+            ),
+            'BYO model and credentials must remain attached when Pi classifies an unmodified 413',
+          );
           fixtureEvidence.push({
             scenario: `provider-raw-413-${provider.api}`,
             finalOutcome: raw413Recognized ? 'done' : 'error',
@@ -1678,7 +1778,7 @@ test('configured provider adapters classify unmodified 413 responses by the inst
 
 test('one-shot AI keeps using the direct streaming path', async () => {
   await withFixture('complete', 'one-shot', async (fixture) => {
-    const events: Array<{ type: string; label?: string }> = [];
+    const events: FixtureAiEvent[] = [];
     const ai = createAi(fixture, events);
     const response = await ai.ask('Answer with a short fixture response.', {
       model: 'fast',
@@ -1706,7 +1806,7 @@ test('one-shot AI keeps using the direct streaming path', async () => {
 test('prepared tool-enabled fallback reuses the real loaded session', async () => {
   await withFixture('complete', 'prepared-fallback', async (fixture) => {
     const ai = createAi(fixture, []);
-    const events: Array<{ type: string }> = [];
+    const events: FixtureAiEvent[] = [];
     try {
       await ai.prepare({ model: 'fast', toolMode: 'conversation' });
       const response = await ai.ask(
@@ -1778,7 +1878,7 @@ test('overlapping prompts on one extension session settle in request order', asy
 test('cancellation during model preparation prevents the next provider request', async () => {
   await withFixture('prepare-cancel', 'prepare-cancel', async (fixture) => {
     const ai = createAi(fixture, []);
-    const events: Array<{ type: string }> = [];
+    const events: FixtureAiEvent[] = [];
     const session = ai.session('prepare-cancel-session', {
       model: 'fast',
       toolMode: 'none',
@@ -1823,7 +1923,7 @@ test('Pi summary auth and credit failures produce one terminal error, never succ
         model: 'fast',
         toolMode: 'none',
       });
-      const events: Array<{ type: string; message?: string }> = [];
+      const events: FixtureAiEvent[] = [];
       try {
         await seedLongPiSession(session);
         await assert.rejects(
@@ -1860,7 +1960,7 @@ test('Pi stops after an exhausted overflow recovery attempt and emits one final 
         model: 'fast',
         toolMode: 'none',
       });
-      const events: Array<{ type: string }> = [];
+      const events: FixtureAiEvent[] = [];
       try {
         await seedLongPiSession(session);
         await assert.rejects(
@@ -1892,7 +1992,7 @@ test('Pi stops after an exhausted overflow recovery attempt and emits one final 
 test('host cancellation during Pi compaction settles as aborted without false success', async () => {
   await withFixture('summary-hangs', 'summary-cancel', async (fixture) => {
     const ai = createAi(fixture, []);
-    const events: Array<{ type: string }> = [];
+    const events: FixtureAiEvent[] = [];
     const controller = new AbortController();
     const session = ai.session('summary-cancel-session', {
       model: 'fast',
@@ -1945,7 +2045,7 @@ test('host cancellation during Pi transient retry emits only an aborted outcome'
     'builder-retry-hangs',
     'builder-retry-cancel',
     async (fixture) => {
-      const events: Array<{ type: string }> = [];
+      const events: FixtureAiEvent[] = [];
       const ai = createAi(fixture, events);
       try {
         const pending = ai.send(
@@ -1977,7 +2077,7 @@ test('builder transient retries stay enabled while general session retries stay 
     'builder-transient',
     'builder-transient',
     async (fixture) => {
-      const events: Array<{ type: string }> = [];
+      const events: FixtureAiEvent[] = [];
       const ai = createAi(fixture, events);
       try {
         await ai.send(
@@ -2005,7 +2105,7 @@ test('builder transient retries stay enabled while general session retries stay 
     'general-transient',
     async (fixture) => {
       const ai = createAi(fixture, []);
-      const events: Array<{ type: string }> = [];
+      const events: FixtureAiEvent[] = [];
       try {
         await assert.rejects(
           ai
@@ -2033,7 +2133,7 @@ test('builder transient retries stay enabled while general session retries stay 
 
 test('conversation AI exposes the exact real read-only and web tool allowlist', async () => {
   await withFixture('complete', 'conversation', async (fixture) => {
-    const events: Array<{ type: string; label?: string; data?: any }> = [];
+    const events: FixtureAiEvent[] = [];
     const ai = createAi(fixture, events);
     try {
       await ai
@@ -2062,23 +2162,18 @@ test('conversation AI exposes the exact real read-only and web tool allowlist', 
       const policyEvent = events.find(
         (event) => event.type === 'debug' && event.label === 'pi-tool-policy',
       );
-      assert.ok(policyEvent?.data);
-      const policy = policyEvent.data as {
-        registeredTools: Array<{ name: string; exposure: string }>;
-        activeToolNames: string[];
-        callableToolNames: string[];
-      };
+      const policyValue = policyEvent ? eventData(policyEvent) : undefined;
+      assert.ok(isPiToolPolicy(policyValue));
+      const policy = policyValue;
       assert.deepEqual(policy.activeToolNames, names);
       assert.deepEqual(policy.callableToolNames, names);
       for (const inactiveWebTool of ['source_check', 'get_search_content']) {
-        assert.equal(
-          policy.registeredTools.find((tool) => tool.name === inactiveWebTool)
-            ?.exposure,
-          'direct',
-          `${inactiveWebTool} should be registered but direct-only in the SDK`,
-        );
         assert.equal(policy.activeToolNames.includes(inactiveWebTool), false);
-        assert.equal(policy.callableToolNames.includes(inactiveWebTool), false);
+        assert.equal(
+          policy.callableToolNames.includes(inactiveWebTool),
+          false,
+          `${inactiveWebTool} must remain uncallable, whether registered or deferred`,
+        );
       }
       assert.equal(
         policy.registeredTools.some((tool) =>

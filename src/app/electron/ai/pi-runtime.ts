@@ -1,7 +1,10 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Model as PiModel } from '@earendil-works/pi-ai';
+import type {
+  Api as PiModelApi,
+  Model as PiModel,
+} from '@earendil-works/pi-ai';
 
 type PiApi = typeof import('@earendil-works/pi-coding-agent');
 
@@ -13,7 +16,10 @@ export type PiRuntimeModuleResolution = {
 
 export const PI_AI_COMPACTION_RESERVE_TOKENS = 16_384;
 
-export function compactionSettingsForModel(pi: PiApi, model: PiModel) {
+export function compactionSettingsForModel(
+  pi: PiApi,
+  model: PiModel<PiModelApi>,
+) {
   return {
     enabled: true,
     reserveTokens: PI_AI_COMPACTION_RESERVE_TOKENS,
