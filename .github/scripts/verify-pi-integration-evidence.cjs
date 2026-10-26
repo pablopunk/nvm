@@ -299,6 +299,7 @@ if (require.main === module) {
 
 module.exports = {
   REQUIRED_SCENARIOS,
+  lockfileImporterSpecifier,
   lockedPiPackageVersion,
   supportsBetweenToolCompaction,
   verifyPiIntegrationEvidence,

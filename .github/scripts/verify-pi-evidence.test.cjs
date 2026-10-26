@@ -7,6 +7,7 @@ const { pathToFileURL } = require('node:url');
 const test = require('node:test');
 const asar = require('@electron/asar');
 const {
+  lockfileImporterSpecifier,
   lockedPiPackageVersion,
   supportsBetweenToolCompaction,
   verifyPiIntegrationEvidence,
@@ -29,6 +30,11 @@ test('adapter evidence distinguishes installed lock versions from the legacy man
   assert.equal(
     lockedPiPackageVersion(lockfile, '@earendil-works/pi-coding-agent'),
     candidateVersion,
+  );
+  assert.equal(
+    lockfileImporterSpecifier(lockfile, '@earendil-works/pi-coding-agent'),
+    candidateVersion,
+    'the shared verifier must expose the same lockfile importer pin used by packaged evidence',
   );
   assert.equal(supportsBetweenToolCompaction('0.80.10'), false);
   assert.equal(supportsBetweenToolCompaction('0.84.3'), false);
