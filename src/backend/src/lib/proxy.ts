@@ -1608,7 +1608,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
             {
               error: {
                 type: 'prompt_too_large',
-                message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens`,
+                message: `Prompt exceeds ${MAX_INPUT_TOKENS} input tokens; context_length_exceeded`,
               },
             },
             { status: 413 },
@@ -1718,7 +1718,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
             {
               error: {
                 type: 'prompt_too_large',
-                message: 'Prompt leaves no room for model output',
+                message: 'Prompt leaves no room for model output; context_length_exceeded',
               },
             },
             { status: 413 },

@@ -1771,9 +1771,7 @@ const {
 const { handleNevermindAiEvent } = createNevermindAiEventHandler({
   userStateStore,
   draftAiChats,
-  activeBuilderSessionIds,
   getActiveAiChatId: () => activeAiChatId,
-  getNevermindAi: () => nevermindAi,
   getLearningStore: () => learningStore,
   aiLearningMetadata,
   appendAiChatDelta,

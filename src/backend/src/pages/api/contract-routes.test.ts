@@ -1984,7 +1984,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
     assert.deepEqual(await inputLimitResponse.json(), {
       error: {
         type: 'prompt_too_large',
-        message: 'Prompt exceeds 100000 input tokens',
+        message: 'Prompt exceeds 100000 input tokens; context_length_exceeded',
       },
     });
 
@@ -2000,7 +2000,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
     assert.deepEqual(await noOutputContextResponse.json(), {
       error: {
         type: 'prompt_too_large',
-        message: 'Prompt leaves no room for model output',
+        message: 'Prompt leaves no room for model output; context_length_exceeded',
       },
     });
   } finally {
