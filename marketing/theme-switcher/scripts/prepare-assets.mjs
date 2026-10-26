@@ -1,11 +1,14 @@
 import { createRequire } from 'node:module';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
 const output = new URL('../public/', import.meta.url);
+const themes = JSON.parse(
+  await readFile(new URL('../src/themes.json', import.meta.url), 'utf8'),
+);
 await mkdir(output, { recursive: true });
 
 const sources = [
@@ -56,10 +59,26 @@ const dockIcons = [
   ['chrome', 590],
 ];
 for (const [id, left] of dockIcons) {
-  await sharp(screenshot)
-    .extract({ left: 600 + left, top: 1073, width: 38, height: 38 })
+  const sourceIcon = await sharp(screenshot)
+    .extract({ left: 601 + left, top: 1074, width: 36, height: 36 })
+    .resize(76, 76)
+    .ensureAlpha()
+    .composite([
+      {
+        input: Buffer.from(
+          '<svg width="76" height="76"><rect width="76" height="76" rx="18" fill="white"/></svg>',
+        ),
+        blend: 'dest-in',
+      },
+    ])
     .png()
-    .toFile(new URL(`dock-${id}.png`, output).pathname);
+    .toBuffer();
+  for (const theme of themes) {
+    await sharp(sourceIcon)
+      .tint(theme.tint)
+      .png()
+      .toFile(new URL(`dock-${id}-${theme.id}.png`, output).pathname);
+  }
 }
 await writeFile(
   new URL('assets.json', output),

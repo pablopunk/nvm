@@ -29,20 +29,24 @@ export function ProductUi({ frame, scene }: { frame: number; scene: string }) {
   const grid = scene === 'grid';
   const chat = scene === 'chat';
   const selection = grid
-    ? frame >= 504
+    ? frame >= 523
       ? 'meadow'
-      : frame >= 414
+      : frame >= 433
         ? 'forest'
         : 'pink'
     : query
       ? 'create'
       : 'apps';
   const slide = chat ? 1 - tween(frame, 174, 192) : 0;
+  const dismiss = grid ? tween(frame, 580, 599) : 0;
 
   return (
     <div
       className={`productWindow ${chat ? 'chatWindow' : ''}`}
-      style={{ transform: `translateX(${slide * 300}px)`, opacity: 1 - slide }}
+      style={{
+        transform: `translate(${slide * 300}px, ${dismiss * 14}px)`,
+        opacity: (1 - slide) * (1 - dismiss),
+      }}
     >
       <Command
         className="palette"
