@@ -151,7 +151,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     frame = requestAnimationFrame(draw);
   }
   function randomizeAngle() {
-    const radians = (Math.random() - 0.5) * Math.PI * 0.75;
+    const radians = ((Math.random() * 100 - 50) * Math.PI) / 180;
     gl!.uniform1f(angle, radians);
     return radians;
   }
