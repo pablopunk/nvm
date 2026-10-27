@@ -6,12 +6,10 @@ import { users } from '../../../db/schema';
 import {
   BillingConfigError,
   BillingEligibilityError,
-  BillingPendingError,
   BillingRequestError,
   createBillingCheckout,
   rejectCrossOriginBillingPost,
 } from '../../../lib/billing';
-import { acquireCheckoutLock, releaseCheckoutLock } from '../../../lib/ratelimit';
 import { getSessionFromCookies } from '../../../lib/workos';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -21,7 +19,9 @@ const checkoutSchema = z.object({
   tier: z.string().optional(),
 });
 
-const attemptKeySchema = z.string().uuid();
+function checkoutError(status: number, type: string, message: string) {
+  return Response.json({ status: 'not_created', error: { type, message } }, { status });
+}
 
 export const POST: APIRoute = async ({ request }) => {
   const crossOriginResponse = rejectCrossOriginBillingPost(request);
@@ -35,100 +35,14 @@ export const POST: APIRoute = async ({ request }) => {
 
   const parsed = await safeJsonBody(request, checkoutSchema);
   if (!parsed.ok) return Response.json({ status: 'not_created', error: parsed.error.error }, { status: 400 });
-  const body = parsed.data;
-  const kind = body.kind;
-  const suppliedAttemptKey = request.headers.get('idempotency-key');
-  const attemptKey = suppliedAttemptKey ? attemptKeySchema.safeParse(suppliedAttemptKey) : null;
-  if (attemptKey && !attemptKey.success) {
-    return Response.json(
-      {
-        status: 'not_created',
-        error: {
-          type: 'invalid_idempotency_key',
-          message: 'Idempotency-Key must be a UUID.',
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  if (!suppliedAttemptKey && kind === 'subscription') {
-    const lock = await acquireCheckoutLock(user.id);
-    if (!lock.ok) {
-      return Response.json(
-        {
-          error: {
-            type: 'checkout_in_flight',
-            message: 'A checkout session is already in progress. Please wait and try again.',
-          },
-        },
-        { status: 409 },
-      );
-    }
-  }
 
   try {
-    const checkout = await createBillingCheckout({
-      user,
-      kind,
-      priceId: body.priceId,
-      tier: body.tier,
-      attemptKey: attemptKey?.data,
-      legacyCaller: !suppliedAttemptKey,
-    });
-    return checkout.status === 'url' ? Response.json({ url: checkout.url }) : Response.json({ status: checkout.status }, { status: 202 });
+    return Response.json(await createBillingCheckout({ user, ...parsed.data }));
   } catch (error) {
-    if (error instanceof BillingPendingError) {
-      if (error.preCreation?.notCreated) {
-        return Response.json(
-          {
-            status: 'not_created',
-            error: { type: error.preCreation.type, message: error.preCreation.message },
-          },
-          { status: 502 },
-        );
-      }
-      const statusCode = error.status === 'processing' ? 202 : error.status === 'reconciliation_required' ? 409 : 200;
-      return Response.json(
-        {
-          status: error.status,
-          ...(error.attemptKey ? { attemptKey: error.attemptKey } : {}),
-        },
-        { status: statusCode },
-      );
-    }
-    if (error instanceof BillingConfigError) {
-      return Response.json(
-        {
-          status: 'not_created',
-          error: { type: 'billing_not_configured', message: error.message },
-        },
-        { status: 503 },
-      );
-    }
-    if (error instanceof BillingRequestError) {
-      const status = error.type === 'idempotency_conflict' || error.type === 'checkout_in_flight' ? 409 : 400;
-      return Response.json(
-        {
-          ...(['idempotency_conflict', 'checkout_in_flight'].includes(error.type) ? {} : { status: 'not_created' }),
-          error: { type: error.type, message: error.message },
-        },
-        { status },
-      );
-    }
-    if (error instanceof BillingEligibilityError) {
-      return Response.json(
-        {
-          status: 'not_created',
-          error: { type: error.type, message: error.message },
-        },
-        { status: error.type === 'already_subscribed' ? 409 : 403 },
-      );
-    }
+    if (error instanceof BillingConfigError) return checkoutError(503, 'billing_not_configured', error.message);
+    if (error instanceof BillingRequestError) return checkoutError(400, error.type, error.message);
+    if (error instanceof BillingEligibilityError)
+      return checkoutError(error.type === 'already_subscribed' ? 409 : 403, error.type, error.message);
     throw error;
-  } finally {
-    if (!suppliedAttemptKey && kind === 'subscription') {
-      await releaseCheckoutLock(user.id);
-    }
   }
 };

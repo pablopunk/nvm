@@ -66,11 +66,11 @@ test('pricingKnobs shows worst-case cost when every credit is spent', () => {
           priceId: 'price_pro',
           tier: 'pro',
           credits: 1000,
-          displayPrice: { amount: 2000, currency: 'usd', interval: 'month' },
         },
       ],
       topUps: [{ kind: 'top_up', priceId: 'price_top', credits: 1000 }],
     },
+    new Map([['price_pro', 20]]),
     { creditUsd: 0.01, markup: 5, monthlyFreeCredits: 500 },
   );
   assert.equal(knobs.maxFreeUserCostUsd, 1);

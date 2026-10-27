@@ -218,7 +218,6 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         integer.format(row.requests),
         money(row.costUsd),
       ]), 5);
-      return summary.problems.stuckPayments;
     }
 
     function renderKnobs(knobs) {
@@ -236,9 +235,8 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
       note.textContent = `1 credit = ${money(knobs.creditUsd)} retail at ${knobs.markup}× markup over provider cost.`;
     }
 
-    async function loadProblems(stuckPayments) {
+    async function loadProblems() {
       const problems = [];
-      if (stuckPayments > 0) problems.push(`<div class="admin-notice admin-notice--warning">${stuckPayments} payment(s) need manual review — check Stripe and the webhook logs.</div>`);
       const [{ breakers }, cap] = await Promise.all([getJson('/api/admin/route-breakers'), getJson('/api/admin/free-spend-cap')]);
       if (cap.current?.halted) problems.push('<div class="admin-notice admin-notice--warning">Free usage cap reached — free users are blocked until next month or a higher cap.</div>');
       for (const breaker of breakers) {
@@ -268,8 +266,8 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
       const month = monthInput.value;
       history.replaceState(null, '', `?month=${month}`);
       try {
-        const stuckPayments = renderSummary(await getJson(`/api/admin/summary?month=${encodeURIComponent(month)}`));
-        await loadProblems(stuckPayments);
+        renderSummary(await getJson(`/api/admin/summary?month=${encodeURIComponent(month)}`));
+        await loadProblems();
       } catch (error) {
         document.getElementById('problems').innerHTML = `<div class="admin-notice admin-notice--warning">Could not load: ${esc(error.message)}</div>`;
       }

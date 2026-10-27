@@ -1,6 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { billingCatalog } from './billing';
+import { billingCatalog, stripeClient } from './billing';
 import { CREDIT_USD, MARKUP } from './cost';
 import { MONTHLY_FREE_CREDITS } from './users';
 
@@ -63,7 +63,6 @@ export type AdminSummary = {
   free: SegmentTotals;
   models: ModelCostRow[];
   topUsers: UserEconomicsRow[];
-  problems: { stuckPayments: number };
   knobs: PricingKnobs | null;
 };
 
@@ -128,9 +127,13 @@ export function segmentTotals(rows: SegmentRow[]): SegmentTotals {
   };
 }
 
-/** Worst case assumes every granted credit is spent at the configured markup. */
+/**
+ * Worst case assumes every granted credit is spent at the configured markup.
+ * `pricesUsd` holds live Stripe amounts by price ID.
+ */
 export function pricingKnobs(
   catalog: ReturnType<typeof billingCatalog>,
+  pricesUsd: Map<string, number>,
   config = { creditUsd: CREDIT_USD, markup: MARKUP, monthlyFreeCredits: MONTHLY_FREE_CREDITS },
 ): PricingKnobs {
   const creditsToMaxCostUsd = (credits: number) =>
@@ -140,7 +143,7 @@ export function pricingKnobs(
     ...config,
     maxFreeUserCostUsd,
     subscriptions: catalog.subscriptions.map((item) => {
-      const priceUsd = item.displayPrice ? item.displayPrice.amount / 100 : null;
+      const priceUsd = pricesUsd.get(item.priceId) ?? null;
       const maxCostUsd = creditsToMaxCostUsd(item.credits) + maxFreeUserCostUsd;
       return {
         tier: item.tier,
@@ -155,7 +158,7 @@ export function pricingKnobs(
     }),
     topUps: catalog.topUps.map((item) => ({
       credits: item.credits,
-      priceUsd: item.displayPrice ? item.displayPrice.amount / 100 : null,
+      priceUsd: pricesUsd.get(item.priceId) ?? null,
       maxCostUsd: creditsToMaxCostUsd(item.credits),
     })),
   };
@@ -229,7 +232,7 @@ export async function loadAdminSummary(
   month: SummaryMonth,
 ): Promise<AdminSummary> {
   const economics = userEconomicsQuery(month);
-  const [segmentResult, topUserResult, modelResult, stuckResult] =
+  const [segmentResult, topUserResult, modelResult, knobs] =
     await Promise.all([
       db.execute(sql`${economics}
         select paying,
@@ -257,11 +260,7 @@ export async function loadAdminSummary(
         where u.created_at >= ${month.from} and u.created_at < ${month.to}
         group by u.model, u.provider, e.paying
         order by 5 desc`),
-      db.execute(sql`
-        select (
-          (select count(*) from stripe_events where state = 'needs_reconciliation') +
-          (select count(*) from billing_orders where state = 'needs_reconciliation')
-        )::int as count`),
+      loadPricingKnobs(),
     ]);
 
   const segments = rowsOf<SegmentRow>(segmentResult);
@@ -306,14 +305,29 @@ export async function loadAdminSummary(
           revenueUsd - estimateStripeFeesUsd(revenueUsd, row.payments) - costUsd,
       };
     }),
-    problems: { stuckPayments: rowsOf<{ count: number }>(stuckResult)[0]?.count ?? 0 },
-    knobs: safePricingKnobs(),
+    knobs,
   };
 }
 
-function safePricingKnobs(): PricingKnobs | null {
+/** USD-only; non-USD or unreadable prices show as unknown. */
+async function loadPricingKnobs(): Promise<PricingKnobs | null> {
   try {
-    return pricingKnobs(billingCatalog());
+    const catalog = billingCatalog();
+    const items = [...catalog.subscriptions, ...catalog.topUps];
+    const prices = await Promise.all(
+      items.map(async function retrievePrice(item) {
+        const price = await stripeClient().prices.retrieve(item.priceId);
+        return [
+          item.priceId,
+          price.currency === 'usd' && price.unit_amount != null
+            ? price.unit_amount / 100
+            : null,
+        ] as const;
+      }),
+    );
+    const pricesUsd = new Map<string, number>();
+    for (const [priceId, usd] of prices) if (usd != null) pricesUsd.set(priceId, usd);
+    return pricingKnobs(catalog, pricesUsd);
   } catch {
     return null;
   }
