@@ -5,7 +5,7 @@ import {
   Square,
   X,
 } from 'lucide-react';
-import { type RefObject, useRef } from 'react';
+import React, { useRef } from 'react';
 import { canSendAiChatMessage } from '../../shared/ai-chat-images';
 import type { AiChatModel } from '../../shared/ai-chat-model';
 import type { AiChatAttachment } from '../ai-chat/use-ai-chat';
@@ -37,7 +37,7 @@ export function ChatInputForm({
   onResize: (textarea?: HTMLTextAreaElement | null) => void;
   onSubmit: () => void;
   busy: boolean;
-  inputRef: RefObject<HTMLTextAreaElement | null>;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   placeholder?: string;
   onAbort?: (chatId?: string) => void;
   chatId?: string;
