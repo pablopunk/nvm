@@ -5,9 +5,16 @@ const path = require('node:path');
 if (process.platform !== 'darwin') process.exit(0);
 
 const root = path.resolve(__dirname, '..');
-const sources = ['main.swift', 'selected-text.swift'].map((name) =>
-  path.join(root, 'src/app/resources/macos-helper', name),
-);
+const sources = [
+  'main.swift',
+  'selected-text.swift',
+  'window-manager.swift',
+  'window-subcommands.swift',
+  'window-accessibility.swift',
+  'window-display.swift',
+  'window-frame-writer.swift',
+  'window-fullscreen.swift',
+].map((name) => path.join(root, 'src/app/resources/macos-helper', name));
 const outputDirectory = path.join(root, 'build/native');
 const output = path.join(outputDirectory, 'macos-selected-text');
 const architectures = process.argv.includes('--universal')
