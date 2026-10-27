@@ -24,11 +24,12 @@ import LandingPalette from './landing-palette/LandingPalette';
   }
   .landing-palette { position: relative; text-align: left; }
   .landing-palette__host { min-height: 470px; }
-  .landing-palette__tabs { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
-  .landing-palette__tabs button { padding: 8px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
-  .landing-palette__tabs button:hover { color: var(--text); }
-  .landing-palette__tabs button[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--text); }
-  .landing-palette__tabs button:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 6px; border-radius: 2px; }
+  .landing-palette__tabs { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+  .landing-palette__tabs button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border: 1px solid #2a2a2a; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0.01em; cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
+  .landing-palette__tabs button svg { width: 14px; height: 14px; flex: none; }
+  .landing-palette__tabs button:hover { color: var(--text); border-color: #3d3d3d; background: rgba(255, 255, 255, 0.04); }
+  .landing-palette__tabs button[aria-pressed="true"] { color: var(--text); border-color: #525252; background: rgba(255, 255, 255, 0.08); }
+  .landing-palette__tabs button:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 2px; }
   @media (max-width: 860px) { .palette-demo { padding: 64px 0 80px; } }
   @media (forced-colors: active) { .palette-demo__highlight { background: none; color: CanvasText; } }
 </style>

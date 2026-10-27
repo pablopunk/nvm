@@ -1,10 +1,12 @@
 import { Command } from 'cmdk';
 import {
   Activity,
+  AppWindow,
   Download,
   Clipboard,
   CircleStop,
   FileCode,
+  FileSearch,
   FileText,
   Folder,
   History,
@@ -54,9 +56,11 @@ import type { PaletteItem } from './palette-types';
 
 const ICONS: Record<string, LucideIcon> = {
   activity: Activity,
+  'app-window': AppWindow,
   download: Download,
   clipboard: Clipboard,
   'file-code': FileCode,
+  'file-search': FileSearch,
   'file-text': FileText,
   folder: Folder,
   history: History,
@@ -341,16 +345,20 @@ export default function LandingPalette() {
           )
         : null}
       <div className="landing-palette__tabs" role="group" aria-label="Palette examples">
-        {paletteTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            aria-pressed={activeTab === tab.id}
-            onClick={() => chooseTab(tab.id, tab.query)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {paletteTabs.map((tab) => {
+          const TabIcon = (tab.icon && ICONS[tab.icon]) || Sparkles;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              aria-pressed={activeTab === tab.id}
+              onClick={() => chooseTab(tab.id, tab.query)}
+            >
+              <TabIcon size={14} aria-hidden="true" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
