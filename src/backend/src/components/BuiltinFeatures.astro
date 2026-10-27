@@ -1,0 +1,75 @@
+<section id="features" class="builtin-features" aria-labelledby="builtin-features-title" data-builtin-showcase>
+  <div class="builtin-features__copy">
+    <h2 id="builtin-features-title">No <span class="builtin-features__highlight">AI</span>? No problem.</h2>
+    <p>A command palette with <strong>batteries included.</strong> Launch apps, find files, search your clipboard, and crunch numbers. Ready out of the box.</p>
+  </div>
+  <div class="builtin-features__showcase">
+    <div id="builtin-apps" class="builtin-features__panel" data-feature-panel="apps">
+      <img src="/features/app-launcher.webp" width="1060" height="560" loading="lazy" decoding="async" alt="Nevermind app launcher with Calendar, Calculator, Notes, Finder, Photos, and Terminal" />
+    </div>
+    <div id="builtin-clipboard" class="builtin-features__panel" data-feature-panel="clipboard" hidden>
+      <img src="/features/clipboard-history.webp" width="1060" height="560" loading="lazy" decoding="async" alt="Nevermind clipboard history with copied text, image thumbnails, and a full image preview" />
+    </div>
+    <div id="builtin-files" class="builtin-features__panel" data-feature-panel="files" hidden>
+      <img src="/features/file-finder.webp" width="1060" height="560" loading="lazy" decoding="async" alt="Nevermind file finder searching for design files, with matching documents and folders and their paths" />
+    </div>
+    <div class="builtin-features__switcher" role="group" aria-label="Built-in feature views">
+      <button type="button" aria-pressed="true" aria-controls="builtin-apps" data-feature-view="apps">App launcher</button>
+      <button type="button" aria-pressed="false" aria-controls="builtin-clipboard" data-feature-view="clipboard">Clipboard history</button>
+      <button type="button" aria-pressed="false" aria-controls="builtin-files" data-feature-view="files">File finder</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  for (const showcase of document.querySelectorAll<HTMLElement>('[data-builtin-showcase]')) {
+    const buttons = showcase.querySelectorAll<HTMLButtonElement>('[data-feature-view]');
+    const panels = showcase.querySelectorAll<HTMLElement>('[data-feature-panel]');
+    for (const button of buttons) {
+      button.addEventListener('click', function selectFeature() {
+        for (const candidate of buttons) {
+          candidate.setAttribute('aria-pressed', String(candidate === button));
+        }
+        for (const panel of panels) {
+          panel.hidden = panel.dataset.featurePanel !== button.dataset.featureView;
+        }
+      });
+    }
+  }
+</script>
+
+<style>
+  .builtin-features {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr);
+    align-items: center;
+    gap: 48px;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 112px 24px 144px;
+  }
+  h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  p { max-width: 360px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  p strong { color: var(--text); font-weight: 600; }
+  .builtin-features__highlight { color: #f4cf86; }
+  @supports (background-clip: text) {
+    .builtin-features__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
+  }
+  @media (forced-colors: active) {
+    .builtin-features__highlight { background: none; color: CanvasText; }
+  }
+  .builtin-features__showcase { min-width: 0; }
+  .builtin-features__panel img { display: block; width: 100%; height: auto; }
+  .builtin-features__panel[hidden] { display: none; }
+  .builtin-features__switcher { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 16px; }
+  button { padding: 8px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+  button:hover { color: var(--text); }
+  button[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--text); }
+  button:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 6px; border-radius: 2px; }
+  @media (max-width: 860px) {
+    .builtin-features { grid-template-columns: 1fr; gap: 32px; padding: 64px 0 80px; }
+    .builtin-features__copy { text-align: center; }
+    p { margin-inline: auto; }
+  }
+</style>

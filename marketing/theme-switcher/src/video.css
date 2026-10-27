@@ -331,3 +331,13 @@
   font-size: 11px;
   color: #b6bdbd;
 }
+
+.builtinFeature .productWindow {
+  left: 50px;
+  top: 40px;
+  width: 960px;
+  height: 480px;
+}
+.builtinFeature .resultsCard {
+  height: 380px;
+}
