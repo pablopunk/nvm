@@ -49,3 +49,19 @@
   .console-page .admin-panel, .console-page .card { padding: 16px; }
   .console-page .stat-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 }
+
+.console-navigation { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.console-navigation__brand { color: var(--text); font-weight: 600; margin-right: 16px; text-decoration: none; }
+.console-navigation__account { margin-left: auto; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.console-navigation form { margin: 0; }
+.console-navigation a:hover { text-decoration: none; }
+.console-page [data-slot="input"]:focus-visible { outline: none; box-shadow: none; border-color: var(--text); }
+.console-page [data-slot="table"] { font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .console-navigation__account { flex-basis: 100%; margin-left: 0; } }
+.console-page button[data-slot="button"] { font-family: inherit; cursor: default; border-style: solid; border-width: 1px; border-color: transparent; }
+.console-page button[data-slot="button"][data-variant="outline"] { border-color: var(--border); }
+.console-page button[data-slot="button"]:disabled { cursor: default; }
+.console-page a[data-slot="button"] { text-decoration: none; }
+.console-page [data-slot="native-select-wrapper"] { width: 100%; }
+.console-page [data-slot="native-select-wrapper"]:has(.tomselected) > [data-slot="native-select-icon"] { display: none; }
+.console-page [data-slot="native-select"]:focus-visible { outline: none; box-shadow: none; }

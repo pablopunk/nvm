@@ -4,7 +4,9 @@ import '../styles/console.css';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
+import { ConsoleSelect } from '../components/ConsoleSelect';
 import { ConsoleTable } from '../components/ConsoleTable';
+import { ConsoleNavigation } from '../components/ConsoleNavigation';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
 import {
@@ -70,16 +72,11 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
   (model) => modelRouteToRef(model),
 );
 ---
-<Layout title="Nevermind · Admin" width="wide" console>
+<Layout title="Nevermind · Admin" width="wide" showHeader={false} console>
   <Combobox />
-  <nav class="nav">
-    <a href="/profile">Profile</a>
-    <a href="/admin" aria-current="page">Admin</a>
-    <span class="spacer"></span>
-    <span class="muted"><code>{user.email}</code></span>
-  </nav>
+  <ConsoleNavigation email={user.email} admin={true} current="admin" />
 
-  <main class="admin-console">
+  <div class="admin-console">
     <header class="admin-header">
       <div>
         <h1>Am I making money?</h1>
@@ -111,10 +108,10 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         <h3>Give or remove credits</h3>
         <div class="row admin-grant">
           <label class="field">Email<Input className="input" id="grant-email" type="email" autoComplete="off" /></label>
-          <label class="field">Pool<select class="input" id="grant-kind"><option value="paid">Paid</option><option value="free">Free</option></select></label>
+          <label class="field">Pool<ConsoleSelect className="input" id="grant-kind" options={[{ value: "paid", label: "Paid" }, { value: "free", label: "Free" }]} /></label>
           <label class="field">Credits<Input className="input" id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
           <label class="field">Reason<Input className="input" id="grant-reason" type="text" maxLength="500" /></label>
-          <Button className="button button--primary" id="grant" type="button">Apply</Button>
+          <Button variant="default" id="grant" type="button">Apply</Button>
           <span class="status" id="grant-status" aria-live="polite"></span>
         </div>
       </div>
@@ -138,16 +135,16 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         {modelRows.map(({ slot, title, route, kind, options }) => (
           <section class="model-route-row" data-model-route={slot}>
             <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status></span></header>
-            <label class="field">Model<select class="input combo model-select">{route && !options.includes(route.ref) && <option value={route.ref} selected disabled>{route.ref} (not selectable)</option>}{options.map((ref) => <option value={ref} selected={ref === route?.ref}>{ref}</option>)}</select></label>
+            <label class="field">Model<ConsoleSelect className="input combo model-select" defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
             {kind === 'smart'
-              ? <label class="field model-route-row__thinking">Thinking<select class="input thinking-select">{THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}</select></label>
+              ? <label class="field model-route-row__thinking">Thinking<ConsoleSelect className="input thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
               : <span class="muted model-route-row__thinking">Thinking off</span>}
             <div class="route-details muted" data-pricing></div>
           </section>
         ))}
         <section class="model-route-row" data-audio-model-route>
           <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status></span></header>
-          <label class="field">Model<select class="input combo model-select">{audioRouteRef && !audioModelRefs.includes(audioRouteRef) && <option value={audioRouteRef} selected disabled>{audioRouteRef} (catalog unavailable)</option>}{audioModelRefs.map((ref) => <option value={ref} selected={ref === audioRouteRef}>{ref}</option>)}</select></label>
+          <label class="field">Model<ConsoleSelect className="input combo model-select" defaultValue={audioRouteRef ?? undefined} options={[...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (catalog unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
         </section>
       </div>
     </section></Card>
@@ -157,13 +154,13 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
       <p class="muted" id="cap-state">Loading…</p>
       <div class="row admin-grant">
         <label class="field">Monthly cap (USD)<Input className="input" id="cap-usd" type="text" inputMode="decimal" placeholder="25.00" /></label>
-        <label class="field">Applies to<select class="input" id="cap-effective"><option value="current">This month</option><option value="next_month">Next month</option></select></label>
-        <Button className="button button--primary" id="cap-set" type="button">Set</Button>
-        <Button className="button" id="cap-clear" type="button">Remove cap</Button>
+        <label class="field">Applies to<ConsoleSelect className="input" id="cap-effective" options={[{ value: "current", label: "This month" }, { value: "next_month", label: "Next month" }]} /></label>
+        <Button variant="default" id="cap-set" type="button">Set</Button>
+        <Button variant="outline" id="cap-clear" type="button">Remove cap</Button>
         <span class="status" id="cap-status" aria-live="polite"></span>
       </div>
     </section></Card>
-  </main>
+  </div>
 
   <script is:inline>
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
