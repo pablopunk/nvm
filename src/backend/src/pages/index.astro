@@ -17,9 +17,11 @@ import Layout from '../layouts/Layout.astro';
         <a href="/docs">Docs</a>
         <a href="https://github.com/pablopunk/nvm/releases">Releases</a>
       </nav>
-      <LandingAccount placement="nav" server:defer>
-        <a class="button" href="/api/auth/signin" slot="fallback">Sign in or create an account</a>
-      </LandingAccount>
+      <div class="landing-nav__account">
+        <LandingAccount placement="nav" server:defer>
+          <a class="button" href="/api/auth/signin" slot="fallback">Sign in</a>
+        </LandingAccount>
+      </div>
     </header>
 
     <section class="landing-hero">

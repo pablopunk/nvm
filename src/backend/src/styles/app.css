@@ -443,6 +443,7 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
 }
 .landing-nav__links a:hover { color: var(--text); text-decoration: none; }
 .landing-nav-account { display: inline-flex; align-items: center; gap: 8px; }
+.landing-nav__account { display: flex; align-items: center; }
 .landing-nav-email { color: var(--muted); font-size: 13px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .landing-hero {
   display: flex;
@@ -536,16 +537,17 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
 .landing-account-note { color: var(--muted); font-size: 13px; }
 @media (max-width: 860px) {
   .landing-shell { gap: 0; }
-  .landing-nav { position: relative; top: auto; left: auto; transform: none; flex-wrap: wrap; }
+  .landing-nav { position: relative; top: auto; left: auto; transform: none; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; width: calc(100% + 48px); margin-inline: -24px; }
   .landing-nav::before { display: none; }
-  .landing-nav__links { margin-left: auto; }
+  .landing-brand { grid-column: 2; grid-row: 1; justify-self: center; }
+  .landing-nav__account { grid-column: 3; grid-row: 1; justify-self: end; }
+  .landing-nav__account .button { padding: 8px 12px; font-size: 13px; }
+  .landing-nav-email { display: none; }
+  .landing-nav__links { grid-column: 1 / -1; grid-row: 2; margin-left: 0; justify-content: center; }
   .landing-hero { gap: 32px; padding: 0 0 60px; }
   .landing-hero__title { font-size: 36px; }
   .landing-hero__copy { align-items: center; text-align: center; }
   .landing-actions { justify-content: center; }
-}
-@media (max-width: 520px) {
-  .landing-nav__links { order: 3; width: 100%; margin-left: 0; }
 }
 
 /* ── Pricing page ── */
