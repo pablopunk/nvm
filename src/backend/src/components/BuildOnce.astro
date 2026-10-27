@@ -4,22 +4,8 @@
     <p>Waiting for AI on every task gets old. Nevermind uses AI to <strong>write the tool</strong>, then runs the code directly.</p>
     <p>Your extension is ready for the next time you need it. <strong>No AI round trip</strong> for work the code can do.</p>
   </div>
-  <div class="build-once__visual" role="img" aria-label="AI builds a video pipeline extension once. The saved code handles converting, resizing, and merging videos on every run.">
-    <div class="build-once__creation">
-      <span class="build-once__spark" aria-hidden="true">✦</span>
-      <span>Build a video pipeline</span>
-      <span class="build-once__once">Once</span>
-    </div>
-    <div class="build-once__connector" aria-hidden="true">↓</div>
-    <div class="build-once__tool">
-      <div class="build-once__filename"><span aria-hidden="true">{ }</span> video-pipeline.ts <span class="build-once__saved">Saved</span></div>
-      <div class="build-once__steps">
-        <div><span class="build-once__check" aria-hidden="true">✓</span> Convert to MP4</div>
-        <div><span class="build-once__check" aria-hidden="true">✓</span> Resize videos</div>
-        <div><span class="build-once__check" aria-hidden="true">✓</span> Merge into one</div>
-      </div>
-      <div class="build-once__footer"><span class="build-once__bolt" aria-hidden="true">ϟ</span> Runs as code. Every time.</div>
-    </div>
+  <div class="build-once__visual">
+    <img src="/features/builder-preview.webp" width="1060" height="680" loading="lazy" decoding="async" alt="Nevermind's split extension builder: an AI chat creates a theme switcher on the left, with the saved extension's wallpaper grid preview on the right." />
   </div>
 </section>
 
@@ -29,20 +15,9 @@
   .build-once__copy p { max-width: 360px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
   .build-once__copy p + p { margin-top: 20px; }
   strong { color: var(--text); font-weight: 600; }
-  .build-once__highlight, .build-once__spark, .build-once__bolt { color: #f4cf86; }
-  .build-once__visual { width: 100%; min-width: 0; padding: 24px; }
-  .build-once__creation { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
-  .build-once__spark { font-size: 20px; }
-  .build-once__once { margin-left: auto; font-size: 12px; }
-  .build-once__connector { margin: 12px 0 12px 4px; color: var(--muted); }
-  .build-once__tool { border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface) 45%, var(--bg)); }
-  .build-once__filename { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); color: var(--text); font: 13px var(--mono); }
-  .build-once__filename > span:first-child { color: #f4cf86; }
-  .build-once__saved { margin-left: auto; color: var(--muted); font: 12px var(--font); }
-  .build-once__steps { display: grid; gap: 16px; padding: 24px 20px; color: var(--text); font-size: 14px; }
-  .build-once__check { display: inline-block; margin-right: 12px; color: #f4cf86; }
-  .build-once__footer { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
-  .build-once__bolt { font-size: 20px; line-height: 1; }
+  .build-once__highlight { color: #f4cf86; }
+  .build-once__visual { width: 100%; min-width: 0; }
+  .build-once__visual img { display: block; width: 100%; height: auto; }
   @supports (background-clip: text) {
     .build-once__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
   }
@@ -53,6 +28,5 @@
     .build-once { padding-block: 64px 32px; }
     .build-once__copy { text-align: center; }
     .build-once__copy p { margin-inline: auto; }
-    .build-once__visual { padding: 16px 0; }
   }
 </style>
