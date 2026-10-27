@@ -12,6 +12,8 @@ export type AiCreatedActionsDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   extensionActionRegistry: Map<string, any>;
   scheduleSaveState: () => void;
+  commitPortable: (input: any) => Promise<{ ok: boolean; message?: string }>;
+  logWarn: (message: string, data?: unknown) => void;
   invalidateExtensionRootItems: () => void;
   actionAliases: (actionId: any) => string[];
   extensionActionFromContribution: (entry: any) => any;
@@ -34,6 +36,8 @@ export function createAiCreatedActions(deps: AiCreatedActionsDeps) {
     userStateStore,
     extensionActionRegistry,
     scheduleSaveState,
+    commitPortable,
+    logWarn,
     invalidateExtensionRootItems,
     actionAliases,
     extensionActionFromContribution,
@@ -56,10 +60,20 @@ export function createAiCreatedActions(deps: AiCreatedActionsDeps) {
     if (!entry) return;
     const action = extensionActionFromContribution(entry);
     if (!action?.id) return;
-    const aliases = new Set(actionAliases(action.id));
-    aliases.add(chat.query.trim());
-    userStateStore.get().aliases[action.id] = Array.from(aliases);
-    scheduleSaveState();
+    const alias = chat.query.trim();
+    void commitPortable({
+      label: 'alias:generated',
+      actionId: action.id,
+      actionIsGenerated: Boolean(action.removable),
+      mutate: (draft) => {
+        draft.aliases[action.id] = [
+          ...new Set([...(draft.aliases[action.id] ?? []), alias]),
+        ];
+      },
+    }).then((outcome) => {
+      if (!outcome.ok)
+        logWarn('ai.alias.save.failed', { message: outcome.message });
+    });
   }
 
   async function duplicateCreatedAction(action) {

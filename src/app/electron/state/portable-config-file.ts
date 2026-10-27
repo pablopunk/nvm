@@ -104,10 +104,11 @@ async function existingFileMode(filePath: string) {
   return stat ? stat.mode & 0o777 : null;
 }
 
-export async function writePortableConfigText(filePath: string, text: string) {
-  const target = await resolveWriteTarget(filePath);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  const mode = (await existingFileMode(target)) ?? PRIVATE_FILE_MODE;
+async function writeTemporarySibling(
+  target: string,
+  text: string,
+  mode: number,
+) {
   const temporaryPath = path.join(
     path.dirname(target),
     `.${path.basename(target)}.${crypto.randomUUID()}.tmp`,
@@ -120,9 +121,54 @@ export async function writePortableConfigText(filePath: string, text: string) {
     await file.close();
     file = undefined;
     await fs.chmod(temporaryPath, mode);
-    await fs.rename(temporaryPath, target);
-  } finally {
+  } catch (error) {
     await file?.close().catch(ignoreError);
     await fs.unlink(temporaryPath).catch(ignoreError);
+    throw error;
   }
+  return temporaryPath;
+}
+
+export async function createPortableConfigFileExclusively(
+  filePath: string,
+  text: string,
+): Promise<'created' | 'exists'> {
+  const target = await resolveWriteTarget(filePath);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const temporaryPath = await writeTemporarySibling(
+    target,
+    text,
+    PRIVATE_FILE_MODE,
+  );
+  try {
+    await fs.link(temporaryPath, target);
+    return 'created';
+  } catch (error) {
+    if (errorCode(error) === 'EEXIST') return 'exists';
+    throw error;
+  } finally {
+    await fs.unlink(temporaryPath).catch(ignoreError);
+  }
+}
+
+export async function replacePortableConfigFile(
+  filePath: string,
+  text: string,
+  stillCurrent: () => Promise<boolean>,
+): Promise<'replaced' | 'changed'> {
+  const target = await resolveWriteTarget(filePath);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const mode = (await existingFileMode(target)) ?? PRIVATE_FILE_MODE;
+  const temporaryPath = await writeTemporarySibling(target, text, mode);
+  try {
+    if (!(await stillCurrent())) return 'changed';
+    await fs.rename(temporaryPath, target);
+    return 'replaced';
+  } finally {
+    await fs.unlink(temporaryPath).catch(ignoreError);
+  }
+}
+
+export async function readPortableConfigText(filePath: string) {
+  return fs.readFile(filePath, 'utf8').catch(() => null);
 }

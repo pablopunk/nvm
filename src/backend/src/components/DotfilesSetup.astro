@@ -2,10 +2,11 @@
   <div class="dotfiles__copy">
     <h2 id="dotfiles-title">Your setup, <span class="dotfiles__highlight">in one file.</span></h2>
     <p>Settings, aliases, shortcuts, job switches, and the default AI model live in <code>~/.config/nevermind/config.json</code>. Commit it, symlink it, or copy it to a new Mac.</p>
-    <p>Change a setting in the palette and the file updates. Edit the file and Nevermind reloads it within a second.</p>
+    <p>A palette change counts as applied only after it is saved. Edit the file and Nevermind applies the change within a second.</p>
     <ul class="dotfiles__notes">
-      <li>A broken or deleted file never overwrites your edits. Nevermind keeps your last valid setup and stops saving until the file is valid again.</li>
-      <li>Chats, clipboard history, recents, and extension data stay out of the file.</li>
+      <li>A broken or deleted file blocks saving. Palette changes show an error, and the file is left as you wrote it.</li>
+      <li>Shortcuts and aliases for AI-generated extensions stay on this Mac, as do chats, clipboard history, recents, and extension data.</li>
+      <li>A shortcut that another action or macOS already uses shows as Not active, with the reason, instead of failing silently.</li>
     </ul>
   </div>
   <div class="dotfiles__files" aria-label="Example config.json with settings, an alias, a custom shortcut, a disabled shortcut, a disabled job, and the default AI model">

@@ -9,6 +9,7 @@ export type ShortcutCatalogDeps = {
   extensionActionFromContribution: (entry: any) => any;
   resolveStoredShortcutAction: (actionId: string) => any;
   patchOpenView: (viewId: string, patch: any) => void;
+  activationFailure: (key: string) => string | null;
 };
 
 export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
@@ -18,7 +19,13 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
     extensionActionFromContribution,
     resolveStoredShortcutAction,
     patchOpenView,
+    activationFailure,
   } = deps;
+
+  function inactiveSubtitle(item) {
+    const failure = activationFailure(`shortcut:${item.actionId}`);
+    return failure ? `Not active: ${failure}` : item.action.subtitle;
+  }
 
   function declaredGlobalShortcuts() {
     return visibleExtensionActionEntries()
@@ -50,13 +57,7 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
       }))
       .filter((item) => item.action);
     const declared = declaredGlobalShortcuts()
-      .filter(
-        (item) =>
-          !(
-            userStateStore.get().shortcuts[item.actionId] ||
-            userStateStore.get().removedShortcuts?.[item.actionId]
-          ),
-      )
+      .filter((item) => !(item.actionId in userStateStore.get().shortcuts))
       .map((item) => ({
         ...item,
         accelerator: String(item.accelerator),
@@ -72,7 +73,7 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
     return getShortcuts().map((item) => ({
       actionId: item.actionId,
       title: item.action.title,
-      subtitle: item.action.subtitle,
+      subtitle: inactiveSubtitle(item),
       accelerator: item.accelerator,
       scope: 'global' as const,
       source: item.source,

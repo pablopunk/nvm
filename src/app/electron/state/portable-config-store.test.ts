@@ -25,15 +25,13 @@ async function withConfigFile(
 }
 
 function createTestStore(filePath: string) {
-  const conflicts: string[][] = [];
   const blockedReasons: Array<string | null> = [];
   const store = createPortableConfigStore({
     filePath: () => filePath,
     settingKinds: KINDS,
-    onConflict: (paths) => conflicts.push(paths),
     onBlockedReasonChange: (reason) => blockedReasons.push(reason),
   });
-  return { store, conflicts, blockedReasons };
+  return { store, blockedReasons };
 }
 
 function withHotkey(accelerator: string): PortableConfig {
@@ -97,24 +95,6 @@ test('merges a persisted change onto the latest disk and keeps unknown fields', 
   });
 });
 
-test('reports a conflict when the same key changed on disk since the last valid read', async () => {
-  await withConfigFile(async (filePath) => {
-    await fs.writeFile(filePath, VALID_TEXT);
-    const { store, conflicts } = createTestStore(filePath);
-    await store.load();
-    await fs.writeFile(
-      filePath,
-      VALID_TEXT.replace('Command+Alt+K', 'Command+Alt+B'),
-    );
-
-    const result = await store.persist(withHotkey('Command+Alt+C'));
-    assert.equal(result.ok, true);
-    assert.deepEqual(conflicts, [['settings.paletteHotkey']]);
-    const written = JSON.parse(await fs.readFile(filePath, 'utf8'));
-    assert.equal(written.settings.paletteHotkey, 'Command+Alt+C');
-  });
-});
-
 test('an invalid edit after a valid load blocks writes and keeps the last valid config', async () => {
   await withConfigFile(async (filePath) => {
     await fs.writeFile(filePath, VALID_TEXT);
@@ -128,7 +108,10 @@ test('an invalid edit after a valid load blocks writes and keeps the last valid 
 
     const result = await store.persist(withHotkey('Command+Alt+J'));
     assert.equal(result.ok, false);
-    assert.equal(result.config.settings.paletteHotkey, 'Command+Alt+K');
+    assert.equal(
+      !result.ok && result.current.settings.paletteHotkey,
+      'Command+Alt+K',
+    );
     assert.equal(await fs.readFile(filePath, 'utf8'), '{ "version": 1, ');
     assert.equal(blockedReasons.length, 1);
   });

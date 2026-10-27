@@ -8,6 +8,11 @@ import {
 
 export type SettingsServiceDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
+  commitPortable: (input: {
+    label: string;
+    mutate: (draft: any) => string | void;
+  }) => Promise<{ ok: true } | { ok: false; message: string }>;
+  activationFailure: (key: string) => string | null;
   hasCapability: (capability: string) => boolean;
   getLaunchAtLoginEnabled: () => boolean;
   setLaunchAtLoginEnabled: (enabled: boolean) => {
@@ -16,8 +21,6 @@ export type SettingsServiceDeps = {
   };
   osLabel: () => string;
   setDiagnosticReporting: (enabled: boolean) => void;
-  scheduleSaveState: () => void;
-  invalidateExtensionRootItems: () => void;
   patchOpenView: (viewId: string, patch: any) => void;
   buildRecordShortcutAction: (input: any, options: any) => any;
 };
@@ -29,9 +32,8 @@ export function createSettingsService(deps: SettingsServiceDeps) {
     getLaunchAtLoginEnabled,
     setLaunchAtLoginEnabled,
     osLabel,
-    setDiagnosticReporting,
-    scheduleSaveState,
-    invalidateExtensionRootItems,
+    commitPortable,
+    activationFailure,
     patchOpenView,
     buildRecordShortcutAction,
   } = deps;
@@ -55,7 +57,7 @@ export function createSettingsService(deps: SettingsServiceDeps) {
     return settingValue(userStateStore.get().settings, definition.id);
   }
 
-  function setSetting(id: any, value: any) {
+  async function setSetting(id: any, value: any) {
     const definition = settingDefinition(String(id));
     if (!definition) return { ok: false, message: 'Setting not found' };
     if (!settingIsAvailable(definition))
@@ -63,24 +65,21 @@ export function createSettingsService(deps: SettingsServiceDeps) {
         ok: false,
         message: `${definition.title} is not available on ${osLabel()}`,
       };
-    if (definition.id === 'startAtLogin') {
-      const result = setLaunchAtLoginEnabled(Boolean(value));
-      if (!result.ok) return result;
-    }
-    if (!userStateStore.get().settings) userStateStore.get().settings = {};
-    userStateStore.get().settings[definition.id] = value;
-    if (definition.id === 'errorReporting')
-      setDiagnosticReporting(Boolean(value));
-    scheduleSaveState();
-    invalidateExtensionRootItems();
-    patchSettingsView(definition.id);
+    const result = await commitPortable({
+      label: `setting:${definition.id}`,
+      mutate: (draft) => {
+        draft.settings[definition.id] = value;
+      },
+    });
+    if (!result.ok) return result;
     return { ok: true, message: `${definition.title} updated` };
   }
 
   function settingItemPatch(definition) {
     const value = getSetting(definition.id);
-    const accessoryText =
-      definition.type === 'boolean'
+    const accessoryText = activationFailure(`setting:${definition.id}`)
+      ? 'Not active'
+      : definition.type === 'boolean'
         ? value
           ? 'On'
           : 'Off'

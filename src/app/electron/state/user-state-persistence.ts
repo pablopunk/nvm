@@ -1,4 +1,4 @@
-import { recordWithoutPortableFields } from './portable-config-projection';
+import { recordForPrivateState } from './portable-config-projection';
 import { createUserStateSaveScheduler, writeUserStateFile } from './user-state';
 import type { UserStateRecord } from './user-state-store';
 
@@ -6,7 +6,6 @@ interface UserStatePersistenceDeps {
   getUserState: () => UserStateRecord;
   getStatePath: () => string;
   beforeWrite: () => void;
-  persistPortableConfig: (record: UserStateRecord) => Promise<void>;
   onSaveError: (error: unknown) => void;
 }
 
@@ -35,11 +34,9 @@ function createUserStatePersistence(deps: UserStatePersistenceDeps) {
 
   async function writeCurrentUserState() {
     deps.beforeWrite();
-    const record = deps.getUserState();
-    await deps.persistPortableConfig(record);
     await writeUserStateFile(
       deps.getStatePath(),
-      recordWithoutPortableFields(record),
+      recordForPrivateState(deps.getUserState()),
     );
   }
 

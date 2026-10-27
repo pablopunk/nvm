@@ -3,6 +3,7 @@ import type {
   PortableConfig,
   PortableSettingKinds,
 } from './portable-config-schema';
+import { localBundleOf } from './portable-keys';
 
 export type PortableChange = {
   path: string[];
@@ -170,4 +171,8 @@ export function applyPortableChanges(
     else parent[leafKey] = change.value;
   }
   return next;
+}
+
+export function recordForPrivateState(record: RecordLike) {
+  return { ...recordWithoutPortableFields(record), ...localBundleOf(record) };
 }

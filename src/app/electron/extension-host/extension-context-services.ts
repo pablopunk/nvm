@@ -91,24 +91,24 @@ export function createContextSettings(deps: ContextSettingsDeps) {
       })),
     get: (id) => getSetting(id),
     set: canWriteSettings
-      ? (id, value) => {
-          const result = setSetting(id, value);
+      ? async (id, value) => {
+          const result = await setSetting(id, value);
           if (!result.ok) throw new Error(result.message);
           return value;
         }
-      : () => {
+      : async () => {
           throw trustedExtensionApiUnavailable('settings.write');
         },
     toggle: canWriteSettings
-      ? (id) => {
+      ? async (id) => {
           const definition = settingDefinition(id);
           if (!definition) throw new Error(`Unknown setting: ${id}`);
           const next = toggledSettingValue(definition, getSetting(id));
-          const result = setSetting(id, next);
+          const result = await setSetting(id, next);
           if (!result.ok) throw new Error(result.message);
           return next;
         }
-      : () => {
+      : async () => {
           throw trustedExtensionApiUnavailable('settings.write');
         },
   };

@@ -13,6 +13,7 @@ function createDefaultUserState(): UserStateRecord {
     shortcuts: {},
     shortcutActions: {},
     removedShortcuts: {},
+    localActionIds: [],
     overrides: {},
     clipboardHistory: [],
     aiChats: {},
@@ -35,10 +36,13 @@ function userStateFromLoadedFile(loaded: UserState): UserStateRecord {
   const defaults = createDefaultUserState();
   return {
     recents: loaded.recents || {},
-    aliases: defaults.aliases,
-    shortcuts: defaults.shortcuts,
+    aliases: loaded.localAliases || {},
+    localActionIds: Array.isArray(loaded.localActionIds)
+      ? loaded.localActionIds.filter((id) => typeof id === 'string')
+      : [],
+    shortcuts: loaded.localShortcuts || {},
     shortcutActions: loaded.shortcutActions || {},
-    removedShortcuts: defaults.removedShortcuts,
+    removedShortcuts: loaded.localRemovedShortcuts || {},
     overrides: loaded.overrides || {},
     clipboardHistory: loaded.clipboardHistory || [],
     aiChats: loaded.aiChats || {},

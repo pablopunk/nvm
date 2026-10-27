@@ -1,8 +1,10 @@
 import {
+  createPortableConfigFileExclusively,
   type PortableDiskReading,
   portableConfigSignature,
   readPortableConfigFile,
-  writePortableConfigText,
+  readPortableConfigText,
+  replacePortableConfigFile,
 } from './portable-config-file';
 import {
   applyPortableChanges,
@@ -23,11 +25,11 @@ export type PortableConfigSnapshot = {
   blockedReason: string | null;
 };
 
-export type PortableConfigPersistResult =
-  | { ok: true; config: PortableConfig; conflicts: string[] }
-  | { ok: false; reason: string; config: PortableConfig };
+export type PortablePersistResult =
+  | { ok: true; config: PortableConfig }
+  | { ok: false; reason: string; current: PortableConfig };
 
-export type PortableConfigPollResult = {
+export type PortablePollResult = {
   adopted: PortableConfig | null;
   blockedReason: string | null;
 };
@@ -35,9 +37,10 @@ export type PortableConfigPollResult = {
 export type PortableConfigStoreDeps = {
   filePath: () => string;
   settingKinds: PortableSettingKinds;
-  onConflict: (paths: string[]) => void;
   onBlockedReasonChange: (reason: string | null) => void;
 };
+
+const MAX_PERSIST_ATTEMPTS = 3;
 
 function blockedReasonForReading(
   reading: Exclude<PortableDiskReading, { kind: 'valid' }>,
@@ -62,7 +65,11 @@ function sameJson(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: The store keeps load, poll, and persist transitions on one serialized state machine.
+function conflictReason(paths: string[]) {
+  return `${paths.join(', ')} changed in config.json after Nevermind loaded it. Nothing was saved; the file was reloaded.`;
+}
+
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: The store keeps load, poll, and compare-and-swap persist transitions on one serialized state machine.
 export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
   let lastValid: PortableConfig | null = null;
   let effective: PortableConfig = createDefaultPortableConfig();
@@ -102,6 +109,17 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
     setBlockedReason(isCreatable ? null : blockedReasonForReading(reading));
   }
 
+  function adoptWrittenText(text: string) {
+    const parsed = parsePortableConfigText(text, deps.settingKinds);
+    if (!parsed.ok) return null;
+    lastValid = parsed.config;
+    effective = parsed.config;
+    lastSeenText = text;
+    fileEverSeen = true;
+    setBlockedReason(null);
+    return parsed.config;
+  }
+
   function snapshot(): PortableConfigSnapshot {
     return {
       config: effective,
@@ -110,60 +128,88 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
     };
   }
 
-  function rejectWrite(): PortableConfigPersistResult {
+  function writtenOutcome(text: string): PortablePersistResult {
+    const config = adoptWrittenText(text);
+    if (config) return { ok: true, config };
     return {
       ok: false,
-      reason: blockedReason ?? 'Config is not writable',
-      config: effective,
+      reason: 'Nevermind wrote an unreadable config.json; nothing was kept.',
+      current: effective,
     };
   }
 
-  async function mergeWithDisk(
-    reading: Extract<PortableDiskReading, { kind: 'valid' }>,
+  function conflictsWithBase(
+    base: PortableConfig,
+    raw: Record<string, unknown>,
     changes: ReturnType<typeof diffPortableConfig>,
   ) {
-    const base = serializePortableConfig(
-      lastValid ?? createDefaultPortableConfig(),
-    );
-    const conflicts = changes
+    const baseDocument = serializePortableConfig(base);
+    return changes
       .filter(
         (change) =>
           !sameJson(
-            valueAtPath(reading.raw, change.path),
-            valueAtPath(base, change.path),
+            valueAtPath(raw, change.path),
+            valueAtPath(baseDocument, change.path),
           ),
       )
       .map((change) => change.path.join('.'));
-    return {
-      text: portableConfigText(applyPortableChanges(reading.raw, changes)),
-      conflicts,
-    };
   }
 
-  async function writeAndAdopt(
-    text: string,
-    conflicts: string[],
-  ): Promise<PortableConfigPersistResult> {
-    try {
-      await writePortableConfigText(deps.filePath(), text);
-    } catch (error) {
+  async function createFirstFile(
+    filePath: string,
+    next: PortableConfig,
+  ): Promise<PortablePersistResult | 'retry'> {
+    const text = portableConfigText(serializePortableConfig(next));
+    const created = await createPortableConfigFileExclusively(filePath, text);
+    if (created === 'exists') return 'retry';
+    return writtenOutcome(text);
+  }
+
+  async function replaceValidFile(
+    filePath: string,
+    reading: Extract<PortableDiskReading, { kind: 'valid' }>,
+    next: PortableConfig,
+  ): Promise<PortablePersistResult | 'retry'> {
+    const base = lastValid ?? createDefaultPortableConfig();
+    const changes = diffPortableConfig(base, next);
+    const conflicts = conflictsWithBase(base, reading.raw, changes);
+    if (conflicts.length) {
+      adoptValidReading(reading);
       return {
         ok: false,
-        reason: `Could not write config: ${error instanceof Error ? error.message : String(error)}`,
-        config: effective,
+        reason: conflictReason(conflicts),
+        current: reading.config,
       };
     }
-    const parsed = parsePortableConfigText(text, deps.settingKinds);
-    if (!parsed.ok)
-      return { ok: false, reason: parsed.reason, config: effective };
-    lastValid = parsed.config;
-    effective = parsed.config;
-    lastSeenText = text;
-    fileEverSeen = true;
-    setBlockedReason(null);
-    lastSignature = await portableConfigSignature(deps.filePath());
-    if (conflicts.length) deps.onConflict(conflicts);
-    return { ok: true, config: effective, conflicts };
+    if (!changes.length) {
+      adoptValidReading(reading);
+      return { ok: true, config: reading.config };
+    }
+    const text = portableConfigText(applyPortableChanges(reading.raw, changes));
+    const replaced = await replacePortableConfigFile(
+      filePath,
+      text,
+      async () => (await readPortableConfigText(filePath)) === reading.text,
+    );
+    return replaced === 'changed' ? 'retry' : writtenOutcome(text);
+  }
+
+  async function persistOnce(
+    next: PortableConfig,
+  ): Promise<PortablePersistResult | 'retry'> {
+    const filePath = deps.filePath();
+    const reading = await readPortableConfigFile(filePath, deps.settingKinds);
+    if (reading.kind === 'missing' && !lastValid && !fileEverSeen)
+      return createFirstFile(filePath, next);
+    if (reading.kind !== 'valid') {
+      adoptReading(reading);
+      return {
+        ok: false,
+        reason: blockedReason ?? 'Config is not writable',
+        current: effective,
+      };
+    }
+    return replaceValidFile(filePath, reading, next);
   }
 
   function load() {
@@ -176,42 +222,28 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
     });
   }
 
-  function persist(desired: PortableConfig) {
-    return enqueue(async (): Promise<PortableConfigPersistResult> => {
-      const changes = diffPortableConfig(
-        lastValid ?? createDefaultPortableConfig(),
-        desired,
-      );
-      if (!changes.length)
-        return { ok: true, config: effective, conflicts: [] };
-      if (blockedReason) return rejectWrite();
-      const reading = await readPortableConfigFile(
-        deps.filePath(),
-        deps.settingKinds,
-      );
-      if (reading.kind === 'valid') {
-        const merged = await mergeWithDisk(reading, changes);
-        return writeAndAdopt(merged.text, merged.conflicts);
+  function persist(next: PortableConfig) {
+    return enqueue(async (): Promise<PortablePersistResult> => {
+      for (let attempt = 0; attempt < MAX_PERSIST_ATTEMPTS; attempt += 1) {
+        const outcome = await persistOnce(next);
+        if (outcome !== 'retry') return outcome;
       }
-      if (reading.kind === 'missing' && !lastValid && !fileEverSeen)
-        return writeAndAdopt(
-          portableConfigText(serializePortableConfig(desired)),
-          [],
-        );
-      adoptReading(reading);
-      return rejectWrite();
+      return {
+        ok: false,
+        reason:
+          'config.json kept changing while Nevermind was saving. Nothing was saved; try again.',
+        current: effective,
+      };
     });
   }
 
   function pollForExternalChange() {
-    return enqueue(async (): Promise<PortableConfigPollResult> => {
-      const signature = await portableConfigSignature(deps.filePath());
+    return enqueue(async (): Promise<PortablePollResult> => {
+      const filePath = deps.filePath();
+      const signature = await portableConfigSignature(filePath);
       if (signature === lastSignature) return { adopted: null, blockedReason };
       lastSignature = signature;
-      const reading = await readPortableConfigFile(
-        deps.filePath(),
-        deps.settingKinds,
-      );
+      const reading = await readPortableConfigFile(filePath, deps.settingKinds);
       if (reading.kind === 'valid' && reading.text === lastSeenText)
         return { adopted: null, blockedReason };
       const previous = effective;
@@ -224,10 +256,5 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
     });
   }
 
-  return {
-    load,
-    persist,
-    pollForExternalChange,
-    snapshot,
-  };
+  return { load, persist, pollForExternalChange, snapshot };
 }

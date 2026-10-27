@@ -188,6 +188,7 @@ import {
   createPaletteWindowController,
   installPermissionHandlers,
 } from './app/palette-window';
+import { createPortableConfigLive } from './app/portable-config-live';
 import { createPortableConfigService } from './app/portable-config-service';
 import { createQuitLifecycle } from './app/quit-lifecycle';
 import { createRunningAppStatusService } from './app/running-app-status';
@@ -286,6 +287,7 @@ import {
 } from './os/os';
 import { createSelectedTextReader } from './os/selected-text';
 import { createSystemAudioMuteCapability } from './os/system-audio';
+import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
 import {
@@ -581,12 +583,12 @@ const userStatePersistence = createUserStatePersistence({
   getUserState: () => userStateStore.get(),
   getStatePath: () => statePath,
   beforeWrite: captureRuntimeStateIntoUserState,
-  persistPortableConfig: () => portableConfigService.persistPortableConfig(),
   onSaveError: (error) =>
     logError('state.save.failed', error, { source: 'host', scope: 'state' }),
 });
 const { scheduleSaveState, saveUserState, persistUserState } =
   userStatePersistence;
+const activationStatus = createActivationStatus();
 const portableConfigService = createPortableConfigService({
   filePath: () =>
     resolvePortableConfigPath({
@@ -597,22 +599,25 @@ const portableConfigService = createPortableConfigService({
     SETTING_DEFINITIONS.map((definition) => [definition.id, definition.type]),
   ),
   userStateStore,
-  effects: {
-    applyPaletteHotkey: (accelerator) => {
-      const status = paletteWindow.registerHotkey(accelerator);
-      return status.registered || !status.configured;
-    },
+  scheduleSaveState,
+  live: createPortableConfigLive({
+    registerPaletteHotkey: (accelerator) =>
+      paletteWindow.registerHotkey(accelerator),
     setLaunchAtLogin: (enabled) => setLaunchAtLoginEnabled(enabled),
     setDiagnosticReporting: (enabled) => setDiagnosticReporting(enabled),
-    settingChanged: (settingId) => patchSettingsView(settingId),
-    registerActionShortcuts: () => registerActionShortcuts(),
+    patchSettingsView: (settingId) => patchSettingsView(settingId),
+    invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
     invalidateShortcutCaches: () => invalidateShortcutCaches(),
     patchKeyboardShortcutsView: () => patchKeyboardShortcutsView(),
-    invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
     applyJobEnablement: (overrides) =>
       jobRegistry.applyEnabledOverrides(overrides),
-  },
+    applyShortcutView: (view) => applyShortcutView(view),
+    activation: activationStatus,
+  }),
 });
+function registerActionShortcuts() {
+  void portableConfigService.refreshShortcutBindings();
+}
 
 const stateSafeQuit = createStateSafeQuit({
   flushPendingSave: async () => {
@@ -659,9 +664,8 @@ const {
   getLaunchAtLoginEnabled,
   setLaunchAtLoginEnabled,
   osLabel,
-  setDiagnosticReporting,
-  scheduleSaveState,
-  invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
+  commitPortable: (input) => portableConfigService.commit(input),
+  activationFailure: (key) => activationStatus.failureFor(key),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
   buildRecordShortcutAction: (input, options) =>
     buildRecordShortcutAction(input, options),
@@ -991,6 +995,7 @@ const {
   extensionActionFromContribution,
   resolveStoredShortcutAction: (actionId) =>
     resolveStoredShortcutAction(actionId),
+  activationFailure: (key) => activationStatus.failureFor(key),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
 });
 const { executeShortcutAction } = createShortcutRunner({
@@ -1009,27 +1014,16 @@ const { executeShortcutAction } = createShortcutRunner({
   normalizeHostViewResult,
   actionFailedFeedbackView: () => actionFailedFeedbackView(),
 });
-const {
-  unregisterShortcutForAction,
-  registerActionShortcut,
-  unregisterActionShortcuts,
-  registerActionShortcuts,
-} = createGlobalShortcutRegistration({
-  globalShortcut: {
-    register: (accelerator, listener) =>
-      globalShortcut.register(accelerator, listener),
-    unregister: (accelerator) => globalShortcut.unregister(accelerator),
-    isRegistered: (accelerator) => globalShortcut.isRegistered(accelerator),
-  },
-  paletteWindow,
-  registeredActionAccelerators,
-  userStateStore,
-  invalidateShortcutCaches,
-  executeShortcutAction,
-  resolveStoredShortcutAction: (actionId) =>
-    resolveStoredShortcutAction(actionId),
-  declaredGlobalShortcuts,
-});
+const { applyShortcutView, releaseAllShortcuts } =
+  createGlobalShortcutRegistration({
+    globalShortcut,
+    isPaletteHotkeyReserved: (accelerator) =>
+      paletteWindow.isHotkeyReserved(accelerator),
+    resolveStoredShortcutAction: (actionId) =>
+      resolveStoredShortcutAction(actionId),
+    declaredGlobalShortcuts,
+    executeShortcutAction,
+  });
 const {
   removeShortcut,
   setAlias,
@@ -1045,20 +1039,13 @@ const {
 } = createActionCustomization({
   userStateStore,
   scheduleSaveState,
-  globalShortcut: {
-    unregister: (accelerator) => globalShortcut.unregister(accelerator),
-  },
   paletteWindow,
-  actionAliases: (actionId) => actionAliases(actionId),
+  commitPortable: (input) => portableConfigService.commit(input),
   chatTouchedExtensionFiles: (chat) => chatTouchedExtensionFiles(chat),
   getPaletteHotkey: () => getPaletteHotkey(),
   setSetting: (id, value) => setSetting(id, value),
   settingDefinition,
   declaredGlobalShortcuts,
-  invalidateShortcutCaches,
-  patchKeyboardShortcutsView,
-  unregisterShortcutForAction,
-  registerActionShortcut,
 });
 const { extensionRootActionFromItem } = createExtensionRootActionNormalizer({
   extensionActionRegistry,
@@ -1455,6 +1442,9 @@ const {
   userStateStore,
   extensionActionRegistry,
   scheduleSaveState,
+  commitPortable: (input) => portableConfigService.commit(input),
+  logWarn: (message, data) =>
+    logWarn(message, data, { source: 'host', scope: 'ai' }),
   invalidateExtensionRootItems,
   actionAliases,
   extensionActionFromContribution,
@@ -1851,6 +1841,7 @@ const { initNevermindAi } = createNevermindAiInitializer({
 });
 const { setAiChatModel } = createAiChatModelChange({
   userStateStore,
+  commitPortable: (input) => portableConfigService.commit(input),
   draftAiChats,
   pendingAiChatSends,
   activeConversationRequests,
@@ -1974,6 +1965,13 @@ function initExtensionRuntimeContext() {
     createExtensionContext,
     scheduleSaveState,
     saveUserState,
+    setJobEnabled: (id: string, enabled: boolean) =>
+      portableConfigService.commit({
+        label: 'job',
+        mutate: (draft) => {
+          draft.jobs.enabled[id] = enabled;
+        },
+      }),
     invalidateExtensionRootItems,
     broadcastAuthChanged,
     isPackaged: app.isPackaged,
@@ -2065,10 +2063,6 @@ const { loadUserState } = createUserStateLoader({
 
 function captureRuntimeStateIntoUserState() {
   userStateStore.get().clipboardHistory = clipboardHistory;
-  userStateStore.get().jobSettings = {
-    ...(userStateStore.get().jobSettings || {}),
-    enabled: jobRegistry.enabledOverridesSnapshot(),
-  };
 }
 
 const { pickFormFieldPaths } = createFormFieldPathPicker({
@@ -2160,7 +2154,7 @@ app.whenReady().then(async () => {
     openSystemKeyboardSettings,
     getShortcuts,
     removeShortcut,
-    unregisterActionShortcuts,
+    unregisterActionShortcuts: releaseAllShortcuts,
     registerActionShortcuts,
     suspendPaletteHotkey,
     resumePaletteHotkey,
@@ -2211,6 +2205,12 @@ app.whenReady().then(async () => {
 
   paletteWindow.createWindow();
   const paletteHotkeyStatus = paletteWindow.registerHotkey();
+  activationStatus.set(
+    'setting:paletteHotkey',
+    paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured
+      ? null
+      : `Could not register ${paletteHotkeyStatus.accelerator}`,
+  );
   if (paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured)
     paletteWindow.showPaletteWhenReady();
 
