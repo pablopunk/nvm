@@ -4,12 +4,12 @@ import Foundation
 
 private let noSelectionExitCode: Int32 = 3
 
-private func fail(_ message: String, code: Int32 = 1) -> Never {
+func fail(_ message: String, code: Int32 = 1) -> Never {
   FileHandle.standardError.write(Data("\(message)\n".utf8))
   exit(code)
 }
 
-private func attribute(_ element: AXUIElement, _ name: CFString) -> AnyObject? {
+func attribute(_ element: AXUIElement, _ name: CFString) -> AnyObject? {
   var value: AnyObject?
   let result = AXUIElementCopyAttributeValue(element, name, &value)
   guard result != .apiDisabled else {
@@ -206,7 +206,7 @@ private func replaceSelectedTextInFocusedHierarchy(
   return false
 }
 
-private func readSelection(pid: pid_t) -> Never {
+func readSelection(pid: pid_t) -> Never {
   let app = AXUIElementCreateApplication(pid)
   AXUIElementSetAttributeValue(
     app,
@@ -232,7 +232,7 @@ private func readSelection(pid: pid_t) -> Never {
   exit(noSelectionExitCode)
 }
 
-private func copySelection(pid: pid_t) -> Never {
+func copySelection(pid: pid_t) -> Never {
   guard CGPreflightPostEventAccess() else {
     fail("Accessibility access for keyboard events is blocked", code: 2)
   }
@@ -258,7 +258,7 @@ private func copySelection(pid: pid_t) -> Never {
   exit(0)
 }
 
-private func replaceSelection(pid: pid_t) -> Never {
+func replaceSelection(pid: pid_t) -> Never {
   guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
     fail("Selection target is not frontmost", code: 4)
   }
@@ -278,28 +278,4 @@ private func replaceSelection(pid: pid_t) -> Never {
     exit(noSelectionExitCode)
   }
   exit(0)
-}
-
-guard AXIsProcessTrusted() else {
-  fail("Nevermind does not have Accessibility access", code: 2)
-}
-if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "permissions" {
-  guard CGPreflightPostEventAccess() else {
-    fail("Accessibility access for keyboard events is blocked", code: 2)
-  }
-  _ = attribute(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString)
-  exit(0)
-}
-guard
-  CommandLine.arguments.count == 3,
-  let pid = pid_t(CommandLine.arguments[2])
-else {
-  fail("Usage: macos-selected-text <read|copy|replace> <pid> | permissions")
-}
-
-switch CommandLine.arguments[1] {
-case "read": readSelection(pid: pid)
-case "copy": copySelection(pid: pid)
-case "replace": replaceSelection(pid: pid)
-default: fail("Unknown selected-text operation")
 }
