@@ -1,5 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import '../styles/console.css';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card } from '../components/ui/card';
 import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
@@ -28,7 +32,7 @@ const hasActiveSubscription = subscription ? isActiveBillingSubscriptionStatus(s
 const canBuyTopUps = hasActiveSubscription;
 const billingState = Astro.url.searchParams.get('billing');
 ---
-<Layout title="Nevermind · Profile">
+<Layout title="Nevermind · Profile" console>
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:32px">
     <div>
       <h1 style="margin:0">Profile</h1>
@@ -36,7 +40,7 @@ const billingState = Astro.url.searchParams.get('billing');
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       {isAdmin && <a class="button" href="/admin">Admin</a>}
-      <form method="post" action="/api/auth/signout" style="margin:0"><button class="button" type="submit">Sign out</button></form>
+      <form method="post" action="/api/auth/signout" style="margin:0"><Button className="button" type="submit">Sign out</Button></form>
     </div>
   </div>
 
@@ -49,7 +53,7 @@ const billingState = Astro.url.searchParams.get('billing');
   <div class="section card stack" id="connect-desktop">
     <h3>Connect desktop app</h3>
     <p class="muted" style="margin:0">Sign into the Nevermind desktop app from this browser.</p>
-    <button class="button button--primary" id="initiate-connect" type="button">Start device connection</button>
+    <Button className="button button--primary" id="initiate-connect" type="button">Start device connection</Button>
     <p id="connect-status" class="status" style="margin:0"></p>
     <pre id="connect-code" style="display:none;"></pre>
     <a id="connect-deep-link" class="button" style="display:none;" href="#">Open in Nevermind</a>
@@ -97,7 +101,7 @@ const billingState = Astro.url.searchParams.get('billing');
     </script>
   </div>
 
-  <div class="section card stack">
+  <Card className="section card stack"><section class="stack">
     <div>
       <h3>Billing</h3>
       <p class="muted" style="margin:0">
@@ -108,32 +112,32 @@ const billingState = Astro.url.searchParams.get('billing');
     {billingState === 'canceled' && <p class="status">Checkout canceled. Nothing was charged.</p>}
     <div class="row">
       {!hasActiveSubscription && catalog.subscriptions.map((item) => (
-        <button class="button button--primary billing-checkout" data-kind="subscription" data-price-id={item.priceId}>
+        <Button className="button button--primary billing-checkout" data-kind="subscription" data-price-id={item.priceId}>
           Subscribe {item.tier} · {item.credits} credits/mo
-        </button>
+        </Button>
       ))}
       {canBuyTopUps && catalog.topUps.map((item) => (
-        <button class="button billing-checkout" data-kind="top_up" data-price-id={item.priceId}>
+        <Button className="button billing-checkout" data-kind="top_up" data-price-id={item.priceId}>
           Top up · {item.credits} credits
-        </button>
+        </Button>
       ))}
       {!canBuyTopUps && catalog.topUps.length > 0 && <span class="muted">Top-ups unlock after subscribing to Pro.</span>}
       {user?.stripeCustomerId && (
-        <button class={hasActiveSubscription ? 'button button--primary' : 'button'} id="manage-billing" type="button">
+        <Button className={hasActiveSubscription ? 'button button--primary' : 'button'} id="manage-billing" type="button">
           {hasActiveSubscription ? 'Manage subscription' : 'Manage billing'}
-        </button>
+        </Button>
       )}
       {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span class="muted">Billing is not configured yet.</span>}
     </div>
     <p id="billing-status" class="status" style="margin:0" aria-live="polite"></p>
-  </div>
+  </section></Card>
 
   <div class="section">
     <h2>API tokens</h2>
     <p class="muted">Use these to call the API directly. The full token is shown only once.</p>
     <form id="create-token-form" class="row" style="margin-bottom:12px;">
-      <input class="input" type="text" name="name" placeholder="Token name (e.g. My Mac)" required />
-      <button class="button button--primary" type="submit">Create token</button>
+      <Input className="input" type="text" name="name" aria-label="Token name" placeholder="Token name (e.g. My Mac)" required />
+      <Button className="button button--primary" type="submit">Create token</Button>
     </form>
     <div id="new-token-panel" class="card stack" style="display:none;" role="region" aria-label="New API token">
       <div>
@@ -143,8 +147,8 @@ const billingState = Astro.url.searchParams.get('billing');
       <pre class="token-value" id="new-token-value"></pre>
       <div id="copy-status" aria-live="polite" class="status"></div>
       <div class="row">
-        <button type="button" id="copy-token-btn" class="button button--primary">Copy</button>
-        <button type="button" id="close-token-btn" class="button">Close</button>
+        <Button type="button" id="copy-token-btn" className="button button--primary">Copy</Button>
+        <Button type="button" id="close-token-btn" className="button">Close</Button>
       </div>
     </div>
     <ul class="list-clean">
@@ -155,7 +159,7 @@ const billingState = Astro.url.searchParams.get('billing');
           <span class="muted">· created {new Date(t.createdAt).toLocaleString()}</span>
           <span class="muted">{t.lastUsedAt ? `· last used ${new Date(t.lastUsedAt).toLocaleString()}` : '· never used'}</span>
           <span class="spacer" style="flex:1"></span>
-          <button class="button button--danger revoke" data-id={t.id}>Revoke</button>
+          <Button className="button button--danger revoke" data-id={t.id}>Revoke</Button>
         </li>
       ))}
       {tokens.length === 0 && <li class="muted">No tokens yet.</li>}

@@ -1,0 +1,51 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../components/ui";
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-fg);
+  --color-secondary: var(--border-light);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--border-light);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--border-light);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent-highlight);
+  --radius-md: 6px;
+  --radius-xl: var(--radius-lg);
+}
+
+.console-page { font-size: 14px; }
+.console-page h1 { font-size: 24px; letter-spacing: -0.02em; }
+.console-page h2 { font-size: 18px; margin-bottom: 8px; }
+.console-page h3 { font-size: 14px; }
+.console-page .section { margin-top: 20px; }
+.console-page .card { box-shadow: 0 1px 2px rgb(0 0 0 / 0.04); }
+.console-page .admin-panel { padding: 20px; }
+.console-page .stat-grid { gap: 8px; }
+.console-page .stat { background: var(--bg); }
+.console-page .stat .v { font-size: 20px; }
+.console-page .table th { color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.console-page .table td { vertical-align: top; }
+.console-page .table tbody tr:hover { background: var(--border-light); }
+.console-page .table th, .console-page .table td { padding: 10px 12px; }
+.console-page .button { cursor: default; }
+.console-page :is(button, a):focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 2px; }
+.console-page .input:focus { outline: none; border-color: var(--text); }
+.console-page .nav { margin-bottom: 24px; }
+.console-page .admin-header { padding: 8px 0; }
+.console-page .admin-panel > p { max-width: 80ch; font-size: 13px; }
+.console-page .model-route-row { background: var(--bg); }
+@media (max-width: 560px) {
+  .console-page .admin-panel, .console-page .card { padding: 16px; }
+  .console-page .stat-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+}

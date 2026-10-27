@@ -1,5 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import '../styles/console.css';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card } from '../components/ui/card';
+import { ConsoleTable } from '../components/ConsoleTable';
 import Combobox from '../components/Combobox.astro';
 import { getCurrentUser, isAdmin } from '../lib/admin';
 import {
@@ -65,7 +70,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
   (model) => modelRouteToRef(model),
 );
 ---
-<Layout title="Nevermind · Admin" width="wide">
+<Layout title="Nevermind · Admin" width="wide" console>
   <Combobox />
   <nav class="nav">
     <a href="/profile">Profile</a>
@@ -80,53 +85,53 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         <h1>Am I making money?</h1>
         <p class="muted">Revenue from Stripe payments, cost from provider usage, Stripe fees estimated at 2.9% + 30¢. UTC calendar months.</p>
       </div>
-      <label class="field">Month<input class="input" id="month" type="month" /></label>
+      <label class="field">Month<Input className="input" id="month" type="month" /></label>
     </header>
 
     <div class="admin-alerts" id="problems" aria-live="polite"></div>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <div class="stat-grid" id="headline"><div class="stat"><div class="v">…</div><div class="l">Loading</div></div></div>
       <div class="table-scroll admin-subpanel">
-        <table class="table" id="segments"><thead><tr><th></th><th>Users</th><th>Active</th><th>Requests</th><th>Provider cost</th><th>Revenue</th><th>Net</th><th>Cost / active user</th></tr></thead><tbody></tbody></table>
+        <ConsoleTable id="segments" columns={['', 'Users', 'Active', 'Requests', 'Provider cost', 'Revenue', 'Net', 'Cost / active user']} />
       </div>
-    </section>
+    </section></Card>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <h2>Pricing</h2>
       <p class="muted">Set in Vercel env (<code>CREDIT_MARKUP</code>, <code>CREDIT_USD</code>, <code>MONTHLY_FREE_CREDITS</code>, <code>STRIPE_SUBSCRIPTION_TIERS</code>, <code>STRIPE_TOP_UP_PACKS</code>). Worst case means the user spends every credit they get.</p>
-      <div class="table-scroll"><table class="table" id="knobs"><thead><tr><th>Plan</th><th>Price</th><th>Credits / month</th><th>Worst-case cost</th><th>Worst-case net</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-scroll"><ConsoleTable id="knobs" columns={['Plan', 'Price', 'Credits / month', 'Worst-case cost', 'Worst-case net']} /></div>
       <p class="muted" id="knobs-note"></p>
-    </section>
+    </section></Card>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <h2>Top users by cost</h2>
-      <div class="table-scroll"><table class="table" id="top-users"><thead><tr><th>Email</th><th>Plan</th><th>Requests</th><th>Cost</th><th>Revenue</th><th>Net</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-scroll"><ConsoleTable id="top-users" columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} /></div>
       <div class="admin-subpanel">
         <h3>Give or remove credits</h3>
         <div class="row admin-grant">
-          <label class="field">Email<input class="input" id="grant-email" type="email" autocomplete="off" /></label>
+          <label class="field">Email<Input className="input" id="grant-email" type="email" autoComplete="off" /></label>
           <label class="field">Pool<select class="input" id="grant-kind"><option value="paid">Paid</option><option value="free">Free</option></select></label>
-          <label class="field">Credits<input class="input" id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
-          <label class="field">Reason<input class="input" id="grant-reason" type="text" maxlength="500" /></label>
-          <button class="button button--primary" id="grant" type="button">Apply</button>
+          <label class="field">Credits<Input className="input" id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
+          <label class="field">Reason<Input className="input" id="grant-reason" type="text" maxLength="500" /></label>
+          <Button className="button button--primary" id="grant" type="button">Apply</Button>
           <span class="status" id="grant-status" aria-live="polite"></span>
         </div>
       </div>
-    </section>
+    </section></Card>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <h2>Cost by model</h2>
-      <div class="table-scroll"><table class="table" id="models"><thead><tr><th>Model</th><th>Provider</th><th>Who</th><th>Requests</th><th>Cost</th></tr></thead><tbody></tbody></table></div>
-    </section>
+      <div class="table-scroll"><ConsoleTable id="models" columns={['Model', 'Provider', 'Who', 'Requests', 'Cost']} /></div>
+    </section></Card>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <h2>Model performance</h2>
       <p class="muted">Successful HTTP requests this month, measured at the backend rather than the desktop. TTFT starts at request admission and ends at the first parsed text, reasoning or tool output, ignoring keepalives. Turn time ends when the response finishes. Tokens/s is the mean per-request output rate after TTFT, estimated when provider token counts are missing; partial streams may contribute. Sample counts appear below each mean; historical requests have no TTFT.</p>
-      <div class="table-scroll"><table class="table" id="performance"><thead><tr><th>Model</th><th>Provider</th><th>Requests</th><th>Mean TTFT</th><th>Mean turn time</th><th>Mean tokens/s (est.)</th></tr></thead><tbody></tbody></table></div>
-    </section>
+      <div class="table-scroll"><ConsoleTable id="performance" columns={['Model', 'Provider', 'Requests', 'Mean TTFT', 'Mean turn time', 'Mean tokens/s (est.)']} /></div>
+    </section></Card>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <h2>Models</h2>
       <p class="muted">From the models.dev catalog, priced models only. Smart: image input and reasoning. Fast: text in, text out, thinking off. Dictation: audio transcription.</p>
       <div class="model-routes">
@@ -145,19 +150,19 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
           <label class="field">Model<select class="input combo model-select">{audioRouteRef && !audioModelRefs.includes(audioRouteRef) && <option value={audioRouteRef} selected disabled>{audioRouteRef} (catalog unavailable)</option>}{audioModelRefs.map((ref) => <option value={ref} selected={ref === audioRouteRef}>{ref}</option>)}</select></label>
         </section>
       </div>
-    </section>
+    </section></Card>
 
-    <section class="section card admin-panel">
+    <Card className="section card admin-panel"><section>
       <h2>Free usage cap</h2>
       <p class="muted" id="cap-state">Loading…</p>
       <div class="row admin-grant">
-        <label class="field">Monthly cap (USD)<input class="input" id="cap-usd" type="text" inputmode="decimal" placeholder="25.00" /></label>
+        <label class="field">Monthly cap (USD)<Input className="input" id="cap-usd" type="text" inputMode="decimal" placeholder="25.00" /></label>
         <label class="field">Applies to<select class="input" id="cap-effective"><option value="current">This month</option><option value="next_month">Next month</option></select></label>
-        <button class="button button--primary" id="cap-set" type="button">Set</button>
-        <button class="button" id="cap-clear" type="button">Remove cap</button>
+        <Button className="button button--primary" id="cap-set" type="button">Set</Button>
+        <Button className="button" id="cap-clear" type="button">Remove cap</Button>
         <span class="status" id="cap-status" aria-live="polite"></span>
       </div>
-    </section>
+    </section></Card>
   </main>
 
   <script is:inline>

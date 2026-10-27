@@ -2,6 +2,8 @@
 import { defineConfig } from 'astro/config';
 import vercel from '@astrojs/vercel';
 import sentry from '@sentry/astro';
+import react from '@astrojs/react';
+import tailwindcss from '@tailwindcss/vite';
 
 const sentryDsn = process.env.SENTRY_DSN;
 
@@ -9,7 +11,8 @@ export default defineConfig({
   output: 'server',
   adapter: vercel(),
   site: 'https://www.nvm.fyi',
-  integrations: sentryDsn
+  vite: { plugins: [tailwindcss()] },
+  integrations: [react(), ...(sentryDsn
     ? [
         sentry({
           dsn: sentryDsn,
@@ -19,5 +22,5 @@ export default defineConfig({
           sourceMapsUploadOptions: { telemetry: false },
         }),
       ]
-    : [],
+    : [])],
 });
