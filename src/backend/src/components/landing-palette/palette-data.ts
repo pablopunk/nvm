@@ -34,6 +34,10 @@ function sample(
   };
 }
 
+export const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
+/** What the dictation demo "transcribes" and pastes into the palette. */
+export const DICTATED_TEXT = 'Download nevermind';
+
 const LAUNCH_SUBTITLE = 'Launch application';
 const apps: PaletteItem[] = [
   sample('app', 'Helium', LAUNCH_SUBTITLE, 'app-window', ['browser', 'web'], '/apps/helium.webp', 'https://helium.computer'),
@@ -64,6 +68,16 @@ const voice: PaletteItem[] = [
   sample('command', 'Dictation History', 'Browse past transcripts', 'history', ['dictate', 'voice', 'speech']),
 ];
 
+const downloadNevermind = sample(
+  'command',
+  'Download Nevermind',
+  'Get the app for macOS, Windows, and Linux',
+  'download',
+  ['install', 'get', 'app', 'releases'],
+  undefined,
+  RELEASES_URL,
+);
+
 const clipboardHistory = sample(
   'command',
   'Clipboard History',
@@ -75,6 +89,7 @@ const clipboardHistory = sample(
 /** Empty-query order mirrors a fresh palette: apps first, then commands. */
 export const paletteItems: PaletteItem[] = [
   ...apps,
+  downloadNevermind,
   clipboardHistory,
   ...voice,
   ...builtinCommands,

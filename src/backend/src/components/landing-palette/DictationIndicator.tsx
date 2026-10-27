@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MODE_FRAMES, resolvePreset } from 'thinking-orbs/engine';
 
 const LISTENING_END_S = 2.2;
@@ -95,18 +95,31 @@ function SuccessMark({ progress }: { progress: number }) {
  * The desktop app's dictation indicator, replayed on a timer: it listens,
  * transcribes, then pastes. Renders with the app's own indicator styles.
  */
-export default function DictationIndicator({ onDone }: { onDone: () => void }) {
+export default function DictationIndicator({
+  onPasted,
+  onDone,
+}: {
+  onPasted: () => void;
+  onDone: () => void;
+}) {
   const [time, setTime] = useState(0);
+  const callbacks = useRef({ onPasted, onDone });
+  callbacks.current = { onPasted, onDone };
 
   useEffect(
     function runTimeline() {
       const started = performance.now();
       let frame = 0;
+      let pasted = false;
       function tick(now: number) {
         const elapsed = (now - started) / 1000;
         if (elapsed >= TOTAL_S) {
-          onDone();
+          callbacks.current.onDone();
           return;
+        }
+        if (!pasted && elapsed >= PASTED_AT_S) {
+          pasted = true;
+          callbacks.current.onPasted();
         }
         setTime(elapsed);
         frame = requestAnimationFrame(tick);
@@ -114,7 +127,7 @@ export default function DictationIndicator({ onDone }: { onDone: () => void }) {
       frame = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(frame);
     },
-    [onDone],
+    [],
   );
 
   const transcribing = tween(time, LISTENING_END_S, LISTENING_END_S + 0.2);

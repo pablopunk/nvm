@@ -1,6 +1,7 @@
 import { Command } from 'cmdk';
 import {
   Activity,
+  Download,
   Clipboard,
   CircleStop,
   FileCode,
@@ -41,13 +42,19 @@ import {
 import { createPortal } from 'react-dom';
 import { requestLightningStrike } from '../lightning/strike-event';
 import DictationIndicator from './DictationIndicator';
-import { paletteItems, paletteTabs } from './palette-data';
+import {
+  DICTATED_TEXT,
+  paletteItems,
+  paletteTabs,
+  RELEASES_URL,
+} from './palette-data';
 import { searchPalette } from './palette-search';
 import { landingPaletteCss } from './palette-styles';
 import type { PaletteItem } from './palette-types';
 
 const ICONS: Record<string, LucideIcon> = {
   activity: Activity,
+  download: Download,
   clipboard: Clipboard,
   'file-code': FileCode,
   'file-text': FileText,
@@ -79,7 +86,6 @@ const DOWNLOAD_NOTICE_TEXT = 'Download the app to actually do that!';
 /** Notice target for the "Tab to ask AI" hint; item ids identify result rows. */
 const ASK_AI_TARGET = 'ask-ai';
 const START_DICTATION_ID = 'command:Start Dictation';
-const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
 
 function iconFor(item: PaletteItem): ReactNode {
   const Icon = (item.icon && ICONS[item.icon]) || Sparkles;
@@ -290,6 +296,10 @@ export default function LandingPalette() {
     setDictating(false);
   }, []);
 
+  function pasteDictation() {
+    typeFreely(DICTATED_TEXT);
+  }
+
   function selectItem(item: PaletteItem) {
     if (item.id === START_DICTATION_ID) {
       hideNotice();
@@ -320,7 +330,11 @@ export default function LandingPalette() {
               inputRef={inputRef}
             />
             {dictating ? (
-              <DictationIndicator key={dictationRun} onDone={stopDictating} />
+              <DictationIndicator
+                key={dictationRun}
+                onPasted={pasteDictation}
+                onDone={stopDictating}
+              />
             ) : null}
             </>,
             mount,
