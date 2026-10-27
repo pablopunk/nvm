@@ -1,17 +1,13 @@
 import { Command } from 'cmdk';
 import {
   Activity,
-  Calculator,
-  Calendar,
   Clipboard,
   CircleStop,
   FileCode,
   FileText,
   Folder,
-  FolderOpen,
   History,
   Image,
-  Images,
   Keyboard,
   Link,
   List,
@@ -27,7 +23,6 @@ import {
   SmilePlus,
   Sparkles,
   SquarePen,
-  StickyNote,
   Terminal,
   Type,
   Zap,
@@ -52,16 +47,12 @@ import type { PaletteItem } from './palette-types';
 
 const ICONS: Record<string, LucideIcon> = {
   activity: Activity,
-  calculator: Calculator,
-  calendar: Calendar,
   clipboard: Clipboard,
   'file-code': FileCode,
   'file-text': FileText,
   folder: Folder,
-  'folder-open': FolderOpen,
   history: History,
   image: Image,
-  images: Images,
   keyboard: Keyboard,
   link: Link,
   list: List,
@@ -76,7 +67,6 @@ const ICONS: Record<string, LucideIcon> = {
   'smile-plus': SmilePlus,
   sparkles: Sparkles,
   'square-pen': SquarePen,
-  'sticky-note': StickyNote,
   'stop-circle': CircleStop,
   terminal: Terminal,
   type: Type,
@@ -292,6 +282,11 @@ export default function LandingPalette() {
   }
 
   function selectItem(item: PaletteItem) {
+    if (item.url) {
+      hideNotice();
+      window.open(item.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     showNotice(item.id);
   }
 

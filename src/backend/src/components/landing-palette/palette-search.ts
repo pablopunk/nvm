@@ -1,7 +1,7 @@
 import { scoreNormalizedNonEmpty } from '../../../../app/palette/search-ranking';
 import type { PaletteItem } from './palette-types';
 
-export const MAX_RESULTS = 12;
+export const MAX_RESULTS = 40;
 const ALIAS_WEIGHT = 0.9;
 const KEYWORD_WEIGHT = 0.7;
 const SUBTITLE_WEIGHT = 0.5;

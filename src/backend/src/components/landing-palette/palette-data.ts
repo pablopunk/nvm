@@ -19,6 +19,7 @@ function sample(
   icon: string,
   keywords: string[] = [],
   image?: string,
+  url?: string,
 ): PaletteItem {
   return {
     id: `${kind}:${title}`,
@@ -29,23 +30,17 @@ function sample(
     kind,
     keywords,
     image,
+    url,
   };
 }
 
 const LAUNCH_SUBTITLE = 'Launch application';
 const apps: PaletteItem[] = [
-  sample('app', 'Helium', LAUNCH_SUBTITLE, 'app-window', ['browser', 'web'], '/apps/helium.webp'),
-  sample('app', 'T3 Code', LAUNCH_SUBTITLE, 'app-window', ['code', 'agent', 'ai'], '/apps/t3-code.webp'),
-  sample('app', 'Spotifin', LAUNCH_SUBTITLE, 'app-window', ['music', 'player'], '/apps/spotifin.webp'),
-  sample('app', 'Telegram', LAUNCH_SUBTITLE, 'app-window', ['chat', 'messages'], '/apps/telegram.webp'),
+  sample('app', 'Helium', LAUNCH_SUBTITLE, 'app-window', ['browser', 'web'], '/apps/helium.webp', 'https://helium.computer'),
+  sample('app', 'T3 Code', LAUNCH_SUBTITLE, 'app-window', ['code', 'agent', 'ai'], '/apps/t3-code.webp', 'https://t3.codes'),
+  sample('app', 'Spotifin', LAUNCH_SUBTITLE, 'app-window', ['music', 'player'], '/apps/spotifin.webp', 'https://spotifin.app'),
+  sample('app', 'Telegram', LAUNCH_SUBTITLE, 'app-window', ['chat', 'messages'], '/apps/telegram.webp', 'https://telegram.org'),
   sample('app', 'Nevermind', LAUNCH_SUBTITLE, 'app-window', ['palette', 'launcher'], '/apps/nevermind.webp'),
-  sample('app', 'Calendar', LAUNCH_SUBTITLE, 'calendar'),
-  sample('app', 'Calculator', LAUNCH_SUBTITLE, 'calculator'),
-  sample('app', 'Notes', LAUNCH_SUBTITLE, 'sticky-note'),
-  sample('app', 'Finder', LAUNCH_SUBTITLE, 'folder-open'),
-  sample('app', 'Photos', LAUNCH_SUBTITLE, 'images'),
-  sample('app', 'Terminal', LAUNCH_SUBTITLE, 'terminal'),
-  sample('app', 'System Settings', LAUNCH_SUBTITLE, 'settings'),
 ];
 
 const files: PaletteItem[] = [
@@ -59,7 +54,7 @@ const files: PaletteItem[] = [
 
 const clipboard: PaletteItem[] = [
   sample('clipboard', 'https://nvm.fyi/pricing', 'Copied 2 minutes ago', 'link', ['clipboard', 'copied', 'paste']),
-  sample('clipboard', 'ssh pol@192.168.1.153', 'Copied 14 minutes ago', 'terminal', ['clipboard', 'copied', 'paste']),
+  sample('clipboard', 'git checkout -b feature/palette', 'Copied 14 minutes ago', 'terminal', ['clipboard', 'copied', 'paste']),
   sample('clipboard', 'Meeting at 3pm, bring the roadmap', 'Copied 1 hour ago', 'type', ['clipboard', 'copied', 'paste']),
   sample('clipboard', '#f4cf86', 'Copied yesterday', 'palette', ['clipboard', 'copied', 'paste']),
 ];

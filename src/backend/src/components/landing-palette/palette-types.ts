@@ -10,6 +10,8 @@ export interface PaletteItem {
   kind: PaletteItemKind;
   /** Bundled app icon path; replaces the generic Lucide glyph. */
   image?: string;
+  /** Site opened in a new tab on Enter; items without one show the download notice. */
+  url?: string;
   /** Extra text that makes the item findable without being shown. */
   keywords?: string[];
 }
