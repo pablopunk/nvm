@@ -1,0 +1,51 @@
+<section class="own-ai" aria-labelledby="own-ai-title">
+  <div class="own-ai__files" aria-label="Extensions folder containing the bundled API types and your own extension">
+    <div class="own-ai__path">~/.config/nevermind/</div>
+    <pre><span class="own-ai__branch">└──</span> extensions/
+    <span class="own-ai__branch">├──</span> <span class="own-ai__api">nevermind-extension-api.d.ts</span>
+    <span class="own-ai__branch">├──</span> package.json
+    <span class="own-ai__branch">└──</span> <span class="own-ai__extension">your-next-idea.ts</span></pre>
+    <p class="own-ai__caption">The API is already there. The next idea is yours.</p>
+  </div>
+  <div class="own-ai__copy">
+    <h2 id="own-ai-title">Bring <span class="own-ai__highlight">your own AI.</span></h2>
+    <p>Point your favorite coding agent at <code>~/.config/nevermind</code> and build your own extensions. <strong>Just local TypeScript files</strong>, a typed Extension API, and a setup that fits right into your dotfiles.</p>
+  </div>
+</section>
+
+<style>
+  .own-ai {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.85fr);
+    align-items: center;
+    gap: 64px;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 24px 144px;
+  }
+  h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  .own-ai__copy p { max-width: 400px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  strong { color: var(--text); font-weight: 600; }
+  code { background: transparent; border: 0; padding: 0; color: var(--text); overflow-wrap: anywhere; }
+  .own-ai__files { min-width: 0; padding: 32px; font-family: var(--mono); }
+  .own-ai__path { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  pre { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; color: var(--text); font-size: clamp(11px, 1.2vw, 14px); line-height: 2.4; }
+  .own-ai__branch { color: #57534e; }
+  .own-ai__api { color: #f4cf86; }
+  .own-ai__extension { color: var(--text); font-weight: 600; }
+  .own-ai__caption { margin: 24px 0 0; color: var(--muted); font-family: var(--font); font-size: 13px; line-height: 1.6; }
+  .own-ai__highlight { color: #f4cf86; }
+  @supports (background-clip: text) {
+    .own-ai__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
+  }
+  @media (forced-colors: active) {
+    .own-ai__highlight { background: none; color: CanvasText; }
+  }
+  @media (max-width: 860px) {
+    .own-ai { grid-template-columns: 1fr; gap: 32px; padding: 32px 0 80px; }
+    .own-ai__copy { grid-row: 1; text-align: center; }
+    .own-ai__copy p { margin-inline: auto; }
+    .own-ai__files { padding: 16px; justify-self: center; }
+  }
+</style>
