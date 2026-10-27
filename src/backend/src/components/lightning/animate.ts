@@ -65,6 +65,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
   const intro = uniform('uIntro');
   const offset = uniform('uXOffset');
   const bolts = uniform('uBolts');
+  const angle = uniform('uAngle');
   const strikes = uniform('uStrikes');
   const strikeInfo = uniform('uStrikeInfo');
   const strikeData = new Float32Array(16);
@@ -149,8 +150,14 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
     frame = requestAnimationFrame(draw);
   }
+  function randomizeAngle() {
+    const radians = (Math.random() - 0.5) * Math.PI * 0.75;
+    gl!.uniform1f(angle, radians);
+    return radians;
+  }
   function strike() {
     clicked = null;
+    randomizeAngle();
     if (canvas.clientHeight < 1) {
       schedule();
       return;
@@ -192,8 +199,9 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     resizeCanvas();
     const x = (2 * (event.clientX - rect.left) - rect.width) / rect.height;
     const y = (rect.height - 2 * (event.clientY - rect.top)) / rect.height;
-    const sine = Math.sin(defaults.uAngle);
-    const cosine = Math.cos(defaults.uAngle);
+    const radians = randomizeAngle();
+    const sine = Math.sin(radians);
+    const cosine = Math.cos(radians);
     clicked = {
       x,
       y,
