@@ -21,6 +21,25 @@ import Layout from '../layouts/Layout.astro';
     </header>
 
     <section class="landing-hero">
+      <div class="landing-demo">
+        <video
+          id="product-demo"
+          class="landing-demo__video"
+          width="1280"
+          height="720"
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="metadata"
+          poster="/videos/nevermind-demo-v1.jpg"
+          aria-label="Nevermind demo: create a Mac theme switcher, browse pull requests and calendar events, and process selected videos"
+        >
+          <source src="/videos/nevermind-demo-v1.mp4" type="video/mp4" />
+          <a href="/videos/nevermind-demo-v1.mp4">Watch the Nevermind demo</a>
+        </video>
+        <button class="landing-demo__toggle" type="button" aria-controls="product-demo" aria-label="Pause demo">Pause</button>
+      </div>
       <div class="landing-hero__copy">
         <div class="landing-platforms" aria-label="Supported platforms">
           <span class="landing-platforms__pill"><img src="/platforms/apple.svg" alt="" /> macOS</span>
@@ -41,13 +60,29 @@ import Layout from '../layouts/Layout.astro';
           <a class="button button--ghost" href="/docs">Read the docs →</a>
         </div>
       </div>
-
-      <figure class="landing-screenshot">
-        <img src="/screenshot.jpg" alt="Nevermind command palette showing AI-built Screenshot and Open Camera extensions" />
-        <figcaption>
-          The screenshot and camera tools above were created by telling Nevermind what to build — not by writing code.
-        </figcaption>
-      </figure>
     </section>
   </div>
 </Layout>
+
+<script>
+  function setupDemoPlayback(video: HTMLVideoElement, toggle: HTMLButtonElement) {
+    function syncPlaybackControl() {
+      toggle.textContent = video.paused ? 'Play' : 'Pause';
+      toggle.setAttribute('aria-label', video.paused ? 'Play demo' : 'Pause demo');
+    }
+    function toggleDemoPlayback() {
+      if (video.paused) {
+        video.play().catch(syncPlaybackControl);
+      } else {
+        video.pause();
+      }
+    }
+    toggle.addEventListener('click', toggleDemoPlayback);
+    video.addEventListener('play', syncPlaybackControl);
+    video.addEventListener('pause', syncPlaybackControl);
+    syncPlaybackControl();
+  }
+  const video = document.querySelector<HTMLVideoElement>('#product-demo');
+  const toggle = document.querySelector<HTMLButtonElement>('.landing-demo__toggle');
+  if (video && toggle) setupDemoPlayback(video, toggle);
+</script>
