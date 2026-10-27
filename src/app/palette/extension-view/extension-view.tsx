@@ -6,6 +6,7 @@ import {
   CornerDownLeft,
   CreditCard,
   LogIn,
+  Paperclip,
   RotateCw,
   Search,
   Square,
@@ -22,11 +23,10 @@ import React, {
 import { canSendAiChatMessage } from '../../shared/ai-chat-images';
 import type { AiChatModel } from '../../shared/ai-chat-model';
 import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
+import type { AiChatAttachment, AiLimitState } from '../ai-chat/use-ai-chat';
 import { iconForItem } from '../command-icons';
 import { RootCommandList } from '../command-list';
 import { captureRendererFailure } from '../diagnostics';
-import { titleFromFirstContentLine } from './editor-title';
-import { formApplyRowId } from './form-fields';
 import {
   actionsFromPanel,
   type CommandAction,
@@ -48,8 +48,9 @@ import {
   PreviewView,
   ProgressView,
 } from '../ui';
+import { titleFromFirstContentLine } from './editor-title';
+import { formApplyRowId } from './form-fields';
 import type { usePaletteForm } from './palette-form';
-import type { AiChatAttachment, AiLimitState } from '../ai-chat/use-ai-chat';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
@@ -1000,6 +1001,7 @@ function ChatInputForm({
   attachmentError,
   onAttachImages,
   onRemoveAttachment,
+  allowImagePicker = false,
   model,
   modelChanging = false,
   onModelChange,
@@ -1019,10 +1021,12 @@ function ChatInputForm({
   attachmentError?: string | null;
   onAttachImages?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
+  allowImagePicker?: boolean;
   model?: AiChatModel;
   modelChanging?: boolean;
   onModelChange?: (model: AiChatModel) => void;
 }) {
+  const imageInputRef = useRef<HTMLInputElement>(null);
   return (
     <form
       className="chatInputRow"
@@ -1091,38 +1095,65 @@ function ChatInputForm({
           }
         />
         <div className="chatComposerFooter">
-          {model && onModelChange ? (
-            <label className="chatModelPicker" title="AI model">
-              <select
-                className="chatModelSelect"
-                aria-label="AI model"
-                value={model}
-                disabled={busy || modelChanging}
-                onKeyDown={(event) => {
-                  if (
-                    [
-                      'ArrowDown',
-                      'ArrowLeft',
-                      'ArrowRight',
-                      'ArrowUp',
-                      'Enter',
-                      ' ',
-                    ].includes(event.key)
-                  )
-                    event.stopPropagation();
-                }}
-                onChange={(event) =>
-                  onModelChange(event.target.value as AiChatModel)
-                }
-              >
-                <option value="fast">Fast</option>
-                <option value="smart">Smart</option>
-              </select>
-              <ChevronDown size={12} aria-hidden="true" />
-            </label>
-          ) : (
-            <span />
-          )}
+          <div className="chatComposerOptions">
+            {model && onModelChange ? (
+              <label className="chatModelPicker" title="AI model">
+                <select
+                  className="chatModelSelect"
+                  aria-label="AI model"
+                  value={model}
+                  disabled={busy || modelChanging}
+                  onKeyDown={(event) => {
+                    if (
+                      [
+                        'ArrowDown',
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'ArrowUp',
+                        'Enter',
+                        ' ',
+                      ].includes(event.key)
+                    )
+                      event.stopPropagation();
+                  }}
+                  onChange={(event) =>
+                    onModelChange(event.target.value as AiChatModel)
+                  }
+                >
+                  <option value="fast">Fast</option>
+                  <option value="smart">Smart</option>
+                </select>
+                <ChevronDown size={12} aria-hidden="true" />
+              </label>
+            ) : null}
+            {allowImagePicker && onAttachImages ? (
+              <>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    const files = Array.from(event.currentTarget.files || []);
+                    event.currentTarget.value = '';
+                    if (files.length) onAttachImages(files);
+                    inputRef.current?.focus();
+                  }}
+                />
+                <button
+                  className="chatIconButton chatAttachButton"
+                  type="button"
+                  aria-label="Attach images"
+                  title="Attach images"
+                  disabled={modelChanging}
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <Paperclip size={15} aria-hidden="true" />
+                </button>
+              </>
+            ) : null}
+          </div>
           {busy ? (
             <button
               className="chatIconButton chatStopButton"
@@ -1258,6 +1289,7 @@ function ChatExtensionView({
       attachmentError={aiChat.attachmentError}
       onAttachImages={(files) => void aiChat.attachImageFiles(files)}
       onRemoveAttachment={aiChat.removeAttachment}
+      allowImagePicker={aiChat.model === 'smart'}
     />
   ) : view.submitAction ? (
     <ChatInputForm
