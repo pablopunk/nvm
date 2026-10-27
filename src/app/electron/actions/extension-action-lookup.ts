@@ -7,6 +7,7 @@ export type ExtensionActionLookupDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   chatTouchedExtensionFiles: (chat: any) => string[];
   extensionActionFromContribution: (entry: any) => any;
+  extensionRootActionFromItem: (entry: any, item: any) => any;
 };
 
 export function createExtensionActionLookup(deps: ExtensionActionLookupDeps) {
@@ -16,6 +17,7 @@ export function createExtensionActionLookup(deps: ExtensionActionLookupDeps) {
     userStateStore,
     chatTouchedExtensionFiles,
     extensionActionFromContribution,
+    extensionRootActionFromItem,
   } = deps;
 
   function extensionActionEntryForAction(action) {
@@ -94,6 +96,27 @@ export function createExtensionActionLookup(deps: ExtensionActionLookupDeps) {
     return action;
   }
 
+  function liveActionForStableId(actionId: string) {
+    for (const entry of extensionActionRegistry.values()) {
+      const candidates = [
+        extensionActionFromContribution(entry),
+        extensionRootActionFromItem(entry, entry.item),
+      ];
+      const match = candidates.find((action) => action?.id === actionId);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  function resolveStoredShortcutAction(actionId: string) {
+    return (
+      liveActionForStableId(actionId) ??
+      currentActionForStoredShortcut(
+        userStateStore.get().shortcutActions[actionId],
+      )
+    );
+  }
+
   function resolveRegisteredActionRef(action) {
     let current = action;
     const visited = new Set<string>();
@@ -118,6 +141,7 @@ export function createExtensionActionLookup(deps: ExtensionActionLookupDeps) {
     extensionEntryForAction,
     extensionModuleForAction,
     currentActionForStoredShortcut,
+    resolveStoredShortcutAction,
     resolveRegisteredActionRef,
   };
 }

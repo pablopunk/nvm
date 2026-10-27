@@ -7,7 +7,7 @@ export type ShortcutCatalogDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   visibleExtensionActionEntries: () => any[];
   extensionActionFromContribution: (entry: any) => any;
-  currentActionForStoredShortcut: (action: any) => any;
+  resolveStoredShortcutAction: (actionId: string) => any;
   patchOpenView: (viewId: string, patch: any) => void;
 };
 
@@ -16,7 +16,7 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
     userStateStore,
     visibleExtensionActionEntries,
     extensionActionFromContribution,
-    currentActionForStoredShortcut,
+    resolveStoredShortcutAction,
     patchOpenView,
   } = deps;
 
@@ -46,9 +46,7 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
         accelerator: String(accelerator),
         scope: 'global',
         source: 'user' as const,
-        action: currentActionForStoredShortcut(
-          userStateStore.get().shortcutActions[actionId],
-        ),
+        action: resolveStoredShortcutAction(actionId),
       }))
       .filter((item) => item.action);
     const declared = declaredGlobalShortcuts()

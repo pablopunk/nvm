@@ -1,3 +1,5 @@
+import { backoffDelay, mergeEventPayloads, timeout } from './job-helpers';
+
 export type JobOwner = 'host' | 'extension';
 export type JobStatus =
   | 'idle'
@@ -93,68 +95,8 @@ type JobRecord = {
 };
 
 const HISTORY_LIMIT = 10;
-const DEFAULT_EXTENSION_BACKOFF_MS = 30_000;
-const DEFAULT_EXTENSION_MAX_BACKOFF_MS = 15 * 60_000;
 
 type EnabledOverrides = Record<string, boolean>;
-
-function timeout<T>(promise: Promise<T>, timeoutMs: number, title: string) {
-  let timer: NodeJS.Timeout | undefined;
-  const guard = new Promise<T>((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(`${title} timed out after ${timeoutMs}ms`);
-      error.name = 'TimeoutError';
-      reject(error);
-    }, timeoutMs);
-    timer.unref?.();
-  });
-  return Promise.race([promise, guard]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
-
-function backoffDelay(record: JobRecord) {
-  if (record.definition.owner !== 'extension' && !record.definition.backoff)
-    return 0;
-  const initial =
-    record.definition.backoff?.initialMs ?? DEFAULT_EXTENSION_BACKOFF_MS;
-  const max =
-    record.definition.backoff?.maxMs ?? DEFAULT_EXTENSION_MAX_BACKOFF_MS;
-  return Math.min(
-    max,
-    initial * Math.max(1, 2 ** Math.max(0, record.consecutiveFailures - 1)),
-  );
-}
-
-function mergeEventPayloads(
-  previous?: { event?: string; payload?: unknown },
-  next?: { event?: string; payload?: unknown },
-) {
-  if (!previous) return next || {};
-  if (!next) return previous;
-  const previousPayload: any = previous.payload;
-  const nextPayload: any = next.payload;
-  if (
-    Array.isArray(previousPayload?.changedPaths) ||
-    Array.isArray(nextPayload?.changedPaths)
-  ) {
-    const changedPaths = [
-      ...new Set([
-        ...(previousPayload?.changedPaths || []),
-        ...(nextPayload?.changedPaths || []),
-      ]),
-    ].slice(-100);
-    return {
-      event: next.event || previous.event,
-      payload: {
-        ...(previousPayload || {}),
-        ...(nextPayload || {}),
-        changedPaths,
-      },
-    };
-  }
-  return next;
-}
 
 export class JobRegistry {
   private records = new Map<string, JobRecord>();
@@ -368,12 +310,28 @@ export class JobRegistry {
     const record = this.records.get(id);
     if (!record) return false;
     this.enabledOverrides[id] = enabled;
+    this.applyRecordEnabled(record, enabled);
+    return true;
+  }
+
+  applyEnabledOverrides(overrides: EnabledOverrides) {
+    this.enabledOverrides = { ...overrides };
+    for (const record of this.records.values()) {
+      const override = this.enabledOverrides[record.definition.id];
+      const enabled =
+        typeof override === 'boolean'
+          ? override
+          : record.definition.enabled !== false;
+      if (enabled !== record.enabled) this.applyRecordEnabled(record, enabled);
+    }
+  }
+
+  private applyRecordEnabled(record: JobRecord, enabled: boolean) {
     record.enabled = enabled;
     record.status = enabled ? 'idle' : 'disabled';
     if (!enabled) this.clearTimers(record);
     else this.installTriggers(record);
     this.notify();
-    return true;
   }
 
   clearError(id: string) {

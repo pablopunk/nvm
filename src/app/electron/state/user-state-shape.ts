@@ -1,7 +1,4 @@
-import {
-  DEFAULT_AI_CHAT_MODEL,
-  normalizeAiChatModel,
-} from '../../shared/ai-chat-model';
+import { DEFAULT_AI_CHAT_MODEL } from '../../shared/ai-chat-model';
 import {
   getDefaultNevermindBaseUrl,
   nevermindEnvironmentForBaseUrl,
@@ -35,22 +32,23 @@ function createDefaultUserState(): UserStateRecord {
 }
 
 function userStateFromLoadedFile(loaded: UserState): UserStateRecord {
+  const defaults = createDefaultUserState();
   return {
     recents: loaded.recents || {},
-    aliases: loaded.aliases || {},
-    shortcuts: loaded.shortcuts || {},
+    aliases: defaults.aliases,
+    shortcuts: defaults.shortcuts,
     shortcutActions: loaded.shortcutActions || {},
-    removedShortcuts: loaded.removedShortcuts || {},
+    removedShortcuts: defaults.removedShortcuts,
     overrides: loaded.overrides || {},
     clipboardHistory: loaded.clipboardHistory || [],
     aiChats: loaded.aiChats || {},
-    aiChatDefaultModel: normalizeAiChatModel(loaded.aiChatDefaultModel),
+    aiChatDefaultModel: defaults.aiChatDefaultModel,
     hasCompletedOnboarding:
       typeof loaded.hasCompletedOnboarding === 'boolean'
         ? loaded.hasCompletedOnboarding
         : true,
-    settings: loaded.settings || {},
-    jobSettings: loaded.jobSettings || {},
+    settings: defaults.settings,
+    jobSettings: defaults.jobSettings,
     rateCache: loaded.rateCache || {},
     appFirstSeenAtById: loaded.appFirstSeenAtById || {},
     appFirstSeenInitialized: loaded.appFirstSeenInitialized === true,

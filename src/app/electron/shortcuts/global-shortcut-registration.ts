@@ -1,5 +1,5 @@
-import type { UserStateStore } from '../state/user-state-store';
 import { warn as logWarn } from '../platform/logger';
+import type { UserStateStore } from '../state/user-state-store';
 
 export type GlobalShortcutRegistrationDeps = {
   globalShortcut: {
@@ -15,7 +15,7 @@ export type GlobalShortcutRegistrationDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   invalidateShortcutCaches: () => void;
   executeShortcutAction: (action: any) => unknown;
-  currentActionForStoredShortcut: (action: any) => any;
+  resolveStoredShortcutAction: (actionId: string) => any;
   declaredGlobalShortcuts: () => any[];
 };
 
@@ -29,7 +29,7 @@ export function createGlobalShortcutRegistration(
     userStateStore,
     invalidateShortcutCaches,
     executeShortcutAction,
-    currentActionForStoredShortcut,
+    resolveStoredShortcutAction,
     declaredGlobalShortcuts,
   } = deps;
 
@@ -76,9 +76,7 @@ export function createGlobalShortcutRegistration(
     for (const [actionId, accelerator] of Object.entries(
       userStateStore.get().shortcuts,
     )) {
-      const action = currentActionForStoredShortcut(
-        userStateStore.get().shortcutActions[actionId],
-      );
+      const action = resolveStoredShortcutAction(actionId);
       if (!action) continue;
       const ok = bindGlobalActionShortcut(actionId, accelerator, action);
       if (ok) bound.add(accelerator);

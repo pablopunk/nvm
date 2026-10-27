@@ -188,9 +188,11 @@ import {
   createPaletteWindowController,
   installPermissionHandlers,
 } from './app/palette-window';
+import { createPortableConfigService } from './app/portable-config-service';
 import { createQuitLifecycle } from './app/quit-lifecycle';
 import { createRunningAppStatusService } from './app/running-app-status';
 import {
+  SETTING_DEFINITIONS,
   settingDefinition,
   settingValue,
   toggledSettingValue,
@@ -257,6 +259,7 @@ import { createOpenWithApps } from './files/quick-look-and-open-with';
 import { startFileDrag } from './files/start-file-drag';
 import { createThumbnailService } from './files/thumbnails';
 import { registerAppIpcHandlers } from './ipc/app-ipc-handlers';
+import { registerDictationIpc } from './ipc/dictation-ipc';
 import { createMeasuredIpcRegistrar } from './ipc/ipc-registration';
 import {
   type AppFocusTarget,
@@ -310,6 +313,7 @@ import { withInheritedShortcutLifecycle } from './shortcuts/shortcut-lifecycle';
 import { createShortcutRunner } from './shortcuts/shortcut-runner';
 import { createViewLoaderRegistry } from './state/data-loader';
 import { LocalLearningStore } from './state/learning-store';
+import { resolvePortableConfigPath } from './state/portable-config-file';
 import { createStateSafeQuit } from './state/state-safe-quit';
 import { createUserStateLoader } from './state/user-state-loader';
 import { createUserStatePersistence } from './state/user-state-persistence';
@@ -378,7 +382,6 @@ const paletteWindow = createPaletteWindowController({
   onOpen: () => warmConversationAiOnPaletteOpen(),
 });
 const systemAudioMute = createSystemAudioMuteCapability();
-const MAX_DICTATION_AUDIO_BYTES = 4_194_304;
 const dictationService = createDictationService(
   (command) => {
     paletteWindow.win?.webContents.send('dictation:command', command);
@@ -578,11 +581,38 @@ const userStatePersistence = createUserStatePersistence({
   getUserState: () => userStateStore.get(),
   getStatePath: () => statePath,
   beforeWrite: captureRuntimeStateIntoUserState,
+  persistPortableConfig: () => portableConfigService.persistPortableConfig(),
   onSaveError: (error) =>
     logError('state.save.failed', error, { source: 'host', scope: 'state' }),
 });
 const { scheduleSaveState, saveUserState, persistUserState } =
   userStatePersistence;
+const portableConfigService = createPortableConfigService({
+  filePath: () =>
+    resolvePortableConfigPath({
+      isTestMode: isNvmTestMode,
+      userDataDirectory: app.getPath('userData'),
+    }),
+  settingKinds: Object.fromEntries(
+    SETTING_DEFINITIONS.map((definition) => [definition.id, definition.type]),
+  ),
+  userStateStore,
+  effects: {
+    applyPaletteHotkey: (accelerator) => {
+      const status = paletteWindow.registerHotkey(accelerator);
+      return status.registered || !status.configured;
+    },
+    setLaunchAtLogin: (enabled) => setLaunchAtLoginEnabled(enabled),
+    setDiagnosticReporting: (enabled) => setDiagnosticReporting(enabled),
+    settingChanged: (settingId) => patchSettingsView(settingId),
+    registerActionShortcuts: () => registerActionShortcuts(),
+    invalidateShortcutCaches: () => invalidateShortcutCaches(),
+    patchKeyboardShortcutsView: () => patchKeyboardShortcutsView(),
+    invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
+    applyJobEnablement: (overrides) =>
+      jobRegistry.applyEnabledOverrides(overrides),
+  },
+});
 
 const stateSafeQuit = createStateSafeQuit({
   flushPendingSave: async () => {
@@ -622,6 +652,7 @@ const {
   setSetting,
   settingItemPatch,
   settingsItems,
+  patchSettingsView,
 } = createSettingsService({
   userStateStore,
   hasCapability,
@@ -958,8 +989,8 @@ const {
   userStateStore,
   visibleExtensionActionEntries: () => visibleExtensionActionEntries(),
   extensionActionFromContribution,
-  currentActionForStoredShortcut: (action) =>
-    currentActionForStoredShortcut(action),
+  resolveStoredShortcutAction: (actionId) =>
+    resolveStoredShortcutAction(actionId),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
 });
 const { executeShortcutAction } = createShortcutRunner({
@@ -995,8 +1026,8 @@ const {
   userStateStore,
   invalidateShortcutCaches,
   executeShortcutAction,
-  currentActionForStoredShortcut: (action) =>
-    currentActionForStoredShortcut(action),
+  resolveStoredShortcutAction: (actionId) =>
+    resolveStoredShortcutAction(actionId),
   declaredGlobalShortcuts,
 });
 const {
@@ -1045,6 +1076,7 @@ const {
   extensionEntryForAction,
   extensionModuleForAction,
   currentActionForStoredShortcut,
+  resolveStoredShortcutAction,
   resolveRegisteredActionRef,
 } = createExtensionActionLookup({
   extensionActionRegistry,
@@ -1052,6 +1084,8 @@ const {
   userStateStore,
   chatTouchedExtensionFiles: (chat) => chatTouchedExtensionFiles(chat),
   extensionActionFromContribution,
+  extensionRootActionFromItem: (entry, item) =>
+    extensionRootActionFromItem(entry, item),
 });
 const {
   extensionRootItemsCache,
@@ -2025,6 +2059,7 @@ const { loadUserState } = createUserStateLoader({
   },
   clipboardLimit: CLIPBOARD_LIMIT,
   hydrateJobEnabled: (enabled) => jobRegistry.hydrateEnabled(enabled),
+  loadPortableConfig: () => portableConfigService.loadPortableConfig(),
   scheduleSaveState,
 });
 
@@ -2064,6 +2099,7 @@ app.whenReady().then(async () => {
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
 
   await loadUserState();
+  portableConfigService.startPollingPortableConfig();
   await appIndexService.startWatcher();
   await Promise.all([hydrateExtensionDrafts(), hydrateExtensionWindowsState()]);
   extensionPrSubmitter = createExtensionPrSubmitter({
@@ -2178,70 +2214,12 @@ app.whenReady().then(async () => {
   if (paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured)
     paletteWindow.showPaletteWhenReady();
 
-  ipcMain.handle('microphone:get-status', () =>
-    systemPreferences.getMediaAccessStatus('microphone'),
-  );
-  ipcMain.on('dictation:level', (event, level) => {
-    if (event.sender !== paletteWindow.win?.webContents) return;
-    const normalized =
-      typeof level === 'number' && Number.isFinite(level)
-        ? Math.min(1, Math.max(0, level))
-        : null;
-    extensionWindowManager.sendToIndicator(
-      'nevermind.dictation',
-      'dictation',
-      'indicator:mic-level',
-      normalized,
-    );
-  });
-  ipcMain.on('dictation:reply', (event, reply) => {
-    if (event.sender !== paletteWindow.win?.webContents) return;
-    if (!reply || typeof reply !== 'object') return;
-    if (reply.type === 'recording' && typeof reply.operationId === 'string') {
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (
-      reply.type === 'audio' &&
-      typeof reply.operationId === 'string' &&
-      typeof reply.mimeType === 'string' &&
-      reply.mimeType.toLowerCase().startsWith('audio/webm') &&
-      Array.isArray(reply.segments) &&
-      reply.segments.length > 0 &&
-      reply.segments.length <= 120 &&
-      reply.segments.every(
-        (segment) =>
-          segment instanceof Uint8Array &&
-          segment.byteLength > 0 &&
-          segment.byteLength <= MAX_DICTATION_AUDIO_BYTES,
-      )
-    ) {
-      if (reply.debug && typeof reply.debug === 'object')
-        loggerDebug('dictation.capture-stats', reply.debug, {
-          source: 'renderer',
-          scope: 'dictation',
-        });
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (reply.type === 'audio' && typeof reply.operationId === 'string') {
-      dictationService.reply({
-        type: 'error',
-        operationId: reply.operationId,
-        message: 'The dictation recording is empty, unsupported, or too large.',
-      });
-      return;
-    }
-    if (reply.type === 'devices' && Array.isArray(reply.devices)) {
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (
-      reply.type === 'error' &&
-      typeof reply.message === 'string' &&
-      (reply.operationId === undefined || typeof reply.operationId === 'string')
-    )
-      dictationService.reply(reply as DictationRendererReply);
+  registerDictationIpc({
+    ipcMain,
+    systemPreferences,
+    paletteWindow,
+    extensionWindowManager,
+    dictationService,
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>

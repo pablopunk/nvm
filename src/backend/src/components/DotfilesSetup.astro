@@ -1,0 +1,72 @@
+<section class="dotfiles landing-feature" aria-labelledby="dotfiles-title">
+  <div class="dotfiles__copy">
+    <h2 id="dotfiles-title">Your setup, <span class="dotfiles__highlight">in one file.</span></h2>
+    <p>Settings, aliases, shortcuts, job switches, and the default AI model live in <code>~/.config/nevermind/config.json</code>. Commit it, symlink it, or copy it to a new Mac.</p>
+    <p>Change a setting in the palette and the file updates. Edit the file and Nevermind reloads it within a second.</p>
+    <ul class="dotfiles__notes">
+      <li>A broken or deleted file never overwrites your edits. Nevermind keeps your last valid setup and stops saving until the file is valid again.</li>
+      <li>Chats, clipboard history, recents, and extension data stay out of the file.</li>
+    </ul>
+  </div>
+  <div class="dotfiles__files" aria-label="Example config.json with settings, an alias, a custom shortcut, a disabled shortcut, a disabled job, and the default AI model">
+    <div class="dotfiles__path">~/.config/nevermind/config.json</div>
+    <pre><code>{`{
+  "version": 1,
+  "settings": {
+    "paletteHotkey": "Command+Alt+K",
+    "showClipboardInRoot": false
+  },
+  "aliases": {
+    "extension-action:my-tools:open-notes": ["notes", "journal"]
+  },
+  "shortcuts": {
+    "extension-action:my-tools:open-notes": "Command+Shift+N",
+    "extension-action:calendar:next-meeting": null
+  },
+  "jobs": {
+    "enabled": { "cache.thumbnails": false }
+  },
+  "ai": {
+    "defaultModel": "smart"
+  }
+}`}</code></pre>
+    <p class="dotfiles__caption"><code>null</code> turns off a shortcut that an extension declares.</p>
+  </div>
+</section>
+
+<style>
+  .dotfiles { padding-block: 48px 144px; }
+  h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  .dotfiles__copy p { max-width: 520px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  .dotfiles__copy p + p { margin-top: 20px; }
+  .dotfiles__notes { max-width: 520px; margin: 20px 0 0; padding: 0 0 0 20px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+  .dotfiles__notes li + li { margin-top: 8px; }
+  code { background: transparent; border: 0; padding: 0; color: var(--text); overflow-wrap: anywhere; }
+  .dotfiles__files {
+    min-width: 0;
+    width: 100%;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--surface) 45%, var(--bg));
+    font-family: var(--mono);
+  }
+  .dotfiles__path { color: var(--muted); font-size: 14px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  pre { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: auto; color: var(--text); font-size: clamp(11px, 1.2vw, 14px); line-height: 1.7; }
+  .dotfiles__caption { margin: 24px 0 0; color: var(--muted); font-family: var(--font); font-size: 13px; line-height: 1.6; }
+  .dotfiles__caption code { color: #f4cf86; }
+  .dotfiles__highlight { color: #f4cf86; }
+  @supports (background-clip: text) {
+    .dotfiles__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
+  }
+  @media (forced-colors: active) {
+    .dotfiles__highlight { background: none; color: CanvasText; }
+  }
+  @media (max-width: 860px) {
+    .dotfiles { padding-block: 32px 80px; }
+    .dotfiles__copy { text-align: center; }
+    .dotfiles__copy p { margin-inline: auto; }
+    .dotfiles__notes { margin-inline: auto; padding-left: 0; list-style-position: inside; }
+    .dotfiles__files { padding: 24px; }
+  }
+</style>

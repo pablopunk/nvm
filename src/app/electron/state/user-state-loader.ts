@@ -52,6 +52,7 @@ export type UserStateLoaderDeps = {
   setClipboardHistory: (history: ClipboardHistoryItem[]) => void;
   clipboardLimit: number;
   hydrateJobEnabled: (enabled: Record<string, boolean>) => void;
+  loadPortableConfig: () => Promise<void>;
   scheduleSaveState: () => void;
 };
 
@@ -69,6 +70,7 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
     setClipboardHistory,
     clipboardLimit,
     hydrateJobEnabled,
+    loadPortableConfig,
     scheduleSaveState,
   } = deps;
 
@@ -140,6 +142,7 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
       userStateStore.replace(userStateFromLoadedFile(loaded));
       userStateStore.markLoadedFromDisk(paths.statePath);
     }
+    await loadPortableConfig();
 
     setDiagnosticReporting(
       settingValue(userStateStore.get().settings, 'errorReporting') === true,
@@ -162,12 +165,7 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
       ),
     );
     hydrateJobEnabled(userStateStore.get().jobSettings?.enabled || {});
-    if (
-      loaded &&
-      (aiChatsChanged ||
-        loaded.aiChatDefaultModel !== userStateStore.get().aiChatDefaultModel)
-    )
-      scheduleSaveState();
+    if (loaded && aiChatsChanged) scheduleSaveState();
   }
 
   return { loadUserState };
