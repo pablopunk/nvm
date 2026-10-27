@@ -48,6 +48,7 @@ export function ThemeSwitcher() {
     Math.max(0, Math.min(CONTENT_FRAMES - 1, outputFrame - INTRO_FRAMES)) *
     PLAYBACK_SPEED;
   const intro = outputFrame < INTRO_FRAMES;
+  const openingSwipe = tween(outputFrame, 6, INTRO_FRAMES - 1);
   const outroFrame = outputFrame - INTRO_FRAMES - CONTENT_FRAMES;
   const scene = sceneAt(frame);
   const view = camera(frame);
@@ -69,7 +70,7 @@ export function ThemeSwitcher() {
         ref={stage}
         className="videoStage"
         style={{
-          transform: `translate(960px, 540px) scale(${view.scale}) translate(${-view.x}px, ${-view.y}px)`,
+          transform: `translateY(${(1 - openingSwipe) * 1200}px) translate(960px, 540px) scale(${view.scale}) translate(${-view.x}px, ${-view.y}px)`,
           filter: `blur(${tween(frame, STORY.zoomStart, STORY.zoomPeak) * (1 - tween(frame, STORY.gridStart, STORY.gridSettled)) * 8}px)`,
         }}
       >
@@ -90,7 +91,7 @@ export function ThemeSwitcher() {
           <AbsoluteFill
             style={{
               background: 'black',
-              opacity: intro ? 1 : tween(outroFrame, 0, 24),
+              opacity: intro ? 0 : tween(outroFrame, 0, 24),
             }}
           />
           <AbsoluteFill
@@ -98,6 +99,9 @@ export function ThemeSwitcher() {
               alignItems: 'center',
               justifyContent: 'center',
               opacity: intro ? 1 : tween(outroFrame, 14, 32),
+              transform: intro
+                ? `translateY(${-openingSwipe * 720}px)`
+                : undefined,
             }}
           >
             <img
