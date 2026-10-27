@@ -1,0 +1,18 @@
+{
+  "name": "nevermind-theme-switcher-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.tsx",
+    "render": "remotion render src/index.tsx ThemeSwitcher out/theme-switcher-v14.mp4 --dark-mode --concurrency=4",
+    "still": "remotion still src/index.tsx ThemeSwitcher out/review.png --dark-mode",
+    "gif": "ffmpeg -hide_banner -loglevel warning -y -i out/theme-switcher-v14.mp4 -vf 'fps=15,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' out/theme-switcher-v14.gif"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.539",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "remotion": "4.0.539",
+    "sharp": "^0.35.5"
+  }
+}

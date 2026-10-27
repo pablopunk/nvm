@@ -1,5 +1,8 @@
 ---
 import { Download } from '@lucide/astro';
+import BuiltinFeatures from '../components/BuiltinFeatures.astro';
+import BringYourOwnAi from '../components/BringYourOwnAi.astro';
+import GitHubIcon from '../components/GitHubIcon.astro';
 import LandingAccount from '../components/LandingAccount.astro';
 import Layout from '../layouts/Layout.astro';
 ---
@@ -12,15 +15,34 @@ import Layout from '../layouts/Layout.astro';
       </a>
       <nav class="landing-nav__links" aria-label="Product links">
         <a href="/pricing">Pricing</a>
-        <a href="/docs">Docs</a>
         <a href="https://github.com/pablopunk/nvm/releases">Releases</a>
       </nav>
-      <LandingAccount placement="nav" server:defer>
-        <a class="button" href="/api/auth/signin" slot="fallback">Sign in or create an account</a>
-      </LandingAccount>
+      <div class="landing-nav__account">
+        <LandingAccount placement="nav" server:defer>
+          <a class="button" href="/api/auth/signin" slot="fallback">Sign in</a>
+        </LandingAccount>
+      </div>
     </header>
 
     <section class="landing-hero">
+      <div class="landing-demo">
+        <video
+          id="product-demo"
+          class="landing-demo__video"
+          width="1280"
+          height="720"
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="metadata"
+          poster="/videos/nevermind-demo-v1.jpg"
+          aria-label="Nevermind demo: create a Mac theme switcher, browse pull requests and calendar events, and process selected videos"
+        >
+          <source src="/videos/nevermind-demo-v2.mp4" type="video/mp4" />
+          <a href="/videos/nevermind-demo-v2.mp4">Watch the Nevermind demo</a>
+        </video>
+      </div>
       <div class="landing-hero__copy">
         <div class="landing-platforms" aria-label="Supported platforms">
           <span class="landing-platforms__pill"><img src="/platforms/apple.svg" alt="" /> macOS</span>
@@ -34,20 +56,15 @@ import Layout from '../layouts/Layout.astro';
           A command palette that extends itself. Really.
         </p>
         <div class="landing-actions">
-          <a class="button button--primary button--lg" href="/api/auth/signin">Get started free</a>
-          <a class="button button--primary button--lg" href="https://github.com/pablopunk/nvm/releases">
+          <a class="button button--primary button--lg landing-download" href="https://github.com/pablopunk/nvm/releases">
             <Download size={16} />Download for free
+            <span class="landing-download__badge">alpha</span>
           </a>
-          <a class="button button--ghost" href="/docs">Read the docs →</a>
+          <a class="button button--ghost" href="https://github.com/pablopunk/nvm"><GitHubIcon />GitHub</a>
         </div>
       </div>
-
-      <figure class="landing-screenshot">
-        <img src="/screenshot.jpg" alt="Nevermind command palette showing AI-built Screenshot and Open Camera extensions" />
-        <figcaption>
-          The screenshot and camera tools above were created by telling Nevermind what to build — not by writing code.
-        </figcaption>
-      </figure>
     </section>
+    <BuiltinFeatures />
+    <BringYourOwnAi />
   </div>
 </Layout>

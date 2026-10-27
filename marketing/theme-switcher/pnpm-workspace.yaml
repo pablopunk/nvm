@@ -1,0 +1,36 @@
+packages: []
+
+allowBuilds:
+  esbuild: true
+  '@swc/core': true
+
+minimumReleaseAgeExclude:
+  - '@remotion/bundler@4.0.539'
+  - '@remotion/captions@4.0.539'
+  - '@remotion/cli@4.0.539'
+  - '@remotion/codemods@4.0.539'
+  - '@remotion/compositor-darwin-arm64@4.0.539'
+  - '@remotion/compositor-darwin-x64@4.0.539'
+  - '@remotion/compositor-linux-arm64-gnu@4.0.539'
+  - '@remotion/compositor-linux-arm64-musl@4.0.539'
+  - '@remotion/compositor-linux-x64-gnu@4.0.539'
+  - '@remotion/compositor-linux-x64-musl@4.0.539'
+  - '@remotion/compositor-win32-x64-msvc@4.0.539'
+  - '@remotion/elevenlabs@4.0.539'
+  - '@remotion/licensing@4.0.539'
+  - '@remotion/media-utils@4.0.539'
+  - '@remotion/media@4.0.539'
+  - '@remotion/openai-whisper@4.0.539'
+  - '@remotion/paths@4.0.539'
+  - '@remotion/player@4.0.539'
+  - '@remotion/renderer@4.0.539'
+  - '@remotion/sdk@4.0.539'
+  - '@remotion/streaming@4.0.539'
+  - '@remotion/studio-protocol@4.0.539'
+  - '@remotion/studio-server@4.0.539'
+  - '@remotion/studio-shared@4.0.539'
+  - '@remotion/studio@4.0.539'
+  - '@remotion/timeline-utils@4.0.539'
+  - '@remotion/web-renderer@4.0.539'
+  - '@remotion/zod-types@4.0.539'
+  - remotion@4.0.539
