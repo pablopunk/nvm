@@ -108,7 +108,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
           <label class="field">Email<Input id="grant-email" type="email" autoComplete="off" /></label>
           <label class="field">Pool<ConsoleSelect id="grant-kind" options={[{ value: "paid", label: "Paid" }, { value: "free", label: "Free" }]} /></label>
           <label class="field">Credits<Input id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
-          <label class="field">Reason<Input id="grant-reason" type="text" maxLength="500" /></label>
+          <label class="field">Reason<Input id="grant-reason" type="text" maxLength={500} /></label>
           <Button variant="default" id="grant" type="button">Apply</Button>
           <span class="status" id="grant-status" aria-live="polite"></span>
         </div>

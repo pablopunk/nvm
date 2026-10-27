@@ -431,6 +431,7 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
 
 /* ── Pricing page ── */
 
+.pricing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
