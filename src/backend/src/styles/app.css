@@ -439,21 +439,6 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
   height: 100%;
   object-fit: contain;
 }
-.landing-demo__toggle {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  padding: 6px 12px;
-  border: 1px solid #333;
-  border-radius: var(--radius);
-  background: rgba(0, 0, 0, 0.7);
-  color: #fafaf9;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.landing-demo__toggle:hover { background: #292524; }
-.landing-demo__toggle:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 4px; }
 .landing-hero__copy {
   display: flex;
   flex-direction: column;

@@ -39,7 +39,6 @@ import Layout from '../layouts/Layout.astro';
           <source src="/videos/nevermind-demo-v1.mp4" type="video/mp4" />
           <a href="/videos/nevermind-demo-v1.mp4">Watch the Nevermind demo</a>
         </video>
-        <button class="landing-demo__toggle" type="button" aria-controls="product-demo" aria-label="Pause demo">Pause</button>
       </div>
       <div class="landing-hero__copy">
         <div class="landing-platforms" aria-label="Supported platforms">
@@ -63,26 +62,3 @@ import Layout from '../layouts/Layout.astro';
     </section>
   </div>
 </Layout>
-
-<script>
-  function setupDemoPlayback(video: HTMLVideoElement, toggle: HTMLButtonElement) {
-    function syncPlaybackControl() {
-      toggle.textContent = video.paused ? 'Play' : 'Pause';
-      toggle.setAttribute('aria-label', video.paused ? 'Play demo' : 'Pause demo');
-    }
-    function toggleDemoPlayback() {
-      if (video.paused) {
-        video.play().catch(syncPlaybackControl);
-      } else {
-        video.pause();
-      }
-    }
-    toggle.addEventListener('click', toggleDemoPlayback);
-    video.addEventListener('play', syncPlaybackControl);
-    video.addEventListener('pause', syncPlaybackControl);
-    syncPlaybackControl();
-  }
-  const video = document.querySelector<HTMLVideoElement>('#product-demo');
-  const toggle = document.querySelector<HTMLButtonElement>('.landing-demo__toggle');
-  if (video && toggle) setupDemoPlayback(video, toggle);
-</script>
