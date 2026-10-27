@@ -1,4 +1,5 @@
 import { FRAGMENT, VERTEX } from './shaders';
+import { LIGHTNING_STRIKE_EVENT } from './strike-event';
 
 export function animateLightning(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext('webgl2', { alpha: true, antialias: false });
@@ -179,26 +180,15 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     if (document.hidden || reducedMotion.matches || gl!.isContextLost()) return;
     timer = setTimeout(strike, first ? 1200 : 1000 + Math.random() * 5000);
   }
-  function clickStrike(event: PointerEvent) {
-    if (
-      event.button !== 0 ||
-      document.hidden ||
-      reducedMotion.matches ||
-      gl!.isContextLost()
-    )
-      return;
+  function strikeAt(clientX: number, clientY: number) {
+    if (document.hidden || reducedMotion.matches || gl!.isContextLost()) return;
     updateBounds();
     const rect = canvas.getBoundingClientRect();
-    if (
-      rect.height < 1 ||
-      event.clientY < rect.top ||
-      event.clientY > rect.bottom
-    )
-      return;
+    if (rect.height < 1 || clientY < rect.top || clientY > rect.bottom) return;
     clear();
     resizeCanvas();
-    const x = (2 * (event.clientX - rect.left) - rect.width) / rect.height;
-    const y = (rect.height - 2 * (event.clientY - rect.top)) / rect.height;
+    const x = (2 * (clientX - rect.left) - rect.width) / rect.height;
+    const y = (rect.height - 2 * (clientY - rect.top)) / rect.height;
     const radians = randomizeAngle();
     const sine = Math.sin(radians);
     const cosine = Math.cos(radians);
@@ -216,7 +206,15 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     first = false;
     frame = requestAnimationFrame(draw);
   }
+  function clickStrike(event: PointerEvent) {
+    if (event.button === 0) strikeAt(event.clientX, event.clientY);
+  }
+  function requestedStrike(event: Event) {
+    const { x, y } = (event as CustomEvent<{ x: number; y: number }>).detail;
+    strikeAt(x, y);
+  }
   window.addEventListener('pointerdown', clickStrike, { passive: true });
+  window.addEventListener(LIGHTNING_STRIKE_EVENT, requestedStrike);
   document.addEventListener('visibilitychange', schedule);
   reducedMotion.addEventListener('change', schedule);
   canvas.addEventListener('webglcontextlost', clear);
@@ -228,6 +226,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
       document.removeEventListener('visibilitychange', schedule);
       reducedMotion.removeEventListener('change', schedule);
       window.removeEventListener('pointerdown', clickStrike);
+      window.removeEventListener(LIGHTNING_STRIKE_EVENT, requestedStrike);
       window.removeEventListener('scroll', updateBounds);
       window.removeEventListener('resize', updateBounds);
       gl!.deleteBuffer(buffer);

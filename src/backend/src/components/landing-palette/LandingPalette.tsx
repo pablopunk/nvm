@@ -34,6 +34,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import {
+  type KeyboardEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -43,6 +44,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { requestLightningStrike } from '../lightning/strike-event';
 import { paletteItems, paletteTabs } from './palette-data';
 import { searchPalette } from './palette-search';
 import { landingPaletteCss } from './palette-styles';
@@ -82,6 +84,7 @@ const ICONS: Record<string, LucideIcon> = {
 
 const TYPING_INTERVAL_MS = 55;
 const DOWNLOAD_NOTICE_MS = 4000;
+const DOWNLOAD_NOTICE_TEXT = 'Download the app to actually do that!';
 const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
 
 function iconFor(item: PaletteItem): ReactNode {
@@ -89,13 +92,27 @@ function iconFor(item: PaletteItem): ReactNode {
   return <Icon size={18} />;
 }
 
-function ResultRow({ item, onSelect }: { item: PaletteItem; onSelect: () => void }) {
+function ResultRow({
+  item,
+  showNotice,
+  onSelect,
+}: {
+  item: PaletteItem;
+  showNotice: boolean;
+  onSelect: () => void;
+}) {
   return (
     <Command.Item value={item.id} className="result" onSelect={onSelect}>
       <span className="resultIcon">{iconFor(item)}</span>
       <span className="resultText">
         <strong>{item.title}</strong>
-        <small>{item.subtitle}</small>
+        {showNotice ? (
+          <small className="downloadNotice" role="status">
+            <a href={RELEASES_URL}>{DOWNLOAD_NOTICE_TEXT}</a>
+          </small>
+        ) : (
+          <small>{item.subtitle}</small>
+        )}
       </span>
       <span className="resultTrailing">
         <span className="keyHints">
@@ -108,20 +125,35 @@ function ResultRow({ item, onSelect }: { item: PaletteItem; onSelect: () => void
   );
 }
 
+function strikeOnEnter(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+  const selected = event.currentTarget.querySelector('[cmdk-item][data-selected="true"]');
+  const rect = (selected ?? event.currentTarget).getBoundingClientRect();
+  requestLightningStrike(rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
 function PaletteApp({
   query,
   onQueryChange,
+  noticeItemId,
   onSelectItem,
   inputRef,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
+  noticeItemId: string | null;
   onSelectItem: (item: PaletteItem) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const results = useMemo(() => searchPalette(paletteItems, query), [query]);
   return (
-    <Command className="palette fitContent" label="Nevermind" loop shouldFilter={false}>
+    <Command
+      className="palette fitContent"
+      label="Nevermind"
+      loop
+      shouldFilter={false}
+      onKeyDown={strikeOnEnter}
+    >
       <div className="searchRow card searchCard">
         <Zap className="brandIcon" size={22} />
         <Command.Input
@@ -147,7 +179,12 @@ function PaletteApp({
           </div>
         ) : (
           results.map((item) => (
-            <ResultRow key={item.id} item={item} onSelect={() => onSelectItem(item)} />
+            <ResultRow
+              key={item.id}
+              item={item}
+              showNotice={item.id === noticeItemId}
+              onSelect={() => onSelectItem(item)}
+            />
           ))
         )}
       </Command.List>
@@ -162,7 +199,7 @@ export default function LandingPalette() {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string | null>(paletteTabs[0].id);
-  const [downloadNotice, setDownloadNotice] = useState(false);
+  const [noticeItemId, setNoticeItemId] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(
@@ -189,13 +226,13 @@ export default function LandingPalette() {
   const hideNotice = useCallback(function hideNotice() {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = null;
-    setDownloadNotice(false);
+    setNoticeItemId(null);
   }, []);
   useEffect(() => hideNotice, [hideNotice]);
 
-  function showNotice() {
+  function showNotice(itemId: string) {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    setDownloadNotice(true);
+    setNoticeItemId(itemId);
     noticeTimer.current = setTimeout(hideNotice, DOWNLOAD_NOTICE_MS);
   }
 
@@ -228,8 +265,8 @@ export default function LandingPalette() {
     setQuery(value);
   }
 
-  function selectItem() {
-    showNotice();
+  function selectItem(item: PaletteItem) {
+    showNotice(item.id);
   }
 
   return (
@@ -240,19 +277,13 @@ export default function LandingPalette() {
             <PaletteApp
               query={query}
               onQueryChange={typeFreely}
+              noticeItemId={noticeItemId}
               onSelectItem={selectItem}
               inputRef={inputRef}
             />,
             mount,
           )
         : null}
-      <div className="landing-palette__toast-region" aria-live="polite">
-        {downloadNotice ? (
-          <a className="landing-palette__toast" href={RELEASES_URL}>
-            Download the app to actually do that!
-          </a>
-        ) : null}
-      </div>
       <div className="landing-palette__tabs" role="group" aria-label="Palette examples">
         {paletteTabs.map((tab) => (
           <button
