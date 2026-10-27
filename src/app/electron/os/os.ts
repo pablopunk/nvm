@@ -72,6 +72,7 @@ const macOnlyCapabilities = new Set([
   'window-panel-policy',
   'file-date-added',
   'app-uninstall',
+  'window-management',
 ]);
 
 export function validatedWindowsImageName(rawName: string) {
