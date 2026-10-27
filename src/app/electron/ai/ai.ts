@@ -40,6 +40,7 @@ import {
   findPiWebAccessPath,
   PI_AI_COMPACTION_RESERVE_TOKENS,
 } from './pi-runtime';
+import { validateExtensionCapabilities } from './extension-capability-validation';
 import { registerObservedPiProvider } from './pi-provider';
 import { isMessageUpdateEvent } from './pi-session-events';
 import { ensurePiToolAllowlist } from './pi-session-tool-policy';
@@ -53,7 +54,6 @@ import {
   measureDebugPerformance,
   recordDebugPerformance,
 } from '../diagnostics/debug-performance';
-import { inspectExtensionManifest } from '../extension-host/extension-manifest';
 import { freeSpendCapNoticeFromText } from '../backend/free-spend-cap-notice';
 import * as logger from '../platform/logger';
 import { nevermindDesktopHeaders } from '../backend/nevermind-api';
@@ -2193,44 +2193,6 @@ function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
   const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, host);
   const plain = formatted.replace(/\x1b\[[0-9;]*m/g, '');
   throw new Error(`TypeScript validation failed:\n${plain}`);
-}
-
-function validateExtensionCapabilities(source: string) {
-  const manifest = inspectExtensionManifest(source);
-  if (!(manifest.id && manifest.title))
-    throw new Error(
-      'Extension must statically declare literal id and title values',
-    );
-  const capabilities = new Set(manifest.capabilities);
-  const declarations = [
-    [
-      'system',
-      /ctx\.desktop\.shell\b|ctx\.actions\.(?:shellExec|shellScript|system)\b/,
-    ],
-    ['desktop.files', /ctx\.desktop\.files\b|ctx\.desktop\.selection\.files\b/],
-    ['desktop.apps', /ctx\.desktop\.apps\b/],
-    ['desktop.window-management', /ctx\.desktop\.windowManagement\b/],
-    [
-      'clipboard.history',
-      /ctx\.clipboard\.history\b|ctx\.desktop\.clipboard\b/,
-    ],
-    ['ocr', /ctx\.ocr\b/],
-    ['ai', /ctx\.ai\b/],
-    ['settings.write', /ctx\.settings\.(?:set|toggle)\b/],
-    [
-      'shortcuts',
-      /ctx\.shortcuts\b|ctx\.actions\.(?:recordShortcut|removeShortcut|setPaletteShortcut)\b/,
-    ],
-    ['updates', /ctx\.updates\b|ctx\.actions\.updates\b/],
-    ['extensions.ownership', /ctx\.extensions\.ownership\b/],
-  ] as const;
-  for (const [capability, pattern] of declarations) {
-    if (pattern.test(source) && !capabilities.has(capability)) {
-      throw new Error(
-        `Extension uses ${capability} helpers but does not declare the '${capability}' capability. Add it to capabilities so reviewers understand its intent.`,
-      );
-    }
-  }
 }
 
 async function validateTypeScriptExtension(

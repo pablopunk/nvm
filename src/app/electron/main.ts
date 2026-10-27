@@ -228,6 +228,10 @@ import {
   commandFromItem,
 } from './extension-host/extension-action-builders';
 import { createExtensionContextFactory } from './extension-host/extension-context';
+import {
+  checkAiRateLimit,
+  checkRefreshBurst,
+} from './extension-host/extension-rate-limits';
 import { createExtensionDevFixtures } from './extension-host/extension-dev-fixtures';
 import { createDiagnosticExtensionTargets } from './extension-host/extension-diagnostic-target';
 import { createExtensionDraftPersistence } from './extension-host/extension-draft-persistence';
@@ -308,6 +312,7 @@ import { createShortcutCatalog } from './shortcuts/shortcut-catalog';
 import { createShortcutHints } from './shortcuts/shortcut-hints';
 import { withInheritedShortcutLifecycle } from './shortcuts/shortcut-lifecycle';
 import { createShortcutRunner } from './shortcuts/shortcut-runner';
+import { createWindowManagementComposition } from './app/window-management-composition';
 import { createViewLoaderRegistry } from './state/data-loader';
 import { LocalLearningStore } from './state/learning-store';
 import { createStateSafeQuit } from './state/state-safe-quit';
@@ -376,6 +381,10 @@ const paletteWindow = createPaletteWindowController({
   restoreFocusReturnTarget: (target) =>
     restoreAppFocus(target as AppFocusTarget),
   onOpen: () => warmConversationAiOnPaletteOpen(),
+});
+const windowManagement = createWindowManagementComposition({
+  paletteWindow,
+  frontmostTarget: frontmostAppFocusTarget,
 });
 const systemAudioMute = createSystemAudioMuteCapability();
 const MAX_DICTATION_AUDIO_BYTES = 4_194_304;
@@ -484,10 +493,6 @@ const CLIPBOARD_LAST_WEEK_MS = 7 * CLIPBOARD_LAST_DAY_MS;
 const EXTENSION_ROOT_ITEMS_TTL_MS = 60_000;
 const EXTENSION_ROOT_ITEMS_TIMEOUT_MS = 10_000;
 const EXTENSION_ROOT_ITEMS_INITIAL_TIMEOUT_MS = 100;
-const EXTENSION_REFRESH_MAX_BURST = 5;
-const EXTENSION_REFRESH_BURST_WINDOW_MS = 2000;
-const EXTENSION_AI_CALLS_PER_MINUTE = 30;
-const EXTENSION_AI_RATE_WINDOW_MS = 60_000;
 const EXTENSION_TYPES_FILENAME = 'nevermind-extension-api.d.ts';
 
 protocol.registerSchemesAsPrivileged([
@@ -964,6 +969,7 @@ const {
 });
 const { executeShortcutAction } = createShortcutRunner({
   paletteWindow,
+  captureFrontmostTarget: frontmostAppFocusTarget,
   paneInvocations,
   paneInvocationWindows,
   currentActionForStoredShortcut: (action) =>
@@ -1236,9 +1242,6 @@ const { extensionCacheFor, createExtensionCache } = createExtensionMemoryCache({
     invalidateExtensionRootItemsForExtension(extension),
 });
 
-const extensionRefreshBurstWindow = new Map<string, number[]>();
-const extensionAiCallWindow = new Map<string, number[]>();
-
 function registerAiEventActionForRenderer(event) {
   const data = event?.data;
   if (!(data && typeof data === 'object' && data.action)) return event;
@@ -1251,37 +1254,6 @@ function registerAiEventActionForRenderer(event) {
       action: registerViewActionForRenderer(action),
     },
   };
-}
-
-function checkRefreshBurst(extension: any) {
-  const id = extension?.id || 'unknown';
-  const now = Date.now();
-  const recent = (extensionRefreshBurstWindow.get(id) || []).filter(
-    (time) => now - time < EXTENSION_REFRESH_BURST_WINDOW_MS,
-  );
-  if (recent.length >= EXTENSION_REFRESH_MAX_BURST) {
-    logWarn(
-      'extension.refresh.throttled',
-      { count: recent.length },
-      { source: 'host', scope: 'extension', extensionId: id },
-    );
-    return false;
-  }
-  recent.push(now);
-  extensionRefreshBurstWindow.set(id, recent);
-  return true;
-}
-
-function checkAiRateLimit(extension: any) {
-  const id = extension?.id || 'unknown';
-  const now = Date.now();
-  const recent = (extensionAiCallWindow.get(id) || []).filter(
-    (time) => now - time < EXTENSION_AI_RATE_WINDOW_MS,
-  );
-  if (recent.length >= EXTENSION_AI_CALLS_PER_MINUTE) return false;
-  recent.push(now);
-  extensionAiCallWindow.set(id, recent);
-  return true;
 }
 
 const REQUIRED_INTERNAL_EXTENSIONS = [
@@ -1482,6 +1454,7 @@ const createExtensionContext = createExtensionContextFactory({
       removeClipboardHistoryByAction(action),
   },
   desktop: {
+    windowManagement,
     clipboardApi,
     writeDesktopClipboard: (item, options) =>
       writeDesktopClipboard(item, options),
@@ -1526,7 +1499,7 @@ const createExtensionContext = createExtensionContextFactory({
     getPaletteHotkey: () => getPaletteHotkey(),
   },
   views: {
-    checkRefreshBurst: (extension) => checkRefreshBurst(extension),
+    checkRefreshBurst: (extension) => checkRefreshBurst(extension, logWarn),
     invalidateExtensionRootItemsForExtension: (extension) =>
       invalidateExtensionRootItemsForExtension(extension),
     extensionCacheFor,

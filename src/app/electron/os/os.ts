@@ -17,6 +17,7 @@ import {
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
 import { debug as logDebug, warn as logWarn } from '../platform/logger';
+import { macosAppFocusRestoreScript } from './macos-app-focus';
 import { macosSelectionAccess } from './macos-selected-text';
 import { createLinuxDesktopText } from './linux-desktop-text';
 import { createWindowsDesktopText } from './windows-desktop-text';
@@ -1188,12 +1189,10 @@ export async function restoreAppFocus(appIdentity: {
       linux: () => linuxDesktopText.restore(appIdentity as DesktopTextTarget),
       win32: () => windowsDesktopText.restore(appIdentity as DesktopTextTarget),
       darwin: async () => {
-        const script = `tell application "System Events"
-set matchingProcesses to application processes whose bundle identifier is ${appleScriptString(bundleId)}
-if (count of matchingProcesses) is 0 then return false
-set frontmost of item 1 of matchingProcesses to true
-return true
-end tell`;
+        const script = macosAppFocusRestoreScript(
+          appleScriptString(bundleId),
+          appIdentity.pid,
+        );
         const result = await runAppleScript(script, 5000);
         return result.exitCode === 0 && result.stdout.trim() === 'true';
       },
