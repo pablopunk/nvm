@@ -11,6 +11,7 @@ const APPS = [
   { id: 'finder', title: 'Finder' },
   { id: 'photos', title: 'Photos' },
   { id: 'terminal', title: 'Terminal' },
+  { id: 'settings', title: 'System Settings' },
 ];
 const CLIPS = [
   {
@@ -49,6 +50,12 @@ const CLIPS = [
     subtitle: 'Text · 12 minutes ago',
     image: null,
   },
+  {
+    id: 'meadow',
+    title: 'Summer wallpaper.png',
+    subtitle: 'Image · 18 minutes ago',
+    image: 'meadow',
+  },
 ];
 
 const FILES = [
@@ -72,6 +79,18 @@ const FILES = [
   },
   { id: 'notes', title: 'Design notes.md', path: '~/Documents', folder: false },
   { id: 'assets', title: 'Design assets', path: '~/Downloads', folder: true },
+  {
+    id: 'review',
+    title: 'Design review.pdf',
+    path: '~/Documents/Reviews',
+    folder: false,
+  },
+  {
+    id: 'icons',
+    title: 'Design icons.svg',
+    path: '~/Documents/Projects/Assets',
+    folder: false,
+  },
 ];
 
 function ignore() {}
