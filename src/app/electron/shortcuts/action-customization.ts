@@ -8,6 +8,7 @@ type CommitInput = {
   actionId?: string;
   actionIsGenerated?: boolean;
   mutate: (draft: any) => string | void;
+  beforeApply?: () => () => void;
   afterCommit?: () => void;
 };
 
@@ -83,7 +84,7 @@ export function createActionCustomization(deps: ActionCustomizationDeps) {
     const hasDeclaredShortcut = declaredGlobalShortcuts().some(
       (item) => item.actionId === actionId,
     );
-    if (!wasUserShortcut && !hasDeclaredShortcut)
+    if (!(wasUserShortcut || hasDeclaredShortcut))
       return { ok: false, message: 'Shortcut not found' };
     const outcome = await commitPortable({
       label: 'shortcut:remove',
@@ -169,6 +170,15 @@ export function createActionCustomization(deps: ActionCustomizationDeps) {
           delete draft.shortcuts[conflictingId];
         }
         draft.shortcuts[action.id] = accelerator;
+      },
+      beforeApply: () => {
+        const actions = userStateStore.get().shortcutActions;
+        const previous = actions[action.id];
+        actions[action.id] = action;
+        return () => {
+          if (previous === undefined) delete actions[action.id];
+          else actions[action.id] = previous;
+        };
       },
       afterCommit: () => {
         if (replacedActionId)

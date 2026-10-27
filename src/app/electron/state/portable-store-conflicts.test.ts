@@ -49,6 +49,36 @@ function withHotkey(accelerator: string): PortableConfig {
   };
 }
 
+test('a missing model field uses its default when checking conflicts', async () => {
+  await withDirectory(async (directory) => {
+    const filePath = path.join(directory, 'config.json');
+    await fs.writeFile(filePath, JSON.stringify({ version: 1 }));
+    const store = storeFor(filePath);
+    await store.load();
+    const result = await store.persist({
+      ...createDefaultPortableConfig(),
+      ai: { defaultModel: 'smart' },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(
+      JSON.parse(await fs.readFile(filePath, 'utf8')).ai.defaultModel,
+      'smart',
+    );
+  });
+});
+
+test('a write failure returns a failure instead of throwing', async () => {
+  await withDirectory(async (directory) => {
+    const parent = path.join(directory, 'config-dir');
+    const filePath = path.join(parent, 'config.json');
+    const store = storeFor(filePath);
+    await store.load();
+    await fs.writeFile(parent, 'not a directory');
+    const result = await store.persist(withHotkey('Command+Alt+K'));
+    assert.equal(result.ok, false);
+  });
+});
+
 test('a same-key edit that landed on disk after load is reported, not overwritten', async () => {
   await withDirectory(async (directory) => {
     const filePath = path.join(directory, 'config.json');

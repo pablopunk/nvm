@@ -67,6 +67,41 @@ function serviceFor(
   return { service, saveCount: () => saves };
 }
 
+test('shortcut preparation is available during live apply and rolled back on failure', async () => {
+  await withConfigFile(async (filePath) => {
+    const record = emptyRecord();
+    const actionId = 'default:calculator';
+    const live: PortableLive = {
+      apply: (_before, _after, keys) => {
+        if (
+          keys.includes(`shortcut:${actionId}`) &&
+          record.shortcutActions[actionId]
+        )
+          return [{ key: `shortcut:${actionId}`, message: 'in use' }];
+        return [];
+      },
+      applyShortcuts: () => [],
+    };
+    const { service } = serviceFor(filePath, record, live);
+    await service.loadPortableConfig();
+    const result = await service.commit({
+      label: 'shortcut:set',
+      actionId,
+      mutate: (draft) => {
+        draft.shortcuts[actionId] = 'Command+K';
+      },
+      beforeApply: () => {
+        record.shortcutActions[actionId] = { id: actionId };
+        return () => {
+          delete record.shortcutActions[actionId];
+        };
+      },
+    });
+    assert.equal(result.ok, false);
+    assert.equal(record.shortcutActions[actionId], undefined);
+  });
+});
+
 test('a portable commit is persisted before it reports success and updates the record', async () => {
   await withConfigFile(async (filePath) => {
     const record = emptyRecord();

@@ -28,6 +28,7 @@ export type PortableCommitInput = {
   actionId?: string;
   actionIsGenerated?: boolean;
   mutate: (draft: PortableConfig) => string | void;
+  beforeApply?: () => () => void;
   afterCommit?: () => void;
 };
 
@@ -141,10 +142,12 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
     if (!changes.length && sameIds(localIds, beforeLocal)) return { ok: true };
 
     const keys = changedKeysOf(changes);
+    const undoPreparation = input.beforeApply?.();
     const blocking = live
       .apply(before, draft, keys)
       .find((failure) => keys.includes(failure.key));
     if (blocking) {
+      undoPreparation?.();
       live.apply(draft, before, keys);
       return { ok: false, message: blocking.message };
     }
@@ -153,6 +156,7 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
     if (changes.some((change) => !isLocalChange(change, localIds))) {
       const persisted = await store.persist(diskViewOf(draft, localIds));
       if (!persisted.ok) {
+        undoPreparation?.();
         live.apply(draft, before, keys);
         adoptView(
           before,

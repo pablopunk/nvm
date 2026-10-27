@@ -69,7 +69,10 @@ export function createContextDrafts(extension, deps: ContextDraftsDeps) {
 export type ContextSettingsDeps = {
   availableSettingDefinitions: () => any[];
   getSetting: (id: any) => any;
-  setSetting: (id: any, value: any) => { ok: boolean; message?: string };
+  setSetting: (
+    id: any,
+    value: any,
+  ) => Promise<{ ok: boolean; message?: string }>;
   settingDefinition: (id: string) => any;
   toggledSettingValue: (definition: any, current: any) => any;
 };

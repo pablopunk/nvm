@@ -57,7 +57,13 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
       }))
       .filter((item) => item.action);
     const declared = declaredGlobalShortcuts()
-      .filter((item) => !(item.actionId in userStateStore.get().shortcuts))
+      .filter(
+        (item) =>
+          !(
+            item.actionId in userStateStore.get().shortcuts ||
+            userStateStore.get().removedShortcuts?.[item.actionId]
+          ),
+      )
       .map((item) => ({
         ...item,
         accelerator: String(item.accelerator),

@@ -140,15 +140,16 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
 
   function conflictsWithBase(
     base: PortableConfig,
-    raw: Record<string, unknown>,
+    disk: PortableConfig,
     changes: ReturnType<typeof diffPortableConfig>,
   ) {
     const baseDocument = serializePortableConfig(base);
+    const diskDocument = serializePortableConfig(disk);
     return changes
       .filter(
         (change) =>
           !sameJson(
-            valueAtPath(raw, change.path),
+            valueAtPath(diskDocument, change.path),
             valueAtPath(baseDocument, change.path),
           ),
       )
@@ -172,7 +173,7 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
   ): Promise<PortablePersistResult | 'retry'> {
     const base = lastValid ?? createDefaultPortableConfig();
     const changes = diffPortableConfig(base, next);
-    const conflicts = conflictsWithBase(base, reading.raw, changes);
+    const conflicts = conflictsWithBase(base, reading.config, changes);
     if (conflicts.length) {
       adoptValidReading(reading);
       return {
@@ -224,9 +225,17 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
 
   function persist(next: PortableConfig) {
     return enqueue(async (): Promise<PortablePersistResult> => {
-      for (let attempt = 0; attempt < MAX_PERSIST_ATTEMPTS; attempt += 1) {
-        const outcome = await persistOnce(next);
-        if (outcome !== 'retry') return outcome;
+      try {
+        for (let attempt = 0; attempt < MAX_PERSIST_ATTEMPTS; attempt += 1) {
+          const outcome = await persistOnce(next);
+          if (outcome !== 'retry') return outcome;
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          reason: `Could not save config.json: ${error instanceof Error ? error.message : String(error)}`,
+          current: effective,
+        };
       }
       return {
         ok: false,
