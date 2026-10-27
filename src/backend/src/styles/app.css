@@ -550,6 +550,20 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
   .landing-actions { justify-content: center; }
 }
 
+.landing-feature {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+@media (max-width: 860px) {
+  .landing-feature { grid-template-columns: 1fr; padding-inline: 0; }
+}
+
 /* ── Pricing page ── */
 
 .pricing-grid {

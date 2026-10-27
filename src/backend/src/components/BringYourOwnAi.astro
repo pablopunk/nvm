@@ -1,4 +1,4 @@
-<section class="own-ai" aria-labelledby="own-ai-title">
+<section class="own-ai landing-feature" aria-labelledby="own-ai-title">
   <div class="own-ai__files" aria-label="Extensions folder containing the bundled API types and your own extension">
     <div class="own-ai__path">~/.config/nevermind/</div>
     <pre><span class="own-ai__branch">└──</span> extensions/
@@ -15,16 +15,7 @@
 </section>
 
 <style>
-  .own-ai {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: center;
-    gap: 48px;
-    width: 100%;
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 48px 24px 144px;
-  }
+  .own-ai { padding-block: 48px 144px; }
   h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
   .own-ai__copy p { max-width: 520px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
   .own-ai__copy p + p { margin-top: 20px; }
@@ -33,7 +24,7 @@
   .own-ai__copy a:visited { color: #f4cf86; text-decoration: underline; text-decoration-color: #80663c; text-underline-offset: 4px; }
   .own-ai__copy a:hover { color: #fff0c1; text-decoration-color: currentColor; }
   code { background: transparent; border: 0; padding: 0; color: var(--text); overflow-wrap: anywhere; }
-  .own-ai__files { min-width: 0; padding: 32px 0; font-family: var(--mono); }
+  .own-ai__files { min-width: 0; max-width: 100%; padding: 32px 0; font-family: var(--mono); }
   .own-ai__path { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
   pre { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; color: var(--text); font-size: clamp(11px, 1.2vw, 14px); line-height: 2.4; }
   .own-ai__branch { color: #57534e; }
@@ -48,7 +39,7 @@
     .own-ai__highlight { background: none; color: CanvasText; }
   }
   @media (max-width: 860px) {
-    .own-ai { grid-template-columns: 1fr; gap: 32px; padding: 32px 0 80px; }
+    .own-ai { padding-block: 32px 80px; }
     .own-ai__copy { grid-row: 1; text-align: center; }
     .own-ai__copy p { margin-inline: auto; }
     .own-ai__files { padding: 16px; justify-self: center; }
