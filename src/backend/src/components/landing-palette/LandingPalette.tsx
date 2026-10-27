@@ -40,6 +40,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { requestLightningStrike } from '../lightning/strike-event';
+import DictationIndicator from './DictationIndicator';
 import { paletteItems, paletteTabs } from './palette-data';
 import { searchPalette } from './palette-search';
 import { landingPaletteCss } from './palette-styles';
@@ -77,6 +78,7 @@ const DOWNLOAD_NOTICE_MS = 4000;
 const DOWNLOAD_NOTICE_TEXT = 'Download the app to actually do that!';
 /** Notice target for the "Tab to ask AI" hint; item ids identify result rows. */
 const ASK_AI_TARGET = 'ask-ai';
+const START_DICTATION_ID = 'command:Start Dictation';
 const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
 
 function iconFor(item: PaletteItem): ReactNode {
@@ -216,6 +218,8 @@ export default function LandingPalette() {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string | null>(paletteTabs[0].id);
   const [noticeTarget, setNoticeTarget] = useState<string | null>(null);
+  const [dictationRun, setDictationRun] = useState(0);
+  const [dictating, setDictating] = useState(false);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(
@@ -227,6 +231,7 @@ export default function LandingPalette() {
       const style = document.createElement('style');
       style.textContent = landingPaletteCss;
       const container = document.createElement('div');
+      container.style.position = 'relative';
       shadow.append(style, container);
       setMount(container);
     },
@@ -281,7 +286,17 @@ export default function LandingPalette() {
     setQuery(value);
   }
 
+  const stopDictating = useCallback(function stopDictating() {
+    setDictating(false);
+  }, []);
+
   function selectItem(item: PaletteItem) {
+    if (item.id === START_DICTATION_ID) {
+      hideNotice();
+      setDictationRun((run) => run + 1);
+      setDictating(true);
+      return;
+    }
     if (item.url) {
       hideNotice();
       window.open(item.url, '_blank', 'noopener,noreferrer');
@@ -295,6 +310,7 @@ export default function LandingPalette() {
       <div ref={hostRef} className="landing-palette__host" />
       {mount
         ? createPortal(
+            <>
             <PaletteApp
               query={query}
               onQueryChange={typeFreely}
@@ -302,7 +318,11 @@ export default function LandingPalette() {
               onSelectItem={selectItem}
               onAskAi={() => showNotice(ASK_AI_TARGET)}
               inputRef={inputRef}
-            />,
+            />
+            {dictating ? (
+              <DictationIndicator key={dictationRun} onDone={stopDictating} />
+            ) : null}
+            </>,
             mount,
           )
         : null}
