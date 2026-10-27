@@ -101,11 +101,12 @@ export interface PaletteTab {
   id: string;
   label: string;
   query: string;
+  icon: string;
 }
 
 export const paletteTabs: PaletteTab[] = [
-  { id: 'apps', label: 'App launcher', query: '' },
-  { id: 'clipboard', label: 'Clipboard history', query: 'clipboard' },
-  { id: 'files', label: 'File finder', query: 'design' },
-  { id: 'dictation', label: 'Dictation', query: 'dictate' },
+  { id: 'apps', label: 'App launcher', query: '', icon: 'app-window' },
+  { id: 'clipboard', label: 'Clipboard history', query: 'clipboard', icon: 'clipboard' },
+  { id: 'files', label: 'File finder', query: 'design', icon: 'file-search' },
+  { id: 'dictation', label: 'Dictation', query: 'dictate', icon: 'mic' },
 ];
