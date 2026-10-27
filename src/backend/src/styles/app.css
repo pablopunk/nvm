@@ -167,6 +167,7 @@ label.field--inline { flex-direction: row; align-items: center; gap: 8px; color:
 .site-header__nav {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
   flex: 1;
 }
@@ -193,7 +194,7 @@ label.field--inline { flex-direction: row; align-items: center; gap: 8px; color:
   .site-header__inner { gap: 8px; }
   .site-header__brand { gap: 4px; font-size: 13px; white-space: nowrap; }
   .site-header__brand img { width: 24px; height: 24px; }
-  .site-header__nav { justify-content: center; gap: 0; }
+  .site-header__nav { gap: 0; }
   .site-header__nav a { padding: 8px 5px; font-size: 12px; }
   .site-header__actions a.button { padding: 7px 8px; font-size: 12px; white-space: nowrap; }
 }
@@ -426,7 +427,7 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
   .landing-nav { gap: 8px; min-height: 56px; padding: 8px 16px; }
   .landing-brand { gap: 4px; font-size: 13px; white-space: nowrap; }
   .landing-brand__icon { width: 24px; height: 24px; }
-  .landing-nav__links { flex: 1; justify-content: center; gap: 10px; margin-left: 0; font-size: 12px; }
+  .landing-nav__links { gap: 10px; font-size: 12px; }
   .landing-nav__account .button { padding: 7px 8px; font-size: 12px; }
   .landing-hero { gap: 24px; padding-top: 24px; }
   .landing-hero__copy { order: -1; gap: 16px; }
