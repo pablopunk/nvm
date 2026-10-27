@@ -1,16 +1,17 @@
 <svg class="lightning-accent" viewBox="0 0 600 320" preserveAspectRatio="none" aria-hidden="true" data-lightning-accent>
   <g>
-    <path d="M462 8 449 36 468 31 451 66 478 58 498 92 486 88 514 127 505 147 532 174 522 167 551 208 541 229 570 276" />
+    <path d="M462 0 449 36 468 31 451 66 478 58 498 92 486 88 514 127 505 147 532 174 522 167 551 208 541 229 570 320" />
     <path class="lightning-accent__branch" d="m478 58 35 9-9 8 32 17m-22 35-28 12 7 18-20 10m68 62 32-3-7 12 17 18" />
   </g>
 </svg>
 
 <style>
   .lightning-accent {
-    position: absolute;
-    inset: -20px;
-    width: calc(100% + 40px);
-    height: calc(100% + 40px);
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
     opacity: 0;
     color: #f4cf86;
@@ -18,6 +19,7 @@
     stroke: currentColor;
     stroke-width: 1.4;
     stroke-linejoin: round;
+    overflow: hidden;
     filter: drop-shadow(0 0 5px currentColor);
   }
   .lightning-accent__branch { stroke-width: 0.7; opacity: 0.5; }
@@ -45,7 +47,9 @@
       accent.classList.remove('is-striking');
       if (!visible || document.hidden || reducedMotion.matches) return;
       timer = setTimeout(function strike() {
-        accent.style.transform = Math.random() > 0.5 ? 'scaleX(-1)' : '';
+        const direction = Math.random() > 0.5 ? -1 : 1;
+        const offset = -direction * Math.random() * 65;
+        accent.style.transform = `translateX(${offset}%) scaleX(${direction})`;
         accent.classList.add('is-striking');
         hasStruck = true;
       }, hasStruck ? 7000 + Math.random() * 9000 : 1500 + Math.random() * 2000);

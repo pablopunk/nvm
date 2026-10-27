@@ -4,10 +4,12 @@ import BuiltinFeatures from '../components/BuiltinFeatures.astro';
 import BringYourOwnAi from '../components/BringYourOwnAi.astro';
 import GitHubIcon from '../components/GitHubIcon.astro';
 import LandingAccount from '../components/LandingAccount.astro';
+import LightningAccent from '../components/LightningAccent.astro';
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout title="Nevermind" width="wide" showHeader={false}>
   <div class="landing-shell">
+    <LightningAccent />
     <header class="landing-nav" aria-label="Primary navigation">
       <a class="landing-brand" href="/" aria-label="Nevermind home">
         <img src="/icon.png" alt="" class="landing-brand__icon" />

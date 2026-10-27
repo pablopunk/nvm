@@ -1,6 +1,3 @@
----
-import LightningAccent from './LightningAccent.astro';
----
 <section class="own-ai landing-feature" aria-labelledby="own-ai-title">
   <div class="own-ai__copy">
     <h2 id="own-ai-title">Bring <span class="own-ai__highlight">your own AI.</span> Dotfiles ready.</h2>
@@ -8,7 +5,6 @@ import LightningAccent from './LightningAccent.astro';
     <p>You can also use your own coding agent. Point it at <code>~/.config/nevermind</code> and build extensions with the included API. <strong>Just local TypeScript files</strong>, ready for your dotfiles.</p>
   </div>
   <div class="own-ai__files" aria-label="Extensions folder containing the bundled API types and your own extension">
-    <LightningAccent />
     <div class="own-ai__path">~/.config/nevermind/</div>
     <pre><span class="own-ai__branch">└──</span> extensions/
     <span class="own-ai__branch">├──</span> <span class="own-ai__api">nevermind-extension-api.d.ts</span>
@@ -29,7 +25,6 @@ import LightningAccent from './LightningAccent.astro';
   .own-ai__copy a:hover { color: #fff0c1; text-decoration-color: currentColor; }
   code { background: transparent; border: 0; padding: 0; color: var(--text); overflow-wrap: anywhere; }
   .own-ai__files {
-    position: relative;
     min-width: 0;
     width: 100%;
     padding: 32px;
