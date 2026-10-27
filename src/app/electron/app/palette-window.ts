@@ -1,23 +1,22 @@
-// biome-ignore-all lint/performance/noNamespaceImport lint/style/useExportsLast lint/style/useConsistentTypeDefinitions lint/style/useBlockStatements lint/complexity/noExcessiveCognitiveComplexity lint/style/noNestedTernary lint/style/noMagicNumbers lint/complexity/useSimplifiedLogicExpression lint/style/noProcessEnv lint/complexity/noExcessiveLinesPerFunction lint/style/useNamingConvention: This established window controller keeps native event handling and sizing policy together.
+// biome-ignore-all lint/performance/noNamespaceImport lint/performance/noBarrelFile lint/style/useExportsLast lint/style/useConsistentTypeDefinitions lint/style/useBlockStatements lint/complexity/noExcessiveCognitiveComplexity lint/style/noNestedTernary lint/style/noMagicNumbers lint/complexity/useSimplifiedLogicExpression lint/style/noProcessEnv lint/complexity/noExcessiveLinesPerFunction lint/style/useNamingConvention: This established window controller keeps native event handling and sizing policy together.
 import {
   app,
   BrowserWindow,
   type BrowserWindowConstructorOptions,
   globalShortcut,
   screen,
-  session,
 } from 'electron';
+import type { PaletteHotkeyStatus } from '../../palette/preload-api';
 import {
   markDebugPerformance,
   measureDebugPerformanceSync,
 } from '../diagnostics/debug-performance';
-import * as logger from '../platform/logger';
 import {
   applyPaletteWindowPolicy as applyOsPaletteWindowPolicy,
-  canRequestMediaPermission,
   paletteBrowserWindowOptions,
   supportsProgrammaticWindowPositioning,
 } from '../os/os';
+import * as logger from '../platform/logger';
 import {
   isNvmHeadlessTestMode,
   isNvmTestMode,
@@ -25,14 +24,15 @@ import {
   recordTestWindowEvent,
 } from '../platform/test-mode';
 import {
-  installExternalNavigationPolicy,
-  isTrustedAppPage,
-} from './window-navigation-policy';
-import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
 } from './palette-shortcuts';
-import type { PaletteHotkeyStatus } from '../../palette/preload-api';
+import {
+  installExternalNavigationPolicy,
+  isTrustedAppPage,
+} from './window-navigation-policy';
+
+export { installPermissionHandlers } from './palette-permissions';
 
 export type PaletteMode =
   | 'default'
@@ -89,41 +89,6 @@ function installPaletteRendererIsolationHeaders(window: BrowserWindow) {
           'Cross-Origin-Embedder-Policy': ['credentialless'],
         },
       });
-    },
-  );
-}
-
-export function installPermissionHandlers(
-  isDev: boolean,
-  rendererUrl = process.env.ELECTRON_RENDERER_URL || '',
-  rendererIndexPath?: string,
-) {
-  const allowedPermissions = [
-    'media',
-    'display-capture',
-    'clipboard-read',
-    'clipboard-sanitized-write',
-  ];
-  session.defaultSession.setPermissionCheckHandler(
-    (webContents, permission) => {
-      const url = webContents?.getURL() || '';
-      return (
-        isTrustedAppPage(url, isDev, rendererUrl, rendererIndexPath) &&
-        allowedPermissions.includes(permission) &&
-        canRequestMediaPermission(permission)
-      );
-    },
-  );
-  session.defaultSession.setPermissionRequestHandler(
-    (webContents, permission, callback) => {
-      const url = webContents.getURL();
-      if (
-        isTrustedAppPage(url, isDev, rendererUrl, rendererIndexPath) &&
-        allowedPermissions.includes(permission) &&
-        canRequestMediaPermission(permission)
-      )
-        return callback(true);
-      callback(false);
     },
   );
 }
@@ -532,6 +497,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     showPaletteWhenReady,
     togglePalette,
     takeRestoredFocusReturnTarget,
+    peekFocusReturnTarget: () => focusReturnTarget,
     getHotkeyStatus,
     isHotkeyReserved,
     registerHotkey,

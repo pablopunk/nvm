@@ -7,6 +7,7 @@ import {
   operationStage,
   recordOperationFailure,
 } from '../diagnostics/observability';
+import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import type { ViewRefreshRecord } from './action-execution-records';
 
@@ -89,7 +90,10 @@ export function createActionIpc(deps: ActionIpcDeps) {
                       action: summarizeDebugValue(trustedAction),
                       alwaysLog: true,
                     },
-                    () => executeAction(trustedAction),
+                    () =>
+                      runInWindowInvocationScope({ source: 'palette' }, () =>
+                        executeAction(trustedAction),
+                      ),
                   ),
                 ),
                 trustedAction,
@@ -233,7 +237,10 @@ export function createActionIpc(deps: ActionIpcDeps) {
                       action: summarizeDebugValue(trustedAction),
                       alwaysLog: true,
                     },
-                    () => executeViewAction(trustedAction),
+                    () =>
+                      runInWindowInvocationScope({ source: 'palette' }, () =>
+                        executeViewAction(trustedAction),
+                      ),
                   ),
                 ),
                 trustedAction,
