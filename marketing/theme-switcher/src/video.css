@@ -353,3 +353,32 @@
 .dictationDemoIndicator .progressView {
   flex: none;
 }
+
+.dictationDemoMark {
+  position: relative;
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.dictationDemoMark > span {
+  position: absolute;
+  inset: 0;
+}
+.dictationDemoLabel {
+  position: relative;
+  height: 18px;
+  min-width: 0;
+  flex: 1;
+}
+.dictationDemoLabel strong {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.dictationDemo .progressOverview {
+  width: 100%;
+}
+.dictationDemo .indicatorStatusGlyph {
+  animation: none;
+  stroke-dashoffset: calc(14 * (1 - var(--success-progress)));
+}

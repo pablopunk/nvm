@@ -1,24 +1,72 @@
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { MODE_FRAMES, resolvePreset } from 'thinking-orbs/engine';
+import { IndicatorStatusIcon } from '../../../src/app/palette/indicator/indicator-status-icon';
+import { tween } from './timeline';
 
-const DURATION = 120;
-const preset = resolvePreset('listening', 20);
+const TRANSCRIBING = 90;
+const PASTED = 132;
+export const DICTATION_DURATION = 180;
+
+function Orb({
+  state,
+  time,
+}: {
+  state: 'listening' | 'composing';
+  time: number;
+}) {
+  const preset = resolvePreset(state, 20);
+  const orb = MODE_FRAMES[preset.mode](20, time * preset.speed, preset.opts);
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20">
+      {orb.dots.map(function renderDot(dot, index) {
+        const ink = Math.round((1 - dot.white) * 255);
+        return (
+          <circle
+            key={index}
+            cx={dot.x}
+            cy={dot.y}
+            r={dot.r}
+            fill={`rgb(${ink},${ink},${ink})`}
+            opacity={dot.a ?? 1}
+          />
+        );
+      })}
+    </svg>
+  );
+}
 
 export function DictationDemo() {
   const frame = useCurrentFrame();
-  const phase = (frame / DURATION) * Math.PI * 2;
-  const time = (1 - Math.cos(phase)) * 1.5;
-  const orb = MODE_FRAMES[preset.mode](20, time * preset.speed, preset.opts);
+  const phase = (frame / 120) * Math.PI * 2;
+  const transcribing = tween(frame, TRANSCRIBING, TRANSCRIBING + 6);
+  const pasted = tween(frame, PASTED, PASTED + 6);
+  const states = [
+    { label: 'Listening', opacity: 1 - transcribing },
+    { label: 'Transcribing...', opacity: transcribing * (1 - pasted) },
+    { label: 'Pasted', opacity: pasted },
+  ];
   return (
     <AbsoluteFill className="videoCanvas dictationDemo">
-      <div className="extensionWindowChromeNone dictationDemoIndicator">
-        <div className="extensionView progressView">
+      <div
+        className="extensionWindowChromeNone dictationDemoIndicator"
+        style={{ opacity: tween(frame, 0, 8) * (1 - tween(frame, 171, 179)) }}
+      >
+        <div
+          className="extensionView progressView"
+          style={
+            {
+              width: 126 + transcribing * 34 - pasted * 56,
+              '--success-progress': pasted,
+            } as React.CSSProperties
+          }
+        >
           <svg
             className="indicatorMicTrace"
             viewBox="0 0 126 40"
             preserveAspectRatio="none"
             aria-hidden="true"
+            style={{ opacity: (1 - transcribing) * 0.35 }}
           >
             {Array.from({ length: 48 }, function renderSample(_, index) {
               const level =
@@ -43,28 +91,40 @@ export function DictationDemo() {
           </svg>
           <div
             className="progressOverview"
-            data-status="active"
+            data-status={frame >= PASTED ? 'done' : 'active'}
             data-mark="true"
           >
-            <span className="indicatorOrb" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 20 20">
-                {orb.dots.map(function renderDot(dot, index) {
-                  const ink = Math.round((1 - dot.white) * 255);
-                  return (
-                    <circle
-                      key={index}
-                      cx={dot.x}
-                      cy={dot.y}
-                      r={dot.r}
-                      fill={`rgb(${ink},${ink},${ink})`}
-                      opacity={dot.a ?? 1}
-                    />
-                  );
-                })}
-              </svg>
+            <span className="dictationDemoMark" aria-hidden="true">
+              <span
+                className="indicatorOrb"
+                style={{ opacity: 1 - transcribing }}
+              >
+                <Orb state="listening" time={frame / 30} />
+              </span>
+              <span
+                className="indicatorOrb"
+                style={{ opacity: transcribing * (1 - pasted) }}
+              >
+                <Orb state="composing" time={frame / 30} />
+              </span>
+              <span style={{ opacity: pasted }}>
+                <IndicatorStatusIcon kind="success" />
+              </span>
             </span>
-            <div>
-              <strong>Listening</strong>
+            <div className="dictationDemoLabel">
+              {states.map(function renderLabel(state) {
+                return (
+                  <strong
+                    key={state.label}
+                    style={{
+                      opacity: state.opacity,
+                      transform: `translateY(${(1 - state.opacity) * 4}px)`,
+                    }}
+                  >
+                    {state.label}
+                  </strong>
+                );
+              })}
             </div>
           </div>
         </div>

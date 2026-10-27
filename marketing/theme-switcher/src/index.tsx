@@ -2,7 +2,7 @@ import React from 'react';
 import { Composition, registerRoot } from 'remotion';
 import { ThemeSwitcher } from './theme-switcher';
 import { BuiltinFeatures } from './builtin-features';
-import { DictationDemo } from './dictation-demo';
+import { DictationDemo, DICTATION_DURATION } from './dictation-demo';
 import { DURATION, FPS } from './timeline';
 import '../../../src/app/palette/styles.css';
 import './video.css';
@@ -32,7 +32,7 @@ function VideoRoot() {
         width={1060}
         height={560}
         fps={30}
-        durationInFrames={120}
+        durationInFrames={DICTATION_DURATION}
       />
     </>
   );
