@@ -6,12 +6,12 @@ import {
   fileToExtensionFile,
   thumbnailUrlForPreviewablePath,
 } from '../files/extension-file';
+import { defaultFileIndexRoots } from '../files/file-index';
 import {
   displayUserPath,
   expandUserPath,
   fileUrlForPath,
 } from '../files/file-utils';
-import { defaultFileIndexRoots } from '../files/file-index';
 import { findFiles } from '../files/find-files';
 import { ocrImage, ocrScreen } from '../files/ocr';
 import {
@@ -35,6 +35,10 @@ import {
 import { limitedOutput } from '../platform/limited-output';
 import { openExternalUrl } from '../platform/url-utils';
 import { trustedContextCapabilities } from './extension-context-capabilities';
+import {
+  createDesktopWindowManagement,
+  type DesktopWindowManagementDeps,
+} from './extension-desktop-window-management';
 
 export type ContextDesktopDeps = {
   clipboardApi: Pick<
@@ -57,6 +61,7 @@ export type ContextDesktopDeps = {
   runShellCommand: (command: any, args?: any, options?: any) => unknown;
   runShellScript: (script: any, options?: any) => unknown;
   shellSpawnEnv: (extraEnv?: Record<string, string>) => Promise<any>;
+  windowManagement?: DesktopWindowManagementDeps;
 };
 
 function createDesktopKeyboard() {
@@ -245,6 +250,7 @@ export function createContextDesktop(deps: ContextDesktopDeps) {
     apps: createDesktopApps(deps),
     files: createDesktopFiles(deps),
     shell: createDesktopShell(deps),
+    windowManagement: createDesktopWindowManagement(deps.windowManagement),
   };
 }
 
