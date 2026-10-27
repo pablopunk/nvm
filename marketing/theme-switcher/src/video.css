@@ -342,6 +342,20 @@
   height: 380px;
 }
 
+.builderFeature .productWindow {
+  left: 16px;
+  top: 16px;
+  width: 1028px;
+  height: 648px;
+}
+.builderFeature .resultsCard {
+  height: 580px;
+}
+.builderFeature .builderPreviewBody .extensionGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: none;
+}
+
 .dictationDemoIndicator {
   position: absolute;
   inset: 0;

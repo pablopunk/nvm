@@ -1,0 +1,32 @@
+<section class="build-once landing-feature" aria-labelledby="build-once-title">
+  <div class="build-once__copy">
+    <h2 id="build-once-title">Built once.<br /><span class="build-once__highlight">Fast every time.</span></h2>
+    <p>Waiting for AI on every task gets old. Nevermind uses AI to <strong>write the tool</strong>, then runs the code directly.</p>
+    <p>Your extensions will be there <strong>with or without AI or an internet connection.</strong></p>
+  </div>
+  <div class="build-once__visual">
+    <img src="/features/builder-preview.webp" width="1060" height="680" loading="lazy" decoding="async" alt="Nevermind's split extension builder: an AI chat creates a theme switcher on the left, with the saved extension's wallpaper grid preview on the right." />
+  </div>
+</section>
+
+<style>
+  .build-once { padding-block: 112px 48px; }
+  h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  .build-once__copy p { max-width: 360px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  .build-once__copy p + p { margin-top: 20px; }
+  strong { color: var(--text); font-weight: 600; }
+  .build-once__highlight { color: #f4cf86; }
+  .build-once__visual { width: 100%; min-width: 0; }
+  .build-once__visual img { display: block; width: 100%; height: auto; }
+  @supports (background-clip: text) {
+    .build-once__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
+  }
+  @media (forced-colors: active) {
+    .build-once__highlight { background: none; color: CanvasText; }
+  }
+  @media (max-width: 860px) {
+    .build-once { padding-block: 64px 32px; }
+    .build-once__copy { text-align: center; }
+    .build-once__copy p { margin-inline: auto; }
+  }
+</style>
