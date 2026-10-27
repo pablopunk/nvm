@@ -69,8 +69,10 @@ for (const [id, source] of dockIcons) {
   } else {
     await copyFile(source, prepared);
   }
-  const sourceIcon = await sharp(prepared)
-    .resize(76, 76, {
+  const iconSize = id === 'nevermind' ? 62 : 76;
+  const padding = (76 - iconSize) / 2;
+  const roundedIcon = await sharp(prepared)
+    .resize(iconSize, iconSize, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
@@ -78,11 +80,21 @@ for (const [id, source] of dockIcons) {
     .composite([
       {
         input: Buffer.from(
-          '<svg width="76" height="76"><rect width="76" height="76" rx="18" fill="white"/></svg>',
+          `<svg width="${iconSize}" height="${iconSize}"><rect width="${iconSize}" height="${iconSize}" rx="${(18 * iconSize) / 76}" fill="white"/></svg>`,
         ),
         blend: 'dest-in',
       },
     ])
+    .png()
+    .toBuffer();
+  const sourceIcon = await sharp(roundedIcon)
+    .extend({
+      top: padding,
+      bottom: padding,
+      left: padding,
+      right: padding,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .png()
     .toBuffer();
   for (const theme of themes) {
