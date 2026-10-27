@@ -24,8 +24,16 @@
   .own-ai__copy a:visited { color: #f4cf86; text-decoration: underline; text-decoration-color: #80663c; text-underline-offset: 4px; }
   .own-ai__copy a:hover { color: #fff0c1; text-decoration-color: currentColor; }
   code { background: transparent; border: 0; padding: 0; color: var(--text); overflow-wrap: anywhere; }
-  .own-ai__files { min-width: 0; max-width: 100%; padding: 32px 0; font-family: var(--mono); }
-  .own-ai__path { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .own-ai__files {
+    min-width: 0;
+    width: 100%;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--surface) 45%, var(--bg));
+    font-family: var(--mono);
+  }
+  .own-ai__path { color: var(--muted); font-size: 14px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
   pre { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; color: var(--text); font-size: clamp(11px, 1.2vw, 14px); line-height: 2.4; }
   .own-ai__branch { color: #57534e; }
   .own-ai__api { color: #f4cf86; }
@@ -42,6 +50,6 @@
     .own-ai { padding-block: 32px 80px; }
     .own-ai__copy { text-align: center; }
     .own-ai__copy p { margin-inline: auto; }
-    .own-ai__files { padding: 16px; justify-self: center; }
+    .own-ai__files { padding: 24px; }
   }
 </style>
