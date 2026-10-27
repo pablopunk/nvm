@@ -1,8 +1,9 @@
 import React from 'react';
 import { Composition, registerRoot } from 'remotion';
-import { ThemeSwitcher } from './theme-switcher';
+import { BuilderPreview } from './builder-preview';
 import { BuiltinFeatures } from './builtin-features';
-import { DictationDemo, DICTATION_DURATION } from './dictation-demo';
+import { DICTATION_DURATION, DictationDemo } from './dictation-demo';
+import { ThemeSwitcher } from './theme-switcher';
 import { DURATION, FPS } from './timeline';
 import '../../../src/app/palette/styles.css';
 import './video.css';
@@ -17,6 +18,14 @@ function VideoRoot() {
         height={1080}
         fps={FPS}
         durationInFrames={DURATION}
+      />
+      <Composition
+        id="BuilderPreview"
+        component={BuilderPreview}
+        width={1060}
+        height={680}
+        fps={30}
+        durationInFrames={1}
       />
       <Composition
         id="BuiltinFeatures"
