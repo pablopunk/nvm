@@ -5,7 +5,9 @@ const path = require('node:path');
 if (process.platform !== 'darwin') process.exit(0);
 
 const root = path.resolve(__dirname, '..');
-const source = path.join(root, 'src/app/resources/macos-selected-text.swift');
+const sources = ['main.swift', 'selected-text.swift'].map((name) =>
+  path.join(root, 'src/app/resources/macos-helper', name),
+);
 const outputDirectory = path.join(root, 'build/native');
 const output = path.join(outputDirectory, 'macos-selected-text');
 const architectures = process.argv.includes('--universal')
@@ -19,7 +21,7 @@ const slices = architectures.map((architecture) => {
     'xcrun',
     [
       'swiftc',
-      source,
+      ...sources,
       '-O',
       '-target',
       `${architecture}-apple-macos12.0`,

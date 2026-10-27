@@ -3,13 +3,13 @@ name: macOS selected-text helper
 on:
   pull_request:
     paths:
-      - src/app/resources/macos-selected-text.swift
+      - src/app/resources/macos-helper/**
       - scripts/build-macos-selected-text-helper.cjs
       - .github/workflows/macos-selected-text.yml
   push:
     branches: [main]
     paths:
-      - src/app/resources/macos-selected-text.swift
+      - src/app/resources/macos-helper/**
       - scripts/build-macos-selected-text-helper.cjs
       - .github/workflows/macos-selected-text.yml
 
