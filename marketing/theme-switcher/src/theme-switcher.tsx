@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { DesktopBackground, DesktopDock } from './desktop';
+import { ExistingExtensions } from './existing-extensions';
 import { ProductUi } from './product-ui';
 import {
   camera,
@@ -66,8 +67,14 @@ export function ThemeSwitcher() {
         }}
       >
         <DesktopDock frame={frame} />
-        {scene !== 'desktop' ? <ProductUi frame={frame} scene={scene} /> : null}
-        {scene === 'palette' || scene === 'grid' ? (
+        {scene === 'existing-extension' ? (
+          <ExistingExtensions frame={frame} />
+        ) : scene !== 'desktop' ? (
+          <ProductUi frame={frame} scene={scene} />
+        ) : null}
+        {scene === 'palette' ||
+        scene === 'grid' ||
+        scene === 'existing-extension' ? (
           <Pointer frame={frame} />
         ) : null}
       </div>

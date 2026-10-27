@@ -1,9 +1,10 @@
 import { Easing, interpolate } from 'remotion';
+import { existingExtensionAt } from './extension-scenes';
 
 export const REQUEST = 'mac theme switcher';
 export const FPS = 30;
 export const PLAYBACK_SPEED = 1.15;
-export const DURATION = Math.ceil(426 / PLAYBACK_SPEED);
+export const DURATION = Math.ceil(686 / PLAYBACK_SPEED);
 
 export const STORY = {
   typingStart: 24,
@@ -49,6 +50,14 @@ export const BEATS = [
   { frame: STORY.dockZoomStart, scale: 1, x: 960, y: 540 },
   { frame: STORY.dockZoomEnd, scale: 2.25, x: 960, y: 1008 },
   { frame: 425, scale: 2.25, x: 960, y: 1008 },
+  { frame: 448, scale: 1.55, x: 960, y: 360 },
+  { frame: 480, scale: 1.55, x: 960, y: 360 },
+  { frame: 504, scale: 1.38, x: 960, y: 450 },
+  { frame: 550, scale: 1.38, x: 960, y: 450 },
+  { frame: 560, scale: 1.55, x: 960, y: 360 },
+  { frame: 603, scale: 1.55, x: 960, y: 360 },
+  { frame: 619, scale: 1.38, x: 960, y: 450 },
+  { frame: 685, scale: 1.38, x: 960, y: 450 },
 ];
 
 const easing = Easing.bezier(0.65, 0, 0.2, 1);
@@ -91,6 +100,7 @@ export function camera(frame: number) {
 }
 
 export function sceneAt(frame: number) {
+  if (existingExtensionAt(frame)) return 'existing-extension';
   if (frame < STORY.chatStart) return 'palette';
   if (frame < STORY.gridStart) return 'chat';
   if (frame < STORY.dismissEnd) return 'grid';
@@ -111,6 +121,18 @@ export function themeTransition(frame: number) {
 }
 
 export function pointerAt(frame: number) {
+  const extension = existingExtensionAt(frame);
+  if (extension) {
+    const progress = tween(frame, extension.moveStart, extension.click - 3);
+    return {
+      x: interpolate(progress, [0, 1], [1460, 1060]),
+      y: interpolate(progress, [0, 1], [740, 280]),
+      opacity:
+        tween(frame, extension.moveStart - 2, extension.moveStart) *
+        (1 - tween(frame, extension.click + 3, extension.listStart)),
+      clickAt: extension.click,
+    };
+  }
   if (frame < STORY.chatStart) {
     const progress = tween(frame, STORY.createMoveStart, STORY.createMoveEnd);
     return {
