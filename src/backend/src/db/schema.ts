@@ -93,6 +93,8 @@ export const usage = pgTable(
     requestId: text('request_id'),
     status: integer('status'),
     latencyMs: integer('latency_ms'),
+    /** First parsed streamed output; null for non-streaming or empty responses. */
+    ttftMs: integer('ttft_ms'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

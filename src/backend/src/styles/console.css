@@ -1,0 +1,299 @@
+@import "./theme.css";
+@import "tailwindcss";
+@import "tw-animate-css";
+@source "../components";
+@source "../pages/admin.astro";
+@source "../pages/profile.astro";
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-fg);
+  --color-secondary: var(--border-light);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--border-light);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--border-light);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent-highlight);
+  --radius-md: var(--radius);
+  --radius-xl: var(--radius-lg);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply m-0 min-h-svh bg-background text-foreground text-sm antialiased;
+    font-family: var(--font);
+    line-height: 1.5;
+  }
+  h1 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+  h2 {
+    @apply text-lg font-semibold tracking-tight;
+  }
+  h3 {
+    @apply text-sm font-semibold;
+  }
+  p {
+    @apply leading-relaxed;
+  }
+  code,
+  pre {
+    font-family: var(--mono);
+  }
+  code {
+    @apply text-xs break-all;
+  }
+  pre {
+    @apply rounded-md border bg-muted p-4 text-xs leading-relaxed overflow-x-auto;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    cursor: default;
+  }
+  a {
+    @apply transition-colors;
+  }
+  a:hover {
+    @apply text-foreground;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent-highlight);
+    outline-offset: 2px;
+  }
+  input:focus-visible,
+  select:focus-visible {
+    @apply outline-none shadow-none;
+    border-color: var(--text);
+  }
+  [hidden] {
+    display: none !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+@layer components {
+  .console-container {
+    @apply mx-auto w-full max-w-4xl px-4 py-6 sm:px-8;
+  }
+  .console-container--wide {
+    @apply max-w-7xl;
+  }
+  .console-navigation {
+    @apply mb-8 flex flex-wrap items-center gap-2 border-b pb-4;
+  }
+  .console-navigation__brand {
+    @apply mr-4 font-semibold tracking-tight;
+  }
+  .console-navigation__account {
+    @apply ml-auto text-xs text-muted-foreground break-all;
+  }
+  .console-footer {
+    @apply mx-auto flex w-full max-w-7xl flex-wrap justify-center gap-6 px-6 py-8 text-xs text-muted-foreground;
+  }
+  .console-skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-background focus:p-3;
+  }
+  .console-page [data-slot="button"] {
+    @apply cursor-default;
+  }
+  .console-page [data-slot="input"]:focus-visible,
+  .console-page [data-slot="native-select"]:focus-visible {
+    @apply ring-0 shadow-none;
+    border-color: var(--text);
+  }
+  .console-page [data-slot="native-select-wrapper"] {
+    @apply w-full;
+  }
+  .section {
+    @apply mt-6;
+  }
+  .admin-console {
+    @apply space-y-6;
+  }
+  .admin-header,
+  .profile-header {
+    @apply mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between;
+  }
+  .admin-header p,
+  .profile-header p {
+    @apply mt-2 max-w-3xl;
+  }
+  .admin-panel,
+  .profile-panel {
+    @apply min-w-0 p-6;
+  }
+  .admin-panel h2,
+  .profile-panel h2 {
+    @apply mb-2;
+  }
+  .admin-panel h2 + p {
+    @apply mb-4 max-w-3xl;
+  }
+  .profile-panel {
+    @apply gap-4;
+  }
+  .profile-grid {
+    @apply grid items-start gap-6;
+  }
+  .admin-subpanel {
+    @apply mt-6 border-t pt-6;
+  }
+  .admin-subpanel h3 {
+    @apply mb-3;
+  }
+  .stat-grid {
+    @apply grid grid-cols-2 gap-4 lg:grid-cols-4;
+  }
+  .profile-stats {
+    @apply grid-cols-3 lg:grid-cols-3;
+  }
+  .stat {
+    @apply rounded-md border bg-card p-4;
+  }
+  .stat .v {
+    @apply text-xl font-semibold tracking-tight tabular-nums;
+  }
+  .stat .l {
+    @apply mt-1 text-xs text-muted-foreground;
+  }
+  .table-scroll {
+    @apply w-full overflow-x-auto;
+  }
+  [data-slot="table"] {
+    @apply text-sm tabular-nums;
+  }
+  [data-slot="table"] th {
+    @apply whitespace-nowrap text-xs font-medium text-muted-foreground;
+  }
+  [data-slot="table"] td {
+    @apply border-b px-2 py-3 align-top;
+  }
+  [data-slot="table"] tbody tr {
+    @apply border-b transition-colors hover:bg-muted/50;
+  }
+  [data-slot="table"] tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .row {
+    @apply flex flex-wrap items-center gap-3;
+  }
+  .stack {
+    @apply flex flex-col gap-4;
+  }
+  .field {
+    @apply flex min-w-0 flex-col gap-2 text-xs font-medium;
+  }
+  .admin-grant {
+    @apply mt-4 flex-wrap items-end gap-3;
+  }
+  .admin-grant .field {
+    @apply flex-1 basis-36;
+  }
+  .muted {
+    @apply text-muted-foreground;
+  }
+  .status {
+    @apply text-xs text-muted-foreground;
+  }
+  .status--ok {
+    color: var(--success);
+  }
+  .status--err {
+    color: var(--danger);
+  }
+  .admin-alerts {
+    @apply grid gap-3;
+  }
+  .admin-alerts:empty {
+    @apply hidden;
+  }
+  .admin-notice {
+    @apply flex flex-wrap items-center gap-3 rounded-md border bg-card p-4 text-sm;
+  }
+  .admin-notice--warning {
+    @apply border-destructive/40;
+  }
+  .model-routes {
+    @apply mt-4 grid gap-4;
+  }
+  .model-route-row {
+    @apply grid grid-cols-1 items-end gap-4 rounded-md border p-4 sm:grid-cols-[minmax(0,1fr)_8rem];
+  }
+  .model-route-row__header {
+    @apply col-span-full flex flex-wrap items-center justify-between gap-2;
+  }
+  .model-route-row__header strong {
+    @apply text-sm font-medium;
+  }
+  .route-details {
+    @apply col-span-full text-xs;
+  }
+  .console-fallback-select {
+    @apply h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm;
+  }
+  .token-list {
+    @apply divide-y;
+  }
+  .token-list-item {
+    @apply flex flex-wrap items-center gap-4 py-4;
+  }
+  .token-list-item:first-child {
+    @apply pt-0;
+  }
+  .token-list-item:last-child {
+    @apply pb-0;
+  }
+  .token-details {
+    @apply min-w-0 flex-1 space-y-1;
+  }
+  .token-details p {
+    @apply text-xs text-muted-foreground;
+  }
+  .token-value {
+    @apply whitespace-pre-wrap break-all select-all;
+  }
+  @media (max-width: 640px) {
+    .console-navigation__account {
+      @apply order-last ml-0 w-full pt-2;
+    }
+    .admin-panel,
+    .profile-panel {
+      @apply p-4;
+    }
+    .stat-grid {
+      @apply gap-2;
+    }
+    .stat {
+      @apply p-3;
+    }
+  }
+}

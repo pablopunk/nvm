@@ -1,15 +1,23 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { afterEach, test } from 'node:test';
 import {
   IMAGE_INPUT_TOKENS_ESTIMATE_PER_IMAGE,
-  reviewedImageTokenLimits,
+  imageTokenLimits,
 } from './image-cost-bound';
 import {
   conservativeImageRequestInputTokenCeiling,
   supportsBoundedImageInput,
 } from './limits';
+import { listModelsForProvider, resetPricingCacheForTests } from './pricing';
 
-test('bounds image billing by the reviewed route model input limit', () => {
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  resetPricingCacheForTests();
+});
+
+test('bounds image billing by the route model input limit', () => {
   assert.equal(IMAGE_INPUT_TOKENS_ESTIMATE_PER_IMAGE, 8_192);
   assert.equal(
     conservativeImageRequestInputTokenCeiling(
@@ -39,57 +47,59 @@ test('bounds image billing by the reviewed route model input limit', () => {
     ),
     undefined,
   );
-  assert.equal(
-    supportsBoundedImageInput('openrouter', 'openai/gpt-6.1-sol', [
-      'text',
-      'image',
-    ]),
-    true,
-  );
-  assert.equal(
-    supportsBoundedImageInput('openrouter', 'meta/muse-spark-1.3-contributor', [
-      'text',
-      'image',
-    ]),
-    true,
-  );
-  assert.equal(
-    supportsBoundedImageInput(
-      'opencode_zen',
-      'muse-spark-1.3-contributor-free',
-      ['text', 'image'],
-    ),
-    false,
-  );
-  assert.equal(
-    supportsBoundedImageInput('openrouter', 'openai/gpt-6.1-sol', ['text']),
-    false,
-  );
-  assert.deepEqual(
-    reviewedImageTokenLimits('openrouter', 'openai/gpt-6.1-sol'),
-    {
-      contextWindow: 1_050_000,
-      maxInputTokens: 922_000,
-      maxTokens: 128_000,
-      maximumCost: {
-        inputUsdPerMtok: 2,
-        outputUsdPerMtok: 10,
-        cacheReadUsdPerMtok: 0.1,
-        cacheWriteUsdPerMtok: 2.5,
-        tiers: [
-          {
-            thresholdTokens: 272_000,
-            inputUsdPerMtok: 4,
-            outputUsdPerMtok: 15,
-            cacheReadUsdPerMtok: 0.2,
-            cacheWriteUsdPerMtok: 5,
+});
+
+test('image billing limits come from the loaded catalog', async () => {
+  globalThis.fetch = (async () =>
+    Response.json({
+      openrouter: {
+        models: {
+          'vendor/image-model': {
+            id: 'vendor/image-model',
+            modalities: { input: ['text', 'image'] },
+            limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+            cost: {
+              input: 2,
+              output: 10,
+              cache_read: 0.1,
+              tiers: [{ input: 4, output: 15, tier: { type: 'context', size: 272_000 } }],
+            },
           },
-        ],
+          'vendor/text-model': {
+            id: 'vendor/text-model',
+            modalities: { input: ['text'] },
+            limit: { context: 32_000, output: 4_096 },
+            cost: { input: 0.1, output: 0.2 },
+          },
+          'vendor/unlimited-image-model': {
+            id: 'vendor/unlimited-image-model',
+            modalities: { input: ['text', 'image'] },
+            cost: { input: 0.1, output: 0.2 },
+          },
+        },
       },
+    })) as typeof globalThis.fetch;
+  await listModelsForProvider('openrouter');
+
+  assert.deepEqual(imageTokenLimits('openrouter', 'vendor/image-model'), {
+    contextWindow: 1_050_000,
+    maxInputTokens: 922_000,
+    maxTokens: 128_000,
+    maximumCost: {
+      inputUsdPerMtok: 2,
+      outputUsdPerMtok: 10,
+      cacheReadUsdPerMtok: 0.1,
+      tiers: [{ thresholdTokens: 272_000, inputUsdPerMtok: 4, outputUsdPerMtok: 15 }],
     },
+  });
+  assert.equal(imageTokenLimits('openrouter', 'vendor/text-model'), undefined);
+  assert.equal(imageTokenLimits('openrouter', 'vendor/unlimited-image-model'), undefined);
+  assert.equal(
+    supportsBoundedImageInput('openrouter', 'vendor/image-model', ['text', 'image']),
+    true,
   );
   assert.equal(
-    reviewedImageTokenLimits('opencode_zen', 'muse-spark-1.3-contributor-free'),
-    undefined,
+    supportsBoundedImageInput('openrouter', 'vendor/image-model', ['text']),
+    false,
   );
 });

@@ -9,9 +9,10 @@ import {
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
-  hasReviewedImageInputSupport,
-  listReviewedImageModelsForProvider,
+  listModelsForRouteKind,
   lookupModelPricing,
+  modelFitsRouteKind,
+  routeKindForSlot,
 } from '../../../lib/pricing';
 import {
   getConfiguredModelProviderRoutes,
@@ -77,7 +78,9 @@ export const GET: APIRoute = async ({ request, url }) => {
   const providerOptions = await Promise.all(
     providers.map(async (provider) => {
       const compatibleModels = providerSupportsFormat(provider.id, format)
-        ? (await listReviewedImageModelsForProvider(provider.id)).filter(
+        ? (
+            await listModelsForRouteKind(provider.id, routeKindForSlot(slot))
+          ).filter(
             (candidateModelId) =>
               selectApiForModel(provider.id, candidateModelId) === format,
           )
@@ -195,18 +198,17 @@ export const PUT: APIRoute = async ({ request }) => {
       { status: 400 },
     );
   }
-  const routesSupportImages = await Promise.all(
+  const routesFitSlot = await Promise.all(
     routes.map((route) =>
-      hasReviewedImageInputSupport(route.providerId, route.modelId),
+      modelFitsRouteKind(route.providerId, route.modelId, routeKindForSlot(slot)),
     ),
   );
-  if (routesSupportImages.some((supported) => !supported))
+  if (routesFitSlot.some((fits) => !fits))
     return Response.json(
       {
         error: {
-          type: 'unsupported_image_model',
-          message:
-            'Every provider route must have reviewed image-input and billing support.',
+          type: 'unsupported_route_model',
+          message: 'Every provider route must fit the slot (smart or fast).',
         },
       },
       { status: 400 },

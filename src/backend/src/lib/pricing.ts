@@ -1,5 +1,3 @@
-import { hasReviewedImageBilling } from './image-cost-bound';
-
 export type ModelCost = {
   provider: string;
   modelId: string;
@@ -259,14 +257,11 @@ async function runtimeModel(
   return { model, source: cache.source };
 }
 
-export async function lookupModelCost(
+function modelCostFromCatalog(
   provider: string,
   modelId: string,
-): Promise<ModelCost | null> {
-  const resolved = await runtimeModel(provider, modelId);
-  if (resolved?.source === 'fallback') return null;
-  const cost = resolved?.model.cost;
-  if (!hasValidPricing(cost)) return null;
+  cost: ValidModelPricing,
+): ModelCost {
   const tiers = (cost.tiers ?? []).flatMap((tier) =>
     tier.tier?.size == null
       ? []
@@ -297,6 +292,17 @@ export async function lookupModelCost(
       : { cacheWriteUsdPerMtok: cost.cache_write }),
     ...(tiers.length ? { tiers } : {}),
   };
+}
+
+export async function lookupModelCost(
+  provider: string,
+  modelId: string,
+): Promise<ModelCost | null> {
+  const resolved = await runtimeModel(provider, modelId);
+  if (resolved?.source === 'fallback') return null;
+  const cost = resolved?.model.cost;
+  if (!hasValidPricing(cost)) return null;
+  return modelCostFromCatalog(provider, modelId, cost);
 }
 
 export type ModelPricing = Omit<
@@ -392,24 +398,95 @@ export async function listModelsForProvider(
   return [...new Set([...Object.keys(models), ...Object.keys(bundled)])].sort();
 }
 
-/** Models the proxy has reviewed for image input and conservative billing. */
-export async function hasReviewedImageInputSupport(
-  provider: string,
-  modelId: string,
-): Promise<boolean> {
-  if (!hasReviewedImageBilling(provider, modelId)) return false;
-  const descriptor = await lookupModelDescriptor(provider, modelId);
-  return Boolean(descriptor?.input.includes('image'));
+export type RouteKind = 'smart' | 'fast';
+
+export function routeKindForSlot(slot: string): RouteKind {
+  return slot.includes('fast') ? 'fast' : 'smart';
 }
 
-export async function listReviewedImageModelsForProvider(
+/**
+ * Smart routes need image input and adjustable reasoning; fast routes are
+ * text in, text out with thinking off. Both need catalog token prices.
+ */
+function fitsRouteKind(model: ModelsDevModel, kind: RouteKind): boolean {
+  if (!hasValidPricing(model.cost)) return false;
+  const input = model.modalities?.input ?? ['text'];
+  const output = model.modalities?.output ?? ['text'];
+  if (!input.includes('text') || !output.includes('text')) return false;
+  return kind === 'fast' || (Boolean(model.reasoning) && input.includes('image'));
+}
+
+export async function modelFitsRouteKind(
   provider: string,
-): Promise<string[]> {
-  const models = await listModelsForProvider(provider);
-  const support = await Promise.all(
-    models.map((modelId) => hasReviewedImageInputSupport(provider, modelId)),
+  modelId: string,
+  kind: RouteKind,
+): Promise<boolean> {
+  const resolved = await runtimeModel(provider, modelId);
+  return Boolean(
+    resolved && resolved.source !== 'fallback' && fitsRouteKind(resolved.model, kind),
   );
-  return models.filter((_, index) => support[index]);
+}
+
+export async function listModelsForRouteKind(
+  provider: string,
+  kind: RouteKind,
+): Promise<string[]> {
+  await fetchCatalog();
+  const key = modelsDevKey(provider);
+  const models = {
+    ...(cache?.source === 'models.dev' ? cache.data[key]?.models : {}),
+    ...BUNDLED_RUNTIME_MODELS[key]?.models,
+  };
+  return Object.entries(models)
+    .filter(([, model]) => fitsRouteKind(model, kind))
+    .map(([modelId]) => modelId)
+    .sort();
+}
+
+/** Synchronous view of the already-loaded catalog for the proxy hot path. */
+function loadedCatalogModel(
+  provider: string,
+  modelId: string,
+): ModelsDevModel | undefined {
+  const fromCatalog =
+    cache?.source === 'models.dev'
+      ? cache.data[modelsDevKey(provider)]?.models?.[modelId]
+      : undefined;
+  return fromCatalog ?? bundledRuntimeModel(provider, modelId);
+}
+
+export type ImageTokenLimits = {
+  contextWindow: number;
+  maxInputTokens: number;
+  maxTokens: number;
+  maximumCost: Omit<ModelCost, 'provider' | 'modelId'>;
+};
+
+/**
+ * Best-effort image billing bounds from the loaded catalog: images are
+ * reserved at the model's full input ceiling and current catalog prices.
+ * Undefined when the catalog lacks image input, a context limit, or prices.
+ */
+export function loadedImageTokenLimits(
+  provider: string,
+  modelId: string,
+): ImageTokenLimits | undefined {
+  const model = loadedCatalogModel(provider, modelId);
+  const contextWindow = model?.limit?.context;
+  if (
+    !model?.modalities?.input?.includes('image') ||
+    !contextWindow ||
+    !hasValidPricing(model.cost)
+  )
+    return undefined;
+  const { provider: _provider, modelId: _modelId, ...maximumCost } =
+    modelCostFromCatalog(provider, modelId, model.cost);
+  return {
+    contextWindow,
+    maxInputTokens: model.limit?.input ?? contextWindow,
+    maxTokens: model.limit?.output ?? DEFAULT_DESCRIPTOR.maxTokens,
+    maximumCost,
+  };
 }
 
 export function resetPricingCacheForTests() {

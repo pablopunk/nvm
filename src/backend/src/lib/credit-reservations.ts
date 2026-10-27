@@ -671,6 +671,7 @@ export type ReservationFinalization = {
   routeSlot?: string;
   status?: number;
   latencyMs?: number;
+  ttftMs?: number;
   dedup?: {
     userId: string;
     idempotencyKey: string;
@@ -1255,6 +1256,7 @@ async function finalizeReservationInternal(
           requestId: reservation.requestId,
           status: input.status,
           latencyMs: input.latencyMs,
+          ttftMs: input.ttftMs ?? null,
         });
       }
       await tx
@@ -1444,6 +1446,7 @@ async function finalizeReservationInternal(
       requestId: reservation.requestId,
       status: input.status,
       latencyMs: input.latencyMs,
+      ttftMs: input.ttftMs ?? null,
     });
     await tx
       .update(creditReservations)

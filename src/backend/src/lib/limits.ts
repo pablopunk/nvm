@@ -2,7 +2,7 @@ import { DEFAULT_NEVERMIND_MAX_INPUT_TOKENS } from '../../../app/shared/ai-conte
 import { analyzeAiImageInputs, imagePayloadIntent } from './ai-image-input';
 import { computeUsdCost, type ModelCost, usdToCredits } from './cost';
 import {
-  hasReviewedImageBilling,
+  hasImageBilling,
   IMAGE_INPUT_TOKENS_ESTIMATE_PER_IMAGE,
 } from './image-cost-bound';
 
@@ -190,7 +190,7 @@ export function supportsBoundedImageInput(
 ): boolean {
   return Boolean(
     inputModalities?.includes('image') &&
-      hasReviewedImageBilling(provider, modelId),
+      hasImageBilling(provider, modelId),
   );
 }
 

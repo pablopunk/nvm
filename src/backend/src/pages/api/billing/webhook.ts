@@ -30,13 +30,9 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const result = await processStripeEvent(event);
-    return Response.json({
-      received: true,
-      processed: result.processed,
-      needs_reconciliation: result.needsReconciliation ?? false,
-    });
+    return Response.json({ received: true, processed: result.processed });
   } catch (error) {
-    log.error('stripe_webhook_processing_failed', { error });
+    log.error('stripe_webhook_processing_failed', { error, stripe_event_id: event.id, stripe_event_type: event.type });
     return Response.json({ error: { type: 'server_error', message: 'Failed to process webhook' } }, { status: 500 });
   }
 };
