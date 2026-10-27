@@ -121,6 +121,12 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
     </section>
 
     <section class="section card admin-panel">
+      <h2>Model performance</h2>
+      <p class="muted">Successful HTTP requests this month, measured at the backend rather than the desktop. TTFT starts at request admission and ends at the first parsed text, reasoning or tool output, ignoring keepalives. Turn time ends when the response finishes. Tokens/s is the mean per-request output rate after TTFT, estimated when provider token counts are missing; partial streams may contribute. Sample counts appear below each mean; historical requests have no TTFT.</p>
+      <div class="table-scroll"><table class="table" id="performance"><thead><tr><th>Model</th><th>Provider</th><th>Requests</th><th>Mean TTFT</th><th>Mean turn time</th><th>Mean tokens/s (est.)</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="section card admin-panel">
       <h2>Models</h2>
       <p class="muted">From the models.dev catalog, priced models only. Smart: image input and reasoning. Fast: text in, text out, thinking off. Dictation: audio transcription.</p>
       <div class="model-routes">
@@ -136,7 +142,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         ))}
         <section class="model-route-row" data-audio-model-route>
           <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status></span></header>
-          <label class="field">Model<select class="input combo model-select">{audioModelRefs.map((ref) => <option value={ref} selected={ref === audioRouteRef}>{ref}</option>)}</select></label>
+          <label class="field">Model<select class="input combo model-select">{audioRouteRef && !audioModelRefs.includes(audioRouteRef) && <option value={audioRouteRef} selected disabled>{audioRouteRef} (catalog unavailable)</option>}{audioModelRefs.map((ref) => <option value={ref} selected={ref === audioRouteRef}>{ref}</option>)}</select></label>
         </section>
       </div>
     </section>
@@ -163,6 +169,9 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
       return String(value ?? '').replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
     }
     function money(value) { return value == null ? '—' : usd.format(value); }
+    function performanceMean(value, samples, unit) {
+      return value == null ? '—' : `${(unit === 's' ? value / 1000 : value).toFixed(2)} ${unit}<br><small class="muted">${integer.format(samples)} samples</small>`;
+    }
     function signedMoney(value) {
       return `<span class="${value < 0 ? 'status--err' : 'status--ok'}">${money(value)}</span>`;
     }
@@ -212,6 +221,12 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         segment.activeUsers ? money(segment.costUsd / segment.activeUsers) : '—',
       ]), 8);
       renderKnobs(summary.knobs);
+      fillRows('performance', summary.performance.map((row) => [
+        `<code>${esc(row.model)}</code>`, esc(row.provider ?? '—'), integer.format(row.requests),
+        performanceMean(row.meanTtftMs, row.ttftSamples, 's'),
+        performanceMean(row.meanTurnMs, row.timedRequests, 's'),
+        performanceMean(row.meanTokensPerSecond, row.throughputSamples, 'tok/s'),
+      ]), 6);
       fillRows('top-users', summary.topUsers.map((row) => [
         `<button type="button" class="button button--ghost" data-pick-email="${esc(row.email)}">${esc(row.email)}</button>`,
         row.paying ? 'Paying' : 'Free',

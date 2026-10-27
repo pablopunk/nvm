@@ -8,15 +8,15 @@ import {
   TRANSCRIPTION_CATALOG_TTL_MS,
 } from './transcription-models';
 
-test('lists only OpenRouter audio-to-transcription models', async () => {
+test('lists only OpenRouter audio-to-transcription models without an API key', async () => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.OPENROUTER_API_KEY;
-  process.env.OPENROUTER_API_KEY = 'test-key';
+  delete process.env.OPENROUTER_API_KEY;
   globalThis.fetch = async (input, init) => {
     assert.match(String(input), /output_modalities=transcription/);
     assert.equal(
       new Headers(init?.headers).get('authorization'),
-      'Bearer test-key',
+      null,
     );
     return Response.json({
       data: [

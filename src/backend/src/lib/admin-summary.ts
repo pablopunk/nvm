@@ -3,6 +3,7 @@ import { db } from '../db/client';
 import { billingCatalog, stripeClient } from './billing';
 import { CREDIT_USD, MARKUP } from './cost';
 import { MONTHLY_FREE_CREDITS } from './users';
+import { loadModelPerformance, type ModelPerformanceRow } from './admin-model-performance';
 
 /** Stripe's standard US card rate; an estimate, not settled fees. */
 export const STRIPE_FEE_RATE = 0.029;
@@ -62,6 +63,7 @@ export type AdminSummary = {
   paying: SegmentTotals;
   free: SegmentTotals;
   models: ModelCostRow[];
+  performance: ModelPerformanceRow[];
   topUsers: UserEconomicsRow[];
   knobs: PricingKnobs | null;
 };
@@ -232,7 +234,7 @@ export async function loadAdminSummary(
   month: SummaryMonth,
 ): Promise<AdminSummary> {
   const economics = userEconomicsQuery(month);
-  const [segmentResult, topUserResult, modelResult, knobs] =
+  const [segmentResult, topUserResult, modelResult, knobs, performance] =
     await Promise.all([
       db.execute(sql`${economics}
         select paying,
@@ -261,6 +263,7 @@ export async function loadAdminSummary(
         group by u.model, u.provider, e.paying
         order by 5 desc`),
       loadPricingKnobs(),
+      loadModelPerformance(month),
     ]);
 
   const segments = rowsOf<SegmentRow>(segmentResult);
@@ -306,6 +309,7 @@ export async function loadAdminSummary(
       };
     }),
     knobs,
+    performance,
   };
 }
 

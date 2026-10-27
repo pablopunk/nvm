@@ -286,6 +286,7 @@ async function recordUsage(
   status: number,
   latencyMs: number,
   dedupTerminal?: DedupTerminal,
+  ttftMs?: number,
 ) {
   const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
   const providerCostUsd =
@@ -323,6 +324,7 @@ async function recordUsage(
             providerCostUsd == null ? 'catalog_estimate' : 'provider_reported',
           status,
           latencyMs,
+          ttftMs,
           dedup: reservationDedupFinalization(ctx, dedupTerminal),
         }
       : {
@@ -334,6 +336,7 @@ async function recordUsage(
           costRow: ctx.costRow,
           status,
           latencyMs,
+          ttftMs,
           dedup: reservationDedupFinalization(ctx, dedupTerminal),
         },
   );
@@ -346,6 +349,7 @@ async function recordUsage(
     kind: ctx.kind,
     status,
     latency_ms: latencyMs,
+    ttft_ms: ttftMs,
     input_tokens: tokens.inputTokens,
     output_tokens: tokens.outputTokens,
     cost_credits: billable ? credits : 0,
@@ -2094,6 +2098,8 @@ function teeStreamAndBill(
   function sniffStreamUsage(text: string, finalize = false) {
     try {
       cfg.parseUsageFromStreamChunk(text, acc, finalize);
+      if (firstTokenLatencyMs == null && (acc.observedOutputCharacters ?? 0) > 0)
+        firstTokenLatencyMs = Date.now() - startedAt;
     } catch (error) {
       log.warn('usage_sniffer_failed', {
         request_id: billCtx.requestId,
@@ -2115,6 +2121,7 @@ function teeStreamAndBill(
   const decoder = new TextDecoder('utf-8', { fatal: false });
   let terminal = false;
   let loggedFirstChunk = false;
+  let firstTokenLatencyMs: number | undefined;
   async function finish(
     naturalCompletion: boolean,
     outcome: 'completed' | 'failed' | 'cancelled' = naturalCompletion
@@ -2167,6 +2174,7 @@ function teeStreamAndBill(
         naturalCompletion
           ? { status: 'completed', upstreamStatus: status }
           : { status: 'failed', upstreamStatus: status },
+        firstTokenLatencyMs,
       );
     } catch (error) {
       await releaseReservationAfterError(
