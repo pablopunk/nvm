@@ -490,6 +490,21 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
   margin-top: 8px;
 }
 .landing-actions .button--primary { font-size: 15px; padding: 12px 24px; border-radius: 8px; }
+.landing-download { position: relative; }
+.landing-download__badge {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  padding: 2px 7px;
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  background: #f4cf86;
+  color: #251b0b;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
 .landing-wordmark { display: block; width: min(360px, 100%); height: auto; margin-inline: auto; }
 .landing-hero__title { line-height: 1.1; }
 .landing-hero__lede { color: #a8a29e; }
