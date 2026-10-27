@@ -85,6 +85,8 @@ const ICONS: Record<string, LucideIcon> = {
 const TYPING_INTERVAL_MS = 55;
 const DOWNLOAD_NOTICE_MS = 4000;
 const DOWNLOAD_NOTICE_TEXT = 'Download the app to actually do that!';
+/** Notice target for the "Tab to ask AI" hint; item ids identify result rows. */
+const ASK_AI_TARGET = 'ask-ai';
 const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
 
 function iconFor(item: PaletteItem): ReactNode {
@@ -103,7 +105,13 @@ function ResultRow({
 }) {
   return (
     <Command.Item value={item.id} className="result" onSelect={onSelect}>
-      <span className="resultIcon">{iconFor(item)}</span>
+      <span className={item.image ? 'resultIcon appIcon' : 'resultIcon'}>
+        {item.image ? (
+          <img src={item.image} alt="" width={32} height={32} decoding="async" />
+        ) : (
+          iconFor(item)
+        )}
+      </span>
       <span className="resultText">
         <strong>{item.title}</strong>
         {showNotice ? (
@@ -135,24 +143,33 @@ function strikeOnEnter(event: KeyboardEvent<HTMLElement>) {
 function PaletteApp({
   query,
   onQueryChange,
-  noticeItemId,
+  noticeTarget,
   onSelectItem,
+  onAskAi,
   inputRef,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
-  noticeItemId: string | null;
+  noticeTarget: string | null;
   onSelectItem: (item: PaletteItem) => void;
+  onAskAi: () => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const results = useMemo(() => searchPalette(paletteItems, query), [query]);
+  function handlePaletteKeyDown(event: KeyboardEvent<HTMLElement>) {
+    strikeOnEnter(event);
+    if (event.key === 'Tab' && !event.shiftKey && query) {
+      event.preventDefault();
+      onAskAi();
+    }
+  }
   return (
     <Command
       className="palette fitContent"
       label="Nevermind"
       loop
       shouldFilter={false}
-      onKeyDown={strikeOnEnter}
+      onKeyDown={handlePaletteKeyDown}
     >
       <div className="searchRow card searchCard">
         <Zap className="brandIcon" size={22} />
@@ -166,7 +183,16 @@ function PaletteApp({
         />
         {query ? (
           <div className="tabHint">
-            <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to ask AI
+            {noticeTarget === ASK_AI_TARGET ? (
+              <a href={RELEASES_URL} role="status">
+                {DOWNLOAD_NOTICE_TEXT}
+              </a>
+            ) : (
+              <>
+                <Sparkles size={12} aria-hidden="true" /> <kbd>Tab</kbd> to ask
+                AI
+              </>
+            )}
           </div>
         ) : null}
       </div>
@@ -182,7 +208,7 @@ function PaletteApp({
             <ResultRow
               key={item.id}
               item={item}
-              showNotice={item.id === noticeItemId}
+              showNotice={item.id === noticeTarget}
               onSelect={() => onSelectItem(item)}
             />
           ))
@@ -199,7 +225,7 @@ export default function LandingPalette() {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string | null>(paletteTabs[0].id);
-  const [noticeItemId, setNoticeItemId] = useState<string | null>(null);
+  const [noticeTarget, setNoticeTarget] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(
@@ -226,13 +252,13 @@ export default function LandingPalette() {
   const hideNotice = useCallback(function hideNotice() {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = null;
-    setNoticeItemId(null);
+    setNoticeTarget(null);
   }, []);
   useEffect(() => hideNotice, [hideNotice]);
 
-  function showNotice(itemId: string) {
+  function showNotice(target: string) {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    setNoticeItemId(itemId);
+    setNoticeTarget(target);
     noticeTimer.current = setTimeout(hideNotice, DOWNLOAD_NOTICE_MS);
   }
 
@@ -277,8 +303,9 @@ export default function LandingPalette() {
             <PaletteApp
               query={query}
               onQueryChange={typeFreely}
-              noticeItemId={noticeItemId}
+              noticeTarget={noticeTarget}
               onSelectItem={selectItem}
+              onAskAi={() => showNotice(ASK_AI_TARGET)}
               inputRef={inputRef}
             />,
             mount,

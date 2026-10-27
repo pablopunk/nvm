@@ -18,8 +18,12 @@ const landingOverrides = `
 .palette { height: auto; }
 .results { max-height: 392px; }
 .card { -webkit-app-region: no-drag; }
+.resultIcon.appIcon { background: transparent; box-shadow: none; }
+.resultIcon.appIcon img { width: 32px; height: 32px; }
 .resultText small.downloadNotice { color: var(--accent); }
 .downloadNotice a { color: inherit; text-decoration: none; }
+.tabHint a { color: var(--accent); text-decoration: none; }
+.tabHint a:hover { text-decoration: underline; }
 .downloadNotice a:hover { text-decoration: underline; }
 `;
 

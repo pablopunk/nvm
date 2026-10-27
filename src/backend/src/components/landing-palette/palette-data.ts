@@ -18,6 +18,7 @@ function sample(
   subtitle: string,
   icon: string,
   keywords: string[] = [],
+  image?: string,
 ): PaletteItem {
   return {
     id: `${kind}:${title}`,
@@ -27,11 +28,17 @@ function sample(
     aliases: [],
     kind,
     keywords,
+    image,
   };
 }
 
 const LAUNCH_SUBTITLE = 'Launch application';
 const apps: PaletteItem[] = [
+  sample('app', 'Helium', LAUNCH_SUBTITLE, 'app-window', ['browser', 'web'], '/apps/helium.webp'),
+  sample('app', 'T3 Code', LAUNCH_SUBTITLE, 'app-window', ['code', 'agent', 'ai'], '/apps/t3-code.webp'),
+  sample('app', 'Spotifin', LAUNCH_SUBTITLE, 'app-window', ['music', 'player'], '/apps/spotifin.webp'),
+  sample('app', 'Telegram', LAUNCH_SUBTITLE, 'app-window', ['chat', 'messages'], '/apps/telegram.webp'),
+  sample('app', 'Nevermind', LAUNCH_SUBTITLE, 'app-window', ['palette', 'launcher'], '/apps/nevermind.webp'),
   sample('app', 'Calendar', LAUNCH_SUBTITLE, 'calendar'),
   sample('app', 'Calculator', LAUNCH_SUBTITLE, 'calculator'),
   sample('app', 'Notes', LAUNCH_SUBTITLE, 'sticky-note'),

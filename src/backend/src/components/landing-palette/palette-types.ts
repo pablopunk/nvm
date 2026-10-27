@@ -8,6 +8,8 @@ export interface PaletteItem {
   icon?: string;
   aliases: string[];
   kind: PaletteItemKind;
+  /** Bundled app icon path; replaces the generic Lucide glyph. */
+  image?: string;
   /** Extra text that makes the item findable without being shown. */
   keywords?: string[];
 }
