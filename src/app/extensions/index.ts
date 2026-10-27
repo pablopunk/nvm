@@ -20,6 +20,7 @@ import { createPermissionsExtension } from './permissions';
 import { createPlacesExtension, createSystemExtension } from './system';
 import { createUpdatesExtension } from './updates';
 import { createWebSearchExtension } from './web-search';
+import { createWindowManagementExtension } from './window-management';
 
 export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createSystemExtension,
@@ -39,6 +40,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createUpdatesExtension,
   createKeyboardShortcutsExtension,
   createQuitAppsExtension,
+  createWindowManagementExtension,
   createSettingsExtension,
   createBackgroundTasksExtension,
   createDiagnosticsExtension,
@@ -68,4 +70,5 @@ export const INTERNAL_EXTENSION_SOURCE_FILES = [
   'system.ts',
   'updates.ts',
   'web-search.ts',
+  'window-management.ts',
 ] as const;

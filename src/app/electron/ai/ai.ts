@@ -2209,6 +2209,7 @@ function validateExtensionCapabilities(source: string) {
     ],
     ['desktop.files', /ctx\.desktop\.files\b|ctx\.desktop\.selection\.files\b/],
     ['desktop.apps', /ctx\.desktop\.apps\b/],
+    ['desktop.window-management', /ctx\.desktop\.windowManagement\b/],
     [
       'clipboard.history',
       /ctx\.clipboard\.history\b|ctx\.desktop\.clipboard\b/,
@@ -2526,7 +2527,7 @@ validate_extension typechecks changed extension files and verifies they load wit
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
-Declare capabilities explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls. These declarations describe intent for the user's review; they do not restrict an enabled local extension's access.
+Declare capabilities explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'desktop.window-management' for moving or resizing other apps' windows, 'clipboard.history' for clipboard history, and 'ai' for AI calls. These declarations describe intent for the user's review; they do not restrict an enabled local extension's access.
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use actions(ctx) for persistent shortcut-worthy variants such as “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippet actions; these are searchable, aliasable, and global-shortcutable without opening a view. When a view row should run one of those durable actions, set primaryAction: ctx.actions.ref('action-id') instead of duplicating inline logic. Use rootItems(ctx) for high-signal empty-query dynamic/status contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
