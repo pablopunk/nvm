@@ -7,10 +7,14 @@ interface Props {
 
 export function ConsoleTable({ id, columns }: Props) {
   return (
-    <Table id={id} className="table">
+    <Table id={id}>
       <TableHeader>
         <TableRow>
-          {columns.map((column, index) => <TableHead scope="col" key={`${column}-${index}`}>{column}</TableHead>)}
+          {columns.map((column, index) => (
+            <TableHead scope="col" key={`${column}-${index}`}>
+              {column}
+            </TableHead>
+          ))}
         </TableRow>
       </TableHeader>
       <TableBody />

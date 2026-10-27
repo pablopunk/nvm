@@ -1,7 +1,7 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import '../styles/console.css';
-import { Button } from '../components/ui/button';
+import Layout from '../layouts/ConsoleLayout.astro';
+import { Button, buttonVariants } from '../components/ui/button';
+import { ConsoleTokenList } from '../components/ConsoleTokenList';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { ConsoleNavigation } from '../components/ConsoleNavigation';
@@ -33,29 +33,28 @@ const hasActiveSubscription = subscription ? isActiveBillingSubscriptionStatus(s
 const canBuyTopUps = hasActiveSubscription;
 const billingState = Astro.url.searchParams.get('billing');
 ---
-<Layout title="Nevermind · Profile" showHeader={false} console>
+<Layout title="Nevermind · Profile">
   <ConsoleNavigation email={user?.email ?? ""} admin={isAdmin} current="profile" />
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:32px">
+  <header class="profile-header">
     <div>
-      <h1 style="margin:0">Profile</h1>
-      <p class="muted" style="margin:0"><code>{user?.email}</code> · {user?.plan} plan</p>
+      <h1>Profile</h1>
+      <p class="muted"><code>{user?.email}</code> · {user?.plan} plan</p>
     </div>
+  </header>
 
-  </div>
-
-  <div class="section stat-grid">
+  <div class="section stat-grid profile-stats">
     <div class="stat"><div class="v">{balances.total}</div><div class="l">Credits</div></div>
     <div class="stat"><div class="v">{balances.free}</div><div class="l">Free</div></div>
     <div class="stat"><div class="v">{balances.paid}</div><div class="l">Paid</div></div>
   </div>
 
-  <Card className="section card stack" id="connect-desktop">
+  <Card className="section profile-panel" id="connect-desktop">
     <h3>Connect desktop app</h3>
-    <p class="muted" style="margin:0">Sign into the Nevermind desktop app from this browser.</p>
+    <p class="muted">Sign into the Nevermind desktop app from this browser.</p>
     <Button variant="default" id="initiate-connect" type="button">Start device connection</Button>
-    <p id="connect-status" class="status" style="margin:0"></p>
+    <p id="connect-status" class="status"></p>
     <pre id="connect-code" style="display:none;"></pre>
-    <a id="connect-deep-link" class="button" style="display:none;" href="#">Open in Nevermind</a>
+    <a id="connect-deep-link" class={buttonVariants({ variant: "outline" })} style="display:none;" href="#">Open in Nevermind</a>
     <script is:inline>
       var connectPending = false;
       var deepLinkUrl = '';
@@ -93,6 +92,9 @@ const billingState = Astro.url.searchParams.get('billing');
           status.className = 'status status--ok';
           status.textContent = 'Approval code ready. Click "Open in Nevermind" or enter the code manually.';
           status.style.display = '';
+        } catch {
+          status.className = 'status status--err';
+          status.textContent = 'Could not connect. Try again.';
         } finally {
           connectPending = false;
         }
@@ -100,10 +102,10 @@ const billingState = Astro.url.searchParams.get('billing');
     </script>
   </Card>
 
-  <Card className="section card stack"><section class="stack">
+  <Card className="section profile-panel"><section class="stack">
     <div>
       <h3>Billing</h3>
-      <p class="muted" style="margin:0">
+      <p class="muted">
         {subscription ? `${subscription.status} · renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}` : 'No active subscription.'}
       </p>
     </div>
@@ -128,20 +130,20 @@ const billingState = Astro.url.searchParams.get('billing');
       )}
       {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span class="muted">Billing is not configured yet.</span>}
     </div>
-    <p id="billing-status" class="status" style="margin:0" aria-live="polite"></p>
+    <p id="billing-status" class="status" aria-live="polite"></p>
   </section></Card>
 
-  <div class="section">
-    <h2>API tokens</h2>
+  <Card className="section profile-panel">
+    <h2 id="tokens-heading" tabindex="-1">API tokens</h2>
     <p class="muted">Use these to call the API directly. The full token is shown only once.</p>
-    <form id="create-token-form" class="row" style="margin-bottom:12px;">
-      <Input className="input" type="text" name="name" aria-label="Token name" placeholder="Token name (e.g. My Mac)" required />
+    <form id="create-token-form" class="row items-end">
+      <label class="field flex-1">Token name<Input type="text" name="name" placeholder="e.g. My Mac" required id="token-name" /></label>
       <Button variant="default" type="submit">Create token</Button>
     </form>
-    <Card id="new-token-panel" className="card stack" style={{ display: "none" }} role="region" aria-label="New API token">
+    <Card id="new-token-panel" className="profile-panel" style={{ display: "none" }} role="region" aria-label="New API token">
       <div>
         <h3>Your new API token</h3>
-        <p class="muted" style="margin:0;">Save this token now — it will not be shown again.</p>
+        <p class="muted">Save this token now — it will not be shown again.</p>
       </div>
       <pre class="token-value" id="new-token-value"></pre>
       <div id="copy-status" aria-live="polite" class="status"></div>
@@ -150,20 +152,9 @@ const billingState = Astro.url.searchParams.get('billing');
         <Button type="button" id="close-token-btn" variant="outline">Close</Button>
       </div>
     </Card>
-    <ul class="list-clean">
-      {tokens.map((t) => (
-        <li data-id={t.id}>
-          <code>{t.prefix}…</code>
-          <span>{t.name}</span>
-          <span class="muted">· created {new Date(t.createdAt).toLocaleString()}</span>
-          <span class="muted">{t.lastUsedAt ? `· last used ${new Date(t.lastUsedAt).toLocaleString()}` : '· never used'}</span>
-          <span class="spacer" style="flex:1"></span>
-          <Button variant="destructive" className="revoke" data-id={t.id}>Revoke</Button>
-        </li>
-      ))}
-      {tokens.length === 0 && <li class="muted">No tokens yet.</li>}
-    </ul>
-  </div>
+    <p id="token-status" class="status" aria-live="polite"></p>
+    <ConsoleTokenList client:load tokens={tokens.map((token) => ({ id: token.id, prefix: token.prefix, name: token.name, created: new Date(token.createdAt).toLocaleString(), lastUsed: token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'never used' }))} />
+  </Card>
 
   <script is:inline>
     const createTokenForm = document.getElementById('create-token-form');
@@ -238,25 +229,33 @@ const billingState = Astro.url.searchParams.get('billing');
 
     createTokenForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (undisclosedToken) return;
+      if (undisclosedToken || createTokenBtn.disabled) return;
+      const status = document.getElementById('token-status');
       const fd = new FormData(e.target);
-      const res = await fetch('/api/tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: fd.get('name') }),
-      });
-      if (!res.ok) {
-        alert('Failed to create token');
-        return;
+      createTokenBtn.disabled = true;
+      status.className = 'status';
+      status.textContent = 'Creating token…';
+      try {
+        const res = await fetch('/api/tokens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: fd.get('name') }),
+        });
+        if (!res.ok) throw new Error('Could not create token; try again.');
+        const data = await res.json();
+        undisclosedToken = data.token;
+        newTokenValue.textContent = data.token;
+        setPanelVisible(true);
+        status.textContent = '';
+        copyStatus.textContent = '';
+        copyStatus.className = 'status';
+        window.addEventListener('beforeunload', beforeUnloadHandler);
+        copyTokenBtn.focus();
+      } catch {
+        status.textContent = 'Could not create token; try again.';
+        status.className = 'status status--err';
+        createTokenBtn.disabled = false;
       }
-      const data = await res.json();
-      undisclosedToken = data.token;
-      newTokenValue.textContent = data.token;
-      setPanelVisible(true);
-      copyStatus.textContent = '';
-      copyStatus.className = 'status';
-      window.addEventListener('beforeunload', beforeUnloadHandler);
-      copyTokenBtn.focus();
     });
 
     copyTokenBtn.addEventListener('click', copyTokenToClipboard);
@@ -291,12 +290,5 @@ const billingState = Astro.url.searchParams.get('billing');
     });
     document.getElementById('manage-billing')?.addEventListener('click', () => openBillingUrl('/api/billing/portal'));
 
-    document.querySelectorAll('.revoke').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Revoke this token?')) return;
-        await fetch(`/api/tokens/${btn.dataset.id}`, { method: 'DELETE' });
-        location.reload();
-      });
-    });
   </script>
 </Layout>

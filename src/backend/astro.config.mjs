@@ -12,15 +12,18 @@ export default defineConfig({
   adapter: vercel(),
   site: 'https://www.nvm.fyi',
   vite: { plugins: [tailwindcss()] },
-  integrations: [react(), ...(sentryDsn
-    ? [
-        sentry({
-          dsn: sentryDsn,
-          release: process.env.VERCEL_GIT_COMMIT_SHA,
-          environment: process.env.VERCEL_ENV ?? 'development',
-          serverInitPath: './src/sentry.server.config.ts',
-          sourceMapsUploadOptions: { telemetry: false },
-        }),
-      ]
-    : [])],
+  integrations: [
+    react(),
+    ...(sentryDsn
+      ? [
+          sentry({
+            dsn: sentryDsn,
+            release: process.env.VERCEL_GIT_COMMIT_SHA,
+            environment: process.env.VERCEL_ENV ?? 'development',
+            serverInitPath: './src/sentry.server.config.ts',
+            sourceMapsUploadOptions: { telemetry: false },
+          }),
+        ]
+      : []),
+  ],
 });

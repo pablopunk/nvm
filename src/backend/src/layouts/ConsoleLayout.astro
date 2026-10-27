@@ -1,0 +1,22 @@
+---
+import '../styles/console.css';
+interface Props { title: string; width?: 'default' | 'wide'; }
+const { title, width = 'default' } = Astro.props;
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
+  <body class="console-page">
+    <a href="#console-content" class="console-skip-link">Skip to content</a>
+    <main id="console-content" class:list={['console-container', width === 'wide' && 'console-container--wide']}>
+      <slot />
+    </main>
+    <footer class="console-footer" aria-label="Legal and project links">
+      <a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refund">Refunds</a><a href="https://github.com/pablopunk/nvm">GitHub</a>
+    </footer>
+  </body>
+</html>

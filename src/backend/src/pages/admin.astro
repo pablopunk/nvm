@@ -1,13 +1,12 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import '../styles/console.css';
-import { Button } from '../components/ui/button';
+import Layout from '../layouts/ConsoleLayout.astro';
+import { Button, buttonVariants } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { ConsoleSelect } from '../components/ConsoleSelect';
 import { ConsoleTable } from '../components/ConsoleTable';
 import { ConsoleNavigation } from '../components/ConsoleNavigation';
-import Combobox from '../components/Combobox.astro';
+import { ConsoleCombobox } from '../components/ConsoleCombobox';
 import { getCurrentUser, isAdmin } from '../lib/admin';
 import {
   DEFAULT_THINKING_LEVEL,
@@ -72,8 +71,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
   (model) => modelRouteToRef(model),
 );
 ---
-<Layout title="Nevermind · Admin" width="wide" showHeader={false} console>
-  <Combobox />
+<Layout title="Nevermind · Admin" width="wide">
   <ConsoleNavigation email={user.email} admin={true} current="admin" />
 
   <div class="admin-console">
@@ -82,79 +80,79 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         <h1>Am I making money?</h1>
         <p class="muted">Revenue from Stripe payments, cost from provider usage, Stripe fees estimated at 2.9% + 30¢. UTC calendar months.</p>
       </div>
-      <label class="field">Month<Input className="input" id="month" type="month" /></label>
+      <label class="field">Month<Input id="month" type="month" /></label>
     </header>
 
     <div class="admin-alerts" id="problems" aria-live="polite"></div>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <div class="stat-grid" id="headline"><div class="stat"><div class="v">…</div><div class="l">Loading</div></div></div>
       <div class="table-scroll admin-subpanel">
         <ConsoleTable id="segments" columns={['', 'Users', 'Active', 'Requests', 'Provider cost', 'Revenue', 'Net', 'Cost / active user']} />
       </div>
     </section></Card>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <h2>Pricing</h2>
       <p class="muted">Set in Vercel env (<code>CREDIT_MARKUP</code>, <code>CREDIT_USD</code>, <code>MONTHLY_FREE_CREDITS</code>, <code>STRIPE_SUBSCRIPTION_TIERS</code>, <code>STRIPE_TOP_UP_PACKS</code>). Worst case means the user spends every credit they get.</p>
       <div class="table-scroll"><ConsoleTable id="knobs" columns={['Plan', 'Price', 'Credits / month', 'Worst-case cost', 'Worst-case net']} /></div>
       <p class="muted" id="knobs-note"></p>
     </section></Card>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <h2>Top users by cost</h2>
       <div class="table-scroll"><ConsoleTable id="top-users" columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} /></div>
       <div class="admin-subpanel">
         <h3>Give or remove credits</h3>
         <div class="row admin-grant">
-          <label class="field">Email<Input className="input" id="grant-email" type="email" autoComplete="off" /></label>
-          <label class="field">Pool<ConsoleSelect className="input" id="grant-kind" options={[{ value: "paid", label: "Paid" }, { value: "free", label: "Free" }]} /></label>
-          <label class="field">Credits<Input className="input" id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
-          <label class="field">Reason<Input className="input" id="grant-reason" type="text" maxLength="500" /></label>
+          <label class="field">Email<Input id="grant-email" type="email" autoComplete="off" /></label>
+          <label class="field">Pool<ConsoleSelect id="grant-kind" options={[{ value: "paid", label: "Paid" }, { value: "free", label: "Free" }]} /></label>
+          <label class="field">Credits<Input id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
+          <label class="field">Reason<Input id="grant-reason" type="text" maxLength="500" /></label>
           <Button variant="default" id="grant" type="button">Apply</Button>
           <span class="status" id="grant-status" aria-live="polite"></span>
         </div>
       </div>
     </section></Card>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <h2>Cost by model</h2>
       <div class="table-scroll"><ConsoleTable id="models" columns={['Model', 'Provider', 'Who', 'Requests', 'Cost']} /></div>
     </section></Card>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <h2>Model performance</h2>
       <p class="muted">Successful HTTP requests this month, measured at the backend rather than the desktop. TTFT starts at request admission and ends at the first parsed text, reasoning or tool output, ignoring keepalives. Turn time ends when the response finishes. Tokens/s is the mean per-request output rate after TTFT, estimated when provider token counts are missing; partial streams may contribute. Sample counts appear below each mean; historical requests have no TTFT.</p>
       <div class="table-scroll"><ConsoleTable id="performance" columns={['Model', 'Provider', 'Requests', 'Mean TTFT', 'Mean turn time', 'Mean tokens/s (est.)']} /></div>
     </section></Card>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <h2>Models</h2>
       <p class="muted">From the models.dev catalog, priced models only. Smart: image input and reasoning. Fast: text in, text out, thinking off. Dictation: audio transcription.</p>
       <div class="model-routes">
         {modelRows.map(({ slot, title, route, kind, options }) => (
           <section class="model-route-row" data-model-route={slot}>
             <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status></span></header>
-            <label class="field">Model<ConsoleSelect className="input combo model-select" defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
+            <label class="field">Model<ConsoleCombobox client:load label={`${title} model`} defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
             {kind === 'smart'
-              ? <label class="field model-route-row__thinking">Thinking<ConsoleSelect className="input thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
+              ? <label class="field model-route-row__thinking">Thinking<ConsoleSelect className="thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
               : <span class="muted model-route-row__thinking">Thinking off</span>}
             <div class="route-details muted" data-pricing></div>
           </section>
         ))}
         <section class="model-route-row" data-audio-model-route>
           <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status></span></header>
-          <label class="field">Model<ConsoleSelect className="input combo model-select" defaultValue={audioRouteRef ?? undefined} options={[...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (catalog unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
+          <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? undefined} options={[...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (catalog unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
         </section>
       </div>
     </section></Card>
 
-    <Card className="section card admin-panel"><section>
+    <Card className="section admin-panel"><section>
       <h2>Free usage cap</h2>
       <p class="muted" id="cap-state">Loading…</p>
       <div class="row admin-grant">
-        <label class="field">Monthly cap (USD)<Input className="input" id="cap-usd" type="text" inputMode="decimal" placeholder="25.00" /></label>
-        <label class="field">Applies to<ConsoleSelect className="input" id="cap-effective" options={[{ value: "current", label: "This month" }, { value: "next_month", label: "Next month" }]} /></label>
+        <label class="field">Monthly cap (USD)<Input id="cap-usd" type="text" inputMode="decimal" placeholder="25.00" /></label>
+        <label class="field">Applies to<ConsoleSelect id="cap-effective" options={[{ value: "current", label: "This month" }, { value: "next_month", label: "Next month" }]} /></label>
         <Button variant="default" id="cap-set" type="button">Set</Button>
         <Button variant="outline" id="cap-clear" type="button">Remove cap</Button>
         <span class="status" id="cap-status" aria-live="polite"></span>
@@ -162,7 +160,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
     </section></Card>
   </div>
 
-  <script is:inline>
+  <script is:inline define:vars={{ actionButtonClass: buttonVariants({ variant: "outline", size: "sm" }), emailButtonClass: buttonVariants({ variant: "ghost", size: "sm" }) }}>
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const integer = new Intl.NumberFormat('en-US');
     const monthInput = document.getElementById('month');
@@ -230,7 +228,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
         performanceMean(row.meanTokensPerSecond, row.throughputSamples, 'tok/s'),
       ]), 6);
       fillRows('top-users', summary.topUsers.map((row) => [
-        `<button type="button" class="button button--ghost" data-pick-email="${esc(row.email)}">${esc(row.email)}</button>`,
+        `<button type="button" class="${emailButtonClass}" data-pick-email="${esc(row.email)}">${esc(row.email)}</button>`,
         row.paying ? 'Paying' : 'Free',
         integer.format(row.requests),
         money(row.costUsd),
@@ -269,7 +267,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
       const [{ breakers }, cap] = await Promise.all([getJson('/api/admin/route-breakers'), getJson('/api/admin/free-spend-cap')]);
       if (cap.current?.halted) problems.push('<div class="admin-notice admin-notice--warning">Free usage cap reached — free users are blocked until next month or a higher cap.</div>');
       for (const breaker of breakers) {
-        problems.push(`<div class="admin-notice admin-notice--warning">Route <code>${esc(breaker.routeSlot)}</code> (${esc(breaker.provider)}/${esc(breaker.modelId)}) is off: ${esc(breaker.reason)}. <button type="button" class="button" data-breaker='${esc(JSON.stringify({ routeSlot: breaker.routeSlot, provider: breaker.provider, modelId: breaker.modelId }))}'>Turn back on</button></div>`);
+        problems.push(`<div class="admin-notice admin-notice--warning">Route <code>${esc(breaker.routeSlot)}</code> (${esc(breaker.provider)}/${esc(breaker.modelId)}) is off: ${esc(breaker.reason)}. <button type="button" class="${actionButtonClass}" data-breaker='${esc(JSON.stringify({ routeSlot: breaker.routeSlot, provider: breaker.provider, modelId: breaker.modelId }))}'>Turn back on</button></div>`);
       }
       const container = document.getElementById('problems');
       container.innerHTML = problems.join('');
