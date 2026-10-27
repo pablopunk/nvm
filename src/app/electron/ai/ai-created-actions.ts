@@ -64,7 +64,7 @@ export function createAiCreatedActions(deps: AiCreatedActionsDeps) {
     void commitPortable({
       label: 'alias:generated',
       actionId: action.id,
-      actionIsGenerated: Boolean(action.removable),
+      actionIsGenerated: true,
       mutate: (draft) => {
         draft.aliases[action.id] = [
           ...new Set([...(draft.aliases[action.id] ?? []), alias]),
