@@ -43,10 +43,51 @@
  * ```
  */
 
+/** Fractions are of the display work area (menu bar and Dock excluded), origin top-left. `x` and `y` are 0..1, `width` and `height` are above 0 and at most 1, and `x + width` and `y + height` are at most 1. */
+export type ExtensionWindowLayoutSpec =
+  | { kind: 'fraction'; x: number; y: number; width: number; height: number }
+  /** Keep the window's size and center it on its display. */
+  | { kind: 'center' };
+
+export type ExtensionWindowManagementOptions = {
+  /** Pixels between windows and display edges, 0..100. Default 0. */
+  gap?: number;
+};
+
+export type ExtensionWindowApplyResult =
+  | {
+      ok: true;
+      /** `partial` means the app constrained the frame (for example a minimum size). */
+      outcome: 'exact' | 'partial';
+      /** False when the window already had the requested frame. */
+      changed: boolean;
+      frame: { x: number; y: number; width: number; height: number };
+      reason?: string;
+    }
+  | {
+      ok: false;
+      reason:
+        | 'no-target'
+        | 'focus-not-restored'
+        | 'no-window'
+        | 'target-lost'
+        | 'full-screen'
+        | 'minimized'
+        | 'denied'
+        | 'unapplied'
+        | 'not-resizable'
+        | 'unsupported'
+        | 'invalid-spec';
+      /** Palette-ready explanation. */
+      message: string;
+    };
+
 /** Intent an extension declares for review; it does not restrict enabled local code. */
 export type ExtensionCapability =
   | 'desktop.apps'
   | 'desktop.files'
+  /** Declares intent to move and resize windows of other apps through `ctx.desktop.windowManagement`. */
+  | 'desktop.window-management'
   | 'clipboard.history'
   | 'ai'
   | 'extensions.ownership'
@@ -1779,6 +1820,14 @@ export type ExtensionContext = {
       search(query: string): ExtensionApp[];
       /** Icon for an app path as a data URL, or null when unavailable. */
       icon(appPath: string): Promise<string | null>;
+    };
+    /** Move and resize the focused window of another app. Check `ctx.system.capabilities.has('window-management')` for support; macOS only today. */
+    windowManagement?: {
+      /** Apply a layout to the focused window of the app that was frontmost before Nevermind opened (or when a global shortcut fired). Never throws for runtime failures; inspect `ok`. */
+      apply(
+        spec: ExtensionWindowLayoutSpec,
+        options?: ExtensionWindowManagementOptions,
+      ): Promise<ExtensionWindowApplyResult>;
     };
     files?: {
       /**
