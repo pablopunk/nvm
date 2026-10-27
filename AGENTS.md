@@ -6,6 +6,7 @@
 * Leverage existing primitives, formatters, and OS capabilities instead of creating one-off helpers.
 * Respect manual file changes and stop the app before editing `userState` to prevent overwrites.
 * For local app incidents, inspect `.tmp/dev.log` before terminal scrollback; development logs must remain file-backed and terminal-visible.
+* Before handing off a locally started backend, follow `src/backend/README.md` setup and check that the requested pages respond, not just that Astro started.
 * Commit frequently and use history to guide changes.
 * Do not fix symptoms, fix diseases. After two successive symptom patches in the same code path, stop patching and audit the architecture.
 
