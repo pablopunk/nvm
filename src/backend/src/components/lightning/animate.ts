@@ -50,7 +50,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     uSpread: 0.6,
     uFlash: 0,
     uLight: 0,
-    uFade: 1,
+    uFade: 0.7,
   };
   for (const [name, value] of Object.entries(defaults))
     gl.uniform1f(uniform(name), value);
