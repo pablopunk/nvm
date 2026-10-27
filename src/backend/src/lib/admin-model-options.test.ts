@@ -29,7 +29,7 @@ test('model options include only enabled providers with configured keys', async 
   try {
     const refs = await listAdminModelRefs('fast');
     assert.ok(refs.includes('openrouter/test-model'));
-    assert.ok(refs.every((ref) => !ref.startsWith('opencode_zen/'));
+    assert.ok(refs.every((ref) => !ref.startsWith('opencode_zen/')));
   } finally {
     globalThis.fetch = originalFetch;
     if (originalOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
