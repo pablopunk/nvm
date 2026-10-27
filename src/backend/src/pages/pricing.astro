@@ -1,16 +1,18 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { billingCatalog, formatBillingPrice, type BillingCatalogItem } from '../lib/billing';
+import { billingCatalog, type BillingCatalogItem } from '../lib/billing';
 import { getSessionFromCookies } from '../lib/workos';
+import { publicBillingPrices } from '../lib/public-billing-prices';
 
 function displayPriceFor(item: BillingCatalogItem): string | null {
-  return item.displayPrice ? formatBillingPrice(item.displayPrice) : null;
+  return priceDisplays.get(item.priceId)?.amount ?? null;
 }
 
 const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
 const hasSubscriptions = catalog.subscriptions.length > 0;
+const priceDisplays = await publicBillingPrices([...catalog.subscriptions, ...catalog.topUps]);
 const hasTopUps = catalog.topUps.length > 0;
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 const isLoggedIn = Boolean(session);
@@ -25,7 +27,7 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
   <div class="pricing-grid">
     <div class="price-card">
       <h3>Free</h3>
-      <div><span class="price-card__credits">Free</span><span class="price-card__period">/ month</span></div>
+      <div><span class="price-card__credits">$0</span><span class="price-card__period">/ month</span></div>
       <ul class="price-card__features">
         <li>Batteries included</li>
         <li>No credit card required</li>
@@ -45,11 +47,18 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
           {tier === recommendedTier && <span class="price-card__badge">Recommended</span>}
           <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
           {displayPrice ? (
-            <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {tier.displayPrice?.interval}</span></div>
+            <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {priceDisplays.get(tier.priceId)?.period}</span></div>
           ) : (
-            <div><span class="price-card__credits">{tier.credits}</span><span class="price-card__period">credits / month</span></div>
+            <div class="price-card__desc">Price temporarily unavailable</div>
           )}
-          <p class="price-card__desc">{tier.credits} credits included each billing cycle. Credits are consumed per AI operation, proportional to the model and prompt size.</p>
+          <ul class="price-card__features">
+            <li>Everything in Free</li>
+            <li>{tier.credits.toLocaleString('en')} AI credits each billing cycle</li>
+            <li>Build more tools with AI</li>
+            <li>Chat more with AI</li>
+            {hasTopUps && <li>Top up your credits whenever you need more</li>}
+            <li>Cancel anytime</li>
+          </ul>
           {!isLoggedIn && (
             <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
           )}
