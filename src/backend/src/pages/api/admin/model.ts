@@ -9,9 +9,11 @@ import {
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
-  hasReviewedImageInputSupport,
-  listReviewedImageModelsForProvider,
+  listModelsForRouteKind,
   lookupModelCost,
+  modelFitsRouteKind,
+  type RouteKind,
+  routeKindForSlot,
 } from '../../../lib/pricing';
 import {
   DEFAULT_THINKING_LEVEL,
@@ -55,11 +57,11 @@ const putModelSchema = z.object({
     ),
 });
 
-async function listModelRefs() {
+async function listModelRefs(kind: RouteKind) {
   const providers = listKnownProviders();
   const groups = await Promise.all(
     providers.map(async (provider) => {
-      const models = await listReviewedImageModelsForProvider(provider);
+      const models = await listModelsForRouteKind(provider, kind);
       return models.map((modelId) => ({
         provider,
         modelId,
@@ -96,7 +98,8 @@ export const GET: APIRoute = async ({ request }) => {
     proFast: await safeRoute('pro-fast'),
     freeSmart: await safeRoute('free-smart'),
     freeFast: await safeRoute('free-fast'),
-    models: await listModelRefs(),
+    models: await listModelRefs('smart'),
+    fastModels: await listModelRefs('fast'),
   });
 };
 
@@ -124,13 +127,16 @@ export const PUT: APIRoute = async ({ request }) => {
       { status: 400 },
     );
 
-  if (!(await hasReviewedImageInputSupport(route.provider, route.modelId)))
+  const kind = routeKindForSlot(slot);
+  if (!(await modelFitsRouteKind(route.provider, route.modelId, kind)))
     return Response.json(
       {
         error: {
-          type: 'unsupported_image_model',
+          type: 'unsupported_route_model',
           message:
-            'Choose a model with reviewed image-input and billing support.',
+            kind === 'smart'
+              ? 'Smart routes need a priced model with image input and reasoning.'
+              : 'Fast routes need a priced text-to-text model.',
         },
       },
       { status: 400 },
@@ -158,10 +164,12 @@ export const PUT: APIRoute = async ({ request }) => {
       { status: 400 },
     );
 
-  const thinkingLevel =
-    (body.thinkingLevel as ThinkingLevel | undefined) ??
-    (await safeRoute(slot))?.thinkingLevel ??
-    DEFAULT_THINKING_LEVEL;
+  const thinkingLevel: ThinkingLevel =
+    kind === 'fast'
+      ? 'off'
+      : ((body.thinkingLevel as ThinkingLevel | undefined) ??
+        (await safeRoute(slot))?.thinkingLevel ??
+        DEFAULT_THINKING_LEVEL);
   const idempotencyKey = adminMutationKeyFromRequest(request);
   if (!idempotencyKey) {
     return Response.json(

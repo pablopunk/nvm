@@ -28,8 +28,8 @@ import {
 import { captureStreamFailure } from './diagnostics';
 import { freeSpendCapErrorBody } from './free-spend-cap';
 import {
-  type ReviewedImageTokenLimits,
-  reviewedImageTokenLimits,
+  type ImageTokenLimits,
+  imageTokenLimits,
 } from './image-cost-bound';
 import {
   conservativeImageRequestInputTokenCeiling,
@@ -168,7 +168,7 @@ function requestReservationCostUsd(
   outputTokens: number,
   imageCount: number,
   completionCount: number,
-  reviewedLimits?: ReviewedImageTokenLimits,
+  imageLimits?: ImageTokenLimits,
 ) {
   const totalOutputTokens = outputTokens * completionCount;
   return imageCount > 0
@@ -176,7 +176,7 @@ function requestReservationCostUsd(
         costRow,
         inputTokens,
         totalOutputTokens,
-        reviewedLimits?.maximumCost,
+        imageLimits?.maximumCost,
       )
     : computeUsdCost(costRow, inputTokens, totalOutputTokens);
 }
@@ -187,7 +187,7 @@ function requestReservationCredits(
   outputTokens: number,
   imageCount: number,
   completionCount: number,
-  reviewedLimits?: ReviewedImageTokenLimits,
+  imageLimits?: ImageTokenLimits,
 ) {
   return usdToCredits(
     requestReservationCostUsd(
@@ -196,7 +196,7 @@ function requestReservationCredits(
       outputTokens,
       imageCount,
       completionCount,
-      reviewedLimits,
+      imageLimits,
     ),
   );
 }
@@ -1053,12 +1053,12 @@ async function hasConfiguredImageRoute(
       candidate.modelId === routing.activeModelId
         ? primaryDescriptor
         : await lookupModelDescriptor(candidate.providerId, candidate.modelId);
-    const reviewedLimits = reviewedImageTokenLimits(
+    const imageLimits = imageTokenLimits(
       candidate.providerId,
       candidate.modelId,
     );
     if (
-      reviewedLimits &&
+      imageLimits &&
       supportsBoundedImageInput(
         candidate.providerId,
         candidate.modelId,
@@ -1191,13 +1191,13 @@ async function tryUpstreamProviders(
     const descriptor = candidateIsPrimary
       ? primaryDescriptor
       : await lookupModelDescriptor(providerId, modelId);
-    const reviewedLimits =
+    const imageLimits =
       imageCount > 0
-        ? reviewedImageTokenLimits(providerId, modelId)
+        ? imageTokenLimits(providerId, modelId)
         : undefined;
     if (
       imageCount > 0 &&
-      (!reviewedLimits ||
+      (!imageLimits ||
         !supportsBoundedImageInput(providerId, modelId, descriptor?.input))
     ) {
       imageBoundRouteRejected = true;
@@ -1211,9 +1211,9 @@ async function tryUpstreamProviders(
     const candidateInputTokenCeiling =
       imageCount === 0
         ? estimatedInputTokens
-        : descriptor && reviewedLimits
+        : descriptor && imageLimits
           ? conservativeImageRequestInputTokenCeiling(
-              reviewedLimits,
+              imageLimits,
               requestedOutputTokens,
               estimatedInputTokens,
             )
@@ -1232,12 +1232,12 @@ async function tryUpstreamProviders(
       !candidateIsPrimary && descriptor
         ? Math.min(
             requestedOutputTokens ??
-              reviewedLimits?.maxTokens ??
+              imageLimits?.maxTokens ??
               descriptor.maxTokens,
-            reviewedLimits?.maxTokens ?? descriptor.maxTokens,
+            imageLimits?.maxTokens ?? descriptor.maxTokens,
             Math.max(
               0,
-              (reviewedLimits?.contextWindow ?? descriptor.contextWindow) -
+              (imageLimits?.contextWindow ?? descriptor.contextWindow) -
                 candidateInputTokenCeiling -
                 OUTPUT_CONTEXT_SAFETY_TOKENS,
             ),
@@ -1260,7 +1260,7 @@ async function tryUpstreamProviders(
             candidateMaxOutputTokens,
             imageCount,
             completionCount,
-            reviewedLimits,
+            imageLimits,
           );
     const candidateCredits =
       candidateCostUsd == null ? undefined : usdToCredits(candidateCostUsd);
@@ -1629,17 +1629,17 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           candidate.activeModelId === admissionRouting.activeModelId
         )
           routingDescriptor = descriptor;
-        const reviewedLimits =
+        const imageLimits =
           imageCount > 0
-            ? reviewedImageTokenLimits(
+            ? imageTokenLimits(
                 candidate.provider,
                 candidate.activeModelId,
               )
             : undefined;
         contextWindowTokens =
-          reviewedLimits?.contextWindow ?? descriptor?.contextWindow;
+          imageLimits?.contextWindow ?? descriptor?.contextWindow;
         const serverMaximum =
-          reviewedLimits?.maxTokens ?? descriptor?.maxTokens ?? 32_000;
+          imageLimits?.maxTokens ?? descriptor?.maxTokens ?? 32_000;
         const desiredOutputMaximum = Math.min(
           requestedOutput ?? serverMaximum,
           serverMaximum,
@@ -1647,14 +1647,14 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         const imageInputTokenCeiling =
           imageCount > 0 &&
           descriptor &&
-          reviewedLimits &&
+          imageLimits &&
           supportsBoundedImageInput(
             candidate.provider,
             candidate.activeModelId,
             descriptor.input,
           )
             ? conservativeImageRequestInputTokenCeiling(
-                reviewedLimits,
+                imageLimits,
                 desiredOutputMaximum,
                 estimatedInputTokens,
               )
@@ -1662,7 +1662,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         const inputTokensForReservation =
           imageInputTokenCeiling ?? estimatedInputTokens;
         const contextMaximum = descriptor
-          ? (reviewedLimits?.contextWindow ?? descriptor.contextWindow) -
+          ? (imageLimits?.contextWindow ?? descriptor.contextWindow) -
             inputTokensForReservation -
             OUTPUT_CONTEXT_SAFETY_TOKENS
           : serverMaximum;
@@ -1679,9 +1679,9 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       routingDescriptor = initialAdmission.descriptor;
       maxOutputTokens = initialAdmission.maxOutputTokens;
       reservationInputTokenCeiling = initialAdmission.inputTokensForReservation;
-      const initialReviewedLimits =
+      const initialImageLimits =
         imageCount > 0
-          ? reviewedImageTokenLimits(routing.provider, routing.activeModelId)
+          ? imageTokenLimits(routing.provider, routing.activeModelId)
           : undefined;
       if (
         imageCount > 0 &&
@@ -1732,7 +1732,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         maxOutputTokens,
         imageCount,
         completionCount,
-        initialReviewedLimits,
+        initialImageLimits,
       );
       const estimatedProviderCostUsd = requestReservationCostUsd(
         routing.costRow,
@@ -1740,7 +1740,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         maxOutputTokens,
         imageCount,
         completionCount,
-        initialReviewedLimits,
+        initialImageLimits,
       );
       let reservation = await reserveCredits({
         requestId,
@@ -1794,7 +1794,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
               imageCount,
               completionCount,
               freeImageRouteSupported && imageCount > 0
-                ? reviewedImageTokenLimits(
+                ? imageTokenLimits(
                     freeRouting.provider,
                     freeRouting.activeModelId,
                   )
@@ -1813,7 +1813,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                 imageCount,
                 completionCount,
                 freeImageRouteSupported && imageCount > 0
-                  ? reviewedImageTokenLimits(
+                  ? imageTokenLimits(
                       freeRouting.provider,
                       freeRouting.activeModelId,
                     )

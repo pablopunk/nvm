@@ -13,7 +13,7 @@ import {
   type ModelRouteConfig,
   type ModelRouteSlot,
 } from '../lib/settings';
-import { listReviewedImageModelsForProvider } from '../lib/pricing';
+import { listModelsForRouteKind, routeKindForSlot, type RouteKind } from '../lib/pricing';
 import { listTranscriptionModels } from '../lib/transcription-models';
 
 const user = await getCurrentUser(Astro.request);
@@ -41,15 +41,24 @@ const modelRoutes = await Promise.all(
     ] as const
   ).map(async ([slot, title]) => ({ slot, title, route: await safeModelRoute(slot) })),
 );
-const modelOptions = (
-  await Promise.all(
+async function modelRefsForKind(kind: RouteKind): Promise<string[]> {
+  const groups = await Promise.all(
     listKnownProviders().map(async (provider) =>
-      (await listReviewedImageModelsForProvider(provider)).map((modelId) =>
+      (await listModelsForRouteKind(provider, kind)).map((modelId) =>
         modelRouteToRef({ provider, modelId }),
       ),
     ),
-  )
-).flat();
+  );
+  return groups.flat();
+}
+const [smartModelRefs, fastModelRefs] = await Promise.all([
+  modelRefsForKind('smart'),
+  modelRefsForKind('fast'),
+]);
+const modelRows = modelRoutes.map((row) => {
+  const kind = routeKindForSlot(row.slot);
+  return { ...row, kind, options: kind === 'smart' ? smartModelRefs : fastModelRefs };
+});
 const audioRoute = await getAudioModelRoute().catch(() => null);
 const audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
 const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
@@ -113,12 +122,15 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
 
     <section class="section card admin-panel">
       <h2>Models</h2>
+      <p class="muted">From the models.dev catalog, priced models only. Smart: image input and reasoning. Fast: text in, text out, thinking off. Dictation: audio transcription.</p>
       <div class="model-routes">
-        {modelRoutes.map(({ slot, title, route }) => (
+        {modelRows.map(({ slot, title, route, kind, options }) => (
           <section class="model-route-row" data-model-route={slot}>
             <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status></span></header>
-            <label class="field">Model<select class="input combo model-select">{route && !modelOptions.includes(route.ref) && <option value={route.ref} selected disabled>{route.ref} (not selectable)</option>}{modelOptions.map((ref) => <option value={ref} selected={ref === route?.ref}>{ref}</option>)}</select></label>
-            <label class="field model-route-row__thinking">Thinking<select class="input thinking-select">{THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}</select></label>
+            <label class="field">Model<select class="input combo model-select">{route && !options.includes(route.ref) && <option value={route.ref} selected disabled>{route.ref} (not selectable)</option>}{options.map((ref) => <option value={ref} selected={ref === route?.ref}>{ref}</option>)}</select></label>
+            {kind === 'smart'
+              ? <label class="field model-route-row__thinking">Thinking<select class="input thinking-select">{THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}</select></label>
+              : <span class="muted model-route-row__thinking">Thinking off</span>}
             <div class="route-details muted" data-pricing></div>
           </section>
         ))}
@@ -329,7 +341,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
     document.querySelectorAll('[data-model-route]').forEach((row) => {
       loadRoutePricing(row);
       row.querySelectorAll('select').forEach((select) => select.addEventListener('change', async () => {
-        await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select').value });
+        await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select')?.value ?? 'off' });
         loadRoutePricing(row);
       }));
     });
