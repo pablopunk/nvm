@@ -44,7 +44,7 @@ const apps: PaletteItem[] = [
   sample('app', 'T3 Code', LAUNCH_SUBTITLE, 'app-window', ['code', 'agent', 'ai'], '/apps/t3-code.webp', 'https://t3.codes'),
   sample('app', 'Spotifin', LAUNCH_SUBTITLE, 'app-window', ['music', 'player'], '/apps/spotifin.webp', 'https://spotifin.app'),
   sample('app', 'Telegram', LAUNCH_SUBTITLE, 'app-window', ['chat', 'messages'], '/apps/telegram.webp', 'https://telegram.org'),
-  sample('app', 'Nevermind', LAUNCH_SUBTITLE, 'app-window', ['palette', 'launcher'], '/apps/nevermind.webp'),
+  sample('app', 'Nevermind', LAUNCH_SUBTITLE, 'app-window', ['palette', 'launcher'], '/apps/nevermind.webp', RELEASES_URL),
 ];
 
 const files: PaletteItem[] = [
