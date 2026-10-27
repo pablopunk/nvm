@@ -5,8 +5,6 @@ import { docsData } from '../../lib/docs-data';
 
 export const prerender = true;
 
-const described = docsData.features.filter((feature) => feature.description || feature.commands.length);
-const plain = docsData.features.filter((feature) => !feature.description && !feature.commands.length);
 ---
 <Layout title="Built-in features · Nevermind Docs">
   <section class="page-hero">
@@ -23,7 +21,7 @@ const plain = docsData.features.filter((feature) => !feature.description && !fea
       {docsData.features.length === 0 && <p>The feature list is being regenerated. Check back shortly.</p>}
 
       <div class="feature-grid">
-        {described.map((feature) => (
+        {docsData.features.map((feature) => (
           <section class="feature-card" id={feature.id.replace('nevermind.', '')}>
             <h3>{feature.title}</h3>
             {feature.description && <p class="feature-card__subtitle">{feature.description}</p>}
@@ -47,9 +45,6 @@ const plain = docsData.features.filter((feature) => !feature.description && !fea
         ))}
       </div>
 
-      {plain.length > 0 && (
-        <p class="feature-also">Also built in: {plain.map((feature, index) => <><strong>{feature.title}</strong>{index < plain.length - 1 ? ', ' : '.'}</>)}</p>
-      )}
 
       <p>Want something that isn't here? <a href="/docs/api">Build your own extension</a> or ask the AI builder to do it.</p>
     </article>

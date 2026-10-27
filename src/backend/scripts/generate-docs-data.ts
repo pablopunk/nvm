@@ -348,7 +348,9 @@ function generateFeatures(): FeatureExtension[] {
         warn(`Skipping features in ${fileName}`, error);
       }
     }
-    return [...byId.values()].sort((a, b) => a.title.localeCompare(b.title));
+    return [...byId.values()]
+      .filter((feature) => feature.description || feature.commands.length)
+      .sort((a, b) => a.title.localeCompare(b.title));
   } catch (error) {
     warn('Skipping built-in features', error);
     return [];

@@ -96,7 +96,6 @@ function createPlacesExtension() {
   return {
     id: 'nevermind.places',
     title: 'Places',
-    description: 'Open common folders and places on your computer.',
     capabilities: ['places'] as const,
     commands: placesItems().map(extensionContext.commandFromItem),
     rootItems: () => placesItems(),
