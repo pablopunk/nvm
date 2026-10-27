@@ -39,7 +39,7 @@ const containerClass = width === 'wide' ? 'container container--wide' : width ==
     </header>
     )}
 
-    <main class={containerClass} style="padding-top:24px;padding-bottom:48px">
+    <main class={containerClass} style="padding-top:var(--main-padding-top,24px);padding-bottom:48px">
       <slot />
     </main>
 

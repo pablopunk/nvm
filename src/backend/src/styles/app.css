@@ -375,6 +375,7 @@ body:has(.landing-shell) {
   --accent: #fafaf9;
   --accent-fg: #0c0a09;
   background: #000;
+  overflow-x: clip;
 }
 body:has(.landing-shell) .container--wide { max-width: 1800px; }
 body:has(.landing-shell) .site-header {
@@ -382,15 +383,38 @@ body:has(.landing-shell) .site-header {
   border-bottom-color: #1c1c1c;
 }
 .landing-shell { display: flex; flex-direction: column; flex: 1; }
-main:has(.landing-shell) { display: flex; flex-direction: column; }
+main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-direction: column; }
 .landing-nav {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 56px;
+  min-height: 80px;
+  padding: 16px 24px;
   width: 100%;
   max-width: 1280px;
   margin-inline: auto;
+}
+.landing-nav::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  top: 0;
+  bottom: -48px;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  mask-image: linear-gradient(to bottom, #000 35%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 35%, transparent);
 }
 .landing-brand {
   display: inline-flex;
@@ -425,11 +449,12 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
   flex-direction: column;
   align-items: center;
   gap: 48px;
-  padding: 16px 0 72px;
+  padding: 0 0 72px;
 }
 .landing-demo {
   position: relative;
-  width: min(100%, calc((100svh - 136px) * 16 / 9));
+  width: 100vw;
+  max-width: none;
   aspect-ratio: 16 / 9;
   background: #000;
 }
@@ -513,8 +538,7 @@ main:has(.landing-shell) { display: flex; flex-direction: column; }
   .landing-shell { gap: 0; }
   .landing-nav { flex-wrap: wrap; }
   .landing-nav__links { margin-left: auto; }
-  .landing-hero { gap: 32px; padding: 24px 0 60px; }
-  .landing-demo { width: 100%; }
+  .landing-hero { gap: 32px; padding: 0 0 60px; }
   .landing-hero__title { font-size: 36px; }
   .landing-hero__copy { align-items: center; text-align: center; }
   .landing-actions { justify-content: center; }
