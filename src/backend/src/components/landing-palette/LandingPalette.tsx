@@ -81,6 +81,8 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 const TYPING_INTERVAL_MS = 55;
+const DOWNLOAD_NOTICE_MS = 4000;
+const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
 
 function iconFor(item: PaletteItem): ReactNode {
   const Icon = (item.icon && ICONS[item.icon]) || Sparkles;
@@ -160,7 +162,8 @@ export default function LandingPalette() {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string | null>(paletteTabs[0].id);
-  const [note, setNote] = useState('');
+  const [downloadNotice, setDownloadNotice] = useState(false);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(
     function attachShadowRoot() {
@@ -183,6 +186,19 @@ export default function LandingPalette() {
   }, []);
   useEffect(() => stopTyping, [stopTyping]);
 
+  const hideNotice = useCallback(function hideNotice() {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = null;
+    setDownloadNotice(false);
+  }, []);
+  useEffect(() => hideNotice, [hideNotice]);
+
+  function showNotice() {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setDownloadNotice(true);
+    noticeTimer.current = setTimeout(hideNotice, DOWNLOAD_NOTICE_MS);
+  }
+
   const typeInto = useCallback(
     function typeInto(text: string) {
       stopTyping();
@@ -200,7 +216,7 @@ export default function LandingPalette() {
 
   function chooseTab(tabId: string, tabQuery: string) {
     setActiveTab(tabId);
-    setNote('');
+    hideNotice();
     typeInto(tabQuery);
     inputRef.current?.focus({ preventScroll: true });
   }
@@ -208,12 +224,12 @@ export default function LandingPalette() {
   function typeFreely(value: string) {
     stopTyping();
     setActiveTab(null);
-    setNote('');
+    hideNotice();
     setQuery(value);
   }
 
-  function selectItem(item: PaletteItem) {
-    setNote(`In the app, ↵ runs “${item.title}”.`);
+  function selectItem() {
+    showNotice();
   }
 
   return (
@@ -230,9 +246,13 @@ export default function LandingPalette() {
             mount,
           )
         : null}
-      <p className="landing-palette__note" aria-live="polite">
-        {note || 'Try it: type anything, or pick a tab.'}
-      </p>
+      <div className="landing-palette__toast-region" aria-live="polite">
+        {downloadNotice ? (
+          <a className="landing-palette__toast" href={RELEASES_URL}>
+            Download the app to actually do that!
+          </a>
+        ) : null}
+      </div>
       <div className="landing-palette__tabs" role="group" aria-label="Palette examples">
         {paletteTabs.map((tab) => (
           <button
