@@ -4,10 +4,17 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock3,
+  Download,
+  Ellipsis,
   Film,
   Folder,
+  LayoutGrid,
+  List,
+  Monitor,
   Play,
   Search,
+  Share,
   Zap,
 } from 'lucide-react';
 import { staticFile } from 'remotion';
@@ -33,7 +40,7 @@ const STEPS = [
 
 function ignore() {}
 
-function SelectedVideos() {
+function SelectedVideos({ resultEnter }: { resultEnter: number | null }) {
   return (
     <div className="finderWindow">
       <div className="finderToolbar">
@@ -42,19 +49,35 @@ function SelectedVideos() {
           <i />
           <i />
         </div>
-        <ChevronLeft size={18} />
-        <ChevronRight size={18} />
+        <div className="finderControl finderNavigation">
+          <ChevronLeft size={18} />
+          <ChevronRight size={18} />
+        </div>
         <strong>Video clips</strong>
-        <Search size={18} />
+        <div className="finderControl">
+          <LayoutGrid size={18} />
+          <List size={18} />
+        </div>
+        <div className="finderControl">
+          <Share size={18} />
+          <Ellipsis size={18} />
+        </div>
+        <div className="finderControl finderSearch">
+          <Search size={18} />
+        </div>
       </div>
       <div className="finderBody">
         <aside className="finderSidebar">
+          <span>
+            <Clock3 size={18} /> Recents
+          </span>
           <small>Favorites</small>
-          <span>Recents</span>
-          <span>Applications</span>
-          <span>Desktop</span>
-          <span>Documents</span>
-          <span>Downloads</span>
+          <span>
+            <Download size={18} /> Downloads
+          </span>
+          <span>
+            <Monitor size={18} /> Desktop
+          </span>
           <span className="finderFolder">
             <Folder size={16} /> Video clips
           </span>
@@ -72,9 +95,39 @@ function SelectedVideos() {
               </div>
             );
           })}
+          {resultEnter !== null ? (
+            <div
+              className="finderSelectedFile finderOutputFile"
+              style={{
+                opacity: resultEnter,
+                transform: `translateY(${(1 - resultEnter) * 8}px)`,
+              }}
+            >
+              <div className="finderThumbnail finderMergedThumbnail">
+                {CLIPS.map(function renderMergedClip(clip) {
+                  return (
+                    <img
+                      key={clip.name}
+                      src={staticFile(`${clip.image}.jpg`)}
+                      alt=""
+                    />
+                  );
+                })}
+                <Play size={22} fill="currentColor" />
+                <small>00:26</small>
+              </div>
+              <span>final-video.mp4</span>
+            </div>
+          ) : null}
         </div>
       </div>
-      <div className="finderStatus">3 of 3 selected</div>
+      <div className="finderPath">
+        <Folder size={12} /> Movies <ChevronRight size={12} />
+        <Folder size={12} /> Video clips
+      </div>
+      <div className="finderStatus">
+        3 of {resultEnter === null ? 3 : 4} selected
+      </div>
     </div>
   );
 }
@@ -112,7 +165,17 @@ export function VideoPipeline({
           opacity: tween(frame, scene.searchStart, scene.searchStart + 8),
         }}
       >
-        <SelectedVideos />
+        <SelectedVideos
+          resultEnter={
+            complete
+              ? tween(
+                  frame,
+                  scene.listStart + STEPS.length * 32,
+                  scene.listStart + STEPS.length * 32 + 6,
+                )
+              : null
+          }
+        />
       </div>
       <div
         className="productWindow pipelineWindow"

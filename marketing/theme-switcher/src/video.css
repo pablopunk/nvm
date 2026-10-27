@@ -131,8 +131,8 @@
   overflow: hidden;
   border: 1px solid var(--edge-strong);
   border-radius: var(--radius-lg);
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+  background: #252d2e;
+  color: #e4e7e7;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
   font:
     14px -apple-system,
@@ -144,10 +144,9 @@
   height: 56px;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 0 24px;
-  background: var(--surface-raised);
-  border-bottom: 1px solid var(--edge-subtle);
+  gap: 12px;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .finderToolbar strong {
@@ -157,7 +156,8 @@
 .finderTraffic {
   display: flex;
   gap: 8px;
-  margin-right: 72px;
+  width: 164px;
+  flex-shrink: 0;
 }
 .finderTraffic i {
   width: 12px;
@@ -173,7 +173,7 @@
 }
 .finderBody {
   display: flex;
-  height: 360px;
+  height: 330px;
 }
 .finderSidebar {
   width: 180px;
@@ -182,14 +182,20 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  background: var(--surface-raised);
+  background: rgba(12, 25, 28, 0.22);
 }
 .finderSidebar small {
-  color: var(--text-muted);
+  color: #889293;
   font-size: 11px;
 }
 .finderSidebar span {
   padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.finderSidebar span svg {
+  color: #ef8ca6;
 }
 .finderFolder {
   display: flex;
@@ -198,8 +204,8 @@
 }
 .finderFiles {
   display: flex;
-  gap: 36px;
-  padding: 32px 36px;
+  gap: 24px;
+  padding: 32px 24px;
 }
 .finderSelectedFile {
   width: 220px;
@@ -267,4 +273,57 @@
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.finderOutputFile .finderThumbnail {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.finderOutputFile > span {
+  background: transparent;
+  color: #e4e7e7;
+}
+.finderMergedThumbnail {
+  display: flex;
+}
+.finderMergedThumbnail img {
+  width: calc(100% / 3);
+}
+
+.finderControl {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: linear-gradient(
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.02)
+  );
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  color: #d9dddd;
+}
+.finderNavigation {
+  gap: 8px;
+}
+.finderNavigation svg + svg {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 4px;
+  color: #7b8384;
+}
+.finderSearch {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+}
+.finderPath {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 8px 204px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+  color: #b6bdbd;
 }
