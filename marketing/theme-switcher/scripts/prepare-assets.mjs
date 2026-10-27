@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -10,6 +10,10 @@ const themes = JSON.parse(
   await readFile(new URL('../src/themes.json', import.meta.url), 'utf8'),
 );
 await mkdir(output, { recursive: true });
+await copyFile(
+  new URL('../../../src/backend/public/wordmark.png', import.meta.url),
+  new URL('wordmark.png', output),
+);
 
 const sources = [
   ['meadow', 'online/wallhaven-213edy.png', 'Blue Meadow'],

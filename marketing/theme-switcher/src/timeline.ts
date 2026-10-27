@@ -4,7 +4,10 @@ import { existingExtensionAt } from './extension-scenes';
 export const REQUEST = 'mac theme switcher';
 export const FPS = 30;
 export const PLAYBACK_SPEED = 1.15;
-export const DURATION = Math.ceil(960 / PLAYBACK_SPEED);
+export const INTRO_FRAMES = 24;
+export const CONTENT_FRAMES = Math.ceil(960 / PLAYBACK_SPEED);
+export const OUTRO_FRAMES = 48;
+export const DURATION = INTRO_FRAMES + CONTENT_FRAMES + OUTRO_FRAMES;
 
 export const STORY = {
   typingStart: 24,

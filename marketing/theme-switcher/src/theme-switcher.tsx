@@ -1,10 +1,12 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { AbsoluteFill, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, staticFile, useCurrentFrame } from 'remotion';
 import { DesktopBackground, DesktopDock } from './desktop';
 import { ExistingExtensions } from './existing-extensions';
 import { ProductUi } from './product-ui';
 import {
   camera,
+  CONTENT_FRAMES,
+  INTRO_FRAMES,
   PLAYBACK_SPEED,
   pointerAt,
   sceneAt,
@@ -41,7 +43,12 @@ function Pointer({ frame }: { frame: number }) {
 }
 
 export function ThemeSwitcher() {
-  const frame = useCurrentFrame() * PLAYBACK_SPEED;
+  const outputFrame = useCurrentFrame();
+  const frame =
+    Math.max(0, Math.min(CONTENT_FRAMES - 1, outputFrame - INTRO_FRAMES)) *
+    PLAYBACK_SPEED;
+  const intro = outputFrame < INTRO_FRAMES;
+  const outroFrame = outputFrame - INTRO_FRAMES - CONTENT_FRAMES;
   const scene = sceneAt(frame);
   const view = camera(frame);
   const stage = useRef<HTMLDivElement>(null);
@@ -78,6 +85,29 @@ export function ThemeSwitcher() {
           <Pointer frame={frame} />
         ) : null}
       </div>
+      {intro || outroFrame >= 0 ? (
+        <AbsoluteFill style={{ pointerEvents: 'none' }}>
+          <AbsoluteFill
+            style={{
+              background: 'black',
+              opacity: intro ? 1 : tween(outroFrame, 0, 24),
+            }}
+          />
+          <AbsoluteFill
+            style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: intro ? 1 : tween(outroFrame, 14, 32),
+            }}
+          >
+            <img
+              src={staticFile('wordmark.png')}
+              alt="Nevermind"
+              style={{ width: 800, height: 'auto' }}
+            />
+          </AbsoluteFill>
+        </AbsoluteFill>
+      ) : null}
     </AbsoluteFill>
   );
 }
