@@ -65,6 +65,31 @@ export function animateLightning(canvas: HTMLCanvasElement) {
   const intro = uniform('uIntro');
   const offset = uniform('uXOffset');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const video = document.querySelector('.landing-demo');
+  function updateBounds() {
+    const top = Math.max(
+      0,
+      Math.min(innerHeight, video?.getBoundingClientRect().bottom ?? 0),
+    );
+    canvas.style.setProperty('--lightning-top', `${top}px`);
+  }
+  function resizeCanvas() {
+    const width = Math.max(1, canvas.clientWidth);
+    const height = Math.max(1, canvas.clientHeight);
+    const ratio = Math.min(1, 1280 / width, 900 / height);
+    const targetWidth = Math.round(width * ratio);
+    const targetHeight = Math.round(height * ratio);
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+    gl!.viewport(0, 0, canvas.width, canvas.height);
+    gl!.uniform2f(resolution, canvas.width, canvas.height);
+  }
+  updateBounds();
+  window.addEventListener('scroll', updateBounds, { passive: true });
+  window.addEventListener('resize', updateBounds);
+
   let timer: ReturnType<typeof setTimeout>;
   let frame = 0;
   let first = true;
@@ -78,31 +103,34 @@ export function animateLightning(canvas: HTMLCanvasElement) {
   }
   function draw(now: number) {
     const age = (now - start) / 1000;
-    if (age > 1.8) {
+    if (age > 0.65) {
       clear();
       schedule();
       return;
     }
-    gl!.uniform1f(phase, seed + age * 0.13);
-    gl!.uniform1f(intro, Math.min(1, age / 0.15));
+    resizeCanvas();
+    gl!.uniform1f(phase, seed + age * 0.3);
+    gl!.uniform1f(intro, Math.min(1, age / 0.06));
     gl!.uniform1f(
       opacity,
-      Math.min(1, age / 0.08) *
-        Math.max(0, Math.min(1, (1.8 - age) / 0.65)) *
+      Math.min(1, age / 0.035) *
+        Math.max(0, Math.min(1, (0.65 - age) / 0.25)) *
         0.75,
     );
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
     frame = requestAnimationFrame(draw);
   }
   function strike() {
-    const ratio = Math.min(1, 1280 / innerWidth, 900 / innerHeight);
-    canvas.width = Math.round(innerWidth * ratio);
-    canvas.height = Math.round(innerHeight * ratio);
-    gl!.viewport(0, 0, canvas.width, canvas.height);
-    gl!.uniform2f(resolution, canvas.width, canvas.height);
+    if (canvas.clientHeight < 1) {
+      schedule();
+      return;
+    }
+    resizeCanvas();
     gl!.uniform1f(
       offset,
-      (Math.random() - 0.5) * (innerWidth / innerHeight) * 1.3,
+      (Math.random() - 0.5) *
+        (canvas.clientWidth / Math.max(1, canvas.clientHeight)) *
+        1.3,
     );
     seed = Math.random();
     start = performance.now();
@@ -124,6 +152,8 @@ export function animateLightning(canvas: HTMLCanvasElement) {
       clear();
       document.removeEventListener('visibilitychange', schedule);
       reducedMotion.removeEventListener('change', schedule);
+      window.removeEventListener('scroll', updateBounds);
+      window.removeEventListener('resize', updateBounds);
       gl!.deleteBuffer(buffer);
       gl!.deleteProgram(program);
     },
