@@ -42,7 +42,7 @@ export const BEATS = [
   { frame: 0, scale: 1, x: 960, y: 540 },
   { frame: 18, scale: 1.72, x: 920, y: 320 },
   { frame: 64, scale: 1.72, x: 920, y: 320 },
-  { frame: STORY.createClick, scale: 1.9, x: 900, y: 355 },
+  { frame: STORY.createClick, scale: 1.72, x: 920, y: 320 },
   { frame: STORY.chatSettled, scale: 1.25, x: 960, y: 450 },
   { frame: STORY.zoomStart, scale: 1.25, x: 960, y: 450 },
   { frame: STORY.zoomPeak, scale: 5, x: 850, y: 380 },
