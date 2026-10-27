@@ -11,24 +11,24 @@ import {
   type BrowserWindowConstructorOptions,
   shell,
 } from 'electron';
-import {
-  EXTENSION_WINDOW_CAPABILITIES,
-  type ExtensionWindowSession,
-  hasExtensionWindowCapability,
-} from './extension-window-capabilities';
 import { debug as logDebug, warn as logWarn } from '../platform/logger';
-import { macosAppFocusRestoreScript } from './macos-app-focus';
-import { macosSelectionAccess } from './macos-selected-text';
-import { createLinuxDesktopText } from './linux-desktop-text';
-import { createWindowsDesktopText } from './windows-desktop-text';
 import type {
   DesktopTextAccess,
   DesktopTextTarget,
 } from './desktop-text-access';
 import {
+  EXTENSION_WINDOW_CAPABILITIES,
+  type ExtensionWindowSession,
+  hasExtensionWindowCapability,
+} from './extension-window-capabilities';
+import { createLinuxDesktopText } from './linux-desktop-text';
+import { macosAppFocusRestoreScript } from './macos-app-focus';
+import { macosSelectionAccess } from './macos-selected-text';
+import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
+import { createWindowsDesktopText } from './windows-desktop-text';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
