@@ -40,7 +40,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     return gl!.getUniformLocation(program, name);
   }
   const defaults = {
-    uIntensity: 0.85,
+    uIntensity: 0.3,
     uSize: 1.2,
     uThickness: 0.75,
     uGlow: 0.65,
@@ -50,7 +50,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     uSpread: 0.6,
     uFlash: 0,
     uLight: 0,
-    uFade: 0.2,
+    uFade: 1,
   };
   for (const [name, value] of Object.entries(defaults))
     gl.uniform1f(uniform(name), value);
@@ -64,6 +64,12 @@ export function animateLightning(canvas: HTMLCanvasElement) {
   const opacity = uniform('uOpacity');
   const intro = uniform('uIntro');
   const offset = uniform('uXOffset');
+  const bolts = uniform('uBolts');
+  const strikes = uniform('uStrikes');
+  const strikeInfo = uniform('uStrikeInfo');
+  const strikeData = new Float32Array(16);
+  const infoData = new Float32Array(16);
+  const speed = 3;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const video = document.querySelector('.landing-demo');
   function updateBounds() {
@@ -95,6 +101,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
   let first = true;
   let start = 0;
   let seed = 0;
+  let clicked: { x: number; y: number; reach: number } | null = null;
   function clear() {
     clearTimeout(timer);
     cancelAnimationFrame(frame);
@@ -109,7 +116,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
       return;
     }
     resizeCanvas();
-    gl!.uniform1f(phase, seed + age * 0.3);
+    gl!.uniform1f(phase, seed + (age * speed) / 10);
     gl!.uniform1f(intro, Math.min(1, age / 0.06));
     gl!.uniform1f(
       opacity,
@@ -117,10 +124,33 @@ export function animateLightning(canvas: HTMLCanvasElement) {
         Math.max(0, Math.min(1, (0.65 - age) / 0.25)) *
         0.75,
     );
+    strikeData.fill(0);
+    infoData.fill(0);
+    if (clicked) {
+      const elapsed = age * 2;
+      const progress = Math.min(1, elapsed / 0.11);
+      const since = Math.max(0, elapsed - 0.11);
+      const strength =
+        elapsed < 0.11
+          ? 0.45 + 0.35 * progress
+          : 1.8 * Math.exp(-since * 5.5) * (0.85 + 0.2 * Math.sin(since * 70)) +
+            (since > 0.17 ? Math.exp(-(since - 0.17) * 9) : 0);
+      strikeData.set([
+        clicked.x,
+        clicked.y,
+        clicked.reach * (1 - progress ** 1.6),
+        strength,
+      ]);
+      infoData.set([seed * 100, clicked.reach, elapsed >= 0.11 ? 1 : 0, 0]);
+    }
+    gl!.uniform1i(bolts, clicked ? 0 : 1);
+    gl!.uniform4fv(strikes, strikeData);
+    gl!.uniform4fv(strikeInfo, infoData);
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
     frame = requestAnimationFrame(draw);
   }
   function strike() {
+    clicked = null;
     if (canvas.clientHeight < 1) {
       schedule();
       return;
@@ -142,6 +172,43 @@ export function animateLightning(canvas: HTMLCanvasElement) {
     if (document.hidden || reducedMotion.matches || gl!.isContextLost()) return;
     timer = setTimeout(strike, first ? 1200 : 7000 + Math.random() * 9000);
   }
+  function clickStrike(event: PointerEvent) {
+    if (
+      event.button !== 0 ||
+      document.hidden ||
+      reducedMotion.matches ||
+      gl!.isContextLost()
+    )
+      return;
+    updateBounds();
+    const rect = canvas.getBoundingClientRect();
+    if (
+      rect.height < 1 ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    )
+      return;
+    clear();
+    resizeCanvas();
+    const x = (2 * (event.clientX - rect.left) - rect.width) / rect.height;
+    const y = (rect.height - 2 * (event.clientY - rect.top)) / rect.height;
+    const sine = Math.sin(defaults.uAngle);
+    const cosine = Math.cos(defaults.uAngle);
+    clicked = {
+      x,
+      y,
+      reach:
+        (rect.width / rect.height) * Math.abs(sine) +
+        Math.abs(cosine) -
+        (-sine * x + cosine * y) +
+        0.2,
+    };
+    seed = Math.random();
+    start = performance.now();
+    first = false;
+    frame = requestAnimationFrame(draw);
+  }
+  window.addEventListener('pointerdown', clickStrike, { passive: true });
   document.addEventListener('visibilitychange', schedule);
   reducedMotion.addEventListener('change', schedule);
   canvas.addEventListener('webglcontextlost', clear);
@@ -152,6 +219,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
       clear();
       document.removeEventListener('visibilitychange', schedule);
       reducedMotion.removeEventListener('change', schedule);
+      window.removeEventListener('pointerdown', clickStrike);
       window.removeEventListener('scroll', updateBounds);
       window.removeEventListener('resize', updateBounds);
       gl!.deleteBuffer(buffer);
