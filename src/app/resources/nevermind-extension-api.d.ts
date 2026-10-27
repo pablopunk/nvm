@@ -50,7 +50,7 @@ export type ExtensionWindowLayoutSpec =
   | { kind: 'center' };
 
 export type ExtensionWindowManagementOptions = {
-  /** Pixels between windows and display edges, 0..100. Default 0. */
+  /** Whole pixels between windows and display edges, 0..100. Default 0. */
   gap?: number;
 };
 

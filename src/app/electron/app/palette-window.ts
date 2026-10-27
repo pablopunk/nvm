@@ -497,7 +497,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     showPaletteWhenReady,
     togglePalette,
     takeRestoredFocusReturnTarget,
-    peekFocusReturnTarget: () => focusReturnTarget,
+    peekFocusReturnTarget: () => focusReturnTarget ?? restoredFocusReturnTarget,
     getHotkeyStatus,
     isHotkeyReserved,
     registerHotkey,

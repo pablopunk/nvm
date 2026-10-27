@@ -26,6 +26,7 @@ interface WindowManagementServiceDependencies {
     pickDisplayForFrame(displays: DisplayInfo[], frame: Frame): DisplayInfo;
   };
   supported(): boolean;
+  selfPid?: number;
 }
 
 type Engine = WindowManagementServiceDependencies['engine'];
@@ -96,6 +97,9 @@ function failure(
 ): FailedResult {
   return { ok: false, reason, message };
 }
+
+const SELF_TARGET_MESSAGE =
+  'Nevermind is in front. Focus the window you want to move, then run the command again.';
 
 function noTargetMessage(source: WindowInvocation['source']) {
   return source === 'palette' ? PALETTE_NO_TARGET : SHORTCUT_NO_TARGET;
@@ -459,6 +463,9 @@ export function createWindowManagementService(
     const { target, source } = invocation;
     if (!target) {
       return Promise.resolve(failure('no-target', noTargetMessage(source)));
+    }
+    if (target.pid === dependencies.selfPid) {
+      return Promise.resolve(failure('no-target', SELF_TARGET_MESSAGE));
     }
     return enqueueForPid(queues, target.pid, () =>
       applyToTarget(dependencies, { spec, options, source, target }),

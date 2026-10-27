@@ -1,20 +1,21 @@
-import { createWindowManagementService } from '../os/window-management';
-import { computeTargetFrame, pickDisplayForFrame } from '../os/window-layouts';
-import { macosWindowManager } from '../os/macos-window-manager';
-import { hasCapability } from '../os/os';
-import type {
-  WindowFocusTarget,
-  WindowInvocationPorts,
-} from '../os/window-management-types';
 import {
   type WindowInvocationScope,
   windowInvocationFromScope,
 } from '../extension-host/window-invocation-scope';
+import { macosWindowManager } from '../os/macos-window-manager';
+import { hasCapability } from '../os/os';
+import { computeTargetFrame, pickDisplayForFrame } from '../os/window-layouts';
+import { createWindowManagementService } from '../os/window-management';
+import type {
+  WindowFocusTarget,
+  WindowInvocationPorts,
+} from '../os/window-management-types';
 
 type WindowManagementCompositionDependencies = {
   paletteWindow: {
     peekFocusReturnTarget(): unknown;
     hidePalette(): Promise<unknown>;
+    win?: { isVisible(): boolean } | null;
   };
   frontmostTarget(): Promise<WindowFocusTarget | null>;
 };
@@ -35,8 +36,13 @@ export function createWindowManagementComposition(
   const ports: WindowInvocationPorts = {
     paletteFocusTarget: () =>
       focusTargetFrom(paletteWindow.peekFocusReturnTarget()),
-    hidePaletteAndRestoreFocus: async () => {
-      await paletteWindow.hidePalette();
+    hidePaletteAndRestoreFocus: async (target) => {
+      if (
+        focusTargetFrom(paletteWindow.peekFocusReturnTarget())?.pid !==
+        target.pid
+      )
+        return false;
+      if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
       return true;
     },
     frontmostTarget,
@@ -46,6 +52,7 @@ export function createWindowManagementComposition(
     ports,
     engine: { computeTargetFrame, pickDisplayForFrame },
     supported: () => hasCapability('window-management'),
+    selfPid: process.pid,
   });
   return {
     service,
