@@ -1936,8 +1936,6 @@ export type NevermindExtension = {
   id: string;
   title: string;
   subtitle?: string;
-  /** One-sentence summary of what the extension does. Used by the generated public docs and extension listings. */
-  description?: string;
   /** Review metadata only; an enabled local extension still has full local access. */
   capabilities?: ExtensionCapability[];
   /** @deprecated Use `capabilities`. Used only when `capabilities` is absent. */

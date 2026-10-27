@@ -4,7 +4,6 @@ export function createSettingsExtension() {
   return {
     id: 'nevermind.settings',
     title: 'Settings',
-    description: 'Configure Nevermind.',
     capabilities: ['settings.write'] as const,
     commands: [
       {

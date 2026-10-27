@@ -177,8 +177,6 @@ export function createBackgroundTasksExtension() {
   return {
     id: 'nevermind.background-tasks',
     title: 'Background Tasks',
-    description:
-      'Inspect and run the background jobs that the app and extensions manage.',
     capabilities: [] as const,
     commands: [
       {

@@ -1,9 +1,9 @@
 import {
   CHARACTER_RECORDS,
-  type CharacterCatalogRecord,
   characterCodePoints,
   characterId,
   characterWithSkinTone,
+  type CharacterCatalogRecord,
 } from '../electron/app/emoji-symbol-catalog';
 
 type CharacterPickerState = {
@@ -192,7 +192,6 @@ export function createEmojiSymbolsExtension() {
   return {
     id: 'nevermind.emoji-symbols',
     title: 'Emoji & Symbols',
-    description: 'Search emoji and symbols and paste them anywhere.',
     commands: [
       {
         id: 'emoji-symbols',

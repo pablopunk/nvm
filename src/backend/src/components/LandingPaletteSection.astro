@@ -1,0 +1,31 @@
+---
+import LandingPalette from './landing-palette/LandingPalette';
+---
+<section id="features" class="palette-demo" aria-labelledby="palette-demo-title">
+  <div class="palette-demo__copy">
+    <h2 id="palette-demo-title"><span class="palette-demo__highlight">No AI</span>? No problem.</h2>
+    <p>A command palette with <strong>batteries included.</strong> Launch apps, find files, search your clipboard, and dictate. This is the real thing, so go ahead and type.</p>
+  </div>
+  <LandingPalette client:visible />
+</section>
+
+<style is:global>
+  .palette-demo { width: 100%; max-width: 720px; margin: 0 auto; padding: 112px 24px 144px; text-align: center; }
+  .palette-demo h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  .palette-demo__copy p { max-width: 520px; margin: 0 auto 40px; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  .palette-demo__copy strong { color: var(--text); font-weight: 600; }
+  .palette-demo__highlight { color: #f4cf86; }
+  @supports (background-clip: text) {
+    .palette-demo__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
+  }
+  .landing-palette { text-align: left; }
+  .landing-palette__host { min-height: 470px; }
+  .landing-palette__note { margin: 16px 0 0; min-height: 1.4em; color: var(--muted); font-size: 13px; text-align: center; }
+  .landing-palette__tabs { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 8px; }
+  .landing-palette__tabs button { padding: 8px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+  .landing-palette__tabs button:hover { color: var(--text); }
+  .landing-palette__tabs button[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--text); }
+  .landing-palette__tabs button:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 6px; border-radius: 2px; }
+  @media (max-width: 860px) { .palette-demo { padding: 64px 0 80px; } }
+  @media (forced-colors: active) { .palette-demo__highlight { background: none; color: CanvasText; } }
+</style>

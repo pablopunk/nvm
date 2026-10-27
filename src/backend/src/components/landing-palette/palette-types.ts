@@ -1,0 +1,13 @@
+export type PaletteItemKind = 'command' | 'app' | 'file' | 'clipboard';
+
+export interface PaletteItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  /** Lucide icon name in kebab-case, as used by the desktop app. */
+  icon?: string;
+  aliases: string[];
+  kind: PaletteItemKind;
+  /** Extra text that makes the item findable without being shown. */
+  keywords?: string[];
+}

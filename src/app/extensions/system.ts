@@ -77,8 +77,6 @@ function createSystemExtension() {
   const extension = {
     id: 'nevermind.system',
     title: 'System',
-    description:
-      'Lock, sleep, restart, open system settings, or quit Nevermind.',
     capabilities: ['system'] as const,
   };
   const commands = systemItems(

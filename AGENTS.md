@@ -40,7 +40,6 @@
 * Prefer named functions over anonymous arrow functions.
 * Keep `AGENTS.md` concise. Move detailed guides to `docs/`. Document intention, NEVER implementation.
 * Before debugging recurring architecture issues, search `docs/solutions/` for prior root causes and verification notes.
-* `/docs/api` and `/docs/features` are generated at backend build time (`src/backend/scripts/generate-docs-data.ts`) from that file's TSDoc and the built-in extension manifests. Improve those sources, never hand-write the generated pages.
 * Treat `src/app/resources/nevermind-extension-api.d.ts` as the self-documenting source of truth for the app's extension platform: runtime contract, validation types, author guidance, and AI builder context. Update its types/TSDoc with every API change and do not recreate API reference markdown.
 * For selectable or multi-item extension and fixture UI, follow the list-first rule in `docs/list-first-extension-ui.md`; only use its documented exceptions.
 * Every extension API endpoint that renders UI must have a dev-only fixture under `src/app/fixtures/`; use `.agents/skills/extensions-ui-test/SKILL.md` for dogfooding and see `docs/extension-api-ui-fixtures.md`.

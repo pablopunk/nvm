@@ -380,7 +380,6 @@ export function createFloatingNotesExtension() {
   return {
     id: 'nevermind.floating-notes',
     title: 'Floating Notes',
-    description: 'Keep quick notes in always-on-top floating windows.',
     async restoreWindow(ctx: any, restoreKey: string) {
       if (restoreKey !== FLOATING_WINDOW_ID) return null;
       const note = (await mostRecentNote(ctx)) || (await createNote(ctx));

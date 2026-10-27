@@ -30,7 +30,6 @@ export function createKeyboardShortcutsExtension() {
   return {
     id: 'nevermind.shortcuts',
     title: 'Keyboard Shortcuts',
-    description: 'See and change the global shortcut for any command.',
     capabilities: ['shortcuts'] as const,
     commands: [
       {

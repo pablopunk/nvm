@@ -5,7 +5,6 @@ export function createWebSearchExtension() {
   return {
     id: 'nevermind.web',
     title: 'Web',
-    description: 'Open a URL or search the web from the palette.',
     capabilities: [] as const,
     commands: [],
     searchItems(_ctx, query) {
