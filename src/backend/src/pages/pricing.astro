@@ -16,7 +16,6 @@ const priceDisplays = await publicBillingPrices([...catalog.subscriptions, ...ca
 const hasTopUps = catalog.topUps.length > 0;
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 const isLoggedIn = Boolean(session);
-const recommendedTier = catalog.subscriptions[0] ?? null;
 ---
 <Layout title="Pricing · Nevermind">
   <section class="page-hero">
@@ -25,7 +24,8 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
   </section>
 
   <div class="pricing-grid">
-    <div class="price-card">
+    <div class="price-card price-card--recommended">
+      <span class="price-card__badge">Recommended</span>
       <h3>Free</h3>
       <div><span class="price-card__credits">$0</span><span class="price-card__period">/ month</span></div>
       <ul class="price-card__features">
@@ -43,8 +43,7 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
     {catalog.subscriptions.map((tier) => {
       const displayPrice = displayPriceFor(tier);
       return (
-        <div class={`price-card${tier === recommendedTier ? ' price-card--recommended' : ''}`}>
-          {tier === recommendedTier && <span class="price-card__badge">Recommended</span>}
+        <div class="price-card">
           <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
           {displayPrice ? (
             <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {priceDisplays.get(tier.priceId)?.period}</span></div>
