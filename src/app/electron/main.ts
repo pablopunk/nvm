@@ -199,7 +199,6 @@ import { createSettingsService } from './app/settings-service';
 import { createTestModeIpc } from './app/test-mode-ipc';
 import { createUpdateManager } from './app/update-manager';
 import { createUpdatesService } from './app/updates-service';
-import { createWindowManagementComposition } from './app/window-management-composition';
 import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
@@ -229,6 +228,10 @@ import {
   commandFromItem,
 } from './extension-host/extension-action-builders';
 import { createExtensionContextFactory } from './extension-host/extension-context';
+import {
+  checkAiRateLimit,
+  checkRefreshBurst,
+} from './extension-host/extension-rate-limits';
 import { createExtensionDevFixtures } from './extension-host/extension-dev-fixtures';
 import { createDiagnosticExtensionTargets } from './extension-host/extension-diagnostic-target';
 import { createExtensionDraftPersistence } from './extension-host/extension-draft-persistence';
@@ -239,10 +242,6 @@ import { createExtensionManager } from './extension-host/extension-manager';
 import { createExtensionMemoryCache } from './extension-host/extension-memory-cache';
 import { createExtensionPrSubmitter } from './extension-host/extension-pr-submitter';
 import { createExtensionProposals } from './extension-host/extension-proposals';
-import {
-  checkAiRateLimit,
-  checkRefreshBurst,
-} from './extension-host/extension-rate-limits';
 import { createExtensionRegistration } from './extension-host/extension-registration';
 import { createExtensionRuntimeState } from './extension-host/extension-runtime-state';
 import { createExtensionRuntimeTransaction } from './extension-host/extension-runtime-transaction';
@@ -313,6 +312,7 @@ import { createShortcutCatalog } from './shortcuts/shortcut-catalog';
 import { createShortcutHints } from './shortcuts/shortcut-hints';
 import { withInheritedShortcutLifecycle } from './shortcuts/shortcut-lifecycle';
 import { createShortcutRunner } from './shortcuts/shortcut-runner';
+import { createWindowManagementComposition } from './app/window-management-composition';
 import { createViewLoaderRegistry } from './state/data-loader';
 import { LocalLearningStore } from './state/learning-store';
 import { createStateSafeQuit } from './state/state-safe-quit';

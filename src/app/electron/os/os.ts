@@ -11,24 +11,27 @@ import {
   type BrowserWindowConstructorOptions,
   shell,
 } from 'electron';
-import { debug as logDebug, warn as logWarn } from '../platform/logger';
-import type {
-  DesktopTextAccess,
-  DesktopTextTarget,
-} from './desktop-text-access';
 import {
   EXTENSION_WINDOW_CAPABILITIES,
   type ExtensionWindowSession,
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
-import { createLinuxDesktopText } from './linux-desktop-text';
-import { macosAppFocusRestoreScript } from './macos-app-focus';
+import { debug as logDebug, warn as logWarn } from '../platform/logger';
+import {
+  macosAppFocusRestoreScript,
+  parseLsappinfoTarget,
+} from './macos-app-focus';
 import { macosSelectionAccess } from './macos-selected-text';
+import { createLinuxDesktopText } from './linux-desktop-text';
+import { createWindowsDesktopText } from './windows-desktop-text';
+import type {
+  DesktopTextAccess,
+  DesktopTextTarget,
+} from './desktop-text-access';
 import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
-import { createWindowsDesktopText } from './windows-desktop-text';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
@@ -1158,17 +1161,12 @@ export async function frontmostAppFocusTarget() {
             execFile(
               '/usr/bin/lsappinfo',
               ['info', '-only', 'bundleID', '-only', 'pid', asn],
-              (infoError, infoStdout) => {
-                if (infoError) return resolve(null);
-                const bundleId =
-                  String(infoStdout || '').match(
-                    /"CFBundleIdentifier"="([^"]+)"/,
-                  )?.[1] || '';
-                const pid = Number(
-                  String(infoStdout || '').match(/"pid"=(\d+)/)?.[1] || 0,
-                );
-                resolve(bundleId && pid ? { bundleId, pid } : null);
-              },
+              (infoError, infoStdout) =>
+                resolve(
+                  infoError
+                    ? null
+                    : parseLsappinfoTarget(String(infoStdout || '')),
+                ),
             );
           });
         }),

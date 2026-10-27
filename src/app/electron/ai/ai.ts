@@ -2,21 +2,60 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import type {
-  Model as PiModel,
-  Api as PiModelApi,
-} from '@earendil-works/pi-ai';
-import type {
-  AgentSessionEvent,
-  AgentSession as PiAgentSession,
-} from '@earendil-works/pi-coding-agent';
 import { app } from 'electron';
 import ts from 'typescript';
+import type {
+  AgentSession as PiAgentSession,
+  AgentSessionEvent,
+} from '@earendil-works/pi-coding-agent';
+import type {
+  Api as PiModelApi,
+  Model as PiModel,
+} from '@earendil-works/pi-ai';
 import type { CommandAction } from '../../palette/model';
 import { AUTOMATE_AI_CHAT_MODEL } from '../../shared/ai-chat-model';
 import { effectiveNevermindContextWindow } from '../../shared/ai-context-window';
+import {
+  finalOneShotAssistantText,
+  streamedOneShotAssistantText,
+} from './ai-one-shot-result';
+import {
+  createAiSessionOutcomeTracker,
+  observeAiSessionOutcome,
+  resolveAiSessionOutcome,
+  type AiSessionOutcome,
+  type AiSessionOutcomeTracker,
+} from './ai-session-outcome';
+import { createBuilderTools } from './ai-builder-tools';
+import { formatBuilderValidationError } from './ai-builder-read-page';
+import { currentBuilderExtensionFile } from './ai-builder-tool-shared';
+import {
+  type AiToolMode,
+  aiPromptUsesDirectModel,
+  CONVERSATION_AI_TOOLS,
+  missingConversationAiTools,
+} from './ai-tool-policy';
+import {
+  compactionSettingsForModel,
+  findPiWebAccessPath,
+  PI_AI_COMPACTION_RESERVE_TOKENS,
+} from './pi-runtime';
+import { validateExtensionCapabilities } from './extension-capability-validation';
+import { registerObservedPiProvider } from './pi-provider';
+import { isMessageUpdateEvent } from './pi-session-events';
+import { ensurePiToolAllowlist } from './pi-session-tool-policy';
+import {
+  fetchDiagnosticBackend,
+  observeProviderOptions,
+} from '../diagnostics/backend-observability';
 import { type ByoKeySnapshot, getByoKey } from '../backend/byo-key';
+import {
+  markDebugPerformance,
+  measureDebugPerformance,
+  recordDebugPerformance,
+} from '../diagnostics/debug-performance';
 import { freeSpendCapNoticeFromText } from '../backend/free-spend-cap-notice';
+import * as logger from '../platform/logger';
 import { nevermindDesktopHeaders } from '../backend/nevermind-api';
 import {
   getNevermindAuth,
@@ -25,15 +64,6 @@ import {
 } from '../backend/nevermind-auth';
 import { checkNevermindCompatibility } from '../backend/nevermind-compatibility';
 import {
-  fetchDiagnosticBackend,
-  observeProviderOptions,
-} from '../diagnostics/backend-observability';
-import {
-  markDebugPerformance,
-  measureDebugPerformance,
-  recordDebugPerformance,
-} from '../diagnostics/debug-performance';
-import {
   bindOperation,
   currentOperation,
   operationOutcome,
@@ -41,36 +71,6 @@ import {
   recordOperationFailure,
   runOperation,
 } from '../diagnostics/observability';
-import * as logger from '../platform/logger';
-import { formatBuilderValidationError } from './ai-builder-read-page';
-import { currentBuilderExtensionFile } from './ai-builder-tool-shared';
-import { createBuilderTools } from './ai-builder-tools';
-import {
-  finalOneShotAssistantText,
-  streamedOneShotAssistantText,
-} from './ai-one-shot-result';
-import {
-  type AiSessionOutcome,
-  type AiSessionOutcomeTracker,
-  createAiSessionOutcomeTracker,
-  observeAiSessionOutcome,
-  resolveAiSessionOutcome,
-} from './ai-session-outcome';
-import {
-  type AiToolMode,
-  aiPromptUsesDirectModel,
-  CONVERSATION_AI_TOOLS,
-  missingConversationAiTools,
-} from './ai-tool-policy';
-import { validateExtensionCapabilities } from './extension-capability-validation';
-import { registerObservedPiProvider } from './pi-provider';
-import {
-  compactionSettingsForModel,
-  findPiWebAccessPath,
-  PI_AI_COMPACTION_RESERVE_TOKENS,
-} from './pi-runtime';
-import { isMessageUpdateEvent } from './pi-session-events';
-import { ensurePiToolAllowlist } from './pi-session-tool-policy';
 
 type AiEvent = {
   type: string;
@@ -202,9 +202,7 @@ type ThinkingLevel =
   | 'max';
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'low';
 const ACTIVE_MODEL_FETCH_TIMEOUT_MS = 5_000;
-
 export { PI_AI_COMPACTION_RESERVE_TOKENS };
-
 const BUILDER_PI_WEB_ACCESS_TOOLS = [
   'web_search',
   'source_check',
