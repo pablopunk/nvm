@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
+import { listAdminModelRefs } from '../../../lib/admin-model-options';
 import {
   adminMutationKeyFromRequest,
   adminMutationResponse,
@@ -9,17 +10,14 @@ import {
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
-  listModelsForRouteKind,
   lookupModelCost,
   modelFitsRouteKind,
-  type RouteKind,
   routeKindForSlot,
 } from '../../../lib/pricing';
 import {
   DEFAULT_THINKING_LEVEL,
   getModelRoute,
   isProviderEnabled,
-  listKnownProviders,
   ModelNotConfiguredError,
   type ModelRouteSlot,
   modelRouteToRef,
@@ -57,19 +55,12 @@ const putModelSchema = z.object({
     ),
 });
 
-async function listModelRefs(kind: RouteKind) {
-  const providers = listKnownProviders();
-  const groups = await Promise.all(
-    providers.map(async (provider) => {
-      const models = await listModelsForRouteKind(provider, kind);
-      return models.map((modelId) => ({
-        provider,
-        modelId,
-        ref: modelRouteToRef({ provider, modelId }),
-      }));
-    }),
-  );
-  return groups.flat();
+async function listModelRefs(kind: 'smart' | 'fast') {
+  return (await listAdminModelRefs(kind)).map((ref) => {
+    const route = parseModelRouteRef(ref);
+    if (!route) throw new Error('Invalid model reference');
+    return { ...route, ref };
+  });
 }
 
 async function safeRoute(slot: ModelRouteSlot) {
