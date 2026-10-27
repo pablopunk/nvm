@@ -584,6 +584,14 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
   padding: 4px 14px;
   border-radius: 20px;
 }
+.price-card__features {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.price-card__features li + li { margin-top: 8px; }
 .price-card h3 {
   font-size: 20px;
   font-weight: 600;
