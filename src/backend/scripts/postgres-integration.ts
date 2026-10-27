@@ -51,6 +51,7 @@ import { runPostgresMigrations } from './migrate-postgres';
 import { runAudioReservationAssertions } from './audio-reservation-assertions';
 import { runAudioJourneyAssertions } from './audio-journey-assertions';
 import { runModelPerformanceAssertions } from './model-performance-assertions';
+import { runFreeSpendAttributionAssertions } from './free-spend-attribution-assertions';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
   throw new Error('Postgres integration requires NVM_DB_DRIVER=postgres');
@@ -146,6 +147,7 @@ async function runAssertions() {
         .returning();
       assert.ok(user);
       await runModelPerformanceAssertions(user.id);
+      await runFreeSpendAttributionAssertions();
 
       // Admission is serialized on the user row with no overdraft grace.
       await db.insert(creditLedger).values({
