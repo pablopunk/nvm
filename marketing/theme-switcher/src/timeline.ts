@@ -4,7 +4,7 @@ import { existingExtensionAt } from './extension-scenes';
 export const REQUEST = 'mac theme switcher';
 export const FPS = 30;
 export const PLAYBACK_SPEED = 1.15;
-export const DURATION = Math.ceil(686 / PLAYBACK_SPEED);
+export const DURATION = Math.ceil(960 / PLAYBACK_SPEED);
 
 export const STORY = {
   typingStart: 24,
@@ -57,7 +57,11 @@ export const BEATS = [
   { frame: 560, scale: 1.55, x: 960, y: 360 },
   { frame: 603, scale: 1.55, x: 960, y: 360 },
   { frame: 619, scale: 1.38, x: 960, y: 450 },
-  { frame: 685, scale: 1.38, x: 960, y: 450 },
+  { frame: 675, scale: 1.38, x: 960, y: 450 },
+  { frame: 704, scale: 1, x: 960, y: 540 },
+  { frame: 724, scale: 1, x: 960, y: 540 },
+  { frame: 770, scale: 1.12, x: 960, y: 500 },
+  { frame: 959, scale: 1.12, x: 960, y: 500 },
 ];
 
 const easing = Easing.bezier(0.65, 0, 0.2, 1);
@@ -126,7 +130,11 @@ export function pointerAt(frame: number) {
     const progress = tween(frame, extension.moveStart, extension.click - 3);
     return {
       x: interpolate(progress, [0, 1], [1460, 1060]),
-      y: interpolate(progress, [0, 1], [740, 280]),
+      y: interpolate(
+        progress,
+        [0, 1],
+        [740, extension.id === 'pipeline' ? 510 : 280],
+      ),
       opacity:
         tween(frame, extension.moveStart - 2, extension.moveStart) *
         (1 - tween(frame, extension.click + 3, extension.listStart)),

@@ -25,6 +25,19 @@ export const EXTENSION_SCENES = [
     listStart: 609,
     end: 686,
   },
+  {
+    id: 'pipeline',
+    query: 'Video pipeline',
+    command: 'Video pipeline',
+    subtitle: 'Convert, resize, speed up and merge selected videos',
+    title: 'Video pipeline',
+    searchStart: 686,
+    typingStart: 714,
+    moveStart: 740,
+    click: 750,
+    listStart: 756,
+    end: 960,
+  },
 ] as const;
 
 export function existingExtensionAt(frame: number) {

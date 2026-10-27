@@ -9,12 +9,15 @@ import {
 import { CALENDAR_EVENTS, PULL_REQUESTS } from './extension-demo-data';
 import { existingExtensionAt } from './extension-scenes';
 import { tween } from './timeline';
+import { VideoPipeline } from './video-pipeline';
 
 function ignore() {}
 
 export function ExistingExtensions({ frame }: { frame: number }) {
   const scene = existingExtensionAt(frame);
   if (!scene) return null;
+  if (scene.id === 'pipeline')
+    return <VideoPipeline frame={frame} scene={scene} />;
   const list = frame >= scene.listStart;
   const github = scene.id === 'github';
   const query = scene.query.slice(
