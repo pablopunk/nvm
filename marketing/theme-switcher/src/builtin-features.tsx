@@ -93,13 +93,58 @@ const FILES = [
   },
 ];
 
+const DICTATIONS = [
+  {
+    id: 'idea',
+    title: 'I have an idea for the next release.',
+    date: '10/27/2026, 10:42 AM',
+  },
+  {
+    id: 'reply',
+    title: 'Thanks for the feedback. I’ll take a look today.',
+    date: '10/27/2026, 10:35 AM',
+  },
+  {
+    id: 'notes',
+    title: 'Let’s keep the first version simple.',
+    date: '10/27/2026, 10:18 AM',
+  },
+  {
+    id: 'plan',
+    title: 'The new demo is ready to share.',
+    date: '10/27/2026, 9:56 AM',
+  },
+  {
+    id: 'meeting',
+    title: 'Can we move our meeting to tomorrow?',
+    date: '10/27/2026, 9:32 AM',
+  },
+  {
+    id: 'reminder',
+    title: 'Remember to update the launch notes.',
+    date: '10/27/2026, 9:14 AM',
+  },
+  {
+    id: 'summary',
+    title: 'Everything we need, one shortcut away.',
+    date: '10/27/2026, 9:02 AM',
+  },
+];
+
 function ignore() {}
 
 export function BuiltinFeatures() {
   const frame = useCurrentFrame();
   const clipboard = frame === 1;
   const files = frame === 2;
-  const rows = clipboard ? CLIPS : files ? FILES : APPS;
+  const dictation = frame === 3;
+  const rows = clipboard
+    ? CLIPS
+    : files
+      ? FILES
+      : dictation
+        ? DICTATIONS
+        : APPS;
   return (
     <AbsoluteFill className="videoCanvas builtinFeature">
       <div className="productWindow">
@@ -115,7 +160,11 @@ export function BuiltinFeatures() {
               readOnly
               value={files ? 'design' : ''}
               placeholder={
-                clipboard ? 'Search Clipboard History' : 'Search anything…'
+                clipboard
+                  ? 'Search Clipboard History'
+                  : dictation
+                    ? 'Search dictation history'
+                    : 'Search anything…'
               }
               onValueChange={ignore}
             />
@@ -161,6 +210,22 @@ export function BuiltinFeatures() {
                   <PreviewView image={staticFile('forest.jpg')} />
                 </div>
               </div>
+            ) : dictation ? (
+              <ListView
+                items={DICTATIONS}
+                renderItem={function renderTranscript(entry) {
+                  return (
+                    <CommandRow
+                      key={entry.id}
+                      value={entry.id}
+                      icon={<FileText size={20} />}
+                      title={entry.title}
+                      subtitle={entry.date}
+                      onSelect={ignore}
+                    />
+                  );
+                }}
+              />
             ) : files ? (
               <ListView
                 items={FILES}

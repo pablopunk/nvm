@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -35,37 +36,44 @@ for (const [id, filename, title] of sources) {
     .toFile(new URL(`${id}.jpg`, output).pathname);
   manifest.push({ id, title, source, asset: `${id}.jpg` });
 }
-const screenshot = process.argv[2];
-if (!screenshot)
-  throw new Error(
-    'Pass the supplied desktop screenshot path as the first argument.',
-  );
-const info = await sharp(screenshot).metadata();
-if (info.width !== 2000 || info.height !== 1125)
-  throw new Error('Dock crop expects the supplied 2000×1125 screenshot.');
-await sharp(screenshot)
-  .extract({ left: 600, top: 1057, width: 785, height: 68 })
-  .png()
-  .toFile(new URL('dock.png', output).pathname);
 const dockIcons = [
-  ['finder', 15],
-  ['calculator', 61],
-  ['calendar', 108],
-  ['ardia', 154],
-  ['photos', 200],
-  ['slack', 246],
-  ['t3', 292],
-  ['twitter', 338],
-  ['network', 384],
-  ['settings', 430],
-  ['zoom', 498],
-  ['whatsapp', 544],
-  ['chrome', 590],
+  [
+    'finder',
+    '/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns',
+  ],
+  [
+    'calendar',
+    '/System/Applications/Calendar.app/Contents/Resources/AppIcon.icns',
+  ],
+  ['notes', '/System/Applications/Notes.app/Contents/Resources/AppIcon.icns'],
+  ['photos', '/System/Applications/Photos.app/Contents/Resources/AppIcon.icns'],
+  [
+    'calculator',
+    '/System/Applications/Calculator.app/Contents/Resources/AppIcon.icns',
+  ],
+  [
+    'settings',
+    '/System/Applications/System Settings.app/Contents/Resources/Settings.icns',
+  ],
+  [
+    'nevermind',
+    new URL('../../../src/backend/public/icon.png', import.meta.url).pathname,
+  ],
 ];
-for (const [id, left] of dockIcons) {
-  const sourceIcon = await sharp(screenshot)
-    .extract({ left: 601 + left, top: 1074, width: 36, height: 36 })
-    .resize(76, 76)
+for (const [id, source] of dockIcons) {
+  const prepared = new URL(`app-${id}.png`, output).pathname;
+  if (source.endsWith('.icns')) {
+    execFileSync('sips', ['-s', 'format', 'png', source, '--out', prepared], {
+      stdio: 'ignore',
+    });
+  } else {
+    await copyFile(source, prepared);
+  }
+  const sourceIcon = await sharp(prepared)
+    .resize(76, 76, {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .ensureAlpha()
     .composite([
       {
@@ -86,8 +94,15 @@ for (const [id, left] of dockIcons) {
 }
 await writeFile(
   new URL('assets.json', output),
-  JSON.stringify({ screenshot, wallpapers: manifest }, null, 2),
+  JSON.stringify(
+    {
+      wallpapers: manifest,
+      dockIcons: dockIcons.map(([id, source]) => ({ id, source })),
+    },
+    null,
+    2,
+  ),
 );
 console.log(
-  `Prepared ${sources.length} wallpapers, the Dock crop, and ${dockIcons.length} source icon crops.`,
+  `Prepared ${sources.length} wallpapers and ${dockIcons.length} default Dock icons.`,
 );

@@ -23,7 +23,7 @@ function VideoRoot() {
         width={1060}
         height={560}
         fps={30}
-        durationInFrames={3}
+        durationInFrames={4}
       />
     </>
   );

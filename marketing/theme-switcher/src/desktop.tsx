@@ -5,18 +5,12 @@ import THEMES from './themes.json';
 
 const ICONS = [
   'finder',
-  'calculator',
   'calendar',
-  'ardia',
+  'notes',
   'photos',
-  'slack',
-  't3',
-  'twitter',
-  'network',
+  'calculator',
   'settings',
-  'zoom',
-  'whatsapp',
-  'chrome',
+  'nevermind',
 ];
 
 export function DesktopBackground({ frame }: { frame: number }) {
@@ -54,7 +48,8 @@ export function DesktopBackground({ frame }: { frame: number }) {
 
 export function DesktopDock({ frame }: { frame: number }) {
   const { theme, previous, changedAt } = themeTransition(frame);
-  const iconDelay = changedAt >= STORY.dockZoomStart ? 2 : 0.5;
+  const iconDelay =
+    changedAt >= STORY.dockZoomStart ? 24 / (ICONS.length - 1) : 0.5;
   return (
     <div className="desktopDock">
       {ICONS.map(function renderIcon(icon, index) {
@@ -62,12 +57,11 @@ export function DesktopDock({ frame }: { frame: number }) {
           frame >= changedAt + index * iconDelay ? theme : previous;
         return (
           <React.Fragment key={icon}>
-            {index === 10 ? <span className="dockDivider" /> : null}
             <div className="dockIcon">
               <Img
                 src={staticFile(`dock-${icon}-${THEMES[iconTheme].id}.png`)}
               />
-              {[0, 3, 6, 10, 11, 12].includes(index) ? (
+              {[0, 2, 6].includes(index) ? (
                 <span className="dockRunningDot" />
               ) : null}
             </div>

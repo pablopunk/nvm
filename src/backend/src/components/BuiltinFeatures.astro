@@ -13,10 +13,14 @@
     <div id="builtin-files" class="builtin-features__panel" data-feature-panel="files" hidden>
       <img src="/features/file-finder.webp" width="1060" height="560" loading="lazy" decoding="async" alt="Nevermind file finder searching for design files, with matching documents and folders and their paths" />
     </div>
+    <div id="builtin-dictation" class="builtin-features__panel" data-feature-panel="dictation" hidden>
+      <img src="/features/dictation.webp" width="1060" height="560" loading="lazy" decoding="async" alt="Nevermind cloud dictation history with seven searchable voice transcripts" />
+    </div>
     <div class="builtin-features__switcher" role="group" aria-label="Built-in feature views">
       <button type="button" aria-pressed="true" aria-controls="builtin-apps" data-feature-view="apps">App launcher</button>
       <button type="button" aria-pressed="false" aria-controls="builtin-clipboard" data-feature-view="clipboard">Clipboard history</button>
       <button type="button" aria-pressed="false" aria-controls="builtin-files" data-feature-view="files">File finder</button>
+      <button type="button" aria-pressed="false" aria-controls="builtin-dictation" data-feature-view="dictation">Dictation</button>
     </div>
   </div>
 </section>
@@ -60,7 +64,7 @@
     .builtin-features__highlight { background: none; color: CanvasText; }
   }
   .builtin-features__showcase { min-width: 0; }
-  .builtin-features__panel img { display: block; width: 100%; height: auto; }
+  .builtin-features__image, .builtin-features__panel img { display: block; width: 100%; height: auto; }
   .builtin-features__panel[hidden] { display: none; }
   .builtin-features__switcher { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 16px; }
   button { padding: 8px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
