@@ -177,7 +177,7 @@ export function animateLightning(canvas: HTMLCanvasElement) {
   function schedule() {
     clear();
     if (document.hidden || reducedMotion.matches || gl!.isContextLost()) return;
-    timer = setTimeout(strike, first ? 1200 : 7000 + Math.random() * 9000);
+    timer = setTimeout(strike, first ? 1200 : 5000 + Math.random() * 5000);
   }
   function clickStrike(event: PointerEvent) {
     if (
