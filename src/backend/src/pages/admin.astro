@@ -12,14 +12,14 @@ import {
   DEFAULT_THINKING_LEVEL,
   getAudioModelRoute,
   getModelRoute,
-  listKnownProviders,
   modelRouteToRef,
   ModelNotConfiguredError,
   THINKING_LEVELS,
   type ModelRouteConfig,
   type ModelRouteSlot,
 } from '../lib/settings';
-import { listModelsForRouteKind, routeKindForSlot, type RouteKind } from '../lib/pricing';
+import { routeKindForSlot } from '../lib/pricing';
+import { listAdminModelRefs } from '../lib/admin-model-options';
 import { listTranscriptionModels } from '../lib/transcription-models';
 
 const user = await getCurrentUser(Astro.request);
@@ -47,19 +47,9 @@ const modelRoutes = await Promise.all(
     ] as const
   ).map(async ([slot, title]) => ({ slot, title, route: await safeModelRoute(slot) })),
 );
-async function modelRefsForKind(kind: RouteKind): Promise<string[]> {
-  const groups = await Promise.all(
-    listKnownProviders().map(async (provider) =>
-      (await listModelsForRouteKind(provider, kind)).map((modelId) =>
-        modelRouteToRef({ provider, modelId }),
-      ),
-    ),
-  );
-  return groups.flat();
-}
 const [smartModelRefs, fastModelRefs] = await Promise.all([
-  modelRefsForKind('smart'),
-  modelRefsForKind('fast'),
+  listAdminModelRefs('smart'),
+  listAdminModelRefs('fast'),
 ]);
 const modelRows = modelRoutes.map((row) => {
   const kind = routeKindForSlot(row.slot);
