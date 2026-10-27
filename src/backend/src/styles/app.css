@@ -536,7 +536,8 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
 .landing-account-note { color: var(--muted); font-size: 13px; }
 @media (max-width: 860px) {
   .landing-shell { gap: 0; }
-  .landing-nav { flex-wrap: wrap; }
+  .landing-nav { position: relative; top: auto; left: auto; transform: none; flex-wrap: wrap; }
+  .landing-nav::before { display: none; }
   .landing-nav__links { margin-left: auto; }
   .landing-hero { gap: 32px; padding: 0 0 60px; }
   .landing-hero__title { font-size: 36px; }
