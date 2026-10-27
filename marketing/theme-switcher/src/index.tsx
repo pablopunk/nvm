@@ -2,6 +2,7 @@ import React from 'react';
 import { Composition, registerRoot } from 'remotion';
 import { ThemeSwitcher } from './theme-switcher';
 import { BuiltinFeatures } from './builtin-features';
+import { DictationDemo } from './dictation-demo';
 import { DURATION, FPS } from './timeline';
 import '../../../src/app/palette/styles.css';
 import './video.css';
@@ -24,6 +25,14 @@ function VideoRoot() {
         height={560}
         fps={30}
         durationInFrames={4}
+      />
+      <Composition
+        id="DictationDemo"
+        component={DictationDemo}
+        width={1060}
+        height={560}
+        fps={30}
+        durationInFrames={120}
       />
     </>
   );
