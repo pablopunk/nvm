@@ -1,4 +1,4 @@
-import { getUpstreamConfig } from './upstream';
+import { getUpstreamBaseUrl } from './upstream';
 
 export const TRANSCRIPTION_CATALOG_TTL_MS = 15 * 60 * 1000;
 const STALE_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
@@ -72,11 +72,10 @@ function transcriptionModel(model: OpenRouterModel): TranscriptionModel | null {
 }
 
 async function fetchOpenRouterTranscriptionModels() {
-  const { baseUrl, apiKey } = getUpstreamConfig('openrouter');
+  const baseUrl = getUpstreamBaseUrl('openrouter');
   const response = await fetch(
     `${baseUrl}/models?input_modalities=audio&output_modalities=transcription`,
     {
-      headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(8_000),
     },
   );

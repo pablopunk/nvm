@@ -6,6 +6,8 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
@@ -34,10 +36,15 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            BASE="${{ github.event.merge_group.base_sha }}"
+            HEAD="${{ github.event.merge_group.head_sha }}"
           else
             BASE="HEAD~1"
+            HEAD="HEAD"
           fi
-          changed="$(git diff --name-only "$BASE" HEAD | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
+          changed="$(git diff --name-only "$BASE" "$HEAD" | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Classify Windows package changes
@@ -46,10 +53,15 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            BASE="${{ github.event.merge_group.base_sha }}"
+            HEAD="${{ github.event.merge_group.head_sha }}"
           else
             BASE="HEAD~1"
+            HEAD="HEAD"
           fi
-          changed="$(git diff --name-only "$BASE" HEAD | mise exec -- node .github/scripts/windows-package-paths.cjs)"
+          changed="$(git diff --name-only "$BASE" "$HEAD" | mise exec -- node .github/scripts/windows-package-paths.cjs)"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
@@ -59,6 +71,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            BASE="${{ github.event.merge_group.base_sha }}"
           else
             BASE="HEAD~1"
           fi
@@ -72,12 +86,52 @@ jobs:
       - name: Verify
         run: mise exec -- pnpm verify
 
+  pi-change-classification:
+    name: Pi change classification
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.classify.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Classify Pi integration changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE="$PR_BASE_SHA"
+            HEAD="$PR_HEAD_SHA"
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            BASE="$MERGE_BASE_SHA"
+            HEAD="$MERGE_HEAD_SHA"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          result="$(mise exec -- node .github/scripts/pi-change-classification.cjs "$BASE" "$HEAD")"
+          case "$result" in
+            relevant=true|relevant=false) echo "$result" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Pi classifier returned malformed output: $result" >&2; exit 1 ;;
+          esac
+
   electron-smoke:
     name: Linux Electron smoke
     if: >-
-      github.event_name == 'pull_request' &&
-      needs.check.outputs.electron_smoke_changed == 'true'
-    needs: check
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+      (needs.check.outputs.electron_smoke_changed == 'true' || needs['pi-change-classification'].outputs.relevant == 'true')
+    needs: [check, pi-change-classification]
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -117,13 +171,51 @@ jobs:
           path: test-results/electron
           if-no-files-found: warn
 
+  pi-integration-tests:
+    name: Pi adapter integration tests
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+      needs['pi-change-classification'].outputs.relevant == 'true'
+    needs: [pi-change-classification]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Run real Pi and Nevermind adapter fixtures
+        env:
+          PI_INTEGRATION_EVIDENCE_DIR: ${{ github.workspace }}/test-results/pi-integration
+        run: >-
+          mise exec -- pnpm -C src/backend exec node
+          --experimental-test-module-mocks --import tsx --test
+          ../app/electron/ai/ai-session-outcome.test.ts
+          ../app/electron/ai/ai-builder-read-page.test.ts
+          ../app/electron/ai/pi-session-integration.test.ts
+      - name: Verify adapter evidence
+        run: >-
+          mise exec -- node .github/scripts/verify-pi-integration-evidence.cjs
+          test-results/pi-integration "$GITHUB_SHA"
+      - name: Upload adapter evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-integration-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/pi-integration
+          if-no-files-found: error
+          retention-days: 14
+
   packaged-dependency-contracts:
     name: Windows packaged diagnostics
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && needs.check.outputs.electron_smoke_changed == 'true')
-    needs: check
+      ((github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+      (needs.check.outputs.electron_smoke_changed == 'true' || needs['pi-change-classification'].outputs.relevant == 'true'))
+    needs: [check, pi-change-classification]
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -136,16 +228,26 @@ jobs:
       - name: Verify package dependency and blockmap contracts
         run: mise exec -- pnpm exec node --test .github/scripts/packaged-dependencies.test.cjs .github/scripts/linux-blockmap.test.cjs
       - name: Build
+        env:
+          NVM_TEST_PI_PACKAGED_BUILD: '1'
         run: mise exec -- pnpm build
-      - name: Package and verify real SDK capture
+      - name: Package app and run diagnostics plus packaged Pi Electron session
+        env:
+          NVM_TEST_PI_PACKAGED: '1'
         run: mise exec -- pnpm exec electron-builder --config electron-builder.yml --win dir --x64 --publish never
+      - name: Verify packaged Pi Electron session evidence
+        run: >-
+          mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs
+          test-results/packaged-pi-electron-win32-x64 "$env:GITHUB_SHA" win32-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: packaged-diagnostics-windows-x64
-          path: test-results/packaged-diagnostics-*
-          if-no-files-found: warn
+          path: |
+            test-results/packaged-diagnostics-*
+            test-results/packaged-pi-electron-win32-x64
+          if-no-files-found: error
           retention-days: 7
 
   packaged-diagnostics:
@@ -153,8 +255,9 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && needs.check.outputs.electron_smoke_changed == 'true')
-    needs: check
+      ((github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+      (needs.check.outputs.electron_smoke_changed == 'true' || needs['pi-change-classification'].outputs.relevant == 'true'))
+    needs: [check, pi-change-classification]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -167,17 +270,104 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install --yes xvfb
       - name: Build
+        env:
+          NVM_TEST_PI_PACKAGED_BUILD: '1'
         run: mise exec -- pnpm build
-      - name: Package and verify real SDK capture
+      - name: Package app and run diagnostics plus packaged Pi Electron session
+        env:
+          NVM_TEST_PI_PACKAGED: '1'
         run: xvfb-run -a mise exec -- pnpm exec electron-builder --config electron-builder.yml --linux dir --x64 --publish never
+      - name: Verify packaged Pi Electron session evidence
+        run: >-
+          mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs
+          test-results/packaged-pi-electron-linux-x64 "$GITHUB_SHA" linux-x64
       - name: Upload packaged diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: packaged-diagnostics-linux-x64
-          path: test-results/packaged-diagnostics-*
-          if-no-files-found: warn
+          path: |
+            test-results/packaged-diagnostics-*
+            test-results/packaged-pi-electron-linux-x64
+          if-no-files-found: error
           retention-days: 7
+
+  pi-packaged-macos:
+    name: macOS Pi packaged Electron runtime
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+      needs['pi-change-classification'].outputs.relevant == 'true'
+    needs: [pi-change-classification]
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Build
+        env:
+          NVM_TEST_PI_PACKAGED_BUILD: '1'
+        run: mise exec -- pnpm build
+      - name: Build selected-text helper resources
+        run: node scripts/build-macos-selected-text-helper.cjs --universal
+      - name: Package unsigned native-architecture app and run packaged Pi session
+        timeout-minutes: 10
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          NVM_TEST_PI_PACKAGED: '1'
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          ARCH="$(node -p 'process.arch')"
+          mise exec -- pnpm exec electron-builder --config electron-builder.yml --mac dir "--${ARCH}" --publish never 2>&1 | tee test-results/pi-macos-package.log
+      - name: Verify packaged Pi Electron session evidence
+        run: |
+          ARCH="$(node -p 'process.arch')"
+          mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs \
+            "test-results/packaged-pi-electron-darwin-${ARCH}" "$GITHUB_SHA" "darwin-${ARCH}"
+      - name: Upload packaged macOS Pi evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-pi-electron-macos-${{ runner.arch }}-${{ github.run_id }}
+          path: |
+            test-results/packaged-diagnostics-darwin-*
+            test-results/packaged-pi-electron-darwin-*
+            test-results/pi-macos-package.log
+          if-no-files-found: error
+          retention-days: 14
+
+  pi-integration-compatibility:
+    name: Pi integration compatibility
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+    needs:
+      - pi-change-classification
+      - check
+      - pi-integration-tests
+      - electron-smoke
+      - packaged-dependency-contracts
+      - packaged-diagnostics
+      - pi-packaged-macos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Evaluate fail-closed same-run gate
+        env:
+          PI_CLASSIFICATION_RESULT: ${{ needs.pi-change-classification.result }}
+          PI_RELEVANT: ${{ needs.pi-change-classification.outputs.relevant }}
+          PI_CHECK_RESULT: ${{ needs.check.result }}
+          PI_JOB_pi_integration_tests: ${{ needs.pi-integration-tests.result }}
+          PI_JOB_electron_smoke: ${{ needs.electron-smoke.result }}
+          PI_JOB_packaged_dependency_contracts: ${{ needs.packaged-dependency-contracts.result }}
+          PI_JOB_packaged_diagnostics: ${{ needs.packaged-diagnostics.result }}
+          PI_JOB_pi_packaged_macos: ${{ needs.pi-packaged-macos.result }}
+        run: node .github/scripts/pi-ci-gate.cjs
 
   windows-first-run:
     name: Windows first-run Electron

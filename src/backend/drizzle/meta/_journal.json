@@ -169,6 +169,20 @@
       "when": 1791849600000,
       "tag": "0023_audio_reservation_preparation",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793118000000,
+      "tag": "0024_model_performance",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793121740372,
+      "tag": "0025_legacy_free_spend_attribution",
+      "breakpoints": true
     }
   ]
 }

@@ -265,6 +265,7 @@ export type NevermindApi = {
     source: string,
   ) => Promise<{ draftFile: string }>;
   testRunJob: (id: string) => Promise<{ found: boolean }>;
+  testRunPiSession: () => Promise<unknown>;
   testFailNextExtensionActivation: (
     phase: 'state-persist' | 'after-persist' | 'runtime-commit',
   ) => Promise<{ armed: boolean }>;

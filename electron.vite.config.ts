@@ -8,6 +8,9 @@ const { desktopBuildIdentity } = createRequire(import.meta.url)(
 
 const buildDefinitions = {
   __NEVERMIND_BUILD__: JSON.stringify(desktopBuildIdentity()),
+  __NVM_TEST_PI_PACKAGED_BUILD__: JSON.stringify(
+    process.env.NVM_TEST_PI_PACKAGED_BUILD === '1',
+  ),
 };
 
 // biome-ignore lint/style/noDefaultExport: Electron-vite requires default export

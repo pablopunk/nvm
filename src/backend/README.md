@@ -80,11 +80,10 @@ After an approved production deployment, follow the
 to verify the real WorkOS callback, packaged device handoff, structured tool
 calling, billing debit, and non-zero Google usage telemetry.
 
-Before enabling commercial Checkout, follow the
-[billing launch-readiness gates](../../docs/billing-launch-readiness.md).
-Configure `BILLING_PRICE_APPROVER_WORKOS_USER_ID` to the owner's exact WorkOS
-user ID in each environment before approval is needed. Price-term approval is
-fail-closed when this value is unset and is restricted to that WorkOS identity
-when the account also has the admin role. Code readiness does not approve
-production Price terms, webhook configuration, historical Stripe coverage, or
-the production migration/deploy consequence.
+Billing is intentionally simple: `STRIPE_SUBSCRIPTION_TIERS` and
+`STRIPE_TOP_UP_PACKS` map Stripe price IDs to credits, and Stripe owns the
+amounts. If a webhook names a price that is not in those maps, it fails with a
+500 so Stripe retries; fix the env and redeploy, and the retry grants credits.
+The live Stripe webhook must send `checkout.session.completed`, `invoice.paid`,
+`customer.subscription.updated`, and `customer.subscription.deleted`, and the
+Billing Portal needs a saved live-mode configuration.

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import {
   expirePricingCacheForTests,
-  listReviewedImageModelsForProvider,
   listModelsForProvider,
+  listModelsForRouteKind,
   lookupModelCost,
   lookupModelDescriptor,
   lookupModelPricing,
@@ -169,63 +169,52 @@ test('admin model listing includes bundled runtime models', async () => {
   assert.ok(models.includes('deepseek/deepseek-v4-flash-0731'));
 });
 
-test('admin image model choices require both models.dev image input and reviewed billing', async () => {
+test('route model choices follow the slot criteria from the catalog', async () => {
   globalThis.fetch = mockFetch({
     openrouter: {
       models: {
-        'openai/gpt-6.1-sol': {
-          id: 'openai/gpt-6.1-sol',
-          modalities: { input: ['text', 'image'] },
-          limit: { context: 1_050_000, input: 922_000, output: 128_000 },
-          cost: { input: 2, output: 10 },
+        'vendor/smart-model': {
+          id: 'vendor/smart-model',
+          reasoning: true,
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          cost: { input: 1, output: 2 },
         },
-        'google/gemini-2.5-flash': {
-          id: 'google/gemini-2.5-flash',
-          modalities: { input: ['text', 'image'] },
-          limit: { context: 1_048_576, output: 65_535 },
-          cost: { input: 0.3, output: 2.5 },
+        'vendor/image-no-reasoning': {
+          id: 'vendor/image-no-reasoning',
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          cost: { input: 1, output: 2 },
         },
-        'meta/muse-spark-1.3-contributor': {
-          id: 'meta/muse-spark-1.3-contributor',
-          modalities: { input: ['text', 'image'] },
-          limit: { context: 1_048_576, output: 943_718 },
+        'vendor/text-model': {
+          id: 'vendor/text-model',
+          modalities: { input: ['text'], output: ['text'] },
           cost: { input: 0.1, output: 0.2 },
         },
-        'provider/unreviewed-image-model': {
-          id: 'provider/unreviewed-image-model',
-          modalities: { input: ['text', 'image'] },
-          limit: { context: 32_000, output: 4_096 },
-          cost: { input: 0.1, output: 0.2 },
+        'vendor/unpriced-model': {
+          id: 'vendor/unpriced-model',
+          reasoning: true,
+          modalities: { input: ['text', 'image'], output: ['text'] },
         },
-        'provider/text-only-model': {
-          id: 'provider/text-only-model',
-          modalities: { input: ['text'] },
-          limit: { context: 32_000, output: 4_096 },
-          cost: { input: 0.1, output: 0.2 },
-        },
-      },
-    },
-    opencode: {
-      models: {
-        'muse-spark-1.3-contributor-free': {
-          id: 'muse-spark-1.3-contributor-free',
-          modalities: { input: ['text', 'image'] },
-          limit: { context: 1_048_576, output: 131_072 },
-          cost: { input: 0, output: 0 },
+        'vendor/image-generator': {
+          id: 'vendor/image-generator',
+          modalities: { input: ['text'], output: ['image'] },
+          cost: { input: 1, output: 2 },
         },
       },
     },
   });
 
-  assert.deepEqual(await listReviewedImageModelsForProvider('openrouter'), [
-    'google/gemini-2.5-flash',
-    'meta/muse-spark-1.3-contributor',
-    'openai/gpt-6.1-sol',
-  ]);
-  assert.deepEqual(
-    await listReviewedImageModelsForProvider('opencode_zen'),
-    [],
-  );
+  const smart = await listModelsForRouteKind('openrouter', 'smart');
+  assert.ok(smart.includes('vendor/smart-model'));
+  assert.ok(smart.includes('google/gemini-2.5-flash'));
+  assert.ok(!smart.includes('vendor/image-no-reasoning'));
+  assert.ok(!smart.includes('vendor/text-model'));
+  assert.ok(!smart.includes('vendor/unpriced-model'));
+
+  const fast = await listModelsForRouteKind('openrouter', 'fast');
+  assert.ok(fast.includes('vendor/text-model'));
+  assert.ok(fast.includes('vendor/image-no-reasoning'));
+  assert.ok(!fast.includes('vendor/unpriced-model'));
+  assert.ok(!fast.includes('vendor/image-generator'));
 });
 
 test('active runtime models do not wait for the remote catalog', async () => {

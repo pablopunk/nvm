@@ -1,0 +1,6 @@
+[
+  { "id": "neutral", "wallpaper": null, "tint": "#92979e" },
+  { "id": "pink", "wallpaper": "pink", "tint": "#bd4d99" },
+  { "id": "forest", "wallpaper": "forest", "tint": "#387f79" },
+  { "id": "meadow", "wallpaper": "meadow", "tint": "#2786b9" }
+]

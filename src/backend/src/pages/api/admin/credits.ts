@@ -15,7 +15,7 @@ import { safeJsonBody } from '../../../lib/validation';
 
 const creditsSchema = z
   .object({
-    userId: z.string().uuid(),
+    email: z.string().trim().toLowerCase().email(),
     delta: z.number().int().min(-1_000_000).max(1_000_000),
     kind: z.enum(['free', 'paid']),
     reason: z.string().trim().min(1).max(500),
@@ -68,7 +68,7 @@ export const POST: APIRoute = async ({ request }) => {
       const [target] = await tx
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.id, parsed.data.userId))
+        .where(eq(users.email, parsed.data.email))
         .for('update');
       if (!target)
         return {
@@ -78,6 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
           },
         };
 
+      const userId = target.id;
       const [pool] = await tx
         .select({
           balance: sql<number>`coalesce(sum(${creditLedger.delta}), 0)::int`,
@@ -85,7 +86,7 @@ export const POST: APIRoute = async ({ request }) => {
         .from(creditLedger)
         .where(
           and(
-            eq(creditLedger.userId, parsed.data.userId),
+            eq(creditLedger.userId, userId),
             eq(creditLedger.kind, parsed.data.kind),
           ),
         );
@@ -99,7 +100,7 @@ export const POST: APIRoute = async ({ request }) => {
         .from(creditReservations)
         .where(
           and(
-            eq(creditReservations.userId, parsed.data.userId),
+            eq(creditReservations.userId, userId),
             eq(creditReservations.status, 'pending'),
           ),
         );
@@ -124,7 +125,7 @@ export const POST: APIRoute = async ({ request }) => {
 
       const reference = `admin-adjustment:${idempotencyKey}`;
       await tx.insert(creditLedger).values({
-        userId: parsed.data.userId,
+        userId,
         delta: parsed.data.delta,
         kind: parsed.data.kind,
         reason: parsed.data.reason,
@@ -134,7 +135,7 @@ export const POST: APIRoute = async ({ request }) => {
         actorUserId: actor.id,
         action: parsed.data.delta >= 0 ? 'credits.granted' : 'credits.adjusted',
         targetType: 'user',
-        targetId: parsed.data.userId,
+        targetId: userId,
         meta: {
           delta: parsed.data.delta,
           kind: parsed.data.kind,
@@ -145,7 +146,7 @@ export const POST: APIRoute = async ({ request }) => {
       return {
         body: {
           ok: true,
-          userId: parsed.data.userId,
+          email: parsed.data.email,
           kind: parsed.data.kind,
           balance: balance + parsed.data.delta,
           pendingReserved: reserved,

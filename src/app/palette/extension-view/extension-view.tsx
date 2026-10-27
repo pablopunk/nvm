@@ -1,9 +1,7 @@
 // biome-ignore-all lint: This established renderer retains existing declarative view conventions.
 import {
   Check,
-  ChevronDown,
   Copy,
-  CornerDownLeft,
   CreditCard,
   LogIn,
   RotateCw,
@@ -19,14 +17,12 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { canSendAiChatMessage } from '../../shared/ai-chat-images';
 import type { AiChatModel } from '../../shared/ai-chat-model';
 import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
+import type { AiChatAttachment, AiLimitState } from '../ai-chat/use-ai-chat';
 import { iconForItem } from '../command-icons';
 import { RootCommandList } from '../command-list';
 import { captureRendererFailure } from '../diagnostics';
-import { titleFromFirstContentLine } from './editor-title';
-import { formApplyRowId } from './form-fields';
 import {
   actionsFromPanel,
   type CommandAction,
@@ -48,8 +44,10 @@ import {
   PreviewView,
   ProgressView,
 } from '../ui';
+import { ChatInputForm } from './chat-input-form';
+import { titleFromFirstContentLine } from './editor-title';
+import { formApplyRowId } from './form-fields';
 import type { usePaletteForm } from './palette-form';
-import type { AiChatAttachment, AiLimitState } from '../ai-chat/use-ai-chat';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
@@ -984,176 +982,6 @@ function ListExtensionView({
   return list;
 }
 
-function ChatInputForm({
-  active = true,
-  value,
-  onChange,
-  onResize,
-  onSubmit,
-  busy,
-  inputRef,
-  placeholder,
-  onAbort,
-  chatId,
-  attachments = [],
-  attaching = false,
-  attachmentError,
-  onAttachImages,
-  onRemoveAttachment,
-  model,
-  modelChanging = false,
-  onModelChange,
-}: {
-  active?: boolean;
-  value: string;
-  onChange: (value: string) => void;
-  onResize: (textarea?: HTMLTextAreaElement | null) => void;
-  onSubmit: () => void;
-  busy: boolean;
-  inputRef: React.RefObject<HTMLTextAreaElement | null>;
-  placeholder?: string;
-  onAbort?: (chatId?: string) => void;
-  chatId?: string;
-  attachments?: AiChatAttachment[];
-  attaching?: boolean;
-  attachmentError?: string | null;
-  onAttachImages?: (files: File[]) => void;
-  onRemoveAttachment?: (id: string) => void;
-  model?: AiChatModel;
-  modelChanging?: boolean;
-  onModelChange?: (model: AiChatModel) => void;
-}) {
-  return (
-    <form
-      className="chatInputRow"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit();
-      }}
-    >
-      <div className="chatInputShell">
-        {attachments.length ? (
-          <div className="chatAttachments" aria-label="Attached images">
-            {attachments.map((attachment) => (
-              <div className="chatAttachment" key={attachment.id}>
-                <img
-                  src={attachment.previewUrl}
-                  alt={attachment.name || 'Pasted image'}
-                />
-                <button
-                  type="button"
-                  aria-label={`Remove ${attachment.name || 'image'}`}
-                  title="Remove image"
-                  onClick={() => onRemoveAttachment?.(attachment.id)}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {attachmentError ? (
-          <div className="chatAttachmentError" role="status">
-            {attachmentError}
-          </div>
-        ) : null}
-        <textarea
-          ref={inputRef}
-          autoFocus={active}
-          rows={1}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onInput={(event) => onResize(event.currentTarget)}
-          onPaste={(event) => {
-            if (!onAttachImages) return;
-            const files = Array.from(event.clipboardData.items).flatMap(
-              (item) => {
-                const file = item.kind === 'file' ? item.getAsFile() : null;
-                return file ? [file] : [];
-              },
-            );
-            if (!files.some((file) => file.type.startsWith('image/'))) return;
-            event.preventDefault();
-            onAttachImages(files);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return;
-            event.stopPropagation();
-            if (!event.shiftKey) {
-              event.preventDefault();
-              onSubmit();
-            }
-          }}
-          placeholder={
-            attaching
-              ? 'Attaching image…'
-              : placeholder || (busy ? 'Thinking' : 'Message AI')
-          }
-        />
-        <div className="chatComposerFooter">
-          {model && onModelChange ? (
-            <label className="chatModelPicker" title="AI model">
-              <select
-                className="chatModelSelect"
-                aria-label="AI model"
-                value={model}
-                disabled={busy || modelChanging}
-                onKeyDown={(event) => {
-                  if (
-                    [
-                      'ArrowDown',
-                      'ArrowLeft',
-                      'ArrowRight',
-                      'ArrowUp',
-                      'Enter',
-                      ' ',
-                    ].includes(event.key)
-                  )
-                    event.stopPropagation();
-                }}
-                onChange={(event) =>
-                  onModelChange(event.target.value as AiChatModel)
-                }
-              >
-                <option value="fast">Fast</option>
-                <option value="smart">Smart</option>
-              </select>
-              <ChevronDown size={12} aria-hidden="true" />
-            </label>
-          ) : (
-            <span />
-          )}
-          {busy ? (
-            <button
-              className="chatIconButton chatStopButton"
-              type="button"
-              aria-label="Stop"
-              title="Stop"
-              onClick={() => onAbort?.(chatId)}
-            >
-              <Square size={12} fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              className="chatIconButton chatEnterButton"
-              type="submit"
-              aria-label="Send message"
-              title="Send message"
-              disabled={
-                attaching ||
-                modelChanging ||
-                !canSendAiChatMessage(value, attachments.length)
-              }
-            >
-              <CornerDownLeft size={15} />
-            </button>
-          )}
-        </div>
-      </div>
-    </form>
-  );
-}
-
 function ChatExtensionView({
   active = true,
   view,
@@ -1258,6 +1086,7 @@ function ChatExtensionView({
       attachmentError={aiChat.attachmentError}
       onAttachImages={(files) => void aiChat.attachImageFiles(files)}
       onRemoveAttachment={aiChat.removeAttachment}
+      allowImagePicker={aiChat.model === 'smart'}
     />
   ) : view.submitAction ? (
     <ChatInputForm

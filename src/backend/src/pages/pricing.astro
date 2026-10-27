@@ -1,20 +1,21 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { billingCatalog, formatBillingPrice, type BillingCatalogItem } from '../lib/billing';
+import { billingCatalog, type BillingCatalogItem } from '../lib/billing';
 import { getSessionFromCookies } from '../lib/workos';
+import { publicBillingPrices } from '../lib/public-billing-prices';
 
 function displayPriceFor(item: BillingCatalogItem): string | null {
-  return item.displayPrice ? formatBillingPrice(item.displayPrice) : null;
+  return priceDisplays.get(item.priceId)?.amount ?? null;
 }
 
 const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
 const hasSubscriptions = catalog.subscriptions.length > 0;
+const priceDisplays = await publicBillingPrices([...catalog.subscriptions, ...catalog.topUps]);
 const hasTopUps = catalog.topUps.length > 0;
 const session = await getSessionFromCookies(Astro.request.headers.get('cookie'));
 const isLoggedIn = Boolean(session);
-const recommendedTier = catalog.subscriptions[0] ?? null;
 ---
 <Layout title="Pricing · Nevermind">
   <section class="page-hero">
@@ -23,25 +24,40 @@ const recommendedTier = catalog.subscriptions[0] ?? null;
   </section>
 
   <div class="pricing-grid">
-    <div class="price-card">
+    <div class="price-card price-card--recommended">
+      <span class="price-card__badge">Recommended</span>
       <h3>Free</h3>
-      <div><span class="price-card__credits">Free</span><span class="price-card__period">/ month</span></div>
-      <p class="price-card__desc">Includes free monthly credits to try the AI features in the desktop app. No credit card required. Credits reset each month.</p>
+      <div><span class="price-card__credits">$0</span><span class="price-card__period">/ month</span></div>
+      <ul class="price-card__features">
+        <li>Batteries included</li>
+        <li>No credit card required</li>
+        <li>No need to sign in</li>
+        <li>Free monthly credits to build with AI</li>
+        <li>Free monthly credits to chat with AI</li>
+        <li>Bring your own AI</li>
+        <li>Dotfiles friendly</li>
+      </ul>
       <a class="button" href="https://github.com/pablopunk/nvm/releases">Download the app</a>
     </div>
 
     {catalog.subscriptions.map((tier) => {
       const displayPrice = displayPriceFor(tier);
       return (
-        <div class={`price-card${tier === recommendedTier ? ' price-card--recommended' : ''}`}>
-          {tier === recommendedTier && <span class="price-card__badge">Recommended</span>}
+        <div class="price-card">
           <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
           {displayPrice ? (
-            <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {tier.displayPrice?.interval}</span></div>
+            <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {priceDisplays.get(tier.priceId)?.period}</span></div>
           ) : (
-            <div><span class="price-card__credits">{tier.credits}</span><span class="price-card__period">credits / month</span></div>
+            <div class="price-card__desc">Price temporarily unavailable</div>
           )}
-          <p class="price-card__desc">{tier.credits} credits included each billing cycle. Credits are consumed per AI operation, proportional to the model and prompt size.</p>
+          <ul class="price-card__features">
+            <li>Everything in Free</li>
+            <li>{tier.credits.toLocaleString('en')} AI credits each billing cycle</li>
+            <li>Build more tools with AI</li>
+            <li>Chat more with AI</li>
+            {hasTopUps && <li>Top up your credits whenever you need more</li>}
+            <li>Cancel anytime</li>
+          </ul>
           {!isLoggedIn && (
             <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
           )}

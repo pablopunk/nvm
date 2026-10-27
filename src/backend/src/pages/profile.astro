@@ -1,5 +1,10 @@
 ---
-import Layout from '../layouts/Layout.astro';
+import Layout from '../layouts/ConsoleLayout.astro';
+import { Button, buttonVariants } from '../components/ui/button';
+import { ConsoleTokenList } from '../components/ConsoleTokenList';
+import { Input } from '../components/ui/input';
+import { Card } from '../components/ui/card';
+import { ConsoleNavigation } from '../components/ConsoleNavigation';
 import { eq } from 'drizzle-orm';
 import { getSessionFromCookies } from '../lib/workos';
 import { db } from '../db/client';
@@ -29,30 +34,27 @@ const canBuyTopUps = hasActiveSubscription;
 const billingState = Astro.url.searchParams.get('billing');
 ---
 <Layout title="Nevermind · Profile">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:32px">
+  <ConsoleNavigation email={user?.email ?? ""} admin={isAdmin} current="profile" />
+  <header class="profile-header">
     <div>
-      <h1 style="margin:0">Profile</h1>
-      <p class="muted" style="margin:0"><code>{user?.email}</code> · {user?.plan} plan</p>
+      <h1>Profile</h1>
+      <p class="muted"><code>{user?.email}</code> · {user?.plan} plan</p>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      {isAdmin && <a class="button" href="/admin">Admin</a>}
-      <form method="post" action="/api/auth/signout" style="margin:0"><button class="button" type="submit">Sign out</button></form>
-    </div>
-  </div>
+  </header>
 
-  <div class="section stat-grid">
+  <div class="section stat-grid profile-stats">
     <div class="stat"><div class="v">{balances.total}</div><div class="l">Credits</div></div>
     <div class="stat"><div class="v">{balances.free}</div><div class="l">Free</div></div>
     <div class="stat"><div class="v">{balances.paid}</div><div class="l">Paid</div></div>
   </div>
 
-  <div class="section card stack" id="connect-desktop">
+  <Card className="section profile-panel" id="connect-desktop">
     <h3>Connect desktop app</h3>
-    <p class="muted" style="margin:0">Sign into the Nevermind desktop app from this browser.</p>
-    <button class="button button--primary" id="initiate-connect" type="button">Start device connection</button>
-    <p id="connect-status" class="status" style="margin:0"></p>
+    <p class="muted">Sign into the Nevermind desktop app from this browser.</p>
+    <Button variant="default" id="initiate-connect" type="button">Start device connection</Button>
+    <p id="connect-status" class="status"></p>
     <pre id="connect-code" style="display:none;"></pre>
-    <a id="connect-deep-link" class="button" style="display:none;" href="#">Open in Nevermind</a>
+    <a id="connect-deep-link" class={buttonVariants({ variant: "outline" })} style="display:none;" href="#">Open in Nevermind</a>
     <script is:inline>
       var connectPending = false;
       var deepLinkUrl = '';
@@ -90,78 +92,69 @@ const billingState = Astro.url.searchParams.get('billing');
           status.className = 'status status--ok';
           status.textContent = 'Approval code ready. Click "Open in Nevermind" or enter the code manually.';
           status.style.display = '';
+        } catch {
+          status.className = 'status status--err';
+          status.textContent = 'Could not connect. Try again.';
         } finally {
           connectPending = false;
         }
       });
     </script>
-  </div>
+  </Card>
 
-  <div class="section card stack">
+  <Card className="section profile-panel"><section class="stack">
     <div>
       <h3>Billing</h3>
-      <p class="muted" style="margin:0">
+      <p class="muted">
         {subscription ? `${subscription.status} · renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}` : 'No active subscription.'}
       </p>
     </div>
-    {billingState === 'success' && <p class="status">Checking payment status…</p>}
-    {billingState === 'canceled' && <p class="status">Checking checkout status…</p>}
+    {billingState === 'success' && <p class="status status--ok">Payment received. Credits can take a few seconds to appear; refresh if they're missing.</p>}
+    {billingState === 'canceled' && <p class="status">Checkout canceled. Nothing was charged.</p>}
     <div class="row">
       {!hasActiveSubscription && catalog.subscriptions.map((item) => (
-        <button class="button button--primary billing-checkout" data-kind="subscription" data-price-id={item.priceId}>
+        <Button variant="default" className="billing-checkout" data-kind="subscription" data-price-id={item.priceId}>
           Subscribe {item.tier} · {item.credits} credits/mo
-        </button>
+        </Button>
       ))}
       {canBuyTopUps && catalog.topUps.map((item) => (
-        <button class="button billing-checkout" data-kind="top_up" data-price-id={item.priceId}>
+        <Button variant="outline" className="billing-checkout" data-kind="top_up" data-price-id={item.priceId}>
           Top up · {item.credits} credits
-        </button>
+        </Button>
       ))}
       {!canBuyTopUps && catalog.topUps.length > 0 && <span class="muted">Top-ups unlock after subscribing to Pro.</span>}
       {user?.stripeCustomerId && (
-        <button class={hasActiveSubscription ? 'button button--primary' : 'button'} id="manage-billing" type="button">
+        <Button variant={hasActiveSubscription ? 'default' : 'outline'} id="manage-billing" type="button">
           {hasActiveSubscription ? 'Manage subscription' : 'Manage billing'}
-        </button>
+        </Button>
       )}
       {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span class="muted">Billing is not configured yet.</span>}
     </div>
-    <p id="billing-status" class="status" style="margin:0" data-user-id={user?.id ?? ''}></p>
-    <div id="billing-actions" class="row"></div>
-  </div>
+    <p id="billing-status" class="status" aria-live="polite"></p>
+  </section></Card>
 
-  <div class="section">
-    <h2>API tokens</h2>
+  <Card className="section profile-panel">
+    <h2 id="tokens-heading" tabindex="-1">API tokens</h2>
     <p class="muted">Use these to call the API directly. The full token is shown only once.</p>
-    <form id="create-token-form" class="row" style="margin-bottom:12px;">
-      <input class="input" type="text" name="name" placeholder="Token name (e.g. My Mac)" required />
-      <button class="button button--primary" type="submit">Create token</button>
+    <form id="create-token-form" class="row items-end">
+      <label class="field flex-1">Token name<Input type="text" name="name" placeholder="e.g. My Mac" required id="token-name" /></label>
+      <Button variant="default" type="submit">Create token</Button>
     </form>
-    <div id="new-token-panel" class="card stack" style="display:none;" role="region" aria-label="New API token">
+    <Card id="new-token-panel" className="profile-panel" style={{ display: "none" }} role="region" aria-label="New API token">
       <div>
         <h3>Your new API token</h3>
-        <p class="muted" style="margin:0;">Save this token now — it will not be shown again.</p>
+        <p class="muted">Save this token now — it will not be shown again.</p>
       </div>
       <pre class="token-value" id="new-token-value"></pre>
       <div id="copy-status" aria-live="polite" class="status"></div>
       <div class="row">
-        <button type="button" id="copy-token-btn" class="button button--primary">Copy</button>
-        <button type="button" id="close-token-btn" class="button">Close</button>
+        <Button type="button" id="copy-token-btn" variant="default">Copy</Button>
+        <Button type="button" id="close-token-btn" variant="outline">Close</Button>
       </div>
-    </div>
-    <ul class="list-clean">
-      {tokens.map((t) => (
-        <li data-id={t.id}>
-          <code>{t.prefix}…</code>
-          <span>{t.name}</span>
-          <span class="muted">· created {new Date(t.createdAt).toLocaleString()}</span>
-          <span class="muted">{t.lastUsedAt ? `· last used ${new Date(t.lastUsedAt).toLocaleString()}` : '· never used'}</span>
-          <span class="spacer" style="flex:1"></span>
-          <button class="button button--danger revoke" data-id={t.id}>Revoke</button>
-        </li>
-      ))}
-      {tokens.length === 0 && <li class="muted">No tokens yet.</li>}
-    </ul>
-  </div>
+    </Card>
+    <p id="token-status" class="status" aria-live="polite"></p>
+    <ConsoleTokenList client:load tokens={tokens.map((token) => ({ id: token.id, prefix: token.prefix, name: token.name, created: new Date(token.createdAt).toLocaleString(), lastUsed: token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'never used' }))} />
+  </Card>
 
   <script is:inline>
     const createTokenForm = document.getElementById('create-token-form');
@@ -236,224 +229,66 @@ const billingState = Astro.url.searchParams.get('billing');
 
     createTokenForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (undisclosedToken) return;
+      if (undisclosedToken || createTokenBtn.disabled) return;
+      const status = document.getElementById('token-status');
       const fd = new FormData(e.target);
-      const res = await fetch('/api/tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: fd.get('name') }),
-      });
-      if (!res.ok) {
-        alert('Failed to create token');
-        return;
+      createTokenBtn.disabled = true;
+      status.className = 'status';
+      status.textContent = 'Creating token…';
+      try {
+        const res = await fetch('/api/tokens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: fd.get('name') }),
+        });
+        if (!res.ok) throw new Error('Could not create token; try again.');
+        const data = await res.json();
+        undisclosedToken = data.token;
+        newTokenValue.textContent = data.token;
+        setPanelVisible(true);
+        status.textContent = '';
+        copyStatus.textContent = '';
+        copyStatus.className = 'status';
+        window.addEventListener('beforeunload', beforeUnloadHandler);
+        copyTokenBtn.focus();
+      } catch {
+        status.textContent = 'Could not create token; try again.';
+        status.className = 'status status--err';
+        createTokenBtn.disabled = false;
       }
-      const data = await res.json();
-      undisclosedToken = data.token;
-      newTokenValue.textContent = data.token;
-      setPanelVisible(true);
-      copyStatus.textContent = '';
-      copyStatus.className = 'status';
-      window.addEventListener('beforeunload', beforeUnloadHandler);
-      copyTokenBtn.focus();
     });
 
     copyTokenBtn.addEventListener('click', copyTokenToClipboard);
     closeTokenBtn.addEventListener('click', dismissTokenPanel);
     const billingStatus = document.getElementById('billing-status');
-    const billingActions = document.getElementById('billing-actions');
-    const billingStorageKey = 'nevermind.billing.attempt.' + billingStatus.dataset.userId;
-    const billingStates = new Set(['open', 'processing', 'retry_required', 'completed', 'expired', 'failed', 'reconciliation_required', 'none']);
-    function storedBillingAttempt() {
-      try { return JSON.parse(sessionStorage.getItem(billingStorageKey) || 'null'); } catch { return null; }
-    }
-    function saveBillingAttempt(attempt) { sessionStorage.setItem(billingStorageKey, JSON.stringify(attempt)); }
-    function clearBillingAttempt() { sessionStorage.removeItem(billingStorageKey); }
-    function showBillingResult(data) {
-      billingActions.replaceChildren();
-      if (!data || !billingStates.has(data.status)) {
-        billingStatus.textContent = 'Checkout status is unclear. Your attempt is saved; refresh status before trying again.';
-        billingStatus.className = 'status status--err';
-        addRefreshAction();
-        return;
-      }
-      let attempt = storedBillingAttempt();
-      if (data.attemptKey && data.kind && data.priceId) {
-        attempt = { ...(attempt || {}), key: data.attemptKey, kind: data.kind, priceId: data.priceId };
-        saveBillingAttempt(attempt);
-      }
-      if (data.status === 'retry_required' && !data.retryOperationId && attempt?.retryKey) {
-        delete attempt.retryKey;
-        delete attempt.retryOperationId;
-        saveBillingAttempt(attempt);
-      }
-      document.querySelectorAll('.billing-checkout').forEach((button) => {
-        button.disabled = Boolean(attempt?.key && !['completed', 'expired', 'failed'].includes(data.status)) ||
-          ['open', 'processing', 'retry_required', 'reconciliation_required'].includes(data.status);
-      });
-      if (['completed', 'expired', 'failed'].includes(data.status)) clearBillingAttempt();
-      const messages = {
-        none: 'No checkout order is currently recorded. Your saved attempt remains available for a safe retry.',
-        open: 'Checkout is open. Resume the existing checkout rather than starting another purchase.',
-        processing: 'Payment or checkout creation is processing. Refresh later; no new purchase will be started.',
-        retry_required: 'The previous payment needs a retry. The old PaymentIntent will be canceled before a replacement checkout opens.',
-        completed: 'Payment completed and credits were recorded.',
-        expired: 'Checkout expired. You can start a new purchase.',
-        failed: 'Checkout failed. You can start a new purchase.',
-        reconciliation_required: 'This purchase needs support review. Starting another purchase is blocked.',
-      };
-      billingStatus.textContent = messages[data.status];
-      billingStatus.className = data.status === 'completed' ? 'status status--ok' : data.status === 'failed' || data.status === 'reconciliation_required' ? 'status status--err' : 'status';
-      if (data.status === 'open' && data.resumeUrl) addAction('Resume checkout', () => { location.href = data.resumeUrl; });
-      if (data.status === 'retry_required' || (data.status === 'processing' && data.retryOperationId)) {
-        addAction(data.status === 'retry_required' ? 'Retry payment' : 'Continue retry', () => retryBilling(data));
-      }
-      if (data.status === 'none' && attempt?.key) addAction('Retry saved checkout attempt', () => retrySavedCheckout(attempt));
-      if (['open', 'processing', 'retry_required', 'reconciliation_required'].includes(data.status)) addRefreshAction();
-      if (attempt && data.retryOperationId && attempt.retryOperationId !== data.retryOperationId) {
-        attempt.retryOperationId = data.retryOperationId;
-        saveBillingAttempt(attempt);
-      }
-    }
-    function addAction(label, action) {
-      const button = document.createElement('button');
-      button.className = 'button'; button.type = 'button'; button.textContent = label;
-      button.addEventListener('click', action);
-      billingActions.append(button);
-    }
-    function addRefreshAction() {
-      addAction('Refresh payment status', refreshBillingStatus);
-    }
-    async function readBillingResponse(response) {
-      const data = await response.json().catch(() => ({}));
-      if (data.status === 'not_created') {
-        clearBillingAttempt();
-        billingStatus.textContent = data.error?.message || 'Checkout was not created.';
-        billingStatus.className = 'status status--err';
-        billingActions.replaceChildren();
-        return null;
-      }
-      if (data.url) { location.href = data.url; return null; }
-      if (data.status && billingStates.has(data.status)) { showBillingResult(data); return data; }
-      billingStatus.textContent = data.error?.message || 'The result is unclear; your attempt is saved. Refresh its status before trying again.';
+    function showBillingError(message) {
+      billingStatus.textContent = message;
       billingStatus.className = 'status status--err';
-      addRefreshAction();
-      return null;
     }
-    async function refreshBillingStatus() {
-      const attempt = storedBillingAttempt() || {};
-      const returnedSessionId = new URLSearchParams(location.search).get('session_id');
-      const body = {
-        ...(attempt.key ? { attemptKey: attempt.key } : {}),
-        ...(returnedSessionId ? { session_id: returnedSessionId } : {}),
-        ...(attempt.retryOperationId ? { retryOperationId: attempt.retryOperationId } : {}),
-      };
-      const hasStripeReturn = Boolean(returnedSessionId);
+    async function openBillingUrl(path, body) {
       try {
-        const response = await fetch('/api/billing/checkout-status' + (hasStripeReturn ? '' : '?' + new URLSearchParams(body).toString()), {
-          method: hasStripeReturn ? 'POST' : 'GET',
-          ...(hasStripeReturn ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined,
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error?.message || 'Status could not be refreshed.');
-        showBillingResult(data);
-      } catch {
-        billingStatus.textContent = 'Could not refresh status. Your saved attempt is retained; try again before starting another purchase.';
-        billingStatus.className = 'status status--err';
-        addRefreshAction();
-      }
-    }
-    async function retryBilling(status) {
-      let attempt = storedBillingAttempt() || {};
-      if (!attempt.retryKey) { attempt.retryKey = crypto.randomUUID(); saveBillingAttempt(attempt); }
-      const body = {
-        ...(attempt.key ? { attemptKey: attempt.key } : {}),
-        ...(attempt.retryOperationId || status.retryOperationId ? { retryOperationId: attempt.retryOperationId || status.retryOperationId } : {}),
-        retryKey: attempt.retryKey,
-      };
-      billingStatus.textContent = 'Retry operation is processing…';
-      try {
-        const response = await fetch('/api/billing/checkout-retry', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (data.retryOperationId) { attempt.retryOperationId = data.retryOperationId; saveBillingAttempt(attempt); }
-        if (!response.ok && response.status !== 202) throw new Error(data.error?.message || 'Retry is awaiting resolution.');
-        if (data.url) { location.href = data.url; return; }
-        showBillingResult(data);
-      } catch (error) {
-        billingStatus.textContent = error.message || 'Retry status is unclear; the operation key is retained.';
-        billingStatus.className = 'status status--err';
-        addRefreshAction();
-      }
-    }
-    async function retrySavedCheckout(attempt) {
-      if (!attempt?.key || !attempt.kind || !attempt.priceId) return;
-      billingStatus.textContent = 'Retrying the saved checkout request…';
-      billingActions.replaceChildren();
-      try {
-        const response = await fetch('/api/billing/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': attempt.key },
-          body: JSON.stringify({ kind: attempt.kind, priceId: attempt.priceId }),
-        });
-        await readBillingResponse(response);
-      } catch {
-        billingStatus.textContent = 'The response is still unclear. Your original attempt key is retained.';
-        billingStatus.className = 'status status--err';
-        addRefreshAction();
-        addAction('Retry saved checkout attempt', () => retrySavedCheckout(attempt));
-      }
-    }
-    async function createBillingCheckout(button) {
-      const attempt = { key: crypto.randomUUID(), kind: button.dataset.kind, priceId: button.dataset.priceId };
-      saveBillingAttempt(attempt);
-      billingStatus.textContent = 'Opening Stripe…';
-      billingActions.replaceChildren();
-      try {
-        const response = await fetch('/api/billing/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': attempt.key },
-          body: JSON.stringify({ kind: attempt.kind, priceId: attempt.priceId }),
-        });
-        await readBillingResponse(response);
-      } catch {
-        billingStatus.textContent = 'Checkout response was lost. Your attempt is saved; refresh status before retrying.';
-        billingStatus.className = 'status status--err';
-        addRefreshAction();
-        addAction('Retry saved checkout attempt', () => retrySavedCheckout(attempt));
-      }
-    }
-    document.querySelectorAll('.billing-checkout').forEach((btn) => {
-      btn.addEventListener('click', () => createBillingCheckout(btn));
-    });
-    document.getElementById('manage-billing')?.addEventListener('click', async () => {
-      try {
-        const response = await fetch('/api/billing/portal', { method: 'POST' });
-        const data = await response.json();
         if (response.ok && data.url) location.href = data.url;
-        else { billingStatus.textContent = data.error?.message || 'Unable to open billing right now.'; billingStatus.className = 'status status--err'; }
-      } catch { billingStatus.textContent = 'Unable to open billing right now.'; billingStatus.className = 'status status--err'; }
-    });
-    const billingQuery = new URLSearchParams(location.search);
-    if (billingQuery.has('session_id')) refreshBillingStatus();
-    else {
-      const saved = storedBillingAttempt();
-      const query = new URLSearchParams(saved?.key ? { attemptKey: saved.key } : {});
-      if (saved?.retryOperationId) query.set('retryOperationId', saved.retryOperationId);
-      fetch('/api/billing/checkout-status' + (query.size ? '?' + query.toString() : ''))
-        .then((response) => response.json()).then(showBillingResult).catch(() => {
-          billingStatus.textContent = 'Could not load checkout status. Any saved attempt remains retained.';
-          billingStatus.className = 'status status--err';
-          addRefreshAction();
-        });
+        else showBillingError(data.error?.message || 'Unable to open billing right now.');
+      } catch {
+        showBillingError('Unable to open billing right now.');
+      }
     }
-
-    document.querySelectorAll('.revoke').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Revoke this token?')) return;
-        await fetch(`/api/tokens/${btn.dataset.id}`, { method: 'DELETE' });
-        location.reload();
+    document.querySelectorAll('.billing-checkout').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.disabled = true;
+        billingStatus.className = 'status';
+        billingStatus.textContent = 'Opening Stripe…';
+        openBillingUrl('/api/billing/checkout', { kind: button.dataset.kind, priceId: button.dataset.priceId })
+          .finally(() => { button.disabled = false; });
       });
     });
+    document.getElementById('manage-billing')?.addEventListener('click', () => openBillingUrl('/api/billing/portal'));
+
   </script>
 </Layout>

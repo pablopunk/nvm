@@ -126,13 +126,10 @@ export async function runAudioJourneyAssertions(
     response: ServerResponse,
   ) {
     try {
-      assert.equal(
-        request.headers.authorization,
-        'Bearer integration-test-key',
-      );
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
       response.setHeader('content-type', 'application/json');
       if (request.method === 'GET' && url.pathname === '/api/v1/models') {
+        assert.equal(request.headers.authorization, undefined);
         assert.equal(url.searchParams.get('input_modalities'), 'audio');
         assert.equal(
           url.searchParams.get('output_modalities'),
@@ -156,6 +153,10 @@ export async function runAudioJourneyAssertions(
         );
         return;
       }
+      assert.equal(
+        request.headers.authorization,
+        'Bearer integration-test-key',
+      );
       assert.equal(request.method, 'POST');
       assert.equal(url.pathname, '/api/v1/audio/transcriptions');
       const chunks: Buffer[] = [];

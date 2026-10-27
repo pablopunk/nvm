@@ -1,5 +1,5 @@
 {
-  "electron/ai.ts": 2774,
+  "electron/ai.ts": 2561,
   "electron/app-uninstall-service.ts": 769,
   "electron/calculator.ts": 1406,
   "electron/clipboard-history.ts": 1023,
@@ -13,7 +13,7 @@
   "extensions/account.ts": 612,
   "extensions/dictation.ts": 810,
   "palette/App.tsx": 5986,
-  "palette/extension-view.tsx": 1530,
+  "palette/extension-view.tsx": 1359,
   "palette/model.ts": 750,
   "palette/ui.tsx": 992,
   "palette/use-ai-chat.ts": 873

@@ -10,8 +10,10 @@
           "image-name": "icon.png",
           "name": "icon",
           "position": {
-            "scale": 0.9,
-            "translation-in-points": [-14.97233260584814, -15.830718165463658]
+            "scale": 0.82,
+            "translation-in-points": [
+              -5.000000000000016, 2.1316282072803006e-14
+            ]
           }
         }
       ],

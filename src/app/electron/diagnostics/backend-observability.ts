@@ -10,8 +10,20 @@ import {
   recordServerOutcome,
   runOperation,
 } from './observability';
-import type { SimpleStreamOptions } from '@earendil-works/pi-ai/compat';
+import type {
+  Api,
+  AssistantMessageEventStream,
+  Model,
+  SimpleStreamOptions,
+  TranscriptContext,
+} from '@earendil-works/pi-ai';
 type ProviderResponseCallback = NonNullable<SimpleStreamOptions['onResponse']>;
+
+type PiSimpleStream = (
+  model: Model<Api>,
+  context: TranscriptContext,
+  options?: SimpleStreamOptions,
+) => AssistantMessageEventStream;
 
 export function observeProviderResponse(
   response: { status: number; headers: Record<string, string> },
@@ -44,18 +56,9 @@ export function observeProviderOptions(options: SimpleStreamOptions = {}) {
   };
 }
 
-export function observeAgentResponses(agent: {
-  streamFn?: import('@earendil-works/pi-coding-agent').AgentSession['agent']['streamFn'];
-}) {
-  const original = agent.streamFn;
-  if (!original) return;
-  agent.streamFn = function observedAgentStream(model, context, options) {
-    return original.call(
-      agent,
-      model,
-      context,
-      observeProviderOptions(options),
-    );
+export function observeProviderStream(stream: PiSimpleStream): PiSimpleStream {
+  return function observedProviderStream(model, context, options) {
+    return stream(model, context, observeProviderOptions(options));
   };
 }
 

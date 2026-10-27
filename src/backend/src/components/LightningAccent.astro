@@ -1,0 +1,22 @@
+<canvas class="lightning-accent" aria-hidden="true" data-lightning-accent></canvas>
+
+<style>
+  .lightning-accent {
+    position: fixed;
+    inset: var(--lightning-top, 0px) 0 0;
+    z-index: 2;
+    width: 100%;
+    height: calc(100% - var(--lightning-top, 0px));
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce), (forced-colors: active) {
+    .lightning-accent { display: none; }
+  }
+</style>
+
+<script>
+  import { animateLightning } from './lightning/animate';
+  for (const canvas of document.querySelectorAll<HTMLCanvasElement>('[data-lightning-accent]')) {
+    animateLightning(canvas);
+  }
+</script>

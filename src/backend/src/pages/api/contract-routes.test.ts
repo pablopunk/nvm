@@ -1984,7 +1984,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
     assert.deepEqual(await inputLimitResponse.json(), {
       error: {
         type: 'prompt_too_large',
-        message: 'Prompt exceeds 100000 input tokens',
+        message: 'Prompt exceeds 100000 input tokens; context_length_exceeded',
       },
     });
 
@@ -2000,7 +2000,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
     assert.deepEqual(await noOutputContextResponse.json(), {
       error: {
         type: 'prompt_too_large',
-        message: 'Prompt leaves no room for model output',
+        message: 'Prompt leaves no room for model output; context_length_exceeded',
       },
     });
   } finally {
@@ -2019,7 +2019,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
   assert.equal(promptSizeLogs[1]?.output_context_safety_tokens, 4096);
 });
 
-test('proxy forwards a bounded image through a reviewed image-capable route', async () => {
+test('proxy forwards a bounded image through a catalog image-capable route', async () => {
   resetPricingCacheForTests();
   process.env.OPENROUTER_API_KEY = 'openrouter-key';
   process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
@@ -2047,7 +2047,22 @@ test('proxy forwards a bounded image through a reviewed image-capable route', as
           models: {
             'openai/gpt-6.1-sol': {
               id: 'openai/gpt-6.1-sol',
-              cost: { input: 2, output: 10 },
+              cost: {
+                input: 2,
+                output: 10,
+                cache_read: 0.1,
+                cache_write: 2.5,
+                tiers: [
+                  {
+                    input: 4,
+                    output: 15,
+                    cache_read: 0.2,
+                    cache_write: 5,
+                    tier: { type: 'context', size: 272_000 },
+                  },
+                ],
+              },
+              limit: { context: 1_050_000, input: 922_000, output: 128_000 },
               modalities: { input: ['text', 'image'] },
             },
           },
@@ -2193,7 +2208,7 @@ test('proxy returns a stable error when the declared request body exceeds its li
   assert.deepEqual(await response.json(), fixture('request-too-large-error'));
 });
 
-test('production free-smart Muse route stays fail-closed without a Chat Completions image contract', async () => {
+test('image routes fail closed when the catalog has no context limit', async () => {
   resetPricingCacheForTests();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
@@ -2215,7 +2230,6 @@ test('production free-smart Muse route stays fail-closed without a Chat Completi
             'muse-spark-1.3-contributor-free': {
               id: 'muse-spark-1.3-contributor-free',
               cost: { input: 0, output: 0 },
-              limit: { context: 1_048_576, output: 131_072 },
               modalities: { input: ['text', 'image'] },
             },
           },

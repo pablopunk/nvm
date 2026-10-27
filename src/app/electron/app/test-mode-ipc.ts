@@ -1,6 +1,13 @@
 // biome-ignore-all lint: Test-mode IPC handlers are dynamic renderer payload shims moved verbatim from main.ts.
+import { app } from 'electron';
+import { piRuntimeModuleResolution } from '../ai/pi-runtime';
+import {
+  createPackagedPiSessionFixture,
+  type PackagedPiSessionAi,
+} from '../ai/packaged-pi-session-fixture';
 import type { ExtensionRuntimeState } from '../extension-host/extension-runtime-state';
 import type { JobRegistry } from '../platform/jobs';
+import { isNvmPackagedPiTestMode } from '../platform/test-mode-flags';
 import { normalizeAccelerator } from '../shortcuts/shortcut-utils';
 import { testModePaletteActionIsSafe } from './test-mode-safety';
 
@@ -46,6 +53,8 @@ export type TestModeIpcDeps = {
   getSetting: (id: any) => unknown;
   getShortcuts: () => unknown;
   showRendererIndicator: (sender: any, input: any) => unknown;
+  initializeAi: () => Promise<unknown>;
+  getAi: () => PackagedPiSessionAi | null;
 };
 
 export function createTestModeIpc(deps: TestModeIpcDeps) {
@@ -68,7 +77,17 @@ export function createTestModeIpc(deps: TestModeIpcDeps) {
     getSetting,
     getShortcuts,
     showRendererIndicator,
+    initializeAi,
+    getAi,
   } = deps;
+  const runPiPackagedSession = createPackagedPiSessionFixture({
+    enabled: isNvmPackagedPiTestMode,
+    isPackaged: () => app.isPackaged,
+    appPath: () => app.getAppPath(),
+    initializeAi,
+    getAi,
+    resolveModules: piRuntimeModuleResolution,
+  });
 
   function registerTestModeIpcHandlers() {
     const handle = createMeasuredIpcHandle();
@@ -100,6 +119,8 @@ export function createTestModeIpc(deps: TestModeIpcDeps) {
       await jobRegistry.run(id, 'electron-smoke');
       return { found: true };
     });
+    if (isNvmPackagedPiTestMode)
+      handle('test:run-pi-session', () => runPiPackagedSession());
     handle('test:fail-next-extension-activation', (_event, phase) => {
       extensionRuntimeState.testExtensionActivationFailurePhase = String(
         phase || 'after-persist',

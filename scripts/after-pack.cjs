@@ -13,7 +13,8 @@ module.exports = async function verifyPackagedRuntime(context) {
           'Resources',
         )
       : path.join(context.appOutDir, 'resources');
-  const result = verifyPackagedDependencies(path.join(resources, 'app.asar'));
+  const archive = path.join(resources, 'app.asar');
+  const result = verifyPackagedDependencies(archive);
   console.log(
     `Verified ${result.packagesChecked} packaged runtime dependencies`,
   );
@@ -43,8 +44,17 @@ module.exports = async function verifyPackagedRuntime(context) {
     'test-results',
     `packaged-diagnostics-${context.electronPlatformName}-${process.arch}`,
   );
+  const piArtifacts =
+    process.env.NVM_TEST_PI_PACKAGED === '1'
+      ? path.join(
+          context.packager.projectDir,
+          'test-results',
+          `packaged-pi-electron-${context.electronPlatformName}-${process.arch}`,
+        )
+      : undefined;
   await require('./packaged-diagnostics-smoke.cjs').packagedDiagnosticsSmoke(
     executable,
     artifacts,
+    { archive, piArtifacts },
   );
 };

@@ -1,0 +1,55 @@
+<section class="own-ai landing-feature" aria-labelledby="own-ai-title">
+  <div class="own-ai__copy">
+    <h2 id="own-ai-title">Bring <span class="own-ai__highlight">your own AI.</span> Dotfiles ready.</h2>
+    <p><strong>AI is built in</strong>, with <a href="/pricing">free monthly credits</a> to build and chat.</p>
+    <p>You can also use your own coding agent. Point it at <code>~/.config/nevermind</code> and build extensions with the included API. <strong>Just local TypeScript files</strong>, ready for your dotfiles.</p>
+  </div>
+  <div class="own-ai__files" aria-label="Extensions folder containing the bundled API types and your own extension">
+    <div class="own-ai__path">~/.config/nevermind/</div>
+    <pre><span class="own-ai__branch">└──</span> extensions/
+    <span class="own-ai__branch">├──</span> <span class="own-ai__api">nevermind-extension-api.d.ts</span>
+    <span class="own-ai__branch">├──</span> package.json
+    <span class="own-ai__branch">└──</span> <span class="own-ai__extension">your-next-idea.ts</span></pre>
+    <p class="own-ai__caption">The API is already there. The sky is the limit.</p>
+  </div>
+</section>
+
+<style>
+  .own-ai { padding-block: 48px 144px; }
+  h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  .own-ai__copy p { max-width: 520px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  .own-ai__copy p + p { margin-top: 20px; }
+  strong { color: var(--text); font-weight: 600; }
+  .own-ai__copy a,
+  .own-ai__copy a:visited { color: #f4cf86; text-decoration: underline; text-decoration-color: #80663c; text-underline-offset: 4px; }
+  .own-ai__copy a:hover { color: #fff0c1; text-decoration-color: currentColor; }
+  code { background: transparent; border: 0; padding: 0; color: var(--text); overflow-wrap: anywhere; }
+  .own-ai__files {
+    min-width: 0;
+    width: 100%;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--surface) 45%, var(--bg));
+    font-family: var(--mono);
+  }
+  .own-ai__path { color: var(--muted); font-size: 14px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  pre { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; color: var(--text); font-size: clamp(11px, 1.2vw, 14px); line-height: 2.4; }
+  .own-ai__branch { color: #57534e; }
+  .own-ai__api { color: #f4cf86; }
+  .own-ai__extension { color: var(--text); font-weight: 600; }
+  .own-ai__caption { margin: 24px 0 0; color: var(--muted); font-family: var(--font); font-size: 13px; line-height: 1.6; }
+  .own-ai__highlight { color: #f4cf86; }
+  @supports (background-clip: text) {
+    .own-ai__highlight { background: linear-gradient(110deg, #fff0c1, #d99739 65%, #f4d890); background-clip: text; color: transparent; }
+  }
+  @media (forced-colors: active) {
+    .own-ai__highlight { background: none; color: CanvasText; }
+  }
+  @media (max-width: 860px) {
+    .own-ai { padding-block: 32px 80px; }
+    .own-ai__copy { text-align: center; }
+    .own-ai__copy p { margin-inline: auto; }
+    .own-ai__files { padding: 24px; }
+  }
+</style>

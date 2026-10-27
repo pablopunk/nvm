@@ -56,10 +56,16 @@ export function providerSupportsFormat(provider: string, format: UpstreamApi): b
   return cfg ? cfg.apiFormats.includes(format) : false;
 }
 
+export function getUpstreamBaseUrl(provider: string): string {
+  const cfg = PROVIDER_CONFIGS[provider];
+  if (!cfg) throw new UpstreamConfigError(`Unknown provider: ${provider}`);
+  return String(env(cfg.baseUrlEnv ?? '') ?? cfg.defaultBaseUrl).replace(/\/$/, '');
+}
+
 export function getUpstreamConfig(provider: string): { baseUrl: string; apiKey: string } {
   const cfg = PROVIDER_CONFIGS[provider];
   if (!cfg) throw new UpstreamConfigError(`Unknown provider: ${provider}`);
-  const baseUrl = String(env(cfg.baseUrlEnv ?? '') ?? cfg.defaultBaseUrl).replace(/\/$/, '');
+  const baseUrl = getUpstreamBaseUrl(provider);
   const apiKey = String(env(cfg.apiKeyEnv) ?? '');
   if (!apiKey) throw new UpstreamConfigError(`Missing ${cfg.apiKeyEnv}`);
   return { baseUrl, apiKey };
