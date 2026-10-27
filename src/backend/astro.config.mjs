@@ -4,15 +4,45 @@ import vercel from '@astrojs/vercel';
 import sentry from '@sentry/astro';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const sentryDsn = process.env.SENTRY_DSN;
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+
+/**
+ * Exposes the desktop app's built-in palette items to the landing page on every
+ * dev, check, and build run. Runs here instead of an npm pre-hook because
+ * Vercel's Astro preset invokes `astro build` directly. It never fails the build.
+ */
+const generatedPaletteItems = {
+  name: 'generated-palette-items',
+  hooks: {
+    'astro:config:setup': function generatePaletteItems() {
+      try {
+        execFileSync(
+          process.execPath,
+          ['--import', 'tsx', fileURLToPath(new URL('./scripts/generate-palette-items.ts', import.meta.url))],
+          { stdio: 'inherit' },
+        );
+      } catch (error) {
+        console.warn('[palette] Generation failed; the landing palette uses sample content only.', error);
+      }
+    },
+  },
+};
 
 export default defineConfig({
   output: 'server',
   adapter: vercel(),
   site: 'https://www.nvm.fyi',
-  vite: { plugins: [tailwindcss()] },
+  vite: {
+    plugins: [tailwindcss()],
+    // The landing palette imports the desktop app's palette styles and ranking.
+    server: { fs: { allow: [repoRoot] } },
+  },
   integrations: [
+    generatedPaletteItems,
     react(),
     ...(sentryDsn
       ? [

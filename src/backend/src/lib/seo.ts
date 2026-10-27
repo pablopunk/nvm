@@ -12,11 +12,6 @@ export const publicPages: Record<
     description:
       'Start free with built-in desktop tools and monthly AI credits. Compare Nevermind Free and Pro, or bring your own AI to build personal extensions.',
   },
-  '/docs': {
-    title: 'Desktop setup and custom extensions · Nevermind Docs',
-    description:
-      'Install Nevermind, learn the command palette, and build your own extensions. Explore app launching, clipboard history, shortcuts, and the AI builder.',
-  },
   '/terms': {
     title: 'Terms of Service · Nevermind',
     description:
