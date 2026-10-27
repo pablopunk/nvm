@@ -3,10 +3,13 @@ import type { BrowserWindow } from 'electron';
 import { extensionLoadingView } from '../../palette/model';
 import { performanceTraces } from '../diagnostics/debug-performance';
 import { runOperation } from '../diagnostics/observability';
+import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
+import type { WindowFocusTarget } from '../os/window-management-types';
 import { error as logError } from '../platform/logger';
 import { shortcutActionRunsWithoutView } from './shortcut-lifecycle';
 
 export type ShortcutRunnerDeps = {
+  captureFrontmostTarget: () => Promise<WindowFocusTarget | null>;
   paletteWindow: {
     readonly win: BrowserWindow | null;
     showPalette: (options: {
@@ -32,6 +35,7 @@ export type ShortcutRunnerDeps = {
 
 export function createShortcutRunner(deps: ShortcutRunnerDeps) {
   const {
+    captureFrontmostTarget,
     paletteWindow,
     paneInvocations,
     paneInvocationWindows,
@@ -69,9 +73,12 @@ export function createShortcutRunner(deps: ShortcutRunnerDeps) {
       : null;
     if (instantView) recordRecent(currentAction);
     if (shortcutActionRunsWithoutView(currentAction)) {
+      const target = await captureFrontmostTarget();
       runInBackground(async () => {
         try {
-          await executeAction({ ...currentAction, traceId });
+          await runInWindowInvocationScope({ source: 'shortcut', target }, () =>
+            executeAction({ ...currentAction, traceId }),
+          );
         } catch (error) {
           presentActionErrorFeedback(error, currentAction);
         }
@@ -108,9 +115,13 @@ export function createShortcutRunner(deps: ShortcutRunnerDeps) {
     if (instantView) return;
     try {
       const result = normalizeHostViewResult(
-        await executeAction(
-          { ...currentAction, traceId },
-          { keepPaletteOpen: true },
+        await runInWindowInvocationScope(
+          { source: 'shortcut', target: null },
+          () =>
+            executeAction(
+              { ...currentAction, traceId },
+              { keepPaletteOpen: true },
+            ),
         ),
       );
       if (!sender.isDestroyed())
