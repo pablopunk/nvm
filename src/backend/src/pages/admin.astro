@@ -14,21 +14,15 @@ import {
   type ModelRouteSlot,
 } from '../lib/settings';
 import { listReviewedImageModelsForProvider } from '../lib/pricing';
-import {
-  CREDIT_USD,
-  CREDIT_USD_SOURCE,
-  MARKUP,
-  MARKUP_SOURCE,
-} from '../lib/cost';
 import { listTranscriptionModels } from '../lib/transcription-models';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-const safeModelRoute = async (
+async function safeModelRoute(
   slot: ModelRouteSlot,
-): Promise<(ModelRouteConfig & { ref: string }) | null> => {
+): Promise<(ModelRouteConfig & { ref: string }) | null> {
   try {
     const route = await getModelRoute(slot);
     return { ...route, ref: modelRouteToRef(route) };
@@ -36,39 +30,30 @@ const safeModelRoute = async (
     if (err instanceof ModelNotConfiguredError) return null;
     throw err;
   }
-};
-const [proSmartRoute, proFastRoute, freeSmartRoute, freeFastRoute] =
-  await Promise.all([
-    safeModelRoute('pro-smart'),
-    safeModelRoute('pro-fast'),
-    safeModelRoute('free-smart'),
-    safeModelRoute('free-fast'),
-  ]);
+}
+const modelRoutes = await Promise.all(
+  (
+    [
+      ['pro-smart', 'Pro smart'],
+      ['pro-fast', 'Pro fast'],
+      ['free-smart', 'Free smart'],
+      ['free-fast', 'Free fast'],
+    ] as const
+  ).map(async ([slot, title]) => ({ slot, title, route: await safeModelRoute(slot) })),
+);
 const modelOptions = (
   await Promise.all(
-    listKnownProviders().map(async (provider) => {
-      const models = await listReviewedImageModelsForProvider(provider);
-      return models.map((modelId) => ({
-        provider,
-        modelId,
-        ref: modelRouteToRef({ provider, modelId }),
-      }));
-    }),
+    listKnownProviders().map(async (provider) =>
+      (await listReviewedImageModelsForProvider(provider)).map((modelId) =>
+        modelRouteToRef({ provider, modelId }),
+      ),
+    ),
   )
 ).flat();
-const modelRoutes = [
-  { slot: 'pro-smart', title: 'Pro smart', route: proSmartRoute },
-  { slot: 'pro-fast', title: 'Pro fast', route: proFastRoute },
-  { slot: 'free-smart', title: 'Free smart', route: freeSmartRoute },
-  { slot: 'free-fast', title: 'Free fast', route: freeFastRoute },
-] as const;
 const audioRoute = await getAudioModelRoute().catch(() => null);
 const audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
-const audioModels = (await listTranscriptionModels().catch(() => [])).map(
-  (model) => ({
-    ...model,
-    ref: modelRouteToRef(model),
-  }),
+const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
+  (model) => modelRouteToRef(model),
 );
 ---
 <Layout title="Nevermind · Admin" width="wide">
@@ -83,951 +68,280 @@ const audioModels = (await listTranscriptionModels().catch(() => [])).map(
   <main class="admin-console">
     <header class="admin-header">
       <div>
-        <h1>Operations</h1>
-        <p class="muted">Bounded usage, billing evidence, and audited controls. Metrics are operational—not accounting profit.</p>
+        <h1>Am I making money?</h1>
+        <p class="muted">Revenue from Stripe payments, cost from provider usage, Stripe fees estimated at 2.9% + 30¢. UTC calendar months.</p>
       </div>
-      <div class="admin-range-controls" aria-label="UTC report range">
-        <label class="field">From (UTC)<input class="input" id="range-from" type="date" /></label>
-        <label class="field">To, exclusive (UTC)<input class="input" id="range-to" type="date" /></label>
-        <button class="button button--primary" id="apply-range" type="button">Refresh range</button>
-      </div>
+      <label class="field">Month<input class="input" id="month" type="month" /></label>
     </header>
 
-    <nav class="admin-sections" aria-label="Admin sections">
-      <a href="#overview">Overview</a>
-      <a href="#billing">Billing</a>
-      <a href="#usage">Usage</a>
-      <a href="#users">Users</a>
-      <a href="#models">Models &amp; Providers</a>
-      <a href="#audit">Audit</a>
-    </nav>
-    <span id="admin-config" data-admin-id={user.id} data-credit-usd={CREDIT_USD} data-credit-usd-source={CREDIT_USD_SOURCE} data-markup={MARKUP} data-markup-source={MARKUP_SOURCE} hidden></span>
+    <div class="admin-alerts" id="problems" aria-live="polite"></div>
 
-    <section class="section card admin-panel" id="overview">
-      <div class="admin-section-heading"><div><h2>Overview</h2><p class="muted" id="overview-range">Loading selected UTC range…</p></div><span class="status" id="overview-status" aria-live="polite"></span></div>
-      <div class="stat-grid" id="stats"><div class="stat"><div class="v">…</div><div class="l">Loading bounded report</div></div></div>
-      <div class="table-scroll admin-subpanel"><table class="table admin-table" id="credit-ledger-summary"><caption class="muted">Credit counts only—not Stripe cash, revenue, profit, or an accounting liability.</caption><thead><tr><th>Pool</th><th>Granted in range</th><th>Consumed in range</th><th>Adjusted in range</th><th>Current outstanding</th></tr></thead><tbody><tr><td colspan="5" class="muted">Loading credit counts…</td></tr></tbody></table></div>
-      <div class="admin-alerts" id="admin-alerts" aria-live="polite"></div>
-      <div class="admin-overview-grid">
-        <div class="admin-notice" id="free-cap-banner" role="status">Loading free-spend cap state…</div>
-        <div class="admin-economics" id="credit-economics"></div>
+    <section class="section card admin-panel">
+      <div class="stat-grid" id="headline"><div class="stat"><div class="v">…</div><div class="l">Loading</div></div></div>
+      <div class="table-scroll admin-subpanel">
+        <table class="table" id="segments"><thead><tr><th></th><th>Users</th><th>Active</th><th>Requests</th><th>Provider cost</th><th>Revenue</th><th>Net</th><th>Cost / active user</th></tr></thead><tbody></tbody></table>
       </div>
-      <div class="section--sm admin-subpanel">
-        <div class="admin-section-heading"><div><h3>Aggregate free-provider-cost cap</h3><p class="muted">USD microcents per UTC month; unset means no aggregate ceiling. In-flight work can still overrun.</p></div></div>
-        <div class="admin-cap-grid">
-          <div><strong>Current month</strong><div class="muted" id="cap-current">Loading…</div></div>
-          <div><strong>Next month</strong><div class="muted" id="cap-next">Loading…</div></div>
-          <div class="admin-cap-controls">
-            <label class="field">Cap in USD<input class="input" id="free-cap-usd" type="text" inputmode="decimal" placeholder="e.g. 25.00" aria-describedby="cap-input-help" /></label>
-            <label class="field">Effective period<select class="input" id="free-cap-effective"><option value="current">Current UTC month</option><option value="next_month">Next UTC month</option></select></label>
-            <div class="row"><button class="button button--primary" id="set-free-cap" type="button">Set cap</button><button class="button" id="clear-free-cap" type="button">Clear cap</button></div>
-            <span class="status" id="free-cap-status" aria-live="polite"></span>
-            <small class="muted" id="cap-input-help">Current-month activation is blocked when attribution is incomplete or legacy holds are pending. Clearing next month does not lift this month’s cap.</small>
-          </div>
+    </section>
+
+    <section class="section card admin-panel">
+      <h2>Pricing</h2>
+      <p class="muted">Set in Vercel env (<code>CREDIT_MARKUP</code>, <code>CREDIT_USD</code>, <code>MONTHLY_FREE_CREDITS</code>, <code>STRIPE_SUBSCRIPTION_TIERS</code>, <code>STRIPE_TOP_UP_PACKS</code>). Worst case means the user spends every credit they get.</p>
+      <div class="table-scroll"><table class="table" id="knobs"><thead><tr><th>Plan</th><th>Price</th><th>Credits / month</th><th>Worst-case cost</th><th>Worst-case net</th></tr></thead><tbody></tbody></table></div>
+      <p class="muted" id="knobs-note"></p>
+    </section>
+
+    <section class="section card admin-panel">
+      <h2>Top users by cost</h2>
+      <div class="table-scroll"><table class="table" id="top-users"><thead><tr><th>Email</th><th>Plan</th><th>Requests</th><th>Cost</th><th>Revenue</th><th>Net</th></tr></thead><tbody></tbody></table></div>
+      <div class="admin-subpanel">
+        <h3>Give or remove credits</h3>
+        <div class="row admin-grant">
+          <label class="field">Email<input class="input" id="grant-email" type="email" autocomplete="off" /></label>
+          <label class="field">Pool<select class="input" id="grant-kind"><option value="paid">Paid</option><option value="free">Free</option></select></label>
+          <label class="field">Credits<input class="input" id="grant-delta" type="number" step="1" placeholder="250 or -50" /></label>
+          <label class="field">Reason<input class="input" id="grant-reason" type="text" maxlength="500" /></label>
+          <button class="button button--primary" id="grant" type="button">Apply</button>
+          <span class="status" id="grant-status" aria-live="polite"></span>
         </div>
       </div>
     </section>
 
-    <section class="section card admin-panel" id="billing">
-      <div class="admin-section-heading"><div><h2>Billing</h2><p class="muted">Local Stripe evidence is shown separately from customer credit counts. Stripe reads happen only after an explicit action.</p></div><span id="billing-status" class="status" aria-live="polite"></span></div>
-      <div class="admin-subpanel">
-        <div class="admin-section-heading"><div><h3>Configured Stripe Price candidates</h3><p class="muted">Refresh retrieves configured Price objects with read-only GET. The owner must review each exact amount, currency, interval, and grant before approval; approval stores immutable terms and never writes to Stripe. Production Checkout also requires read-only webhook verification.</p></div><button class="button" id="refresh-price-candidates" type="button">Refresh candidates</button></div>
-        <div class="table-scroll"><table class="table admin-table" id="price-candidates-table"><thead><tr><th>Price</th><th>Purchase</th><th>Verified Stripe terms</th><th>Server grant</th><th>Approval</th></tr></thead><tbody><tr><td colspan="5" class="muted">Select “Refresh candidates” to read Stripe.</td></tr></tbody></table></div>
-      </div>
-      <div class="admin-subpanel">
-        <h3>Unresolved purchase and retry evidence</h3>
-        <p class="muted">Actions re-fetch Stripe objects read-only, then apply only exact, immutable purchase evidence. Ambiguous cases remain blocked for owner review.</p>
-        <div class="table-scroll"><table class="table admin-table" id="billing-reconciliation-table"><thead><tr><th>Type</th><th>Reference</th><th>State / reason</th><th>Updated</th><th>Action</th></tr></thead><tbody><tr><td colspan="5" class="muted">Loading local reconciliation records…</td></tr></tbody></table></div>
-      </div>
-      <div class="admin-subpanel">
-        <div class="admin-section-heading"><div><h3>Stripe balance-transaction coverage</h3><p class="muted">One explicit request reads at most one page. Continue only when you choose to.</p></div><button class="button button--primary" id="start-financial-reconcile" type="button">Reconcile selected range</button></div>
-        <p class="status" id="financial-reconcile-status" aria-live="polite"></p>
-        <div class="table-scroll"><table class="table admin-table" id="financial-jobs-table"><thead><tr><th>UTC range</th><th>State</th><th>Rows imported / updated / unknown</th><th>Updated</th><th>Action</th></tr></thead><tbody><tr><td colspan="5" class="muted">Loading local reconciliation jobs…</td></tr></tbody></table></div>
-      </div>
-      <div class="admin-subpanel">
-        <h3>Stripe balance movements by currency</h3>
-        <p class="muted">Source: Stripe balance transactions, integer minor units. Coverage gaps and missing fields are shown as incomplete, not zero.</p>
-        <div class="table-scroll"><table class="table admin-table" id="financials-table"><thead><tr><th>Currency</th><th>Interval coverage</th><th>Captured charges</th><th>Refunds</th><th>Partial capture reversals</th><th>Disputes</th><th>Dispute reversals</th><th>Payment fees</th><th>Standalone fees</th><th>Stripe tax</th><th>Selected-category movement</th><th>Charge failures</th><th>Refund failures</th><th>Other adjustments</th><th>Unclassified</th><th>Payouts</th><th>Transfers</th><th>Reserves</th><th>Pending / available</th><th>Unknowns</th></tr></thead><tbody><tr><td colspan="20" class="muted">Loading bounded financial report…</td></tr></tbody></table></div>
-        <p class="muted">Selected-category movement is not net cash, settled cash, total Stripe balance movement, or revenue. Credit grants and credit face value are not cash receipts.</p>
-      </div>
+    <section class="section card admin-panel">
+      <h2>Cost by model</h2>
+      <div class="table-scroll"><table class="table" id="models"><thead><tr><th>Model</th><th>Provider</th><th>Who</th><th>Requests</th><th>Cost</th></tr></thead><tbody></tbody></table></div>
     </section>
 
-    <section class="section card admin-panel" id="usage">
-      <div class="admin-section-heading"><div><h2>Usage</h2><p class="muted">Stored customer-request provider cost and token counts; counts may be request-estimated when upstream usage is absent. Admin probes are excluded and their cost is unknown.</p></div><label class="field field--inline">Series<select class="input" id="series-mode"><option value="cost">Provider cost</option><option value="tokens">Input + output tokens</option></select></label></div>
-      <div class="admin-chart-card"><div class="admin-chart-summary"><strong id="series-total">Loading…</strong><span class="muted" id="series-note"></span></div><div class="table-scroll"><svg id="usage-chart" class="admin-chart" viewBox="0 0 100 36" role="img" aria-label="Daily usage series"></svg></div><div class="admin-chart-axis" id="usage-chart-axis"></div></div>
-      <div class="admin-subpanel"><h3>Provider cost by model</h3><p class="muted">Top 100 model/provider/cost-source groups in the selected range, ordered by tracked cost. Provider-reported versus catalog-estimated values remain labeled. Free-pool cost is an estimate; missing reservation attribution is not guessed.</p>
-        <div class="table-scroll"><table class="table admin-table" id="by-model"><thead><tr><th>Provider</th><th>Model</th><th>Modality</th><th>Requests</th><th>Errors</th><th>Input / output tokens</th><th>Cached / cache-write / reasoning</th><th>Audio duration / tokens</th><th>Credits debited</th><th>Provider-reported cost</th><th>Catalog estimate</th><th>Free-attributed estimate</th><th>Paid-attributed estimate</th><th>Unknown pool</th><th>Unknown cost source</th></tr></thead><tbody><tr><td colspan="15" class="muted">Loading bounded report…</td></tr></tbody></table></div>
-      </div>
-      <div class="admin-subpanel"><div class="admin-section-heading"><div><h3>Recent requests</h3><p class="muted" id="requests-note">Eventually consistent; refresh to restart pagination. Prompts, completions, credentials, and payment data are not included.</p></div><button class="button" id="requests-next" type="button" disabled>Next page</button></div>
-        <div class="table-scroll"><table class="table admin-table" id="requests-table"><thead><tr><th>When (UTC)</th><th>Model / provider</th><th>Status</th><th>Latency</th><th>Tokens (may be estimated) / audio</th><th>Credits (free / paid)</th><th>Provider cost / source</th><th>Pool attribution</th><th>Request ID</th></tr></thead><tbody><tr><td colspan="9" class="muted">Loading bounded request log…</td></tr></tbody></table></div>
-      </div>
-    </section>
-
-    <section class="section card admin-panel" id="users">
-      <div class="admin-section-heading"><div><h2>Users</h2><p class="muted">Account actions are inline, reasoned, audited, and idempotent. The list shows users created in the selected range; exact email search checks all account history.</p></div></div>
-      <div class="row admin-user-search"><label class="field">Find account by exact email<input class="input" id="user-search-email" type="email" autocomplete="off" placeholder="name@example.com" /></label><button class="button" id="user-search-button" type="button">Find user</button><button class="button button--ghost" id="user-search-clear" type="button">Clear search</button><span class="status" id="user-status" aria-live="polite"></span></div>
-      <div class="table-scroll"><table class="table admin-table" id="users-table"><thead><tr><th>Email</th><th>Role</th><th>Plan</th><th>Free balance</th><th>Paid balance</th><th>Total</th><th>Requests</th><th>Credits spent</th><th>Last model / used</th><th>Joined</th><th>Admin actions</th></tr></thead><tbody><tr><td colspan="11" class="muted">Loading users…</td></tr></tbody></table></div>
-      <div class="row admin-pagination"><span class="muted" id="users-page-note"></span><button class="button" id="users-next" type="button" disabled>Next page</button></div>
-      <div class="admin-subpanel">
-        <h3>Historical waitlist and invite queue</h3><p class="muted">This queue is historical only; it does not gate or replace open signup. Invite delivery is asynchronous and depends on sender configuration.</p>
-        <div class="row admin-invite-form"><label class="field">Manual invite email<input class="input" id="manual-invite-email" type="email" placeholder="name@example.com" /></label><button class="button" id="manual-invite" type="button">Queue invite</button><span id="waitlist-status" class="status" aria-live="polite"></span></div>
-        <div class="table-scroll"><table class="table admin-table" id="waitlist-table"><thead><tr><th>Email</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody><tr><td colspan="4" class="muted">Loading queue…</td></tr></tbody></table></div>
-      </div>
-    </section>
-
-    <section class="section card admin-panel" id="models">
-      <h2>Models &amp; Providers</h2>
-      <p class="muted">Route eligibility and credit-pool funding are separate server-owned decisions.</p>
-      <div class="admin-subpanel"><h3>Model routes</h3><p class="muted">Smart and Fast routes only offer models with image input and reviewed billing support. Existing unsupported routes remain visible until replaced. Dictation uses its separate audio model catalog.</p>
-        <div class="model-routes">
-          {modelRoutes.map(({ slot, title, route }) => (
-            <section class="model-route-row" data-model-route={slot}>
-              <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status-for={slot}></span></header>
-              <label class="field">Model<select id={`model-select-${slot}`} class="input combo model-select">{route && !modelOptions.some((model) => model.ref === route.ref) && <option value={route.ref} selected disabled>{route.ref} (currently configured · not selectable)</option>}{modelOptions.map((model) => <option value={model.ref} selected={model.ref === route?.ref}>{model.ref}</option>)}</select></label>
-              <label class="field model-route-row__thinking">Thinking<select id={`thinking-select-${slot}`} class="input thinking-select">{THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}</select></label>
-              <div class="route-details" data-route-details aria-live="polite">Loading pricing and failover…</div>
-            </section>
-          ))}
-          <section class="model-route-row" data-audio-model-route>
-            <header class="model-route-row__header"><strong>Dictation audio</strong><span class="status" data-audio-model-status></span></header>
-            <label class="field">Model<select id="audio-model-select" class="input combo model-select">{audioModels.map((model) => <option value={model.ref} selected={model.ref === audioRouteRef}>{model.ref}</option>)}</select></label>
-            <div class="route-details muted">Only OpenRouter models with audio input and transcription output are shown.</div>
+    <section class="section card admin-panel">
+      <h2>Models</h2>
+      <div class="model-routes">
+        {modelRoutes.map(({ slot, title, route }) => (
+          <section class="model-route-row" data-model-route={slot}>
+            <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status></span></header>
+            <label class="field">Model<select class="input combo model-select">{route && !modelOptions.includes(route.ref) && <option value={route.ref} selected disabled>{route.ref} (not selectable)</option>}{modelOptions.map((ref) => <option value={ref} selected={ref === route?.ref}>{ref}</option>)}</select></label>
+            <label class="field model-route-row__thinking">Thinking<select class="input thinking-select">{THINKING_LEVELS.map((level) => <option value={level} selected={level === (route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL)}>{level}</option>)}</select></label>
+            <div class="route-details muted" data-pricing></div>
           </section>
-        </div>
-      </div>
-      <div class="admin-subpanel"><div class="admin-section-heading"><div><h3>Providers</h3><p class="muted">Disabled providers are skipped during failover. Probe is a live provider request; its cost is excluded from tracked customer usage.</p></div></div>
-        <div class="table-scroll"><table class="table admin-table" id="providers-table"><thead><tr><th>Provider</th><th>Enabled</th><th>Priority</th><th>Health</th><th></th></tr></thead><tbody><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></div>
-      </div>
-      <div class="admin-subpanel"><div class="admin-section-heading"><div><h3>Route breakers</h3><p class="muted">Re-enable only the exact route after investigating the overrun evidence.</p></div><button class="button" id="refresh-breakers" type="button">Refresh breakers</button></div>
-        <div class="table-scroll"><table class="table admin-table" id="route-breakers-table"><thead><tr><th>Route slot</th><th>Provider</th><th>Model</th><th>Reason</th><th>Tripped at</th><th></th></tr></thead><tbody><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></div>
+        ))}
+        <section class="model-route-row" data-audio-model-route>
+          <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status></span></header>
+          <label class="field">Model<select class="input combo model-select">{audioModelRefs.map((ref) => <option value={ref} selected={ref === audioRouteRef}>{ref}</option>)}</select></label>
+        </section>
       </div>
     </section>
 
-    <section class="section card admin-panel" id="audit">
-      <div class="admin-section-heading"><div><h2>Audit</h2><p class="muted">Recent privileged state changes. Audit writes share a transaction with the change they record.</p></div></div>
-      <div class="table-scroll"><table class="table audit-table" id="audit-table"><colgroup><col class="audit-table__when" /><col class="audit-table__actor" /><col class="audit-table__action" /><col class="audit-table__target" /><col class="audit-table__meta" /></colgroup><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Meta</th></tr></thead><tbody><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></div>
+    <section class="section card admin-panel">
+      <h2>Free usage cap</h2>
+      <p class="muted" id="cap-state">Loading…</p>
+      <div class="row admin-grant">
+        <label class="field">Monthly cap (USD)<input class="input" id="cap-usd" type="text" inputmode="decimal" placeholder="25.00" /></label>
+        <label class="field">Applies to<select class="input" id="cap-effective"><option value="current">This month</option><option value="next_month">Next month</option></select></label>
+        <button class="button button--primary" id="cap-set" type="button">Set</button>
+        <button class="button" id="cap-clear" type="button">Remove cap</button>
+        <span class="status" id="cap-status" aria-live="polite"></span>
+      </div>
     </section>
   </main>
 
   <script is:inline>
-    const adminConfig = document.getElementById('admin-config');
-    const adminId = adminConfig?.dataset.adminId || 'unknown-admin';
-    const adminMutationStorageKey = `nvm.admin.mutations:${adminId}`;
-    const inMemoryMutations = [];
-    let latestSeries = [];
-    let requestCursor = null;
-    let usersCursor = null;
-    let userSearchEmail = '';
-    let priceCandidates = [];
-    let canApprovePriceTerms = false;
+    const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const integer = new Intl.NumberFormat('en-US');
+    const monthInput = document.getElementById('month');
 
     function esc(value) {
-      if (value == null) return '';
-      return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      return String(value ?? '').replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
     }
-
-    function stableJson(value) {
-      if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-      if (value && typeof value === 'object') {
-        return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
-      }
-      return JSON.stringify(value);
+    function money(value) { return value == null ? '—' : usd.format(value); }
+    function signedMoney(value) {
+      return `<span class="${value < 0 ? 'status--err' : 'status--ok'}">${money(value)}</span>`;
     }
-
-    function pendingMutations() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(adminMutationStorageKey) || '[]');
-        return Array.isArray(saved) ? saved : inMemoryMutations;
-      } catch {
-        return inMemoryMutations;
-      }
-    }
-
-    function savePendingMutations(records) {
-      inMemoryMutations.splice(0, inMemoryMutations.length, ...records);
-      try { localStorage.setItem(adminMutationStorageKey, JSON.stringify(records)); } catch {}
-    }
-
-    async function adminMutation(path, method, payload, scope = `${method}:${path}`) {
-      const serializedPayload = stableJson(payload);
-      const records = pendingMutations();
-      let record = records.find((item) => item.scope === scope && item.payload === serializedPayload);
-      if (!record) {
-        record = { scope, payload: serializedPayload, key: crypto.randomUUID() };
-        records.push(record);
-        savePendingMutations(records);
-      }
-      let response;
-      try {
-        response = await fetch(path, {
-          method,
-          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': record.key },
-          body: JSON.stringify(payload),
-        });
-      } catch (error) {
-        throw new Error(`Connection failed. Retry the same action to reuse its saved idempotency key. ${error instanceof Error ? error.message : ''}`);
-      }
-      if (response.status < 500) {
-        let keepForRetry = false;
-        if (response.status === 409) {
-          try {
-            keepForRetry = (await response.clone().json()).error?.type === 'mutation_in_progress';
-          } catch {}
-        }
-        if (!keepForRetry) savePendingMutations(pendingMutations().filter((item) => item.key !== record.key));
-      }
-      return response;
-    }
-
-    async function responseMessage(response) {
-      try {
-        const body = await response.clone().json();
-        return body.error?.message || body.message || JSON.stringify(body);
-      } catch {
-        return await response.text();
-      }
-    }
-
-    async function getJson(path) {
-      const response = await fetch(path);
-      if (!response.ok) throw new Error(await responseMessage(response));
-      return response.json();
-    }
-
     function setStatus(element, message, kind = '') {
-      if (!element) return;
       element.textContent = message;
       element.className = `status${kind ? ` status--${kind}` : ''}`;
     }
-
-    function utcDateString(date) {
-      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+    async function errorMessage(response) {
+      try { return (await response.json()).error?.message || response.statusText; } catch { return response.statusText; }
+    }
+    async function getJson(path) {
+      const response = await fetch(path);
+      if (!response.ok) throw new Error(await errorMessage(response));
+      return response.json();
+    }
+    async function adminMutation(path, method, payload) {
+      const response = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      return response.json();
+    }
+    function fillRows(tableId, rows, columns) {
+      document.querySelector(`#${tableId} tbody`).innerHTML = rows.length
+        ? rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')
+        : `<tr><td colspan="${columns}" class="muted">Nothing this month.</td></tr>`;
     }
 
-    function initializeRange() {
-      const end = new Date();
-      const exclusiveEnd = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
-      const start = new Date(exclusiveEnd.getTime() - 30 * 24 * 60 * 60 * 1000);
-      document.getElementById('range-from').value = utcDateString(start);
-      document.getElementById('range-to').value = utcDateString(exclusiveEnd);
+    function renderSummary(summary) {
+      const { total, paying, free } = summary;
+      document.getElementById('headline').innerHTML = [
+        ['Revenue', money(total.revenueUsd)],
+        ['Provider cost', money(total.costUsd)],
+        ['Stripe fees (est.)', money(total.feesUsd)],
+        ['Net', signedMoney(total.netUsd)],
+      ].map(([label, value]) => `<div class="stat"><div class="v">${value}</div><div class="l">${label}</div></div>`).join('');
+      fillRows('segments', [['Paying', paying], ['Free', free]].map(([label, segment]) => [
+        `<strong>${label}</strong>`,
+        integer.format(segment.users),
+        integer.format(segment.activeUsers),
+        integer.format(segment.requests),
+        money(segment.costUsd),
+        money(segment.revenueUsd),
+        signedMoney(segment.netUsd),
+        segment.activeUsers ? money(segment.costUsd / segment.activeUsers) : '—',
+      ]), 8);
+      renderKnobs(summary.knobs);
+      fillRows('top-users', summary.topUsers.map((row) => [
+        `<button type="button" class="button button--ghost" data-pick-email="${esc(row.email)}">${esc(row.email)}</button>`,
+        row.paying ? 'Paying' : 'Free',
+        integer.format(row.requests),
+        money(row.costUsd),
+        money(row.revenueUsd),
+        signedMoney(row.netUsd),
+      ]), 6);
+      document.querySelectorAll('[data-pick-email]').forEach((button) => button.addEventListener('click', () => {
+        document.getElementById('grant-email').value = button.dataset.pickEmail;
+      }));
+      fillRows('models', summary.models.map((row) => [
+        `<code>${esc(row.model)}</code>`,
+        esc(row.provider ?? '—'),
+        row.paying ? 'Paying' : 'Free',
+        integer.format(row.requests),
+        money(row.costUsd),
+      ]), 5);
+      return summary.problems.stuckPayments;
     }
 
-    function rangeParams() {
-      const from = document.getElementById('range-from').value;
-      const to = document.getElementById('range-to').value;
-      if (!from || !to) throw new Error('Choose both UTC date bounds.');
-      return new URLSearchParams({ from, to });
+    function renderKnobs(knobs) {
+      const note = document.getElementById('knobs-note');
+      if (!knobs) {
+        fillRows('knobs', [], 5);
+        note.textContent = 'Billing config could not be read; check the Stripe env vars.';
+        return;
+      }
+      fillRows('knobs', [
+        ['Free', money(0), integer.format(knobs.monthlyFreeCredits), money(knobs.maxFreeUserCostUsd), signedMoney(-knobs.maxFreeUserCostUsd)],
+        ...knobs.subscriptions.map((item) => [esc(item.tier), money(item.priceUsd), `${integer.format(item.credits)} + ${integer.format(knobs.monthlyFreeCredits)} free`, money(item.maxCostUsd), item.worstCaseNetUsd == null ? '—' : signedMoney(item.worstCaseNetUsd)]),
+        ...knobs.topUps.map((item) => ['Top-up', money(item.priceUsd), integer.format(item.credits), money(item.maxCostUsd), '']),
+      ], 5);
+      note.textContent = `1 credit = ${money(knobs.creditUsd)} retail at ${knobs.markup}× markup over provider cost.`;
     }
 
-    function rangeQuery(extra = {}) {
-      const params = rangeParams();
-      for (const [key, value] of Object.entries(extra)) if (value != null && value !== '') params.set(key, value);
-      return params.toString();
+    async function loadProblems(stuckPayments) {
+      const problems = [];
+      if (stuckPayments > 0) problems.push(`<div class="admin-notice admin-notice--warning">${stuckPayments} payment(s) need manual review — check Stripe and the webhook logs.</div>`);
+      const [{ breakers }, cap] = await Promise.all([getJson('/api/admin/route-breakers'), getJson('/api/admin/free-spend-cap')]);
+      if (cap.current?.halted) problems.push('<div class="admin-notice admin-notice--warning">Free usage cap reached — free users are blocked until next month or a higher cap.</div>');
+      for (const breaker of breakers) {
+        problems.push(`<div class="admin-notice admin-notice--warning">Route <code>${esc(breaker.routeSlot)}</code> (${esc(breaker.provider)}/${esc(breaker.modelId)}) is off: ${esc(breaker.reason)}. <button type="button" class="button" data-breaker='${esc(JSON.stringify({ routeSlot: breaker.routeSlot, provider: breaker.provider, modelId: breaker.modelId }))}'>Turn back on</button></div>`);
+      }
+      const container = document.getElementById('problems');
+      container.innerHTML = problems.join('');
+      container.querySelectorAll('[data-breaker]').forEach((button) => button.addEventListener('click', async () => {
+        button.disabled = true;
+        try { await adminMutation('/api/admin/route-breakers', 'POST', JSON.parse(button.dataset.breaker)); await refresh(); }
+        catch (error) { button.disabled = false; button.textContent = error.message; }
+      }));
+      renderCap(cap);
     }
 
-    function formatInteger(value) {
-      const parsed = Number(value ?? 0);
-      return Number.isFinite(parsed) ? Math.trunc(parsed).toLocaleString() : '—';
+    function renderCap(cap) {
+      const budget = cap.current;
+      const spent = budget ? (Number(budget.actualFreeCostMicrocents) + Number(budget.reservedFreeCostMicrocents)) / 1e8 : 0;
+      const capUsd = budget?.capMicrocents == null ? null : Number(budget.capMicrocents) / 1e8;
+      const next = cap.nextMonth?.capMicrocents == null ? 'none' : money(Number(cap.nextMonth.capMicrocents) / 1e8);
+      document.getElementById('cap-state').textContent = capUsd == null
+        ? `No cap: free users can cost unlimited money. Spent on free users this month: ${money(spent)}. Next month's cap: ${next}.`
+        : `Spent ${money(spent)} of ${money(capUsd)} this month${budget.halted ? ' — free usage is blocked' : ''}. Next month's cap: ${next}.`;
     }
 
-    function formatUsdMicrocents(value) {
-      if (value == null || !/^-?\d+$/.test(String(value))) return '—';
-      let amount;
-      try { amount = BigInt(String(value)); } catch { return '—'; }
-      const negative = amount < 0n;
-      if (negative) amount = -amount;
-      const scale = 100_000_000n;
-      const whole = amount / scale;
-      const fraction = String(amount % scale).padStart(8, '0').replace(/0+$/, '');
-      return `${negative ? '−' : ''}$${new Intl.NumberFormat('en-US').format(whole)}${fraction ? `.${fraction}` : ''}`;
-    }
-
-    function formatMinorUnits(value, currency) {
-      if (value == null || !/^-?\d+$/.test(String(value)) || !currency || currency === 'UNKNOWN') return '—';
-      let digits = 2;
-      try { digits = new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits; } catch { return '—'; }
-      let amount;
-      try { amount = BigInt(String(value)); } catch { return '—'; }
-      const negative = amount < 0n;
-      if (negative) amount = -amount;
-      const scale = 10n ** BigInt(digits);
-      const whole = amount / scale;
-      const fraction = digits ? String(amount % scale).padStart(digits, '0') : '';
-      const formattedWhole = new Intl.NumberFormat('en-US').format(whole);
-      return `${negative ? '−' : ''}${currency.toUpperCase()} ${formattedWhole}${digits ? `.${fraction}` : ''}`;
-    }
-
-    function formatFinancialMetric(metric, currency) {
-      if (!metric) return '—';
-      const known = formatMinorUnits(metric.knownMinorUnits, currency);
-      return metric.complete ? known : `${known} · incomplete`;
-    }
-
-    function currentRangeLabel() {
-      return `${document.getElementById('range-from').value} ≤ UTC < ${document.getElementById('range-to').value}`;
-    }
-
-    async function loadWaitlist() {
-      const target = document.querySelector('#waitlist-table tbody');
+    async function refresh() {
+      const month = monthInput.value;
+      history.replaceState(null, '', `?month=${month}`);
       try {
-        const { entries } = await getJson('/api/admin/waitlist');
-        target.innerHTML = entries.map((entry) => `<tr><td>${esc(entry.email)}</td><td>${esc(entry.status)}</td><td>${new Date(entry.submittedAt).toLocaleString()}</td><td class="admin-row-actions">${entry.status === 'pending' ? `<button class="button waitlist-invite" type="button" data-id="${esc(entry.id)}" data-email="${esc(entry.email)}">Invite</button><button class="button" type="button" data-waitlist-status="declined" data-id="${esc(entry.id)}">Decline</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No historical queue entries</td></tr>';
-        target.querySelectorAll('.waitlist-invite').forEach((button) => button.addEventListener('click', async () => {
-          const status = document.getElementById('waitlist-status');
-          const payload = { email: button.dataset.email, waitlistEntryId: button.dataset.id };
-          setStatus(status, 'Queueing invite…');
-          try {
-            const response = await adminMutation('/api/admin/waitlist', 'POST', payload);
-            setStatus(status, response.ok ? 'Invite queued.' : await responseMessage(response), response.ok ? 'ok' : 'err');
-            if (response.ok) await loadWaitlist();
-          } catch (error) { setStatus(status, error.message, 'err'); }
-        }));
-        target.querySelectorAll('[data-waitlist-status]').forEach((button) => button.addEventListener('click', async () => {
-          const payload = { id: button.dataset.id, status: button.dataset.waitlistStatus };
-          try {
-            const response = await adminMutation('/api/admin/waitlist', 'PUT', payload);
-            setStatus(document.getElementById('waitlist-status'), response.ok ? 'Queue status updated.' : await responseMessage(response), response.ok ? 'ok' : 'err');
-            if (response.ok) await loadWaitlist();
-          } catch (error) { setStatus(document.getElementById('waitlist-status'), error.message, 'err'); }
-        }));
+        const stuckPayments = renderSummary(await getJson(`/api/admin/summary?month=${encodeURIComponent(month)}`));
+        await loadProblems(stuckPayments);
       } catch (error) {
-        target.innerHTML = `<tr><td colspan="4" class="status status--err">Could not load waitlist: ${esc(error.message)}</td></tr>`;
+        document.getElementById('problems').innerHTML = `<div class="admin-notice admin-notice--warning">Could not load: ${esc(error.message)}</div>`;
       }
     }
 
-    document.getElementById('manual-invite')?.addEventListener('click', async () => {
-      const emailInput = document.getElementById('manual-invite-email');
-      const email = emailInput.value.trim();
-      if (!email) { setStatus(document.getElementById('waitlist-status'), 'Enter an email address.', 'err'); emailInput.focus(); return; }
+    document.getElementById('grant').addEventListener('click', async () => {
+      const status = document.getElementById('grant-status');
+      const payload = {
+        email: document.getElementById('grant-email').value.trim().toLowerCase(),
+        kind: document.getElementById('grant-kind').value,
+        delta: Number(document.getElementById('grant-delta').value),
+        reason: document.getElementById('grant-reason').value.trim(),
+      };
+      if (!payload.email || !Number.isInteger(payload.delta) || payload.delta === 0 || !payload.reason) {
+        setStatus(status, 'Enter an email, a non-zero whole number, and a reason.', 'err');
+        return;
+      }
+      setStatus(status, 'Applying…');
       try {
-        const response = await adminMutation('/api/admin/waitlist', 'POST', { email });
-        setStatus(document.getElementById('waitlist-status'), response.ok ? 'Invite queued.' : await responseMessage(response), response.ok ? 'ok' : 'err');
-        if (response.ok) { emailInput.value = ''; await loadWaitlist(); }
-      } catch (error) { setStatus(document.getElementById('waitlist-status'), error.message, 'err'); }
+        const result = await adminMutation('/api/admin/credits', 'POST', payload);
+        setStatus(status, `Done. ${result.kind} balance is now ${integer.format(result.balance)}.`, 'ok');
+      } catch (error) { setStatus(status, error.message, 'err'); }
     });
 
-    function routeModelId(row) {
-      const ref = row.querySelector('.model-select').value;
-      return ref.slice(ref.indexOf('/') + 1);
-    }
-
-    function routeProviderId(row) {
-      return row.querySelector('.model-select').value.split('/')[0];
-    }
-
-    function moneyPerMillion(value) {
-      return value == null ? '—' : `$${Number(value).toFixed(3)}/M`;
-    }
-
-    function pricingSummary(pricing) {
-      if (!pricing) return '<span class="status status--err">Pricing unavailable</span>';
-      const secondary = [
-        pricing.cacheReadUsdPerMtok == null ? '' : `Cache read ${moneyPerMillion(pricing.cacheReadUsdPerMtok)}`,
-        pricing.cacheWriteUsdPerMtok == null ? '' : `Cache write ${moneyPerMillion(pricing.cacheWriteUsdPerMtok)}`,
-        ...(pricing.tiers || []).map((tier) => `Over ${Number(tier.thresholdTokens).toLocaleString()} tokens: ${moneyPerMillion(tier.inputUsdPerMtok)} in / ${moneyPerMillion(tier.outputUsdPerMtok)} out`),
-        esc(pricing.source),
-      ].filter(Boolean).join(' · ');
-      return `<span class="pricing"><span class="pricing__core"><span>Input <strong>${moneyPerMillion(pricing.inputUsdPerMtok)}</strong></span><span>Output <strong>${moneyPerMillion(pricing.outputUsdPerMtok)}</strong></span></span><details class="pricing__details"><summary>Details</summary><span class="pricing__secondary">${secondary}</span></details></span>`;
-    }
-
-    function providerOptionsHtml(providers, selected) {
-      return providers
-        .map((provider) => {
-          const hasImageModels = provider.compatibleModels.length > 0;
-          const disabled =
-            !provider.enabled || (!hasImageModels && provider.id !== selected);
-          const suffix = !provider.enabled
-            ? ' (disabled)'
-            : hasImageModels
-              ? ''
-              : ' (no reviewed image models)';
-          return `<option value="${esc(provider.id)}" ${provider.id === selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${esc(provider.displayName)}${suffix}</option>`;
-        })
-        .join('');
-    }
-
-    function modelOptionsHtml(provider, selected) {
-      const models = provider?.compatibleModels || [];
-      const currentUnsupported =
-        selected && !models.includes(selected)
-          ? `<option value="${esc(selected)}" selected disabled>${esc(selected)} (currently configured · not selectable)</option>`
-          : '';
-      return (
-        currentUnsupported +
-        models
-          .map(
-            (model) =>
-              `<option value="${esc(model)}" ${model === selected ? 'selected' : ''}>${esc(model)}</option>`,
-          )
-          .join('')
-      );
-    }
-
-    function initializeComboboxes() {
-      document.dispatchEvent(new Event('combobox:init'));
-    }
-
-    async function probeProvider(providerId, status, modelId) {
-      status.textContent = 'Checking…';
+    async function saveCap(clear) {
+      const status = document.getElementById('cap-status');
       try {
-        const response = await fetch(`/api/admin/probe/${encodeURIComponent(providerId)}`, modelId ? {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId }),
-        } : undefined);
-        const result = await response.json();
-        status.textContent = result.ok ? `${modelId ? 'First byte' : 'Healthy'} · ${result.latencyMs}ms` : `Unavailable · ${result.error || result.status}`;
-        status.className = `probe-status ${result.ok ? 'status--ok' : 'status--err'}`;
-      } catch (error) {
-        status.textContent = `Probe failed: ${error.message}`;
-        status.className = 'probe-status status--err';
-      }
+        const value = document.getElementById('cap-usd').value.trim();
+        if (!clear && !/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter a dollar amount like 25 or 25.50.');
+        const capMicrocents = clear ? null : Math.round(Number(value) * 1e8);
+        setStatus(status, 'Saving…');
+        await adminMutation('/api/admin/free-spend-cap', 'POST', { capMicrocents, effective: document.getElementById('cap-effective').value });
+        setStatus(status, 'Saved.', 'ok');
+        await refresh();
+      } catch (error) { setStatus(status, error.message, 'err'); }
     }
+    document.getElementById('cap-set').addEventListener('click', () => saveCap(false));
+    document.getElementById('cap-clear').addEventListener('click', () => saveCap(true));
 
-    function chainRowsHtml(data) {
-      return data.routes.map((route, index) => {
-        const provider = data.providers.find((candidate) => candidate.id === route.providerId);
-        return `<div class="chain-row" data-chain-row>
-          <button type="button" class="chain-drag" draggable="true" aria-label="Reorder fallback ${index + 1}" title="Drag to reorder; use arrow keys for keyboard reordering"><svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="5" cy="3" r="1"/><circle cx="11" cy="3" r="1"/><circle cx="5" cy="8" r="1"/><circle cx="11" cy="8" r="1"/><circle cx="5" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg></button>
-          <label class="field">Provider<select class="input chain-provider" aria-label="Fallback provider">${providerOptionsHtml(data.providers, route.providerId)}</select></label>
-          <label class="field">Model<select class="input combo chain-model" aria-label="Fallback model">${modelOptionsHtml(provider, route.modelId)}</select></label>
-          <div class="chain-actions"><button type="button" class="button chain-probe">Probe</button><button type="button" class="button chain-remove">Remove</button></div>
-          <div class="chain-meta"><span class="muted chain-price">${pricingSummary(route.pricing)}</span><span class="probe-status" aria-live="polite"></span></div>
-        </div>`;
-      }).join('');
+    function splitRef(ref) {
+      const separator = ref.indexOf('/');
+      return { provider: ref.slice(0, separator), modelId: ref.slice(separator + 1) };
     }
-
-    async function saveRouteChain(row) {
-      const details = row.querySelector('[data-route-details]');
-      const routes = [...details.querySelectorAll('[data-chain-row]')].map((chainRow) => ({ providerId: chainRow.querySelector('.chain-provider').value, modelId: chainRow.querySelector('.chain-model').value }));
-      const status = details.querySelector('[data-chain-status]');
+    function perMillion(value) { return value == null ? '—' : `${usd.format(value)}/M`; }
+    async function loadRoutePricing(row) {
+      const target = row.querySelector('[data-pricing]');
+      try {
+        const query = new URLSearchParams({ slot: row.dataset.modelRoute, modelId: splitRef(row.querySelector('.model-select').value).modelId });
+        const { primaryPricing } = await getJson(`/api/admin/model-providers?${query}`);
+        target.textContent = primaryPricing ? `Input ${perMillion(primaryPricing.inputUsdPerMtok)} · Output ${perMillion(primaryPricing.outputUsdPerMtok)}` : 'Pricing unknown';
+      } catch { target.textContent = 'Pricing unknown'; }
+    }
+    async function saveRoute(row, path, payload) {
+      const status = row.querySelector('[data-status]');
       setStatus(status, 'Saving…');
-      try {
-        const payload = { slot: row.dataset.modelRoute, modelId: routeModelId(row), routes };
-        const response = await adminMutation('/api/admin/model-providers', 'PUT', payload);
-        if (!response.ok) throw new Error(await responseMessage(response));
-        await loadRouteDetails(row);
-      } catch (error) { setStatus(status, `Save failed: ${error.message}`, 'err'); }
+      try { await adminMutation(path, 'PUT', payload); setStatus(status, 'Saved', 'ok'); }
+      catch (error) { setStatus(status, error.message, 'err'); }
     }
-
-    function wireFallbackRow(row, data, chainRow) {
-      const providerSelect = chainRow.querySelector('.chain-provider');
-      providerSelect.addEventListener('change', () => {
-        const provider = data.providers.find((candidate) => candidate.id === providerSelect.value);
-        const modelSelect = chainRow.querySelector('.chain-model');
-        modelSelect.tomselect?.destroy();
-        modelSelect.innerHTML = modelOptionsHtml(provider, provider?.compatibleModels?.[0]);
-        initializeComboboxes();
-        saveRouteChain(row);
-      });
-      chainRow.querySelector('.chain-model').addEventListener('change', () => saveRouteChain(row));
-      chainRow.querySelector('.chain-remove').addEventListener('click', () => { chainRow.remove(); saveRouteChain(row); });
-      const dragHandle = chainRow.querySelector('.chain-drag');
-      dragHandle.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-        event.preventDefault();
-        const sibling = event.key === 'ArrowUp' ? chainRow.previousElementSibling : chainRow.nextElementSibling;
-        if (sibling?.matches('[data-chain-row]')) { event.key === 'ArrowUp' ? sibling.before(chainRow) : sibling.after(chainRow); dragHandle.focus(); saveRouteChain(row); }
-      });
-      dragHandle.addEventListener('dragstart', (event) => { chainRow.classList.add('chain-row--dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', 'fallback'); });
-      dragHandle.addEventListener('dragend', () => { chainRow.classList.remove('chain-row--dragging'); chainRow.parentElement.querySelectorAll('.chain-row--drop-target').forEach((candidate) => candidate.classList.remove('chain-row--drop-target')); });
-      chainRow.addEventListener('dragover', (event) => { event.preventDefault(); if (!chainRow.classList.contains('chain-row--dragging')) chainRow.classList.add('chain-row--drop-target'); });
-      chainRow.addEventListener('dragleave', () => chainRow.classList.remove('chain-row--drop-target'));
-      chainRow.addEventListener('drop', (event) => { event.preventDefault(); chainRow.classList.remove('chain-row--drop-target'); const dragged = chainRow.parentElement.querySelector('.chain-row--dragging'); if (!dragged || dragged === chainRow) return; event.clientY > chainRow.getBoundingClientRect().top + chainRow.offsetHeight / 2 ? chainRow.after(dragged) : chainRow.before(dragged); saveRouteChain(row); });
-      chainRow.querySelector('.chain-probe').addEventListener('click', () => probeProvider(providerSelect.value, chainRow.querySelector('.probe-status'), chainRow.querySelector('.chain-model').value));
-    }
-
-    function wireRouteChain(row, data) {
-      const details = row.querySelector('[data-route-details]');
-      details.querySelectorAll('[data-chain-row]').forEach((chainRow) => wireFallbackRow(row, data, chainRow));
-      details.querySelector('[data-add-fallback]').addEventListener('click', () => {
-        const used = new Set([...details.querySelectorAll('.chain-provider')].map((select) => select.value));
-        const provider = data.providers.find((candidate) => candidate.enabled && candidate.compatibleModels.length && !used.has(candidate.id));
-        if (!provider) { setStatus(details.querySelector('[data-chain-status]'), 'No additional compatible provider is available.', 'err'); return; }
-        const route = { providerId: provider.id, modelId: provider.compatibleModels[0], pricing: null };
-        data.routes.push(route);
-        const container = details.querySelector('[data-chain-rows]');
-        container.insertAdjacentHTML('beforeend', chainRowsHtml({ ...data, routes: [route] }));
-        wireFallbackRow(row, data, container.lastElementChild);
-        initializeComboboxes();
-        saveRouteChain(row);
-      });
-      initializeComboboxes();
-    }
-
-    async function loadRouteDetails(row) {
-      const details = row.querySelector('[data-route-details]');
-      details.textContent = 'Loading pricing and failover…';
-      try {
-        const query = new URLSearchParams({ slot: row.dataset.modelRoute, modelId: routeModelId(row) });
-        const response = await fetch(`/api/admin/model-providers?${query}`);
-        if (!response.ok) throw new Error(await responseMessage(response));
-        const data = await response.json();
-        const fallbackLabel = data.routes.length === 1 ? '1 fallback' : `${data.routes.length} fallbacks`;
-        details.innerHTML = `<div class="route-summary"><div class="route-summary__pricing"><span class="route-summary__label">Pricing</span>${pricingSummary(data.primaryPricing)}</div><div class="route-summary__probe"><button type="button" class="button" data-probe-primary>Probe primary</button><span class="probe-status" data-primary-probe-status aria-live="polite"></span></div></div><details class="chain-editor"><summary class="chain-editor__summary"><span>Failover</span><span class="muted">${esc(fallbackLabel)}</span></summary><div class="chain-editor__body"><div data-chain-rows>${chainRowsHtml(data)}</div><div class="chain-footer"><button type="button" class="button" data-add-fallback>Add fallback</button><span class="status" data-chain-status aria-live="polite"></span></div></div></details>`;
-        details.querySelector('[data-probe-primary]').addEventListener('click', () => probeProvider(routeProviderId(row), details.querySelector('[data-primary-probe-status]'), routeModelId(row)));
-        wireRouteChain(row, data);
-      } catch (error) {
-        details.innerHTML = `<span class="status status--err" role="alert">Could not load pricing and failover: ${esc(error.message)}</span> <button type="button" class="button" data-retry-route>Retry</button>`;
-        details.querySelector('[data-retry-route]').addEventListener('click', () => loadRouteDetails(row));
-      }
-    }
-
-    function statusEl(purpose) { return document.querySelector(`[data-status-for="${purpose}"]`); }
-    function setState(element, state) {
-      const map = { idle: ['status', ''], saving: ['status', 'Saving…'], saved: ['status status--ok', 'Saved ✓'], error: ['status status--err', 'Failed'] };
-      const [className, text] = map[state];
-      element.className = className;
-      element.textContent = text;
-    }
-    function setSelectDisabled(select, disabled) {
-      const tomSelect = select.tomselect;
-      if (tomSelect) return disabled ? tomSelect.disable() : tomSelect.enable();
-      select.disabled = disabled;
-    }
-
-    async function autosave(row) {
-      const purpose = row.dataset.modelRoute;
-      const modelSelect = row.querySelector('.model-select');
-      const thinkingSelect = row.querySelector('.thinking-select');
-      const status = statusEl(purpose);
-      setState(status, 'saving');
-      setSelectDisabled(modelSelect, true);
-      setSelectDisabled(thinkingSelect, true);
-      try {
-        const payload = { modelRef: modelSelect.value, thinkingLevel: thinkingSelect.value, purpose };
-        const response = await adminMutation('/api/admin/model', 'PUT', payload);
-        if (!response.ok) throw new Error(await responseMessage(response));
-        setState(status, 'saved');
-        await loadRouteDetails(row);
-      } catch (error) { status.className = 'status status--err'; status.textContent = `Save failed: ${error.message}`; }
-      finally {
-        setSelectDisabled(modelSelect, false);
-        setSelectDisabled(thinkingSelect, false);
-        if (status.classList.contains('status--ok')) setTimeout(() => setState(status, 'idle'), 1500);
-      }
-    }
-
     document.querySelectorAll('[data-model-route]').forEach((row) => {
-      row.querySelectorAll('select').forEach((select) => select.addEventListener('change', () => autosave(row)));
-      loadRouteDetails(row);
+      loadRoutePricing(row);
+      row.querySelectorAll('select').forEach((select) => select.addEventListener('change', async () => {
+        await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select').value });
+        loadRoutePricing(row);
+      }));
+    });
+    document.querySelectorAll('[data-audio-model-route]').forEach((row) => {
+      row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/audio-model', splitRef(event.currentTarget.value)));
     });
 
-    async function autosaveAudioModel(select) {
-      const status = document.querySelector('[data-audio-model-status]');
-      setState(status, 'saving');
-      setSelectDisabled(select, true);
-      const separator = select.value.indexOf('/');
-      const payload = { provider: select.value.slice(0, separator), modelId: select.value.slice(separator + 1) };
-      try {
-        const response = await adminMutation('/api/admin/audio-model', 'PUT', payload);
-        if (!response.ok) throw new Error(await responseMessage(response));
-        setState(status, 'saved');
-      } catch (error) { status.className = 'status status--err'; status.textContent = `Save failed: ${error.message}`; }
-      finally { setSelectDisabled(select, false); if (status.classList.contains('status--ok')) setTimeout(() => setState(status, 'idle'), 1500); }
-    }
-    document.getElementById('audio-model-select')?.addEventListener('change', (event) => autosaveAudioModel(event.currentTarget));
-
-    async function loadStats() {
-      const response = await getJson(`/api/admin/stats?${rangeQuery({ limit: '100' })}`);
-      document.getElementById('overview-range').textContent = `UTC range: ${response.range.from} to ${response.range.to} (exclusive)`;
-      const trackedCost = BigInt(response.usage.providerReportedCostMicrocents || '0') + BigInt(response.usage.catalogEstimatedCostMicrocents || '0');
-      const freeConsumed = response.credits.free.consumed;
-      const paidConsumed = response.credits.paid.consumed;
-      const freeCost = response.usage.freeSubsidyEstimate;
-      document.getElementById('stats').innerHTML = `
-        <div class="stat"><div class="v">${formatInteger(response.users.createdInRange)}</div><div class="l">Users created in range</div></div>
-        <div class="stat"><div class="v">${formatInteger(response.usage.requests)}</div><div class="l">AI requests</div></div>
-        <div class="stat"><div class="v">${formatInteger(response.usage.errors)}</div><div class="l">Failed requests</div></div>
-        <div class="stat"><div class="v">${formatUsdMicrocents(trackedCost.toString())}</div><div class="l">Tracked provider cost · reported + estimated</div></div>
-        <div class="stat"><div class="v">${formatUsdMicrocents(freeCost.knownMicrocents)}${freeCost.complete ? '' : ' *'}</div><div class="l">Free-attributed subsidy estimate</div></div>
-        <div class="stat"><div class="v">${formatInteger(freeConsumed)} / ${formatInteger(paidConsumed)}</div><div class="l">Free / paid credits consumed</div></div>
-      `;
-      document.querySelector('#credit-ledger-summary tbody').innerHTML = ['free', 'paid'].map((kind) => {
-        const row = response.credits[kind];
-        return `<tr><th scope="row">${kind === 'free' ? 'Free' : 'Paid'}</th><td>${formatInteger(row.granted)}</td><td>${formatInteger(row.consumed)}</td><td>${formatInteger(row.adjusted)}</td><td>${formatInteger(row.outstanding)}</td></tr>`;
-      }).join('');
-      const coverage = response.financials.intervalCoverage;
-      const alerts = [];
-      if (response.freeSpendCap.warning) alerts.push(response.freeSpendCap.warning);
-      if (!coverage.complete) alerts.push('Stripe transaction interval coverage is incomplete; uncovered periods are unavailable, not zero.');
-      if (response.usage.unknownCostSourceRequests) alerts.push(`${formatInteger(response.usage.unknownCostSourceRequests)} usage rows have an unknown provider-cost source.`);
-      if (response.usage.freeSubsidyEstimate.unknownPoolRequests) alerts.push(`${formatInteger(response.usage.freeSubsidyEstimate.unknownPoolRequests)} usage rows have unknown free/paid pool attribution.`);
-      if (alerts.length) document.getElementById('admin-alerts').innerHTML = alerts.map((message) => `<p class="admin-notice admin-notice--warning">${esc(message)}</p>`).join('');
-      else document.getElementById('admin-alerts').innerHTML = '<p class="admin-notice admin-notice--ok">No range-level coverage or attribution warnings.</p>';
-      const modelRows = response.providerCostByModel || [];
-      document.querySelector('#by-model tbody').innerHTML = modelRows.map((row) => {
-        const audioTokens = row.modality !== 'audio' ? '—' : row.audioInputTokens == null ? 'unavailable' : `${formatInteger(row.audioInputTokens)} / ${formatInteger(row.audioOutputTokens)}`;
-        const reportedCost = row.costSource === 'provider_reported' ? formatUsdMicrocents(row.providerCostMicrocents) : row.costSource === 'not_billed' ? 'Not billed' : '—';
-        const estimatedCost = row.costSource === 'catalog_estimate' ? formatUsdMicrocents(row.providerCostMicrocents) : row.costSource === 'not_billed' ? 'Not billed' : '—';
-        return `<tr><td>${esc(row.provider) || '—'}</td><td><code>${esc(row.model)}</code></td><td>${esc(row.modality || 'text')}</td><td>${formatInteger(row.requests)}</td><td>${formatInteger(row.errors)}</td><td>${formatInteger(row.inputTokens)} / ${formatInteger(row.outputTokens)}</td><td>${formatInteger(row.cachedInputTokens)} / ${formatInteger(row.cacheWriteInputTokens)} / ${formatInteger(row.reasoningTokens)}</td><td>${(Number(row.audioDurationMs) / 1000).toFixed(1)}s / ${audioTokens}</td><td>${formatInteger(row.credits)}</td><td>${reportedCost}</td><td>${estimatedCost}</td><td>${formatUsdMicrocents(row.freeAttributedCostMicrocents)}</td><td>${formatUsdMicrocents(row.paidAttributedCostMicrocents)}</td><td>${formatInteger(row.unknownPoolRequests)}</td><td>${formatInteger(row.unknownCostSourceRequests)}</td></tr>`;
-      }).join('') || '<tr><td colspan="15" class="muted">No customer-request usage in this range</td></tr>';
-      renderFinancials(response);
-    }
-
-    function renderFinancials(report) {
-      const complete = report.financials.intervalCoverage.complete;
-      document.querySelector('#financials-table tbody').innerHTML = report.financials.byCurrency.map((row) => {
-        const status = `${row.status.pending} pending / ${row.status.available} available / ${row.status.unknown} unknown`;
-        const unknowns = `amount ${row.unknowns.amountRows}, net ${row.unknowns.netRows}, category ${row.unknowns.categoryRows}, currency ${row.unknowns.currencyRows}, fee ${row.unknownFeeRows}`;
-        const metric = (name) => formatFinancialMetric(row[name], row.currency);
-        return `<tr><td>${esc(row.currency)}</td><td>${complete ? 'Complete interval' : 'Gaps / unavailable'}</td><td>${metric('grossCapturedCharges')}</td><td>${metric('refunds')}</td><td>${metric('partialCaptureReversalMovements')}</td><td>${metric('disputes')}</td><td>${metric('disputeReversals')}</td><td>${metric('paymentTransactionFees')}<br><small>${formatInteger(row.unknownPaymentFeeRows)} unknown fee rows</small></td><td>${metric('standaloneFeeMovements')}</td><td>${metric('stripeTaxMovements')}</td><td><strong>${metric('selectedPaymentCategoryMovement')}</strong></td><td>${metric('chargeFailures')}</td><td>${metric('refundFailures')}</td><td>${metric('otherAdjustments')}</td><td>${formatInteger(row.unclassified.rows)} rows<br><small>known net ${formatMinorUnits(row.unclassified.knownNetMinorUnits, row.currency)}</small></td><td>${metric('payouts')}</td><td>${metric('transfers')}</td><td>${metric('reserves')}</td><td>${esc(status)}</td><td>${esc(unknowns)}</td></tr>`;
-      }).join('') || `<tr><td colspan="20" class="muted">${complete ? 'No Stripe balance transactions in this range.' : 'No verified transactions; this period is not fully covered.'}</td></tr>`;
-    }
-
-    function chartValues(series) {
-      if (document.getElementById('series-mode').value === 'tokens') return series.map((row) => Number(row.tokens.input || 0) + Number(row.tokens.output || 0));
-      return series.map((row) => Number(BigInt(row.providerCostMicrocents.providerReported || '0') + BigInt(row.providerCostMicrocents.catalogEstimated || '0')));
-    }
-
-    function renderChart() {
-      const chart = document.getElementById('usage-chart');
-      const values = chartValues(latestSeries);
-      if (!values.length) { chart.innerHTML = ''; document.getElementById('series-total').textContent = 'No series data'; return; }
-      const maximum = Math.max(1, ...values);
-      const step = 100 / Math.max(1, values.length - 1);
-      const path = values.map((value, index) => `${index ? 'L' : 'M'}${(index * step).toFixed(2)},${(34 - value / maximum * 30).toFixed(2)}`).join(' ');
-      chart.innerHTML = `<path d="${path}" fill="none" stroke="var(--accent-highlight)" stroke-width="1.3" vector-effect="non-scaling-stroke"/>`;
-      const total = values.reduce((sum, value) => sum + value, 0);
-      const tokensMode = document.getElementById('series-mode').value === 'tokens';
-      if (tokensMode) {
-        const unavailableAudio = latestSeries.some((row) => !row.audioTokens.available && row.audioTokens.input == null);
-        document.getElementById('series-total').textContent = `${formatInteger(total)} stored input + output token counts`;
-        document.getElementById('series-note').textContent = `${unavailableAudio ? 'Unavailable audio token counts are excluded. ' : ''}Stored counts may include request estimates when upstream usage is absent.`;
-      } else {
-        const totalMicrocents = latestSeries.reduce((sum, row) => sum + BigInt(row.providerCostMicrocents.providerReported || '0') + BigInt(row.providerCostMicrocents.catalogEstimated || '0'), 0n);
-        document.getElementById('series-total').textContent = `${formatUsdMicrocents(totalMicrocents.toString())} tracked provider cost`;
-        document.getElementById('series-note').textContent = 'Reported and catalog-estimated cost are stored separately in the request log.';
-      }
-      const first = latestSeries[0]?.day || '';
-      const last = latestSeries.at(-1)?.day || '';
-      document.getElementById('usage-chart-axis').innerHTML = `<span>${esc(first)} UTC</span><span>${esc(last)} UTC</span>`;
-    }
-
-    async function loadTimeseries() {
-      const response = await getJson(`/api/admin/timeseries?${rangeQuery()}`);
-      latestSeries = response.series || [];
-      renderChart();
-    }
-
-    async function loadRequests(cursor = null) {
-      const target = document.querySelector('#requests-table tbody');
-      const params = rangeParams();
-      params.set('limit', '50');
-      if (cursor) params.set('cursor', cursor);
-      const response = await getJson(`/api/admin/requests?${params}`);
-      requestCursor = response.nextCursor;
-      target.innerHTML = response.requests.map((row) => {
-        const audioDetail = row.modality === 'audio'
-          ? `Audio ${(Number(row.audioDurationMs) / 1000).toFixed(1)}s · tokens ${row.audioTokenCountsAvailable ? `${formatInteger(row.inputTokens)} / ${formatInteger(row.outputTokens)}` : 'unavailable'}`
-          : '—';
-        return `<tr><td>${new Date(row.createdAt).toLocaleString()} UTC</td><td><code>${esc(row.model)}</code><br><span class="muted">${esc(row.provider)} · ${esc(row.modality)}</span></td><td>${formatInteger(row.status)}</td><td>${row.latencyMs == null ? '—' : `${formatInteger(row.latencyMs)} ms`}</td><td>In / out ${formatInteger(row.inputTokens)} / ${formatInteger(row.outputTokens)}<br><small>Cached / write / reasoning ${formatInteger(row.cachedInputTokens)} / ${formatInteger(row.cacheWriteInputTokens)} / ${formatInteger(row.reasoningTokens)}</small><br><small>${audioDetail}</small></td><td>${formatInteger(row.credits)} (${row.freeCredits == null ? 'unknown' : formatInteger(row.freeCredits)} / ${row.paidCredits == null ? 'unknown' : formatInteger(row.paidCredits)})</td><td>${formatUsdMicrocents(row.providerCostMicrocents)}<br><small>${esc(row.providerCostSource)}</small></td><td>${row.poolAttributionUnknown ? 'Unknown' : `${formatUsdMicrocents(row.freeAttributedCostMicrocents)} free / ${formatUsdMicrocents(row.paidAttributedCostMicrocents)} paid`}</td><td><code>${esc(row.requestId)}</code></td></tr>`;
-      }).join('') || '<tr><td colspan="9" class="muted">No requests in this range</td></tr>';
-      document.getElementById('requests-next').disabled = !requestCursor;
-      document.getElementById('requests-note').textContent = `${response.paginationNote} Range fixed at ${response.range.from} ≤ UTC < ${response.range.to}.`;
-    }
-
-    function creditAdjustmentMarkup() {
-      return `<details class="credit-adjustment"><summary>Adjust credits</summary><div class="credit-adjustment__body"><label class="field">Pool<select class="input" data-credit-kind><option value="free">Free</option><option value="paid">Paid</option></select></label><label class="field">Delta<input class="input" type="number" step="1" min="-1000000" max="1000000" data-credit-delta placeholder="e.g. 250 or -50" /></label><label class="field">Reason<input class="input" type="text" maxlength="500" data-credit-reason placeholder="Required audit reason" /></label><button type="button" class="button" data-credit-review>Review</button><p class="muted" data-credit-review-text aria-live="polite">Choose a pool, integer delta, and reason.</p><button type="button" class="button button--primary" data-credit-apply disabled>Apply adjustment</button></div></details>`;
-    }
-
-    async function loadUsers(cursor = null) {
-      const target = document.querySelector('#users-table tbody');
-      const params = rangeParams();
-      params.set('limit', '50');
-      if (cursor) params.set('cursor', cursor);
-      if (userSearchEmail) params.set('email', userSearchEmail);
-      const response = await getJson(`/api/admin/users?${params}`);
-      usersCursor = response.nextCursor;
-      target.innerHTML = response.users.map((user) => `<tr data-user-row="${esc(user.id)}"><td>${esc(user.email)}</td><td>${esc(user.role)}</td><td>${esc(user.plan)}</td><td>${formatInteger(user.freeBalance)}</td><td>${formatInteger(user.paidBalance)}</td><td>${formatInteger(user.balance)}</td><td>${formatInteger(user.requests)}</td><td>${formatInteger(user.spent)}</td><td>${user.lastModel ? `<code>${esc(user.lastModel)}</code><br>${user.lastUsedAt ? esc(new Date(user.lastUsedAt).toLocaleString()) : ''}` : '—'}</td><td>${new Date(user.createdAt).toLocaleDateString()}</td><td><div class="admin-row-actions">${creditAdjustmentMarkup()}<button type="button" class="button user-role-toggle" data-user-id="${esc(user.id)}" data-role="${user.role === 'admin' ? 'user' : 'admin'}">${user.role === 'admin' ? 'Demote admin' : 'Promote admin'}</button><span class="status" data-user-action-status aria-live="polite"></span></div></td></tr>`).join('') || `<tr><td colspan="11" class="muted">${userSearchEmail ? 'No account with that exact email.' : 'No users created in this selected range.'}</td></tr>`;
-      document.getElementById('users-next').disabled = !usersCursor || Boolean(userSearchEmail);
-      document.getElementById('users-page-note').textContent = response.searchScope ? `Exact match across all account history: ${response.searchedEmail}` : `Showing users created within ${response.range.from} ≤ UTC < ${response.range.to}.`;
-      target.querySelectorAll('.user-role-toggle').forEach((button) => button.addEventListener('click', async () => {
-        const row = button.closest('[data-user-row]');
-        const status = row.querySelector('[data-user-action-status]');
-        const payload = { userId: button.dataset.userId, role: button.dataset.role };
-        setStatus(status, 'Saving role…');
-        try {
-          const result = await adminMutation('/api/admin/admins', 'POST', payload);
-          if (!result.ok) throw new Error(await responseMessage(result));
-          setStatus(status, 'Role updated.', 'ok');
-          await loadUsers();
-          await loadAudit();
-        } catch (error) { setStatus(status, error.message, 'err'); }
-      }));
-      target.querySelectorAll('[data-credit-review]').forEach((button) => button.addEventListener('click', () => {
-        const form = button.closest('.credit-adjustment__body');
-        const delta = Number(form.querySelector('[data-credit-delta]').value);
-        const reason = form.querySelector('[data-credit-reason]').value.trim();
-        const applyButton = form.querySelector('[data-credit-apply]');
-        const review = form.querySelector('[data-credit-review-text]');
-        const userEmail = form.closest('[data-user-row]').querySelector('td').textContent;
-        if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1_000_000 || !reason) {
-          review.textContent = 'Enter a non-zero whole-number delta within ±1,000,000 and a reason.';
-          review.className = 'status status--err';
-          applyButton.disabled = true;
-          return;
-        }
-        const kind = form.querySelector('[data-credit-kind]').value;
-        review.textContent = `${delta > 0 ? 'Add' : 'Remove'} ${Math.abs(delta).toLocaleString()} ${kind} credits for ${userEmail}. Reason: ${reason}`;
-        review.className = 'muted';
-        applyButton.disabled = false;
-      }));
-      target.querySelectorAll('[data-credit-apply]').forEach((button) => button.addEventListener('click', async () => {
-        const form = button.closest('.credit-adjustment__body');
-        const row = button.closest('[data-user-row]');
-        const status = row.querySelector('[data-user-action-status]');
-        const payload = {
-          userId: row.dataset.userRow,
-          delta: Number(form.querySelector('[data-credit-delta]').value),
-          kind: form.querySelector('[data-credit-kind]').value,
-          reason: form.querySelector('[data-credit-reason]').value.trim(),
-        };
-        button.disabled = true;
-        setStatus(status, 'Applying audited adjustment…');
-        try {
-          const result = await adminMutation('/api/admin/credits', 'POST', payload);
-          if (!result.ok) throw new Error(await responseMessage(result));
-          setStatus(status, 'Adjustment applied once.', 'ok');
-          await loadUsers();
-          await loadStats();
-          await loadAudit();
-        } catch (error) { setStatus(status, error.message, 'err'); button.disabled = false; }
-      }));
-    }
-
-    document.getElementById('users-next').addEventListener('click', () => loadUsers(usersCursor));
-    document.getElementById('user-search-button').addEventListener('click', async () => {
-      const email = document.getElementById('user-search-email').value.trim().toLowerCase();
-      if (!email) { setStatus(document.getElementById('user-status'), 'Enter an exact email address.', 'err'); return; }
-      userSearchEmail = email;
-      usersCursor = null;
-      try { await loadUsers(); setStatus(document.getElementById('user-status'), 'Account lookup complete.', 'ok'); }
-      catch (error) { setStatus(document.getElementById('user-status'), error.message, 'err'); }
-    });
-    document.getElementById('user-search-email').addEventListener('keydown', (event) => { if (event.key === 'Enter') document.getElementById('user-search-button').click(); });
-    document.getElementById('user-search-clear').addEventListener('click', async () => {
-      userSearchEmail = '';
-      document.getElementById('user-search-email').value = '';
-      usersCursor = null;
-      setStatus(document.getElementById('user-status'), 'Showing selected-range users.');
-      await loadUsers();
-    });
-
-    async function loadAudit() {
-      const { entries } = await getJson('/api/admin/audit?limit=50');
-      const target = document.querySelector('#audit-table tbody');
-      target.innerHTML = entries.map((entry) => `<tr><td>${new Date(entry.createdAt).toLocaleString()}</td><td>${entry.actorEmail ? esc(entry.actorEmail) : '—'}</td><td><code>${esc(entry.action)}</code></td><td>${entry.targetType ? `${esc(entry.targetType)}:${entry.targetId ? esc(entry.targetId) : '—'}` : '—'}</td><td><code>${entry.meta ? esc(JSON.stringify(entry.meta)) : ''}</code></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No audit entries yet</td></tr>';
-    }
-
-    function capDescription(budget) {
-      if (!budget) return 'Not materialized';
-      const cap = budget.capMicrocents == null ? 'No aggregate cap configured' : formatUsdMicrocents(budget.capMicrocents);
-      const remaining = budget.capMicrocents == null ? 'unbounded' : formatUsdMicrocents(String(Math.max(0, Number(budget.capMicrocents) - Number(budget.actualFreeCostMicrocents) - Number(budget.reservedFreeCostMicrocents))));
-      return `${cap}; actual ${formatUsdMicrocents(budget.actualFreeCostMicrocents)}; reserved ${formatUsdMicrocents(budget.reservedFreeCostMicrocents)}; remaining ${remaining}; ${budget.halted ? 'HALTED' : 'admission open'}; ${budget.baselineComplete ? 'baseline complete' : 'baseline incomplete'}`;
-    }
-
-    async function loadFreeSpendCap() {
-      const cap = await getJson('/api/admin/free-spend-cap');
-      const current = document.getElementById('cap-current');
-      const next = document.getElementById('cap-next');
-      current.textContent = `${cap.currentMonth}: ${capDescription(cap.current)}`;
-      next.textContent = `${cap.nextMonthKey}: ${capDescription(cap.nextMonth)}`;
-      const banner = document.getElementById('free-cap-banner');
-      if (cap.unset) {
-        banner.className = 'admin-notice admin-notice--warning';
-        banner.textContent = 'No aggregate cap configured. Aggregate free-provider subsidy remains unbounded until an owner sets a value.';
-      } else {
-        banner.className = `admin-notice ${cap.current?.halted ? 'admin-notice--warning' : 'admin-notice--ok'}`;
-        banner.textContent = `Current UTC month ${cap.currentMonth}: ${cap.current?.halted ? 'free admission halted' : 'cap configured'}; ${formatUsdMicrocents(cap.current?.actualFreeCostMicrocents)} committed and ${formatUsdMicrocents(cap.current?.reservedFreeCostMicrocents)} reserved. In-flight provider work can still overrun.`;
-      }
-    }
-
-    function usdInputMicrocents(value) {
-      const match = /^(\d{1,12})(?:\.(\d{1,8}))?$/.exec(value.trim());
-      if (!match) throw new Error('Enter a non-negative USD amount with up to eight decimal places.');
-      const fraction = (match[2] || '').padEnd(8, '0');
-      const amount = BigInt(match[1]) * 100_000_000n + BigInt(fraction || '0');
-      if (amount > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Cap amount is too large.');
-      return Number(amount);
-    }
-
-    async function saveFreeSpendCap(clear) {
-      const status = document.getElementById('free-cap-status');
-      let capMicrocents = null;
-      try {
-        if (!clear) capMicrocents = usdInputMicrocents(document.getElementById('free-cap-usd').value);
-        const payload = { capMicrocents, effective: document.getElementById('free-cap-effective').value };
-        setStatus(status, 'Saving cap and audit record…');
-        const response = await adminMutation('/api/admin/free-spend-cap', 'POST', payload);
-        if (!response.ok) throw new Error(await responseMessage(response));
-        setStatus(status, clear ? 'Cap cleared for the selected period.' : 'Cap saved for the selected period.', 'ok');
-        await loadFreeSpendCap();
-        await loadStats();
-        await loadAudit();
-      } catch (error) { setStatus(status, error.message, 'err'); }
-    }
-    document.getElementById('set-free-cap').addEventListener('click', () => saveFreeSpendCap(false));
-    document.getElementById('clear-free-cap').addEventListener('click', () => saveFreeSpendCap(true));
-
-    function renderPriceCandidates() {
-      const target = document.querySelector('#price-candidates-table tbody');
-      target.innerHTML = priceCandidates.map((candidate, index) => {
-        const amount = candidate.unitAmount == null ? 'Unavailable' : `${formatMinorUnits(candidate.unitAmount, candidate.currency)}${candidate.interval ? ` / ${esc(candidate.interval)}${candidate.intervalCount > 1 ? ` × ${candidate.intervalCount}` : ''}` : ''}`;
-        const purchase = `${esc(candidate.kind)}${candidate.tier ? ` · ${esc(candidate.tier)}` : ''}`;
-        const grant = `${formatInteger(candidate.credits)} credits${candidate.quantity > 1 ? ` × ${candidate.quantity}` : ''}`;
-        const approval = candidate.approved ? `<span class="status status--ok">Approved v${esc(candidate.approvalVersion)}</span>` : candidate.eligible && canApprovePriceTerms ? `<button class="button" type="button" data-approve-price="${index}">Approve immutable terms</button>` : `<span class="status">${esc(candidate.eligible ? 'Owner approval required' : candidate.reason || 'Not eligible')}</span>`;
-        return `<tr><td><code>${esc(candidate.priceId)}</code><br><small>${candidate.priceActive === false ? 'Inactive' : candidate.priceActive == null ? 'Read failed' : 'Active'}</small></td><td>${purchase}</td><td>${amount}</td><td>${grant}</td><td>${approval}</td></tr>`;
-      }).join('') || '<tr><td colspan="5" class="muted">No configured Stripe Price candidates.</td></tr>';
-      target.querySelectorAll('[data-approve-price]').forEach((button) => button.addEventListener('click', async () => {
-        const candidate = priceCandidates[Number(button.dataset.approvePrice)];
-        const payload = { priceId: candidate.priceId, kind: candidate.kind, tier: candidate.tier, credits: candidate.credits, unitAmount: candidate.unitAmount, currency: candidate.currency, quantity: candidate.quantity, interval: candidate.interval, intervalCount: candidate.intervalCount };
-        const status = document.getElementById('billing-status');
-        setStatus(status, 'Re-fetching Stripe Price and approving immutable terms…');
-        try {
-          const response = await adminMutation('/api/admin/billing/price-terms', 'POST', payload);
-          if (!response.ok) throw new Error(await responseMessage(response));
-          setStatus(status, 'Immutable Price terms approved.', 'ok');
-          await refreshPriceCandidates();
-          await loadAudit();
-        } catch (error) { setStatus(status, error.message, 'err'); }
-      }));
-    }
-
-    async function refreshPriceCandidates() {
-      const status = document.getElementById('billing-status');
-      setStatus(status, 'Reading configured Stripe Prices…');
-      try {
-        const response = await getJson('/api/admin/billing/price-terms');
-        priceCandidates = response.candidates || [];
-        canApprovePriceTerms = response.canApprove === true;
-        renderPriceCandidates();
-        setStatus(status, 'Stripe Prices refreshed with read-only GET.', 'ok');
-      } catch (error) { setStatus(status, error.message, 'err'); }
-    }
-    document.getElementById('refresh-price-candidates').addEventListener('click', refreshPriceCandidates);
-
-    async function reconcileBillingTarget(kind, id, button) {
-      const status = document.getElementById('billing-status');
-      const payload = { [kind]: id };
-      button.disabled = true;
-      setStatus(status, 'Fetching Stripe evidence…');
-      try {
-        const response = await adminMutation('/api/admin/billing/reconcile', 'POST', payload);
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error?.message || 'Reconciliation failed.');
-        const requiresReconciliation = result.status === 'needs_reconciliation';
-        setStatus(
-          status,
-          result.message || `Reconciliation result: ${result.status || 'recorded'}.`,
-          requiresReconciliation ? 'err' : 'ok',
-        );
-        await loadBillingReconciliation();
-        await loadUsers();
-        await loadStats();
-        await loadAudit();
-      } catch (error) { setStatus(status, error.message, 'err'); button.disabled = false; }
-    }
-
-    async function loadBillingReconciliation() {
-      const target = document.querySelector('#billing-reconciliation-table tbody');
-      try {
-        const data = await getJson('/api/admin/billing/reconcile');
-        const rows = [
-          ...data.events.map((entry) => ({ kind: 'eventId', id: entry.eventId, type: 'Stripe event', reference: `${entry.type} · ${entry.eventId}`, state: entry.reason || 'needs reconciliation', updated: entry.createdAt })),
-          ...data.orders.map((entry) => ({ kind: 'orderId', id: entry.id, type: 'Checkout order', reference: `${entry.email} · ${entry.kind} · ${entry.amount} ${entry.currency}`, state: entry.reconciliationReason || entry.state, updated: entry.createdAt })),
-          ...data.retryOperations.map((entry) => ({ kind: 'retryOperationId', id: entry.id, type: 'Retry cancellation', reference: `order ${entry.priorOrderId}`, state: `${entry.state}${entry.evidence?.paymentIntentStatus ? ` · PaymentIntent ${entry.evidence.paymentIntentStatus}` : ''}`, updated: entry.updatedAt })),
-        ];
-        target.innerHTML = rows.map((row) => `<tr><td>${esc(row.type)}</td><td><code>${esc(row.reference)}</code></td><td>${esc(row.state)}</td><td>${row.updated ? new Date(row.updated).toLocaleString() : '—'}</td><td><button type="button" class="button" data-reconcile-kind="${esc(row.kind)}" data-reconcile-id="${esc(row.id)}">Read and reconcile</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No unresolved Stripe purchases or retry cancellations.</td></tr>';
-        target.querySelectorAll('[data-reconcile-kind]').forEach((button) => button.addEventListener('click', () => reconcileBillingTarget(button.dataset.reconcileKind, button.dataset.reconcileId, button)));
-      } catch (error) { target.innerHTML = `<tr><td colspan="5" class="status status--err">${esc(error.message)}</td></tr>`; }
-    }
-
-    async function loadFinancialJobs() {
-      const target = document.querySelector('#financial-jobs-table tbody');
-      try {
-        const { jobs } = await getJson('/api/admin/financials/reconcile');
-        target.innerHTML = jobs.map((job) => `<tr><td>${new Date(job.rangeFrom).toISOString()} ≤ UTC &lt; ${new Date(job.rangeTo).toISOString()}</td><td>${esc(job.state)}</td><td>${formatInteger(job.importedCount)} / ${formatInteger(job.updatedCount)} / ${formatInteger(job.unknownCount)}</td><td>${new Date(job.updatedAt).toLocaleString()}</td><td>${job.state === 'complete' ? 'Complete' : `<button type="button" class="button" data-financial-job="${esc(job.id)}">Read next page</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No reconciliation jobs yet.</td></tr>';
-        target.querySelectorAll('[data-financial-job]').forEach((button) => button.addEventListener('click', () => runFinancialReconciliation({ jobId: button.dataset.financialJob }, button)));
-      } catch (error) { target.innerHTML = `<tr><td colspan="5" class="status status--err">${esc(error.message)}</td></tr>`; }
-    }
-
-    async function runFinancialReconciliation(payload, button) {
-      const status = document.getElementById('financial-reconcile-status');
-      if (button) button.disabled = true;
-      setStatus(status, 'Reading one bounded Stripe balance-transaction page…');
-      try {
-        const response = await fetch('/api/admin/financials/reconcile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const result = await response.json();
-        if (!response.ok && response.status !== 202) throw new Error(result.error?.message || 'Reconciliation page failed.');
-        setStatus(status, `${result.status}: ${result.counts?.imported ?? result.page?.imported ?? 0} imported, ${result.counts?.updated ?? result.page?.updated ?? 0} updated, ${result.counts?.unknown ?? result.page?.unknown ?? 0} unknown. ${result.message || ''}`, response.ok ? 'ok' : 'err');
-        await loadFinancialJobs();
-        await loadStats();
-      } catch (error) { setStatus(status, `${error.message} Retry using the same job after its lease expires.`, 'err'); if (button) button.disabled = false; }
-    }
-    document.getElementById('start-financial-reconcile').addEventListener('click', async () => {
-      try { const params = rangeParams(); await runFinancialReconciliation({ from: params.get('from'), to: params.get('to') }); }
-      catch (error) { setStatus(document.getElementById('financial-reconcile-status'), error.message, 'err'); }
-    });
-
-    async function loadRouteBreakers() {
-      const target = document.querySelector('#route-breakers-table tbody');
-      try {
-        const { breakers } = await getJson('/api/admin/route-breakers');
-        target.innerHTML = breakers.map((breaker) => `<tr><td>${esc(breaker.routeSlot)}</td><td>${esc(breaker.provider)}</td><td><code>${esc(breaker.modelId)}</code></td><td>${esc(breaker.reason)}</td><td>${new Date(breaker.trippedAt).toLocaleString()}</td><td><button type="button" class="button" data-reenable-breaker="${esc(breaker.routeSlot)}" data-provider="${esc(breaker.provider)}" data-model="${esc(breaker.modelId)}">Re-enable exact route</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No tripped routes.</td></tr>';
-        target.querySelectorAll('[data-reenable-breaker]').forEach((button) => button.addEventListener('click', async () => {
-          const payload = { routeSlot: button.dataset.reenableBreaker, provider: button.dataset.provider, modelId: button.dataset.model };
-          button.disabled = true;
-          try {
-            const response = await adminMutation('/api/admin/route-breakers', 'POST', payload);
-            if (!response.ok) throw new Error(await responseMessage(response));
-            await loadRouteBreakers();
-            await loadAudit();
-          } catch (error) { setStatus(document.getElementById('billing-status'), error.message, 'err'); button.disabled = false; }
-        }));
-      } catch (error) { target.innerHTML = `<tr><td colspan="6" class="status status--err">${esc(error.message)}</td></tr>`; }
-    }
-    document.getElementById('refresh-breakers').addEventListener('click', loadRouteBreakers);
-
-    async function loadProviders() {
-      const { providers } = await getJson('/api/admin/provider');
-      const target = document.querySelector('#providers-table tbody');
-      target.innerHTML = providers.map((provider) => `<tr><td><code>${esc(provider.id)}</code> <span class="muted">${esc(provider.displayName)}</span></td><td><label class="toggle"><input type="checkbox" class="provider-toggle" data-id="${esc(provider.id)}" ${provider.enabled === 'true' ? 'checked' : ''}><span class="toggle__slider"></span></label></td><td>${formatInteger(provider.priority)}</td><td><span class="probe-status" data-provider="${esc(provider.id)}">—</span></td><td><button type="button" class="button probe-btn" data-id="${esc(provider.id)}">Probe</button></td></tr>`).join('');
-      target.querySelectorAll('.provider-toggle').forEach((checkbox) => checkbox.addEventListener('change', async () => {
-        const previous = !checkbox.checked;
-        try {
-          const response = await adminMutation('/api/admin/provider', 'PUT', { id: checkbox.dataset.id, enabled: checkbox.checked });
-          if (!response.ok) throw new Error(await responseMessage(response));
-          await loadAudit();
-        } catch (error) { checkbox.checked = previous; setStatus(document.getElementById('billing-status'), error.message, 'err'); }
-      }));
-      target.querySelectorAll('.probe-btn').forEach((button) => button.addEventListener('click', async () => {
-        const status = target.querySelector(`.probe-status[data-provider="${CSS.escape(button.dataset.id)}"]`);
-        button.disabled = true;
-        await probeProvider(button.dataset.id, status);
-        button.disabled = false;
-      }));
-    }
-
-    async function loadReports() {
-      const status = document.getElementById('overview-status');
-      setStatus(status, 'Refreshing bounded UTC report…');
-      requestCursor = null;
-      usersCursor = null;
-      try {
-        await loadStats();
-        await Promise.all([loadTimeseries(), loadRequests(), loadUsers()]);
-        setStatus(status, 'Report refreshed.', 'ok');
-      } catch (error) { setStatus(status, error.message, 'err'); }
-    }
-    document.getElementById('apply-range').addEventListener('click', loadReports);
-    document.getElementById('requests-next').addEventListener('click', () => loadRequests(requestCursor));
-    document.getElementById('series-mode').addEventListener('change', renderChart);
-    document.getElementById('free-cap-effective').addEventListener('change', () => {
-      const clear = document.getElementById('clear-free-cap');
-      clear.textContent = document.getElementById('free-cap-effective').value === 'next_month' ? 'Schedule clear' : 'Clear cap';
-    });
-
-    initializeRange();
-    document.getElementById('credit-economics').innerHTML = `Credit denomination: <strong>$${Number(adminConfig.dataset.creditUsd).toFixed(4)} per credit</strong> (${esc(adminConfig.dataset.creditUsdSource)} source, CREDIT_USD); markup: <strong>${esc(adminConfig.dataset.markup)}×</strong> (${esc(adminConfig.dataset.markupSource)} source, CREDIT_MARKUP). Read-only; 500 monthly free-credit policy is unchanged.`;
-    Promise.allSettled([loadReports(), loadFreeSpendCap(), loadBillingReconciliation(), loadFinancialJobs(), loadWaitlist(), loadAudit(), loadProviders(), loadRouteBreakers()]);
+    const now = new Date();
+    monthInput.value = new URLSearchParams(location.search).get('month') || `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    monthInput.addEventListener('change', refresh);
+    refresh();
   </script>
 </Layout>

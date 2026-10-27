@@ -61,7 +61,7 @@ test('authenticated admin credits POST rejects a zero adjustment before opening 
           'idempotency-key': '11111111-1111-4111-8111-111111111111',
         },
         body: JSON.stringify({
-          userId: '11111111-1111-4111-8111-111111111111',
+          email: 'user@example.test',
           delta: 0,
           kind: 'free',
           reason: 'No-op must not be recorded',
