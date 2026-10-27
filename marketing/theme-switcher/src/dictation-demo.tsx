@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { MODE_FRAMES, resolvePreset } from 'thinking-orbs/engine';
 
 const DURATION = 120;
@@ -12,7 +12,6 @@ export function DictationDemo() {
   const orb = MODE_FRAMES[preset.mode](20, time * preset.speed, preset.opts);
   return (
     <AbsoluteFill className="videoCanvas dictationDemo">
-      <Img className="dictationDemoWallpaper" src={staticFile('meadow.jpg')} />
       <div className="extensionWindowChromeNone dictationDemoIndicator">
         <div className="extensionView progressView">
           <svg

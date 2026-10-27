@@ -342,13 +342,6 @@
   height: 380px;
 }
 
-.dictationDemoWallpaper {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 30%;
-}
 .dictationDemoIndicator {
   position: absolute;
   inset: 0;
