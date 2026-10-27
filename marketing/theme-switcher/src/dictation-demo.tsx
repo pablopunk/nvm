@@ -4,9 +4,9 @@ import { MODE_FRAMES, resolvePreset } from 'thinking-orbs/engine';
 import { IndicatorStatusIcon } from '../../../src/app/palette/indicator/indicator-status-icon';
 import { tween } from './timeline';
 
-const TRANSCRIBING = 90;
-const PASTED = 132;
-export const DICTATION_DURATION = 180;
+const TRANSCRIBING = 60;
+const PASTED = 102;
+export const DICTATION_DURATION = 150;
 
 function Orb({
   state,
@@ -50,7 +50,7 @@ export function DictationDemo() {
     <AbsoluteFill className="videoCanvas dictationDemo">
       <div
         className="extensionWindowChromeNone dictationDemoIndicator"
-        style={{ opacity: tween(frame, 0, 8) * (1 - tween(frame, 171, 179)) }}
+        style={{ opacity: tween(frame, 0, 8) * (1 - tween(frame, 141, 149)) }}
       >
         <div
           className="extensionView progressView"
