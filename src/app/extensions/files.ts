@@ -84,6 +84,8 @@ export function createFilesExtension() {
   return {
     id: 'nevermind.files',
     title: 'Files',
+    description:
+      'Find recent files and folders, then open, reveal, or preview them.',
     capabilities: ['desktop.files'] as const,
     commands: [],
     rootItems(ctx) {

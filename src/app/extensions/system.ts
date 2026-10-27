@@ -77,6 +77,8 @@ function createSystemExtension() {
   const extension = {
     id: 'nevermind.system',
     title: 'System',
+    description:
+      'Lock, sleep, restart, open system settings, or quit Nevermind.',
     capabilities: ['system'] as const,
   };
   const commands = systemItems(
@@ -94,6 +96,7 @@ function createPlacesExtension() {
   return {
     id: 'nevermind.places',
     title: 'Places',
+    description: 'Open common folders and places on your computer.',
     capabilities: ['places'] as const,
     commands: placesItems().map(extensionContext.commandFromItem),
     rootItems: () => placesItems(),

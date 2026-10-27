@@ -6,6 +6,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "docs:generate": "tsx scripts/generate-docs-data.ts",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",

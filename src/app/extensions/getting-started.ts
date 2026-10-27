@@ -1,6 +1,6 @@
-import { accountRootItem } from './account';
 import { formatShortcut } from '../shared/shortcut-utils';
 import { extensionContext } from './_context';
+import { accountRootItem } from './account';
 
 export interface GettingStartedDependencies {
   getUserState: () => Record<string, unknown>;
@@ -149,13 +149,14 @@ export function createGettingStartedExtension(
         complete ? 'Open Help' : 'Get Started',
         gettingStartedView(ctx),
       ),
-      ...(!complete ? { actions: [dismissWelcomeAction(ctx)] } : {}),
+      ...(complete ? {} : { actions: [dismissWelcomeAction(ctx)] }),
     };
   }
 
   return {
     id: 'nevermind.getting-started',
     title: 'Getting Started',
+    description: 'A first-run checklist for setting up Nevermind.',
     capabilities: [] as const,
     rootItems(ctx: any) {
       return [gettingStartedItem(ctx)];

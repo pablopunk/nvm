@@ -236,6 +236,8 @@ export function createAppsExtension() {
   return {
     id: 'nevermind.apps',
     title: 'Applications',
+    description:
+      'Launch and switch to apps, force quit running ones, and uninstall apps with their leftover files.',
     capabilities: ['desktop.apps'] as const,
     commands: [
       {

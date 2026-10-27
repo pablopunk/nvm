@@ -142,6 +142,8 @@ export function createCalculatorExtension() {
   return {
     id: 'nevermind.calculator',
     title: 'Calculator',
+    description:
+      'Evaluate math, unit, and currency expressions right in the search box.',
     capabilities: [] as const,
     commands: [],
     searchItems(_ctx, query) {

@@ -1,5 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import DocsNav from '../components/DocsNav.astro';
+
+export const prerender = true;
 ---
 <Layout title="Documentation · Nevermind">
   <section class="page-hero">
@@ -9,6 +12,7 @@ import Layout from '../layouts/Layout.astro';
 
   <div class="docs-layout">
     <nav class="docs-sidebar" aria-label="Docs navigation">
+      <DocsNav current="guide" />
       <span class="docs-sidebar__section">Getting started</span>
       <a href="#installation">Installation</a>
       <a href="#first-run">First run &amp; sign in</a>

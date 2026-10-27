@@ -5,6 +5,7 @@ export function createUpdatesExtension() {
   const extension = {
     id: 'nevermind.updates',
     title: 'Updates',
+    description: 'Check for and install Nevermind updates.',
     capabilities: ['updates'] as const,
   };
   const ctx: any = extensionContext.createExtensionContext(extension, null);

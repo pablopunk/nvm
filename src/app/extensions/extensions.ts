@@ -88,6 +88,7 @@ export function createExtensionsExtension() {
   return {
     id: 'nevermind.extensions',
     title: 'Extensions',
+    description: 'Review, enable, disable, or update your local extensions.',
     capabilities: ['extensions.manage'] as const,
     commands: [
       {

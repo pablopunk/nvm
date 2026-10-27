@@ -21,6 +21,7 @@
       <button type="button" aria-pressed="false" aria-controls="builtin-clipboard" data-feature-view="clipboard">Clipboard history</button>
       <button type="button" aria-pressed="false" aria-controls="builtin-files" data-feature-view="files">File finder</button>
       <button type="button" aria-pressed="false" aria-controls="builtin-dictation" data-feature-view="dictation">Dictation</button>
+      <a class="builtin-features__more" href="/docs/features">More</a>
     </div>
   </div>
 </section>
@@ -67,7 +68,10 @@
   .builtin-features__panel[hidden] { display: none; }
   .builtin-features__switcher { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 16px; }
   button { padding: 8px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
-  button:hover { color: var(--text); }
+  button:hover, .builtin-features__more:hover { color: var(--text); }
+  .builtin-features__more { padding: 8px 0; border-bottom: 1px solid transparent; color: var(--muted); font-size: 13px; text-decoration: none; }
+  .builtin-features__more::after { content: " →"; }
+  .builtin-features__more:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 6px; border-radius: 2px; }
   button[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--text); }
   button:focus-visible { outline: 2px solid var(--accent-highlight); outline-offset: 6px; border-radius: 2px; }
   @media (max-width: 860px) {
