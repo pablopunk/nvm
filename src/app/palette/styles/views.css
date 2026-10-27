@@ -538,6 +538,12 @@
   padding: 0 8px 8px;
 }
 
+.chatComposerOptions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .chatModelPicker {
   position: relative;
   display: inline-flex;
@@ -706,6 +712,16 @@
 
 .chatEnterButton {
   color: var(--text-secondary);
+  background: var(--surface-interactive);
+}
+
+.chatAttachButton {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.chatAttachButton:hover:not(:disabled) {
+  color: var(--text-primary);
   background: var(--surface-interactive);
 }
 
