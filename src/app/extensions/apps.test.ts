@@ -239,22 +239,26 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
   assert.equal(indicators.at(-1).subtitle, '1 item moved to Trash');
   assert.equal(indicators.at(-1).status, 'success');
   trashResult = {
-    status: 'failed',
-    moved: [],
+    status: 'partial',
+    moved: [app.path],
     untouched: [
       { path: candidates[1].path, code: 'trash-failed', message: 'Not moved' },
-      { path: app.path, code: 'associated-failed', message: 'Kept' },
     ],
     notes: [],
   };
   const failed = await confirmation.onConfirm.__handler();
-  const retry = failed.items.find(
-    (item: any) => item.title === 'Uninstall without unavailable files',
+  assert.equal(failed.title, 'Uninstall partially completed');
+  assert.ok(
+    failed.items.some(
+      (item: any) =>
+        item.title === '~/Library/Caches/com.example.App' &&
+        item.subtitle === 'Not moved',
+    ),
   );
-  assert.ok(retry);
-  assert.match(retry.primaryAction.message, /~\/Library\/Caches/);
-  trashResult = undefined;
-  await retry.primaryAction.onConfirm.__handler();
-  assert.deepEqual(trashedValues, { 'app-id': true });
-  assert.match(indicators.at(-1).subtitle, /1 item left behind/);
+  assert.ok(
+    failed.items.some(
+      (item: any) =>
+        item.title === app.path && item.subtitle === 'Moved to Trash',
+    ),
+  );
 });

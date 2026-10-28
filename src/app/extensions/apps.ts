@@ -3,7 +3,7 @@ import { feedbackView } from '../palette/feedback';
 import { extensionContext } from './_context';
 import { showExtensionFeedback } from './feedback';
 
-function uninstallResult(ctx: any, result: any, retryAction?: any) {
+function uninstallResult(ctx: any, result: any) {
   if (result.status === 'complete') {
     showExtensionFeedback(
       ctx,
@@ -38,45 +38,6 @@ function uninstallResult(ctx: any, result: any, retryAction?: any) {
         : 'Selected items were left untouched.',
     tone: 'error',
     details,
-    ...(retryAction
-      ? { actions: [retryAction, { type: 'popView', title: 'Back' }] }
-      : {}),
-  });
-}
-
-function retryWithoutUnavailableFiles(ctx: any, discovery: any, result: any) {
-  const app = result.untouched.find(
-    (entry: any) => entry.code === 'associated-failed',
-  );
-  const skipped = result.untouched.filter(
-    (entry: any) => entry.path !== app?.path,
-  );
-  const candidate = discovery.candidates.find(
-    (entry: any) => entry.kind === 'app' && entry.path === app?.path,
-  );
-  if (!candidate || skipped.length === 0) return undefined;
-  return ctx.ui.confirm({
-    title: 'Uninstall without unavailable files',
-    message: `The app will be moved to Trash. These files will remain:\n${skipped.map((entry: any) => ctx.desktop.files.displayPath(entry.path)).join('\n')}`,
-    confirmLabel: 'Move App to Trash',
-    cancelLabel: 'Cancel',
-    destructive: true,
-    onConfirm: ctx.actions.run('Move App to Trash', async () => {
-      const retried = await extensionContext.appUninstallService.trash(
-        discovery.snapshot,
-        { [candidate.id]: true },
-      );
-      if (retried.status === 'complete') {
-        showExtensionFeedback(
-          ctx,
-          'Uninstall',
-          `App moved to Trash; ${skipped.length} item${skipped.length === 1 ? '' : 's'} left behind`,
-          'success',
-        );
-        return;
-      }
-      return uninstallResult(ctx, retried);
-    }),
   });
 }
 
@@ -171,11 +132,7 @@ function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
           discovery.snapshot,
           values,
         );
-        return uninstallResult(
-          ctx,
-          result,
-          retryWithoutUnavailableFiles(ctx, discovery, result),
-        );
+        return uninstallResult(ctx, result);
       }),
     });
   });

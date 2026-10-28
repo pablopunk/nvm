@@ -75,7 +75,7 @@ All desktop integrations are owned by OS capabilities. The rest of the app descr
 - Login startup behavior appears only on platforms that can own it and should keep the palette hidden until the user invokes it.
 - Update availability and packaging-dependent messaging are presented as platform capabilities, not as generic promises.
 - Extensions that invoke unavailable OS-dependent actions fail safely inside the palette.
-- macOS app results may offer a private **Uninstall…** action. It remains available while an app is running and lets users review associated data before moving selected items to Trash. Exact bundle-ID data is selected by default when no conflicting app is found; uncertain matches are left unchecked. Shared group data, launch agents, system locations, and privileged deletion are excluded. A running app is asked to quit gracefully before removal, and it remains installed if selected data could not be moved. Discovery can be incomplete due to macOS permissions and naming conventions.
+- macOS app results may offer a private **Uninstall…** action. It remains available while an app is running and lets users review associated data before moving selected items to Trash. Exact bundle-ID data is selected by default when no conflicting app is found; uncertain matches are left unchecked. Shared group data, launch agents, system locations, and privileged deletion are excluded. A running app is asked to quit gracefully before removal. When an individual item cannot be moved, other selected items are still attempted and the result identifies what remains. Discovery can be incomplete due to macOS permissions and naming conventions.
 - Shared UI contains no hard-coded OS wording for behavior owned by a capability.
 
 ## Documentation rules

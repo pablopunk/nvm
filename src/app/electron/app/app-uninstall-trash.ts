@@ -28,15 +28,9 @@ const REFUSALS = {
     message:
       'Could not ask the application to quit. Nothing was moved to Trash.',
   },
-  associatedFailed: {
-    code: 'associated-failed',
-    message:
-      'Kept for retry. Deselect the unavailable item to uninstall the app.',
-  },
   trashFailed: {
     code: 'trash-failed',
-    message:
-      'Could not move to Trash. Deselect to continue or check permissions.',
+    message: 'Could not move to Trash. Check its permissions.',
   },
   zeroSelection: {
     code: 'zero-selection',
@@ -250,10 +244,7 @@ export function createTrashRunner({
     const untouched = [...associated.untouched];
     if (appItem) {
       const appRefusal =
-        associated.stop ??
-        (untouched.length > 0
-          ? REFUSALS.associatedFailed
-          : await appTrashRefusal(snapshot, appItem));
+        associated.stop ?? (await appTrashRefusal(snapshot, appItem));
       if (appRefusal) {
         untouched.push({ path: appItem.path, ...appRefusal });
       } else if (await moveToTrash(deps, appItem.path)) {

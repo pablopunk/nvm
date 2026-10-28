@@ -714,7 +714,7 @@ test('refuses to move associated data of a running app unless the app itself is 
   );
 });
 
-test('keeps the app when a selected associated item fails so the uninstall can be retried', async () => {
+test('moves other selected items and the app when an associated item fails', async () => {
   const item = fixture({ failTrashAt: cachePath });
   const discovery = ready(await item.service.discover(appPath));
   const app = candidateFor(discovery, appPath);
@@ -726,15 +726,30 @@ test('keeps the app when a selected associated item fails so the uninstall can b
     [preferences.id]: true,
   });
   assert.equal(result.status, 'partial');
-  assert.deepEqual(item.trashed, [preferencesPath]);
+  assert.deepEqual(item.trashed, [preferencesPath, appPath]);
   assert.deepEqual(
     result.untouched.map((untouched) => [untouched.path, untouched.code]),
-    [
-      [cachePath, 'trash-failed'],
-      [appPath, 'associated-failed'],
-    ],
+    [[cachePath, 'trash-failed']],
   );
-  assert.equal(item.present.has(appPath), true);
+  assert.equal(item.present.has(appPath), false);
+});
+
+test('moves the app and other data if one selected item changed after review', async () => {
+  const item = fixture();
+  const discovery = ready(await item.service.discover(appPath));
+  const app = candidateFor(discovery, appPath);
+  const cache = candidateFor(discovery, cachePath);
+  const preferences = candidateFor(discovery, preferencesPath);
+  item.ids.set(cache.path, replacementInode);
+  const result = await item.service.trash(discovery.snapshot, {
+    [app.id]: true,
+    [cache.id]: true,
+    [preferences.id]: true,
+  });
+  assert.equal(result.status, 'partial');
+  assert.deepEqual(item.trashed, [preferencesPath, appPath]);
+  assert.equal(result.untouched[0].code, 'changed');
+  assert.equal(result.untouched[0].path, cachePath);
 });
 
 test('reports moved data and retains the app when the app cannot be moved', async () => {
