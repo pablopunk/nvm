@@ -22,8 +22,8 @@ test('model options include only enabled providers with configured keys', async 
   globalThis.fetch = (async () => ({
     ok: true,
     json: async () => ({
-      openrouter: { models: { 'test-model': { cost: { input: 1, output: 1 } } } },
-      opencode: { models: { 'test-model': { cost: { input: 1, output: 1 } } } },
+      openrouter: { models: { 'test-model': { id: 'test-model', tool_call: true, cost: { input: 1, output: 1 } } } },
+      opencode: { models: { 'test-model': { id: 'test-model', tool_call: true, cost: { input: 1, output: 1 } } } },
     }),
   })) as unknown as typeof fetch;
   try {
