@@ -38,11 +38,11 @@ function fusesNotDisabled(fuseWire, fuseOptions) {
 }
 
 function appExecutablePath(appPath) {
-  return path.join(
+  return path.posix.join(
     appPath,
     'Contents',
     'MacOS',
-    path.basename(appPath, '.app'),
+    path.posix.basename(appPath, '.app'),
   );
 }
 
