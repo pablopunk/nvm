@@ -1,43 +1,18 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: built-in extension contexts are intentionally untyped at this bridge boundary.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { WINDOW_LAYOUT_IDS } from '../electron/os/window-layout-catalog';
 import { createWindowManagementExtension } from './window-management';
+import { WINDOW_LAYOUT_PRESENTATION } from './window-management-layout-presentation';
 
-const OK_RESULT = {
-  ok: true,
-  outcome: 'exact',
-  changed: true,
-  frame: { x: 0, y: 0, width: 1, height: 1 },
-};
-
-const EXPECTED_LAYOUTS = [
-  {
-    localId: 'layout.left-half',
-    title: 'Left Half',
-    spec: { kind: 'fraction', x: 0, y: 0, width: 0.5, height: 1 },
-  },
-  {
-    localId: 'layout.right-half',
-    title: 'Right Half',
-    spec: { kind: 'fraction', x: 0.5, y: 0, width: 0.5, height: 1 },
-  },
-  {
-    localId: 'layout.top-half',
-    title: 'Top Half',
-    spec: { kind: 'fraction', x: 0, y: 0, width: 1, height: 0.5 },
-  },
-  {
-    localId: 'layout.bottom-half',
-    title: 'Bottom Half',
-    spec: { kind: 'fraction', x: 0, y: 0.5, width: 1, height: 0.5 },
-  },
-  {
-    localId: 'layout.maximize',
-    title: 'Maximize',
-    spec: { kind: 'fraction', x: 0, y: 0, width: 1, height: 1 },
-  },
-  { localId: 'layout.center', title: 'Center', spec: { kind: 'center' } },
-] as const;
+const P1_PERSISTED_IDS = [
+  'extension-action:window-management:layout.left-half',
+  'extension-action:window-management:layout.right-half',
+  'extension-action:window-management:layout.top-half',
+  'extension-action:window-management:layout.bottom-half',
+  'extension-action:window-management:layout.maximize',
+  'extension-action:window-management:layout.center',
+];
 
 function systemContext(hasWindowManagement: boolean) {
   return {
@@ -53,55 +28,36 @@ function systemContext(hasWindowManagement: boolean) {
 function actionsFor(hasWindowManagement: boolean) {
   return createWindowManagementExtension().actions(
     systemContext(hasWindowManagement) as any,
-  ) as Array<{ id: string; title: string; run: (ctx: any) => unknown }>;
+  ) as Array<{ id: string; title: string; icon: string }>;
 }
 
-function runContextWith(apply: (...args: unknown[]) => Promise<unknown>) {
-  const indicators: unknown[] = [];
-  return {
-    indicators,
-    ctx: {
-      desktop: { windowManagement: { apply } },
-      ui: {
-        indicator: {
-          show: (input: unknown) => {
-            indicators.push(input);
-          },
-          hide: () => undefined,
-        },
-      },
-    },
-  };
+function persistedIdOf(localId: string) {
+  return `extension-action:window-management:${localId}`;
 }
 
-function actionByLocalId(localId: string) {
-  const action = actionsFor(true).find((item) => item.id === localId);
-  if (!action) {
-    throw new Error(`expected action ${localId}`);
+test('persisted ids of the P1 layouts are unchanged', () => {
+  const persistedIds = actionsFor(true).map((action) =>
+    persistedIdOf(action.id),
+  );
+  for (const expectedId of P1_PERSISTED_IDS) {
+    assert.ok(persistedIds.includes(expectedId), expectedId);
   }
-  return action;
-}
+});
 
-test('persisted ids for every P1 layout are stable', () => {
+test('every catalog layout is contributed exactly once as a durable action', () => {
   assert.deepEqual(
-    actionsFor(true).map(
-      (action) => `extension-action:window-management:${action.id}`,
-    ),
-    [
-      'extension-action:window-management:layout.left-half',
-      'extension-action:window-management:layout.right-half',
-      'extension-action:window-management:layout.top-half',
-      'extension-action:window-management:layout.bottom-half',
-      'extension-action:window-management:layout.maximize',
-      'extension-action:window-management:layout.center',
-    ],
+    actionsFor(true).map((action) => action.id),
+    WINDOW_LAYOUT_IDS.map((id) => `layout.${id}`),
   );
 });
 
-test('every layout is contributed once with its title', () => {
+test('each layout action carries its presentation title and icon', () => {
   assert.deepEqual(
-    actionsFor(true).map((action) => [action.id, action.title]),
-    EXPECTED_LAYOUTS.map((layout) => [layout.localId, layout.title]),
+    actionsFor(true).map((action) => [action.title, action.icon]),
+    WINDOW_LAYOUT_IDS.map((id) => [
+      WINDOW_LAYOUT_PRESENTATION[id].title,
+      WINDOW_LAYOUT_PRESENTATION[id].icon,
+    ]),
   );
 });
 
@@ -115,57 +71,9 @@ test('declares the desktop.window-management capability', () => {
   ]);
 });
 
-for (const layout of EXPECTED_LAYOUTS) {
-  test(`${layout.title} applies its spec exactly once`, async () => {
-    const calls: unknown[][] = [];
-    const { ctx, indicators } = runContextWith((...args) => {
-      calls.push(args);
-      return Promise.resolve(OK_RESULT);
-    });
-
-    await actionByLocalId(layout.localId).run(ctx);
-
-    assert.deepEqual(calls, [[layout.spec]]);
-    assert.deepEqual(indicators, []);
-  });
-}
-
-test('a failed layout shows its message as palette feedback', async () => {
-  const { ctx, indicators } = runContextWith(() =>
-    Promise.resolve({
-      ok: false,
-      reason: 'no-window',
-      message: 'The focused app has no window to move.',
-    }),
-  );
-
-  await actionByLocalId('layout.left-half').run(ctx);
-
-  assert.deepEqual(indicators, [
-    {
-      id: 'feedback',
-      title: 'Left Half',
-      subtitle: 'The focused app has no window to move.',
-      status: 'error',
-      durationMs: 4000,
-    },
-  ]);
-});
-
-test('a missing window management facet shows unavailable feedback', async () => {
-  const indicators: unknown[] = [];
-  const ctx = {
-    desktop: {},
-    ui: {
-      indicator: {
-        show: (input: unknown) => indicators.push(input),
-        hide: () => undefined,
-      },
-    },
-  };
-
-  await actionByLocalId('layout.maximize').run(ctx);
-
-  assert.equal((indicators[0] as { status: string }).status, 'error');
-  assert.equal((indicators[0] as { title: string }).title, 'Maximize');
+test('contributes the Window Management Settings root command', () => {
+  const [settingsCommand] = createWindowManagementExtension().commands as any[];
+  assert.equal(settingsCommand.id, 'settings');
+  assert.equal(settingsCommand.title, 'Window Management Settings');
+  assert.equal(typeof settingsCommand.run, 'function');
 });

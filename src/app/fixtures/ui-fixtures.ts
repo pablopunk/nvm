@@ -35,6 +35,7 @@ import {
   webviewView,
 } from './ui/simple-view-fixtures.ts';
 import { textInputView } from './ui/text-input-fixture.ts';
+import { windowManagementSettingsFixtureView } from './ui/window-management-settings-fixture.ts';
 
 const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
@@ -120,6 +121,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Text Input',
       icon: 'keyboard',
       run: (ctx) => textInputView(ctx),
+    },
+    {
+      id: 'window-management-settings',
+      title: 'Dev UI: Window Management Settings',
+      icon: 'ruler',
+      run: (ctx) => windowManagementSettingsFixtureView(ctx),
     },
     {
       id: 'clipboard',
