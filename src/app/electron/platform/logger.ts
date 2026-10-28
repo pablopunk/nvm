@@ -185,6 +185,12 @@ function writePrettyConsole(entry: LogEntry) {
   const prefix = `${time} ${entry.level.toUpperCase().padEnd(5)} ${scope || 'main'}`;
   const line = `${prefix} ${entry.message}`;
   const writer = entry.level === 'error' ? process.stderr : process.stdout;
+  if (entry.level === 'debug') {
+    writer.write(
+      `${line}${entry.data === undefined ? '' : ` ${JSON.stringify(entry.data)}`}\n`,
+    );
+    return;
+  }
   writer.write(`${line}\n`);
   if (entry.data !== undefined) writer.write(`${prettyData(entry.data)}\n`);
 }
