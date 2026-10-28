@@ -209,6 +209,7 @@ export type WindowApplyResult =
 
 export interface WindowListQuery {
   appId?: string;
+  appName?: string;
   title?: string;
 }
 

@@ -1697,7 +1697,7 @@ export type ExtensionContext = {
      * `actions(ctx)` and applies the difference. New ids register, removed ids lose their
      * global shortcut and root-search entry, and unchanged ids keep their `actionId` and
      * shortcut. A failing or superseded run keeps the previous set. Call after storage
-     * that backs `actions(ctx)` changes, e.g. when a user creates or deletes a custom command.
+     * that backs `actions(ctx)` changes, e.g. when the extension adds or removes user-defined commands.
      */
     refreshContributions(): Promise<ExtensionContributionRefreshResult>;
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
@@ -2008,12 +2008,13 @@ export type ExtensionContext = {
       /** Displays with their frames and work areas (menu bar and Dock excluded), in global points with a top-left origin. */
       displays(): Promise<ExtensionDisplayInfo[]>;
       /**
-       * List windows of running apps, optionally narrowed by app identifier (`appId`) and/or a case-insensitive `title` substring.
+       * List windows of running apps, optionally narrowed by app identifier (`appId`), a case-insensitive `appName` match (use `ExtensionApp.name` from `ctx.desktop.apps`), and/or a case-insensitive `title` substring.
        * Handles are opaque, short-lived, and only valid in this session; list again when `applyTo`/`focus` reports `unknown-window`.
        * Minimized and other-Space windows may be missing. Returns an empty list when access is denied.
        */
       windows(query?: {
         appId?: string;
+        appName?: string;
         title?: string;
       }): Promise<ExtensionWindowInfo[]>;
       /**
@@ -2021,7 +2022,7 @@ export type ExtensionContext = {
        * Pair it with `ctx.desktop.apps.launch(...)` to open an app and place its first window.
        */
       waitForWindow(
-        query: { appId?: string; title?: string },
+        query: { appId?: string; appName?: string; title?: string },
         options?: { timeoutMs?: number },
       ): Promise<ExtensionWindowInfo | null>;
       /** Apply a layout to a specific window from `windows()`/`waitForWindow()` instead of the invoking app's focused window. Same verification and result contract as `apply`. */

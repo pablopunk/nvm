@@ -136,6 +136,13 @@ test('filters windows by app identifier case-insensitively', async () => {
   assert.equal(calls.includes('windows:43'), false);
 });
 
+test('filters windows by app name substring case-insensitively', async () => {
+  const { service, calls } = createHarness({ windowsRead: windowsOfPid });
+  const result = await service.listWindows({ appName: 'other harness' });
+  assert.deepEqual(titlesOf(result), ['Other Window']);
+  assert.equal(calls.includes('windows:42'), false);
+});
+
 test('filters windows by title substring case-insensitively', async () => {
   const { service } = createHarness({ windowsRead: windowsOfPid });
   const result = await service.listWindows({ title: 'NOTES' });

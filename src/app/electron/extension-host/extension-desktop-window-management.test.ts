@@ -228,17 +228,18 @@ test('windows map the handle string to { id } and drop pid and windowKey', async
   assert.equal(JSON.stringify(window).includes('"pid"'), false);
 });
 
-test('windows forward only the appId and title query fields that are strings', async () => {
+test('windows forward only the appId, appName and title query fields that are strings', async () => {
   const { facet, calls } = createServiceAndFacet();
   await facet.windows({
     appId: 'app.example.Browser',
+    appName: 'Browser',
     title: 'Start',
     extra: 1,
   });
   await facet.windows({ appId: 7 });
   await facet.windows();
   assert.deepEqual(calls.listWindows, [
-    [{ appId: 'app.example.Browser', title: 'Start' }],
+    [{ appId: 'app.example.Browser', appName: 'Browser', title: 'Start' }],
     [{}],
     [{}],
   ]);

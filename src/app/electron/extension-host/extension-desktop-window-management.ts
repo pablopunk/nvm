@@ -26,6 +26,7 @@ interface DesktopWindowManagementDeps {
 
 interface ExtensionWindowQuery {
   appId?: string;
+  appName?: string;
   title?: string;
 }
 
@@ -127,6 +128,7 @@ type ExtensionWindowInfo = ReturnType<typeof toExtensionWindowInfo>;
 function windowListQueryFrom(query?: ExtensionWindowQuery): WindowListQuery {
   return {
     ...(typeof query?.appId === 'string' ? { appId: query.appId } : {}),
+    ...(typeof query?.appName === 'string' ? { appName: query.appName } : {}),
     ...(typeof query?.title === 'string' ? { title: query.title } : {}),
   };
 }

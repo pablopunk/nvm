@@ -22,6 +22,10 @@ function matchesAppId(app: RunningApp, appId: string | undefined) {
   );
 }
 
+function matchesAppName(app: RunningApp, appName: string | undefined) {
+  return !appName || app.name.toLowerCase().includes(appName.toLowerCase());
+}
+
 function matchesTitle(window: WindowInfo, title: string | undefined) {
   return !title || window.title.toLowerCase().includes(title.toLowerCase());
 }
@@ -93,7 +97,10 @@ export async function listWindowsFrom(
     return apps.failure;
   }
   const matchingApps = apps.value
-    .filter((app) => matchesAppId(app, query.appId))
+    .filter(
+      (app) =>
+        matchesAppId(app, query.appId) && matchesAppName(app, query.appName),
+    )
     .slice(0, MAX_LISTED_APPS);
   const windows: WindowDescriptor[] = [];
   for (const app of matchingApps) {
