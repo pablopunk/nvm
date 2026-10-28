@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { StringDecoder } = require('node:string_decoder');
 const { startStripeDevelopmentListener } = require('./stripe-dev-listener.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -10,15 +11,31 @@ const devLogPath = path.join(root, '.tmp', 'dev.log');
 fs.mkdirSync(path.dirname(devLogPath), { recursive: true });
 const devLog = fs.createWriteStream(devLogPath, { flags: 'w' });
 
-function mirrorOutput(stream, terminal) {
+function mirrorOutput(stream, terminal, hideDebug = false) {
+  let pending = '';
+  const decoder = new StringDecoder('utf8');
   stream?.on('data', (chunk) => {
-    terminal.write(chunk);
     devLog.write(chunk);
+    if (!hideDebug) {
+      terminal.write(chunk);
+      return;
+    }
+    pending += decoder.write(chunk);
+    const lines = pending.split(/(?<=\n)/);
+    pending = lines.pop();
+    for (const line of lines) {
+      if (!/^\d{2}:\d{2}:\d{2}\.\d{3} DEBUG\s/.test(line)) terminal.write(line);
+    }
+  });
+  stream?.on('end', () => {
+    pending += decoder.end();
+    if (pending && !/^\d{2}:\d{2}:\d{2}\.\d{3} DEBUG\s/.test(pending))
+      terminal.write(pending);
   });
 }
 
-function mirrorChildOutput(childProcess) {
-  mirrorOutput(childProcess.stdout, process.stdout);
+function mirrorChildOutput(childProcess, hideDebug = false) {
+  mirrorOutput(childProcess.stdout, process.stdout, hideDebug);
   mirrorOutput(childProcess.stderr, process.stderr);
 }
 
@@ -88,7 +105,7 @@ const child = spawn(
 );
 
 mirrorChildOutput(backend);
-mirrorChildOutput(child);
+mirrorChildOutput(child, true);
 
 let shuttingDown = false;
 let fallbackTimer;
