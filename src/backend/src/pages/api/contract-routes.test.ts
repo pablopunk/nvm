@@ -2033,7 +2033,7 @@ test('proxy forwards a bounded image through a catalog image-capable route', asy
     createFakeDb({
       selects: proxySelects({
         free: 1_000_000,
-        model: 'openai/gpt-6.1-sol',
+        model: 'openai/gpt-6-sol',
         routeProvider: 'openrouter',
         providerChainDepth: 2,
         imageAdmission: true,
@@ -2051,8 +2051,8 @@ test('proxy forwards a bounded image through a catalog image-capable route', asy
       return Response.json({
         openrouter: {
           models: {
-            'openai/gpt-6.1-sol': {
-              id: 'openai/gpt-6.1-sol',
+            'openai/gpt-6-sol': {
+              id: 'openai/gpt-6-sol',
               cost: {
                 input: 2,
                 output: 10,
@@ -2107,7 +2107,7 @@ test('proxy forwards a bounded image through a catalog image-capable route', asy
 
   assert.equal(response.status, 200);
   assert.equal(upstreamCalls, 1);
-  assert.equal(forwardedBody?.model, 'openai/gpt-6.1-sol');
+  assert.equal(forwardedBody?.model, 'openai/gpt-6-sol');
   assert.equal(forwardedBody?.max_tokens, 512);
   assert.equal(forwardedBody?.n, 2);
   assert.equal(
@@ -2140,7 +2140,7 @@ test('proxy rejects image billing when the configured model catalog omits its mo
     createFakeDb({
       selects: proxySelects({
         free: 1_000_000,
-        model: 'openai/gpt-6.1-sol',
+        model: 'openai/gpt-6-sol',
         routeProvider: 'openrouter',
       }),
     }),
@@ -2152,8 +2152,8 @@ test('proxy rejects image billing when the configured model catalog omits its mo
       return Response.json({
         openrouter: {
           models: {
-            'openai/gpt-6.1-sol': {
-              id: 'openai/gpt-6.1-sol',
+            'openai/gpt-6-sol': {
+              id: 'openai/gpt-6-sol',
               cost: { input: 2, output: 10 },
             },
           },
