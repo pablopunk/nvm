@@ -7,6 +7,9 @@ import {
 import test from 'node:test';
 import { runDeployedSmoke } from './deployed-smoke';
 
+const DEPLOYED_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const OTHER_COMMIT = 'fedcba9876543210fedcba9876543210fedcba98';
+
 function compatibilityManifest(headers: Headers) {
   const desktopVersion = headers.get('x-nevermind-client-version');
   const apiVersion = Number(headers.get('x-nevermind-api-version') || 1);
@@ -33,6 +36,26 @@ function compatibilityManifest(headers: Headers) {
   };
 }
 
+function smokeContractHandler(health: Record<string, unknown>) {
+  return (request: IncomingMessage, response: ServerResponse) => {
+    response.setHeader('content-type', 'application/json');
+    if (request.url === '/api/health') {
+      response.end(JSON.stringify(health));
+      return;
+    }
+    if (request.url === '/api/compatibility') {
+      response.end(
+        JSON.stringify(
+          compatibilityManifest(new Headers(request.headers as HeadersInit)),
+        ),
+      );
+      return;
+    }
+    response.statusCode = 404;
+    response.end('{}');
+  };
+}
+
 async function fixtureServer(
   handler: (request: IncomingMessage, response: ServerResponse) => void,
   action: (baseUrl: string) => Promise<void>,
@@ -52,29 +75,11 @@ async function fixtureServer(
 
 test('smokes health plus compatible and incompatible desktop contracts', async () => {
   await fixtureServer(
-    (request, response) => {
-      response.setHeader('content-type', 'application/json');
-      if (request.url === '/api/health') {
-        response.end(
-          JSON.stringify({ ok: true, db: true, upstream: true, version: 'abcdef0' }),
-        );
-        return;
-      }
-      if (request.url === '/api/compatibility') {
-        response.end(
-          JSON.stringify(
-            compatibilityManifest(new Headers(request.headers as HeadersInit)),
-          ),
-        );
-        return;
-      }
-      response.statusCode = 404;
-      response.end('{}');
-    },
+    smokeContractHandler({ ok: true, db: true, upstream: true, version: 'abcdef0', commit: DEPLOYED_COMMIT }),
     async (baseUrl) => {
       assert.deepEqual(await runDeployedSmoke(baseUrl), {
         target: baseUrl,
-        health: { version: 'abcdef0', db: true, upstream: true },
+        health: { version: 'abcdef0', commit: DEPLOYED_COMMIT, db: true, upstream: true },
         compatibility: {
           backendEnvironment: 'test',
           backendVersion: 'abcdef0',
@@ -139,4 +144,65 @@ test('fails instead of following a redirect', async () => {
       await assert.rejects(() => runDeployedSmoke(baseUrl), /unexpected redirect/);
     },
   );
+});
+
+test('accepts health whose full commit matches the expected deployment', async () => {
+  await fixtureServer(
+    smokeContractHandler({ ok: true, db: true, upstream: true, version: '0123456', commit: DEPLOYED_COMMIT }),
+    async (baseUrl) => {
+      const result = await runDeployedSmoke(baseUrl, fetch, { expectedCommit: DEPLOYED_COMMIT });
+      assert.equal(result.health.commit, DEPLOYED_COMMIT);
+    },
+  );
+});
+
+test('fails when health reports a different commit than the expected deployment', async () => {
+  await fixtureServer(
+    smokeContractHandler({ ok: true, db: true, upstream: true, version: 'fedcba9', commit: OTHER_COMMIT }),
+    async (baseUrl) => {
+      await assert.rejects(
+        () => runDeployedSmoke(baseUrl, fetch, { expectedCommit: DEPLOYED_COMMIT }),
+        new RegExp(`reported commit ${OTHER_COMMIT}, expected ${DEPLOYED_COMMIT}`),
+      );
+    },
+  );
+});
+
+test('fails closed when health lacks a full commit identity', async () => {
+  for (const commit of [null, 'abcdef0', 'dev']) {
+    await fixtureServer(
+      smokeContractHandler({ ok: true, db: true, upstream: true, version: 'dev', commit }),
+      async (baseUrl) => {
+        await assert.rejects(() => runDeployedSmoke(baseUrl, fetch, { expectedCommit: DEPLOYED_COMMIT }), /reported commit/);
+      },
+    );
+  }
+});
+
+test('can smoke an older deployment without a commit when none is required', async () => {
+  await fixtureServer(
+    smokeContractHandler({ ok: true, db: true, upstream: true, version: 'abcdef0' }),
+    async (baseUrl) => {
+      const result = await runDeployedSmoke(baseUrl);
+      assert.equal(result.health.commit, null);
+    },
+  );
+});
+
+test('rejects malformed expected commits before requesting health', async () => {
+  let requested = false;
+  const failingFetch = (async () => {
+    requested = true;
+    throw new Error('unexpected request');
+  }) as typeof fetch;
+
+  await assert.rejects(
+    () => runDeployedSmoke('https://api.nvm.fyi', failingFetch, { expectedCommit: 'abcdef0' }),
+    /full lowercase 40-character commit SHA/,
+  );
+  await assert.rejects(
+    () => runDeployedSmoke('https://api.nvm.fyi', failingFetch, { expectedCommit: DEPLOYED_COMMIT.toUpperCase() }),
+    /full lowercase 40-character commit SHA/,
+  );
+  assert.equal(requested, false);
 });

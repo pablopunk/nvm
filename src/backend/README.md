@@ -52,6 +52,11 @@ migrations only. Preview and production deploy the selected workflow commit only
 after its migration succeeds; automatic Vercel Git deployments are disabled in
 `vercel.json` so this workflow remains the only deployment owner.
 
+Each deploy passes the checked-out full commit SHA to the Vercel CLI as
+`--build-env NVM_BUILD_COMMIT_SHA=<sha>`. The build bakes it into the server bundle, and
+`/api/health` and `/api/health/deployment` report it as `commit` next to the short
+`version`. The nightly release gate requires a valid deployed identity and checks the public alias before publication.
+
 Use expand-and-contract migrations: apply a backward-compatible schema change,
 deploy compatible code only after migration succeeds, migrate data if needed,
 and remove old schema in a later release. If a deployment fails after migration, roll code

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/admin';
+import { backendCommitSha, backendShortVersion } from '../../../lib/deployment-identity';
 
 export const SIGNUP_POLICY_READER_CAPABILITY = 'signup-policy-reader-v1';
 
@@ -8,6 +9,7 @@ export const GET: APIRoute = async ({ request }) => {
   return Response.json({
     ok: true,
     capabilities: [SIGNUP_POLICY_READER_CAPABILITY],
-    version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
+    version: backendShortVersion(),
+    commit: backendCommitSha(),
   });
 };

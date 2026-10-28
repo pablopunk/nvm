@@ -1,7 +1,9 @@
 import { runDeployedSmoke } from '../src/lib/deployed-smoke';
 
 try {
-  const result = await runDeployedSmoke(process.env.NVM_SMOKE_BASE_URL);
+  const result = await runDeployedSmoke(process.env.NVM_SMOKE_BASE_URL, fetch, {
+    expectedCommit: process.env.NVM_SMOKE_EXPECTED_COMMIT,
+  });
   console.log(JSON.stringify({ ok: true, ...result }, null, 2));
 } catch (error) {
   console.error(

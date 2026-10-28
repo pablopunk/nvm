@@ -4,9 +4,9 @@ import { db } from '../../db/client';
 import { getUpstreamConfig } from '../../lib/upstream';
 import { getActiveProvider } from '../../lib/settings';
 import { compatibilityHeaders } from '../../lib/compatibility';
+import { backendCommitSha, backendShortVersion } from '../../lib/deployment-identity';
 import { log } from '../../lib/log';
 
-const VERSION = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev';
 const UPSTREAM_TIMEOUT_MS = 4000;
 
 async function checkDb(): Promise<boolean> {
@@ -45,7 +45,7 @@ export const GET: APIRoute = async () => {
   const [dbOk, upstreamOk] = await Promise.all([checkDb(), checkUpstream()]);
   const ok = dbOk && upstreamOk;
   return Response.json(
-    { ok, db: dbOk, upstream: upstreamOk, version: VERSION },
+    { ok, db: dbOk, upstream: upstreamOk, version: backendShortVersion(), commit: backendCommitSha() },
     { status: ok ? 200 : 503, headers: compatibilityHeaders() },
   );
 };

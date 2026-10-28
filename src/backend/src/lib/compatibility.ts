@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { backendShortVersion } from './deployment-identity';
 import { compareVersions } from './desktop-version';
 import { log } from './log';
 
@@ -52,7 +53,7 @@ const DEFAULT_UPDATE_URL = 'https://github.com/pablopunk/nvm/releases/latest';
 const SUPPORT_POLICY = 'latest_two_minor_versions_or_90_days';
 
 export function backendVersion() {
-  return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'dev';
+  return backendShortVersion();
 }
 
 export function backendEnvironment() {
