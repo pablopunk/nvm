@@ -19,7 +19,17 @@ const ACCOUNT: DecisionAccount = {
 };
 const ROUTE = { provider: 'openrouter', modelId: 'typesafe/jev-1.13' };
 const UPSTREAM = { baseUrl: 'https://openrouter.ai/api/v1', apiKey: 'key' };
-const PNG_DATA = 'iVBORw0KGgo=';
+const PNG_DATA = (() => {
+  const bytes = Buffer.alloc(57);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+  bytes.writeUInt32BE(13, 8);
+  bytes.write('IHDR', 12, 'ascii');
+  bytes.writeUInt32BE(320, 16);
+  bytes.writeUInt32BE(320, 20);
+  bytes.write('IDAT', 37, 'ascii');
+  bytes.write('IEND', 49, 'ascii');
+  return bytes.toString('base64');
+})();
 
 function requestFixture(images = false): DecisionRequest {
   const parsed = parseDecisionRequest({
@@ -137,6 +147,46 @@ test('reserves the model context as the image input bound', async () => {
       .estimatedProviderCostUsd,
     262_144 / 1_000_000,
   );
+});
+
+test('rejects images below the Jev dimension limits before reserving credits', async () => {
+  const { deps, calls } = fixtureDeps({});
+  const request = requestFixture(true);
+  request.images[0].data = 'iVBORw0KGgo=';
+  const response = await runDecision({
+    requestId: 'invalid-image',
+    account: ACCOUNT,
+    route: ROUTE,
+    request,
+    deps,
+  });
+  assert.equal(response.status, 400);
+  assert.equal(calls.reserve.length, 0);
+  assert.equal(calls.fetch.length, 0);
+});
+
+test('records the exact response with the credit settlement for deduplication', async () => {
+  const { deps, calls } = fixtureDeps({});
+  const dedup = {
+    userId: ACCOUNT.user.id,
+    idempotencyKey: 'key',
+    requestHash: 'hash',
+  };
+  const response = await runDecision({
+    requestId: 'dedup',
+    account: ACCOUNT,
+    route: ROUTE,
+    request: requestFixture(),
+    dedup,
+    deps,
+  });
+  const responseBody = await response.json();
+  assert.deepEqual((calls.finalize[0] as { dedup: unknown }).dedup, {
+    ...dedup,
+    responseJson: responseBody,
+    status: 'completed',
+    upstreamStatus: 200,
+  });
 });
 
 test('refuses images on a text-only configured model before any charge', async () => {

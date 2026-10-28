@@ -17,7 +17,7 @@ test('uses decision catalog token prices and records image billing bounds', () =
       request: '0',
     },
   });
-  assert.equal(model?.cost?.inputUsdPerMtok, 0.042);
+  assert.ok(Math.abs((model?.cost?.inputUsdPerMtok ?? 0) - 0.042) < 1e-12);
   assert.equal(model?.cost?.outputUsdPerMtok, 0);
   assert.equal(model?.imageTokenPriced, true);
   assert.equal(model?.contextLength, 262_144);

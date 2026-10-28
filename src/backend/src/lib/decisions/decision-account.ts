@@ -13,6 +13,7 @@ const DASHBOARD_URL = `${PRODUCTION_WEB_ORIGIN}/dashboard`;
 export type DecisionAccount = {
   user: { id: string; plan: string };
   kind: CreditKind;
+  hasCredits?: boolean;
 };
 
 export async function resolveDecisionAccount(
@@ -25,17 +26,6 @@ export async function resolveDecisionAccount(
   if (!user) return new Response('Unauthorized', { status: 401 });
   await ensureMonthlyFreeCredits(user.id);
   const balances = await getBalances(user.id);
-  if (balances.total <= 0)
-    return Response.json(
-      {
-        error: {
-          type: 'insufficient_credits',
-          message: 'No credits remaining',
-          dashboard_url: DASHBOARD_URL,
-        },
-      },
-      { status: 402 },
-    );
   const decision = decideProxyModel({
     plan: user.plan,
     paidCredits: balances.paid,
@@ -43,5 +33,22 @@ export async function resolveDecisionAccount(
     role: 'smart',
     headers: request.headers,
   });
-  return { user: { id: user.id, plan: user.plan }, kind: decision.creditKind };
+  return {
+    user: { id: user.id, plan: user.plan },
+    kind: decision.creditKind,
+    hasCredits: balances.total > 0,
+  };
+}
+
+export function decisionInsufficientCreditsResponse() {
+  return Response.json(
+    {
+      error: {
+        type: 'insufficient_credits',
+        message: 'No credits remaining',
+        dashboard_url: DASHBOARD_URL,
+      },
+    },
+    { status: 402 },
+  );
 }

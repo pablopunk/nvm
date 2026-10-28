@@ -1,12 +1,9 @@
-import {
-  computeMaximumTokenPricedCost,
-  type ModelCost,
-  usdToCredits,
-} from '../cost';
+import { computeMaximumTokenPricedCost, type ModelCost } from '../cost';
 import { finalizeReservation, reserveCredits } from '../credit-reservations';
 import { freeSpendCapErrorBody } from '../free-spend-cap';
 import { log } from '../log';
 import { getUpstreamConfig, UpstreamConfigError } from '../upstream';
+import { imageDimensions } from '../../../../app/shared/ai-image-dimensions';
 import type { DecisionAccount } from './decision-account';
 import { decisionAdapterFor } from './decision-adapter';
 import {
@@ -103,6 +100,12 @@ async function settleSuccess(input: {
   parsed?: ParsedDecisionResponse;
   startedAt: number;
   deps: Dependencies;
+  dedup?: {
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    responseJson: unknown;
+  };
 }) {
   const settlement = settleDecisionCost({
     costRow: input.costRow,
@@ -130,6 +133,15 @@ async function settleSuccess(input: {
     modality: 'text',
     status: 200,
     latencyMs: Date.now() - input.startedAt,
+    ...(input.dedup
+      ? {
+          dedup: {
+            ...input.dedup,
+            status: 'completed' as const,
+            upstreamStatus: 200,
+          },
+        }
+      : {}),
   });
 }
 
@@ -194,6 +206,7 @@ export async function runDecision(input: {
   route: DecisionRoute;
   request: DecisionRequest;
   deps?: Partial<Dependencies>;
+  dedup?: { userId: string; idempotencyKey: string; requestHash: string };
 }): Promise<Response> {
   const deps: Dependencies = { ...defaultDependencies, ...input.deps };
   const startedAt = Date.now();
@@ -238,6 +251,30 @@ export async function runDecision(input: {
         'unsupported_image_route',
         'The configured decision model accepts PNG and JPEG images.',
       );
+    if (route.modelId.startsWith('typesafe/jev-')) {
+      const invalid = request.images.some((image) => {
+        const dimensions = imageDimensions(
+          Buffer.from(image.data, 'base64'),
+          image.mediaType,
+        );
+        if (!dimensions) return true;
+        const { width, height } = dimensions;
+        return (
+          width < 256 ||
+          height < 256 ||
+          width > 1568 ||
+          height > 1568 ||
+          width * height < 78_400 ||
+          width * height > 2_458_624
+        );
+      });
+      if (invalid)
+        return decisionErrorResponse(
+          400,
+          'invalid_decision_request',
+          'Images for this model must be valid PNG or JPEG files, at least 256 pixels per side and 78,400 pixels total, and at most 1,568 pixels per side.',
+        );
+    }
     imageInputLimit = model.contextLength;
   }
 
@@ -268,10 +305,9 @@ export async function runDecision(input: {
           imageInputLimit,
           decisionOutputTokenCeiling(request),
         );
-  const credits =
-    imageInputLimit === undefined
-      ? decisionReservationCredits(costRow, request)
-      : usdToCredits(reservedCostUsd);
+  // Reserve the estimated user charge while the free-spend cap reserves the
+  // full provider ceiling. Any provider overrun is absorbed by Nevermind.
+  const credits = decisionReservationCredits(costRow, request);
   const reservation = await deps.reserve({
     requestId,
     userId: account.user.id,
@@ -341,6 +377,12 @@ export async function runDecision(input: {
     );
   }
 
+  const responseBody = {
+    id: requestId,
+    model: parsed.providerModel ?? route.modelId,
+    answers: parsed.answers,
+    usage: parsed.usage,
+  };
   await settleSuccess({
     requestId,
     account,
@@ -350,6 +392,9 @@ export async function runDecision(input: {
     parsed,
     startedAt,
     deps,
+    ...(input.dedup
+      ? { dedup: { ...input.dedup, responseJson: responseBody } }
+      : {}),
   });
   log.info('decision_completed', {
     request_id: requestId,
@@ -360,10 +405,5 @@ export async function runDecision(input: {
     image_count: request.images.length,
     latency_ms: Date.now() - startedAt,
   });
-  return Response.json({
-    id: requestId,
-    model: parsed.providerModel ?? route.modelId,
-    answers: parsed.answers,
-    usage: parsed.usage,
-  });
+  return Response.json(responseBody);
 }

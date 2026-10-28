@@ -259,10 +259,12 @@ test('shows selection permission failures instead of asking the user to select t
 test('omits selected-text command where the OS has no safe input capability', () => {
   const extension = createAiCommandsExtension();
   assert.deepEqual(
-    extension.actions({
-      system: { capabilities: { has: () => false } },
-      action: (input: unknown) => input,
-    } as any),
-    [],
+    extension
+      .actions({
+        system: { capabilities: { has: () => false } },
+        action: (input: unknown) => input,
+      } as any)
+      .map((action) => action.id),
+    ['classify-image-with-ai'],
   );
 });

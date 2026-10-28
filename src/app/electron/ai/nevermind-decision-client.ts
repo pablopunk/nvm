@@ -6,8 +6,8 @@ import {
   NevermindAuthRequiredError,
 } from '../backend/nevermind-auth';
 import {
-  decisionRequestFailure,
   type DecisionWireRequest,
+  decisionRequestFailure,
   parseDecisionWireResponse,
 } from './extension-ai-decision-request';
 
@@ -27,6 +27,7 @@ export async function requestNevermindDecision(
         Authorization: `Bearer ${auth.token}`,
         'Content-Type': 'application/json',
         'X-Request-ID': randomUUID(),
+        'Idempotency-Key': randomUUID(),
       }),
       body: JSON.stringify(body),
       signal,
