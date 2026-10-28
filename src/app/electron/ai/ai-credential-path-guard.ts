@@ -86,7 +86,7 @@ export function isCredentialPath(
   policy: CredentialPathPolicy,
 ) {
   const candidate = foldPathCase(resolvedPath);
-  if (isEnvFileName(path.basename(candidate))) return true;
+  if (pathNamesEnvFile(candidate)) return true;
   if (isInsideAnyRoot(candidate, homeCredentialRoots(policy.homeDir)))
     return true;
   if (isInsideAnyRoot(candidate, policy.allowedPaths ?? [])) return false;
@@ -145,11 +145,14 @@ async function credentialPathToolCallResult(
   policy: CanonicalCredentialPathPolicy,
 ): Promise<ToolCallEventResult | undefined> {
   if (!PATH_GUARDED_TOOL_NAMES.has(event.toolName)) return undefined;
-  const target = await resolveToolPath(requestedSearchPath(event.input, cwd), {
+  const requestedPath = requestedSearchPath(event.input, cwd);
+  const target = await resolveToolPath(requestedPath, {
     cwd,
     homeDir: policy.homeDir,
   });
-  return isCredentialPath(target, policy)
+  return pathNamesEnvFile(
+    expandToolPathPrefix(requestedPath, policy.homeDir),
+  ) || isCredentialPath(target, policy)
     ? { block: true, reason: CREDENTIAL_PATH_BLOCK_REASON }
     : undefined;
 }
@@ -204,8 +207,10 @@ async function isCredentialSearchOutputLine(
   searchRoot: string,
   policy: CanonicalCredentialPathPolicy,
 ) {
+  const candidates = searchOutputLinePathCandidates(toolName, line);
+  if (candidates.some(pathNamesEnvFile)) return true;
   const resolvedCandidates = await Promise.all(
-    searchOutputLinePathCandidates(toolName, line).map((candidate) =>
+    candidates.map((candidate) =>
       resolveSearchResultPath(candidate, searchRoot),
     ),
   );
@@ -276,12 +281,22 @@ function homeCredentialRoots(homeDir: string) {
 async function canonicalizeCredentialPathPolicy(
   policy: CredentialPathPolicy,
 ): Promise<CanonicalCredentialPathPolicy> {
-  const [homeDir, extraDeniedPaths, allowedPaths] = await Promise.all([
+  const [
+    homeDir,
+    extraDeniedPaths,
+    canonicalHomeCredentialRoots,
+    allowedPaths,
+  ] = await Promise.all([
     canonicalOrOriginal(policy.homeDir),
     canonicalOrOriginals(policy.extraDeniedPaths ?? []),
+    canonicalOrOriginals(homeCredentialRoots(policy.homeDir)),
     canonicalOrOriginals(policy.allowedPaths ?? []),
   ]);
-  return { homeDir, extraDeniedPaths, allowedPaths };
+  return {
+    homeDir,
+    extraDeniedPaths: [...extraDeniedPaths, ...canonicalHomeCredentialRoots],
+    allowedPaths,
+  };
 }
 
 function canonicalOrOriginals(values: readonly string[]) {
@@ -311,6 +326,10 @@ function isInsidePath(candidate: string, root: string) {
     candidate === root ||
     candidate.startsWith(root.endsWith(path.sep) ? root : `${root}${path.sep}`)
   );
+}
+
+function pathNamesEnvFile(filePath: string) {
+  return isEnvFileName(path.basename(filePath).toLowerCase());
 }
 
 function isEnvFileName(basename: string) {

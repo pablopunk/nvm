@@ -15,7 +15,7 @@ import {
 type Handler = (event: unknown, ctx: { cwd: string }) => unknown;
 
 function createFixture() {
-  const root = fs.realpathSync(
+  const root = fs.realpathSync.native(
     fs.mkdtempSync(path.join(os.tmpdir(), 'nvm-credential-guard-')),
   );
   const home = path.join(root, 'home');
@@ -35,6 +35,20 @@ async function withFixture(
     await run(fixture);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+function symlinkIfPermitted(
+  target: string,
+  linkPath: string,
+  type: 'dir' | 'file',
+) {
+  try {
+    fs.symlinkSync(target, linkPath, type);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') return false;
+    throw error;
   }
 }
 
@@ -127,6 +141,43 @@ test('env files are denied wherever they live', async () => {
         true,
         name,
       );
+  });
+});
+
+test('a symlinked credential directory is still denied', async () => {
+  await withFixture(async ({ root, home, documents }) => {
+    const realKeys = path.join(root, 'private-keys');
+    fs.mkdirSync(realKeys);
+    fs.writeFileSync(path.join(realKeys, 'id_ed25519'), 'PRIVATE KEY');
+    fs.rmSync(path.join(home, '.ssh'), { recursive: true });
+    if (!symlinkIfPermitted(realKeys, path.join(home, '.ssh'), 'dir')) return;
+    const handlers = installGuard({ homeDir: home });
+    const result = await handlers.get('tool_call')?.(
+      toolCallEvent('read', { path: '~/.ssh/id_ed25519' }),
+      { cwd: documents },
+    );
+    assert.deepEqual(result, {
+      block: true,
+      reason: CREDENTIAL_PATH_BLOCK_REASON,
+    });
+  });
+});
+
+test('a symlinked env file is denied by its requested name', async () => {
+  await withFixture(async ({ root, home, documents }) => {
+    const target = path.join(root, 'service-secrets');
+    fs.writeFileSync(target, 'TOKEN=abc');
+    if (!symlinkIfPermitted(target, path.join(documents, '.env'), 'file'))
+      return;
+    const handlers = installGuard({ homeDir: home });
+    const result = await handlers.get('tool_call')?.(
+      toolCallEvent('read', { path: '.env' }),
+      { cwd: documents },
+    );
+    assert.deepEqual(result, {
+      block: true,
+      reason: CREDENTIAL_PATH_BLOCK_REASON,
+    });
   });
 });
 
