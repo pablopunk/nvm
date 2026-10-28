@@ -111,7 +111,7 @@ function jobItem(ctx, job: JobSnapshot) {
     job.enabled ? 'Disable Job' : 'Enable Job',
     async () => {
       const result = await extensionContext.setJobEnabled(job.id, !job.enabled);
-      if (!result.ok) throw new Error(result.message);
+      if (result.ok === false) throw new Error(result.message);
       ctx.ui.indicator.show({
         id: 'feedback',
         title: 'Background Tasks',

@@ -155,7 +155,7 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
     let next = draft;
     if (changes.some((change) => !isLocalChange(change, localIds))) {
       const persisted = await store.persist(diskViewOf(draft, localIds));
-      if (!persisted.ok) {
+      if (persisted.ok === false) {
         undoPreparation?.();
         live.apply(draft, before, keys);
         adoptView(

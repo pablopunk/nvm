@@ -20,7 +20,6 @@ export type SettingsServiceDeps = {
     message?: string;
   };
   osLabel: () => string;
-  setDiagnosticReporting: (enabled: boolean) => void;
   patchOpenView: (viewId: string, patch: any) => void;
   buildRecordShortcutAction: (input: any, options: any) => any;
 };

@@ -38,7 +38,7 @@ export function defaultActionIdFor(action: any) {
 }
 
 function outcomeWithMessage(outcome: CommitOutcome, message: string) {
-  return outcome.ok
+  return outcome.ok === true
     ? { ok: true, message }
     : { ok: false, message: outcome.message };
 }
@@ -228,7 +228,7 @@ export function createActionCustomization(deps: ActionCustomizationDeps) {
         draft.settings.paletteHotkey = normalized;
       },
     });
-    if (!outcome.ok)
+    if (outcome.ok === false)
       return {
         ok: false,
         message: outcome.message,

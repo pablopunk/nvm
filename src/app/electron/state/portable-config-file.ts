@@ -79,7 +79,7 @@ export async function readPortableConfigFile(
     };
   }
   const parsed = parsePortableConfigText(text, kinds);
-  if (!parsed.ok) return { kind: 'invalid', reason: parsed.reason };
+  if (parsed.ok === false) return { kind: 'invalid', reason: parsed.reason };
   return { kind: 'valid', text, raw: parsed.raw, config: parsed.config };
 }
 

@@ -183,7 +183,7 @@ export function parsePortableConfigText(
   if (!isPlainObject(parsed))
     return { ok: false, reason: 'Config must be a JSON object' };
   const validation = validatePortableRaw(parsed, kinds);
-  if (!validation.ok) return validation;
+  if (validation.ok === false) return validation;
   return { ok: true, raw: parsed, config: configFromValidRaw(parsed, kinds) };
 }
 
