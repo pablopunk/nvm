@@ -1,94 +1,109 @@
 import type {
-  Frame,
   NeighborDirection,
   NeighborOptions,
 } from './window-management-types';
+import {
+  areCentersCoincident,
+  centerOf,
+  coneWeightedDistance,
+  coordinateOn,
+  DIRECTION_AXES,
+  hasArea,
+  isHiddenBehindOrigin,
+  type NeighborWindow,
+  perpendicularTo,
+} from './window-neighbor-geometry';
 
-interface DirectionAxis {
-  axis: 'x' | 'y';
-  sign: 1 | -1;
-}
-
-interface MeasuredCandidate {
+interface Measurement {
   id: string;
-  distance: number;
-  overlaps: boolean;
-  perpendicularGap: number;
+  side: 'ahead' | 'behind';
+  displayRank: number;
+  score: number;
+  stackStep: number;
+  axialDistance: number;
+  perpendicularOffset: number;
+  zIndex: number;
 }
 
-const DIRECTION_AXES: Record<NeighborDirection, DirectionAxis> = {
-  right: { axis: 'x', sign: 1 },
-  left: { axis: 'x', sign: -1 },
-  down: { axis: 'y', sign: 1 },
-  up: { axis: 'y', sign: -1 },
-};
-
-const PERPENDICULAR_GAP_PENALTY = 2;
-
-function hasArea(frame: Frame) {
-  return frame.width > 0 && frame.height > 0;
+function displayRankOf(origin: NeighborWindow, candidate: NeighborWindow) {
+  return candidate.displayId === origin.displayId ? 0 : 1;
 }
 
-function startOn(frame: Frame, axis: 'x' | 'y') {
-  return axis === 'x' ? frame.x : frame.y;
-}
-
-function lengthOn(frame: Frame, axis: 'x' | 'y') {
-  return axis === 'x' ? frame.width : frame.height;
-}
-
-function centerOn(frame: Frame, axis: 'x' | 'y') {
-  return startOn(frame, axis) + lengthOn(frame, axis) / 2;
-}
-
-function perpendicularOf(axis: 'x' | 'y') {
-  return axis === 'x' ? 'y' : 'x';
-}
-
-function perpendicularOverlap(
-  current: Frame,
-  candidate: Frame,
-  axis: 'x' | 'y',
-) {
-  const perpendicular = perpendicularOf(axis);
-  const currentStart = startOn(current, perpendicular);
-  const candidateStart = startOn(candidate, perpendicular);
-  return (
-    Math.min(
-      currentStart + lengthOn(current, perpendicular),
-      candidateStart + lengthOn(candidate, perpendicular),
-    ) - Math.max(currentStart, candidateStart)
-  );
-}
-
-function measureCandidate(
-  current: Frame,
-  candidate: NeighborCandidate,
-  { axis, sign }: DirectionAxis,
-) {
-  const signedDistance =
-    sign * (centerOn(candidate.frame, axis) - centerOn(current, axis));
-  const overlap = perpendicularOverlap(current, candidate.frame, axis);
+function stackedMeasurement(
+  origin: NeighborWindow,
+  candidate: NeighborWindow,
+  direction: NeighborDirection,
+  displayRank: number,
+): Measurement | null {
+  const stackStep =
+    DIRECTION_AXES[direction].sign * (candidate.zIndex - origin.zIndex);
+  if (stackStep <= 0) {
+    return null;
+  }
   return {
-    measured: {
-      id: candidate.id,
-      distance: Math.abs(signedDistance),
-      overlaps: overlap > 0,
-      perpendicularGap: Math.max(0, -overlap),
-    },
-    isAhead: signedDistance > 0,
-    isBehind: signedDistance < 0,
+    id: candidate.id,
+    side: 'ahead',
+    displayRank,
+    score: 0,
+    stackStep,
+    axialDistance: 0,
+    perpendicularOffset: 0,
+    zIndex: candidate.zIndex,
   };
 }
 
-function penalisedDistance(candidate: MeasuredCandidate) {
-  return (
-    candidate.distance + PERPENDICULAR_GAP_PENALTY * candidate.perpendicularGap
+function geometricMeasurement(
+  origin: NeighborWindow,
+  candidate: NeighborWindow,
+  direction: NeighborDirection,
+  displayRank: number,
+): Measurement | null {
+  if (isHiddenBehindOrigin(origin, candidate)) {
+    return null;
+  }
+  const { axis, sign } = DIRECTION_AXES[direction];
+  const originCenter = centerOf(origin.frame);
+  const candidateCenter = centerOf(candidate.frame);
+  const signedAxial =
+    sign *
+    (coordinateOn(candidateCenter, axis) - coordinateOn(originCenter, axis));
+  if (signedAxial === 0) {
+    return null;
+  }
+  const perpendicular = perpendicularTo(axis);
+  const axialDistance = Math.abs(signedAxial);
+  const perpendicularOffset = Math.abs(
+    coordinateOn(candidateCenter, perpendicular) -
+      coordinateOn(originCenter, perpendicular),
   );
+  return {
+    id: candidate.id,
+    side: signedAxial > 0 ? 'ahead' : 'behind',
+    displayRank,
+    score: coneWeightedDistance(axialDistance, perpendicularOffset),
+    stackStep: 0,
+    axialDistance,
+    perpendicularOffset,
+    zIndex: candidate.zIndex,
+  };
 }
 
-function overlapRank(candidate: MeasuredCandidate) {
-  return candidate.overlaps ? 0 : 1;
+function measureNeighbor(
+  origin: NeighborWindow,
+  candidate: NeighborWindow,
+  direction: NeighborDirection,
+): Measurement | null {
+  if (candidate.id === origin.id || !hasArea(candidate.frame)) {
+    return null;
+  }
+  const displayRank = displayRankOf(origin, candidate);
+  if (origin.isFullScreen && displayRank === 0) {
+    return null;
+  }
+  if (areCentersCoincident(centerOf(origin.frame), centerOf(candidate.frame))) {
+    return stackedMeasurement(origin, candidate, direction, displayRank);
+  }
+  return geometricMeasurement(origin, candidate, direction, displayRank);
 }
 
 function compareIds(first: string, second: string) {
@@ -98,32 +113,31 @@ function compareIds(first: string, second: string) {
   return first < second ? -1 : 1;
 }
 
-function compareNearest(first: MeasuredCandidate, second: MeasuredCandidate) {
+function compareNearest(first: Measurement, second: Measurement) {
   return (
-    overlapRank(first) - overlapRank(second) ||
-    penalisedDistance(first) - penalisedDistance(second) ||
+    first.displayRank - second.displayRank ||
+    first.score - second.score ||
+    first.stackStep - second.stackStep ||
+    first.zIndex - second.zIndex ||
     compareIds(first.id, second.id)
   );
 }
 
-function compareFarthest(first: MeasuredCandidate, second: MeasuredCandidate) {
+function compareFarthest(first: Measurement, second: Measurement) {
   return (
-    overlapRank(first) - overlapRank(second) ||
-    second.distance - first.distance ||
+    first.displayRank - second.displayRank ||
+    second.axialDistance - first.axialDistance ||
+    first.perpendicularOffset - second.perpendicularOffset ||
+    first.zIndex - second.zIndex ||
     compareIds(first.id, second.id)
   );
 }
 
 function bestOf(
-  candidates: MeasuredCandidate[],
-  compare: (first: MeasuredCandidate, second: MeasuredCandidate) => number,
-) {
-  return [...candidates].sort(compare)[0]?.id ?? null;
-}
-
-export interface NeighborCandidate {
-  id: string;
-  frame: Frame;
+  measurements: Measurement[],
+  compare: (first: Measurement, second: Measurement) => number,
+): string | null {
+  return [...measurements].sort(compare)[0]?.id ?? null;
 }
 
 export const NEIGHBOR_DIRECTIONS: readonly NeighborDirection[] = [
@@ -134,27 +148,28 @@ export const NEIGHBOR_DIRECTIONS: readonly NeighborDirection[] = [
 ];
 
 export function nearestWindowInDirection(
-  current: Frame,
-  candidates: NeighborCandidate[],
+  origin: NeighborWindow,
+  candidates: NeighborWindow[],
   direction: NeighborDirection,
   options: NeighborOptions = {},
 ): string | null {
-  if (!hasArea(current)) {
+  if (!hasArea(origin.frame)) {
     return null;
   }
-  const axis = DIRECTION_AXES[direction];
   const measured = candidates
-    .filter((candidate) => hasArea(candidate.frame))
-    .map((candidate) => measureCandidate(current, candidate, axis));
-  const ahead = measured
-    .filter((entry) => entry.isAhead)
-    .map((entry) => entry.measured);
-  const nearest = bestOf(ahead, compareNearest);
+    .map((candidate) => measureNeighbor(origin, candidate, direction))
+    .filter((entry): entry is Measurement => entry !== null);
+  const nearest = bestOf(
+    measured.filter((entry) => entry.side === 'ahead'),
+    compareNearest,
+  );
   if (nearest !== null || !options.wrap) {
     return nearest;
   }
-  const behind = measured
-    .filter((entry) => entry.isBehind)
-    .map((entry) => entry.measured);
-  return bestOf(behind, compareFarthest);
+  return bestOf(
+    measured.filter((entry) => entry.side === 'behind'),
+    compareFarthest,
+  );
 }
+
+export type { NeighborWindow } from './window-neighbor-geometry';
