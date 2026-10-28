@@ -981,7 +981,6 @@ const { patchOpenView } = createOpenViewPatcher({
   sendToPalette: (channel, ...args) =>
     paletteWindow.win?.webContents.send(channel, ...args),
 });
-const registeredActionAccelerators = new Set<string>();
 const {
   declaredGlobalShortcuts,
   getShortcuts,
@@ -1014,7 +1013,7 @@ const { executeShortcutAction } = createShortcutRunner({
   normalizeHostViewResult,
   actionFailedFeedbackView: () => actionFailedFeedbackView(),
 });
-const { applyShortcutView, releaseAllShortcuts } =
+const { applyShortcutView, releaseAllShortcuts, isActionShortcutOwned } =
   createGlobalShortcutRegistration({
     globalShortcut,
     isPaletteHotkeyReserved: (accelerator) =>
@@ -1756,7 +1755,7 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
   extensionWindowManager,
   jobRegistry,
   extensionRuntimeState,
-  registeredActionAccelerators,
+  isActionShortcutOwned,
   startProgressiveSearch,
   cancelProgressiveSearch,
   searchActions,

@@ -962,7 +962,7 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
         'utf8',
       ),
     );
-    expect(persistedState.shortcuts[scheduledShortcut.actionId]).toBe(
+    expect(persistedState.localShortcuts[scheduledShortcut.actionId]).toBe(
       scheduledShortcut.accelerator,
     );
 

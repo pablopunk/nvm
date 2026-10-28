@@ -42,5 +42,10 @@ export function createGlobalShortcutRegistration(
     );
   }
 
-  return { applyShortcutView, releaseAllShortcuts: bindings.releaseAll };
+  return {
+    applyShortcutView,
+    releaseAllShortcuts: bindings.releaseAll,
+    isActionShortcutOwned: (accelerator: string) =>
+      bindings.ownedAccelerators().has(accelerator),
+  };
 }
