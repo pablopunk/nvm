@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -14,13 +15,13 @@ import {
 const LOCAL_FILE_URL_SECRET_BYTES = 32;
 
 test('displayUserPath abbreviates only the home directory and its descendants', () => {
-  const home = path.join(path.parse(process.cwd()).root, 'Users', 'example');
-  assert.equal(displayUserPath(home, home), '~');
+  const home = os.homedir();
+  assert.equal(displayUserPath(home), '~');
   assert.equal(
-    displayUserPath(path.join(home, 'Library', 'Cache'), home),
+    displayUserPath(path.join(home, 'Library', 'Cache')),
     `~${path.sep}Library${path.sep}Cache`,
   );
-  assert.equal(displayUserPath(`${home}-other`, home), `${home}-other`);
+  assert.equal(displayUserPath(`${home}-other`), `${home}-other`);
 });
 
 test('fileUrlForPath preserves path casing in a fixed-host URL', () => {

@@ -35,7 +35,8 @@ const REFUSALS = {
   },
   trashFailed: {
     code: 'trash-failed',
-    message: 'Could not move this item to Trash',
+    message:
+      'macOS could not move this item to Trash. Check its permissions and try again.',
   },
   zeroSelection: {
     code: 'zero-selection',
