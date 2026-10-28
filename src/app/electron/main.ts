@@ -172,10 +172,7 @@ import {
   createAppIndexService,
   trackFirstSeenApps,
 } from './app/app-index-service';
-import {
-  createProductionAppUninstallService,
-  NEVERMIND_BUNDLE_ID,
-} from './app/app-uninstall-service';
+import { createHostAppUninstallService } from './app/app-uninstall-host';
 import {
   CHARACTER_RECORDS_BY_ID,
   characterCodePoints,
@@ -858,17 +855,8 @@ const runningAppStatus = createRunningAppStatusService({
       scope: 'apps',
     }),
 });
-const nevermindBundlePath =
-  process.execPath.match(/^(.*\.app)(?:\/|$)/)?.[1] || null;
-const appUninstallService = createProductionAppUninstallService({
+const appUninstallService = createHostAppUninstallService({
   trashItem: (itemPath) => shell.trashItem(itemPath),
-  nevermindAppPath: nevermindBundlePath,
-  nevermindBundleId: NEVERMIND_BUNDLE_ID,
-  runningAppPaths: (appPath) =>
-    detectRunningAppPaths([
-      ...appIndexService.get(),
-      { id: `uninstall:${appPath}`, path: appPath },
-    ]),
 });
 const { processPendingThumbnails, thumbnailResponseForPath } =
   createThumbnailService({

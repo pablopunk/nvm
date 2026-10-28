@@ -40,6 +40,7 @@ function fileSelectionListView(ctx: ExtensionContext) {
     );
     return ctx.ui.item({
       ...file,
+      subtitle: ctx.desktop.files?.displayPath(file.subtitle) ?? file.subtitle,
       icon: 'file',
       accessories: [
         {
@@ -100,6 +101,7 @@ const extension: NevermindExtension = {
   id: 'dev.file-selection-list',
   title: 'Dev UI · File Selection List',
   subtitle: 'Keyboard-first multi-select list fixture',
+  capabilities: ['desktop.files'],
   commands: [
     {
       id: 'file-selection-list',
