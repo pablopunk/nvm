@@ -19,6 +19,7 @@ import type {
   Frame,
   HelperCode,
   HelperEnvelope,
+  ListedWindow,
   MacosWindowManager,
   NeighborDirection,
   RunningApp,
@@ -102,6 +103,41 @@ function desktopWith(overrides: Partial<FakeDesktop> = {}): FakeDesktop {
   };
 }
 
+interface WindowEntry {
+  pid: number;
+  appName: string;
+  window: WindowInfo;
+}
+
+function windowEntriesOf(desktop: FakeDesktop): WindowEntry[] {
+  const focused = APPS.flatMap((app) => {
+    const window = desktop.focused[app.pid];
+    return window ? [{ pid: app.pid, appName: app.name, window }] : [];
+  });
+  const others = APPS.flatMap((app) =>
+    (desktop.windows[app.pid] ?? []).map((window) => ({
+      pid: app.pid,
+      appName: app.name,
+      window,
+    })),
+  );
+  return [...focused, ...others].filter(
+    (entry, index, all) =>
+      all.findIndex(
+        (other) => other.window.windowKey === entry.window.windowKey,
+      ) === index,
+  );
+}
+
+function listedWindowsOf(desktop: FakeDesktop): ListedWindow[] {
+  return windowEntriesOf(desktop).map((entry, zIndex) => ({
+    ...entry.window,
+    pid: entry.pid,
+    appName: entry.appName,
+    zIndex,
+  }));
+}
+
 function fakeManager(desktop: FakeDesktop): MacosWindowManager {
   return {
     permissionState: () => Promise.resolve(desktop.permission),
@@ -118,6 +154,7 @@ function fakeManager(desktop: FakeDesktop): MacosWindowManager {
     setFullScreen: () =>
       Promise.reject(new Error('focus does not change full screen')),
     runningApps: () => Promise.resolve(ok(APPS)),
+    allWindows: () => Promise.resolve(ok(listedWindowsOf(desktop))),
     windows: (pid) => Promise.resolve(ok(desktop.windows[pid] ?? [])),
     raiseWindow: (pid, windowKey) => {
       desktop.raised.push([pid, windowKey]);

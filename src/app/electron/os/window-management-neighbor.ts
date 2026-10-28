@@ -9,12 +9,12 @@ import {
 } from './window-management-failures';
 import { noTargetMessage } from './window-management-focused-actions';
 import { raiseWindowKey } from './window-management-handle-actions';
-import { MAX_LISTED_APPS } from './window-management-listing';
 import {
   guardShortcutFocus,
   restorePaletteFocus,
 } from './window-management-target';
 import type {
+  ListedWindow,
   MacosWindowManager,
   NeighborDirection,
   NeighborOptions,
@@ -24,7 +24,7 @@ import type {
   WindowInvocation,
 } from './window-management-types';
 import {
-  type NeighborCandidate,
+  type NeighborWindow,
   nearestWindowInDirection,
 } from './window-neighbors';
 
@@ -35,21 +35,39 @@ interface NeighborRequest {
   target: WindowFocusTarget;
 }
 
-interface ListedWindow {
-  pid: number;
-  window: WindowInfo;
-}
+const FRONT_MOST_Z_INDEX = 0;
 
-function isNeighborEligible(window: WindowInfo, currentKey: string) {
+function isNeighborCandidate(
+  entry: ListedWindow,
+  selfPid: number | undefined,
+  originKey: string,
+) {
   return (
-    window.windowKey !== currentKey &&
-    !window.isMinimized &&
-    !window.isFullScreen
+    entry.pid !== selfPid &&
+    entry.windowKey !== originKey &&
+    !entry.isMinimized &&
+    !entry.isFullScreen
   );
 }
 
-function neighborCandidateOf(entry: ListedWindow): NeighborCandidate {
-  return { id: entry.window.windowKey, frame: entry.window.frame };
+function neighborWindowOf(window: WindowInfo, zIndex: number): NeighborWindow {
+  return {
+    id: window.windowKey,
+    frame: window.frame,
+    zIndex,
+    displayId: window.displayId,
+    isFullScreen: window.isFullScreen,
+  };
+}
+
+function originWindowOf(
+  focused: WindowInfo,
+  listed: ListedWindow[],
+): NeighborWindow {
+  const match = listed.find((entry) => entry.windowKey === focused.windowKey);
+  return match
+    ? neighborWindowOf(match, match.zIndex)
+    : neighborWindowOf(focused, FRONT_MOST_Z_INDEX);
 }
 
 async function readCurrentWindow(
@@ -64,34 +82,6 @@ async function readCurrentWindow(
     };
   }
   return focused;
-}
-
-async function listNeighborWindows(
-  manager: MacosWindowManager,
-  selfPid: number | undefined,
-  currentKey: string,
-): Promise<Settled<ListedWindow[]>> {
-  const apps = unwrapEnvelope(await manager.runningApps());
-  if (apps.ok === false) {
-    return apps;
-  }
-  const listed: ListedWindow[] = [];
-  for (const app of apps.value.slice(0, MAX_LISTED_APPS)) {
-    if (app.pid === selfPid) {
-      continue;
-    }
-    // biome-ignore lint/performance/noAwaitInLoops: apps are read one at a time so a slow app cannot fan out helper processes
-    const windows = unwrapEnvelope(await manager.windows(app.pid));
-    if (windows.ok === false) {
-      continue;
-    }
-    for (const window of windows.value) {
-      if (isNeighborEligible(window, currentKey)) {
-        listed.push({ pid: app.pid, window });
-      }
-    }
-  }
-  return { ok: true, value: listed };
 }
 
 function focusFromInvocationGuard(
@@ -117,31 +107,29 @@ async function runNeighborFocus(
   if (guardFailure) {
     return guardFailure;
   }
-  const current = await readCurrentWindow(manager, request.target.pid);
-  if (current.ok === false) {
-    return current.failure;
+  const focused = await readCurrentWindow(manager, request.target.pid);
+  if (focused.ok === false) {
+    return focused.failure;
   }
-  const listed = await listNeighborWindows(
-    manager,
-    selfPid,
-    current.value.windowKey,
-  );
+  const listed = unwrapEnvelope(await manager.allWindows());
   if (listed.ok === false) {
     return listed.failure;
   }
+  const origin = originWindowOf(focused.value, listed.value);
+  const candidates = listed.value.filter((entry) =>
+    isNeighborCandidate(entry, selfPid, origin.id),
+  );
   const neighborKey = nearestWindowInDirection(
-    current.value.frame,
-    listed.value.map(neighborCandidateOf),
+    origin,
+    candidates.map((entry) => neighborWindowOf(entry, entry.zIndex)),
     request.direction,
     request.options,
   );
-  const neighbor = listed.value.find(
-    (entry) => entry.window.windowKey === neighborKey,
-  );
+  const neighbor = candidates.find((entry) => entry.windowKey === neighborKey);
   if (!neighbor) {
     return failure('no-neighbor');
   }
-  return raiseWindowKey(manager, neighbor.pid, neighbor.window.windowKey);
+  return raiseWindowKey(manager, neighbor.pid, neighbor.windowKey);
 }
 
 export interface NeighborActionContext {

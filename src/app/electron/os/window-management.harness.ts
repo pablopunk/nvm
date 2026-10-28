@@ -13,6 +13,7 @@ import type {
   EngineInput,
   Frame,
   HelperEnvelope,
+  ListedWindow,
   MacosWindowManager,
   RunningApp,
   SetFrameData,
@@ -292,6 +293,7 @@ interface HarnessOptions {
   simulation?: SimulatedWindow;
   engine?: Partial<WindowManagementEngine>;
   runningApps?: () => Promise<HelperEnvelope<RunningApp[]>>;
+  allWindowsRead?: () => Promise<HelperEnvelope<ListedWindow[]>>;
   windowsRead?: (pid: number) => Promise<HelperEnvelope<WindowInfo[]>>;
   raiseResponse?: (pid: number, windowKey: string) => HelperEnvelope<null>;
   now?: () => number;
@@ -311,7 +313,10 @@ const RUNNING_APPS: RunningApp[] = [
 function createWindowListingFake(
   harnessOptions: HarnessOptions,
   calls: string[],
-): Pick<MacosWindowManager, 'runningApps' | 'windows' | 'raiseWindow'> {
+): Pick<
+  MacosWindowManager,
+  'runningApps' | 'allWindows' | 'windows' | 'raiseWindow'
+> {
   const { simulation } = harnessOptions;
   return {
     runningApps() {
@@ -331,6 +336,16 @@ function createWindowListingFake(
       return Promise.resolve(
         ok([focusedWindow({ bundleId: bundleIdForPid(pid) })]),
       );
+    },
+    allWindows() {
+      calls.push('allWindows');
+      if (harnessOptions.allWindowsRead) {
+        return harnessOptions.allWindowsRead();
+      }
+      if (simulation) {
+        return simulation.allWindowsRead();
+      }
+      return Promise.resolve(ok([]));
     },
     raiseWindow(pid, windowKey) {
       calls.push(`raise:${pid}:${windowKey}`);
