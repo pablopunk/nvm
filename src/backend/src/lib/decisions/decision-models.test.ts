@@ -43,3 +43,16 @@ test('does not treat missing or nonzero image pricing as token-only', () => {
     false,
   );
 });
+
+test('accepts the documented token-priced image billing for Jev 1.14 when the catalog omits an image price', () => {
+  const model = decisionModelFromCatalog({
+    id: 'typesafe/jev-1.14',
+    architecture: {
+      input_modalities: ['text', 'image'],
+      output_modalities: ['decisions'],
+    },
+    context_length: 262_144,
+    pricing: { prompt: '0.000000042', completion: '0' },
+  });
+  assert.equal(model?.imageTokenPriced, true);
+});

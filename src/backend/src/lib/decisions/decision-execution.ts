@@ -185,8 +185,8 @@ async function readJsonOrNull(response: Response): Promise<unknown | null> {
 
 /**
  * Reserves from the account's pool, calls the configured decision model once,
- * and settles exactly once. Only a failed upstream call releases the hold; a
- * 2xx whose answers cannot be trusted settles at the reservation ceiling.
+ * and settles exactly once. Failed requests release the user's reservation;
+ * provider costs may still be incurred when the outcome is unknown.
  */
 export async function runDecision(input: {
   requestId: string;
@@ -295,19 +295,13 @@ export async function runDecision(input: {
     deps,
   });
   if ('unavailable' in invocation) {
-    if (invocation.ambiguous) {
-      await settleSuccess({
-        requestId,
-        account,
-        route,
-        costRow,
-        reservedCostUsd,
-        startedAt,
-        deps,
+    await releaseReservation(requestId, account, deps);
+    if (invocation.ambiguous)
+      log.warn('decision_provider_cost_unknown', {
+        request_id: requestId,
+        provider: route.provider,
+        model: route.modelId,
       });
-    } else {
-      await releaseReservation(requestId, account, deps);
-    }
     return decisionErrorResponse(
       502,
       'decision_provider_unavailable',
@@ -332,20 +326,13 @@ export async function runDecision(input: {
     parsed = adapter.parseResponse(body, request);
   } catch (error) {
     if (!(error instanceof DecisionProviderResponseError)) throw error;
-    await settleSuccess({
-      requestId,
-      account,
-      route,
-      costRow,
-      reservedCostUsd,
-      startedAt,
-      deps,
-    });
+    await releaseReservation(requestId, account, deps);
     log.error('decision_provider_response_invalid', {
       request_id: requestId,
       provider: route.provider,
       model: route.modelId,
       reason: error.message,
+      provider_cost_unknown: true,
     });
     return decisionErrorResponse(
       502,

@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import type { ModelCost } from '../cost';
 import { computeUsdCost } from '../cost';
 import type { DecisionAccount } from './decision-account';
-import { decisionReservationCostUsd } from './decision-billing';
 import { runDecision } from './decision-execution';
 import type { DecisionModel } from './decision-models';
 import { type DecisionRequest, parseDecisionRequest } from './decision-request';
@@ -219,7 +218,7 @@ test('maps upstream rate limits and rejected requests to explicit client errors'
   );
 });
 
-test('settles at the reservation ceiling when a 2xx answer cannot be trusted', async () => {
+test('releases the reservation when a 2xx answer cannot be trusted', async () => {
   const { deps, calls } = fixtureDeps({
     fetchResponse: () =>
       providerResponse({
@@ -239,17 +238,9 @@ test('settles at the reservation ceiling when a 2xx answer cannot be trusted', a
     (await response.json()).error.type,
     'decision_provider_response_invalid',
   );
-  const settlement = calls.finalize[0] as {
-    outcome: string;
-    providerCostUsd: number;
-    costSource: string;
-  };
-  assert.equal(settlement.outcome, 'settle');
-  assert.equal(settlement.costSource, 'catalog_estimate');
-  assert.equal(
-    settlement.providerCostUsd,
-    decisionReservationCostUsd(COST, requestFixture()),
-  );
+  assert.deepEqual(calls.finalize, [
+    { requestId: 'req-7', expectedUserId: 'user-1', outcome: 'release' },
+  ]);
 });
 
 test('uses catalog token pricing when a valid answer omits the upstream cost', async () => {
@@ -275,7 +266,7 @@ test('uses catalog token pricing when a valid answer omits the upstream cost', a
   assert.equal(settlement.providerCostUsd, computeUsdCost(COST, 100, 5));
 });
 
-test('settles a timed-out call at the ceiling because upstream may have billed it', async () => {
+test('releases the user reservation when a call times out', async () => {
   const { deps, calls } = fixtureDeps({
     fetchResponse: () => {
       throw new DOMException('The operation timed out.', 'TimeoutError');
@@ -289,17 +280,9 @@ test('settles a timed-out call at the ceiling because upstream may have billed i
     deps,
   });
   assert.equal(response.status, 502);
-  const settlement = calls.finalize[0] as {
-    outcome: string;
-    providerCostUsd: number;
-    costSource: string;
-  };
-  assert.equal(settlement.outcome, 'settle');
-  assert.equal(settlement.costSource, 'catalog_estimate');
-  assert.equal(
-    settlement.providerCostUsd,
-    decisionReservationCostUsd(COST, requestFixture()),
-  );
+  assert.deepEqual(calls.finalize, [
+    { requestId: 'req-9', expectedUserId: 'user-1', outcome: 'release' },
+  ]);
 });
 
 test('releases the hold when the connection fails before any upstream response', async () => {

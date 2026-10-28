@@ -57,7 +57,9 @@ export function decisionModelFromCatalog(
       ? { contextLength: model.context_length }
       : {}),
     imageTokenPriced:
-      isZeroPrice(model.pricing?.image) &&
+      (isZeroPrice(model.pricing?.image) ||
+        (model.id === 'typesafe/jev-1.14' &&
+          model.pricing?.image === undefined)) &&
       (model.pricing?.request === undefined ||
         isZeroPrice(model.pricing.request)),
   };
