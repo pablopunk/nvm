@@ -5836,7 +5836,7 @@ export function App() {
           <Command.List
             ref={resultsListRef}
             data-pane-stack={siblingViews.length > 0 || undefined}
-            className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+            className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${confirmViewActionFor || extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
           >
             {extensionNavigation.frames.flatMap((frame, frameIndex) =>
               frame.history.map((entry, historyIndex) => {
