@@ -35,8 +35,16 @@ function unsupportedGoogleOperationResponse(): Response {
   );
 }
 
+function googleUsageMetadata(json: any): any {
+  if (!Array.isArray(json)) return json?.usageMetadata;
+  for (let index = json.length - 1; index >= 0; index--) {
+    if (json[index]?.usageMetadata) return json[index].usageMetadata;
+  }
+  return undefined;
+}
+
 function parseUsageFromGoogleJson(json: any): UsageTokens | null {
-  const u = json?.usageMetadata;
+  const u = googleUsageMetadata(json);
   if (!u) return null;
   return {
     inputTokens: u.promptTokenCount ?? 0,
@@ -44,6 +52,32 @@ function parseUsageFromGoogleJson(json: any): UsageTokens | null {
     cachedInputTokens: u.cachedContentTokenCount ?? 0,
     reasoningTokens: u.thoughtsTokenCount ?? 0,
   };
+}
+
+function unsupportedGoogleRequestShapeMessage(body: unknown): string | null {
+  if (body && typeof body === 'object' && Object.hasOwn(body, 'generation_config')) {
+    return 'Unsupported Google request shape.';
+  }
+  return null;
+}
+
+function rewriteGoogleRequestBody(
+  bodyText: string,
+  _routing: { activeModelId: string },
+  maxOutputTokens: number,
+): string {
+  const parsed = parseJsonObjectOrNull(bodyText);
+  if (parsed?.generationConfig?.maxOutputTokens === undefined) return bodyText;
+  parsed.generationConfig.maxOutputTokens = maxOutputTokens;
+  return JSON.stringify(parsed);
+}
+
+function parseJsonObjectOrNull(bodyText: string): any {
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
 }
 
 function googleOutputTokens(usageMetadata: any): number {
@@ -88,8 +122,10 @@ export const POST: APIRoute = async ({ request, params, url }) => {
     authHeaderName: 'x-goog-api-key',
     upstreamAuthHeaderName: 'x-goog-api-key',
     formatUpstreamAuthValue: (k) => k,
+    validateRequestBody: unsupportedGoogleRequestShapeMessage,
     buildUpstreamUrl: ({ upstreamBaseUrl, activeModelId }) =>
       googleUpstreamUrl(upstreamBaseUrl, activeModelId, operation, search),
+    rewriteRequestBody: rewriteGoogleRequestBody,
     parseUsageFromJson: parseUsageFromGoogleJson,
     parseUsageFromStreamChunk: parseUsageFromGoogleStreamChunk,
   });
