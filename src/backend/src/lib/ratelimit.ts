@@ -40,8 +40,8 @@ function makeLimiter(
   });
 }
 
-const chatPerMinFree = makeLimiter('chat:min:free', 5, '1 m');
-const chatPerDayFree = makeLimiter('chat:day:free', 20, '1 d');
+const chatPerMinFree = makeLimiter('chat:min:free', 60, '1 m');
+const chatPerDayFree = makeLimiter('chat:day:free', 5000, '1 d');
 const chatPerMinPaid = makeLimiter('chat:min:paid', 60, '1 m');
 const chatPerDayPaid = makeLimiter('chat:day:paid', 5000, '1 d');
 const transcriptionPerMin = makeLimiter('transcription:min', 20, '1 m');
