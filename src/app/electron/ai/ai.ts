@@ -41,6 +41,7 @@ import {
   PI_AI_COMPACTION_RESERVE_TOKENS,
 } from './pi-runtime';
 import { validateExtensionCapabilities } from './extension-capability-validation';
+import { WINDOW_GUIDANCE } from './window-management-builder-guidance';
 import { registerObservedPiProvider } from './pi-provider';
 import { isMessageUpdateEvent } from './pi-session-events';
 import { ensurePiToolAllowlist } from './pi-session-tool-policy';
@@ -2479,8 +2480,7 @@ Use read_extension_api before writing an extension.
 Use list_shortcuts when the extension should mention or depend on currently configured keyboard shortcuts. Never guess shortcut bindings.
 Use web_search, source_check, fetch_content, or get_search_content when current external information, URL contents, or library examples are needed.
 When tweaking an existing generated action, call read_current_extension before writing and preserve existing behavior unless the user asks to remove it. You may read any generated or built-in extension, but you may only write or remove generated extensions owned by this chat.
-Use list_capabilities when unsure which UI or OS capabilities exist.
-Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
+Use list_capabilities when unsure which UI or OS capabilities exist. Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed or built-in extensions. Built-in source is read-only reference material and may use privileged host APIs unavailable to generated extensions.
 Only write .ts extension files with write_extension.
 write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
@@ -2489,7 +2489,7 @@ validate_extension typechecks changed extension files and verifies they load wit
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
 Keep generated commands small, local, and native-feeling.
 Nevermind catches thrown extension errors and shows a native error view, so throw meaningful Error objects instead of swallowing failures unless the extension can recover or add context and rethrow.
-Declare capabilities explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'desktop.window-management' for moving or resizing other apps' windows, 'clipboard.history' for clipboard history, and 'ai' for AI calls. These declarations describe intent for the user's review; they do not restrict an enabled local extension's access.
+Declare capabilities explicitly: use 'system' for shell helpers and system actions, 'desktop.files' for file helpers, 'desktop.apps' for app helpers, 'clipboard.history' for clipboard history, and 'ai' for AI calls. These declarations describe intent for the user's review; they do not restrict an enabled local extension's access. ${WINDOW_GUIDANCE}
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use actions(ctx) for persistent shortcut-worthy variants such as “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippet actions; these are searchable, aliasable, and global-shortcutable without opening a view. When a view row should run one of those durable actions, set primaryAction: ctx.actions.ref('action-id') instead of duplicating inline logic. Use rootItems(ctx) for high-signal empty-query dynamic/status contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
